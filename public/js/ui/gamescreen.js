@@ -110,6 +110,7 @@ function choiceInfo(g, c) {
     for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id) hint = { text: 'Evolves', icon: w.def.icon, owned: true };
     return { name: def.name, icon: def.icon, desc: def.desc, tag: c.isNew ? 'NEW!' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint };
   }
+  if (c.type === 'bless') return { name: 'Blessing of Valor', icon: 'i_might', desc: 'Might {+5%}, health {+2%}. Stacks.', tag: `x${p.blessings + 1}`, color: '#fee761' };
   if (c.type === 'gold') return { name: 'Purse of Gold', icon: 'i_greed', desc: `Gain {${c.value}} gold.`, tag: '', color: '#feae34' };
   return { name: 'Roast Chicken', icon: 'i_vitality', desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44' };
 }

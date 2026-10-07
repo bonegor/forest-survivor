@@ -23,13 +23,13 @@ export const ENEMIES = {
     name: 'Orc Brute', sprite: 'orc', hp: 85, spd: 30, dmg: 14, r: 7, xp: 10, ai: 'charger', mass: 3, anim: 4, death: 'blood', kbRes: 0.6,
     charge: { range: 95, spd: 150, wind: 0.6, dur: 0.5, cd: 4.5 },
   },
-  imp: { name: 'Imp', sprite: 'imp', hp: 30, spd: 60, dmg: 9, r: 4, xp: 4, ai: 'flyer', mass: 0.7, anim: 8, death: 'ash', fly: true },
+  imp: { name: 'Imp', sprite: 'imp', hp: 30, spd: 60, dmg: 8, r: 4, xp: 4, ai: 'flyer', mass: 0.7, anim: 8, death: 'ash', fly: true },
   hellhound: {
-    name: 'Hellhound', sprite: 'hellhound', hp: 52, spd: 62, dmg: 12, r: 6, xp: 7, ai: 'charger', mass: 1.6, anim: 10, death: 'ash',
+    name: 'Hellhound', sprite: 'hellhound', hp: 52, spd: 62, dmg: 10, r: 6, xp: 7, ai: 'charger', mass: 1.6, anim: 10, death: 'ash',
     charge: { range: 110, spd: 200, wind: 0.4, dur: 0.45, cd: 3 },
   },
-  ogre: { name: 'Cyclops Ogre', sprite: 'ogre', hp: 300, spd: 24, dmg: 24, r: 10, xp: 30, ai: 'walker', mass: 8, anim: 3, death: 'blood', kbRes: 0.9 },
-  deathknight: { name: 'Death Knight', sprite: 'deathknight', hp: 190, spd: 40, dmg: 18, r: 6, xp: 22, ai: 'walker', mass: 4, anim: 4, death: 'dark', kbRes: 0.8 },
+  ogre: { name: 'Cyclops Ogre', sprite: 'ogre', hp: 300, spd: 24, dmg: 20, r: 10, xp: 30, ai: 'walker', mass: 8, anim: 3, death: 'blood', kbRes: 0.9 },
+  deathknight: { name: 'Death Knight', sprite: 'deathknight', hp: 190, spd: 40, dmg: 15, r: 6, xp: 22, ai: 'walker', mass: 4, anim: 4, death: 'dark', kbRes: 0.8 },
   thief: { name: 'Gilded Thief', sprite: 'thief', hp: 140, spd: 64, dmg: 0, r: 6, xp: 12, ai: 'flee', mass: 1, anim: 9, death: 'gold', kbRes: 0.3, noTarget: false },
 
   // Breakable props are enemies that never move and never hurt you.
@@ -40,15 +40,15 @@ export const ENEMIES = {
 
   // Bosses.
   boneking: {
-    name: 'King Ossarian', title: 'The Bone King', sprite: 'boneking', hp: 1600, spd: 30, dmg: 16, r: 12, xp: 120, ai: 'boss',
+    name: 'King Ossarian', title: 'The Bone King', sprite: 'boneking', hp: 4000, spd: 30, dmg: 16, r: 12, xp: 120, ai: 'boss',
     mass: 40, anim: 3, death: 'bones', kbRes: 0.97, boss: true, color: '#feae34',
   },
   butcher: {
-    name: 'Grimgut', title: 'The Butcher', sprite: 'butcher', hp: 2800, spd: 36, dmg: 20, r: 12, xp: 160, ai: 'boss',
+    name: 'Grimgut', title: 'The Butcher', sprite: 'butcher', hp: 6500, spd: 36, dmg: 20, r: 12, xp: 160, ai: 'boss',
     mass: 40, anim: 3.5, death: 'blood', kbRes: 0.97, boss: true, color: '#e43b44',
   },
   lich: {
-    name: 'Malgrath', title: 'The Lich', sprite: 'lich', hp: 3600, spd: 26, dmg: 14, r: 10, xp: 220, ai: 'boss',
+    name: 'Malgrath', title: 'The Lich', sprite: 'lich', hp: 4200, spd: 26, dmg: 14, r: 10, xp: 220, ai: 'boss',
     mass: 40, anim: 2, death: 'ecto', kbRes: 0.98, boss: true, color: '#9ee562', fly: true,
   },
   demonlord: {

@@ -122,6 +122,9 @@ test('sanitizeCheckpoint keeps a compact, valid save', () => {
   });
   assert.equal(cp.floor, 2);
   assert.deepEqual(cp.weapons, [['fireball', 5, 0], ['axe', 8, 0]]);
+  assert.equal(cp.bless, 0, 'older saves have no blessings');
+  assert.equal(P.sanitizeCheckpoint({ ...cp, bless: 7 }).bless, 7);
+  assert.equal(P.sanitizeCheckpoint({ ...cp, bless: -3 }).bless, 0);
   assert.equal(P.sanitizeCheckpoint({ mode: 'x' }), null);
   assert.ok(P.encodeState(cp).length < 1500, 'fits comfortably in a cookie');
 });

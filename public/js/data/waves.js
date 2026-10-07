@@ -58,9 +58,9 @@ export const SURVIVAL_BOSSES = {
     { at: 13 * 60, id: 'lich' },
   ],
   s30: [
-    { at: 8 * 60, id: 'boneking' },
-    { at: 16 * 60, id: 'butcher' },
-    { at: 23 * 60, id: 'lich' },
+    { at: 5 * 60, id: 'boneking' },
+    { at: 10.5 * 60, id: 'butcher' },
+    { at: 18 * 60, id: 'lich' },
     { at: 27.5 * 60, id: 'demonlord' },
   ],
 };

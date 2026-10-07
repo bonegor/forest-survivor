@@ -24,7 +24,7 @@ Requires Node 18+. Set `PORT` to change the port.
 | Pick a level-up card | 1–4, arrows + Enter, click | d-pad + A | tap |
 | Reroll level-up | R | Y | button |
 
-Weapons fire automatically. Collect soul gems to level up; every level offers a choice of new weapons, weapon upgrades or relics.
+Weapons fire automatically. Collect soul gems to level up; every level offers a choice of new weapons, weapon upgrades or relics. Once the whole build is maxed, level-ups offer a stacking **Blessing of Valor** (+might, +health), a heal, or gold.
 
 ### Heroes
 
@@ -43,7 +43,7 @@ The Knight is the starting hero. The others unlock in order, and each costs thre
 - **Survival — 15 or 30 minutes.** Endless forest, night falls darker, bosses arrive on a schedule. Survive until dawn to win.
 - **Dungeon Run — 3 floors.** Each floor's guardian sleeps behind a seal until you've slain enough foes. Kill it, take the stairs, and defeat the Demon Lord on floor 3. Your build carries over between floors.
 
-Both modes have **Easy / Medium / Hard**. Harder runs pay more gold.
+Both modes have **Easy / Medium / Hard**. Easy is a forgiving first night; Medium pushes back and expects a decent build (Armory ranks help); Hard is for legends. Harder runs pay more gold.
 
 ### Things to find
 

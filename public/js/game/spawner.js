@@ -45,7 +45,7 @@ export class Spawner {
     const phase = g.phase;
 
     // Steady horde.
-    const target = targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.8 : 1);
+    const target = targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1);
     this.acc -= dt;
     if (this.acc <= 0) {
       const alive = g.hostileCount;

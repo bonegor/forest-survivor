@@ -67,7 +67,8 @@ export class Dungeon {
     this.lavaSpots = [];
     this.stairs = null;
     // The guardian is sealed until enough blood is spilled on this floor.
-    this.sealGoal = [650, 1100, 1500][floor - 1];
+    this.sealGoal = [900, 1400, 1900][floor - 1];
+    this.sealTime = [4, 4.5, 5][floor - 1] * 60; // and enough time to grow stronger
     this.sealStart = g.kills;
     this.sealed = true;
     this.huntT = 0;
@@ -443,8 +444,10 @@ export class Dungeon {
     const gd = this.guardian;
     if (this.sealed && gd && !gd.dead) {
       const n = g.kills - this.sealStart;
-      g.objective = `Break the seal: ${Math.min(n, this.sealGoal)}/${this.sealGoal} slain`;
-      if (n >= this.sealGoal || g.floorTime > 5.5 * 60) {
+      const k = Math.min(1, n / this.sealGoal), t = Math.min(1, g.floorTime / this.sealTime);
+      const pct = Math.floor((k + t) * 50);
+      g.objective = k < 1 ? `Break the seal: slay foes (${pct}%)` : `The seal weakens... (${pct}%)`;
+      if (pct >= 100 || g.floorTime > 7 * 60) {
         this.sealed = false;
         gd.sealed = false;
         g.objective = `Slay ${gd.def.name}`;

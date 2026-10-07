@@ -227,6 +227,7 @@ export function sanitizeCheckpoint(raw) {
     rerolls: int(raw.rerolls, 0, 99),
     weapons: items(raw.weapons),
     passives: items(raw.passives),
+    bless: int(raw.bless, 0, 999),
     ts: int(raw.ts, 0, 2 ** 52),
   };
 }

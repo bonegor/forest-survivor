@@ -32,7 +32,7 @@ async function play(cfg) {
     a.startRun();
   }, [hero, mode, diff]);
   await page.waitForTimeout(300);
-  const limit = cap || (mode === 's15' ? 900 : mode === 's30' ? 1800 : 3600);
+  const limit = cap || (mode === 's15' ? 900 : mode === 's30' ? 1800 : 2400);
   const timeline = [];
   let r;
   for (let t = 0; t < limit + 30; t += 60) {
@@ -42,7 +42,7 @@ async function play(cfg) {
   }
   await ctx.close();
   const s = r.stats;
-  const won = r.state === 'over' && r.hp > 0;
+  const won = r.victory;
   return {
     cfg,
     out: won ? 'WIN ' : r.state === 'over' ? 'DEAD' : 'ALIVE',

@@ -27,6 +27,8 @@ export class Player {
     this.r = 5;
     this.vx = 0;
     this.vy = 0;
+    this.kx = 0; // knockback from heavy blows
+    this.ky = 0;
     this.face = 1;
     this.aim = 0; // radians, last movement direction
     this.moving = false;
@@ -35,6 +37,7 @@ export class Player {
     this.xp = 0;
     this.xpNext = xpFor(1);
     this.passives = new Map();
+    this.blessings = 0; // stacking rewards once the build is complete
     this.weapons = [];
     this.fury = 0;
     this.ult = null; // active ultimate state
@@ -63,10 +66,10 @@ export class Player {
   recompute() {
     const h = this.hero.stats, m = this.meta;
     const oldMax = this.maxHp || 0;
-    this.maxHp = Math.round((h.maxHp ?? 100) * m.maxHp * (1 + this.passiveSum('maxHp')));
+    this.maxHp = Math.round((h.maxHp ?? 100) * m.maxHp * (1 + this.passiveSum('maxHp') + this.blessings * 0.02));
     this.armor = (h.armor || 0) + m.armor + this.passiveSum('armor');
     this.speedMul = (h.speed || 1) * m.speed * (1 + this.passiveSum('speed'));
-    this.might = (h.might || 1) * m.might * (1 + this.passiveSum('might'));
+    this.might = (h.might || 1) * m.might * (1 + this.passiveSum('might') + this.blessings * 0.05);
     this.area = (h.area || 1) * m.area * (1 + this.passiveSum('area'));
     this.cooldown = Math.max(0.35, (h.cooldown || 1) * m.cooldown * (1 + this.passiveSum('cooldown')));
     this.amount = this.passiveSum('amount');
@@ -122,8 +125,10 @@ export class Player {
       this.aim = Math.atan2(ax.y, ax.x);
       if (Math.abs(ax.x) > 0.15) this.face = ax.x < 0 ? -1 : 1;
     }
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
+    this.x += (this.vx + this.kx) * dt;
+    this.y += (this.vy + this.ky) * dt;
+    this.kx = damp(this.kx, 0, 7, dt);
+    this.ky = damp(this.ky, 0, 7, dt);
     g.world.collide(this);
     const spd = Math.hypot(this.vx, this.vy);
     this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
@@ -171,6 +176,12 @@ export class Player {
     }
   }
 
+  knock(dx, dy, force) {
+    const d = Math.hypot(dx, dy) || 1;
+    this.kx = (dx / d) * force;
+    this.ky = (dy / d) * force;
+  }
+
   get untouchable() {
     return this.invuln > 0 || (this.ult && this.ult.type === 'shadowdance') || this.g.state !== 'play';
   }
@@ -216,6 +227,7 @@ export class Player {
   }
 
   heal(amount, quiet = false) {
+    if (this.dead) return 0;
     const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + amount);
     const healed = Math.round(this.hp - before);
@@ -230,6 +242,7 @@ export class Player {
     let gain = v * this.growth;
     if (this.buff('wisdom')) gain *= 1.5;
     if (this.g.mode === 's15') gain *= 1.1;
+    else if (this.g.mode === 'dungeon') gain *= 1.15; // fewer foes down there
     this.xp += gain;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;

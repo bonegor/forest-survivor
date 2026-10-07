@@ -5,7 +5,7 @@ import { HEROES } from '../data/heroes.js';
 import { WEAPONS, BASE_WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, hpScale } from '../data/waves.js';
+import { FLOORS, hpScale, SURVIVAL_BOSSES } from '../data/waves.js';
 import { SPR, TINTS } from '../engine/sprites.js';
 import { sfx, playMusic, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
@@ -42,6 +42,7 @@ export class Game {
     this.frame = 0;
     this.state = 'play'; // play | levelup | chest | paused | dying | dawn | descend | over
     this.timeScale = 1;
+    this.bossPower = 1;
     this.kills = 0;
     this.gold = 0;
     this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0, minHp: 1, fromBoss: 0, fromMobs: 0, fromShots: 0, bossLog: [] };
@@ -113,7 +114,11 @@ export class Game {
   // ------------------------------------------------------------- clock --
 
   get phase() {
-    if (this.mode === 's30') return this.time / 60;
+    if (this.mode === 's30') {
+      // Same opening pace as the 15-minute night, then a long slow climb.
+      const m = this.time / 60;
+      return m <= 15 ? m * 1.4 : 21 + (m - 15) * 0.35;
+    }
     if (this.mode === 's15') return (this.time / 60) * 1.4;
     const f = FLOORS[this.floor - 1];
     return Math.min(f.cap, f.phase0 + (this.floorTime / 60) * f.rate);
@@ -122,7 +127,7 @@ export class Game {
   // Enemy damage stays gentle early and climbs once the night gets long.
   get dmgScale() {
     const ph = this.phase;
-    return 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.045;
+    return 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.06 - Math.max(0, ph - 20) * 0.04;
   }
 
   // ------------------------------------------------------------ floors --
@@ -199,7 +204,7 @@ export class Game {
       pool.splice(pool.indexOf(c), 1);
     }
     if (!out.length) {
-      out.push({ type: 'gold', value: 30 }, { type: 'heal', value: 0.35 });
+      out.push({ type: 'bless' }, { type: 'heal', value: 0.35 }, { type: 'gold', value: 30 });
     }
     return out;
   }
@@ -222,6 +227,9 @@ export class Game {
       sfx('coin');
     } else if (c.type === 'heal') {
       p.heal(p.maxHp * c.value);
+    } else if (c.type === 'bless') {
+      p.blessings++;
+      p.recompute();
     }
   }
 
@@ -289,9 +297,11 @@ export class Game {
   }
 
   spawnBoss(id, x, y, o = {}) {
-    const mul = this.mode === 'dungeon' ? [1.05, 1.9, 2.9][this.floor - 1] : hpScale(this.phase) * 0.8;
+    const mul = this.mode === 'dungeon' ? [0.65, 1.3, 4][this.floor - 1] : hpScale(this.phase) * 0.8;
     const e = this.spawnEnemy(id, x, y, { hpMul: this.diff.hp * mul, instant: true, ...o });
     if (!e) return null;
+    // The Crypt's guardian is the gentler first boss: cramped rooms make every blow count.
+    this.bossPower = this.mode === 'dungeon' && this.floor === 1 ? 0.75 : 1;
     if (!o.sleeping) this.bossIntro(e);
     return e;
   }
@@ -799,6 +809,7 @@ export class Game {
       rerolls: p.rerolls,
       weapons: p.weapons.map((w) => [w.id, w.level, w.evolved ? 1 : 0]),
       passives: [...p.passives.entries()].map(([id, r]) => [id, r, 0]),
+      bless: p.blessings,
       ts: Date.now(),
     };
   }
@@ -815,12 +826,13 @@ export class Game {
     for (const [id, lvl] of cp.weapons) if (WEAPONS[id]) this.addWeapon(id, lvl);
     if (!p.weapons.length) this.addWeapon(p.hero.weapon);
     for (const [id, r] of cp.passives) if (PASSIVES[id]) p.passives.set(id, Math.min(r, PASSIVES[id].max));
+    p.blessings = cp.bless || 0;
     p.recompute();
     p.hp = Math.min(p.maxHp, cp.hp);
     p.xp = cp.xp;
     this.spawner.bossIdx = 0;
     if (this.mode !== 'dungeon') {
-      const b = { s15: [270, 540, 780], s30: [480, 960, 1380, 1650] }[this.mode];
+      const b = SURVIVAL_BOSSES[this.mode].map((x) => x.at);
       while (this.spawner.bossIdx < b.length && b[this.spawner.bossIdx] <= this.time) this.spawner.bossIdx++;
       this.spawner.resetForFloor(this.phase);
     }
@@ -843,7 +855,7 @@ export class Game {
     if (this.state === 'paused' || this.state === 'levelup' || this.state === 'chest' || this.state === 'over') return;
     if (this.slowT > 0) {
       this.slowT -= rdt;
-      if (this.slowT <= 0 && this.state === 'play') this.timeScale = 1;
+      if (this.slowT <= 0 && this.state !== 'dying') this.timeScale = 1;
     }
     const dt = Math.min(rdt, 1 / 30) * this.timeScale;
     this.frame++;

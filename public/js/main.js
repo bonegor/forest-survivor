@@ -188,14 +188,14 @@ function botStep(g) {
   for (const e of g.enemies) {
     if (!e.boss || e.dead || e.sleeping) continue;
     const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
-    const safe = p.id === 'knight' ? 30 : 90;
+    const safe = p.id === 'knight' && p.hp > p.maxHp * 0.6 ? 30 : 80;
     if (d < safe) {
       fx += (dx / d) * 2.5 * (1 - d / safe);
       fy += (dy / d) * 2.5 * (1 - d / safe);
     }
   }
   // Hunt the boss down while healthy, like a player would.
-  if (g.boss && !g.boss.dead && !g.boss.sleeping && p.hp > p.maxHp * 0.45) {
+  if (g.boss && !g.boss.dead && !g.boss.sleeping && p.hp > p.maxHp * 0.6) {
     const dx = g.boss.x - p.x, dy = g.boss.y - p.y, d = Math.hypot(dx, dy) || 1;
     if (d > 50) {
       fx += (dx / d) * 1.1;
@@ -236,15 +236,17 @@ function botStep(g) {
     }
   }
   // Dungeon goals.
-  if (g.world.stairs) {
-    const dx = g.world.stairs.x - p.x, dy = g.world.stairs.y + 4 - p.y, l = Math.hypot(dx, dy) || 1;
-    fx += (dx / l) * 1.5;
-    fy += (dy / l) * 1.5;
-  } else if (g.world.guardian && g.world.guardian.sleeping) {
-    // Walk the corridors toward the guardian using a BFS field rooted there.
-    const w = g.world;
-    if (!w._botFlow) w._botFlow = w.bfs(w.guardRoom.cx, w.guardRoom.cy, new Int16Array(w.W * w.H));
-    const T = 16, tx = Math.floor(p.x / T), ty = Math.floor(p.y / T);
+  const w = g.world;
+  // While the seal holds, fight in the open like in survival; then go find the guardian.
+  if (w.stairs || (w.guardian && w.guardian.sleeping && !w.sealed)) {
+    // Walk the corridors toward the stairs or the guardian using a BFS field rooted there.
+    const T = 16;
+    const goal = w.stairs ? [Math.floor(w.stairs.x / T), Math.floor((w.stairs.y + 4) / T)] : [w.guardRoom.cx, w.guardRoom.cy];
+    if (!w._botFlow || w._botGoal !== goal.join()) {
+      w._botFlow = w.bfs(goal[0], goal[1], new Int16Array(w.W * w.H));
+      w._botGoal = goal.join();
+    }
+    const tx = Math.floor(p.x / T), ty = Math.floor(p.y / T);
     let best = null, bd = w._botFlow[ty * w.W + tx];
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
       const d = w._botFlow[(ty + oy) * w.W + tx + ox];
@@ -252,8 +254,14 @@ function botStep(g) {
     }
     if (best) {
       const dx = best[0] * T + 8 - p.x, dy = best[1] * T + 8 - p.y, l = Math.hypot(dx, dy) || 1;
-      fx += (dx / l) * 0.9;
-      fy += (dy / l) * 0.9;
+      const k = w.stairs ? 1.5 : 0.9;
+      fx += (dx / l) * k;
+      fy += (dy / l) * k;
+    } else if (w.stairs) {
+      // Already there (or off the field): head straight for the steps.
+      const dx = w.stairs.x - p.x, dy = w.stairs.y + 4 - p.y, l = Math.hypot(dx, dy) || 1;
+      fx += (dx / l) * 1.5;
+      fy += (dy / l) * 1.5;
     }
   }
   const l = Math.hypot(fx, fy);
@@ -279,7 +287,8 @@ function sim(seconds, opts = {}) {
           const r = GOOD.indexOf(c.id);
           return 2 + (r < 0 ? 20 : r) + (c.isNew ? 0.5 : 0);
         }
-        return 30;
+        if (c.type === 'heal') return g.player.hp < g.player.maxHp * 0.7 ? 29 : 31;
+        return c.type === 'bless' ? 30 : 32;
       };
       ch.sort((a, b) => score(a) - score(b));
       g.applyChoice(opts.random ? ch[Math.floor(Math.random() * ch.length)] : ch[0]);
@@ -307,7 +316,7 @@ function sim(seconds, opts = {}) {
   const p = g.player;
   return {
     stats: g.stats,
-    time: Math.round(g.time), state: g.state, level: p.level, hp: Math.round(p.hp), maxHp: p.maxHp, kills: g.kills, gold: g.gold,
+    time: Math.round(g.time), state: g.state, victory: !!(g.result && g.result.victory), level: p.level, hp: Math.round(p.hp), maxHp: p.maxHp, kills: g.kills, gold: g.gold,
     enemies: g.enemies.length, floor: g.floor, phase: +g.phase.toFixed(2),
     weapons: p.weapons.map((w) => `${w.id}:${w.level}`).join(' '), passives: [...p.passives].map(([k, v]) => `${k}:${v}`).join(' '),
     msPerStep: +((performance.now() - t0) / Math.max(1, steps)).toFixed(2), boss: g.boss ? g.boss.type + ' ' + Math.round(g.boss.hp) : null,

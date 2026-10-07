@@ -19,13 +19,13 @@ function blast(g, x, y, r, dmg, style = 'dark') {
   g.effects.push(new Explosion(g, x, y, r, style));
   g.effects.push(new Ring(g, x, y, 4, r * 1.1, 0.4, style === 'fire' ? '#fee761' : '#f6757a'));
   const p = g.player;
-  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg);
+  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * g.bossPower);
   g.shake(0.45);
   sfx('slam');
 }
 
 function shoot(g, e, ang, kind, speed, dmg, opts) {
-  g.eshots.push(new EnemyShot(g, e.x, e.y - 10, ang, speed, dmg * g.dmgScale, kind, opts));
+  g.eshots.push(new EnemyShot(g, e.x, e.y - 10, ang, speed, dmg * g.dmgScale * g.bossPower, kind, opts));
 }
 
 function ring(g, e, n, kind, speed, dmg, off = 0, opts) {
@@ -178,10 +178,10 @@ export const BOSS_AI = {
     }
     // Blinks away when cornered, but not right after a blink: melee gets a window.
     if (e.cd2 <= 0 || (distP(e) < 45 && e.cd2 < 3.5)) {
-      e.cd2 = rand(6, 8);
+      e.cd2 = rand(8, 11);
       // Blink away in a puff of grave-light.
       g.particles.burst(e.x, e.y - 12, 0, 24, [PC.l, PC.L, PC.e], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
-      const a = rand(TAU), r = rand(110, 150);
+      const a = rand(TAU), r = rand(85, 120);
       const spot = g.world.freeSpot(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r) || { x: e.x, y: e.y };
       e.x = spot.x;
       e.y = spot.y;
