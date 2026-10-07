@@ -69,34 +69,41 @@ export function discSprite(r, colors, edge = 0.35) {
   });
 }
 
-// A swept sword arc, frame f of n. Bright leading edge, fading tail.
+// A swept sword arc, frame f of n: a crisp crescent with a white-hot leading
+// edge and a tail that tapers and dithers away behind it.
+// palette: dark -> light, last entry is the edge highlight.
 export function slashFrame(radius, arc, angleIdx, f, n, palette) {
   radius = Math.round(radius);
-  const key = `slash|${radius}|${arc.toFixed(2)}|${angleIdx}|${f}|${n}|${palette.join(',')}`;
+  const key = `slash3|${radius}|${arc.toFixed(2)}|${angleIdx}|${f}|${n}|${palette.join(',')}`;
   return cached(key, () => {
     const s = radius * 2 + 4;
     const cx = s / 2, cy = s / 2;
-    const ang = (angleIdx / 32) * TAU;
-    const a0 = ang - arc / 2;
+    const a0 = (angleIdx / 32) * TAU - arc / 2;
     const p = (f + 1) / n;
-    const sweep = arc * Math.min(1, p * 1.6);
+    const head = arc * Math.min(1, p * 1.45);
+    const tail = arc * 0.95;
     const fade = p > 0.6 ? (p - 0.6) / 0.4 : 0;
     const cols = palette.map(hexToRgb);
+    const top = cols.length - 1;
     return pixelCanvas(s, s, (x, y) => {
       const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
       const d = Math.hypot(dx, dy);
-      if (d > radius || d < radius * 0.32) return null;
+      if (d > radius) return null;
       let th = Math.atan2(dy, dx) - a0;
       th = ((th % TAU) + TAU) % TAU;
-      if (th > sweep) return null;
-      const u = sweep > 0 ? th / sweep : 0; // 0 tail .. 1 head
-      // Thickness tapers toward the tail.
-      const inner = radius * (0.92 - 0.55 * u);
+      if (th > head) return null;
+      const u = (head - th) / tail; // 0 at the leading edge, 1 at the tail end
+      if (u > 1) return null;
+      const thick = radius * (0.66 * (1 - u) * (1 - u * 0.4) + 0.06) * (1 - fade * 0.5);
+      const inner = radius - thick;
       if (d < inner) return null;
-      const rim = (d - inner) / Math.max(1, radius - inner); // 0 inner .. 1 outer
-      let v = u * 0.8 + rim * 0.35 - fade * 1.1 + (dither(x, y) - 0.5) * 0.3;
-      if (v < 0.08) return null;
-      const k = clamp(Math.floor(v * cols.length), 0, cols.length - 1);
+      const rim = (d - inner) / Math.max(1, thick); // 0 inner .. 1 outer
+      let v = (1 - u) * 0.8 + rim * 0.3 - fade;
+      // Only the far tail breaks up into dither.
+      if (u > 0.55 && v + (dither(x, y) - 0.5) * 0.35 < 0.2) return null;
+      if (v < 0.04) return null;
+      if (u < 0.12 && rim > 0.55 && fade < 0.5) return cols[top];
+      const k = clamp(Math.floor(v * top), 0, top - 1);
       return cols[k];
     });
   });

@@ -25,17 +25,17 @@ export const SPAWN_TABLE = [
 
 // Desired number of live enemies.
 export function targetCount(phase) {
-  return Math.min(460, 18 + phase * 11 + Math.max(0, phase - 10) * 9);
+  return Math.min(480, 22 + phase * 13 + Math.max(0, phase - 8) * 10);
 }
 
 // Extra health multiplier as the night goes on.
 export function hpScale(phase) {
-  return 1 + phase * 0.08 + Math.max(0, phase - 9) * 0.13 + Math.max(0, phase - 18) * 0.2;
+  return 1 + phase * 0.08 + Math.max(0, phase - 9) * 0.2 + Math.max(0, phase - 16) * 0.3;
 }
 
 // Timed events (phase minutes).
 export const EVENTS = [
-  { at: 2.5, type: 'swarm', enemy: 'bat', count: 22 },
+  { at: 2.5, type: 'swarm', enemy: 'bat', count: 16 },
   { at: 4.5, type: 'ring', enemy: 'skeleton', count: 26 },
   { at: 7, type: 'swarm', enemy: 'bat', count: 30 },
   { at: 9.5, type: 'pack', enemy: 'wolf', count: 8 },

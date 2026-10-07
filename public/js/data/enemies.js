@@ -2,17 +2,17 @@
 // spd is in world pixels per second; r is the collision radius.
 
 export const ENEMIES = {
-  bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, dmg: 4, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true },
-  rat: { name: 'Plague Rat', sprite: 'rat', hp: 7, spd: 44, dmg: 4, r: 4, xp: 1, ai: 'walker', mass: 0.6, anim: 8, death: 'blood' },
-  slime: { name: 'Bog Slime', sprite: 'slime', hp: 13, spd: 30, dmg: 5, r: 5, xp: 2, ai: 'hopper', mass: 1, anim: 3, death: 'goo', split: 'slimelet', splitN: 2 },
-  slimelet: { name: 'Slimelet', sprite: 'slimelet', hp: 5, spd: 40, dmg: 3, r: 3, xp: 1, ai: 'hopper', mass: 0.5, anim: 4, death: 'goo' },
-  skeleton: { name: 'Skeleton', sprite: 'skeleton', hp: 16, spd: 33, dmg: 6, r: 5, xp: 2, ai: 'walker', mass: 1, anim: 5, death: 'bones', rise: true },
-  zombie: { name: 'Ghoul', sprite: 'zombie', hp: 28, spd: 23, dmg: 8, r: 5, xp: 3, ai: 'walker', mass: 1.4, anim: 3.5, death: 'blood', rise: true },
+  bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, dmg: 3, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true },
+  rat: { name: 'Plague Rat', sprite: 'rat', hp: 7, spd: 44, dmg: 3, r: 4, xp: 1, ai: 'walker', mass: 0.6, anim: 8, death: 'blood' },
+  slime: { name: 'Bog Slime', sprite: 'slime', hp: 13, spd: 30, dmg: 4, r: 5, xp: 2, ai: 'hopper', mass: 1, anim: 3, death: 'goo', split: 'slimelet', splitN: 2 },
+  slimelet: { name: 'Slimelet', sprite: 'slimelet', hp: 5, spd: 40, dmg: 2, r: 3, xp: 1, ai: 'hopper', mass: 0.5, anim: 4, death: 'goo' },
+  skeleton: { name: 'Skeleton', sprite: 'skeleton', hp: 16, spd: 33, dmg: 5, r: 5, xp: 2, ai: 'walker', mass: 1, anim: 5, death: 'bones', rise: true },
+  zombie: { name: 'Ghoul', sprite: 'zombie', hp: 28, spd: 23, dmg: 7, r: 5, xp: 3, ai: 'walker', mass: 1.4, anim: 3.5, death: 'blood', rise: true },
   wolf: {
-    name: 'Dire Wolf', sprite: 'wolf', hp: 20, spd: 56, dmg: 7, r: 6, xp: 3, ai: 'charger', mass: 1.2, anim: 9, death: 'blood',
+    name: 'Dire Wolf', sprite: 'wolf', hp: 20, spd: 56, dmg: 6, r: 6, xp: 3, ai: 'charger', mass: 1.2, anim: 9, death: 'blood',
     charge: { range: 85, spd: 165, wind: 0.45, dur: 0.42, cd: 3.4 },
   },
-  goblin: { name: 'Goblin', sprite: 'goblin', hp: 12, spd: 45, dmg: 5, r: 4, xp: 1, ai: 'walker', mass: 0.8, anim: 7, death: 'blood', pack: 4 },
+  goblin: { name: 'Goblin', sprite: 'goblin', hp: 12, spd: 45, dmg: 4, r: 4, xp: 1, ai: 'walker', mass: 0.8, anim: 7, death: 'blood', pack: 4 },
   spider: { name: 'Widow Spider', sprite: 'spider', hp: 22, spd: 54, dmg: 7, r: 6, xp: 3, ai: 'skitter', mass: 1, anim: 10, death: 'dark' },
   ghost: { name: 'Wraith', sprite: 'ghost', hp: 26, spd: 35, dmg: 9, r: 5, xp: 4, ai: 'phaser', mass: 0.7, anim: 3, death: 'ecto', alpha: 0.78, kbRes: 0.5 },
   cultist: {

@@ -72,6 +72,7 @@ export class Weapon {
       this.fx = null;
     }
     this.cd = 0.2;
+    this.queue = 0; // the new form may not fire volleys
     this.recompute();
   }
 
@@ -85,7 +86,7 @@ export class Weapon {
       const r = K.fire(this);
       this.cd = typeof r === 'number' ? r : r === false ? 0.2 : this.s.cd;
     }
-    if (this.queue > 0) {
+    if (this.queue > 0 && K.shoot) {
       this.queueT -= dt;
       while (this.queue > 0 && this.queueT <= 0) {
         K.shoot(this, this.shot++);
@@ -122,6 +123,7 @@ export const KINDS = {
       if (i >= 2) ang += i % 4 < 2 ? 0.55 : -0.55;
       const holy = !!w.s.wave;
       g.effects.push(new Slash(g, w, ang, 30 * w.s.area, 2.4, w.s.dmg, holy));
+      p.swing(ang);
       if (holy) {
         spawnProjectile(g, {
           kind: 'wave', x: p.x, y: p.y, z: 7, ang, speed: 200, life: 0.6, r: 11 * w.s.area, dmg: w.s.dmg * 0.6,

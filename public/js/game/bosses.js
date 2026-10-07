@@ -176,7 +176,8 @@ export const BOSS_AI = {
       cast(e, 0.35);
       return [0, 0, 0];
     }
-    if (e.cd2 <= 0 || distP(e) < 45) {
+    // Blinks away when cornered, but not right after a blink: melee gets a window.
+    if (e.cd2 <= 0 || (distP(e) < 45 && e.cd2 < 3.5)) {
       e.cd2 = rand(6, 8);
       // Blink away in a puff of grave-light.
       g.particles.burst(e.x, e.y - 12, 0, 24, [PC.l, PC.L, PC.e], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
@@ -199,8 +200,8 @@ export const BOSS_AI = {
     // Keep a respectful distance and drift sideways.
     const d = distP(e);
     const a = angP(e);
-    if (d < 95) return [-Math.cos(a), -Math.sin(a), 1.3];
-    if (d > 165) return [Math.cos(a), Math.sin(a), 1.2];
+    if (d < 85) return [-Math.cos(a), -Math.sin(a), 1.05];
+    if (d > 160) return [Math.cos(a), Math.sin(a), 1.2];
     const side = Math.sin(e.life * 0.7) > 0 ? 1 : -1;
     return [-Math.sin(a) * side, Math.cos(a) * side, 0.8];
   },

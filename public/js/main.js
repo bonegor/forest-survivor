@@ -172,7 +172,7 @@ function botStep(g) {
     tx /= l;
     ty /= l;
     const px = -ty * side, py = tx * side; // tangent: circle the horde
-    const keep = near && near.boss ? 70 : p.id === 'knight' ? 26 : 44;
+    const keep = near && near.boss ? (p.id === 'knight' ? 30 : 70) : p.id === 'knight' ? 26 : 44;
     if (dn < keep) {
       fx = -tx * 1.2 + px;
       fy = -ty * 1.2 + py;
@@ -188,9 +188,18 @@ function botStep(g) {
   for (const e of g.enemies) {
     if (!e.boss || e.dead || e.sleeping) continue;
     const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
-    if (d < 90) {
-      fx += (dx / d) * 2.5 * (1 - d / 90);
-      fy += (dy / d) * 2.5 * (1 - d / 90);
+    const safe = p.id === 'knight' ? 30 : 90;
+    if (d < safe) {
+      fx += (dx / d) * 2.5 * (1 - d / safe);
+      fy += (dy / d) * 2.5 * (1 - d / safe);
+    }
+  }
+  // Hunt the boss down while healthy, like a player would.
+  if (g.boss && !g.boss.dead && !g.boss.sleeping && p.hp > p.maxHp * 0.45) {
+    const dx = g.boss.x - p.x, dy = g.boss.y - p.y, d = Math.hypot(dx, dy) || 1;
+    if (d > 50) {
+      fx += (dx / d) * 1.1;
+      fy += (dy / d) * 1.1;
     }
   }
   // Dodge missiles and telegraphed slams.
@@ -297,6 +306,7 @@ function sim(seconds, opts = {}) {
   input.bot = null;
   const p = g.player;
   return {
+    stats: g.stats,
     time: Math.round(g.time), state: g.state, level: p.level, hp: Math.round(p.hp), maxHp: p.maxHp, kills: g.kills, gold: g.gold,
     enemies: g.enemies.length, floor: g.floor, phase: +g.phase.toFixed(2),
     weapons: p.weapons.map((w) => `${w.id}:${w.level}`).join(' '), passives: [...p.passives].map(([k, v]) => `${k}:${v}`).join(' '),

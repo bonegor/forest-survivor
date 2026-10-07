@@ -44,7 +44,7 @@ export class Game {
     this.timeScale = 1;
     this.kills = 0;
     this.gold = 0;
-    this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0 };
+    this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0, minHp: 1, fromBoss: 0, fromMobs: 0, fromShots: 0, bossLog: [] };
     this.cam = { x: 0, y: 0, S: 4, W: 480, H: 270, pxW: 1920, pxH: 1080 };
     this.trauma = 0;
     this.hurtFlash = 0;
@@ -119,8 +119,10 @@ export class Game {
     return Math.min(f.cap, f.phase0 + (this.floorTime / 60) * f.rate);
   }
 
+  // Enemy damage stays gentle early and climbs once the night gets long.
   get dmgScale() {
-    return 1 + this.phase * 0.04;
+    const ph = this.phase;
+    return 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.045;
   }
 
   // ------------------------------------------------------------ floors --
@@ -297,6 +299,7 @@ export class Game {
   bossIntro(e) {
     e.sleeping = false;
     this.boss = e;
+    this.stats.bossLog.push({ id: e.type, t: Math.round(this.time), lvl: this.player.level, hp: Math.round(e.maxHp) });
     this.banner(e.def.name, e.def.title, e.def.color, 3);
     sfx('boss');
     this.shake(0.5);
@@ -500,6 +503,8 @@ export class Game {
   bossDefeated(e) {
     const p = this.player;
     this.stats.bosses++;
+    const log = this.stats.bossLog.find((b) => b.id === e.type && b.kill === undefined);
+    if (log) log.kill = Math.round(this.time - log.t);
     if (this.boss === e) this.boss = null;
     this.timeScale = 0.35;
     this.slowT = 1.1;
@@ -1093,8 +1098,8 @@ export class Game {
     // Lighting.
     this.world.addLights(this);
     const flick = 0.94 + 0.06 * Math.sin(this.time * 9) * Math.sin(this.time * 5.3);
-    this.light(p.x, p.y - 6, (this.mode === 'dungeon' ? 125 : 105) * flick, 'warm', 1);
-    this.light(p.x, p.y - 6, 40, 'white', 0.5);
+    this.light(p.x, p.y - 6, (this.mode === 'dungeon' ? 130 : 125) * flick, 'warm', 1);
+    this.light(p.x, p.y - 8, 46, 'white', 0.7);
     this.lighting.render(ctx, c, this.world.ambient());
 
     // Unlit / additive layers.
@@ -1154,7 +1159,9 @@ export class Game {
     let img = p.flash > 0 ? fr.white(flip) : fr.get(flip);
     const bob = moving ? (Math.floor(p.anim) % 2) * -1 : Math.sin(p.anim * 2) > 0.6 ? -1 : 0;
     const w = img.width * S, h = img.height * S;
-    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y) * S - h + S + bob * S);
+    const lunge = p.swingT > 0 ? Math.sin((p.swingT / 0.14) * Math.PI) * 2.5 : 0;
+    const lx = p.swingT > 0 ? Math.cos(p.swingAng) * lunge : 0, ly = p.swingT > 0 ? Math.sin(p.swingAng) * lunge * 0.6 : 0;
+    const X = Math.round((p.x + lx - c.x) * S - w / 2), Y = Math.round((p.y + ly - c.y) * S - h + S + bob * S);
     let alpha = 1;
     if (p.invuln > 0 && !(p.ult && p.ult.type === 'shadowdance') && Math.floor(p.invuln * 18) % 2 === 0) alpha = 0.45;
     if (p.ult && p.ult.type === 'shadowdance') alpha = 0.35 + 0.15 * Math.sin(this.time * 20);

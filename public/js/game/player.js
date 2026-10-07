@@ -8,12 +8,12 @@ import { clamp, damp, rand, TAU } from '../engine/util.js';
 import { PC, P } from './particles.js';
 
 export const BASE_SPEED = 70;
-export const BASE_MAGNET = 34;
+export const BASE_MAGNET = 42;
 
 export function xpFor(level) {
   if (level < 20) return 5 + (level - 1) * 10;
-  if (level < 40) return 200 + (level - 20) * 16;
-  return 520 + (level - 40) * 26;
+  if (level < 40) return 200 + (level - 20) * 18;
+  return 560 + (level - 40) * 55;
 }
 
 export class Player {
@@ -76,11 +76,18 @@ export class Player {
     this.luck = (h.luck || 1) * m.luck * (1 + this.passiveSum('luck'));
     this.growth = (h.growth || 1) * m.growth * (1 + this.passiveSum('growth'));
     this.greed = m.greed;
-    this.regen = m.regen + this.passiveSum('regen');
+    this.regen = (h.regen || 0) + m.regen + this.passiveSum('regen');
     this.crit = 0.05 + (h.crit || 0) + this.passiveSum('crit');
     this.critMult = 2;
     if (oldMax && this.maxHp > oldMax) this.hp += this.maxHp - oldMax;
     for (const w of this.weapons) w.recompute();
+  }
+
+  // Attack pose: face the swing and lunge a step into it.
+  swing(ang) {
+    this.swingT = 0.14;
+    this.swingAng = ang;
+    if (Math.abs(Math.cos(ang)) > 0.2) this.face = Math.cos(ang) < 0 ? -1 : 1;
   }
 
   buff(id) {
@@ -141,6 +148,7 @@ export class Player {
     }
 
     this.invuln = Math.max(0, this.invuln - dt);
+    this.swingT = Math.max(0, (this.swingT || 0) - dt);
     this.flash = Math.max(0, this.flash - dt);
 
     // Low health heartbeat.
@@ -176,10 +184,14 @@ export class Player {
     if (this.ult && this.ult.type === 'whirlwind') dmg *= 0.5;
     dmg = Math.round(dmg);
     this.hp -= dmg;
-    this.invuln = 0.5;
+    this.invuln = 0.6;
     this.flash = 0.12;
     this.fury = Math.min(100, this.fury + 2.5);
     g.stats.damageTaken += dmg;
+    if (src && src.boss) g.stats.fromBoss += dmg;
+    else if (src) g.stats.fromMobs += dmg;
+    else g.stats.fromShots += dmg;
+    g.stats.minHp = Math.min(g.stats.minHp, Math.max(0, this.hp) / this.maxHp);
     g.numbers.add(this.x, this.y - 18, dmg, 'player');
     g.shake(0.35);
     g.hurtFlash = 0.35;

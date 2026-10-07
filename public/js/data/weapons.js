@@ -10,7 +10,7 @@ export const WEAPONS = {
     icon: 'i_sword',
     kind: 'sword',
     desc: 'Cleaves everything in front of you.',
-    base: { dmg: 15, cd: 1.15, amount: 1, area: 1, kb: 1.3 },
+    base: { dmg: 15, cd: 1, amount: 1, area: 1, kb: 1.3 },
     levels: [
       { amount: 1, text: 'Also slashes {behind} you.' },
       { dmg: 6, text: 'Damage {+6}.' },

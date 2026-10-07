@@ -50,9 +50,9 @@ export class Spawner {
     if (this.acc <= 0) {
       const alive = g.hostileCount;
       const deficit = target - alive;
-      this.acc = deficit > target * 0.5 ? 0.22 : deficit > 0 ? 0.5 : 1.2;
+      this.acc = deficit > target * 0.5 ? 0.18 : deficit > 0 ? 0.4 : 1.2;
       if (deficit > 0) {
-        const n = Math.min(Math.ceil(deficit), 2 + Math.floor(phase / 3));
+        const n = Math.min(Math.ceil(deficit), 3 + Math.floor(phase * 0.7));
         const st = this.stats(phase);
         for (let i = 0; i < n; i++) {
           const type = this.pickType(phase);
@@ -135,7 +135,7 @@ export class Spawner {
           const off = (i / ev.count - 0.5) * 120;
           const x = sx - dy * off + rand(-10, 10), y = sy + dx * off + rand(-10, 10);
           const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6 });
-          if (e) e.spd *= 1.4;
+          if (e) e.spd *= 1.2;
         }
         sfx('charge');
         break;

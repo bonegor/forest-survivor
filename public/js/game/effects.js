@@ -18,7 +18,7 @@ const toScreen = (cam, x, y) => [(x - cam.x) * cam.S, (y - cam.y) * cam.S];
 
 // ------------------------------------------------------------------ slash --
 
-const STEEL = ['#3a4466', '#8b9bb4', '#c0cbdc', '#ffffff'];
+const STEEL = ['#5a6988', '#8b9bb4', '#c0cbdc', '#e8f4ff', '#ffffff'];
 const HOLY = ['#be4a2f', '#f77622', '#feae34', '#fee761', '#ffffff'];
 
 export class Slash {

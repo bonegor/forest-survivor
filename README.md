@@ -28,12 +28,15 @@ Weapons fire automatically. Collect soul gems to level up; every level offers a 
 
 ### Heroes
 
-| Hero | Starts with | Perk | Ultimate |
-| --- | --- | --- | --- |
-| Sir Aldric, Knight | Longsword | +2 armor, high health | Whirlwind |
-| Lyra, Ranger | Hunting Bow | +crit, +speed | Arrow Storm |
-| Eldrin, Sorcerer | Fireball | −cooldowns, +area, +XP | Cataclysm |
-| Kael, Shadow *(unlock: 1500 gold)* | Throwing Daggers | +crit, +speed, +luck | Shadow Dance |
+| Hero | Unlock | Starts with | Perk | Ultimate |
+| --- | --- | --- | --- | --- |
+| Sir Aldric, Knight | — | Longsword | +2 armor, +40% health, slow regeneration | Whirlwind |
+| Lyra, Ranger | 500 gold | Hunting Bow | +crit, +speed | Arrow Storm |
+| Eldrin, Sorcerer | 1 500 gold | Fireball | −cooldowns, +area, +XP | Cataclysm |
+| Kael, Shadow | 4 500 gold | Throwing Daggers | +crit, +speed, +luck | Shadow Dance |
+| Morvath, Necromancer | 13 500 gold | Raise Dead (skeleton minions) | minions last 30% longer, +10% XP | Army of the Dead |
+
+The Knight is the starting hero. The others unlock in order, and each costs three times the one before.
 
 ### Modes
 
@@ -65,6 +68,7 @@ Both modes have **Easy / Medium / Hard**. Harder runs pay more gold.
 | Chain Lightning | Echo Rune | Thunderstorm |
 | Throwing Daggers | Swift Boots | Shadowstrike |
 | Frost Nova | Vitality Amulet | Frozen Heart |
+| Raise Dead *(Necromancer only)* | Scholar's Crown | Legion of the Damned |
 
 ## Saving: everything lives in cookies
 
@@ -96,7 +100,7 @@ POSTs must be `application/json`. Cookies are `SameSite=Lax`, and `Secure` behin
 
 ## Meta-progression (the Armory)
 
-Gold from runs buys permanent ranks: Might, Armor, Vitality, Recovery, Haste, Reach, Swiftness, Magnetism, Fortune, Wisdom, Greed, Insight (rerolls) and Second Wind (a revive). Ranks can be refunded at any time. Gold also unlocks the Shadow.
+Gold from runs buys permanent ranks: Might, Armor, Vitality, Recovery, Haste, Reach, Swiftness, Magnetism, Fortune, Wisdom, Greed, Insight (rerolls) and Second Wind (a revive). Ranks can be refunded at any time. Gold also unlocks the other heroes (see above).
 
 ## Project layout
 
@@ -125,6 +129,8 @@ node tools/preview.mjs knight bat --scale=8      # render sprites to tools/out/s
 node tools/play.mjs smoke                        # headless screenshots (needs the server running)
 node tools/play.mjs sim --hero=archer --mode=s15 --secs=900   # bot plays a run, logs progress
 node tools/play.mjs ui                           # screenshot every menu and overlay
+node tools/balance.mjs --hero=knight --configs=s15:easy,s15:hard --runs=2   # bot balance report
+node tools/watch.mjs --mode=s15 --from=0 --to=600 --every=60                # gameplay screenshots over a run
 ```
 
 In the browser console, `__fs.sim(seconds)` fast-forwards the current run with the bot.
