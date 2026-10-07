@@ -189,7 +189,7 @@ export class Player {
 
   hurt(amount, src) {
     const g = this.g;
-    if (this.dead || this.untouchable) return 0;
+    if (this.dead || this.untouchable || this.devGod) return 0;
     let dmg = amount * g.diff.dmg;
     dmg = Math.max(1, dmg - this.armor);
     if (this.buff('protection')) dmg *= 0.5;

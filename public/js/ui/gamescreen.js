@@ -68,7 +68,7 @@ export class GameScreen {
       }
       if (input.pressed('map') && g.mode === 'dungeon') g.showMap = !g.showMap;
       if (input.pressed('fps')) app.settings.fps = !app.settings.fps;
-      g.update(dt);
+      if (!app.devHold) g.update(dt); // the developer panel can freeze the action
       if (g.state === 'play' && g.pendingLevels > 0) {
         g.state = 'levelup';
         this.open(new LevelUpOverlay(this));

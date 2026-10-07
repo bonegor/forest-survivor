@@ -166,6 +166,39 @@ export const store = {
     return r.ok;
   },
 
+  // ------------------------------------------------------ developer mode --
+  // On the server these need a developer session (see server.js); with plain
+  // static hosting the save is a client cookie anyway, so they just work.
+
+  async devStatus() {
+    if (this.mode !== 'server') return { enabled: true, open: true, authed: true, local: true };
+    try {
+      return await api('dev');
+    } catch {
+      return { enabled: false, open: false, authed: false };
+    }
+  },
+
+  async devLogin(key) {
+    return api('dev/login', { key });
+  },
+
+  async devLogout() {
+    return api('dev/logout', {});
+  },
+
+  // Replace the whole profile with anything (it is still sanitized).
+  async devSaveProfile(profile) {
+    if (this.mode === 'server') {
+      const data = await api('dev/profile', { profile });
+      this.profile = P.sanitizeProfile(data.profile);
+    } else {
+      this.profile = P.sanitizeProfile(profile);
+      this.saveLocal();
+    }
+    return this.profile;
+  },
+
   async reset() {
     if (this.mode === 'server') {
       const data = await api('reset', {});

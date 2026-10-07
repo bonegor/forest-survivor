@@ -134,7 +134,10 @@ function toUI(clientX, clientY) {
 }
 
 export function initInput(canvas) {
+  // Typing into a form field (the developer panel) is not game input.
+  const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || '');
   window.addEventListener('keydown', (e) => {
+    if (typing(e)) return;
     if (PREVENT.has(e.code)) e.preventDefault();
     if (!e.repeat) {
       input.justDown.add(e.code);

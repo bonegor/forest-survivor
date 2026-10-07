@@ -8,6 +8,7 @@ Everything is hand-made in code: pixel-art sprites authored as palette strings, 
 
 ```bash
 npm start          # http://localhost:3000
+npm run dev        # same, with developer mode open and auto-restart
 npm test           # profile + server tests
 ```
 
@@ -110,8 +111,27 @@ If the game is served as plain static files (no `/api`), it falls back to plain 
 | POST | `/api/refund` | — | refund all Armory ranks |
 | POST | `/api/unlock` | `{ hero }` | buy the next hero (after a Hard night with the one before) |
 | POST | `/api/reset` | — | wipe progress |
+| GET | `/api/dev` | — | developer mode status: `{ enabled, open, authed }` |
+| POST | `/api/dev/login` | `{ key }` | start a 12-hour developer session (with `DEV_KEY`) |
+| POST | `/api/dev/logout` | — | end the developer session |
+| POST | `/api/dev/profile` | `{ profile }` | replace the whole profile (developer session only; still sanitized) |
 
 POSTs must be `application/json`. Cookies are `SameSite=Lax`, and `Secure` behind HTTPS (including `X-Forwarded-Proto`).
+
+## Developer mode
+
+A panel for editing your save and bending a run, for testing. Press **`** (backtick) in the game, or add `?dev` to the URL to get a small **DEV** button (handy on a phone).
+
+| Start the server with | Who can use the panel |
+| --- | --- |
+| `npm run dev` | anyone who can reach the server, no key. It listens on this machine only (set `HOST=0.0.0.0` to test from a phone on your network) and restarts on file changes |
+| `DEV_KEY=<long secret> npm start` | whoever logs in with that key; the session lasts 12 hours |
+| `npm start` | nobody: the panel only says developer mode is off |
+
+The server checks every edit, so shipping the panel's code to players unlocks nothing. With plain static hosting the save is a client cookie anyway, so the panel just works there.
+
+- **Save file:** presets for each rung of the ladder (fresh start, Survival ladder done, Dungeon open to all, unlock everything, +10 000 gold, max/clear Armory); gold, owned heroes, every hero's achievements and Ranked best, victories, Armory ranks, records; delete the saved run; and a raw JSON editor for anything else.
+- **This run:** live status; invincibility; freeze the game; +1 level (choose a card) or +10 levels (cards picked for you); full heal and fury; max or evolve all weapons; give any weapon or relic; open a chest; kill all foes; skip or set the clock; spawn any boss; next dungeon floor; win or die now. Results still go through the normal rules, so a developer win records wins and unlocks like a real one.
 
 ## Meta-progression (the Armory)
 

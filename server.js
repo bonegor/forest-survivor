@@ -7,7 +7,7 @@
 // thing the server persists is its key (.data/cookie-secret, or COOKIE_SECRET).
 
 import http from 'node:http';
-import { createHmac, createCipheriv, createDecipheriv, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, createCipheriv, createDecipheriv, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -19,6 +19,8 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
 const PROFILE_COOKIE = 'fs_profile';
 const RUN_COOKIE = 'fs_run';
+const DEV_COOKIE = 'fs_dev';
+const DEV_SESSION = 12 * 60 * 60 * 1000; // a developer login lasts 12 hours
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 400; // browsers cap cookie lifetime at ~400 days
 const MAX_BODY = 8 * 1024;
 
@@ -129,9 +131,9 @@ function isHttps(req) {
   return req.socket.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 }
 
-function cookieHeader(req, name, value) {
+function cookieHeader(req, name, value, maxAge = COOKIE_MAX_AGE) {
   const parts = [`${name}=${value ?? ''}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
-  parts.push(value == null ? 'Max-Age=0' : `Max-Age=${COOKIE_MAX_AGE}`);
+  parts.push(value == null ? 'Max-Age=0' : `Max-Age=${maxAge}`);
   if (isHttps(req)) parts.push('Secure');
   return parts.join('; ');
 }
@@ -224,8 +226,19 @@ function createStatic(publicDir) {
 
 // -------------------------------------------------------------------- api --
 
-export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC } = {}) {
+// Developer mode (edit any profile from the in-game panel) is off unless the
+// server is started with --dev (open to anyone who can reach it: local use
+// only) or with DEV_KEY set (the panel asks for the key, then keeps a
+// 12-hour session cookie).
+export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, devKey = process.env.DEV_KEY || '', devOpen = false } = {}) {
   const box = sealer(secret);
+  const digest = (s) => createHash('sha256').update(String(s)).digest();
+  const isDev = (req) => {
+    if (devOpen) return true;
+    if (!devKey) return false;
+    const s = box.open(DEV_COOKIE, parseCookies(req.headers.cookie)[DEV_COOKIE]);
+    return s.status === 'ok' && typeof s.data?.exp === 'number' && s.data.exp > Date.now();
+  };
   const serveStatic = createStatic(publicDir);
 
   const openCookie = (req, name) => box.open(name, parseCookies(req.headers.cookie)[name]);
@@ -251,6 +264,9 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC } =
       if (run.status === 'legacy') cookies.push(runCookie(req, checkpoint));
       return sendJson(res, 200, out, cookies);
     }
+    if (req.method === 'GET' && route === 'dev') {
+      return sendJson(res, 200, { enabled: devOpen || !!devKey, open: devOpen, authed: isDev(req) });
+    }
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
     // JSON-only POSTs cannot be forged by a plain cross-site form.
     if (!/^application\/json\b/.test(req.headers['content-type'] || '')) {
@@ -258,6 +274,26 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC } =
     }
     const body = await readJson(req);
     const profile = readProfile(req);
+
+    if (route.startsWith('dev/')) {
+      if (!devOpen && !devKey) return sendJson(res, 404, { error: 'Developer mode is off' });
+      if (route === 'dev/login') {
+        if (devOpen) return sendJson(res, 200, { authed: true });
+        if (!body || !timingSafeEqual(digest(body.key), digest(devKey))) {
+          await new Promise((r) => setTimeout(r, 600)); // slow down guessing
+          return sendJson(res, 403, { error: 'Wrong key' });
+        }
+        const session = box.seal(DEV_COOKIE, { exp: Date.now() + DEV_SESSION });
+        return sendJson(res, 200, { authed: true }, [cookieHeader(req, DEV_COOKIE, session, DEV_SESSION / 1000)]);
+      }
+      if (route === 'dev/logout') return sendJson(res, 200, { authed: devOpen }, [cookieHeader(req, DEV_COOKIE, null)]);
+      if (!isDev(req)) return sendJson(res, 403, { error: 'Developer login required' });
+      if (route === 'dev/profile') {
+        const p = P.sanitizeProfile(body && body.profile);
+        return sendJson(res, 200, { profile: p }, [profileCookie(req, p)]);
+      }
+      return sendJson(res, 404, { error: 'Unknown endpoint' });
+    }
 
     switch (route) {
       case 'run': {
@@ -314,8 +350,12 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC } =
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 3000;
-  const host = process.env.HOST || '0.0.0.0';
-  createServer().listen(port, host, () => {
+  const devOpen = process.argv.includes('--dev');
+  // Open developer mode stays on this machine unless HOST says otherwise.
+  const host = process.env.HOST || (devOpen ? '127.0.0.1' : '0.0.0.0');
+  createServer({ devOpen }).listen(port, host, () => {
     console.log(`Forest Survivor is running at http://localhost:${port}`);
+    if (devOpen) console.warn('[forest-survivor] Developer mode is OPEN: anyone who can reach this server can edit saves. Press ` in the game.');
+    else if (process.env.DEV_KEY) console.log('[forest-survivor] Developer mode needs the DEV_KEY. Press ` in the game to log in.');
   });
 }

@@ -142,6 +142,18 @@ async function boot() {
   canvas.focus();
   app.go('title');
   requestAnimationFrame(loop);
+  // Developer panel: loaded on demand with ` (or straight away with ?dev).
+  let devPanel = null;
+  const openDev = async () => {
+    devPanel = devPanel || (await import('./dev/panel.js')).createDevPanel(app);
+    return devPanel;
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Backquote' || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || '')) return;
+    e.preventDefault();
+    openDev().then((p) => p.toggle());
+  });
+  if (new URLSearchParams(location.search).has('dev')) openDev();
 }
 
 // Hooks for automated play-testing: a crude bot that kites the horde.

@@ -1,12 +1,12 @@
 {
   "name": "forest-survivor",
   "version": "1.0.0",
-  "description": "A medieval, Diablo-flavoured survivors-like for the browser. Zero-dependency Node server; all player state lives in signed cookies.",
+  "description": "A medieval, Diablo-flavoured survivors-like for the browser. Zero-dependency Node server; all player state lives in encrypted cookies.",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "node --watch server.js --dev",
     "test": "node --test"
   },
   "engines": {

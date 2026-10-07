@@ -6,8 +6,8 @@ import { encodeState } from '../public/js/shared/profile.js';
 
 const SECRET = 'test-secret-'.padEnd(40, 'x');
 
-async function withServer(fn, secret = SECRET) {
-  const server = createServer({ secret });
+async function withServer(fn, opts = {}) {
+  const server = createServer({ secret: SECRET, devKey: '', ...opts });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
@@ -126,7 +126,7 @@ test('saves from a server with a different key are unreadable, not silently wipe
     c.jar.fs_profile = cookie;
     const data = await (await c.get('/api/state')).json();
     assert.deepEqual(data.unreadable, { profile: true, run: false });
-  }, 'another-secret-'.padEnd(40, 'y'));
+  }, { secret: 'another-secret-'.padEnd(40, 'y') });
 });
 
 test('a profile cookie cannot pose as a saved run', async () => {
@@ -188,4 +188,47 @@ test('rejects non-JSON posts and unknown routes', async () => {
     const c = client(base);
     assert.equal((await c.post('/api/nope', {})).status, 404);
   });
+});
+
+test('developer mode is off unless the server enables it', async () => {
+  await withServer(async (base) => {
+    const c = client(base);
+    assert.deepEqual(await (await c.get('/api/dev')).json(), { enabled: false, open: false, authed: false });
+    assert.equal((await c.post('/api/dev/profile', { profile: { gold: 1e6 } })).status, 404);
+    assert.equal((await c.post('/api/dev/login', { key: '' })).status, 404);
+    assert.equal((await (await c.get('/api/state')).json()).profile.gold, 0);
+  });
+});
+
+test('with DEV_KEY, the panel must log in before it can edit a save', async () => {
+  await withServer(async (base) => {
+    const c = client(base);
+    assert.deepEqual(await (await c.get('/api/dev')).json(), { enabled: true, open: false, authed: false });
+    assert.equal((await c.post('/api/dev/profile', { profile: { gold: 5 } })).status, 403);
+    assert.equal((await c.post('/api/dev/login', { key: 'guess' })).status, 403);
+    assert.equal(c.jar.fs_dev, undefined);
+    assert.equal((await c.post('/api/dev/login', { key: 'open-sesame' })).status, 200);
+    assert.match(c.jar.fs_dev, /^e1\./, 'the session is an encrypted cookie');
+    assert.equal((await (await c.get('/api/dev')).json()).authed, true);
+    const everything = { gold: 123456, heroes: ['knight', 'archer', 'mage', 'rogue', 'necromancer'], feats: { necromancer: 7 }, ranked: { mage: 1800 }, up: { might: 99 } };
+    const data = await (await c.post('/api/dev/profile', { profile: everything })).json();
+    assert.equal(data.profile.gold, 123456);
+    assert.equal(data.profile.up.might, 5, 'still sanitized');
+    const state = await (await c.get('/api/state')).json();
+    assert.equal(state.profile.ranked.mage, 1800);
+    assert.equal(state.profile.feats.necromancer, 7);
+    await c.post('/api/dev/logout', {});
+    assert.equal((await c.post('/api/dev/profile', { profile: {} })).status, 403);
+    // Another browser without the session can't edit.
+    assert.equal((await client(base).post('/api/dev/profile', { profile: { gold: 9 } })).status, 403);
+  }, { devKey: 'open-sesame' });
+});
+
+test('npm run dev opens developer mode without a key', async () => {
+  await withServer(async (base) => {
+    const c = client(base);
+    assert.deepEqual(await (await c.get('/api/dev')).json(), { enabled: true, open: true, authed: true });
+    const data = await (await c.post('/api/dev/profile', { profile: { gold: 777 } })).json();
+    assert.equal(data.profile.gold, 777);
+  }, { devOpen: true });
 });
