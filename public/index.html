@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Forest Survivor</title>
+  <meta name="description" content="Survive the night. Delve the depths. A medieval survivors-like with knights, archers and mages.">
+  <meta name="theme-color" content="#0d0b14">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <style>
+    html, body { margin: 0; height: 100%; background: #0d0b14; overflow: hidden; overscroll-behavior: none; }
+    body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+    canvas#game { position: fixed; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated; outline: none; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; color: #8b9bb4; font: 16px/1.4 monospace; letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+  <canvas id="game" tabindex="0" aria-label="Forest Survivor game"></canvas>
+  <div id="loading">LIGHTING THE TORCHES…</div>
+  <noscript><p style="color:#c0cbdc;font:16px monospace;padding:2em">Forest Survivor needs JavaScript.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
