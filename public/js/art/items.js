@@ -545,6 +545,45 @@ export const ICON_ART = {
     ]],
   },
 
+  i_raise: {
+    emissive: 'lLw',
+    frames: [[
+      '....l..L......',
+      '...lL.lLl.....',
+      '..lLlLlLLl....',
+      '..LlzzzzlL....',
+      '..lzzzzzzl....',
+      '..zzkkzkkz....',
+      '..zzklzklz....',
+      '..zzzzzzzz....',
+      '...zkzkzkz....',
+      '...zzzzzz..z..',
+      '.z..ZZZZ..zZz.',
+      'zZz.......zZ..',
+      '.zZz.....zZz..',
+      '..zZ......z...',
+    ]],
+  },
+  i_legion: {
+    emissive: 'lLwy',
+    frames: [[
+      '..y..y..y.....',
+      '..yy.Y.yy..l..',
+      '..yyyyyyy.lLl.',
+      '..zzzzzzz.LlL.',
+      '.zzzzzzzzz.l..',
+      '.zzkkzzkkz....',
+      '.zzklzzklz..l.',
+      '.zzzzzzzzz.lL.',
+      '..zkzkzkz..Ll.',
+      'l..zzzzz...l..',
+      'Ll.........L..',
+      'lLl...l...lLl.',
+      '.Ll..lLl..Ll..',
+      '..l..LlL..l...',
+    ]],
+  },
+
   // --------------------------------------------------------------- passives
   i_might: {
     frames: [[

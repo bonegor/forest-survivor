@@ -25,6 +25,7 @@ import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile, spawnProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, setUltDaggerSpawner } from './effects.js';
 import { shadowSprite, glow, splatSprite, vignette } from './fxsprites.js';
+import { Minion } from './minions.js';
 
 const tmp = [];
 
@@ -71,6 +72,7 @@ export class Game {
     this.propCount = 0;
 
     this.enemies = [];
+    this.minions = [];
     this.projectiles = [];
     this.eshots = [];
     this.pickups = [];
@@ -133,6 +135,7 @@ export class Game {
     for (const p of this.projectiles) releaseProjectile(p);
     this.projectiles.length = 0;
     this.eshots.length = 0;
+    this.minions.length = 0;
     this.pickups.length = 0;
     this.decals.length = 0;
     this.shrines.length = 0;
@@ -208,7 +211,7 @@ export class Game {
     if (c.type === 'weapon') {
       const w = p.weapons.find((x) => x.id === c.id);
       if (w) w.levelUp();
-      else this.addWeapon(c.id);
+      else if (!this.ownsWeapon(c.id) && p.weapons.length < 6) this.addWeapon(c.id);
     } else if (c.type === 'passive') {
       p.passives.set(c.id, (p.passives.get(c.id) || 0) + 1);
       p.recompute();
@@ -703,6 +706,15 @@ export class Game {
     else if (type === 'shadowdance') {
       this.effects.push(new ShadowDance(this, dur));
       p.invuln = dur;
+    } else if (type === 'deadrise') {
+      // Army of the Dead: a ring of empowered death knights.
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * TAU;
+        const spot = this.world.freeSpot(p.x + Math.cos(a) * 34, p.y + Math.sin(a) * 26);
+        if (spot) this.minions.push(new Minion(this, spot.x, spot.y, { dmg: 24, dur: 11 * p.duration, speed: 1.3, knight: true, burst: true, ult: true }));
+      }
+      this.effects.push(new Ring(this, p.x, p.y, 6, 110, 0.7, '#9ee562', false, 3));
+      this.pushback(p.x, p.y, 70, 260);
     }
   }
 
@@ -903,6 +915,7 @@ export class Game {
 
     if (this.state === 'play') {
       for (const w of p.weapons) w.update(dt);
+      updateList(this.minions, dt);
     }
     updateList(this.projectiles, dt, releaseProjectile);
     updateList(this.eshots, dt);
@@ -1048,6 +1061,7 @@ export class Game {
     for (const e of this.enemies) {
       if (!e.dead && onScreen(c, e.x, e.y, 40)) e.drawShadow(ctx, c);
     }
+    for (const m of this.minions) if (onScreen(c, m.x, m.y, 40)) m.drawShadow(ctx, c);
     if (!p.dead) {
       const shd = shadowSprite(10);
       ctx.globalAlpha = 0.55;
@@ -1061,12 +1075,13 @@ export class Game {
     this.world.collectProps(c, list);
     for (const s of this.shrines) list.push(s);
     for (const e of this.enemies) if (!e.dead && onScreen(c, e.x, e.y, 60)) list.push(e);
+    for (const m of this.minions) if (onScreen(c, m.x, m.y, 60)) list.push(m);
     list.push(p);
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
       if (o === p) this.drawPlayer(ctx, c);
       else if (o.shrine) this.drawShrine(ctx, c, o);
-      else if (o.def) o.draw(ctx, c);
+      else if (o.def || o.minion) o.draw(ctx, c);
       else this.world.drawProp(ctx, c, o, this.time);
     }
 
@@ -1084,7 +1099,7 @@ export class Game {
 
     // Unlit / additive layers.
     for (const o of list) {
-      if (o.def) o.drawEmissive(ctx, c);
+      if (o.def || o.minion) o.drawEmissive(ctx, c);
       else if (o === p) this.drawPlayerEmissive(ctx, c);
       else if (!o.shrine && this.world.drawPropEmissive) this.world.drawPropEmissive(ctx, o);
     }
@@ -1095,6 +1110,7 @@ export class Game {
     for (const pr of this.projectiles) pr.drawGlow(ctx, c);
     for (const s of this.eshots) s.drawGlow(ctx, c);
     for (const e of this.enemies) if (!e.dead && (e.elite || e.boss) && onScreen(c, e.x, e.y, 60)) e.drawGlow(ctx, c);
+    for (const m of this.minions) if (onScreen(c, m.x, m.y, 40)) m.drawGlow(ctx, c);
     this.particles.draw(ctx, c, true);
     ctx.globalCompositeOperation = 'source-over';
 

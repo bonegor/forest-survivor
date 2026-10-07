@@ -1,5 +1,6 @@
 // Monster sprites, facing right. Light comes from the top-left.
 
+// Allied undead raised by the Necromancer reuse these rows (see bottom).
 export const MONSTER_ART = {
   bat: {
     emissive: 'x',
@@ -496,3 +497,16 @@ export const MONSTER_ART = {
     ],
   },
 };
+
+// Raised allies: same bones, green soul-fire instead of red eyes.
+const recolor = (def, map) => ({
+  ...def,
+  emissive: 'l',
+  frames: def.frames.map((f) =>
+    Array.isArray(f)
+      ? f.map((r) => r.replace(/./g, (ch) => map[ch] ?? ch))
+      : { from: f.from, rows: Object.fromEntries(Object.entries(f.rows).map(([k, r]) => [k, r.replace(/./g, (ch) => map[ch] ?? ch)])) },
+  ),
+});
+MONSTER_ART.minion = recolor(MONSTER_ART.skeleton, { x: 'l', Z: 'G' });
+MONSTER_ART.legionnaire = recolor(MONSTER_ART.deathknight, { c: 'l', R: 'E', m: 'v' });

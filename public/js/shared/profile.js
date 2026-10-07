@@ -7,8 +7,10 @@
 export const VERSION = 1;
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
 export const MODES = ['s15', 's30', 'dungeon'];
-export const BASE_HEROES = ['knight', 'archer', 'mage'];
-export const HERO_UNLOCKS = { rogue: 1500 };
+// Heroes unlock in this order, each costing three times the last.
+export const HERO_ORDER = ['knight', 'archer', 'mage', 'rogue', 'necromancer'];
+export const BASE_HEROES = ['knight'];
+export const HERO_UNLOCKS = { archer: 500, mage: 1500, rogue: 4500, necromancer: 13500 };
 
 // Permanent upgrades bought with gold. Rank n+1 costs `cost * (n + 1)`.
 export const UPGRADES = [
@@ -107,11 +109,17 @@ export function refundUpgrades(profile) {
   return { ok: true, profile: p, refunded };
 }
 
+// The next hero waiting to be unlocked, or null when all are free.
+export function nextHeroUnlock(profile) {
+  return HERO_ORDER.find((h) => !profile.heroes.includes(h)) || null;
+}
+
 export function unlockHero(profile, id) {
   const p = sanitizeProfile(profile);
   const cost = HERO_UNLOCKS[id];
   if (!cost) return { ok: false, profile: p, error: 'Unknown hero' };
   if (p.heroes.includes(id)) return { ok: false, profile: p, error: 'Already unlocked' };
+  if (nextHeroUnlock(p) !== id) return { ok: false, profile: p, error: 'Unlock the previous hero first' };
   if (p.gold < cost) return { ok: false, profile: p, error: 'Not enough gold' };
   p.gold -= cost;
   p.heroes.push(id);

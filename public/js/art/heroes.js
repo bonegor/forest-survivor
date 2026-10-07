@@ -1,6 +1,38 @@
 // Hero sprites, facing right. Light comes from the top-left.
 
 export const HERO_ART = {
+  necromancer: {
+    emissive: 'lL',
+    frames: [
+      [
+        '.....hhhh.......',
+        '....haaaah...lL.',
+        '...haAAaaah.lLlL',
+        '...hazzzZah.Llzl',
+        '...hzlzlZah.lzzL',
+        '...hazZzZah..zz.',
+        '..hhaZkZZahh..b.',
+        '.haaAhhhhaaah.b.',
+        '.hAlahaaahalaZb.',
+        '.hAl.haaah.la.m.',
+        '.Za..hLlLh..a.b.',
+        '.....haaaah...b.',
+        '....haaaaaah..b.',
+        '....haLaaLah..m.',
+        '...hhaaaaaahh.b.',
+        '...hLLhhhhLLh.b.',
+        '....mm....mm..m.',
+      ],
+      {
+        from: 0,
+        rows: {
+          15: '...hLLhhhhLLh.b.',
+          16: '...mm......mm.m.',
+        },
+      },
+    ],
+  },
+
   rogue: {
     emissive: '',
     frames: [

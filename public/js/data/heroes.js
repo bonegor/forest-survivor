@@ -52,8 +52,21 @@ export const HEROES = {
     ult: 'shadowdance',
     ultName: 'Shadow Dance',
     ultDesc: 'Vanish for 3s: untouchable, and blades fly in every direction.',
-    unlock: 1500,
+  },
+  necromancer: {
+    id: 'necromancer',
+    name: 'Morvath',
+    title: 'Necromancer',
+    sprite: 'necromancer',
+    weapon: 'raise',
+    color: '#9ee562',
+    stats: { maxHp: 90, duration: 1.3, growth: 1.1 },
+    perk: 'Grave Pact: minions last 30% longer, +10% XP',
+    ult: 'deadrise',
+    ultName: 'Army of the Dead',
+    ultDesc: 'Raise a ring of empowered skeleton warriors around you.',
   },
 };
 
-export const HERO_ORDER = ['knight', 'archer', 'mage', 'rogue'];
+// Unlock order and prices live in shared/profile.js (enforced by the server).
+export { HERO_ORDER, HERO_UNLOCKS } from '../shared/profile.js';

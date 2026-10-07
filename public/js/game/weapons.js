@@ -5,6 +5,7 @@ import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick } from '../engine/util.js';
 import { spawnProjectile } from './projectiles.js';
 import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, explode } from './effects.js';
+import { Minion } from './minions.js';
 import { PC, P } from './particles.js';
 
 export class Weapon {
@@ -315,6 +316,23 @@ export const KINDS = {
         crit: w.s.critBonus || 0.05, trail: w.s.radial ? PC.P : null,
       });
       if (i % 2 === 0) sfx('dagger', { pitch: rand(0.9, 1.2) });
+    },
+  },
+
+  summon: {
+    fire(w) {
+      const g = w.g, p = g.player;
+      let mine = 0;
+      for (const m of g.minions) if (m.w === w) mine++;
+      const n = Math.min(w.s.amount, w.s.amount * 3 - mine);
+      if (n <= 0) return 0.4;
+      for (let i = 0; i < n; i++) {
+        const spot = g.world.freeSpot(p.x + rand(-30, 30), p.y + rand(-22, 22));
+        if (!spot) continue;
+        g.minions.push(new Minion(g, spot.x, spot.y, { w, dmg: w.s.dmg, dur: w.s.dur, speed: w.s.speed, knight: !!w.s.knights, burst: !!w.s.burst }));
+      }
+      g.effects.push(new Ring(g, p.x, p.y, 4, 34, 0.45, '#9ee562', true));
+      sfx('bones', { pitch: 0.7 });
     },
   },
 

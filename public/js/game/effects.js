@@ -80,6 +80,7 @@ const EXPLO = {
   frost: { ring: '#ffffff', glow: '#2ce8f5', light: 'cyan', parts: [PC.w, PC.c, PC.U, PC.G], num: 'frost' },
   dark: { ring: '#f6757a', glow: '#b55088', light: 'purple', parts: [PC.P, PC.p, PC.i], num: 'dark' },
   blood: { ring: '#e43b44', glow: '#a22633', light: 'red', parts: [PC.r, PC.R, PC.x], num: 'normal' },
+  soul: { ring: '#9ee562', glow: '#63c74d', light: 'green', parts: [PC.l, PC.L, PC.w], num: 'normal' },
 };
 
 export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {

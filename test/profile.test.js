@@ -82,14 +82,27 @@ test('revival cannot be bought twice', () => {
   assert.equal(P.buyUpgrade(once.profile, 'revival').ok, false);
 });
 
-test('hero unlocks', () => {
-  const p = P.defaultProfile();
-  p.gold = 2000;
-  const r = P.unlockHero(p, 'rogue');
-  assert.ok(r.ok);
-  assert.ok(r.profile.heroes.includes('rogue'));
-  assert.equal(P.unlockHero(r.profile, 'rogue').ok, false);
+test('heroes unlock in order at exponentially rising prices', () => {
+  let p = P.defaultProfile();
+  assert.deepEqual(p.heroes, ['knight']);
+  p.gold = 100000;
+  assert.equal(P.unlockHero(p, 'mage').ok, false, 'cannot skip ahead');
   assert.equal(P.unlockHero(p, 'dragon').ok, false);
+  const costs = [];
+  for (const id of P.HERO_ORDER.slice(1)) {
+    assert.equal(P.nextHeroUnlock(p), id);
+    const before = p.gold;
+    const r = P.unlockHero(p, id);
+    assert.ok(r.ok, id);
+    costs.push(before - r.profile.gold);
+    p = r.profile;
+  }
+  assert.deepEqual(costs, [500, 1500, 4500, 13500]);
+  assert.equal(P.nextHeroUnlock(p), null);
+  assert.equal(P.unlockHero(p, 'archer').ok, false, 'already unlocked');
+  const poor = P.defaultProfile();
+  poor.gold = 499;
+  assert.equal(P.unlockHero(poor, 'archer').ok, false);
 });
 
 test('metaBonuses reflect upgrade ranks', () => {

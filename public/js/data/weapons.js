@@ -176,6 +176,26 @@ export const WEAPONS = {
     evo: { into: 'frozenheart', with: 'vitality' },
   },
 
+  // Necromancer only: never offered to other heroes.
+  raise: {
+    name: 'Raise Dead',
+    icon: 'i_raise',
+    kind: 'summon',
+    exclusive: 'necromancer',
+    desc: 'Skeletons claw out of the earth to fight for you.',
+    base: { dmg: 9, cd: 3.4, amount: 1, dur: 7, speed: 1, kb: 0.6 },
+    levels: [
+      { amount: 1, text: '{+1} skeleton per call.' },
+      { dmg: 4, text: 'Damage {+4}.' },
+      { dur: 2, text: 'Skeletons last {+2s}.' },
+      { amount: 1, text: '{+1} skeleton per call.' },
+      { dmg: 5, cd: -0.5, text: 'Damage {+5}, raised faster.' },
+      { dur: 2, speed: 0.2, text: 'Last {+2s}, move {+20%} faster.' },
+      { amount: 1, dmg: 5, text: '{+1} skeleton, damage {+5}.' },
+    ],
+    evo: { into: 'legion', with: 'growth' },
+  },
+
   // ------------------------------------------------------------- evolutions
   excalibur: {
     name: 'Excalibur',
@@ -257,6 +277,16 @@ export const WEAPONS = {
     desc: 'Shards freeze foes solid; the frozen shatter violently.',
     base: { dmg: 20, cd: 1.8, amount: 16, speed: 1.15, pierce: 3, slow: 0.6, freeze: 1, kb: 0.6, shatter: 1 },
   },
+};
+
+WEAPONS.legion = {
+  name: 'Legion of the Damned',
+  icon: 'i_legion',
+  kind: 'summon',
+  evolved: true,
+  exclusive: 'necromancer',
+  desc: 'Death knights rise to cleave your foes, bursting in soul-fire as they fall.',
+  base: { dmg: 26, cd: 2.6, amount: 4, dur: 12, speed: 1.2, kb: 1, knights: 1, burst: 1 },
 };
 
 export const BASE_WEAPONS = ['sword', 'bow', 'fireball', 'axe', 'flask', 'blades', 'aura', 'lightning', 'daggers', 'frost'];

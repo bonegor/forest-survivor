@@ -8,7 +8,7 @@ import { fmtTime, fmtNum, clamp, ease } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { DIFFICULTY, MODES } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, totalWins, metaBonuses } from '../shared/profile.js';
+import { UPGRADES, upgradeCost, totalWins, metaBonuses, HERO_UNLOCKS, nextHeroUnlock } from '../shared/profile.js';
 import { panel, button, stepper, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
 
 const UP_ICONS = {
@@ -176,7 +176,12 @@ export class HeroScreen {
         const s = 2;
         ctx.drawImage(img, Math.round(x + cw / 2 - (img.width * s) / 2), y + 6, img.width * s, img.height * s);
       }
-      drawText(ctx, locked ? 'LOCKED' : h.title.toUpperCase(), x + cw / 2, y + ch - 12, { align: 'center', color: locked ? '#5a6988' : f ? '#fee761' : '#c0cbdc' });
+      if (locked) {
+        const next = nextHeroUnlock(prof) === id;
+        const cost = HERO_UNLOCKS[id];
+        ctx.drawImage(SPR.h_coin.frames[0].c, Math.round(x + cw / 2 - (textWidth(String(cost)) + 7) / 2), y + ch - 12);
+        drawText(ctx, String(cost), Math.round(x + cw / 2 + 4), y + ch - 12, { align: 'center', color: next ? (prof.gold >= cost ? '#fee761' : '#feae34') : '#5a6988' });
+      } else drawText(ctx, h.title.toUpperCase(), x + cw / 2, y + ch - 12, { align: 'center', color: f ? '#fee761' : '#c0cbdc' });
       x += cw + 6;
     }
     focusHero = focusHero || 'knight';
@@ -227,7 +232,12 @@ export class HeroScreen {
       drawText(ctx, line, tx, ty, { color: '#8b9bb4' });
       ty += 9;
     }
-    if (locked) drawText(ctx, `UNLOCK FOR ${h.unlock} GOLD`, x + pw / 2, y + ph - 11, { align: 'center', color: '#feae34' });
+    if (locked) {
+      const prof = this.app.store.profile;
+      const next = nextHeroUnlock(prof);
+      const msg = next === id ? `UNLOCK FOR ${HERO_UNLOCKS[id]} GOLD` : `UNLOCK THE ${HEROES[next].title.toUpperCase()} FIRST`;
+      drawText(ctx, msg, x + pw / 2, y + ph - 11, { align: 'center', color: next === id ? '#feae34' : '#8b9bb4' });
+    }
   }
 
   drawConfirm(ctx, W, H, dt) {
@@ -236,8 +246,13 @@ export class HeroScreen {
     dim(ctx, W, H, 0.6);
     const pw = 200, ph = 64, x = Math.round(W / 2 - pw / 2), y = Math.round(H / 2 - ph / 2);
     panel(ctx, x, y, pw, ph, { title: 'UNLOCK HERO' });
-    const can = app.store.profile.gold >= h.unlock;
-    drawText(ctx, `${h.name} the ${h.title} — ${h.unlock} gold`, W / 2, y + 12, { align: 'center', color: can ? '#fee761' : '#e43b44' });
+    const prof = app.store.profile;
+    const cost = HERO_UNLOCKS[this.confirm];
+    const inOrder = nextHeroUnlock(prof) === this.confirm;
+    const can = inOrder && prof.gold >= cost;
+    drawText(ctx, `${h.name} the ${h.title} — ${cost} gold`, W / 2, y + 12, { align: 'center', color: can ? '#fee761' : '#e43b44' });
+    if (!inOrder) drawText(ctx, `Unlock the ${HEROES[nextHeroUnlock(prof)].title} first`, W / 2, y + 23, { align: 'center', color: '#8b9bb4' });
+    else if (!can) drawText(ctx, `You need ${cost - prof.gold} more gold`, W / 2, y + 23, { align: 'center', color: '#8b9bb4' });
     ui.begin(dt);
     const close = () => {
       this.confirm = null;
