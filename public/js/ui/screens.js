@@ -89,6 +89,11 @@ export class TitleScreen {
       return;
     }
 
+    if (app.store.unreadable) {
+      this.drawUnreadable(ctx, W, H, dt, ly + lh + 16);
+      return;
+    }
+
     ui.begin(dt);
     const items = [];
     if (app.store.checkpoint) items.push(['continue', 'CONTINUE RUN']);
@@ -111,7 +116,43 @@ export class TitleScreen {
     const wins = totalWins(p);
     ctx.drawImage(SPR.h_trophy.frames[0].c, W - 14 - textWidth(String(wins)), H - 13);
     drawText(ctx, String(wins), W - 5, H - 12, { align: 'right', color: '#fee761' });
-    drawText(ctx, app.store.mode === 'server' ? 'Progress kept in signed cookies' : 'Progress kept in cookies (offline)', W / 2, H - 12, { align: 'center', color: '#3a4466' });
+    drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress kept in cookies (offline)', W / 2, H - 12, { align: 'center', color: '#3a4466' });
+  }
+
+  // A save exists but can't be read: say so and offer a clean start instead of
+  // silently resetting. The old cookie is only replaced once the player agrees.
+  drawUnreadable(ctx, W, H, dt, top) {
+    const app = this.app, ui = app.ui;
+    const bad = app.store.unreadable;
+    const pw = Math.min(236, W - 16);
+    const lines = bad.profile
+      ? ['Your saved progress could not be read.', 'The save may be damaged, or the game server\'s key has changed. It cannot be recovered.']
+      : ['Your saved run could not be read, so it cannot be continued.', 'Your gold, wins and Armory are safe.'];
+    const wrapped = [];
+    for (const l of lines) wrapped.push(...wrapText(l, pw - 16), '');
+    wrapped.pop();
+    const ph = 34 + wrapped.length * 9;
+    const x = Math.round(W / 2 - pw / 2), y = Math.round(Math.min(Math.max(top + 8, H * 0.5 - ph / 2), H - ph - 18));
+    panel(ctx, x, y, pw, ph, { title: bad.profile ? 'SAVE UNREADABLE' : 'SAVED RUN UNREADABLE' });
+    let ty = y + 11;
+    for (const l of wrapped) {
+      if (l) drawText(ctx, l, W / 2, ty, { align: 'center', color: ty === y + 11 ? '#fee761' : '#c0cbdc' });
+      ty += 9;
+    }
+    ui.begin(dt);
+    if (!this.freshFocus) {
+      ui.focus('fresh');
+      this.freshFocus = true;
+    }
+    const label = bad.profile ? 'START A NEW ADVENTURE' : 'CONTINUE';
+    const bw = 124;
+    if (button(ctx, ui, 'fresh', Math.round(W / 2 - bw / 2), y + ph - 20, bw, 13, label)) {
+      sfx('select');
+      app.store.startFresh().catch(() => {});
+      ui.focus('play');
+      ui.lock(0.25);
+    }
+    ui.end();
   }
 
   pick(id) {

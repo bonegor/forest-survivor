@@ -3,11 +3,11 @@
 //
 // It serves the static game from ./public and exposes a small JSON API for
 // the player profile. The server keeps no database: the profile and any saved
-// run live in HMAC-signed cookies on the player's browser. The only thing the
-// server persists is its signing key (.data/cookie-secret, or COOKIE_SECRET).
+// run live in encrypted (AES-256-GCM) cookies on the player's browser. The only
+// thing the server persists is its key (.data/cookie-secret, or COOKIE_SECRET).
 
 import http from 'node:http';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, createCipheriv, createDecipheriv, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -63,22 +63,52 @@ function loadSecret(root) {
 
 // ---------------------------------------------------------------- cookies --
 
-function signer(secret) {
-  const mac = (data) => createHmac('sha256', secret).update(data).digest('base64url');
+// Cookies are sealed with AES-256-GCM: unreadable and tamper-proof. The cookie
+// name is bound in as associated data, so a profile can't pose as a saved run.
+// Cookies from before encryption (base64 JSON + HMAC signature) are still
+// accepted once and re-issued encrypted.
+const SEALED = 'e1.';
+const IV_LEN = 12;
+const TAG_LEN = 16;
+const MAX_COOKIE = 4096;
+
+function sealer(secret) {
+  const key = Buffer.from(hkdfSync('sha256', secret, 'forest-survivor', 'cookie-encryption-v1', 32));
+  const legacyMac = (data) => createHmac('sha256', secret).update(data).digest('base64url');
+  const bad = { status: 'bad', data: null };
   return {
-    seal(obj) {
-      const body = P.encodeState(obj);
-      return `${body}.${mac(body)}`;
+    seal(name, obj) {
+      const iv = randomBytes(IV_LEN);
+      const c = createCipheriv('aes-256-gcm', key, iv);
+      c.setAAD(Buffer.from(name));
+      const ct = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final()]);
+      return SEALED + Buffer.concat([iv, ct, c.getAuthTag()]).toString('base64url');
     },
-    open(value) {
-      if (typeof value !== 'string') return null;
+    // status: 'none' (no cookie), 'ok', 'legacy' (old signed format, valid) or 'bad'.
+    open(name, value) {
+      if (!value) return { status: 'none', data: null };
+      if (value.length > MAX_COOKIE) return bad;
+      if (value.startsWith(SEALED)) {
+        const buf = Buffer.from(value.slice(SEALED.length), 'base64url');
+        if (buf.length <= IV_LEN + TAG_LEN) return bad;
+        try {
+          const d = createDecipheriv('aes-256-gcm', key, buf.subarray(0, IV_LEN));
+          d.setAAD(Buffer.from(name));
+          d.setAuthTag(buf.subarray(buf.length - TAG_LEN));
+          const json = Buffer.concat([d.update(buf.subarray(IV_LEN, buf.length - TAG_LEN)), d.final()]).toString('utf8');
+          return { status: 'ok', data: JSON.parse(json) };
+        } catch {
+          return bad;
+        }
+      }
       const dot = value.lastIndexOf('.');
-      if (dot < 1) return null;
+      if (dot < 1) return bad;
       const body = value.slice(0, dot);
       const sig = Buffer.from(value.slice(dot + 1));
-      const expected = Buffer.from(mac(body));
-      if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) return null;
-      return P.decodeState(body);
+      const expected = Buffer.from(legacyMac(body));
+      if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) return bad;
+      const data = P.decodeState(body);
+      return data ? { status: 'legacy', data } : bad;
     },
   };
 }
@@ -195,17 +225,31 @@ function createStatic(publicDir) {
 // -------------------------------------------------------------------- api --
 
 export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC } = {}) {
-  const seal = signer(secret);
+  const box = sealer(secret);
   const serveStatic = createStatic(publicDir);
 
-  const readProfile = (req) => P.sanitizeProfile(seal.open(parseCookies(req.headers.cookie)[PROFILE_COOKIE]));
-  const readRun = (req) => P.sanitizeCheckpoint(seal.open(parseCookies(req.headers.cookie)[RUN_COOKIE]));
-  const profileCookie = (req, p) => cookieHeader(req, PROFILE_COOKIE, seal.seal(p));
-  const runCookie = (req, cp) => cookieHeader(req, RUN_COOKIE, cp ? seal.seal(cp) : null);
+  const openCookie = (req, name) => box.open(name, parseCookies(req.headers.cookie)[name]);
+  const readProfile = (req) => P.sanitizeProfile(openCookie(req, PROFILE_COOKIE).data);
+  const profileCookie = (req, p) => cookieHeader(req, PROFILE_COOKIE, box.seal(PROFILE_COOKIE, p));
+  const runCookie = (req, cp) => cookieHeader(req, RUN_COOKIE, cp ? box.seal(RUN_COOKIE, cp) : null);
 
   async function api(req, res, route) {
     if (req.method === 'GET' && route === 'state') {
-      return sendJson(res, 200, { profile: readProfile(req), checkpoint: readRun(req), server: true });
+      const prof = openCookie(req, PROFILE_COOKIE);
+      const run = openCookie(req, RUN_COOKIE);
+      const profile = P.sanitizeProfile(prof.data);
+      const checkpoint = P.sanitizeCheckpoint(run.data);
+      const out = { profile, checkpoint, server: true };
+      // A save that can't be decrypted (wrong key, corruption, tampering) is
+      // reported, not silently replaced: the player is offered a fresh start,
+      // and the cookie stays untouched until they accept it.
+      if (prof.status === 'bad' || run.status === 'bad') {
+        out.unreadable = { profile: prof.status === 'bad', run: run.status === 'bad' };
+      }
+      const cookies = [];
+      if (prof.status === 'legacy') cookies.push(profileCookie(req, profile));
+      if (run.status === 'legacy') cookies.push(runCookie(req, checkpoint));
+      return sendJson(res, 200, out, cookies);
     }
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
     // JSON-only POSTs cannot be forged by a plain cross-site form.

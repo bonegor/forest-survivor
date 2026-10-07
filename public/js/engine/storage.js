@@ -1,8 +1,10 @@
 // Player profile persistence.
 //
-// Preferred: the Node server keeps the profile in an HMAC-signed, HttpOnly
+// Preferred: the Node server keeps the profile in an encrypted, HttpOnly
 // cookie and exposes /api/*. If the game is served from static hosting (no
 // API), it falls back to a plain client-side cookie with the same rules.
+// Either way, a save that exists but can't be read is flagged in
+// store.unreadable so the title screen can offer a fresh start.
 // Settings always live in a small client cookie.
 
 import * as P from '../shared/profile.js';
@@ -37,6 +39,7 @@ export const store = {
   profile: P.defaultProfile(),
   checkpoint: null,
   lastReward: null,
+  unreadable: null, // { profile, run } when a save exists but can't be read
 
   async init() {
     try {
@@ -45,12 +48,27 @@ export const store = {
       this.mode = 'server';
       this.profile = P.sanitizeProfile(data.profile);
       this.checkpoint = data.checkpoint ? P.sanitizeCheckpoint(data.checkpoint) : null;
+      this.unreadable = data.unreadable && (data.unreadable.profile || data.unreadable.run) ? { profile: !!data.unreadable.profile, run: !!data.unreadable.run } : null;
     } catch {
       this.mode = 'local';
-      this.profile = P.sanitizeProfile(P.decodeState(readCookie(LOCAL_PROFILE) || ''));
-      this.checkpoint = P.sanitizeCheckpoint(P.decodeState(readCookie(LOCAL_RUN) || ''));
+      const rawProfile = readCookie(LOCAL_PROFILE), rawRun = readCookie(LOCAL_RUN);
+      const profile = rawProfile ? P.decodeState(rawProfile) : null;
+      const run = rawRun ? P.decodeState(rawRun) : null;
+      this.profile = P.sanitizeProfile(profile);
+      this.checkpoint = P.sanitizeCheckpoint(run);
+      const bad = { profile: !!rawProfile && !profile, run: !!rawRun && !run };
+      this.unreadable = bad.profile || bad.run ? bad : null;
     }
     return this;
+  },
+
+  // Accept the loss of an unreadable save: wipe what can't be read and carry on.
+  async startFresh() {
+    const bad = this.unreadable;
+    this.unreadable = null;
+    if (!bad) return;
+    if (bad.profile) await this.reset();
+    else if (bad.run) await this.clearCheckpoint();
   },
 
   saveLocal() {

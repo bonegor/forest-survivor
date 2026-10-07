@@ -72,23 +72,29 @@ Both modes have **Easy / Medium / Hard**. Easy is a forgiving first night; Mediu
 
 ## Saving: everything lives in cookies
 
-The server keeps **no database**. The only thing it writes to disk is its cookie-signing key (`.data/cookie-secret`, or set `COOKIE_SECRET`).
+The server keeps **no database**. The only thing it writes to disk is its cookie key (`.data/cookie-secret`, or set `COOKIE_SECRET`).
 
 | Cookie | Holds | Set by |
 | --- | --- | --- |
-| `fs_profile` | gold, wins per mode/difficulty, records, Armory ranks, unlocked heroes | server, HMAC-signed, HttpOnly |
-| `fs_run` | a saved run: hero, build, level, floor, time (Save & Quit, dungeon floor checkpoints, survival autosave every minute) | server, HMAC-signed, HttpOnly |
+| `fs_profile` | gold, wins per mode/difficulty, records, Armory ranks, unlocked heroes | server, encrypted (AES-256-GCM), HttpOnly |
+| `fs_run` | a saved run: hero, build, level, floor, time (Save & Quit, dungeon floor checkpoints, survival autosave every minute) | server, encrypted (AES-256-GCM), HttpOnly |
 | `fs_settings` | volume, screen shake, damage numbers, CRT, FPS | browser |
 
-The profile and run cookies are a few hundred bytes. Tampered cookies fail the signature check and are ignored. Run reports are clamped server-side: gold is capped by run length, and a victory only counts if the run lasted long enough to be one.
+The profile and run cookies are a few hundred bytes. They are encrypted with a key derived from the server secret, so players can neither read nor edit them, and each is bound to its cookie name so one can't stand in for the other. Cookies written before encryption (signed, readable JSON) are accepted once and re-issued encrypted.
 
-If the game is served as plain static files (no `/api`), it falls back to unsigned client-side cookies with the same rules.
+If a save exists but can't be decrypted (damaged, tampered with, or written under a different server key), the game says so on the title screen and offers a fresh start. A broken saved run only clears the run; gold, wins and the Armory stay. The old cookie is left untouched until the player accepts, so restoring the right key brings it back.
+
+**When deploying, set `COOKIE_SECRET` to a long random value and keep it stable.** If the key changes, for example because `.data/` isn't persisted between deploys, every existing save becomes unreadable at once.
+
+Run reports are clamped server-side: gold is capped by run length, and a victory only counts if the run lasted long enough to be one.
+
+If the game is served as plain static files (no `/api`), it falls back to plain client-side cookies with the same rules (they can't be meaningfully encrypted without a server, since the key would ship in the page). An unreadable one gets the same fresh-start prompt.
 
 ### API
 
 | Method | Path | Body | Effect |
 | --- | --- | --- | --- |
-| GET | `/api/state` | — | profile + saved run |
+| GET | `/api/state` | — | profile + saved run, plus `unreadable: { profile, run }` when a save can't be decrypted |
 | POST | `/api/run` | `{ mode, diff, hero, victory, time, gold, kills, level, floor }` | pay out gold, record wins, clear saved run |
 | POST | `/api/checkpoint` | `{ checkpoint }` or `{ checkpoint: null }` | save / clear a run |
 | POST | `/api/buy` | `{ id }` | buy an Armory rank |

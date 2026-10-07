@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { createServer } from '../server.js';
+import { encodeState } from '../public/js/shared/profile.js';
 
-async function withServer(fn) {
-  const server = createServer({ secret: 'test-secret-'.padEnd(40, 'x') });
+const SECRET = 'test-secret-'.padEnd(40, 'x');
+
+async function withServer(fn, secret = SECRET) {
+  const server = createServer({ secret });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
@@ -59,7 +63,7 @@ test('serves the game shell and blocks path traversal', async () => {
   });
 });
 
-test('profile lives in a signed cookie and survives round trips', async () => {
+test('profile lives in an encrypted cookie and survives round trips', async () => {
   await withServer(async (base) => {
     const c = client(base);
     let res = await c.get('/api/state');
@@ -72,6 +76,9 @@ test('profile lives in a signed cookie and survives round trips', async () => {
     assert.equal(res.status, 200);
     assert.equal(data.profile.gold, 300 + 300);
     assert.ok(c.jar.fs_profile, 'profile cookie set');
+    assert.match(c.jar.fs_profile, /^e1\.[A-Za-z0-9_-]+$/);
+    const raw = Buffer.from(c.jar.fs_profile.slice(3), 'base64url').toString('latin1');
+    assert.doesNotMatch(raw, /gold|"wins"/, 'contents are not readable');
 
     res = await c.get('/api/state');
     data = await res.json();
@@ -85,16 +92,70 @@ test('profile lives in a signed cookie and survives round trips', async () => {
   });
 });
 
-test('tampered cookies are ignored', async () => {
+test('a tampered save is reported as unreadable, kept until the player starts fresh', async () => {
   await withServer(async (base) => {
     const c = client(base);
     await c.post('/api/run', { mode: 's15', diff: 'easy', victory: false, time: 300, gold: 100, kills: 10 });
-    const [body, sig] = c.jar.fs_profile.split('.');
-    const forged = JSON.parse(Buffer.from(body, 'base64url').toString());
-    forged.gold = 999999;
-    c.jar.fs_profile = Buffer.from(JSON.stringify(forged)).toString('base64url') + '.' + sig;
+    let data = await (await c.get('/api/state')).json();
+    assert.equal(data.unreadable, undefined, 'a healthy save is not flagged');
+    // Flip one byte of the ciphertext.
+    const buf = Buffer.from(c.jar.fs_profile.slice(3), 'base64url');
+    buf[20] ^= 1;
+    const tampered = 'e1.' + buf.toString('base64url');
+    c.jar.fs_profile = tampered;
+    data = await (await c.get('/api/state')).json();
+    assert.equal(data.profile.gold, 0, 'nothing is read from it');
+    assert.deepEqual(data.unreadable, { profile: true, run: false });
+    assert.equal(c.jar.fs_profile, tampered, 'the cookie is left alone until the player decides');
+    data = await (await c.post('/api/reset', {})).json();
+    assert.equal(data.profile.gold, 0);
+    data = await (await c.get('/api/state')).json();
+    assert.equal(data.unreadable, undefined, 'starting fresh replaces the bad save');
+  });
+});
+
+test('saves from a server with a different key are unreadable, not silently wiped', async () => {
+  let cookie;
+  await withServer(async (base) => {
+    const c = client(base);
+    await c.post('/api/run', { mode: 's15', diff: 'easy', victory: false, time: 300, gold: 100, kills: 10 });
+    cookie = c.jar.fs_profile;
+  });
+  await withServer(async (base) => {
+    const c = client(base);
+    c.jar.fs_profile = cookie;
     const data = await (await c.get('/api/state')).json();
-    assert.equal(data.profile.gold, 0, 'forged profile falls back to a fresh one');
+    assert.deepEqual(data.unreadable, { profile: true, run: false });
+  }, 'another-secret-'.padEnd(40, 'y'));
+});
+
+test('a profile cookie cannot pose as a saved run', async () => {
+  await withServer(async (base) => {
+    const c = client(base);
+    await c.post('/api/run', { mode: 's15', diff: 'easy', victory: false, time: 300, gold: 100, kills: 10 });
+    c.jar.fs_run = c.jar.fs_profile;
+    const data = await (await c.get('/api/state')).json();
+    assert.equal(data.checkpoint, null);
+    assert.deepEqual(data.unreadable, { profile: false, run: true });
+  });
+});
+
+test('old signed cookies are accepted once and re-issued encrypted', async () => {
+  await withServer(async (base) => {
+    const c = client(base);
+    const body = encodeState({ gold: 777, heroes: ['knight'] });
+    c.jar.fs_profile = `${body}.${createHmac('sha256', SECRET).update(body).digest('base64url')}`;
+    let data = await (await c.get('/api/state')).json();
+    assert.equal(data.profile.gold, 777, 'progress carries over');
+    assert.equal(data.unreadable, undefined);
+    assert.match(c.jar.fs_profile, /^e1\./, 'upgraded to the encrypted format');
+    data = await (await c.get('/api/state')).json();
+    assert.equal(data.profile.gold, 777);
+    // A forged old-format cookie is still rejected.
+    c.jar.fs_profile = `${encodeState({ gold: 999999 })}.${'A'.repeat(43)}`;
+    data = await (await c.get('/api/state')).json();
+    assert.equal(data.profile.gold, 0);
+    assert.deepEqual(data.unreadable, { profile: true, run: false });
   });
 });
 
