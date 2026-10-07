@@ -1,7 +1,7 @@
 // Decides what to spawn and when: the steady horde, timed events, champions,
 // treasure thieves, breakables, shrines and survival bosses.
 
-import { SPAWN_TABLE, EVENTS, targetCount, hpScale, SURVIVAL_BOSSES } from '../data/waves.js';
+import { SPAWN_TABLE, EVENTS, targetCount, hpScale, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY } from '../data/waves.js';
 import { CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
 import { rand, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
@@ -18,17 +18,20 @@ export class Spawner {
     this.propT = 4;
     this.shrineT = 45;
     this.bossIdx = 0;
+    this.loopAt = 0; // Ranked: next looping event, in phase minutes
   }
 
   resetForFloor(phase0) {
     this.eventIdx = EVENTS.findIndex((e) => e.at >= phase0 + 1.5);
     if (this.eventIdx < 0) this.eventIdx = EVENTS.length;
+    this.loopAt = 0;
     this.eliteT = 60;
     this.thiefT = rand(90, 170);
     this.acc = 1.5;
   }
 
   pickType(phase, exclude) {
+    phase = Math.min(phase, 29.9); // the late-night mix stays on past the table's end
     const rows = SPAWN_TABLE.filter((r) => phase >= r[0] && phase < r[1] && (!exclude || !exclude.includes(r[2])));
     const r = weighted(rows, (row) => row[3]);
     return r ? r[2] : 'skeleton';
@@ -68,6 +71,14 @@ export class Spawner {
     while (this.eventIdx < EVENTS.length && EVENTS[this.eventIdx].at <= phase) {
       this.fire(EVENTS[this.eventIdx++], phase);
     }
+    if (g.mode === 'ranked' && this.eventIdx >= EVENTS.length) {
+      if (!this.loopAt) this.loopAt = phase + RANKED_EVENT_EVERY;
+      if (phase >= this.loopAt) {
+        this.loopAt = phase + RANKED_EVENT_EVERY;
+        const ev = pick(EVENTS.filter((e) => e.at >= 18));
+        this.fire({ ...ev, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) }, phase);
+      }
+    }
 
     // Champions.
     this.eliteT -= dt * g.diff.elite;
@@ -96,6 +107,14 @@ export class Spawner {
         if (g.shrines.filter((s) => !s.used).length < 2) {
           const a = rand(TAU), r = rand(170, 230);
           g.addShrine(g.player.x + Math.cos(a) * r, g.player.y + Math.sin(a) * r, pick(SHRINE_TYPES));
+        }
+      }
+      if (g.mode === 'ranked') {
+        // One lord at a time; the next waits until the last has fallen.
+        if (g.time >= (this.bossIdx + 1) * RANKED_BOSS_EVERY && (!g.boss || g.boss.dead)) {
+          const id = RANKED_BOSSES[this.bossIdx++ % RANKED_BOSSES.length];
+          const pt = g.world.spawnPoint(g, 30);
+          if (pt) g.spawnBoss(id, pt.x, pt.y);
         }
       }
       const bosses = SURVIVAL_BOSSES[g.mode];

@@ -39,6 +39,6 @@ export const DIFFICULTY = {
 
 export const MODES = {
   s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn in the Darkwood.' },
-  s30: { id: 's30', name: 'Survival', sub: '30 minutes', minutes: 30, desc: 'The longest night. Hold out until dawn.' },
   dungeon: { id: 'dungeon', name: 'Dungeon Run', sub: '3 floors', desc: 'Slay each floor\'s guardian and descend. Defeat the Demon Lord.' },
+  ranked: { id: 'ranked', name: 'Ranked', sub: 'Endless', desc: 'No dawn. The night grows deadlier forever. How long can you last?' },
 };

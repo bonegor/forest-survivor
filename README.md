@@ -1,6 +1,6 @@
 # Forest Survivor
 
-A medieval, Diablo-flavoured survivors-like for the browser. Pick a hero, auto-attack your way through ever-growing hordes, level up into evolved weapons, and either **survive the night** in the Darkwood or **delve three dungeon floors** to slay the Lord of Cinders.
+A medieval, Diablo-flavoured survivors-like for the browser. Pick a hero, auto-attack your way through ever-growing hordes, level up into evolved weapons, **survive the night** in the Darkwood, **delve three dungeon floors** to slay the Lord of Cinders, and finally see how long you last in the **endless Ranked night**.
 
 Everything is hand-made in code: pixel-art sprites authored as palette strings, procedurally painted trees and dungeon tiles, a dynamic light map, synthesized sound effects and a chiptune score. There are no image or audio files and no dependencies.
 
@@ -31,19 +31,28 @@ Weapons fire automatically. Collect soul gems to level up; every level offers a 
 | Hero | Unlock | Starts with | Perk | Ultimate |
 | --- | --- | --- | --- | --- |
 | Sir Aldric, Knight | — | Longsword | +2 armor, +40% health, slow regeneration | Whirlwind |
-| Lyra, Ranger | 500 gold | Hunting Bow | +crit, +speed | Arrow Storm |
-| Eldrin, Sorcerer | 1 500 gold | Fireball | −cooldowns, +area, +XP | Cataclysm |
-| Kael, Shadow | 4 500 gold | Throwing Daggers | +crit, +speed, +luck | Shadow Dance |
-| Morvath, Necromancer | 13 500 gold | Raise Dead (skeleton minions) | minions last 30% longer, +10% XP | Army of the Dead |
-
-The Knight is the starting hero. The others unlock in order, and each costs three times the one before.
+| Lyra, Ranger | Hard night with the Knight, then 500 gold | Hunting Bow | +crit, +speed | Arrow Storm |
+| Eldrin, Sorcerer | Hard night with the Ranger, then 1 500 gold | Fireball | −cooldowns, +area, +XP | Cataclysm |
+| Kael, Shadow | Hard night with the Sorcerer, then 4 500 gold | Throwing Daggers | +crit, +speed, +luck | Shadow Dance |
+| Morvath, Necromancer | Hard night with the Shadow, then 13 500 gold | Raise Dead (skeleton minions) | minions last 30% longer, +10% XP | Army of the Dead |
 
 ### Modes
 
-- **Survival — 15 or 30 minutes.** Endless forest, night falls darker, bosses arrive on a schedule. Survive until dawn to win.
-- **Dungeon Run — 3 floors.** Each floor's guardian sleeps behind a seal until you've slain enough foes. Kill it, take the stairs, and defeat the Demon Lord on floor 3. Your build carries over between floors.
+- **Survival — 15 minutes.** Endless forest, night falls darker, bosses arrive on a schedule. Survive until dawn to win.
+- **Dungeon Run — 3 floors.** Each floor's guardian sleeps behind a seal until you've slain enough foes and spent long enough on the floor. Kill it, take the stairs, and defeat the Demon Lord on floor 3. Your build carries over between floors.
+- **Ranked — endless.** No dawn and no difficulty choice. The night keeps getting deadlier, the four lords return in rotation every 4½ minutes, and past the half-hour a blood moon rises. Your score is how long you last, kept as a personal best per hero with a rank title (Peasant, Squire, Knight, Champion, Paladin, Warlord, Hero at 30 minutes, Legend at 40, Mythic at 50, Immortal at an hour).
 
-Both modes have **Easy / Medium / Hard**. Easy is a forgiving first night; Medium pushes back and expects a decent build (Armory ranks help); Hard is for legends. Harder runs pay more gold.
+Survival and the Dungeon have **Easy / Medium / Hard**. Easy is a forgiving first night; Medium pushes back and expects a decent build (Armory ranks help); Hard is for legends. Harder runs pay more gold.
+
+### The unlock ladder
+
+1. You start with the **Knight** and **15-minute Survival** only.
+2. **Survive a Hard night** with a hero to make the next hero available; buy them with gold (each costs three times the last).
+3. A Hard night with the **Necromancer** opens the **Dungeon**, for the Knight only at first.
+4. **Beat the Dungeon** (any difficulty) with a hero to bring the next hero into it.
+5. Beat the Dungeon **on Hard with the Necromancer** to unlock **Ranked**, open to every hero.
+
+The hero screen always shows your next goal, stars mark what each hero has conquered (Hard night, Dungeon, Dungeon on Hard), and the results screen announces anything a run unlocks.
 
 ### Things to find
 
@@ -76,8 +85,8 @@ The server keeps **no database**. The only thing it writes to disk is its cookie
 
 | Cookie | Holds | Set by |
 | --- | --- | --- |
-| `fs_profile` | gold, wins per mode/difficulty, records, Armory ranks, unlocked heroes | server, encrypted (AES-256-GCM), HttpOnly |
-| `fs_run` | a saved run: hero, build, level, floor, time (Save & Quit, dungeon floor checkpoints, survival autosave every minute) | server, encrypted (AES-256-GCM), HttpOnly |
+| `fs_profile` | gold, wins per mode/difficulty, records, Armory ranks, unlocked heroes, each hero's achievements (Hard night, Dungeon, Dungeon on Hard), Ranked personal bests | server, encrypted (AES-256-GCM), HttpOnly |
+| `fs_run` | a saved run: hero, build, level, floor, time (Save & Quit, dungeon floor checkpoints, Survival and Ranked autosave every minute) | server, encrypted (AES-256-GCM), HttpOnly |
 | `fs_settings` | volume, screen shake, damage numbers, CRT, FPS | browser |
 
 The profile and run cookies are a few hundred bytes. They are encrypted with a key derived from the server secret, so players can neither read nor edit them, and each is bound to its cookie name so one can't stand in for the other. Cookies written before encryption (signed, readable JSON) are accepted once and re-issued encrypted.
@@ -86,7 +95,7 @@ If a save exists but can't be decrypted (damaged, tampered with, or written unde
 
 **When deploying, set `COOKIE_SECRET` to a long random value and keep it stable.** If the key changes, for example because `.data/` isn't persisted between deploys, every existing save becomes unreadable at once.
 
-Run reports are clamped server-side: gold is capped by run length, and a victory only counts if the run lasted long enough to be one.
+Run reports are clamped server-side: gold is capped by run length, a victory only counts if the run lasted long enough to be one, and a run in a mode the hero hasn't unlocked yet is refused. The unlock ladder lives in `public/js/shared/profile.js`, shared by the server and the browser.
 
 If the game is served as plain static files (no `/api`), it falls back to plain client-side cookies with the same rules (they can't be meaningfully encrypted without a server, since the key would ship in the page). An unreadable one gets the same fresh-start prompt.
 
@@ -95,11 +104,11 @@ If the game is served as plain static files (no `/api`), it falls back to plain 
 | Method | Path | Body | Effect |
 | --- | --- | --- | --- |
 | GET | `/api/state` | — | profile + saved run, plus `unreadable: { profile, run }` when a save can't be decrypted |
-| POST | `/api/run` | `{ mode, diff, hero, victory, time, gold, kills, level, floor }` | pay out gold, record wins, clear saved run |
+| POST | `/api/run` | `{ mode, diff, hero, victory, time, gold, kills, level, floor }` | pay out gold, record wins, achievements and Ranked bests, clear saved run; the reward lists anything newly unlocked |
 | POST | `/api/checkpoint` | `{ checkpoint }` or `{ checkpoint: null }` | save / clear a run |
 | POST | `/api/buy` | `{ id }` | buy an Armory rank |
 | POST | `/api/refund` | — | refund all Armory ranks |
-| POST | `/api/unlock` | `{ hero }` | unlock a hero |
+| POST | `/api/unlock` | `{ hero }` | buy the next hero (after a Hard night with the one before) |
 | POST | `/api/reset` | — | wipe progress |
 
 POSTs must be `application/json`. Cookies are `SameSite=Lax`, and `Secure` behind HTTPS (including `X-Forwarded-Proto`).

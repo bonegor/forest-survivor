@@ -5,7 +5,8 @@ import { HEROES } from '../data/heroes.js';
 import { WEAPONS, BASE_WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, hpScale, SURVIVAL_BOSSES } from '../data/waves.js';
+import { FLOORS, hpScale, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { RANKS } from '../shared/profile.js';
 import { SPR, TINTS } from '../engine/sprites.js';
 import { sfx, playMusic, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
@@ -36,7 +37,9 @@ export class Game {
     this.diff = DIFFICULTY[o.diff];
     this.settings = o.settings || {};
     this.seed = o.checkpoint?.seed ?? Math.floor(Math.random() * 2 ** 31);
-    this.duration = this.mode === 's15' ? 15 * 60 : this.mode === 's30' ? 30 * 60 : Infinity;
+    this.duration = this.mode === 's15' ? 15 * 60 : Infinity;
+    this.rankedBest = o.rankedBest || 0; // personal best to beat in Ranked
+    this.rankIdx = 0;
     this.time = 0;
     this.floorTime = 0;
     this.frame = 0;
@@ -105,19 +108,21 @@ export class Game {
     else this.addWeapon(HEROES[o.hero].weapon);
     this.cam.x = this.player.x - this.cam.W / 2;
     this.cam.y = this.player.y - this.cam.H / 2;
-    if (this.mode !== 'dungeon') {
-      const title = this.mode === 's15' ? 'Survive 15 minutes' : 'Survive 30 minutes';
-      this.banner('The Darkwood', `${title} until dawn`, '#8fb8ff', 3.5);
+    if (this.mode === 's15') this.banner('The Darkwood', 'Survive 15 minutes until dawn', '#8fb8ff', 3.5);
+    else if (this.mode === 'ranked') {
+      this.banner('The Endless Night', 'No dawn will come. Last as long as you can.', '#f6757a', 3.5);
+      this.rankIdx = RANKS.findLastIndex(([min]) => this.time >= min * 60);
+      this.bestBeaten = this.rankedBest > 0 && this.time > this.rankedBest;
     }
   }
 
   // ------------------------------------------------------------- clock --
 
   get phase() {
-    if (this.mode === 's30') {
-      // Same opening pace as the 15-minute night, then a long slow climb.
+    if (this.mode === 'ranked') {
+      // The 15-minute night's pace, then a climb that never stops.
       const m = this.time / 60;
-      return m <= 15 ? m * 1.4 : 21 + (m - 15) * 0.35;
+      return m <= 15 ? m * 1.4 : 21 + (m - 15) * 0.9;
     }
     if (this.mode === 's15') return (this.time / 60) * 1.4;
     const f = FLOORS[this.floor - 1];
@@ -127,7 +132,7 @@ export class Game {
   // Enemy damage stays gentle early and climbs once the night gets long.
   get dmgScale() {
     const ph = this.phase;
-    return 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.06 - Math.max(0, ph - 20) * 0.04;
+    return 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.06 - Math.max(0, ph - 20) * 0.04 + Math.max(0, ph - 30) * 0.1;
   }
 
   // ------------------------------------------------------------ floors --
@@ -746,6 +751,21 @@ export class Game {
     }
   }
 
+  // Ranked: announce each new rank, and the moment the personal best falls.
+  rankedMilestones() {
+    const next = RANKS[this.rankIdx + 1];
+    if (next && this.time >= next[0] * 60) {
+      this.rankIdx++;
+      this.banner(`Rank: ${next[1]}`, `${next[0]} minutes survived`, '#fee761', 2.6);
+      sfx('levelup');
+    }
+    if (!this.bestBeaten && this.rankedBest > 0 && this.time > this.rankedBest) {
+      this.bestBeaten = true;
+      this.banner('New personal best!', 'Every second now is a record', '#63c74d', 3);
+      sfx('bell');
+    }
+  }
+
   // -------------------------------------------------------- end states --
 
   onPlayerDeath() {
@@ -831,7 +851,10 @@ export class Game {
     p.hp = Math.min(p.maxHp, cp.hp);
     p.xp = cp.xp;
     this.spawner.bossIdx = 0;
-    if (this.mode !== 'dungeon') {
+    if (this.mode === 'ranked') {
+      this.spawner.bossIdx = Math.floor(this.time / RANKED_BOSS_EVERY);
+      this.spawner.resetForFloor(this.phase);
+    } else if (this.mode !== 'dungeon') {
       const b = SURVIVAL_BOSSES[this.mode].map((x) => x.at);
       while (this.spawner.bossIdx < b.length && b[this.spawner.bossIdx] <= this.time) this.spawner.bossIdx++;
       this.spawner.resetForFloor(this.phase);
@@ -980,6 +1003,7 @@ export class Game {
     if (Math.abs(c.y - ty) > c.H) c.y = ty;
 
     if (this.state === 'play' && this.mode !== 'dungeon' && this.time >= this.duration) this.victory('survival');
+    if (this.state === 'play' && this.mode === 'ranked') this.rankedMilestones();
   }
 
   separate() {

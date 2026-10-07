@@ -11,7 +11,8 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { DIFFICULTY, MODES } from '../data/difficulty.js';
-import { metaBonuses } from '../shared/profile.js';
+import { metaBonuses, rankTitle } from '../shared/profile.js';
+import { unlockText } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
 import { OptionsScreen } from './screens.js';
 
@@ -19,10 +20,14 @@ export class GameScreen {
   enter(app, params) {
     this.app = app;
     const c = params.checkpoint;
+    const hero = c ? c.hero : app.choice.hero;
+    const mode = c ? c.mode : app.choice.mode;
     this.game = new Game({
-      hero: c ? c.hero : app.choice.hero,
-      mode: c ? c.mode : app.choice.mode,
-      diff: c ? c.diff : app.choice.diff,
+      hero,
+      mode,
+      // Ranked plays one fixed ruleset so personal bests compare fairly.
+      diff: mode === 'ranked' ? 'medium' : c ? c.diff : app.choice.diff,
+      rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       meta: metaBonuses(app.store.profile),
       settings: app.settings,
       checkpoint: c || null,
@@ -496,16 +501,28 @@ class ResultsOverlay {
     ctx.globalAlpha = a;
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), 8, Math.round(L.width * s), Math.round(L.height * s));
     ctx.globalAlpha = 1;
-    const sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub} · ${DIFFICULTY[res.diff].name}`;
+    const ranked = res.mode === 'ranked';
+    const sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub}` + (ranked ? '' : ` · ${DIFFICULTY[res.diff].name}`);
     drawText(ctx, sub, W / 2, 12 + L.height * s, { align: 'center', color: '#8b9bb4' });
     if (this.t < 0.6) return null;
-    const pw = Math.min(W - 16, 340), ph = Math.min(H - 70 - L.height * s, 160);
+    // Personal bests and anything this run unlocked, shown above the gold.
+    const notes = [];
+    if (this.reward) {
+      const rk = this.reward.ranked;
+      if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
+      for (const k of this.reward.unlocks || []) notes.push([unlockText(k), '#fee761']);
+      if (!this.announced && (this.reward.unlocks?.length || rk?.personalBest)) {
+        this.announced = true;
+        sfx('chest');
+      }
+    }
+    const pw = Math.min(W - 16, 340), ph = Math.min(H - 70 - L.height * s, 160 + notes.length * 10);
     const x = Math.round(W / 2 - pw / 2), y = Math.round(26 + L.height * s);
     panel(ctx, x, y, pw, ph);
     // Stats column.
     const st = res.stats;
     const rows = [
-      ['Time', fmtTime(res.time)],
+      [ranked ? 'Survived' : 'Time', fmtTime(res.time)],
       ['Level', String(res.level)],
       ['Kills', fmtNum(res.kills)],
       ['Best combo', String(st.maxCombo)],
@@ -513,6 +530,7 @@ class ResultsOverlay {
       ['Damage dealt', fmtNum(st.damage)],
     ];
     if (res.mode === 'dungeon') rows.splice(1, 0, ['Floor reached', String(res.floor)]);
+    if (ranked) rows.splice(1, 0, ['Rank', rankTitle(res.time)]);
     let ty = y + 8;
     for (const [k, v] of rows) {
       drawText(ctx, k, x + 8, ty, { color: '#8b9bb4' });
@@ -532,6 +550,7 @@ class ResultsOverlay {
     }
     // Gold reward.
     const gy = y + ph - 33;
+    notes.forEach(([text, color], i) => drawText(ctx, text, W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
     if (this.reward) {
       this.shown = Math.min(this.reward.total, this.shown + Math.max(1, this.reward.total * dt * 1.5));
       if (Math.floor(this.shown) % 5 === 0 && this.shown < this.reward.total) sfx('coin');

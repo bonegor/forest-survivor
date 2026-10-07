@@ -8,8 +8,9 @@ import { fmtTime, fmtNum, clamp, ease } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { DIFFICULTY, MODES } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, totalWins, metaBonuses, HERO_UNLOCKS, nextHeroUnlock } from '../shared/profile.js';
+import { UPGRADES, upgradeCost, totalWins, metaBonuses, HERO_UNLOCKS, nextHeroUnlock, heroUnlockReady, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { panel, button, stepper, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
+import { goalText, lockReason, featStars } from './ladder.js';
 
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
@@ -24,13 +25,13 @@ function goldTag(ctx, app, x, y, align = 'right') {
   drawText(ctx, g, left + 10, y + 1, { color: ['#fff3a8', '#fee761', '#feae34'] });
 }
 
-// Pixel moon: a crescent for the short night, full for the long one.
-function moon(ctx, cx, cy, r, crescent) {
+// Pixel moon: a crescent for the 15-minute night, a full blood moon for Ranked.
+function moon(ctx, cx, cy, r, crescent, cols = ['#fff8e0', '#e4d8b4']) {
   for (let y = -r; y <= r; y++) {
     for (let x = -r; x <= r; x++) {
       if (x * x + y * y > r * r + 1) continue;
       if (crescent && (x - 2) * (x - 2) + (y + 1) * (y + 1) <= r * r) continue;
-      ctx.fillStyle = x + y < 0 ? '#fff8e0' : '#e4d8b4';
+      ctx.fillStyle = x + y < 0 ? cols[0] : cols[1];
       ctx.fillRect(cx + x, cy + y, 1, 1);
     }
   }
@@ -218,15 +219,29 @@ export class HeroScreen {
         ctx.drawImage(img, Math.round(x + cw / 2 - (img.width * s) / 2), y + 6, img.width * s, img.height * s);
       }
       if (locked) {
-        const next = nextHeroUnlock(prof) === id;
+        const ready = heroUnlockReady(prof, id);
         const cost = HERO_UNLOCKS[id];
         ctx.drawImage(SPR.h_coin.frames[0].c, Math.round(x + cw / 2 - (textWidth(String(cost)) + 7) / 2), y + ch - 12);
-        drawText(ctx, String(cost), Math.round(x + cw / 2 + 4), y + ch - 12, { align: 'center', color: next ? (prof.gold >= cost ? '#fee761' : '#feae34') : '#5a6988' });
-      } else drawText(ctx, h.title.toUpperCase(), x + cw / 2, y + ch - 12, { align: 'center', color: f ? '#fee761' : '#c0cbdc' });
+        drawText(ctx, String(cost), Math.round(x + cw / 2 + 4), y + ch - 12, { align: 'center', color: ready ? (prof.gold >= cost ? '#fee761' : '#feae34') : '#5a6988' });
+      } else {
+        drawText(ctx, h.title.toUpperCase(), x + cw / 2, y + ch - 12, { align: 'center', color: f ? '#fee761' : '#c0cbdc' });
+        // Achievement stars: Hard night, Dungeon, Dungeon on Hard.
+        let sx = x + cw - 8;
+        for (const [, col, got] of featStars(prof, id).reverse()) {
+          if (got) drawText(ctx, '★', sx, y + 4, { color: col });
+          sx -= 7;
+        }
+      }
       x += cw + 6;
     }
     focusHero = focusHero || 'knight';
-    this.detail(ctx, W, H, focusHero, y + ch + 8, !prof.heroes.includes(focusHero));
+    const bottom = this.detail(ctx, W, H, focusHero, y + ch + 8, !prof.heroes.includes(focusHero));
+    let gy = bottom + 6;
+    for (const line of wrapText('NEXT: ' + goalText(nextGoal(prof)), W - 24)) {
+      if (gy > H - 32) break;
+      drawText(ctx, line, W / 2, gy, { align: 'center', color: '#feae34' });
+      gy += 9;
+    }
     if (live) {
       if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('title');
       ui.end();
@@ -273,12 +288,27 @@ export class HeroScreen {
       drawText(ctx, line, tx, ty, { color: '#8b9bb4' });
       ty += 9;
     }
+    const prof = this.app.store.profile;
     if (locked) {
-      const prof = this.app.store.profile;
       const next = nextHeroUnlock(prof);
-      const msg = next === id ? `UNLOCK FOR ${HERO_UNLOCKS[id]} GOLD` : `UNLOCK THE ${HEROES[next].title.toUpperCase()} FIRST`;
-      drawText(ctx, msg, x + pw / 2, y + ph - 11, { align: 'center', color: next === id ? '#feae34' : '#8b9bb4' });
+      const prev = HERO_ORDER[HERO_ORDER.indexOf(id) - 1];
+      const ready = heroUnlockReady(prof, id);
+      const msg = next !== id ? `UNLOCK THE ${HEROES[next].title.toUpperCase()} FIRST`
+        : ready ? `UNLOCK FOR ${HERO_UNLOCKS[id]} GOLD`
+        : `SURVIVE ON HARD WITH THE ${HEROES[prev].title.toUpperCase()} FIRST`;
+      drawText(ctx, msg, x + pw / 2, y + ph - 11, { align: 'center', color: ready ? '#feae34' : '#8b9bb4' });
+    } else {
+      // Which trials this hero has conquered.
+      const stars = featStars(prof, id);
+      const parts = stars.map(([label]) => `★ ${label}`);
+      const widths = parts.map((s) => textWidth(s));
+      let sx = Math.round(x + pw / 2 - (widths.reduce((a, b) => a + b, 0) + 10 * (parts.length - 1)) / 2);
+      stars.forEach(([, col, got], i) => {
+        drawText(ctx, parts[i], sx, y + ph - 11, { color: got ? col : '#3a4466' });
+        sx += widths[i] + 10;
+      });
     }
+    return y + ph;
   }
 
   drawConfirm(ctx, W, H, dt) {
@@ -290,9 +320,12 @@ export class HeroScreen {
     const prof = app.store.profile;
     const cost = HERO_UNLOCKS[this.confirm];
     const inOrder = nextHeroUnlock(prof) === this.confirm;
-    const can = inOrder && prof.gold >= cost;
+    const ready = heroUnlockReady(prof, this.confirm);
+    const can = ready && prof.gold >= cost;
+    const prev = HERO_ORDER[HERO_ORDER.indexOf(this.confirm) - 1];
     drawText(ctx, `${h.name} the ${h.title} — ${cost} gold`, W / 2, y + 12, { align: 'center', color: can ? '#fee761' : '#e43b44' });
     if (!inOrder) drawText(ctx, `Unlock the ${HEROES[nextHeroUnlock(prof)].title} first`, W / 2, y + 23, { align: 'center', color: '#8b9bb4' });
+    else if (!ready) drawText(ctx, `First survive 15 minutes on Hard with the ${HEROES[prev].title}`, W / 2, y + 23, { align: 'center', color: '#8b9bb4' });
     else if (!can) drawText(ctx, `You need ${cost - prof.gold} more gold`, W / 2, y + 23, { align: 'center', color: '#8b9bb4' });
     ui.begin(dt);
     const close = () => {
@@ -317,7 +350,9 @@ export class ModeScreen {
     this.app = app;
     this.t = 0;
     app.ui.lock(0.2);
-    app.ui.focusId = 'm_' + (app.choice.mode || 's15');
+    // A trial this hero can't enter (yet) falls back to Survival.
+    if (!canPlay(app.store.profile, app.choice.mode, app.choice.hero)) app.choice.mode = 's15';
+    app.ui.focusId = 'm_' + app.choice.mode;
   }
 
   draw(ctx, W, H, dt) {
@@ -328,56 +363,93 @@ export class ModeScreen {
     header(ctx, W, 'CHOOSE YOUR TRIAL');
     ui.begin(dt);
     const prof = app.store.profile;
-    const modes = ['s15', 's30', 'dungeon'];
+    const hero = app.choice.hero;
+    const modes = ['s15', 'dungeon', 'ranked'];
     const cw = Math.min(110, Math.floor((W - 24) / 3) - 6), ch = 84;
     const total = 3 * cw + 12;
     let x = Math.round(W / 2 - total / 2);
     const y = 34;
+    let focusMode = null;
     for (const m of modes) {
       const M = MODES[m];
       const fid = 'm_' + m;
-      if (ui.item(fid, x, y, cw, ch)) {
+      const open = canPlay(prof, m, hero);
+      if (ui.item(fid, x, y, cw, ch, { disabled: !open })) {
         app.choice.mode = m;
-        ui.focus('d_' + (app.choice.diff || 'medium'));
+        ui.focus(m === 'ranked' ? 'begin' : 'd_' + (app.choice.diff || 'medium'));
       }
       const f = ui.focused(fid);
+      if (f) focusMode = m;
       const sel = app.choice.mode === m;
-      panel(ctx, x, y, cw, ch, { trim: f ? ['#ffffff', '#feae34'] : sel ? ['#feae34', '#733e39'] : ['#5a6988', '#3a4466'], rivets: sel, fill: sel ? '#241b2c' : null });
-      const icon = m === 'dungeon' ? SPR.stairs.frames[0].c : SPR.oak1.frames[0].c;
+      panel(ctx, x, y, cw, ch, { trim: f ? ['#ffffff', '#feae34'] : sel ? ['#feae34', '#733e39'] : ['#5a6988', '#3a4466'], rivets: sel, fill: sel ? '#241b2c' : open ? null : '#120e18' });
+      const fr = (m === 'dungeon' ? SPR.stairs : SPR.oak1).frames[0];
+      const icon = open ? fr.c : fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff2a2238 : 0)) }));
       ctx.drawImage(icon, Math.round(x + cw / 2 - icon.width / 2), y + 6);
-      if (m !== 'dungeon') moon(ctx, x + cw - 15, y + 12, 4, m === 's15');
+      if (m === 's15') moon(ctx, x + cw - 15, y + 12, 4, true);
+      if (m === 'ranked') moon(ctx, x + cw - 15, y + 12, 4, false, open ? ['#f6757a', '#a22633'] : ['#3a4466', '#262b44']);
       if (sel) {
         ctx.fillStyle = '#feae34';
         ctx.fillRect(x + 3, y + ch - 12, cw - 6, 9);
         drawText(ctx, 'SELECTED', x + cw / 2, y + ch - 11, { align: 'center', color: '#3e2731', outline: null });
       }
-      drawText(ctx, M.name.toUpperCase(), x + cw / 2, y + 52, { align: 'center', color: f || sel ? '#fee761' : '#c0cbdc' });
-      drawText(ctx, M.sub, x + cw / 2, y + 61, { align: 'center', color: '#8b9bb4' });
-      const wins = prof.wins[m].reduce((a, b) => a + b, 0);
-      if (wins) {
-        ctx.drawImage(SPR.h_trophy.frames[0].c, x + 6, y + 6);
-        drawText(ctx, `×${wins}`, x + 14, y + 6, { color: '#feae34' });
+      drawText(ctx, M.name.toUpperCase(), x + cw / 2, y + 52, { align: 'center', color: !open ? '#5a6988' : f || sel ? '#fee761' : '#c0cbdc' });
+      drawText(ctx, open ? M.sub : 'LOCKED', x + cw / 2, y + 61, { align: 'center', color: open ? '#8b9bb4' : '#5a6988' });
+      // This hero's record here: stars for wins, or the best Ranked time.
+      if (m === 'ranked') {
+        const best = prof.ranked[hero];
+        if (best && open) drawText(ctx, (cw >= 90 ? 'BEST ' : '') + fmtTime(best), x + 6, y + 5, { color: '#feae34' });
+      } else if (open) {
+        const stars = featStars(prof, hero).filter(([label]) => (m === 's15' ? label === 'Hard night' : label.startsWith('Dungeon')));
+        let sx = x + 6;
+        for (const [, col, got] of stars) {
+          if (got) drawText(ctx, '★', sx, y + 5, { color: col });
+          sx += 7;
+        }
       }
       x += cw + 6;
     }
-    const M = MODES[app.choice.mode || 's15'];
-    drawText(ctx, M.desc, W / 2, y + ch + 5, { align: 'center', color: '#c0cbdc' });
-    // Difficulty.
-    const dy = y + ch + 20;
-    const dw = 70;
-    let dx = Math.round(W / 2 - (3 * dw + 12) / 2);
-    for (const d of ['easy', 'medium', 'hard']) {
-      const D = DIFFICULTY[d];
-      const sel = app.choice.diff === d;
-      if (button(ctx, ui, 'd_' + d, dx, dy, dw, 14, (sel ? '★ ' : '') + D.name.toUpperCase(), { color: D.color })) {
-        app.choice.diff = d;
-        ui.focus('begin');
-      }
-      dx += dw + 6;
+    const mode = app.choice.mode;
+    // The focused trial's description, or what it takes to unlock it.
+    const lockedFocus = focusMode && !canPlay(prof, focusMode, hero);
+    const desc = lockedFocus ? `To unlock: ${lockReason(prof, focusMode, hero)}` : MODES[focusMode || mode].desc;
+    let ty = y + ch + 5;
+    for (const line of wrapText(desc, W - 20)) {
+      drawText(ctx, line, W / 2, ty, { align: 'center', color: lockedFocus ? '#feae34' : '#c0cbdc' });
+      ty += 9;
     }
-    const D = DIFFICULTY[app.choice.diff || 'medium'];
-    drawText(ctx, `${D.flavor} · Gold ×${D.gold}`, W / 2, dy + 18, { align: 'center', color: D.color });
-    if (button(ctx, ui, 'begin', Math.round(W / 2 - 50), Math.min(H - 22, dy + 32), 100, 15, 'BEGIN', { color: '#fee761' })) app.startRun();
+    const dy = ty + 6;
+    let beginY = dy + 32;
+    if (mode === 'ranked') {
+      // One ruleset for everyone; the record to beat is this hero's best.
+      const best = prof.ranked[hero] || 0;
+      let ry = dy;
+      const say = (text, color) => {
+        for (const line of wrapText(text, W - 20)) {
+          drawText(ctx, line, W / 2, ry, { align: 'center', color });
+          ry += 9;
+        }
+      };
+      say('No difficulty choice: every hero faces the same endless night', '#8b9bb4');
+      ry += 3;
+      say(best ? `Your best with the ${HEROES[hero].title}: ${fmtTime(best)} · ${rankTitle(best).toUpperCase()}` : `No Ranked run with the ${HEROES[hero].title} yet`, '#feae34');
+      beginY = Math.max(beginY, ry + 6);
+    } else {
+      // Difficulty.
+      const dw = 70;
+      let dx = Math.round(W / 2 - (3 * dw + 12) / 2);
+      for (const d of ['easy', 'medium', 'hard']) {
+        const D = DIFFICULTY[d];
+        const sel = app.choice.diff === d;
+        if (button(ctx, ui, 'd_' + d, dx, dy, dw, 14, (sel ? '★ ' : '') + D.name.toUpperCase(), { color: D.color })) {
+          app.choice.diff = d;
+          ui.focus('begin');
+        }
+        dx += dw + 6;
+      }
+      const D = DIFFICULTY[app.choice.diff || 'medium'];
+      drawText(ctx, `${D.flavor} · Gold ×${D.gold}`, W / 2, dy + 18, { align: 'center', color: D.color });
+    }
+    if (button(ctx, ui, 'begin', Math.round(W / 2 - 50), Math.min(H - 22, beginY), 100, 15, 'BEGIN', { color: '#fee761' })) app.startRun();
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('hero');
     ui.end();
     if (input.pressed('back')) app.go('hero');
@@ -471,7 +543,9 @@ export class RecordsScreen {
     dim(ctx, W, H, 0.55);
     header(ctx, W, 'RECORDS');
     const p = app.store.profile;
-    const pw = Math.min(W - 16, 300), ph = Math.min(H - 54, 180);
+    // Ranked personal bests, one row per hero that has a run.
+    const ranked = HERO_ORDER.filter((h) => p.ranked[h]).map((h) => [`${HEROES[h].name}, ${HEROES[h].title}`, `${fmtTime(p.ranked[h])} · ${rankTitle(p.ranked[h])}`]);
+    const pw = Math.min(W - 16, 300), ph = Math.min(H - 54, 170 + Math.max(1, ranked.length) * 10 + 14);
     const x = Math.round(W / 2 - pw / 2), y = 32;
     panel(ctx, x, y, pw, ph, { title: 'VICTORIES' });
     const cx = [x + 10, x + pw - 150, x + pw - 100, x + pw - 50];
@@ -479,7 +553,7 @@ export class RecordsScreen {
     drawText(ctx, 'TRIAL', cx[0], ty, { color: '#8b9bb4' });
     ['EASY', 'MEDIUM', 'HARD'].forEach((d, i) => drawText(ctx, d, cx[i + 1] + 20, ty, { align: 'center', color: [DIFFICULTY.easy.color, DIFFICULTY.medium.color, DIFFICULTY.hard.color][i] }));
     ty += 12;
-    for (const m of ['s15', 's30', 'dungeon']) {
+    for (const m of ['s15', 'dungeon']) {
       drawText(ctx, `${MODES[m].name} ${MODES[m].sub}`, cx[0], ty, { color: '#c0cbdc' });
       p.wins[m].forEach((w, i) => drawText(ctx, String(w), cx[i + 1] + 20, ty, { align: 'center', color: w ? '#fee761' : '#3a4466' }));
       ty += 11;
@@ -491,16 +565,20 @@ export class RecordsScreen {
       ['Most kills in a run', fmtNum(p.best.kills)],
       ['Highest level', String(p.best.level)],
       ['Longest night (15 min)', fmtTime(p.best.s15)],
-      ['Longest night (30 min)', fmtTime(p.best.s30)],
       ['Deepest floor', p.best.dungeon >= 4 ? 'Conquered' : p.best.dungeon ? `Floor ${p.best.dungeon}` : '—'],
       ['Gold', fmtNum(p.gold)],
     ];
-    for (const [k, v] of rows) {
-      if (ty > y + ph - 10) break;
-      drawText(ctx, k, cx[0], ty, { color: '#8b9bb4' });
-      drawText(ctx, v, x + pw - 10, ty, { align: 'right', color: '#c0cbdc' });
+    const line = (k, v, kc = '#8b9bb4', vc = '#c0cbdc') => {
+      if (ty > y + ph - 10) return;
+      drawText(ctx, k, cx[0], ty, { color: kc });
+      drawText(ctx, v, x + pw - 10, ty, { align: 'right', color: vc });
       ty += 10;
-    }
+    };
+    for (const [k, v] of rows) line(k, v);
+    ty += 4;
+    line('RANKED BESTS', '', '#feae34');
+    if (!ranked.length) line(modeUnlocked(p, 'ranked') ? 'No Ranked runs yet' : 'Locked', '', '#3a4466');
+    for (const [k, v] of ranked) line(k, v, '#8b9bb4', '#fee761');
     ui.begin(dt);
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('title');
     ui.end();

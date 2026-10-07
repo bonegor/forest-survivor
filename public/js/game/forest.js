@@ -316,12 +316,18 @@ export class Forest {
 
   ambient() {
     const g = this.g;
-    const u = clamp(g.time / g.duration, 0, 1);
+    // Ranked has no dawn: the night deepens over 12 minutes and stays.
+    const u = g.mode === 'ranked' ? clamp(g.time / 900, 0, 0.86) : clamp(g.time / g.duration, 0, 1);
     let i = 0;
     while (i < NIGHT.length - 2 && NIGHT[i + 1][0] < u) i++;
     const [t0, c0] = NIGHT[i], [t1, c1] = NIGHT[i + 1];
     const k = clamp((u - t0) / (t1 - t0), 0, 1);
     let c = [lerp(c0[0], c1[0], k), lerp(c0[1], c1[1], k), lerp(c0[2], c1[2], k)];
+    if (g.mode === 'ranked' && g.phase > 30) {
+      // A blood moon rises as the endless night turns lethal.
+      const r = clamp((g.phase - 30) / 15, 0, 1) * 0.45;
+      c = [lerp(c[0], 170, r), lerp(c[1], 70, r), lerp(c[2], 90, r)];
+    }
     if (g.dawn > 0) {
       const d = clamp(g.dawn, 0, 1);
       c = [lerp(c[0], 255, d), lerp(c[1], 244, d), lerp(c[2], 228, d)];

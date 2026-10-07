@@ -171,7 +171,11 @@ test('checkpoints are saved, cleared by a finished run, and validated', async ()
     const bad = await c.post('/api/checkpoint', { checkpoint: { mode: 'lol' } });
     assert.equal(bad.status, 400);
 
-    await c.post('/api/run', { mode: 'dungeon', diff: 'hard', victory: false, time: 500, floor: 2 });
+    // A Dungeon run is refused while the Dungeon is locked, and leaves the save alone.
+    assert.equal((await c.post('/api/run', { mode: 'dungeon', diff: 'hard', victory: false, time: 500, floor: 2 })).status, 400);
+    data = await (await c.get('/api/state')).json();
+    assert.equal(data.checkpoint.hero, 'knight');
+    await c.post('/api/run', { mode: 's15', diff: 'hard', victory: false, time: 500 });
     data = await (await c.get('/api/state')).json();
     assert.equal(data.checkpoint, null);
   });

@@ -7,7 +7,9 @@ test('sanitizeProfile repairs garbage into a valid default profile', () => {
     const p = P.sanitizeProfile(raw);
     assert.equal(p.v, P.VERSION);
     assert.ok(p.gold >= 0);
-    assert.deepEqual(Object.keys(p.wins).sort(), [...P.MODES].sort());
+    assert.deepEqual(Object.keys(p.wins).sort(), [...P.WIN_MODES].sort());
+    assert.deepEqual(p.feats, {});
+    assert.deepEqual(p.ranked, {});
     assert.ok(!('bogus' in p.up));
     if (p.up.might) assert.ok(p.up.might <= 5);
   }
@@ -43,12 +45,20 @@ test('a victory only counts when the run was long enough', () => {
   const early = P.applyRun(p, { mode: 's15', diff: 'medium', victory: true, time: 42, gold: 10 });
   assert.equal(early.reward.bonus, 0);
   assert.equal(early.profile.wins.s15[1], 0);
-  const real = P.applyRun(p, { mode: 's30', diff: 'easy', victory: true, time: 1800, gold: 10 });
-  assert.equal(real.profile.wins.s30[0], 1);
+  const real = P.applyRun(p, { mode: 's15', diff: 'easy', victory: true, time: 900, gold: 10 });
+  assert.equal(real.profile.wins.s15[0], 1);
 });
 
+// A profile with every hero bought and the Dungeon open.
+function veteran() {
+  const p = P.defaultProfile();
+  p.heroes = [...P.HERO_ORDER];
+  for (const h of P.HERO_ORDER) p.feats[h] = P.FEAT.survivalHard;
+  return p;
+}
+
 test('dungeon runs record the deepest floor', () => {
-  let p = P.defaultProfile();
+  let p = veteran();
   p = P.applyRun(p, { mode: 'dungeon', diff: 'medium', victory: false, time: 600, floor: 2 }).profile;
   assert.equal(p.best.dungeon, 2);
   p = P.applyRun(p, { mode: 'dungeon', diff: 'medium', victory: true, time: 1200, floor: 3 }).profile;
@@ -86,6 +96,8 @@ test('heroes unlock in order at exponentially rising prices', () => {
   let p = P.defaultProfile();
   assert.deepEqual(p.heroes, ['knight']);
   p.gold = 100000;
+  assert.equal(P.unlockHero(p, 'archer').ok, false, 'the Knight must survive a Hard night first');
+  for (const h of P.HERO_ORDER) p.feats[h] = P.FEAT.survivalHard;
   assert.equal(P.unlockHero(p, 'mage').ok, false, 'cannot skip ahead');
   assert.equal(P.unlockHero(p, 'dragon').ok, false);
   const costs = [];
@@ -102,7 +114,72 @@ test('heroes unlock in order at exponentially rising prices', () => {
   assert.equal(P.unlockHero(p, 'archer').ok, false, 'already unlocked');
   const poor = P.defaultProfile();
   poor.gold = 499;
+  poor.feats.knight = P.FEAT.survivalHard;
   assert.equal(P.unlockHero(poor, 'archer').ok, false);
+});
+
+test('the full ladder: Hard nights, then the Dungeon hero by hero, then Ranked', () => {
+  let p = P.defaultProfile();
+  const run = (o) => {
+    const r = P.applyRun(p, { time: 900, gold: 0, kills: 100, level: 30, victory: true, ...o });
+    if (r.ok) p = r.profile;
+    return r;
+  };
+  assert.deepEqual(P.nextGoal(p), { type: 'survivalHard', hero: 'knight', unlocks: 'archer' });
+  assert.equal(P.canPlay(p, 'dungeon', 'knight'), false);
+  assert.equal(P.canPlay(p, 'ranked', 'knight'), false);
+  assert.equal(run({ mode: 'dungeon', diff: 'easy', hero: 'knight' }).ok, false, 'locked modes are refused');
+
+  // An Easy or Medium win doesn't open the next hero.
+  assert.deepEqual(run({ mode: 's15', diff: 'medium', hero: 'knight' }).reward.unlocks, []);
+  assert.equal(P.heroUnlockReady(p, 'archer'), false);
+
+  // Survival ladder.
+  for (const [i, h] of P.HERO_ORDER.entries()) {
+    const next = P.HERO_ORDER[i + 1];
+    const r = run({ mode: 's15', diff: 'hard', hero: h });
+    assert.deepEqual(r.reward.unlocks, [next ? 'buy:' + next : 'mode:dungeon'], h);
+    if (next) {
+      assert.deepEqual(P.nextGoal(p), { type: 'buy', hero: next, unlocks: next, cost: P.HERO_UNLOCKS[next] });
+      p.gold = 1e6;
+      p = P.unlockHero(p, next).profile;
+    }
+  }
+  assert.ok(P.canPlay(p, 'dungeon', 'knight'));
+  assert.equal(P.canPlay(p, 'dungeon', 'archer'), false, 'only the Knight enters the Dungeon at first');
+  assert.equal(run({ mode: 'dungeon', diff: 'easy', hero: 'archer', time: 1200 }).ok, false);
+
+  // Dungeon ladder: any difficulty, but it must be a full clear.
+  run({ mode: 'dungeon', diff: 'easy', hero: 'knight', time: 1200, victory: false, floor: 3 });
+  assert.equal(P.canPlay(p, 'dungeon', 'archer'), false, 'dying on floor 3 is not a clear');
+  for (const [i, h] of P.HERO_ORDER.slice(0, -1).entries()) {
+    assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: h, unlocks: P.HERO_ORDER[i + 1] });
+    const r = run({ mode: 'dungeon', diff: 'easy', hero: h, time: 1200 });
+    assert.deepEqual(r.reward.unlocks, ['dungeon:' + P.HERO_ORDER[i + 1]]);
+  }
+  // The Necromancer must beat it on Hard to open Ranked.
+  assert.deepEqual(run({ mode: 'dungeon', diff: 'medium', hero: 'necromancer', time: 1200 }).reward.unlocks, []);
+  assert.deepEqual(P.nextGoal(p), { type: 'dungeonHard', hero: 'necromancer', unlocks: 'ranked' });
+  assert.deepEqual(run({ mode: 'dungeon', diff: 'hard', hero: 'necromancer', time: 1200 }).reward.unlocks, ['mode:ranked']);
+  assert.equal(P.nextGoal(p), null);
+  for (const h of P.HERO_ORDER) assert.ok(P.canPlay(p, 'ranked', h), h);
+});
+
+test('ranked keeps a personal best per hero and never counts as a win', () => {
+  const p = veteran();
+  for (const h of P.HERO_ORDER) p.feats[h] |= P.FEAT.dungeon | P.FEAT.dungeonHard;
+  let r = P.applyRun(p, { mode: 'ranked', diff: 'hard', hero: 'mage', victory: true, time: 1300, gold: 50, kills: 900, level: 60 });
+  assert.ok(r.ok);
+  assert.equal(r.run.diff, 'medium', 'one ruleset for everyone');
+  assert.equal(r.run.victory, false);
+  assert.deepEqual(r.reward.ranked, { time: 1300, best: 1300, personalBest: true, title: 'Paladin' });
+  assert.equal(P.totalWins(r.profile), 0);
+  r = P.applyRun(r.profile, { mode: 'ranked', hero: 'mage', time: 400 });
+  assert.deepEqual(r.reward.ranked, { time: 400, best: 1300, personalBest: false, title: 'Squire' });
+  assert.equal(r.profile.ranked.mage, 1300);
+  assert.equal(P.sanitizeProfile(JSON.parse(JSON.stringify(r.profile))).ranked.mage, 1300, 'survives a round trip');
+  assert.equal(P.rankTitle(0), 'Peasant');
+  assert.equal(P.rankTitle(60 * 60 + 5), 'Immortal');
 });
 
 test('metaBonuses reflect upgrade ranks', () => {

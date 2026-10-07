@@ -1,6 +1,6 @@
-// Spawn schedule, expressed in "phase minutes" (0-30). A 30-minute survival
-// run advances one phase per minute; shorter runs and dungeon floors map
-// their own clocks onto this scale.
+// Spawn schedule, expressed in "phase minutes" (0-30). The 15-minute night
+// advances 1.4 phases per minute; Ranked keeps going past 30 with the late
+// mix; dungeon floors map their own clocks onto this scale.
 
 // [from, to, enemy, weight]
 export const SPAWN_TABLE = [
@@ -29,8 +29,9 @@ export function targetCount(phase) {
 }
 
 // Extra health multiplier as the night goes on.
+// Past phase 30 (only Ranked gets there) it also compounds, so every night ends.
 export function hpScale(phase) {
-  return 1 + phase * 0.08 + Math.max(0, phase - 9) * 0.2 + Math.max(0, phase - 16) * 0.3;
+  return (1 + phase * 0.08 + Math.max(0, phase - 9) * 0.2 + Math.max(0, phase - 16) * 0.3) * Math.pow(1.06, Math.max(0, phase - 30));
 }
 
 // Timed events (phase minutes).
@@ -57,13 +58,13 @@ export const SURVIVAL_BOSSES = {
     { at: 9 * 60, id: 'butcher' },
     { at: 13 * 60, id: 'lich' },
   ],
-  s30: [
-    { at: 5 * 60, id: 'boneking' },
-    { at: 10.5 * 60, id: 'butcher' },
-    { at: 18 * 60, id: 'lich' },
-    { at: 27.5 * 60, id: 'demonlord' },
-  ],
 };
+
+// Ranked: the four lords return in rotation, one every 4.5 minutes, forever.
+export const RANKED_BOSSES = ['boneking', 'butcher', 'lich', 'demonlord'];
+export const RANKED_BOSS_EVERY = 270;
+// Once the scripted events run out, Ranked keeps drawing from the late ones.
+export const RANKED_EVENT_EVERY = 2.5; // phase minutes
 
 // Dungeon floors: theme, starting phase and the guardian waiting at the end.
 export const FLOORS = [

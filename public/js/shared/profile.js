@@ -1,16 +1,32 @@
 // Profile rules shared by the Node server and the browser.
 //
 // Everything a player owns lives in a cookie, so the profile is deliberately
-// tiny: gold, wins, a few records and the ranks bought in the Armory. Every
-// function here is pure and treats its input as untrusted.
+// tiny: gold, wins, a few records, per-hero achievements and the ranks bought
+// in the Armory. Every function here is pure and treats its input as untrusted.
+//
+// The ladder:
+//  1. Everyone starts with the Knight in 15-minute Survival.
+//  2. Surviving a Hard night with a hero lets you buy the next hero.
+//  3. A Hard night with the Necromancer opens the Dungeon, for the Knight.
+//  4. Beating the Dungeon (any difficulty) with a hero opens it for the next.
+//  5. Beating the Dungeon on Hard with the Necromancer opens Ranked: endless,
+//     any hero, personal bests.
 
-export const VERSION = 1;
+export const VERSION = 2;
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
-export const MODES = ['s15', 's30', 'dungeon'];
+export const MODES = ['s15', 'dungeon', 'ranked'];
+export const WIN_MODES = ['s15', 'dungeon']; // Ranked has no victory, only a time
 // Heroes unlock in this order, each costing three times the last.
 export const HERO_ORDER = ['knight', 'archer', 'mage', 'rogue', 'necromancer'];
 export const BASE_HEROES = ['knight'];
 export const HERO_UNLOCKS = { archer: 500, mage: 1500, rogue: 4500, necromancer: 13500 };
+// Per-hero achievements, stored as bit flags.
+export const FEAT = { survivalHard: 1, dungeon: 2, dungeonHard: 4 };
+// Ranked titles by minutes survived.
+export const RANKS = [
+  [0, 'Peasant'], [5, 'Squire'], [10, 'Knight'], [15, 'Champion'], [20, 'Paladin'],
+  [25, 'Warlord'], [30, 'Hero'], [40, 'Legend'], [50, 'Mythic'], [60, 'Immortal'],
+];
 
 // Permanent upgrades bought with gold. Rank n+1 costs `cost * (n + 1)`.
 export const UPGRADES = [
@@ -30,12 +46,12 @@ export const UPGRADES = [
 ];
 
 const DIFF_GOLD = { easy: 0.75, medium: 1, hard: 1.5 };
-const VICTORY_BONUS = { s15: 200, s30: 500, dungeon: 400 };
+const VICTORY_BONUS = { s15: 200, dungeon: 400 };
 const DIFF_BONUS = { easy: 1, medium: 1.5, hard: 2.5 };
 // Upper bounds used to reject absurd run reports.
-const MAX_TIME = { s15: 16 * 60, s30: 31 * 60, dungeon: 3 * 60 * 60 };
+const MAX_TIME = { s15: 16 * 60, dungeon: 3 * 60 * 60, ranked: 4 * 60 * 60 };
 const MAX_GOLD_PER_SEC = 12;
-const MIN_WIN_TIME = { s15: 15 * 60 - 5, s30: 30 * 60 - 5, dungeon: 4 * 60 };
+const MIN_WIN_TIME = { s15: 15 * 60 - 5, dungeon: 4 * 60 };
 
 const int = (v, lo, hi) => {
   v = Math.floor(Number(v));
@@ -47,12 +63,14 @@ export function defaultProfile() {
   return {
     v: VERSION,
     gold: 0,
-    wins: { s15: [0, 0, 0], s30: [0, 0, 0], dungeon: [0, 0, 0] },
+    wins: { s15: [0, 0, 0], dungeon: [0, 0, 0] },
     runs: 0,
     kills: 0,
-    best: { s15: 0, s30: 0, dungeon: 0, kills: 0, level: 0 },
+    best: { s15: 0, dungeon: 0, kills: 0, level: 0 },
     up: {},
     heroes: [...BASE_HEROES],
+    feats: {}, // hero -> FEAT bits
+    ranked: {}, // hero -> best Ranked time in seconds
   };
 }
 
@@ -60,13 +78,12 @@ export function sanitizeProfile(raw) {
   const p = defaultProfile();
   if (!raw || typeof raw !== 'object') return p;
   p.gold = int(raw.gold, 0, 1e9);
-  for (const m of MODES) {
+  for (const m of WIN_MODES) {
     for (let i = 0; i < 3; i++) p.wins[m][i] = int(raw.wins?.[m]?.[i], 0, 1e6);
   }
   p.runs = int(raw.runs, 0, 1e7);
   p.kills = int(raw.kills, 0, 1e12);
   p.best.s15 = int(raw.best?.s15, 0, MAX_TIME.s15);
-  p.best.s30 = int(raw.best?.s30, 0, MAX_TIME.s30);
   p.best.dungeon = int(raw.best?.dungeon, 0, 4);
   p.best.kills = int(raw.best?.kills, 0, 1e7);
   p.best.level = int(raw.best?.level, 0, 999);
@@ -77,7 +94,72 @@ export function sanitizeProfile(raw) {
   if (Array.isArray(raw.heroes)) {
     for (const h of raw.heroes) if (HERO_UNLOCKS[h] && !p.heroes.includes(h)) p.heroes.push(h);
   }
+  for (const h of HERO_ORDER) {
+    const f = int(raw.feats?.[h], 0, 7);
+    if (f) p.feats[h] = f;
+    const t = int(raw.ranked?.[h], 0, MAX_TIME.ranked);
+    if (t) p.ranked[h] = t;
+  }
   return p;
+}
+
+// ------------------------------------------------------------- the ladder --
+
+export const hasFeat = (p, hero, bit) => ((p.feats?.[hero] || 0) & bit) !== 0;
+const prevHero = (id) => HERO_ORDER[HERO_ORDER.indexOf(id) - 1] || null;
+
+export function modeUnlocked(p, mode) {
+  if (mode === 's15') return true;
+  if (mode === 'dungeon') return hasFeat(p, 'necromancer', FEAT.survivalHard);
+  if (mode === 'ranked') return hasFeat(p, 'necromancer', FEAT.dungeonHard);
+  return false;
+}
+
+// Whether a hero may enter a mode right now.
+export function canPlay(p, mode, hero) {
+  if (!p.heroes.includes(hero) || !modeUnlocked(p, mode)) return false;
+  if (mode !== 'dungeon' || hero === HERO_ORDER[0]) return true;
+  return hasFeat(p, prevHero(hero), FEAT.dungeon);
+}
+
+// The next hero can be bought once the one before it survived a Hard night.
+export function heroUnlockReady(p, id) {
+  return nextHeroUnlock(p) === id && hasFeat(p, prevHero(id), FEAT.survivalHard);
+}
+
+// What the player should aim for next, or null once Ranked is open.
+//   { type: 'survivalHard' | 'buy' | 'dungeon' | 'dungeonHard', hero, unlocks, cost? }
+export function nextGoal(p) {
+  const next = nextHeroUnlock(p);
+  if (next) {
+    if (heroUnlockReady(p, next)) return { type: 'buy', hero: next, unlocks: next, cost: HERO_UNLOCKS[next] };
+    return { type: 'survivalHard', hero: prevHero(next), unlocks: next };
+  }
+  if (!modeUnlocked(p, 'dungeon')) return { type: 'survivalHard', hero: 'necromancer', unlocks: 'dungeon' };
+  for (let i = 0; i < HERO_ORDER.length - 1; i++) {
+    const h = HERO_ORDER[i];
+    if (!hasFeat(p, h, FEAT.dungeon)) return { type: 'dungeon', hero: h, unlocks: HERO_ORDER[i + 1] };
+  }
+  if (!modeUnlocked(p, 'ranked')) return { type: 'dungeonHard', hero: 'necromancer', unlocks: 'ranked' };
+  return null;
+}
+
+// Everything currently open, as keys; applyRun diffs these to announce unlocks.
+function openings(p) {
+  const out = [];
+  const next = nextHeroUnlock(p);
+  if (next && heroUnlockReady(p, next)) out.push('buy:' + next);
+  for (const m of MODES) if (m !== 's15' && modeUnlocked(p, m)) out.push('mode:' + m);
+  if (modeUnlocked(p, 'dungeon')) {
+    for (const h of HERO_ORDER.slice(1)) if (canPlay(p, 'dungeon', h)) out.push('dungeon:' + h);
+  }
+  return out;
+}
+
+export function rankTitle(seconds) {
+  let title = RANKS[0][1];
+  for (const [min, name] of RANKS) if (seconds >= min * 60) title = name;
+  return title;
 }
 
 export function upgradeCost(id, rank) {
@@ -120,6 +202,7 @@ export function unlockHero(profile, id) {
   if (!cost) return { ok: false, profile: p, error: 'Unknown hero' };
   if (p.heroes.includes(id)) return { ok: false, profile: p, error: 'Already unlocked' };
   if (nextHeroUnlock(p) !== id) return { ok: false, profile: p, error: 'Unlock the previous hero first' };
+  if (!heroUnlockReady(p, id)) return { ok: false, profile: p, error: 'Survive a Hard night with the previous hero first' };
   if (p.gold < cost) return { ok: false, profile: p, error: 'Not enough gold' };
   p.gold -= cost;
   p.heroes.push(id);
@@ -130,13 +213,16 @@ export function unlockHero(profile, id) {
 // real run of that length could plausibly produce.
 export function sanitizeRun(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  if (!MODES.includes(raw.mode) || !DIFFICULTIES.includes(raw.diff)) return null;
+  if (!MODES.includes(raw.mode)) return null;
+  // Ranked has one fixed ruleset so personal bests compare fairly.
+  const diff = raw.mode === 'ranked' ? 'medium' : raw.diff;
+  if (!DIFFICULTIES.includes(diff)) return null;
   const time = int(raw.time, 0, MAX_TIME[raw.mode]);
-  // A win only counts if the run lasted long enough to be one.
-  const victory = raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
+  // A win only counts if the run lasted long enough to be one. Ranked never ends in victory.
+  const victory = raw.mode !== 'ranked' && raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
   return {
     mode: raw.mode,
-    diff: raw.diff,
+    diff,
     hero: isId(raw.hero) ? raw.hero : 'knight',
     victory,
     time,
@@ -157,25 +243,40 @@ export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
   const run = sanitizeRun(rawRun);
   if (!run) return { ok: false, profile: p, error: 'Invalid run' };
+  if (!canPlay(p, run.mode, run.hero)) return { ok: false, profile: p, error: 'That mode is locked for this hero' };
+  const before = new Set(openings(p));
   const reward = runReward(run);
   p.gold = int(p.gold + reward.total, 0, 1e9);
   p.runs = int(p.runs + 1, 0, 1e7);
   p.kills = int(p.kills + run.kills, 0, 1e12);
-  if (run.victory) p.wins[run.mode][DIFFICULTIES.indexOf(run.diff)] += 1;
+  const hard = run.diff === 'hard';
+  let personalBest = false;
+  if (run.victory) {
+    p.wins[run.mode][DIFFICULTIES.indexOf(run.diff)] += 1;
+    let f = p.feats[run.hero] || 0;
+    if (run.mode === 's15' && hard) f |= FEAT.survivalHard;
+    if (run.mode === 'dungeon') f |= FEAT.dungeon | (hard ? FEAT.dungeonHard : 0);
+    if (f) p.feats[run.hero] = f;
+  }
   if (run.mode === 'dungeon') {
     const depth = run.victory ? 4 : run.floor;
     p.best.dungeon = Math.max(p.best.dungeon, depth);
+  } else if (run.mode === 'ranked') {
+    personalBest = run.time > (p.ranked[run.hero] || 0);
+    if (personalBest) p.ranked[run.hero] = run.time;
   } else {
     p.best[run.mode] = Math.max(p.best[run.mode], Math.min(run.time, MAX_TIME[run.mode]));
   }
   p.best.kills = Math.max(p.best.kills, run.kills);
   p.best.level = Math.max(p.best.level, run.level);
+  reward.unlocks = openings(p).filter((k) => !before.has(k));
+  if (run.mode === 'ranked') reward.ranked = { time: run.time, best: p.ranked[run.hero] || 0, personalBest, title: rankTitle(run.time) };
   return { ok: true, profile: p, reward, run };
 }
 
 export function totalWins(profile) {
   let n = 0;
-  for (const m of MODES) for (const w of profile.wins[m]) n += w;
+  for (const m of WIN_MODES) for (const w of profile.wins[m]) n += w;
   return n;
 }
 

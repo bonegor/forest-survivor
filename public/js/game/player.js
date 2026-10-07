@@ -13,7 +13,8 @@ export const BASE_MAGNET = 42;
 export function xpFor(level) {
   if (level < 20) return 5 + (level - 1) * 10;
   if (level < 40) return 200 + (level - 20) * 18;
-  return 560 + (level - 40) * 55;
+  // Past level 100 (endless nights) each level costs ever more, so Blessings thin out.
+  return 560 + (level - 40) * 55 + Math.max(0, level - 100) ** 2 * 2;
 }
 
 export class Player {
@@ -241,7 +242,7 @@ export class Player {
   addXp(v) {
     let gain = v * this.growth;
     if (this.buff('wisdom')) gain *= 1.5;
-    if (this.g.mode === 's15') gain *= 1.1;
+    if (this.g.mode === 's15' || this.g.mode === 'ranked') gain *= 1.1;
     else if (this.g.mode === 'dungeon') gain *= 1.15; // fewer foes down there
     this.xp += gain;
     while (this.xp >= this.xpNext) {

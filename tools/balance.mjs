@@ -32,12 +32,12 @@ async function play(cfg) {
     a.startRun();
   }, [hero, mode, diff]);
   await page.waitForTimeout(300);
-  const limit = cap || (mode === 's15' ? 900 : mode === 's30' ? 1800 : 2400);
+  const limit = cap || (mode === 's15' ? 900 : mode === 'ranked' ? 7200 : 2400);
   const timeline = [];
   let r;
   for (let t = 0; t < limit + 30; t += 60) {
     r = await page.evaluate(() => window.__fs.sim(60));
-    timeline.push(`${Math.round(r.time / 60)}m:L${r.level}/${Math.round((r.hp / r.maxHp) * 100)}%/${r.enemies}e${r.floor > 1 ? '/F' + r.floor : ''}`);
+    timeline.push(`${Math.round(r.time / 60)}m:L${r.level}/${Math.round((r.hp / r.maxHp) * 100)}%/${r.enemies}e${r.floor > 1 ? '/F' + r.floor : ''}${mode === 'ranked' ? '/ph' + Math.round(r.phase) : ''}`);
     if (r.state === 'over' || r.time >= limit) break;
   }
   await ctx.close();

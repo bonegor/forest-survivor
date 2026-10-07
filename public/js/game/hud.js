@@ -6,6 +6,7 @@ import { input } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
+import { RANKS } from '../shared/profile.js';
 
 const ORB_R = 21;
 
@@ -166,6 +167,18 @@ export class Hud {
       drawText(ctx, `FLOOR ${g.floor} · ${g.floorName.toUpperCase()}`, cx, 10, { align: 'center', color: ['#ffffff', '#c0cbdc', '#8b9bb4'] });
       if (g.objective) drawText(ctx, g.objective, cx, 21, { align: 'center', color: '#feae34' });
       drawText(ctx, fmtTime(g.time), cx, 32, { align: 'center', color: '#8b9bb4' });
+    } else if (g.mode === 'ranked') {
+      // Endless: the clock counts up; the bar fills toward the next rank.
+      const c = textCanvas(fmtTime(g.time), g.bestBeaten ? ['#ffffff', '#9ee562', '#63c74d'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
+      ctx.drawImage(c, cx - c.width, 9, c.width * 2, c.height * 2);
+      const cur = RANKS[g.rankIdx], next = RANKS[g.rankIdx + 1];
+      const u = next ? clamp((g.time - cur[0] * 60) / ((next[0] - cur[0]) * 60), 0, 1) : 1;
+      ctx.fillStyle = '#181425';
+      ctx.fillRect(cx - 30, 30, 60, 4);
+      ctx.fillStyle = '#feae34';
+      ctx.fillRect(cx - 29, 31, Math.round(58 * u), 2);
+      drawText(ctx, cur[1].toUpperCase(), cx - 34, 29, { align: 'right', color: '#fee761' });
+      if (g.rankedBest) drawText(ctx, `BEST ${fmtTime(Math.max(g.rankedBest, g.bestBeaten ? g.time : 0))}`, cx + 34, 29, { color: g.bestBeaten ? '#63c74d' : '#8b9bb4' });
     } else {
       const remain = Math.max(0, g.duration - g.time);
       const c = textCanvas(fmtTime(remain), remain < 60 ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
