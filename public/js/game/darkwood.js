@@ -17,6 +17,7 @@ export const DARKWOOD = {
   dropRoad: 0.16, // the odd road is left out, but every crossroads keeps three or four
   bend: 0.3, // the most a bend turns a road off its heading (tan of about 17°)
   trees: 1, // how thick the groves are
+  standing: 0.5, // the share of the groves' trees left standing: half since 15 October 2026
 };
 export const CHUNK = 256; // the game's chunk size
 const CELL = 8; // resolution of a chunk's fields
@@ -540,6 +541,9 @@ export function layoutChunk(cx, cy) {
       }
     }
     if (!ok) continue;
+    // Then only some of them stand (DARKWOOD.standing): picked by their own hash, so every chunk
+    // agrees, and after the spacing, so the groves thin out instead of filling the gaps again.
+    if (h(c.gi, c.gj, 24) >= DARKWOOD.standing) continue;
     const r = c.r, cc = cellOf(c.x, c.y), pine = pineF[cc], cursed = cursedF[cc];
     const z = r(), cl = valueNoise(c.x / 260, c.y / 260, SEED + 71); // species come in clumps
     let n;

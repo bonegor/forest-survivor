@@ -71,7 +71,7 @@ Every second crossroads has a **crypt** beside its shrine, so whichever way you 
 - **Dungeon Run — 3 floors.** Each floor's guardian sleeps behind a seal until you've slain enough foes and spent long enough on the floor. Kill it, take the stairs, and defeat the Demon Lord on floor 3. Your build carries over between floors.
 - **Ranked — endless.** No dawn. The night keeps getting deadlier, the four lords return in rotation every 4½ minutes, and past the half-hour a blood moon rises. Your score is how long you last, kept as a personal best per hero with a rank title (Peasant, Squire, Knight, Champion, Paladin, Warlord, Hero at 30 minutes, Legend at 40, Mythic at 50, Immortal at an hour).
 
-There is **one difficulty** for every mode for now: the old Hard, with about 45% more monsters that each have about 93% more health and deal about 2.3× the damage. Monsters pass through one another and through trees and props, so nothing holds a horde up; tree trunks stop only the hero. Dungeon walls still stop everyone. Every run pays gold at the old Hard rate.
+There is **one difficulty** for every mode for now: the old Hard, with about 45% more monsters that each have about 93% more health and deal about 2.3× the damage. Monsters bump into one another and into props, so a horde gathers round the hero in a crowd instead of one heap, and tree trunks stop them as they stop the hero (Wraiths drift through everything, and bats and imps fly over the trees). Dungeon walls stop everyone. Every run pays gold at the old Hard rate.
 
 The whole game runs **10% faster than real time** (`GAME_SPEED` in `public/js/data/difficulty.js`): the clock, the hero, the monsters, everything in a run, though not the menus. The 15-minute night passes in about 13⅔ minutes.
 

@@ -22,6 +22,7 @@ import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
 import { Lighting } from './lighting.js';
 import { SpatialGrid } from './grid.js';
+import { jostle } from './crowd.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
 import { Dungeon } from './dungeon.js';
@@ -34,6 +35,9 @@ import { Minion } from './minions.js';
 const tmp = [];
 // How far behind the hero coins and potions in the forest last (a few screens).
 const PICKUP_FAR = 1400;
+// How hard the hero's blows throw a foe back: px/s per point of a blow's kb, before the foe's
+// own weight and resistance. A third of the old 75 since 15 October 2026 (the user's call).
+export const KNOCKBACK = 25;
 
 // What a broken barrel, crate, urn or lantern leaves, by weight (null: nothing). Luck
 // multiplies the treasures' weights, so better luck only ever makes each of them likelier.
@@ -422,7 +426,7 @@ export class Game {
     if (e.elite) {
       if (o.kb) e.stagger();
     } else if (o.kb && kbRes < 1 && !e.prop) {
-      const k = (o.kb * 75 * (1 - kbRes)) / Math.sqrt(e.def.mass || 1);
+      const k = (o.kb * KNOCKBACK * (1 - kbRes)) / Math.sqrt(e.def.mass || 1);
       e.kx += (o.kx || 0) * k;
       e.ky += (o.ky || 0) * k;
     }
@@ -1401,9 +1405,9 @@ export class Game {
     if (this.state === 'play') this.heroMilestone();
   }
 
-  // Foes pass through one another and through props (barrels, crates...),
-  // so nothing holds a horde up and it piles into a dense mob; the only thing
-  // they can't do is stand inside the hero.
+  // None can stand inside the hero, and foes bump into one another and into props (barrels,
+  // crates...) and spread out (crowd.js): last, so that pushing one off the hero can't leave it
+  // standing in another.
   separate() {
     const E = this.enemies, p = this.player;
     for (let i = 0; i < E.length; i++) {
@@ -1418,6 +1422,7 @@ export class Game {
         }
       }
     }
+    jostle(E, p.x, p.y);
   }
 
   relocate() {

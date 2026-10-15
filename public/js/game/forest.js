@@ -137,7 +137,7 @@ export class Forest {
       const tree = TREE_NAMES.has(q.n);
       props.push({ spr, x: q.x, y: q.y, frame: 0, anim: q.anim || 0, light: q.light || null, tree, t: hash2(q.x, q.y, 11) * 10, solid: 0, trunk: tree ? TRUNK[q.n] : 0 });
     }
-    return { cx, cy, canvas: c, props, used: 0 };
+    return { cx, cy, canvas: c, props, trunks: props.filter((p) => p.trunk), used: 0 };
   }
 
   forEachVisible(cam, margin, fn) {
@@ -243,17 +243,22 @@ export class Forest {
     return false;
   }
 
-  // Tree trunks stop the hero, who slides around them. Monsters and minions
-  // walk straight through, so the horde never snags on the woods. A trunk is a
-  // squat ellipse at the foot of its tree, as the ground is seen at an angle.
+  // Tree trunks stop the hero and the monsters, who slide around them. The hero's minions walk
+  // straight through, and flyers and Wraiths never ask (Enemy.update). A trunk is a squat
+  // ellipse at the foot of its tree, as the ground is seen at an angle.
   collide(e) {
-    if (e !== this.g.player) return;
-    const x0 = Math.floor((e.x - 12) / CH), x1 = Math.floor((e.x + 12) / CH);
-    const y0 = Math.floor((e.y - 12) / CH), y1 = Math.floor((e.y + 12) / CH);
+    if (e.minion) return;
+    const hero = e === this.g.player, m = Math.max(12, (e.r || 5) + 4);
+    const x0 = Math.floor((e.x - m) / CH), x1 = Math.floor((e.x + m) / CH);
+    const y0 = Math.floor((e.y - m) / CH), y1 = Math.floor((e.y + m) / CH);
+    // Where it is heading: the hero's own velocity, a monster's heading at its speed.
+    const ux = hero ? e.vx || 0 : (e.dirX || 0) * (e.spd || 0), uy = hero ? e.vy || 0 : (e.dirY || 0) * (e.spd || 0);
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
-        for (const p of this.chunk(cx, cy).props) {
-          if (!p.trunk) continue;
+        // A monster off in a part of the woods not yet made isn't worth making it for.
+        const c = hero ? this.chunk(cx, cy) : this.chunks.get(this.key(cx, cy));
+        if (!c) continue;
+        for (const p of c.trunks) {
           const rx = p.trunk + (e.r || 5), ry = rx * 0.65;
           // In units where the ellipse is a circle of radius rx.
           const dx = e.x - p.x, dy = ((e.y - p.y) * rx) / ry;
@@ -262,8 +267,8 @@ export class Forest {
           const d = Math.sqrt(d2);
           const nx = d > 1e-3 ? dx / d : 0, ny = d > 1e-3 ? dy / d : 1;
           // Walking dead straight at the trunk: creep round it rather than stick
-          // forever, to the side the hero leans to (in front of the tree when dead on).
-          const vx = e.vx || 0, vy = ((e.vy || 0) * rx) / ry, v = Math.hypot(vx, vy);
+          // forever, to the side it leans to (in front of the tree when dead on).
+          const vx = ux, vy = (uy * rx) / ry, v = Math.hypot(vx, vy);
           const along = nx * vy - ny * vx;
           const side = Math.abs(along) > 0.02 * v ? Math.sign(along) : nx < 0 ? -1 : 1;
           const slip = v > 1 && nx * vx + ny * vy < -0.99 * v ? 0.03 * side : 0;
