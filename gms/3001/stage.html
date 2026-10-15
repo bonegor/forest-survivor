@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- The game finds its pictures and sounds from /game/, as it does from the site root. -->
+<base href="/game/">
+<title>Sprite Lab stage</title>
+<style>
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #0d0b14; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #note { position: absolute; left: 10px; top: 10px; right: 10px; color: #e8e4d9; font: 14px system-ui, sans-serif; text-shadow: 0 1px 2px #000; pointer-events: none; }
+  #note.bad { background: #410f1a; padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="canvas" aria-label="The game, with the chosen sprites"></canvas>
+<p id="note">Loading the game…</p>
+<script type="module" src="/stage.js"></script>
+</body>
+</html>

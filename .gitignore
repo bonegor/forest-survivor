@@ -1,0 +1,28 @@
+node_modules/
+.data/
+*.log
+.DS_Store
+tools/out/
+
+# Generated output and staging folders (hundreds of MB each)
+output/
+tools/knight-variants/
+tools/mapgen/out/
+
+# Side games by port (gms/<port>/). Of the Sprite Lab (gms/3001), only its own code and the
+# proposals: the packs and music it scouted, and its picks, are in the private repository
+# bonegor/forest-survivor-assets (see gms/3001/serve.mjs).
+gms/*
+!gms/3001/
+gms/3001/music/
+gms/3001/sprites/heroes/
+gms/3001/sprites/monsters/
+gms/3001/picks.json
+# Lab sheets of three online packs whose licences forbid redistributing their art, even
+# modified (Bongseng, LyniaDesign, Maxime Nourry): on this machine only, never in the repo.
+gms/3001/sprites/lab/sheets/knight-online-bongseng.png
+gms/3001/sprites/lab/sheets/knight-online-lynia.png
+gms/3001/sprites/lab/sheets/knight-online-maxime.png
+
+# Review boards and screenshots made by gms/3001/tools (review.mjs, shot.mjs)
+gms/3001/sprites/lab/review/

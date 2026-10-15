@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprite Lab</title>
+<meta name="description" content="Play Forest Survivor with any hero or monster sprite, compare their sizes, and pick which ones the game uses.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%2314131a'/%3E%3Crect x='3' y='1' width='2' height='5' fill='%23c0cbdc'/%3E%3Crect x='2' y='5' width='4' height='1' fill='%23feae34'/%3E%3Crect x='3' y='6' width='2' height='1' fill='%23733e39'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="top">
+  <h1>Sprite Lab</h1>
+  <p class="intro">The game itself, with any sprite in any part. Walk the hero round, bring monsters, line everything up to compare sizes, and pick what the game uses.</p>
+  <nav class="pages" aria-label="Pages"><a href="./" aria-current="page">The game</a><a href="compare.html">Compare</a><a href="music/">Music scout</a></nav>
+  <span class="saved" id="saved" role="status"></span>
+</header>
+
+<div class="layout">
+  <section class="play" aria-label="The game">
+    <div class="screen" id="screen">
+      <iframe id="game" title="The game: click it, then walk with WASD or the arrows"></iframe>
+      <section class="tweak" id="tweak" aria-label="Colours">
+        <div class="tw-side">
+          <div class="tw-target" role="group" aria-label="Recolour">
+            <button id="tw-hero" aria-pressed="true">Hero</button>
+            <button id="tw-mon" aria-pressed="false">Monster</button>
+          </div>
+          <b class="tw-name" id="tw-name">…</b>
+        </div>
+        <div class="tw-sliders" id="tw-sliders"></div>
+        <div class="tw-side tw-actions">
+          <button id="tw-save" class="tw-save" disabled>Save new version</button>
+          <div class="tw-row">
+            <button id="tw-reset" disabled>Reset</button>
+            <button id="tw-hide" title="Hide the colour bar">Hide</button>
+          </div>
+        </div>
+      </section>
+      <button class="tw-show" id="tw-show" hidden>Colours</button>
+    </div>
+    <div class="controls">
+      <span class="keys">Click the game, then <kbd>WASD</kbd> or the arrows to walk.</span>
+      <label>View
+        <select id="zoom">
+          <option value="game">as the game shows it</option>
+          <option value="closer">closer</option>
+          <option value="native">one screen pixel per pixel</option>
+        </select>
+      </label>
+      <button id="full">Full screen</button>
+      <button id="pause">Pause</button>
+      <button id="restart">New game</button>
+      <label><input type="checkbox" id="god" checked> Can't die</label>
+      <label><input type="checkbox" id="fight" checked> Hero fights</label>
+      <label><input type="checkbox" id="waves"> The game's own waves</label>
+      <label title="The game's other heroes are 22 to 26 px against the knight's 30, and its monsters were drawn for them: this redraws them at the scale everything else here is shown at."><input type="checkbox" id="grow"> The game's own sprites at the knight's scale</label>
+    </div>
+    <p class="status" id="status"></p>
+  </section>
+
+  <aside class="panel">
+    <section class="box" aria-labelledby="h-hero">
+      <h2 id="h-hero">Hero</h2>
+      <nav class="classes" id="classes" aria-label="Class"></nav>
+      <div class="wearing"><span>Wearing</span> <b id="hero-now">…</b> <button id="hero-pick" disabled>Make it the pick</button></div>
+      <div class="filters">
+        <select id="hero-source" aria-label="Which hero sprites">
+          <option value="all">all</option>
+          <option value="made">made for the game</option>
+          <option value="scout">scouted</option>
+        </select>
+        <input type="search" id="hero-q" placeholder="Search" aria-label="Search hero sprites">
+      </div>
+      <ul class="list" id="hero-list"></ul>
+    </section>
+
+    <section class="box" aria-labelledby="h-mon">
+      <h2 id="h-mon">Monsters</h2>
+      <label class="partsel">Part <select id="part"></select></label>
+      <div class="wearing"><span>Played by</span> <b id="mon-now">…</b> <button id="mon-pick" disabled>Make it the pick</button></div>
+      <div class="spawn">
+        <button data-n="1">Bring 1</button>
+        <button data-n="5">Bring 5</button>
+        <button data-n="20">Bring 20</button>
+        <button id="clear">Clear</button>
+        <button id="lineup" class="lineup">Line up everything</button>
+      </div>
+      <div class="filters">
+        <select id="family" aria-label="Family"></select>
+        <input type="search" id="mon-q" placeholder="Search" aria-label="Search monster sprites">
+        <label><input type="checkbox" id="hide-red"> Hide not for commercial use</label>
+      </div>
+      <ul class="list" id="mon-list"></ul>
+      <div class="more"><button id="mon-more" hidden>Show more</button></div>
+    </section>
+  </aside>
+</div>
+
+<p class="foot">The screen is the game itself (public/), with the game's own forest, light and HUD. Scouted sprites are redrawn in the game's pixels: heroes as tall as the knight (30 px), every sprite in a monster's part at that part's height. Everything turns as the game turns it (public/js/game/facing.js). "Line up everything" stands every hero class, monster, boss and prop in rows by the hero, labelled with their heights, for comparing sizes; trees stand all round. Red-bordered sprites can't be used in a commercial game. Picks are kept in gms/3001/picks.json. The colour bar on the game recolours what the hero, or the chosen monster part, wears, live; "Save new version" keeps it as a new sprite in that part's list (sprites/lab/versions.json, sheets in sprites/lab/sheets/), with the licence of the sprite it was made from. Double-click a slider to put it back to 0.</p>
+<script type="module" src="lab.js"></script>
+</body>
+</html>

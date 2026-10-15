@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprite Compare</title>
+<meta name="description" content="Every sprite for one part of Forest Survivor side by side, at the game's scale: the game's own, every proposal made for it, your recolours and the scouted packs.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%2314131a'/%3E%3Crect x='3' y='1' width='2' height='5' fill='%23c0cbdc'/%3E%3Crect x='2' y='5' width='4' height='1' fill='%23feae34'/%3E%3Crect x='3' y='6' width='2' height='1' fill='%23733e39'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="lab.css">
+<link rel="stylesheet" href="compare.css">
+</head>
+<body>
+<header class="top">
+  <h1>Sprite Lab</h1>
+  <nav class="pages" aria-label="Pages"><a href="./">The game</a><a href="compare.html" aria-current="page">Compare</a><a href="music/">Music scout</a></nav>
+  <p class="intro">Every sprite for one part side by side, at the game's scale with their feet on one line. Try one in the game, or make it the pick.</p>
+  <span class="saved" id="saved" role="status"></span>
+</header>
+
+<section class="cmp-bar" aria-label="What to compare">
+  <div class="cmp-row">
+    <nav class="classes" id="heroes" aria-label="Hero class"></nav>
+    <label class="partsel">Monster <select id="part"></select></label>
+  </div>
+  <div class="cmp-row filters">
+    <select id="source" aria-label="Which sprites">
+      <option value="all">every sprite</option>
+      <option value="made">made for the game</option>
+      <option value="scout">scouted</option>
+    </select>
+    <select id="collection" aria-label="Which batch"></select>
+    <input type="search" id="q" placeholder="Search" aria-label="Search">
+    <label><input type="checkbox" id="hide-red"> Hide not for commercial use</label>
+    <label title="The game's other heroes are 22 to 26 px against the knight's 30: this redraws its own at the scale everything else is shown at."><input type="checkbox" id="grow"> The game's own at the knight's scale</label>
+  </div>
+  <div class="cmp-row">
+    <span class="seg" role="group" aria-label="Pose" id="pose">
+      <button data-v="walk">Walk</button><button data-v="idle">Stand</button><button data-v="attack">Attack</button>
+    </span>
+    <span class="seg" role="group" aria-label="Facing" id="face">
+      <button data-v="right">Facing right</button><button data-v="left">Facing left</button>
+    </span>
+    <span class="seg" role="group" aria-label="Size" id="size">
+      <button data-v="2">2×</button><button data-v="3">3×</button><button data-v="4">4×</button>
+    </span>
+    <span class="count" id="count"></span>
+  </div>
+</section>
+
+<main id="groups" class="groups"></main>
+
+<p class="foot">Sprites are drawn as the game draws them: a proposal in its own pixels, a scouted sprite redrawn in the game's (heroes as tall as the knight, 30 px; a monster at its part's height), each standing on the same ground line. The dashed line is the knight's height for heroes, and the part's for a monster. Red-bordered sprites can't be used in a commercial game. "Try in the game" opens the game wearing it; "Make it the pick" keeps it in gms/3001/picks.json. To add a proposal, put its sheet in sprites/lab/sheets/ and its entry in sprites/lab/catalog.json (see that file's "about").</p>
+<script type="module" src="compare.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+// A codespace for the Sprite Lab (gms/3001), which only the codespace's owner can open. It checks
+// out the private bonegor/forest-survivor-assets next to this repository (the packs, the music and
+// the lab's saves), runs the lab on port 3001 and opens it in a new tab. lab.gamevibe.si leads
+// here: https://codespaces.new/bonegor/forest-survivor?quickstart=1
+{
+  "name": "Sprite Lab",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "customizations": {
+    "codespaces": {
+      // Asked for when the codespace is created: reading and writing the private repository.
+      "repositories": {
+        "bonegor/forest-survivor-assets": { "permissions": { "contents": "write" } }
+      }
+    }
+  },
+  // Each time the editor connects: check out or update, then run the lab unless it's running.
+  "postAttachCommand": "sh .devcontainer/lab.sh",
+  "forwardPorts": [3001],
+  "portsAttributes": {
+    "3001": { "label": "Sprite Lab", "onAutoForward": "openBrowser" }
+  }
+}
