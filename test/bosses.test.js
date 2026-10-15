@@ -12,6 +12,7 @@ const {SURVIVAL_BOSSES} = await mod('public/js/data/waves.js');
 const {HEROES} = await mod('public/js/data/heroes.js');
 const {input} = await mod('public/js/engine/input.js');
 const {thiefPace} = await mod('public/js/game/enemies.js');
+const {EnemyShot} = await mod('public/js/game/projectiles.js');
 const P = await mod('public/js/shared/profile.js');
 
 function gameCase(fn, mode = 's15') {
@@ -101,27 +102,51 @@ test('a hero who sets off five seconds late still reaches a Gilded Thief; one wh
   assert.ok(never.escaped && never.far > 300, `left alone it gets away: ${JSON.stringify(never)}`);
 });
 
-test('the Bone King throws a fifth fewer bones, each drawn a fifth bigger', () => gameCase((g) => {
+test('the Bone King rings 11 bones round him (15 when wounded), fans five every 3.75 s, each drawn big', () => gameCase((g) => {
   step(g, 2);
   const p = g.player;
   p.devGod = true;
   for (const w of p.weapons) w.update = () => {};
   const king = g.spawnBoss('boneking', p.x + 100, p.y);
-  let bones = 0;
+  let bones = 0, bone = null;
   const push = g.eshots.push.bind(g.eshots);
-  g.eshots.push = (...shots) => { bones += shots.filter(s => s.kind === 'bone').length; return push(...shots); };
+  g.eshots.push = (...shots) => {
+    for (const s of shots) if (s.kind === 'bone') { bones++; bone = s; }
+    return push(...shots);
+  };
   const thrown = (setup, seconds) => { bones = 0; setup(); step(g, seconds * 60); return bones; };
   king.cd2 = 99; // no summoning
   king.cd3 = 99;
-  assert.equal(thrown(() => { king.cdT = 0; }, 2.5), 8, 'the ring after a slam: 8 bones, not 10');
+  assert.equal(thrown(() => { king.cdT = 0; }, 2.5), 11, 'the ring after a slam: a third more than 8');
   king.hp = king.maxHp * 0.4;
-  assert.equal(thrown(() => { king.cdT = 0; }, 2.5), 11, 'below half health: 11, not 14');
+  assert.equal(thrown(() => { king.cdT = 0; }, 2.5), 15, 'below half health: a third more than 11');
   assert.equal(thrown(() => { king.cdT = 99; king.cd3 = 0; }, 15), 4 * 5, 'the aimed fan of five: four in 15 s, not five');
   // Drawn a fifth bigger than the 2.5 times its sprite it was.
-  const bone = g.eshots.find(s => s.kind === 'bone');
   let k = 0;
   bone.draw({globalAlpha: 1, drawImage(img, x, y, w) { k = w / (img.width * g.cam.S); }}, g.cam);
   assert.ok(Math.abs(k - 2.5 * 1.2) < 0.05, `drawn at ${k.toFixed(2)} times its sprite`);
+}));
+
+test('a bone that is drawn crossing the hero hurts; one drawn clear of him does not', () => gameCase((g) => {
+  step(g, 2);
+  const p = g.player;
+  // A bone flying sideways past the hero, its ground track `dy` from his feet, standing still.
+  const pass = (dy, spinAt) => {
+    p.hp = p.maxHp;
+    p.invuln = 0;
+    const b = new EnemyShot(g, p.x - 120, p.y + dy, 0, 100, 10, 'bone');
+    b.rot = spinAt;
+    b.look = {...b.look, spin: 1e-9}; // barely turning: it stays at the turn the test gives it
+    for (let i = 0; i < 160 && b.update(1/60); i++);
+    return p.hp < p.maxHp;
+  };
+  // Drawn 8 px up and 33 px long, a bone on a track 14 px behind his feet sweeps his chest;
+  // under the old rule (3 px from the feet) it flew through him.
+  assert.ok(pass(-14, 0), 'flat, across the chest');
+  assert.ok(pass(-14, Math.PI / 2), 'upright, across the chest');
+  assert.ok(pass(0, 0), 'through his legs');
+  assert.ok(!pass(-44, 0), 'well above his head');
+  assert.ok(!pass(22, 0), 'well below his feet');
 }));
 
 test("a boss's blow costs the hero health but never shoves him", () => gameCase((g) => {

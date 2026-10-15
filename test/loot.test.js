@@ -126,6 +126,21 @@ test('props turn up all around a hero who stands still, not only to the east', (
   }
 });
 
+test("a hero's health never goes above its maximum", () => {
+  const g = new Game({hero:'archer', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+  const p = g.player;
+  p.hp = p.maxHp - 5;
+  p.heal(1000);
+  assert.equal(p.hp, p.maxHp, 'a potion at near full health');
+  p.hp = p.maxHp - 1;
+  p.healPool = 500;
+  p.regen = 50;
+  for (let i = 0; i < 120; i++) p.update(1/60);
+  assert.ok(p.hp <= p.maxHp, `regeneration and a heal over time: ${p.hp} of ${p.maxHp}`);
+  for (let i = 0; i < 3; i++) g.addPassive('vitality', 1);
+  assert.ok(p.hp <= p.maxHp, `more maximum health: ${p.hp} of ${p.maxHp}`);
+});
+
 test('coins and potions left far behind in the forest fade, but not chests or gear', () => {
   const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
   const p = g.player;

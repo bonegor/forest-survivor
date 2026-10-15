@@ -309,17 +309,35 @@ function drawCentered(ctx, img, sx, sy, scale) {
 // ------------------------------------------------------------- enemy fire --
 
 // The foes' shots are drawn over everything, unlit (Game.draw), a quarter bigger than their
-// sprites (SHOT_GROW), and scale times that again; how far they hit stays their r.
+// sprites (SHOT_GROW), and scale times that again. Most hit within r of the hero's feet; a
+// shot with a reach hits as it is drawn (EnemyShot.touches).
 const SHOT_GROW = 1.25;
 const SHOT_LOOK = {
   // The Cultist's: a big, slow orb, easy to see coming.
   darkbolt: { sprite: 'darkbolt', glow: '#b55088', light: 'purple', scale: 1.5 },
-  // The Bone King's: big, and burning gold so they can't hide in the dark or the horde.
-  bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, scale: 2.4 },
+  // The Bone King's: big, and burning gold so they can't hide in the dark or the horde. Drawn
+  // 33 px long, a bone hits wherever it crosses the hero's body: a bar 12 px either side of its
+  // drawn centre, 4 px thick, turning with it.
+  bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, scale: 2.4, reach: 12, r: 4 },
   skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green' },
   firebolt: { sprite: 'firebolt', glow: '#f77622', light: 'fire' },
   arrow: { sprite: 'arrow', glow: null, light: null },
 };
+
+// The hero's body as a shot that hits as drawn sees it: an upright bar from 4 to 26 px above
+// the feet, 6 px thick (the heroes stand 30 to 38 px tall).
+export const HERO_BODY = { foot: 4, top: 26, r: 6 };
+
+// The shortest distance between segments AB and CD (0 where they cross).
+function segmentGap(ax, ay, bx, by, cx, cy, dx, dy) {
+  const side = (x1, y1, x2, y2, x3, y3) => (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1);
+  if (side(ax, ay, bx, by, cx, cy) > 0 !== side(ax, ay, bx, by, dx, dy) > 0 && side(cx, cy, dx, dy, ax, ay) > 0 !== side(cx, cy, dx, dy, bx, by) > 0) return 0;
+  const toSeg = (px, py, x1, y1, x2, y2) => {
+    const vx = x2 - x1, vy = y2 - y1, t = Math.max(0, Math.min(1, ((px - x1) * vx + (py - y1) * vy) / (vx * vx + vy * vy || 1)));
+    return Math.hypot(px - x1 - t * vx, py - y1 - t * vy);
+  };
+  return Math.min(toSeg(ax, ay, cx, cy, dx, dy), toSeg(bx, by, cx, cy, dx, dy), toSeg(cx, cy, ax, ay, bx, by), toSeg(dx, dy, ax, ay, bx, by));
+}
 
 export class EnemyShot {
   constructor(g, x, y, ang, speed, dmg, kind, opts = {}) {
@@ -334,7 +352,7 @@ export class EnemyShot {
     this.kind = kind;
     this.look = SHOT_LOOK[kind];
     this.size = SHOT_GROW * (this.look.scale || 1);
-    this.r = opts.r ?? 3;
+    this.r = opts.r ?? this.look.r ?? 3;
     this.life = opts.life ?? 4;
     this.rot = 0;
     this.dead = false;
@@ -363,8 +381,7 @@ export class EnemyShot {
     this.y += this.vy * dt;
     this.rot += (this.look.spin || 0) * dt;
     if (g.world.solid(this.x, this.y) && this.kind !== 'skullbolt') this.dead = true;
-    const rr = this.r + p.r;
-    if (!this.dead && (p.x - this.x) ** 2 + (p.y - this.y) ** 2 < rr * rr) {
+    if (!this.dead && this.touches(p)) {
       if (p.hurt(this.dmg) > 0 || !p.untouchable) this.dead = true;
     }
     if (this.dead || this.life <= 0) {
@@ -372,6 +389,21 @@ export class EnemyShot {
       return false;
     }
     return true;
+  }
+
+  // Whether it touches the hero. Most shots: within r of the feet. One with a reach, as it is
+  // drawn: a bar `reach` either side of its drawn centre, at its drawn turn, within r of the
+  // hero's body (from HERO_BODY.foot to HERO_BODY.top above the feet, HERO_BODY.r thick).
+  touches(p) {
+    const reach = this.look.reach;
+    if (!reach) {
+      const rr = this.r + p.r;
+      return (p.x - this.x) ** 2 + (p.y - this.y) ** 2 < rr * rr;
+    }
+    const n = this.look.spin ? 16 : 32, a = (Math.round(((this.look.spin ? this.rot : this.ang) / TAU) * n) / n) * TAU;
+    const dx = Math.cos(a) * reach, dy = Math.sin(a) * reach, y = this.y - this.z;
+    const d = segmentGap(this.x - dx, y - dy, this.x + dx, y + dy, p.x, p.y - HERO_BODY.top, p.x, p.y - HERO_BODY.foot);
+    return d < this.r + HERO_BODY.r;
   }
 
   draw(ctx, cam) {

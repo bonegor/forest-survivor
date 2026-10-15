@@ -73,7 +73,7 @@ export const BOSS_AI = {
         onDone: () => {
           if (e.dead) return;
           blast(g, e.x, e.y, R, 24, 'dark');
-          ring(g, e, e.phase ? 11 : 8, 'bone', 85, 11, rand(TAU));
+          ring(g, e, e.phase ? 15 : 11, 'bone', 85, 11, rand(TAU));
         },
       }));
       return [0, 0, 0];
