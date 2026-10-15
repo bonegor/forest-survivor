@@ -18,6 +18,12 @@ const N_SRC = 24;
 // Champions aren't pushed by blows: a blow stops one for HOLD seconds instead, and it
 // can't be stopped again until HOLD_EVERY seconds after that, so hits can't pin it.
 export const HOLD = 0.2, HOLD_EVERY = 0.6;
+// A Gilded Thief runs flat out while the hero is within THIEF_NEAR of it (a fifth slower than
+// the slowest hero) and eases off farther ahead, down to a jog at THIEF_JOG of its speed from
+// THIEF_FAR on, as if taunting him. A hero who sets off five or eight seconds late still
+// catches it; one who lets it be still loses it when its 20 seconds are up.
+export const THIEF_NEAR = 100, THIEF_FAR = 180, THIEF_JOG = 0.3;
+export const thiefPace = (d) => clamp((THIEF_FAR - d) / (THIEF_FAR - THIEF_NEAR), THIEF_JOG, 1);
 let nextId = 1;
 
 export class Enemy {
@@ -229,6 +235,7 @@ export class Enemy {
           const d = g.world.steer(this, { x: this.x + ((this.x - p.x) / l) * 60, y: this.y + ((this.y - p.y) / l) * 60 });
           dx = d[0];
           dy = d[1];
+          sp *= thiefPace(l);
           if (Math.random() < 0.2) g.particles.emit(this.x + rand(-4, 4), this.y - rand(4, 12), 0, 0, 0, rand(5, 15), 0.6, 1, PC.Y, P.GLOW | P.FADE, 0);
           if (this.life > 20) {
             g.escape(this);

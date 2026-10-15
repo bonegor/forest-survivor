@@ -10,6 +10,8 @@ const {mulberry32} = await mod('public/js/engine/util.js');
 const {musicState} = await mod('public/js/engine/audio.js');
 const {SURVIVAL_BOSSES} = await mod('public/js/data/waves.js');
 const {HEROES} = await mod('public/js/data/heroes.js');
+const {input} = await mod('public/js/engine/input.js');
+const {thiefPace} = await mod('public/js/game/enemies.js');
 const P = await mod('public/js/shared/profile.js');
 
 function gameCase(fn, mode = 's15') {
@@ -65,6 +67,38 @@ test('a Gilded Thief runs a fifth slower than the slowest hero, so any hero can 
     const sp = thief.spd * g.diff.speed;
     assert.ok(Math.abs(sp / slowest - 0.8) < 0.01, `${sp.toFixed(1)} px/s against the slowest hero's ${slowest.toFixed(1)}`);
   });
+});
+
+test('a hero who sets off five seconds late still reaches a Gilded Thief; one who lets it be loses it', () => {
+  assert.deepEqual([50, 100, 140, 180, 400].map(thiefPace), [1, 1, 0.5, 0.3, 0.3], 'flat out near, a jog far ahead');
+  // The slowest hero, standing `delay` seconds, then running straight at it; no blows, only the chase.
+  const chase = (delay) => {
+    const oldRandom = Math.random, oldBot = input.bot;
+    Math.random = mulberry32(5);
+    try {
+      const g = new Game({hero:'mage', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}, crypts:false});
+      g.spawner.update = () => {};
+      const p = g.player;
+      p.devGod = true;
+      for (const w of p.weapons) w.update = () => {};
+      g.spawner.spawnThief(g.phase);
+      const t = g.enemies.find(e => e.type === 'thief');
+      for (let i = 0; i < 25 * 60 && !t.dead; i++) {
+        const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
+        if (d < 60) return {reached: i / 60};
+        input.bot = i / 60 < delay ? {x:0, y:0} : {x: dx / d, y: dy / d};
+        g.update(1/60);
+      }
+      return {escaped: t.dead, far: Math.round(Math.hypot(t.x - p.x, t.y - p.y))};
+    } finally {
+      Math.random = oldRandom;
+      input.bot = oldBot;
+    }
+  };
+  const late = chase(5);
+  assert.ok(late.reached < 14, `within reach in time: ${JSON.stringify(late)}`);
+  const never = chase(Infinity);
+  assert.ok(never.escaped && never.far > 300, `left alone it gets away: ${JSON.stringify(never)}`);
 });
 
 test("a boss's blow costs the hero health but never shoves him", () => gameCase((g) => {
