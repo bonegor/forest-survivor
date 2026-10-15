@@ -46,6 +46,34 @@ test('at plain luck props drop what they always did', () => {
   assert.ok(Math.abs(PROP_LOOT.reduce((s, d) => s + d.w, 0) - 1) < 1e-9, 'the weights are the odds at luck 1');
 });
 
+test('the horde leaves soul gems and now and then a coin; champions a chest and gold, no potion', () => {
+  const oldRandom = Math.random;
+  Math.random = mulberry32(9);
+  try {
+    const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+    const p = g.player;
+    p.luck = 3; // lucky enough that any rare drop would show
+    const kills = (type, o, n) => {
+      const counts = {};
+      for (let i = 0; i < n; i++) {
+        g.pickups.length = 0;
+        g.killEnemy(g.spawnEnemy(type, p.x + 60, p.y, {instant: true, ...o}));
+        for (const e of g.enemies) g.enemyPool.put(e);
+        g.enemies.length = 0;
+        for (const pk of g.pickups) counts[pk.kind] = (counts[pk.kind] || 0) + 1;
+      }
+      return counts;
+    };
+    const horde = kills('bat', {}, 4000);
+    assert.deepEqual(Object.keys(horde).sort(), ['coin', 'gem'], JSON.stringify(horde));
+    assert.ok(horde.coin > 4000 * 0.014 * 3 * 0.7 && horde.coin < 4000 * 0.014 * 3 * 1.3, 'coins as often as before');
+    const champions = kills('skeleton', {elite: true}, 300);
+    assert.deepEqual(Object.keys(champions).sort(), ['chest', 'gem', 'goldpile'], JSON.stringify(champions));
+  } finally {
+    Math.random = oldRandom;
+  }
+});
+
 test('a legendary power counts once, however many pieces worn carry it', async () => {
   const I = await mod('public/js/shared/items.js');
   const legend = (slot, power) => ({slot, rarity: I.LEGENDARY, stats: {}, power, seed: 1});

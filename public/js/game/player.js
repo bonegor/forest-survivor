@@ -30,8 +30,6 @@ export class Player {
     this.r = 5;
     this.vx = 0;
     this.vy = 0;
-    this.kx = 0; // knockback from heavy blows
-    this.ky = 0;
     this.face = 1;
     this.aim = 0; // radians, last movement direction
     this.moving = false;
@@ -107,10 +105,11 @@ export class Player {
 
   // Standing attacks turn toward the swing. Walking keeps its facing direction
   // so an attack behind the hero cannot flip the sprite for one frame (facing.js).
-  swing(ang) {
+  // turn: false for a swing that mustn't turn him (the rest of a volley, one at nothing).
+  swing(ang, turn = true) {
     this.swingT = 0.14;
     this.swingAng = ang;
-    this.face = faceAttack(this.face, this.moving, Math.cos(ang), Math.sin(ang));
+    if (turn) this.face = faceAttack(this.face, this.moving, Math.cos(ang), Math.sin(ang));
   }
 
   // A blow struck by the player (Game.strike): the sprite's attack starts now (at, the game's
@@ -152,10 +151,9 @@ export class Player {
       this.aim = Math.atan2(ax.y, ax.x);
       this.face = faceAlong(this.face, ax.x, ax.y);
     }
-    this.x += (this.vx + this.kx) * dt;
-    this.y += (this.vy + this.ky) * dt;
-    this.kx = damp(this.kx, 0, 7, dt);
-    this.ky = damp(this.ky, 0, 7, dt);
+    // Only the player moves the hero: no blow, however heavy, shoves him (Enemy.update).
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
     g.world.collide(this);
     const spd = Math.hypot(this.vx, this.vy);
     this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
@@ -208,12 +206,6 @@ export class Player {
       this.fury = 0;
       g.startUlt(this.hero.ult);
     }
-  }
-
-  knock(dx, dy, force) {
-    const d = Math.hypot(dx, dy) || 1;
-    this.kx = (dx / d) * force;
-    this.ky = (dy / d) * force;
   }
 
   get untouchable() {

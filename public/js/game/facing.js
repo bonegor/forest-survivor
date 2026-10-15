@@ -8,7 +8,10 @@
 // flicker from side to side.
 //
 // One exception: a blow, a shot or a charge begun standing still turns it toward its target
-// first. On the move it keeps facing the way it goes, even striking behind itself.
+// first. On the move it keeps facing the way it goes, even striking behind itself. For the
+// hero's volleys only the first blow or arrow, at a foe, can turn him: the slashes behind and
+// beside him that follow, the extra arrows and a swing at nothing leave him as he is, so a hero
+// standing still doesn't spin from side to side.
 
 // How far from straight up or down a move must lean (the sideways share of it) to turn a sprite.
 export const STRAIGHT = 0.12;

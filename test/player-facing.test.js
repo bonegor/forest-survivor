@@ -100,6 +100,42 @@ test('a level-two alternating sword volley damages both sides without flipping a
   assert.deepEqual(flips, [false,false,false], 'the alternating attack angles must not alter the walk-facing silhouette');
 }));
 
+test('a standing hero with a level-two sword keeps facing his foe through the slash behind him', () => gameCase((g,p,w) => {
+  input.bot = {x:0,y:0};
+  p.update(1/60);
+  w.levelUp(); // the second slash, opposite the first
+  assert.equal(w.s.amount, 2);
+  const foe = g.spawnEnemy('bat', p.x - 24, p.y, {instant:true, hpMul:1000});
+  g.grid.rebuild(g.enemies, p.x, p.y);
+  w.cd = 0;
+  w.update(0);
+  assert.equal(p.face, -1, 'the first slash, at the foe, turns him');
+  w.update(.11);
+  assert.equal(w.queue, 0);
+  assert.equal(g.effects.at(-1).ang, Math.PI*2, 'the second slash still goes the other way');
+  assert.equal(p.face, -1, 'without turning him');
+  assert.equal(displayedFlip(g), true);
+  assert.ok(foe.hp < foe.maxHp);
+}));
+
+test('a swing at nothing leaves a standing hero facing as he was', () => gameCase((g,p,w) => {
+  input.bot = {x:0,y:0};
+  p.update(1/60);
+  g.grid.rebuild(g.enemies, p.x, p.y);
+  assert.equal(g.nearestEnemy(p.x, p.y, 34 * w.s.area + 26), null, 'no foe in reach');
+  p.aim = 0; p.face = -1; // he walked right, then turned to strike a foe on his left, now gone
+  w.levelUp();
+  w.cd = 0;
+  const flips = [];
+  w.update(0);
+  flips.push(displayedFlip(g));
+  w.update(.11);
+  flips.push(displayedFlip(g));
+  assert.deepEqual(g.effects.slice(-2).map(s => s.ang), [0, Math.PI], 'both slashes still swing');
+  assert.equal(p.face, -1);
+  assert.deepEqual(flips, [true, true], 'he never turns, not even for one slash');
+}));
+
 test('a stationary hero still turns toward the sword target and retains the attack direction', () => gameCase((g,p,w) => {
   input.bot = {x:0,y:0};
   p.update(1/60);

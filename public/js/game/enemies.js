@@ -257,9 +257,8 @@ export class Enemy {
     if (this.dmg > 0 && this.freezeT <= 0) {
       const rr = this.r + p.r;
       if ((p.x - this.x) ** 2 + (p.y - this.y) ** 2 < rr * rr) {
-        const hit = p.hurt(this.dmg * (this.boss ? (1 + (g.dmgScale - 1) * 0.6) * g.bossPower : g.dmgScale) * (this.state === 'dash' ? 1.4 : 1), this);
-        // A boss's blow sends the hero flying instead of pinning them.
-        if (hit && this.boss) p.knock(p.x - this.x, p.y - this.y, 240);
+        // It costs the hero health only: no blow, a boss's included, shoves him (Player.update).
+        p.hurt(this.dmg * (this.boss ? (1 + (g.dmgScale - 1) * 0.6) * g.bossPower : g.dmgScale) * (this.state === 'dash' ? 1.4 : 1), this);
       }
     }
   }

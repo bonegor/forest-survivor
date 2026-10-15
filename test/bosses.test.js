@@ -66,3 +66,15 @@ test('a Gilded Thief runs a fifth slower than the slowest hero, so any hero can 
     assert.ok(Math.abs(sp / slowest - 0.8) < 0.01, `${sp.toFixed(1)} px/s against the slowest hero's ${slowest.toFixed(1)}`);
   });
 });
+
+test("a boss's blow costs the hero health but never shoves him", () => gameCase((g) => {
+  step(g, 2);
+  const p = g.player;
+  p.invuln = 0;
+  const king = g.spawnEnemy('boneking', p.x + 8, p.y, {instant: true});
+  const x = p.x, y = p.y, hp = p.hp;
+  king.update(1/60);
+  assert.ok(p.hp < hp, 'the blow lands');
+  for (let i = 0; i < 60; i++) p.update(1/60);
+  assert.deepEqual([p.x, p.y], [x, y], 'the hero stays where he stood');
+}));

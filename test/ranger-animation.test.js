@@ -75,3 +75,23 @@ test('walking while shooting keeps its leg cycle, and a rear target cannot flip 
   assert.ok(SPR.archer.walk.includes(shown(g).index));
   assert.ok(Math.cos(g.projectiles.at(-1).ang)<0,'rear projectile retains its real direction');
 }));
+
+test('standing, only the first arrow of a volley turns the ranger',()=>run((g,p,w)=>{
+  w.levelUp();assert.equal(w.s.amount,2);
+  p.update(1/60);assert.equal(p.moving,false);assert.equal(p.face,1);
+  for(const dx of [-40,60]){const foe=g.spawnEnemy('slime',p.x+dx,p.y,{instant:true,hpMul:10});foe.dormant=true;}
+  g.grid.rebuild(g.enemies,p.x,p.y);w.cd=0;w.update(0);
+  assert.equal(p.face,-1,'the first arrow, at the nearer foe, turns him');
+  assert.equal(shown(g).flip,true);
+  w.update(.07);
+  assert.ok(Math.cos(g.projectiles.at(-1).ang)>0,'the second arrow flies at the foe behind him');
+  assert.equal(p.face,-1);assert.equal(shown(g).flip,true,'without turning him back');
+}));
+
+test('standing with nothing to shoot, a wild arrow never turns the ranger',()=>run((g,p,w)=>{
+  p.update(1/60);p.aim=-Math.PI/2;p.face=1; // he last walked straight up
+  const flips=new Set();
+  for(let i=0;i<20*60;i++){g.update(1/60);flips.add(shown(g).flip);}
+  assert.ok(w.volley>=15,`the bow kept shooting (${w.volley} volleys)`);
+  assert.deepEqual([...flips],[false]);
+}));

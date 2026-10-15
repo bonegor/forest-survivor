@@ -473,17 +473,13 @@ export class Game {
     } else if (e.lord) {
       this.lordDefeated(e);
     } else if (e.elite) {
+      // A champion leaves its chest and gold. Potions, scrolls, relics, runes and fury orbs
+      // come only from what the hero breaks (PROP_LOOT).
       this.addPickup('chest', e.x, e.y, 0, { kind: 'elite' });
       this.addPickup('goldpile', e.x + rand(-8, 8), e.y, Math.round(rand(10, 20)));
-      if (chance(0.35)) this.addPickup('potion', e.x, e.y);
-    } else {
-      const r = Math.random();
-      if (r < 0.014 * luck) this.addPickup('coin', e.x, e.y, 1);
-      else if (r < 0.016 * luck) this.addPickup('potion', e.x, e.y);
-      else if (r < 0.0168 * luck) this.addPickup('magnet', e.x, e.y);
-      else if (r < 0.0173 * luck) this.addPickup('relic', e.x, e.y);
-      else if (r < 0.0178 * luck) this.addPickup('frostrune', e.x, e.y);
-      else if (r < 0.0198 * luck) this.addPickup('fury', e.x, e.y);
+    } else if (chance(0.014 * luck)) {
+      // The horde leaves its soul gems and, now and then, a coin: nothing else.
+      this.addPickup('coin', e.x, e.y, 1);
     }
     if (e.def.split && !o.noSplit) {
       for (let i = 0; i < e.def.splitN; i++) {
