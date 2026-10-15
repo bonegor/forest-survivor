@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hero Sprites · Forest Survivor</title>
+  <link rel="icon" href="../favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Forest Survivor · Hero sprites</div>
+  <h1>Pick a look, then tune its colours</h1>
+  <p class="lead">Choose a hero and a version. Tune its colours with the sliders, then press <b>Save this look</b>. It is kept in this browser, and you get a short code: send it to Claude, and that look goes into the game.</p>
+
+  <div class="tabs" id="heroes" role="tablist" aria-label="Heroes"></div>
+  <div class="strip" id="versions" aria-label="Versions"></div>
+
+  <div class="layout">
+    <div>
+      <section class="card">
+        <div class="head"><h2 id="vname">Loading…</h2><span class="badge" id="vkind"></span></div>
+        <p class="desc" id="vdesc"></p>
+        <div class="view"><canvas id="big" aria-label="The version facing left and right, with the knight for scale"></canvas></div>
+        <div class="row" id="bigOptions">
+          <span>Background</span>
+          <button type="button" data-bg="forest" aria-pressed="true">Forest floor</button>
+          <button type="button" data-bg="night" aria-pressed="false">Dark</button>
+          <button type="button" data-bg="light" aria-pressed="false">Light</button>
+          <span class="sep"></span>
+          <button type="button" id="knight" aria-pressed="true">Knight beside</button>
+        </div>
+      </section>
+      <section class="card scene">
+        <h3>In the game, at night</h3>
+        <div class="view"><canvas id="scene" aria-label="The version standing in the forest, drawn by the game itself"></canvas></div>
+        <div class="row" id="sceneOptions">
+          <span>Facing</span>
+          <button type="button" data-face="-1" aria-pressed="false">Left</button>
+          <button type="button" data-face="1" aria-pressed="true">Right</button>
+          <span class="sep"></span>
+          <span>Zoom</span>
+          <button type="button" data-zoom="2" aria-pressed="false">2×</button>
+          <button type="button" data-zoom="3" aria-pressed="true">3×</button>
+          <button type="button" data-zoom="4" aria-pressed="false">4×</button>
+        </div>
+        <p class="note" id="sceneNote">Drawn by the game itself: its forest, light and shadows. New versions are standing poses for now; the walk and attacks are drawn for the look you pick.</p>
+      </section>
+    </div>
+
+    <aside>
+      <section class="card">
+        <h3>Colours</h3>
+        <div id="sliders"></div>
+        <div class="buttons"><button type="button" id="reset">Reset colours</button></div>
+      </section>
+      <section class="card">
+        <h3>Save</h3>
+        <div class="buttons">
+          <button type="button" class="primary" id="save">Save this look</button>
+          <button type="button" id="png">Download PNG</button>
+        </div>
+        <div id="savedBox" hidden>
+          <p class="note" id="savedText"></p>
+          <div class="code"><input id="code" readonly aria-label="Code for this hero's saved look"><button type="button" id="copy">Copy</button></div>
+        </div>
+        <h3 class="gap">Saved looks</h3>
+        <ul class="saved-list" id="savedList"></ul>
+        <div class="buttons mt"><button type="button" id="copyAll">Copy all codes</button></div>
+      </section>
+    </aside>
+  </div>
+  <p id="status" role="status"></p>
+</div>
+<script type="module" src="review.js"></script>
+</body>
+</html>

@@ -1,0 +1,314 @@
+{
+ "knight": {
+  "file": "heroes/knight.png",
+  "w": 80,
+  "h": 64,
+  "anchorY": 47
+ },
+ "heroes": [
+  {
+   "id": "archer",
+   "title": "Ranger",
+   "name": "Lyra",
+   "versions": [
+    {
+     "id": "game",
+     "kind": "game",
+     "name": "Current",
+     "description": "The sprite the game uses now, with its walk and attacks.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/archer/game.png",
+     "glow": []
+    },
+    {
+     "id": "study-oct14",
+     "kind": "study",
+     "name": "Thornwarden",
+     "description": "A deep green hood shading the brow and cheek, a short mantle, leather armour and a bow held at rest. Standing proposal, both directions; no walk or attack animation.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/archer/study-oct14.png",
+     "glow": []
+    },
+    {
+     "id": "polish-a",
+     "kind": "new",
+     "name": "Greenhood",
+     "description": "The classic hooded ranger, done right: a bright pointed hood whose lit rim frames a clear face, a dark braid, a dagged capelet and red-fletched arrows over the shoulder. Replaces the cap-like hood, hidden face and claw-like arrows with one clean silhouette and a bow held at the grip.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/archer/polish-a.png",
+     "glow": []
+    },
+    {
+     "id": "polish-b",
+     "kind": "new",
+     "name": "Copper Tail",
+     "description": "Hood down: a copper ponytail tied in green falls down her back like the knight's plume, over a leaf-cut capelet, leather and dark green leggings. Warm and cool blocks alternate as on the knight, so she reads at a glance instead of as a muddy brown figure.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/archer/polish-b.png",
+     "glow": []
+    },
+    {
+     "id": "polish-c",
+     "kind": "new",
+     "name": "Mossmantle",
+     "description": "A deep olive hood lined in crimson frames her face, with a gold clasp, a long mossy cloak thrown back and a crimson grip on the bow. Fixes Thornwarden's hidden face and loose cape: the red lining is the one focal accent, and the cloak hangs from the hood as one shape.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/archer/polish-c.png",
+     "glow": []
+    },
+    {
+     "id": "polish-d",
+     "kind": "new",
+     "name": "Silverleaf",
+     "description": "An elven huntress: silver hair, a long pointed ear, a teal leaf mantle and a pale birch bow whose moonstone glows at night. A cool, light silhouette that stands out on the dark forest floor, unlike the brown and olive rangers before her.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/archer/polish-d.png",
+     "glow": [
+      "#8ff0dd"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mage",
+   "title": "Sorcerer",
+   "name": "Eldrin",
+   "versions": [
+    {
+     "id": "game",
+     "kind": "game",
+     "name": "Current",
+     "description": "The sprite the game uses now, with its walk and attacks.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/mage/game.png",
+     "glow": [
+      "#2ce8f5",
+      "#c8f4ec",
+      "#f77622",
+      "#ffd6a0"
+     ]
+    },
+    {
+     "id": "study-oct14",
+     "kind": "study",
+     "name": "Ember Archmage",
+     "description": "A tapered wizard hat with a forward-bent tip and a narrower brim, a stern face and shorter beard, steel shoulders, blue and antique-gold robes, a planted staff and a flame in the free hand. Standing proposal, both directions; no walk or attack animation.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/mage/study-oct14.png",
+     "glow": [
+      "#e18040",
+      "#f3b85f",
+      "#ffe1a1"
+     ]
+    },
+    {
+     "id": "polish-a",
+     "kind": "new",
+     "name": "Grand Archmage",
+     "description": "The classic Eldrin rebuilt: brim, band and cone all centred on the skull, the brim dipping over the brow onto white hair and throwing a shadow on stern V-brows, a long beard hanging from the chin, an ember orb in a gold cup and a white-hot fireball in his raised hand.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/mage/polish-a.png",
+     "glow": [
+      "#8e1f19",
+      "#f77622",
+      "#feae34",
+      "#fee761",
+      "#fff6d0"
+     ]
+    },
+    {
+     "id": "polish-b",
+     "kind": "new",
+     "name": "Battlemage",
+     "description": "A grizzled war-wizard: a battered leather hat worn low, its brim centred and its tip folded forward, a crimson coat with a baldric, a steel pauldron and bracer, a fireball held forward on an open palm and an iron-crowned staff planted behind, in a wide stride like the knight's.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/mage/polish-b.png",
+     "glow": [
+      "#8e1f19",
+      "#f77622",
+      "#feae34",
+      "#fee761",
+      "#fff6d0"
+     ]
+    },
+    {
+     "id": "polish-c",
+     "kind": "new",
+     "name": "Ember Prodigy",
+     "description": "A young fire sorcerer: a straight plum hat with a gold flame emblem, seated on swept-back red hair that fills the back of the brim, stern brows in its shadow, a fitted coat with gold lapels, a fireball raised high and a gold-ring ember staff.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/mage/polish-c.png",
+     "glow": [
+      "#8e1f19",
+      "#f77622",
+      "#feae34",
+      "#fee761",
+      "#fff6d0"
+     ]
+    },
+    {
+     "id": "polish-d",
+     "kind": "new",
+     "name": "Ashen Pyromancer",
+     "description": "A mysterious ash-grey pyromancer: a wide slouched hat, centred on the head, throws the face into shadow so only two ember eyes show above a red scarf; he cups a flame before his chest, carries a caged-lantern staff, and his hem smoulders.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/mage/polish-d.png",
+     "glow": [
+      "#8e1f19",
+      "#f77622",
+      "#feae34",
+      "#fee761",
+      "#fff6d0"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "necromancer",
+   "title": "Necromancer",
+   "name": "Morvath",
+   "versions": [
+    {
+     "id": "game",
+     "kind": "game",
+     "name": "Current",
+     "description": "The sprite the game uses now, with its walk and attacks.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/game.png",
+     "glow": [
+      "#9ee562",
+      "#f6757a",
+      "#ff0044"
+     ]
+    },
+    {
+     "id": "study-oct14",
+     "kind": "study",
+     "name": "Grave Regent",
+     "description": "A fitted ash-violet hood, bone pauldrons over a split crimson robe, a green-eyed skull and a forward-leaning skull staff. Standing proposal, both directions; no walk or attack animation.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/study-oct14.png",
+     "glow": [
+      "#6fa77a",
+      "#b3db95",
+      "#e0efc2"
+     ]
+    },
+    {
+     "id": "study-oct14-ossuary",
+     "kind": "study",
+     "name": "Ossuary King",
+     "description": "An exposed crowned skull, broad spiked bone pauldrons, a dark ribbed cuirass, ash-green robes and a hooked soul staff. An alternative to the hooded Grave Regent. Standing proposal, both directions; no walk or attack animation.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/study-oct14-ossuary.png",
+     "glow": [
+      "#416959",
+      "#6fa77a",
+      "#b3db95",
+      "#e0efc2"
+     ]
+    },
+    {
+     "id": "polish-a",
+     "kind": "new",
+     "name": "Gravecaller",
+     "description": "A violet hood with a swept-back peak and a forward brim hides the face but for two green eyes and a glint of jaw; a ragged mantle, a cloak trailing behind with its green lining turned out at the tears, and a bell sleeve reaching to a skull staff crowned with soul fire. Fixes the box skull, the floating pauldrons, the cake-like grimoire and the comb hem with one clean silhouette lit from the upper left, its glow kept at the face and the staff.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/polish-a.png",
+     "glow": [
+      "#9ee562",
+      "#effcc4"
+     ]
+    },
+    {
+     "id": "polish-b",
+     "kind": "new",
+     "name": "Bone Tyrant",
+     "description": "A death lord in lilac-black plate: bone horns off an iron helm over a skull face with green eyes, spiked pauldrons, a ribcage cuirass, a wine cape and tabard over a wide armoured stance, and a staff whose bone prongs cradle a soul orb. Bone appears only as sharp accents on dark armour, so he reads as the master of the skeletons rather than one of them.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/polish-b.png",
+     "glow": [
+      "#9ee562",
+      "#effcc4"
+     ]
+    },
+    {
+     "id": "polish-c",
+     "kind": "new",
+     "name": "Grave Warden",
+     "description": "A plague-doctor gravekeeper: a black wide-brimmed hat and feathered capelet frame a bird-skull mask with a green lens, over a teal coat with bone buttons and a skull charm, and a crook from which hangs a lantern of soul fire. The most distinctive silhouette of the set, with the lantern as its focal glow and no shape shared with any monster.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/polish-c.png",
+     "glow": [
+      "#9ee562",
+      "#effcc4"
+     ]
+    },
+    {
+     "id": "polish-d",
+     "kind": "new",
+     "name": "Soulflame",
+     "description": "A lich whose bare skull burns with green soul fire, three tongues streaming back like the knight’s plume, in midnight-navy robes with a gold-trimmed mantle, a gold-edged front flap and hem, a belt of vertebrae, bone feet and a sickle-headed staff. The fire is the focal point and still reads at 1x, and at night it glows on its own.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/polish-d.png",
+     "glow": [
+      "#9ee562",
+      "#effcc4"
+     ]
+    },
+    {
+     "id": "polish-e",
+     "kind": "new",
+     "name": "Blood Lich Reforged",
+     "description": "The Blood Lich in the game now, with its weirdness fixed: a rounded three-quarter skull under a black iron crown with a soul gem, the cowl draped behind the head, blood-wine robes deeper than the knight’s red, a staff gripped by a visible hand, and an open grimoire whose green fire rises from its gutter. The closest of the five to what ships today.",
+     "w": 48,
+     "h": 48,
+     "anchorY": 40,
+     "file": "heroes/necromancer/polish-e.png",
+     "glow": [
+      "#9ee562",
+      "#effcc4"
+     ]
+    }
+   ]
+  }
+ ]
+}

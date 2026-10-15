@@ -22,7 +22,7 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const mod = (f) => import(pathToFileURL(join(ROOT, f)).href);
 await mod('tools/headless.mjs');
 const { buildSprite } = await mod('public/js/engine/sprites.js');
-const { makeBuf, blit, keepColors, flipX } = await mod('public/js/engine/pixels.js');
+const { makeBuf, blit, keepColors, flipX, hexPack } = await mod('public/js/engine/pixels.js');
 const { packedPalette } = await mod('public/js/art/palette.js');
 const PAL = packedPalette();
 const { HEROES } = await mod('public/js/data/heroes.js');
@@ -55,7 +55,9 @@ for (const file of files) {
       }
       // What glows in the dark (def.emissive: palette keys, as the game's sprites have it) gets two
       // more rows, the glow facing right and facing left, which the lab draws unlit as the game does.
-      const glow = p.def.emissive ? new Set([...p.def.emissive].map((ch) => PAL[ch]).filter((c) => c !== undefined)) : null;
+      // ...or p.glow: the glowing colours as '#rrggbb', for art drawn in colours of its own.
+      const glow = p.def.emissive ? new Set([...p.def.emissive].map((ch) => PAL[ch]).filter((c) => c !== undefined))
+        : p.glow && p.glow.length ? new Set(p.glow.map((hex) => hexPack(hex))) : null;
       const rows = glow ? ['right', 'glow', 'glowLeft'] : ['right'];
       const sheet = makeBuf(w * spr.frames.length, h * rows.length);
       spr.frames.forEach((f, i) => {
@@ -82,7 +84,7 @@ for (const file of files) {
             attackRelease: spr.attackRelease ?? null, attackWalk: spr.attackWalk || null,
             walkFps: null, idleFps: null, motionRate: spr.motionRate || 1, idleRate: spr.idleRate ?? 4, anchorY: spr.anchorY, selfBob: !!spr.selfBob,
             floating: !!p.def.floating, fitW: spr.fitW || w, fitH: spr.fitH || h, outline: false, sheet: file,
-            ...(glow ? { rows, emissive: p.def.emissive } : {}),
+            ...(glow ? { rows, emissive: p.def.emissive || null, ...(p.glow && p.glow.length ? { glow: p.glow } : {}) } : {}),
           }
         : { as: 'monster', role: p.role, ...base, walk: null, idle: null, attack: null, animFps: p.def.animFps || null, anchorY: h - 1, fitW: w, fitH: h, outline: false, sheet: file };
       const at = catalog.entries.findIndex((e) => (e.cls || e.role) === part && e.id === p.id);
