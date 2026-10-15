@@ -73,7 +73,7 @@ export const BOSS_AI = {
         onDone: () => {
           if (e.dead) return;
           blast(g, e.x, e.y, R, 24, 'dark');
-          ring(g, e, e.phase ? 14 : 10, 'bone', 85, 11, rand(TAU));
+          ring(g, e, e.phase ? 11 : 8, 'bone', 85, 11, rand(TAU));
         },
       }));
       return [0, 0, 0];
@@ -87,7 +87,8 @@ export const BOSS_AI = {
       return [0, 0, 0];
     }
     if (e.phase && e.cd3 <= 0) {
-      e.cd3 = 3;
+      // Five bones, the middle one at the hero; every 3.75 s, so as few as four a volley would be.
+      e.cd3 = 3.75;
       fan(g, e, 5, 0.22, 'bone', 115, 12);
     }
     const v = toward(e);

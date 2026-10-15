@@ -101,6 +101,29 @@ test('a hero who sets off five seconds late still reaches a Gilded Thief; one wh
   assert.ok(never.escaped && never.far > 300, `left alone it gets away: ${JSON.stringify(never)}`);
 });
 
+test('the Bone King throws a fifth fewer bones, each drawn a fifth bigger', () => gameCase((g) => {
+  step(g, 2);
+  const p = g.player;
+  p.devGod = true;
+  for (const w of p.weapons) w.update = () => {};
+  const king = g.spawnBoss('boneking', p.x + 100, p.y);
+  let bones = 0;
+  const push = g.eshots.push.bind(g.eshots);
+  g.eshots.push = (...shots) => { bones += shots.filter(s => s.kind === 'bone').length; return push(...shots); };
+  const thrown = (setup, seconds) => { bones = 0; setup(); step(g, seconds * 60); return bones; };
+  king.cd2 = 99; // no summoning
+  king.cd3 = 99;
+  assert.equal(thrown(() => { king.cdT = 0; }, 2.5), 8, 'the ring after a slam: 8 bones, not 10');
+  king.hp = king.maxHp * 0.4;
+  assert.equal(thrown(() => { king.cdT = 0; }, 2.5), 11, 'below half health: 11, not 14');
+  assert.equal(thrown(() => { king.cdT = 99; king.cd3 = 0; }, 15), 4 * 5, 'the aimed fan of five: four in 15 s, not five');
+  // Drawn a fifth bigger than the 2.5 times its sprite it was.
+  const bone = g.eshots.find(s => s.kind === 'bone');
+  let k = 0;
+  bone.draw({globalAlpha: 1, drawImage(img, x, y, w) { k = w / (img.width * g.cam.S); }}, g.cam);
+  assert.ok(Math.abs(k - 2.5 * 1.2) < 0.05, `drawn at ${k.toFixed(2)} times its sprite`);
+}));
+
 test("a boss's blow costs the hero health but never shoves him", () => gameCase((g) => {
   step(g, 2);
   const p = g.player;

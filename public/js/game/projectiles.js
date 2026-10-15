@@ -312,9 +312,10 @@ function drawCentered(ctx, img, sx, sy, scale) {
 // sprites (SHOT_GROW), and scale times that again; how far they hit stays their r.
 const SHOT_GROW = 1.25;
 const SHOT_LOOK = {
-  darkbolt: { sprite: 'darkbolt', glow: '#b55088', light: 'purple' },
+  // The Cultist's: a big, slow orb, easy to see coming.
+  darkbolt: { sprite: 'darkbolt', glow: '#b55088', light: 'purple', scale: 1.5 },
   // The Bone King's: big, and burning gold so they can't hide in the dark or the horde.
-  bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, scale: 2 },
+  bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, scale: 2.4 },
   skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green' },
   firebolt: { sprite: 'firebolt', glow: '#f77622', light: 'fire' },
   arrow: { sprite: 'arrow', glow: null, light: null },

@@ -7,6 +7,7 @@ const mod = file => import(pathToFileURL(root + '/' + file).href);
 await mod('tools/headless.mjs');
 const {Game} = await mod('public/js/game/game.js');
 const {POCKETS} = await mod('public/js/data/waves.js');
+const {mulberry32} = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
 
 // How many times its sprite's size a monster is drawn at.
@@ -27,6 +28,24 @@ test('the red-robed Cultist is drawn half again its size, its body with it, and 
   assert.ok(Math.abs(drawnScale(g, champion) - 1.5 * 1.35) < 0.05, 'a Cultist champion bigger still');
   assert.equal(cultist.r, skeleton.r * 1.5, "blows land on all of it: a skeleton's body, half again as big");
   assert.equal(cultist.spd, 27, 'a tenth slower than the 30 px/s it had');
+});
+
+test("a Cultist's dark bolt flies 15% slower than it did and is drawn half again as big", () => {
+  const oldRandom = Math.random;
+  Math.random = mulberry32(3);
+  try {
+    const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+    const p = g.player;
+    const cultist = g.spawnEnemy('cultist', p.x + 90, p.y, {instant: true});
+    cultist.cdT = 0;
+    for (let i = 0; i < 120 && !g.eshots.length; i++) cultist.update(1/60);
+    const bolt = g.eshots.find(s => s.kind === 'darkbolt');
+    assert.ok(bolt, 'it casts at the hero');
+    assert.ok(Math.abs(Math.hypot(bolt.vx, bolt.vy) - 72 * 0.85) < 1e-9, `${Math.hypot(bolt.vx, bolt.vy)} px/s`);
+    assert.ok(Math.abs(drawnScale(g, bolt) - 1.25 * 1.5) < 0.05, `drawn at ${drawnScale(g, bolt).toFixed(2)} times its sprite`);
+  } finally {
+    Math.random = oldRandom;
+  }
 });
 
 test('the 15-minute night sends few Cultists: never more than one monster in twenty', () => {

@@ -19,7 +19,7 @@ export const ENEMIES = {
   // The red-robed caster: few (weight 1 in the night's pockets), big, and slow.
   cultist: {
     name: 'Cultist', sprite: 'cultist', hp: 32, spd: 27, dmg: 6, r: 7.5, scale: 1.5, xp: 5, ai: 'caster', mass: 1, anim: 3, death: 'dark',
-    shot: { range: 125, cd: 3.2, spd: 72, dmg: 10, kind: 'darkbolt', wind: 0.55 },
+    shot: { range: 125, cd: 3.2, spd: 61.2, dmg: 10, kind: 'darkbolt', wind: 0.55 },
   },
   orc: {
     name: 'Orc Brute', sprite: 'orc', hp: 85, spd: 30, dmg: 14, r: 7, xp: 10, ai: 'charger', mass: 3, anim: 4, death: 'blood', kbRes: 0.6,
