@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Standing proposals · Forest Survivor</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#171c22;color:#e5e2d8;font:15px/1.5 system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:30px 24px 50px}h1{font-size:30px;line-height:1.2;letter-spacing:-.8px;margin:8px 0 12px}h2{font-size:20px;margin:30px 0 12px}.eyebrow{font-size:11px;letter-spacing:2px;color:#d4b47b}p{max-width:760px;color:#aebbc0;margin:8px 0 20px}a{color:#d4b47b}button,select{border:1px solid #4a555e;border-radius:6px;background:#252e36;color:#e5e2d8;padding:9px 14px;font:inherit;cursor:pointer}button[aria-pressed=true]{background:#d4b47b;color:#171c22;border-color:#d4b47b}button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #fff;outline-offset:3px}.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{padding:16px;background:#222930;border:1px solid #39464c;border-radius:8px;min-width:0}.card h3{margin:0 0 8px;font-size:16px}.card p{font-size:13px;margin:6px 0}.sprites{display:flex;justify-content:center;gap:8px;height:172px;align-items:center}.sprites img{width:144px;height:144px;image-rendering:pixelated}.captions{display:flex;justify-content:space-around;font-size:11px;letter-spacing:1px;color:#aebbc0}.downloads{display:flex;gap:15px;justify-content:center;font-size:13px;margin-top:12px}.native{height:60px;display:flex;justify-content:center;align-items:center;gap:10px}.native img{width:48px;height:48px;image-rendering:pixelated}.native img.knight{width:80px;height:64px}.scene{width:320px;max-width:100%;height:auto;image-rendering:pixelated;display:block;margin:auto}.board{width:100%;height:auto;image-rendering:pixelated;display:block}.note{font-size:12px;color:#91a3ac}#error{color:#ffb5a7;white-space:pre-wrap}@media(max-width:850px){.grid{grid-template-columns:1fr}.sprites{height:202px}.sprites img{width:192px;height:192px}.scene{width:100%;max-width:640px}h1{font-size:27px}}
+</style>
+<style>#cards{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:650px){#cards{grid-template-columns:1fr}}</style>
+</head>
+<body><main>
+<div class="eyebrow">FOREST SURVIVOR · ART STUDIES · 14 OCTOBER 2026</div>
+<h1>Revised hoods, hats &amp; a second necromancer.</h1>
+<p>The ranger and mage have revised headwear. Compare two distinct necromancers below. Every proposal has left and right standing views on a transparent 48×48 canvas.</p>
+<div id="cards" class="grid"></div>
+<h2>In the forest</h2>
+<p>The current game’s renderer, ground, shadows and lighting. Compare the standing poses at a matched scale.</p>
+<div class="bar" id="roles"><button data-role="archer" aria-pressed="true">Ranger</button><button data-role="mage" aria-pressed="false">Mage</button><button data-role="necromancer" aria-pressed="false">Grave Regent</button><button data-role="necromancer-ossuary" aria-pressed="false">Ossuary King</button><label for="scale">Scale</label><select id="scale"><option value="2">2×</option><option value="1">1× native</option><option value="3">3×</option></select></div>
+<div class="grid"><div class="card"><h3>Current · right</h3><canvas class="scene" id="current" width="320" height="192"></canvas></div><div class="card"><h3>Proposal · left</h3><canvas class="scene" id="left" width="320" height="192"></canvas></div><div class="card"><h3>Proposal · right</h3><canvas class="scene" id="right" width="320" height="192"></canvas></div></div>
+<p id="status" class="note" role="status">Loading the game renderer…</p><p id="error" role="alert"></p>
+<h2>Full comparison</h2>
+<p>Original, proposed left, proposed right, and the current knight. All four use the same pixel scale and ground line.</p>
+<a href="/sprites/lab/standing-oct14/comparison.png" download="hero-standing-comparison.png">Download comparison board</a>
+<img class="board" src="/sprites/lab/standing-oct14/comparison.png" alt="Ranger, mage and necromancer: current sprites, revised left and right standing poses, and the knight for comparison">
+<p class="note">These are standing studies. Walk and attack cycles are not included. The production game on port 3000 still uses its current sprites.</p>
+</main><script type="module" src="/standing-oct14.js"></script></body></html>

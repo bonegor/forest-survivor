@@ -1,0 +1,106 @@
+[
+  {
+    "class": "archer",
+    "id": "standing-oct14",
+    "file": "archer",
+    "name": "Ranger · Thornwarden",
+    "cell": [
+      48,
+      48
+    ],
+    "anchorY": 40,
+    "visible": {
+      "x": 13,
+      "y": 10,
+      "w": 25,
+      "h": 30
+    },
+    "before": {
+      "x": 12,
+      "y": 8,
+      "w": 26,
+      "h": 32
+    },
+    "colours": 20,
+    "frames": 1,
+    "animation": "standing only"
+  },
+  {
+    "class": "mage",
+    "id": "standing-oct14",
+    "file": "mage",
+    "name": "Mage · Ember Archmage",
+    "cell": [
+      48,
+      48
+    ],
+    "anchorY": 40,
+    "visible": {
+      "x": 11,
+      "y": 5,
+      "w": 29,
+      "h": 35
+    },
+    "before": {
+      "x": 9,
+      "y": 3,
+      "w": 32,
+      "h": 37
+    },
+    "colours": 24,
+    "frames": 1,
+    "animation": "standing only"
+  },
+  {
+    "class": "necromancer",
+    "id": "standing-oct14",
+    "file": "necromancer",
+    "name": "Necromancer · Grave Regent",
+    "cell": [
+      48,
+      48
+    ],
+    "anchorY": 40,
+    "visible": {
+      "x": 13,
+      "y": 7,
+      "w": 27,
+      "h": 33
+    },
+    "before": {
+      "x": 11,
+      "y": 3,
+      "w": 28,
+      "h": 37
+    },
+    "colours": 19,
+    "frames": 1,
+    "animation": "standing only"
+  },
+  {
+    "class": "necromancer",
+    "id": "standing-oct14-ossuary",
+    "file": "necromancer-ossuary",
+    "name": "Necromancer · Ossuary King",
+    "cell": [
+      48,
+      48
+    ],
+    "anchorY": 40,
+    "visible": {
+      "x": 12,
+      "y": 6,
+      "w": 29,
+      "h": 34
+    },
+    "before": {
+      "x": 11,
+      "y": 3,
+      "w": 28,
+      "h": 37
+    },
+    "colours": 16,
+    "frames": 1,
+    "animation": "standing only"
+  }
+]
