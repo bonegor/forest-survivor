@@ -37,16 +37,18 @@ const PICKUP_FAR = 1400;
 
 // What a broken barrel, crate, urn or lantern leaves, by weight (null: nothing). Luck
 // multiplies the treasures' weights, so better luck only ever makes each of them likelier.
+// The horde drops no potions, so nearly half of all props hold one: about as many reach
+// the hero early in the night as when monsters dropped them too.
 export const PROP_LOOT = [
-  { kind: 'coins', w: 0.34 },
-  { kind: 'potion', w: 0.16 },
+  { kind: 'coins', w: 0.2 },
+  { kind: 'potion', w: 0.45 },
   { kind: 'magnet', w: 0.08, lucky: true },
   { kind: 'fury', w: 0.04, lucky: true },
   { kind: 'relic', w: 0.01, lucky: true },
   { kind: 'frostrune', w: 0.02, lucky: true },
   { kind: 'elixir', w: 0.02, lucky: true },
   { kind: 'goldpile', w: 0.13 },
-  { kind: null, w: 0.2 },
+  { kind: null, w: 0.05 },
 ];
 
 // A blow struck by hand on the hero's sprite: its attack from two frames before the middle one,
@@ -473,13 +475,15 @@ export class Game {
     } else if (e.lord) {
       this.lordDefeated(e);
     } else if (e.elite) {
-      // A champion leaves its chest and gold. Potions, scrolls, relics, runes and fury orbs
-      // come only from what the hero breaks (PROP_LOOT).
+      // A champion leaves its chest and gold. Potions, scrolls, relics and runes come only
+      // from what the hero breaks (PROP_LOOT).
       this.addPickup('chest', e.x, e.y, 0, { kind: 'elite' });
       this.addPickup('goldpile', e.x + rand(-8, 8), e.y, Math.round(rand(10, 20)));
-    } else if (chance(0.014 * luck)) {
-      // The horde leaves its soul gems and, now and then, a coin: nothing else.
-      this.addPickup('coin', e.x, e.y, 1);
+    } else {
+      // The horde leaves its soul gems and, now and then, a coin or a fury orb: nothing else.
+      const r = Math.random();
+      if (r < 0.014 * luck) this.addPickup('coin', e.x, e.y, 1);
+      else if (r < 0.016 * luck) this.addPickup('fury', e.x, e.y);
     }
     if (e.def.split && !o.noSplit) {
       for (let i = 0; i < e.def.splitN; i++) {

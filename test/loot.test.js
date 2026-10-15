@@ -44,9 +44,10 @@ test('at plain luck props drop what they always did', () => {
     assert.ok(Math.abs(c[kind] / n - share(kind)) < 0.01, `${kind}: ${(c[kind] / n).toFixed(3)} vs ${share(kind)}`);
   }
   assert.ok(Math.abs(PROP_LOOT.reduce((s, d) => s + d.w, 0) - 1) < 1e-9, 'the weights are the odds at luck 1');
+  assert.ok(share('potion') >= 0.4, 'the horde drops no potions, so nearly half of all props hold one');
 });
 
-test('the horde leaves soul gems and now and then a coin; champions a chest and gold, no potion', () => {
+test('the horde leaves soul gems and now and then a coin or a fury orb; champions a chest and gold, no potion', () => {
   const oldRandom = Math.random;
   Math.random = mulberry32(9);
   try {
@@ -65,8 +66,9 @@ test('the horde leaves soul gems and now and then a coin; champions a chest and 
       return counts;
     };
     const horde = kills('bat', {}, 4000);
-    assert.deepEqual(Object.keys(horde).sort(), ['coin', 'gem'], JSON.stringify(horde));
+    assert.deepEqual(Object.keys(horde).sort(), ['coin', 'fury', 'gem'], JSON.stringify(horde));
     assert.ok(horde.coin > 4000 * 0.014 * 3 * 0.7 && horde.coin < 4000 * 0.014 * 3 * 1.3, 'coins as often as before');
+    assert.ok(horde.fury > 4000 * 0.002 * 3 * 0.5 && horde.fury < 4000 * 0.002 * 3 * 1.5, 'fury orbs as often as before');
     const champions = kills('skeleton', {elite: true}, 300);
     assert.deepEqual(Object.keys(champions).sort(), ['chest', 'gem', 'goldpile'], JSON.stringify(champions));
   } finally {

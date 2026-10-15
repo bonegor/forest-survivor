@@ -87,8 +87,8 @@ The hero screen always shows your next goal, stars mark what each hero has conqu
 
 ### Things to find
 
-- **Soul gems** (XP) from every monster, and now and then a coin, nothing more (champions, Gilded Thieves, crypt lords and bosses leave more); **gold**, **potions** and **elixirs** in what you break
-- **Scroll of Gathering** pulls in every gem; the **Holy Relic** purges the screen and the **Frost Rune** freezes it (bosses, crypt lords and champions only take a heavy blow or slow down); **fury orbs** charge your ultimate. All four lie only in what you break
+- **Soul gems** (XP) from every monster, and now and then a coin or a **fury orb**, nothing more (champions, Gilded Thieves, crypt lords and bosses leave more); **gold**, **potions** and **elixirs** in what you break
+- **Scroll of Gathering** pulls in every gem; the **Holy Relic** purges the screen and the **Frost Rune** freezes it (bosses, crypt lords and champions only take a heavy blow or slow down). All three lie only in what you break. **Fury orbs** charge your ultimate; they lie in what you break too
 - **Champions** with randomly generated names and affixes, and **Gilded Thieves** that flee with treasure
 - **Treasure chests** from champions and bosses. A max-level weapon plus its paired relic **evolves** when you open a chest
 - **Gear** from the lords of the crypts: helm, armor, gloves, boots, amulet and ring, each Common (1 stat), Uncommon (2), Rare (3), Epic (3, stronger) or Legendary (4 and a power: +1 projectile, +40% crit damage, a revive, or +20% health and +2 armor; each power counts once, however many pieces worn carry it). Later in the night and farther from the start the odds get better. Picking a piece up shows it beside everything worn, with what it would change; wear it (the piece it replaces is sold) or sell it, and sell anything worn while you're there. **Each hero keeps their own gear from run to run**; heroes don't share it (`public/js/shared/items.js`)
