@@ -103,17 +103,15 @@ export class Player {
     this.revivals = Math.max(0, this.revivals + this.gearB.revival - before);
   }
 
-  // Standing attacks turn toward the swing. Walking keeps its facing direction
-  // so an attack behind the hero cannot flip the sprite for one frame (facing.js).
-  // turn: false for a swing that mustn't turn him (the rest of a volley, one at nothing).
-  swing(ang, turn = true) {
+  // A blow his weapon strikes by itself never turns him, walking or standing: he keeps facing
+  // the way he last walked, whichever side it lands (facing.js).
+  swing(ang) {
     this.swingT = 0.14;
     this.swingAng = ang;
-    if (turn) this.face = faceAttack(this.face, this.moving, Math.cos(ang), Math.sin(ang));
   }
 
   // A blow struck by the player (Game.strike): the sprite's attack starts now (at, the game's
-  // clock), and he turns to it as any attack turns him.
+  // clock). The one blow that may turn him: standing, he turns to the foe the player strikes at.
   strike(ang, at) {
     this.strikeAt = at;
     this.face = faceAttack(this.face, this.moving, Math.cos(ang), Math.sin(ang));

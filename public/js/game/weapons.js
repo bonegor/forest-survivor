@@ -7,7 +7,6 @@ import { spawnProjectile } from './projectiles.js';
 import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode } from './effects.js';
 import { Minion } from './minions.js';
 import { PC, P } from './particles.js';
-import { faceAttack } from './facing.js';
 
 export class Weapon {
   constructor(g, id, src) {
@@ -131,7 +130,6 @@ export const KINDS = {
       const p = w.g.player;
       const t = w.g.nearestEnemy(p.x, p.y, 34 * w.s.area + 26);
       w.aimAng = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim;
-      w.aimed = !!t;
       w.burst(w.s.amount, 0.11);
     },
     shoot(w, i) {
@@ -141,8 +139,8 @@ export const KINDS = {
       if (i >= 2) ang += i % 4 < 2 ? 0.55 : -0.55;
       const holy = !!w.s.wave;
       g.effects.push(new Slash(g, w, ang, 30 * w.s.area, 2.4, w.s.dmg, holy));
-      // Only the first slash, at a foe, may turn him; those behind and beside him don't (facing.js).
-      p.swing(ang, i === 0 && w.aimed);
+      // No slash turns him, not even one at a foe behind him (facing.js).
+      p.swing(ang);
       if (holy) {
         spawnProjectile(g, {
           kind: 'wave', x: p.x, y: p.y, z: 7, ang, speed: 200, life: 0.6, r: 11 * w.s.area, dmg: w.s.dmg * 0.6,
@@ -167,11 +165,8 @@ export const KINDS = {
       const ang = t ? Math.atan2(t.y - m.y, t.x - m.x) + (i >= w.targets.length ? rand(-0.15, 0.15) : 0) : p.aim + rand(-0.25, 0.25);
       // The ranger's release is recorded at the actual shot, including every
       // arrow in a volley. This is visual state; projectile timing is unchanged.
-      // Only the volley's first arrow, at a foe, may turn him (facing.js).
-      if (p.id === 'archer') {
-        p.bowShot = { at: g.clock, ang };
-        if (i === 0 && t) p.face = faceAttack(p.face, p.moving, Math.cos(ang), Math.sin(ang));
-      }
+      // No arrow turns him, not even one at a foe behind him (facing.js).
+      if (p.id === 'archer') p.bowShot = { at: g.clock, ang };
       const arrow = (a) =>
         spawnProjectile(g, {
           kind: 'arrow', sprite: 'arrow', x: m.x, y: m.y, z: p.id === 'archer' ? 19 : 7, ang: a, speed: 270 * w.s.speed, life: 1.2, r: 3,

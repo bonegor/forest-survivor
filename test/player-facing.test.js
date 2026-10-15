@@ -100,22 +100,24 @@ test('a level-two alternating sword volley damages both sides without flipping a
   assert.deepEqual(flips, [false,false,false], 'the alternating attack angles must not alter the walk-facing silhouette');
 }));
 
-test('a standing hero with a level-two sword keeps facing his foe through the slash behind him', () => gameCase((g,p,w) => {
+test('a standing hero with a level-two sword keeps facing ahead through both slashes, at a foe behind him and away', () => gameCase((g,p,w) => {
   input.bot = {x:0,y:0};
   p.update(1/60);
+  assert.equal(p.face, 1);
   w.levelUp(); // the second slash, opposite the first
   assert.equal(w.s.amount, 2);
   const foe = g.spawnEnemy('bat', p.x - 24, p.y, {instant:true, hpMul:1000});
   g.grid.rebuild(g.enemies, p.x, p.y);
   w.cd = 0;
   w.update(0);
-  assert.equal(p.face, -1, 'the first slash, at the foe, turns him');
+  assert.equal(g.effects.at(-1).ang, Math.PI, 'the first slash goes at the foe behind him');
+  assert.ok(foe.hp < foe.maxHp, 'and hits it');
+  assert.equal(p.face, 1, 'without turning him');
   w.update(.11);
   assert.equal(w.queue, 0);
   assert.equal(g.effects.at(-1).ang, Math.PI*2, 'the second slash still goes the other way');
-  assert.equal(p.face, -1, 'without turning him');
-  assert.equal(displayedFlip(g), true);
-  assert.ok(foe.hp < foe.maxHp);
+  assert.equal(p.face, 1);
+  assert.equal(displayedFlip(g), false);
 }));
 
 test('a swing at nothing leaves a standing hero facing as he was', () => gameCase((g,p,w) => {
@@ -123,7 +125,7 @@ test('a swing at nothing leaves a standing hero facing as he was', () => gameCas
   p.update(1/60);
   g.grid.rebuild(g.enemies, p.x, p.y);
   assert.equal(g.nearestEnemy(p.x, p.y, 34 * w.s.area + 26), null, 'no foe in reach');
-  p.aim = 0; p.face = -1; // he walked right, then turned to strike a foe on his left, now gone
+  p.aim = 0; p.face = -1; // he walked right, then struck a foe on his left by hand (Game.strike), now gone
   w.levelUp();
   w.cd = 0;
   const flips = [];
@@ -136,7 +138,7 @@ test('a swing at nothing leaves a standing hero facing as he was', () => gameCas
   assert.deepEqual(flips, [true, true], 'he never turns, not even for one slash');
 }));
 
-test('a stationary hero still turns toward the sword target and retains the attack direction', () => gameCase((g,p,w) => {
+test('a standing hero is not turned by his sword, which still strikes the nearer foe behind him', () => gameCase((g,p,w) => {
   input.bot = {x:0,y:0};
   p.update(1/60);
   assert.equal(p.moving, false);
@@ -146,11 +148,49 @@ test('a stationary hero still turns toward the sword target and retains the atta
   w.update(0);
   assert.ok(rear.hp < rearHp);
   assert.equal(front.hp, frontHp);
-  assert.equal(p.face, -1);
-  assert.equal(displayedFlip(g), true);
+  assert.equal(p.face, 1);
+  assert.equal(displayedFlip(g), false);
   assert.equal(p.swingAng, Math.PI);
   assert.equal(p.swingT, .14);
   p.update(1/60);
-  assert.equal(p.face, -1);
-  assert.equal(displayedFlip(g), true);
+  assert.equal(p.face, 1);
+  assert.equal(displayedFlip(g), false);
 }));
+
+// The user's call: "when hero is just standing, looking to the right, it then decides and turns to
+// the left instead.... should just stay put". Every hero stands among foes on both sides, his
+// weapons at work (the knight's and the ranger's at level 2: two slashes, two arrows a volley),
+// facing first one way, then the other.
+for (const hero of ['knight', 'archer', 'mage', 'rogue', 'necromancer']) {
+  for (const face of [1, -1]) test(`a standing ${hero} facing ${face === 1 ? 'right' : 'left'} never turns, whatever his weapons hit`, () => {
+    const oldRandom = Math.random, oldBot = input.bot;
+    Math.random = mulberry32(739);
+    try {
+      input.bot = {x:face, y:0};
+      const g = new Game({hero, mode:'s15', meta:metaBonuses(defaultProfile()), settings:{numbers:false}, crypts:false});
+      g.spawner.update = () => {};
+      const p = g.player, w = p.weapons[0];
+      p.devGod = true;
+      if (hero === 'knight' || hero === 'archer') w.levelUp();
+      for (let i = 0; i < 10; i++) p.update(1/60);
+      assert.equal(p.face, face);
+      input.bot = {x:0, y:0};
+      for (const [dx, dy] of [[-30, 0], [32, 0], [-60, 20], [70, -15]]) {
+        const e = g.spawnEnemy('slime', p.x + dx, p.y + dy, {instant:true, hpMul:1e6});
+        e.dormant = true; // stays put, so only the hero's own attacks are at work
+      }
+      g.grid.rebuild(g.enemies, p.x, p.y);
+      const flips = new Set(), hp = g.enemies.reduce((s, e) => s + e.hp, 0);
+      for (let i = 0; i < 10*60; i++) {
+        g.update(1/60);
+        flips.add(displayedFlip(g));
+      }
+      assert.equal(p.moving, false);
+      assert.ok(g.enemies.reduce((s, e) => s + e.hp, 0) < hp, 'his weapons were at work');
+      assert.deepEqual([...flips], [face < 0], 'he stays as he faced');
+    } finally {
+      input.bot = oldBot;
+      Math.random = oldRandom;
+    }
+  });
+}
