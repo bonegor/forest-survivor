@@ -1,5 +1,6 @@
 // Enemy archetypes at "Medium". hp/dmg/spd are scaled by difficulty and time.
-// spd is in world pixels per second; r is the collision radius.
+// spd is in world pixels per second; r is the collision radius; scale, if given, is how much
+// bigger than its sprite it is drawn (r is given at that size).
 
 export const ENEMIES = {
   bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, dmg: 3, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true },
@@ -15,8 +16,9 @@ export const ENEMIES = {
   goblin: { name: 'Goblin', sprite: 'goblin', hp: 12, spd: 45, dmg: 4, r: 4, xp: 1, ai: 'walker', mass: 0.8, anim: 7, death: 'blood', pack: 4 },
   spider: { name: 'Widow Spider', sprite: 'spider', hp: 22, spd: 54, dmg: 7, r: 6, xp: 3, ai: 'skitter', mass: 1, anim: 10, death: 'dark' },
   ghost: { name: 'Wraith', sprite: 'ghost', hp: 26, spd: 35, dmg: 9, r: 5, xp: 4, ai: 'phaser', mass: 0.7, anim: 3, death: 'ecto', alpha: 0.78, kbRes: 0.5 },
+  // The red-robed caster: few (weight 1 in the night's pockets), big, and slow.
   cultist: {
-    name: 'Cultist', sprite: 'cultist', hp: 32, spd: 30, dmg: 6, r: 5, xp: 5, ai: 'caster', mass: 1, anim: 3, death: 'dark',
+    name: 'Cultist', sprite: 'cultist', hp: 32, spd: 27, dmg: 6, r: 7.5, scale: 1.5, xp: 5, ai: 'caster', mass: 1, anim: 3, death: 'dark',
     shot: { range: 125, cd: 3.2, spd: 72, dmg: 10, kind: 'darkbolt', wind: 0.55 },
   },
   orc: {

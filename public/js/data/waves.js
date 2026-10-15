@@ -16,15 +16,15 @@ export const POCKETS = [
   { minutes: [5, 6], spawn: { bat: 1, skeleton: 6, zombie: 4, wolf: 3, goblin: 5 } },
   { minutes: [6, 7], spawn: { bat: 1, skeleton: 6, zombie: 4, wolf: 3, goblin: 5, spider: 3 } },
   { minutes: [7, 8], spawn: { bat: 1, skeleton: 6, zombie: 4, wolf: 3, goblin: 5, spider: 3, ghost: 3 } },
-  { minutes: [8, 9], spawn: { bat: 1, skeleton: 4, zombie: 4, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 2, orc: 2 } },
-  { minutes: [9, 10], spawn: { bat: 1, skeleton: 1.5, zombie: 4, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 2, orc: 3, deathknight: 1 } },
-  { minutes: [10, 11], spawn: { bat: 1, skeleton: 1.5, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 2, orc: 3, imp: 4, deathknight: 2 } },
-  { minutes: [11, 12], spawn: { bat: 1, skeleton: 1.5, goblin: 5, spider: 3, ghost: 3, cultist: 2, orc: 3, imp: 4, hellhound: 3, deathknight: 2, ogre: 1 } },
-  { minutes: [12, 13.5], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 2, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 1.5 } },
-  { minutes: [13.5, 15], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 2, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 2 } },
+  { minutes: [8, 9], spawn: { bat: 1, skeleton: 4, zombie: 4, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 2 } },
+  { minutes: [9, 10], spawn: { bat: 1, skeleton: 1.5, zombie: 4, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 3, deathknight: 1 } },
+  { minutes: [10, 11], spawn: { bat: 1, skeleton: 1.5, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, deathknight: 2 } },
+  { minutes: [11, 12], spawn: { bat: 1, skeleton: 1.5, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 2, ogre: 1 } },
+  { minutes: [12, 13.5], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 1.5 } },
+  { minutes: [13.5, 15], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 2 } },
   // Only Ranked gets past dawn.
-  { minutes: [15, 19], spawn: { bat: 1, skeleton: 1.5, ghost: 3, cultist: 2, orc: 2, imp: 4, hellhound: 3, deathknight: 2, ogre: 1.1 } },
-  { minutes: [19, Infinity], spawn: { bat: 1, skeleton: 1.5, cultist: 2, orc: 2, imp: 4, hellhound: 3, deathknight: 2, ogre: 1.1 } },
+  { minutes: [15, 19], spawn: { bat: 1, skeleton: 1.5, ghost: 3, cultist: 1, orc: 2, imp: 4, hellhound: 3, deathknight: 2, ogre: 1.1 } },
+  { minutes: [19, Infinity], spawn: { bat: 1, skeleton: 1.5, cultist: 1, orc: 2, imp: 4, hellhound: 3, deathknight: 2, ogre: 1.1 } },
 ];
 
 // The minute of the night a phase stands for: 1.4 phases a minute up to

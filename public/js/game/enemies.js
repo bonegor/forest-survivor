@@ -45,7 +45,7 @@ export class Enemy {
     this.elite = !!o.elite;
     this.boss = !!def.boss;
     this.prop = !!def.prop;
-    this.scale = o.scale ?? (this.elite ? 1.35 : 1);
+    this.scale = o.scale ?? (def.scale || 1) * (this.elite ? 1.35 : 1);
     this.r = def.r * (this.elite ? 1.3 : 1);
     this.maxHp = this.hp = Math.max(1, def.hp * (o.hpMul ?? 1));
     this.spd = def.spd * (o.spdMul ?? 1);
