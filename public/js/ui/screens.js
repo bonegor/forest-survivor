@@ -6,7 +6,7 @@ import { SPR, smoothScaled, walkFrame, loopFrame } from '../engine/sprites.js';
 import { saveSettings, DEBUG } from '../engine/storage.js';
 import { overlay, picture, presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp, ease } from '../engine/util.js';
-import { HEROES, HERO_ORDER } from '../data/heroes.js';
+import { HEROES, HERO_ORDER, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { MODES, NORMAL, VETERAN } from '../data/difficulty.js';
 import { UPGRADES, upgradeCost, totalWins, metaBonuses, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
@@ -323,9 +323,12 @@ export class HeroScreen {
     };
     stat('HEALTH', h.stats.maxHp, 300, '#e43b44');
     stat('SPEED', h.stats.speed || 1, 1.25, '#2ce8f5');
-    const w = WEAPONS[h.weapon];
-    ctx.drawImage(SPR[w.icon].frames[0].c, tx - 1, ty - 1);
-    drawText(ctx, w.name, tx + 17, ty + 3, { color: '#fee761' });
+    // What he starts with: one weapon, or the Necromancer's two side by side.
+    const start = startWeapons(h).map((id) => WEAPONS[id]);
+    start.forEach((w, i) => ctx.drawImage(SPR[w.icon].frames[0].c, tx - 1 + i * 17, ty - 1));
+    const nx = tx + 17 * start.length;
+    const names = wrapText(start.map((w) => w.name).join(' + '), tx + tw - nx);
+    names.forEach((ln, i) => drawText(ctx, ln, nx, ty + 3 + i * 9 - (names.length - 1) * 4, { color: '#fee761' }));
     ty += 17;
     for (const line of wrapText(h.perk, tw)) {
       drawText(ctx, line, tx, ty, { color: '#c0cbdc' });

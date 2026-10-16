@@ -47,7 +47,7 @@ There's no game server on Pages (its `/api` calls get a 404), so:
 | Pick a level-up card | 1–4, arrows + Enter, click | d-pad + A | tap |
 | Reroll level-up | R | Y | button |
 
-Weapons fire automatically, except in the crypts (below). Collect soul gems to level up; every level offers a choice of new weapons, weapon upgrades or relics. Each level also makes the hero a little stronger, without limit: +0.5% damage a level, health growing 0.5% on itself a level (×1.48 by level 80, ×4.4 by 300), and a point of armor every 20 levels (`levelBonus` in `public/js/game/player.js`). The level-up screen shows what the levels have given so far. When fewer upgrades are left than a level-up offers (none, once the whole build is maxed), a stacking **Blessing of Valor** (+might, +health), a heal and gold fill the rest.
+Weapons fire automatically, except in the crypts (below). Collect soul gems to level up; every level offers a choice of new weapons (only the hero's own, below), weapon upgrades or relics. Each level also makes the hero a little stronger, without limit: +0.5% damage a level, health growing 0.5% on itself a level (×1.48 by level 80, ×4.4 by 300), and a point of armor every 20 levels (`levelBonus` in `public/js/game/player.js`). The level-up screen shows what the levels have given so far. When fewer upgrades are left than a level-up offers (none, once the whole build is maxed), a stacking **Blessing of Valor** (+might, +health), a heal and gold fill the rest.
 
 **Quit Run** in the pause menu ends the run there and then, and you keep the gold you found. There is no saving a run to come back to: **Continue** on the title screen only appears when the game was closed mid-run, and picks it up from its last autosave.
 
@@ -58,8 +58,8 @@ Weapons fire automatically, except in the crypts (below). Collect soul gems to l
 | Sir Aldric, Knight | — | Longsword | +2 armor, +180% health, +7% speed, slow regeneration | Whirlwind |
 | Lyra, Ranger | 5 minutes survived with the Knight | Hunting Bow | +crit, +speed | Arrow Storm |
 | Eldrin, Sorcerer | 5 minutes survived with the Ranger | Fireball | −cooldowns, +area, +XP | Cataclysm |
-| Kael, Shadow | 5 minutes survived with the Sorcerer | Throwing Daggers | +crit, +speed, +luck | Shadow Dance |
-| Morvath, Necromancer | 5 minutes survived with the Shadow | Raise Dead (skeleton minions) | minions last 30% longer, +10% XP | Army of the Dead |
+| Kael, Shadow | 5 minutes survived with the Sorcerer | Shadow Blade | +crit, +speed, +luck | Shadow Dance |
+| Morvath, Necromancer | 5 minutes survived with the Shadow | Raise Dead (skeleton minions) and Miasma | minions last 30% longer, +10% XP | Army of the Dead |
 
 ### Modes
 
@@ -67,7 +67,7 @@ Weapons fire automatically, except in the crypts (below). Collect soul gems to l
 
 The Darkwood (Survival and Ranked) is one endless forest, the same in every run. You start on a crossroads with four roads out to the four corners; each runs about 30 seconds of walking, mostly straight with the odd bend, to another crossroads with a wayside shrine, and on from there in every direction. The four roads out of any crossroads lead to four different shrines. Groves, meadows, pine and cursed woods, and landmarks down footpaths (stone circles, ruins, graveyards, woodcutters' camps) fill the woods between. Nothing is stored: every patch of forest is worked out from a fixed seed as you reach it (`public/js/game/darkwood.js`; `node tools/mapgen/endless.mjs` draws previews of it).
 
-Every second crossroads has a **crypt** beside its shrine, so whichever way you walk there is one about a minute from the start and another every minute after. Walk up its steps and the night's clock stops: dawn comes no closer, the horde neither grows nor follows, and Ranked doesn't count the time. Down there each hero has their own weapon alone (the Knight his sword, the Ranger her bow, the Sorcerer his fireball, the Shadow his daggers, the Necromancer his Raise Dead, or what it evolved into), and it fires only when you strike (X or Shift): at the nearest foe in its reach, the blade landing or the shot leaving on the sprite's blow frame; held, it strikes each time the weapon is ready. The others wait outside. Inside, a handful of rooms hold sleeping packs of the night's foes (as strong as the minute you went in), and a named lord waits in the last, a short walk from the stairs. Those stairs are barred while the lord lives: once in, you leave past it, or by falling, which wakes you by the door outside with the crypt shut to you for good. The lord drops a piece of **gear** (nothing it drops lands in a wall), and the wall breaks open on a way up at least five tiles' walk from you (the nearest such stretch of wall): moonlight runs along the shortest walk there (A*, worked out again as you move), on the map too, and the stairs you came down open as well. Out either way, the crypt is sealed for the rest of the run. Whatever lies about when you climb out (gems, gold, gear) comes with you.
+Every second crossroads has a **crypt** beside its shrine, so whichever way you walk there is one about a minute from the start and another every minute after. Walk up its steps and the night's clock stops: dawn comes no closer, the horde neither grows nor follows, and Ranked doesn't count the time. Down there each hero has their own weapon alone (the Knight his sword, the Ranger her bow, the Sorcerer his fireball, the Shadow his Shadow Blade, the Necromancer his Raise Dead, not his Miasma, or what it evolved into), and it fires only when you strike (X or Shift): at the nearest foe in its reach, the blade landing or the shot leaving on the sprite's blow frame; held, it strikes each time the weapon is ready. The others wait outside. Inside, a handful of rooms hold sleeping packs of the night's foes (as strong as the minute you went in), and a named lord waits in the last, a short walk from the stairs. Those stairs are barred while the lord lives: once in, you leave past it, or by falling, which wakes you by the door outside with the crypt shut to you for good. The lord drops a piece of **gear** (nothing it drops lands in a wall), and the wall breaks open on a way up at least five tiles' walk from you (the nearest such stretch of wall): moonlight runs along the shortest walk there (A*, worked out again as you move), on the map too, and the stairs you came down open as well. Out either way, the crypt is sealed for the rest of the run. Whatever lies about when you climb out (gems, gold, gear) comes with you.
 - **Dungeon Run — 3 floors.** Each floor's guardian sleeps behind a seal until you've slain enough foes and spent long enough on the floor. Kill it, take the stairs, and defeat the Demon Lord on floor 3. Your build carries over between floors.
 - **Ranked — endless.** No dawn. The night keeps getting deadlier, the four lords return in rotation every 4½ minutes, and past the half-hour a blood moon rises. Your score is how long you last, kept as a personal best per hero with a rank title (Peasant, Squire, Knight, Champion, Paladin, Warlord, Hero at 30 minutes, Legend at 40, Mythic at 50, Immortal at an hour).
 
@@ -103,22 +103,32 @@ The hero screen always shows your next goal, stars mark what each hero has conqu
 
 ### Weapons and evolutions
 
-| Weapon | + Relic | Evolves into |
-| --- | --- | --- |
-| Longsword | Gauntlets of Might | Excalibur |
-| Hunting Bow | Eagle Feather | Stormstring |
-| Fireball | Spellbook | Meteor Storm |
-| Throwing Axe | Giant's Belt | Whirlwind |
-| Firebomb Flask | Hourglass | Hellfire |
-| Guardian Blades | Plate Armor | Aegis |
-| Consecration | Troll Blood | Sanctuary |
-| Chain Lightning | Echo Rune | Thunderstorm |
-| Throwing Daggers | Swift Boots | Shadowstrike |
-| Frost Nova | Vitality Amulet | Frozen Heart |
-| Moonglaive | Lodestone | Lodestar |
-| Bramble | Plate Armor | Briarheart |
-| Will-o'-Wisps | Lucky Clover | Fae Lanterns |
-| Raise Dead *(Necromancer only)* | Scholar's Crown | Legion of the Damned |
+Every weapon belongs to one hero. Each has four: the one he starts with (the Necromancer starts with two) and the rest, which only his own level-ups offer; no hero ever sees another's. Relics are shared by all, and a hero's four weapons each evolve with a different one. An evolution is better than its weapon at level 8 in every way (`test/rosters.test.js` checks every stat). Each hero's `roster` and `start` are in `public/js/data/heroes.js`, the weapons in `public/js/data/weapons.js`.
+
+| Hero | Weapon | + Relic | Evolves into |
+| --- | --- | --- | --- |
+| Knight | Longsword *(starts)* | Gauntlets of Might | Excalibur |
+| | Throwing Axe | Giant's Belt | Whirlwind |
+| | Guardian Blades | Plate Armor | Aegis |
+| | Consecration | Troll Blood | Sanctuary |
+| Ranger | Hunting Bow *(starts)*: arrows fly straight the way she faces | Eagle Feather | Stormstring |
+| | Moonglaive | Lodestone | Lodestar |
+| | Bramble | Plate Armor | Briarheart |
+| | Will-o'-Wisps | Lucky Clover | Fae Lanterns |
+| Sorcerer | Fireball *(starts)* | Spellbook | Meteor Storm |
+| | Chain Lightning | Echo Rune | Thunderstorm |
+| | Frost Nova | Vitality Amulet | Frozen Heart |
+| | Arcane Ray: an instant ray through every foe in its line | Giant's Belt | Prismatic Ray: it splits on the first foe it strikes |
+| Shadow | Shadow Blade *(starts)*: spinning blades at the nearest foe, through all in their path | Swift Boots | Shadowstrike |
+| | Firebomb Flask | Hourglass | Hellfire |
+| | Caltrops: spikes thrown behind him, that cut and slow what follows | Lucky Clover | Razor Field |
+| | Shadow Clone: a shade of Kael that hunts for a while | Spellbook | Twin Shadows: two that never fade, throwing blades |
+| Necromancer | Raise Dead *(starts)* | Scholar's Crown | Legion of the Damned |
+| | Miasma *(starts)*: a poison cloud about him, and a trail of it from his steps | Troll Blood | Pestilence: what dies in it bursts into poison |
+| | Bone Spear | Eagle Feather | Spine Lance |
+| | Grasping Dead: bony hands claw up in a line and grip hard | Hourglass | Hands of the Grave |
+
+A run saved before the rosters keeps the weapons it had, and they still level up. The newer weapons draw borrowed icons and sprites until their own are drawn (`tools/handoff-art.md`).
 
 ## Saving: everything lives in cookies
 
@@ -268,7 +278,7 @@ autopilot    3     2   15:00  13:55  10:14-15:00  18039   70.0       62     2.0 
 | `random` | takes a new random heading every `every` seconds | `every=1` |
 | `autopilot` | plays like a decent player: circles the horde, dodges missiles and slams, hunts bosses while healthy, loots when calm, finds the dungeon's guardian and stairs | |
 
-All of them press the ultimate when it is ready unless given `ult=0`. When a bot doesn't choose its own level-up cards, `--pick` does: `first`, `random`, `weapons`, `relics`, or `build` (the default: grow weapons, add up to four, then useful relics).
+All of them press the ultimate when it is ready unless given `ult=0`. When a bot doesn't choose its own level-up cards, `--pick` does: `first`, `random`, `weapons`, `relics`, or `build` (the default: grow weapons, add the rest of the hero's four, the ones that clear the horde round him first, then the relics that evolve them, then useful relics). None of the strategies aims, so a weapon that flies only where the hero faces (the Hunting Bow) fares badly with any of them: they walk away from foes, or stand.
 
 ### Writing a strategy
 

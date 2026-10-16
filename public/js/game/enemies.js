@@ -26,6 +26,8 @@ export const HOLD = 0.2, HOLD_EVERY = 0.6;
 // catches it; one who lets it be still loses it when its 20 seconds are up.
 export const THIEF_NEAR = 100, THIEF_FAR = 180, THIEF_JOG = 0.3;
 export const thiefPace = (d) => clamp((THIEF_FAR - d) / (THIEF_FAR - THIEF_NEAR), THIEF_JOG, 1);
+// The sparks a foe gives off while it burns or sickens (Enemy.addDot).
+const DOT_SPARKS = { fire: [PC.o, PC.y], poison: [PC.l, PC.L] };
 let nextId = 1;
 
 export class Enemy {
@@ -62,9 +64,11 @@ export class Enemy {
     this.freezeT = 0;
     this.holdT = 0;
     this.holdCd = 0;
-    this.burnT = 0;
-    this.burnDps = 0;
-    this.burnTick = 0;
+    this.dotT = 0; // damage over time (addDot): how long it lasts yet
+    this.dotDps = 0;
+    this.dotTick = 0;
+    this.dotType = 'fire';
+    this.dotW = null; // the weapon it counts for
     this.state = 'move';
     this.stateT = 0;
     this.cdT = rand(1, 2.5);
@@ -150,15 +154,15 @@ export class Enemy {
     }
 
     // Damage over time.
-    if (this.burnT > 0) {
-      this.burnT -= dt;
-      this.burnTick -= dt;
-      if (this.burnTick <= 0) {
-        this.burnTick = 0.5;
-        g.hitEnemy(this, this.burnDps * 0.5, { type: 'fire', kb: 0, src: SRC.BURN });
+    if (this.dotT > 0) {
+      this.dotT -= dt;
+      this.dotTick -= dt;
+      if (this.dotTick <= 0) {
+        this.dotTick = 0.5;
+        g.hitEnemy(this, this.dotDps * 0.5, { type: this.dotType, kb: 0, src: SRC.BURN, w: this.dotW });
         if (this.dead) return;
       }
-      if (Math.random() < 0.3) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick([PC.o, PC.y]), P.GLOW | P.FADE, 0);
+      if (Math.random() < 0.3) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick(DOT_SPARKS[this.dotType]), P.GLOW | P.FADE, 0);
     }
 
     // In a crypt (world.vision) a monster that hasn't seen the hero doesn't know where he is:
@@ -296,6 +300,20 @@ export class Enemy {
         p.hurt(this.dmg * (this.boss ? (1 + (g.dmgScale - 1) * 0.6) * g.bossPower : g.dmgScale) * (this.state === 'dash' ? 1.4 : 1), this);
       }
     }
+  }
+
+  // Damage over time: dps for t seconds, a blow every half second ('fire' or 'poison', which
+  // its numbers and sparks show), counting for weapon w. A stronger one takes over a weaker;
+  // any keeps it going at least t seconds more.
+  addDot(type, dps, t, w = null) {
+    if (this.dead || this.prop || dps <= 0) return;
+    if (this.dotT <= 0) this.dotTick = 0.5;
+    if (this.dotT <= 0 || dps >= this.dotDps) {
+      this.dotDps = dps;
+      this.dotType = type;
+      this.dotW = w;
+    }
+    this.dotT = Math.max(this.dotT, t);
   }
 
   // A champion taking a blow. A charge already under way carries on.

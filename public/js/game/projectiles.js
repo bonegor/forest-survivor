@@ -6,6 +6,7 @@ import { sfx } from '../engine/audio.js';
 import { shadowSprite, glow, crescentSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { explode } from './effects.js';
+import { WEAPON_SPRITES } from '../data/weapons.js';
 
 const pool = [];
 
@@ -14,6 +15,15 @@ export function spawnProjectile(g, o) {
   p.init(g, o);
   g.projectiles.push(p);
   return p;
+}
+
+// One of the Shadow's spinning blades (Shadow Blade, Shadowstrike, Twin Shadows' clones):
+// through everything in its path, his crits keener with an evolved one's critBonus.
+export function shadowBlade(g, w, x, y, ang, dmg, life) {
+  return spawnProjectile(g, {
+    kind: 'dagger', sprite: WEAPON_SPRITES.shadowblade, x, y, z: 7, ang, speed: 330 * w.s.speed, life, r: 3, dmg,
+    pierce: w.s.pierce || 99, kb: w.s.kb, w, crit: w.s.critBonus || 0.05, spin: 22, trail: w.evolved ? PC.P : null,
+  });
 }
 
 export function releaseProjectile(p) {
@@ -172,6 +182,7 @@ export class Projectile {
       default:
         this.x += this.vx * dt;
         this.y += this.vy * dt;
+        this.rot += this.spin * dt;
         if (g.world.solid(this.x, this.y)) {
           this.impact();
           return false;
@@ -284,10 +295,10 @@ export class Projectile {
         img = this.sprite.frames[Math.floor(this.t * 10 + this.a0) % this.sprite.frames.length].c;
         break;
       default:
-        img = this.sprite.frames[0].rotated(this.ang, 32);
+        // A spinning blade turns as it flies; anything else points the way it goes.
+        img = this.spin ? this.sprite.frames[0].rotated(this.rot, 16) : this.sprite.frames[0].rotated(this.ang, 32);
     }
-    const sc = spun ? S * this.scale : S;
-    drawCentered(ctx, img, sx, sy - this.z * S, sc);
+    drawCentered(ctx, img, sx, sy - this.z * S, S * this.scale);
   }
 
   drawGlow(ctx, cam) {

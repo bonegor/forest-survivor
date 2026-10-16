@@ -68,7 +68,8 @@ for(const face of [-1,1])test(`bow wind-up and release follow the real projectil
   for(const index of SPR.archer.attack)assert.ok(poses.has(index),`missing shooting pose ${index}`);
 }));
 
-test('walking while shooting keeps its leg cycle, and a rear target cannot flip it',()=>run((g,p,w)=>{
+// The owner, 16 October 2026: the bow fires straight, the way she faces; it seeks no foe.
+test('walking while shooting keeps its leg cycle, and a foe behind her neither flips her nor draws the arrow',()=>run((g,p,w)=>{
   input.bot={x:1,y:0};
   for(let i=0;i<40;i++)p.update(1/60);
   p.aim=0;p.bowShot={at:g.clock,ang:0};
@@ -80,21 +81,21 @@ test('walking while shooting keeps its leg cycle, and a rear target cannot flip 
   const foe=g.spawnEnemy('slime',p.x-40,p.y,{instant:true,hpMul:10});foe.dormant=true;
   g.grid.rebuild(g.enemies,p.x,p.y);w.cd=0;w.update(0);
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);
-  assert.ok(SPR.archer.walk.includes(shown(g).index));
-  assert.ok(Math.cos(g.projectiles.at(-1).ang)<0,'rear projectile retains its real direction');
+  assert.ok(SPR.archer.attackWalk[SPR.archer.attackRelease].includes(shown(g).index),'she shows the shot ahead, on the move');
+  assert.ok(Math.cos(g.projectiles.at(-1).ang)>0,'the arrow flies straight ahead, not at the foe behind');
 }));
 
-test('standing, no arrow turns the ranger, not even one at a foe behind him',()=>run((g,p,w)=>{
+test('standing, the ranger shoots straight the way she faces, a foe behind her or not',()=>run((g,p,w)=>{
   w.levelUp();assert.equal(w.s.amount,2);
   p.update(1/60);assert.equal(p.moving,false);assert.equal(p.face,1);
   for(const dx of [-40,60]){const foe=g.spawnEnemy('slime',p.x+dx,p.y,{instant:true,hpMul:10});foe.dormant=true;}
   g.grid.rebuild(g.enemies,p.x,p.y);w.cd=0;w.update(0);
-  assert.ok(Math.cos(g.projectiles.at(-1).ang)<0,'the first arrow flies at the nearer foe, behind him');
-  assert.equal(p.face,1,'without turning him');
+  assert.ok(Math.abs(g.projectiles.at(-1).ang)<1e-9,'the first arrow flies straight ahead, not at the nearer foe behind');
+  assert.equal(p.face,1,'without turning her');
   assert.equal(shown(g).flip,false);
-  assert.ok(!SPR.archer.attack.includes(shown(g).index),'and shows no forward shot');
+  assert.ok(SPR.archer.attack.includes(shown(g).index),'and shows the shot');
   w.update(.07);
-  assert.ok(Math.cos(g.projectiles.at(-1).ang)>0,'the second arrow flies at the foe ahead');
+  assert.ok(Math.abs(Math.abs(g.projectiles.at(-1).ang)-0.06)<1e-9,'the second fans out just beside it: one volley');
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);
 }));
 

@@ -1,8 +1,8 @@
 // A single run: owns every system and runs the update/draw loop.
 
 import { diffFor } from '../data/difficulty.js';
-import { HEROES } from '../data/heroes.js';
-import { WEAPONS, BASE_WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
+import { HEROES, startWeapons } from '../data/heroes.js';
+import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
@@ -163,7 +163,7 @@ export class Game {
       playMusic('forest');
     }
     if (o.checkpoint) this.restore(o.checkpoint);
-    else this.addWeapon(HEROES[o.hero].weapon);
+    else for (const id of startWeapons(HEROES[o.hero])) this.addWeapon(id);
     this.syncCam();
     this.cam.x = this.player.x - this.cam.W / 2;
     this.cam.y = this.player.y - this.cam.H / 2;
@@ -251,6 +251,8 @@ export class Game {
     return this.player.weapons.some((w) => w.id === id || (w.def.evolved && WEAPONS[id].evo && WEAPONS[id].evo.into === w.id));
   }
 
+  // A level-up's cards. New weapons come from the hero's own roster alone; any weapon he holds
+  // grows, one from outside it too (a run saved before the rosters).
   levelChoices(n) {
     const p = this.player;
     const pool = [];
@@ -258,7 +260,7 @@ export class Game {
       if (!w.maxed) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: 3 });
     }
     if (p.weapons.length < 6) {
-      for (const id of BASE_WEAPONS) if (!this.ownsWeapon(id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
+      for (const id of p.hero.roster) if (!this.ownsWeapon(id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
     }
     for (const [id, rank] of p.passives) {
       if (rank < PASSIVES[id].max) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
@@ -319,11 +321,17 @@ export class Game {
     return p.weapons.filter((w) => !w.evolved && w.level >= MAX_WEAPON_LEVEL && w.def.evo && p.passives.has(w.def.evo.with));
   }
 
+  // What a chest holds, given at once: an evolution if one is ready, else upgrades to what the
+  // hero holds (never a new weapon), and gold. The chest screen only shows them, one by one.
   rollChest(kind = 'elite') {
     const p = this.player;
     const items = [];
     const ev = this.evolvable();
-    if (ev.length) items.push({ type: 'evolve', w: ev[0], id: ev[0].def.evo.into });
+    if (ev.length) {
+      const w = ev[0];
+      items.push({ type: 'evolve', w, id: w.def.evo.into });
+      w.evolve();
+    }
     let n = 1;
     const r = Math.random() / p.luck;
     if (kind === 'boss') n = r < 0.35 ? 5 : 3;
@@ -420,7 +428,7 @@ export class Game {
     let crit = false;
     if (!o.src || o.src !== SRC.BURN) {
       crit = Math.random() < p.crit + (o.crit || 0);
-      if (crit) d *= p.critMult;
+      if (crit) d *= p.critMult + (o.critDmg || 0);
     }
     d *= rand(0.9, 1.1);
     if (e.mod && e.mod.id === 'stone') d *= 0.65;
@@ -447,6 +455,8 @@ export class Game {
       e.freezeT = Math.max(e.freezeT, 1.6);
       e.shatterOnDeath = o.shatter;
     }
+    // Pinned (Hands of the Grave): held where it stands a moment. Bosses aren't.
+    if (o.pin && !e.boss && !e.prop) e.holdT = Math.max(e.holdT, o.pin);
     if (this.numbers.enabled && !o.noNum) this.numbers.add(e.x, e.y - e.h * 0.85, d, crit ? 'crit' : o.type || 'normal', e);
     if (o.w) o.w.dmgDealt += d;
     this.stats.damage += d;
@@ -472,7 +482,10 @@ export class Game {
     this.comboT = 2;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
     p.addFury(e.boss ? 35 : e.lord ? 25 : e.elite ? 8 : 0.75);
-    if (o.w) o.w.kills++;
+    if (o.w) {
+      o.w.kills++;
+      if (o.w.onKill) o.w.onKill(e);
+    }
     this.deathFx(e, fr);
     // Loot.
     if (e.xp > 0) this.dropGem(e.x, e.y, e.xp);
@@ -713,7 +726,8 @@ export class Game {
       this.snapCam();
       this.objective = '';
       this.banner(name, 'Here the night stands still. Slay its lord to leave', '#b55088', 3.2);
-      // The other weapons wait outside: their blades and auras go out until he is back.
+      // The other weapons wait outside: their blades and auras go out until he is back, and
+      // what they called up (the Shadow's clones) stays behind.
       const main = this.mainWeapon();
       for (const w of p.weapons) {
         if (w === main || !w.fx) continue;
@@ -721,6 +735,7 @@ export class Game {
         w.fx = null;
         w.cd = Math.min(w.cd, 0.35);
       }
+      this.minions = this.minions.filter((m) => !m.w || m.w === main);
       const keys = input.device === 'pad' ? 'RB' : input.device === 'touch' ? 'Tap a second finger' : 'X or Shift';
       this.banner(`Your ${main ? main.def.name : 'weapon'} alone`, `${keys} to ${STRIKE_VERB[main?.def.kind] || 'strike'}`, '#feae34', 4);
       playMusic('crypt');
@@ -1210,8 +1225,9 @@ export class Game {
     p.xpNext = xpFor(cp.level);
     p.fury = cp.fury;
     p.rerolls = cp.rerolls;
+    // Weapons from outside his roster (a run saved before the rosters) are kept, and still grow.
     for (const [id, lvl] of cp.weapons) if (WEAPONS[id]) this.addWeapon(id, lvl);
-    if (!p.weapons.length) this.addWeapon(p.hero.weapon);
+    if (!p.weapons.length) for (const id of startWeapons(p.hero)) this.addWeapon(id);
     for (const [id, r] of cp.passives) if (PASSIVES[id]) p.passives.set(id, Math.min(r, PASSIVES[id].max));
     p.blessings = cp.bless || 0;
     p.recompute();

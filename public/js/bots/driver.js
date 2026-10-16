@@ -87,10 +87,10 @@ export class Driver {
       }
       g.state = 'play';
     } else if (g.state === 'play' && g.chestQueue.length) {
+      // The roll gives what it holds, an evolution too, as the chest screen's does.
       const roll = g.rollChest(g.chestQueue.shift());
       g.gold += roll.gold;
       g.stats.gold += roll.gold;
-      for (const it of roll.items) if (it.type === 'evolve') it.w.evolve();
     } else if (g.state === 'play' && g.itemQueue.length) {
       // Wear it unless something rarer is worn there.
       const it = g.itemQueue.shift(), worn = g.gear[it.slot];

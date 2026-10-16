@@ -4,6 +4,7 @@
 // Effect interface: update(dt) -> keep?; drawGround / draw / drawGlow(ctx, cam).
 
 import { SPR } from '../engine/sprites.js';
+import { tint, hexPack } from '../engine/pixels.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, lerp, clamp, ease, angleDiff, pick } from '../engine/util.js';
 import { ringSprite, discSprite, slashFrame, glow, beamSprite, shadowSprite } from './fxsprites.js';
@@ -162,9 +163,16 @@ const POOL_LOOK = {
   fire: { disc: ['#be4a2f', '#733e39', '#3e2731'], parts: [PC.y, PC.o, PC.O, PC.Y], glow: '#f77622', light: 'fire', num: 'fire' },
   hell: { disc: ['#0099db', '#124e89', '#262b44'], parts: [PC.c, PC.w, PC.U], glow: '#2ce8f5', light: 'cyan', num: 'frost' },
   holy: { disc: ['#feae34', '#be4a2f', '#3e2731'], parts: [PC.Y, PC.w, PC.y], glow: '#feae34', light: 'holy', num: 'holy' },
-  poison: { disc: ['#63c74d', '#3e8948', '#193c3e'], parts: [PC.l, PC.L, PC.e], glow: '#63c74d', light: 'green', num: 'normal' },
+  poison: { disc: ['#63c74d', '#3e8948', '#193c3e'], parts: [PC.l, PC.L, PC.e], glow: '#63c74d', light: 'green', num: 'poison', dot: 'poison' },
+  // Caltrops: dark ground strewn with steel spikes (marks), no glow, hardly a spark.
+  spikes: { disc: ['#3a4466', '#262b44', '#181425'], parts: [PC.G, PC.g], glow: null, light: null, num: 'normal', emit: 0.15, alpha: 0.35, marks: true },
 };
 
+// A pool on the ground that hurts what stands in it every `tick`. opts: hostile (hurts the
+// hero instead), src (its hit channel; a weapon's own by default, so a weapon's pools never
+// hurt one foe twice in a tick), kb, slow + slowT, dot (poison a second after each touch, for
+// a poison look), critDmg (extra crit damage), decay (shrinks to nothing over its life, as if
+// seeping into the ground), sparse (a quarter of the sparks, for the many of a trail).
 export class Pool {
   constructor(g, w, x, y, R, dur, dmg, tick, style = 'fire', creep = false, opts = {}) {
     this.g = g;
@@ -182,12 +190,32 @@ export class Pool {
     this.emitT = 0;
     this.hostile = opts.hostile || 0; // damages the player instead
     this.src = w ? w.src : opts.src ?? 15;
+    this.kb = opts.kb ?? 0.1;
+    this.slow = opts.slow || 0;
+    this.slowT = opts.slowT || 0.6;
+    this.dot = opts.dot || 0;
+    this.critDmg = opts.critDmg || 0;
+    this.decay = !!opts.decay;
+    this.sparse = !!opts.sparse;
+    if (this.look.marks) {
+      this.marks = [];
+      for (let i = Math.round(4 + R * 0.35); i > 0; i--) {
+        const a = rand(TAU), r = Math.sqrt(Math.random()) * R * 0.85;
+        this.marks.push(Math.cos(a) * r, Math.sin(a) * r * 0.85);
+      }
+    }
+  }
+
+  // Its reach now: a decaying pool shrinks to nothing as its time runs out.
+  get r() {
+    return this.decay ? this.R * Math.max(0, 1 - this.t / this.dur) : this.R;
   }
 
   update(dt) {
     const g = this.g;
     this.t += dt;
     if (this.t >= this.dur) return false;
+    const R = this.r;
     if (this.creep) {
       const e = g.nearestEnemy(this.x, this.y, 140);
       if (e) {
@@ -201,24 +229,26 @@ export class Pool {
       this.tickT = this.tick;
       if (this.hostile) {
         const p = g.player;
-        if (Math.hypot(p.x - this.x, p.y - this.y) < this.R + p.r - 2) p.hurt(this.hostile);
+        if (Math.hypot(p.x - this.x, p.y - this.y) < R + p.r - 2) p.hurt(this.hostile);
       } else {
-        const cands = g.grid.query(this.x, this.y, this.R + 12);
+        const cands = g.grid.query(this.x, this.y, R + 12);
         for (let i = 0; i < cands.length; i++) {
           const e = cands[i];
           // By the game's clock, which runs on in a crypt where the night's stands still.
           if (e.dead || e.hitT[this.src] > g.clock) continue;
           const d = Math.hypot(e.x - this.x, e.y - this.y);
-          if (d > this.R + e.r) continue;
+          if (d > R + e.r) continue;
           e.hitT[this.src] = g.clock + this.tick * 0.9;
-          g.hitEnemy(e, this.dmg, { w: this.w, type: this.look.num, kb: 0.1, kx: 0, ky: 0 });
+          g.hitEnemy(e, this.dmg, { w: this.w, type: this.look.num, kb: this.kb, kx: 0, ky: 0, slow: this.slow, slowT: this.slowT, critDmg: this.critDmg });
+          if (this.dot && this.look.dot) e.addDot(this.look.dot, this.dot, 1.5, this.w);
         }
       }
     }
     this.emitT -= dt;
+    const every = (0.6 / (R + 4)) / ((this.look.emit ?? 1) * (this.sparse ? 0.25 : 1));
     while (this.emitT <= 0) {
-      this.emitT += 0.6 / (this.R + 4);
-      const a = rand(TAU), r = Math.sqrt(Math.random()) * this.R;
+      this.emitT += every;
+      const a = rand(TAU), r = Math.sqrt(Math.random()) * R;
       g.particles.emit(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r, 0, rand(-4, 4), rand(-4, 4), rand(18, 40), rand(0.3, 0.7), rand(1, 2), pick(this.look.parts), P.GLOW | P.FADE | P.SHRINK, 1);
     }
     return true;
@@ -229,20 +259,37 @@ export class Pool {
   }
 
   drawGround(ctx, cam) {
-    const img = discSprite(this.R, this.look.disc, 0.55);
+    const R = this.r;
     const [sx, sy] = toScreen(cam, this.x, this.y);
-    ctx.globalAlpha = 0.75 * this.alpha;
-    blitCentered(ctx, img, sx, sy, cam.S);
+    if (R >= 2) {
+      ctx.globalAlpha = (this.look.alpha ?? 0.75) * this.alpha;
+      blitCentered(ctx, discSprite(R, this.look.disc, 0.55), sx, sy, cam.S);
+    }
+    // Caltrops: a little steel cross for each spike, catching the light on top.
+    if (this.marks) {
+      const S = cam.S, k = R / this.R;
+      ctx.globalAlpha = this.alpha;
+      for (let i = 0; i < this.marks.length; i += 2) {
+        const mx = Math.round(sx + this.marks[i] * k * S), my = Math.round(sy + this.marks[i + 1] * k * S);
+        ctx.fillStyle = '#8b9bb4';
+        ctx.fillRect(mx - S, my, S * 3, S);
+        ctx.fillRect(mx, my - S, S, S * 3);
+        ctx.fillStyle = '#e8f4ff';
+        ctx.fillRect(mx, my - S, S, S);
+      }
+    }
     ctx.globalAlpha = 1;
   }
 
   drawGlow(ctx, cam) {
+    if (!this.look.glow) return;
+    const R = this.r;
     const [sx, sy] = toScreen(cam, this.x, this.y);
-    const s = this.R * 2.6 * cam.S;
+    const s = R * 2.6 * cam.S;
     ctx.globalAlpha = (0.22 + Math.sin(this.t * 17) * 0.05) * this.alpha;
     ctx.drawImage(glow(this.look.glow), sx - s / 2, sy - s / 2, s, s);
     ctx.globalAlpha = 1;
-    this.g.light(this.x, this.y, this.R * 3, this.look.light, 0.7 * this.alpha);
+    this.g.light(this.x, this.y, R * 3, this.look.light, 0.7 * this.alpha);
   }
 }
 
@@ -338,10 +385,21 @@ export class Orbit {
 
 // ------------------------------------------------------------------- aura --
 
+// How a ground round the hero looks: R, its radius at area 1; num, the damage numbers' style;
+// fill, rim and inner, its rings; parts, its sparks; dot, the poison it leaves on a foe.
+const AURA_LOOK = {
+  holy: { R: 27, num: 'holy', fill: '#feae34', rim: '#fee761', inner: '#feae34', glow: '#feae34', light: 'holy', parts: [PC.Y, PC.y] },
+  // Sanctuary: the holy ground, healing.
+  heal: { R: 27, num: 'holy', fill: '#63c74d', rim: '#9ee562', inner: '#feae34', glow: '#63c74d', light: 'holy', parts: [PC.Y, PC.y] },
+  // Miasma: a sickly cloud a tenth smaller than Consecration's ground.
+  poison: { R: 24.3, num: 'poison', fill: '#3e8948', rim: '#63c74d', inner: '#9ee562', glow: '#63c74d', light: 'green', parts: [PC.l, PC.L, PC.e], dot: 'poison' },
+};
+
 export class Aura {
-  constructor(g, w) {
+  constructor(g, w, style = 'holy') {
     this.g = g;
     this.w = w;
+    this.style = style;
     this.tickT = 0.2;
     this.pulse = 0;
     this.dead = false;
@@ -349,10 +407,18 @@ export class Aura {
     this.persistent = true;
   }
 
+  get look() {
+    return AURA_LOOK[this.w.s.heal ? 'heal' : this.style];
+  }
+
+  get R() {
+    return this.look.R * this.w.s.area;
+  }
+
   update(dt) {
     if (this.dead) return false;
-    const g = this.g, s = this.w.s, p = g.player;
-    const R = 27 * s.area;
+    const g = this.g, s = this.w.s, p = g.player, L = this.look;
+    const R = this.R;
     this.t += dt;
     this.tickT -= dt;
     this.pulse = Math.max(0, this.pulse - dt * 3);
@@ -367,51 +433,53 @@ export class Aura {
         const dx = e.x - p.x, dy = e.y - p.y;
         const d = Math.hypot(dx, dy);
         if (d > R + e.r) continue;
-        g.hitEnemy(e, s.dmg, { w: this.w, type: 'holy', kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
+        g.hitEnemy(e, s.dmg, { w: this.w, type: L.num, kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
         if (s.slow) {
           e.slowT = Math.max(e.slowT, 0.6);
           e.slowF = Math.max(e.slowF, s.slow);
         }
+        if (s.dot && L.dot) e.addDot(L.dot, s.dot, 1.5, this.w);
         hits++;
       }
       if (s.heal && hits) p.healPool = Math.min(20, p.healPool + Math.min(hits, 8) * 0.22);
     }
     if (Math.random() < dt * (10 + R * 0.4)) {
       const a = rand(TAU), r = Math.sqrt(Math.random()) * R;
-      g.particles.emit(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 0, 0, 0, rand(15, 35), rand(0.5, 0.9), 1, Math.random() < 0.5 ? PC.Y : PC.y, P.GLOW | P.FADE, 0);
+      g.particles.emit(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 0, 0, 0, rand(15, 35), rand(0.5, 0.9), 1, pick(L.parts), P.GLOW | P.FADE, 0);
     }
     return true;
   }
 
   drawGround(ctx, cam) {
-    const s = this.w.s, p = this.g.player;
-    const R = 27 * s.area;
+    const p = this.g.player, L = this.look;
+    const R = this.R;
     const [sx, sy] = toScreen(cam, p.x, p.y);
-    const fill = s.heal ? '#63c74d' : '#feae34';
     ctx.globalAlpha = 0.14 + this.pulse * 0.1;
-    blitCentered(ctx, ringSprite(R, fill, 99), sx, sy, cam.S);
+    blitCentered(ctx, ringSprite(R, L.fill, 99), sx, sy, cam.S);
     ctx.globalAlpha = 0.55 + this.pulse * 0.45;
-    blitCentered(ctx, ringSprite(R, s.heal ? '#9ee562' : '#fee761', 1), sx, sy, cam.S);
+    blitCentered(ctx, ringSprite(R, L.rim, 1), sx, sy, cam.S);
     const r2 = R * (0.55 + 0.15 * Math.sin(this.t * 2));
     ctx.globalAlpha = 0.25;
-    blitCentered(ctx, ringSprite(r2, '#feae34', 1), sx, sy, cam.S);
+    blitCentered(ctx, ringSprite(r2, L.inner, 1), sx, sy, cam.S);
     ctx.globalAlpha = 1;
   }
 
   drawGlow(ctx, cam) {
-    const s = this.w.s, p = this.g.player;
-    const R = 27 * s.area;
+    const p = this.g.player, L = this.look;
+    const R = this.R;
     const [sx, sy] = toScreen(cam, p.x, p.y);
     const sz = R * 2.6 * cam.S;
     ctx.globalAlpha = 0.12 + this.pulse * 0.18;
-    ctx.drawImage(glow(s.heal ? '#63c74d' : '#feae34'), sx - sz / 2, sy - sz / 2, sz, sz);
+    ctx.drawImage(glow(L.glow), sx - sz / 2, sy - sz / 2, sz, sz);
     ctx.globalAlpha = 1;
-    this.g.light(p.x, p.y, R * 2.4, 'holy', 0.45 + this.pulse * 0.3);
+    this.g.light(p.x, p.y, R * 2.4, L.light, 0.45 + this.pulse * 0.3);
   }
 }
 
 // ------------------------------------------------------------------- bolt --
 
+// A lightning bolt between two points ('sky': down from the sky, 'chain': foe to foe), or a
+// straight ray ('ray': Arcane Ray's beam, no jitter and no fork, in its colour and a pink core).
 export class Bolt {
   constructor(g, pts, style = 'chain', color = '#2ce8f5') {
     this.g = g;
@@ -419,15 +487,16 @@ export class Bolt {
     this.b = pts[1];
     this.style = style;
     this.color = color;
+    this.straight = style === 'ray';
     this.t = 0;
-    this.dur = style === 'sky' ? 0.24 : 0.18;
+    this.dur = style === 'sky' ? 0.24 : this.straight ? 0.22 : 0.18;
     this.jitter();
   }
 
   jitter() {
     const { a, b } = this;
     const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const n = Math.max(3, Math.round(len / 7));
+    const n = this.straight ? 1 : Math.max(3, Math.round(len / 7));
     const nx = -(b.y - a.y) / (len || 1), ny = (b.x - a.x) / (len || 1);
     const amp = this.style === 'sky' ? 7 : 4;
     this.pts = [];
@@ -436,6 +505,10 @@ export class Bolt {
       const o = i === 0 || i === n ? 0 : rand(-amp, amp);
       this.pts.push(lerp(a.x, b.x, u) + nx * o, lerp(a.y, b.y, u) + ny * o);
     }
+    if (this.straight) {
+      this.fork = null;
+      return;
+    }
     // One small fork.
     const k = 2 * Math.floor(rand(1, n - 1));
     this.fork = [this.pts[k], this.pts[k + 1], this.pts[k] + rand(-12, 12), this.pts[k + 1] + rand(4, 14)];
@@ -443,7 +516,7 @@ export class Bolt {
 
   update(dt) {
     this.t += dt;
-    if (Math.random() < dt * 25) this.jitter();
+    if (!this.straight && Math.random() < dt * 25) this.jitter();
     return this.t < this.dur;
   }
 
@@ -457,6 +530,7 @@ export class Bolt {
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
+      if (!this.fork) return;
       ctx.moveTo((this.fork[0] - cam.x) * S, (this.fork[1] - cam.y) * S);
       ctx.lineTo((this.fork[2] - cam.x) * S, (this.fork[3] - cam.y) * S);
     };
@@ -465,14 +539,20 @@ export class Bolt {
     path();
     ctx.globalAlpha = 0.35 * fade;
     ctx.strokeStyle = this.color;
-    ctx.lineWidth = S * 4;
+    ctx.lineWidth = S * (this.straight ? 5 : 4);
     ctx.stroke();
+    if (this.straight) {
+      ctx.globalAlpha = 0.8 * fade;
+      ctx.strokeStyle = '#f6757a';
+      ctx.lineWidth = S * 2.4;
+      ctx.stroke();
+    }
     ctx.globalAlpha = fade;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = S * 1.2;
     ctx.stroke();
     ctx.globalAlpha = 1;
-    this.g.light(this.b.x, this.b.y, 60, 'cyan', fade);
+    this.g.light(this.b.x, this.b.y, 60, this.straight ? 'purple' : 'cyan', fade);
   }
 }
 
@@ -544,15 +624,24 @@ export class Meteor {
 
 const THORN_RISE = 0.07, THORN_HOLD = 0.4, THORN_SINK = 0.15;
 const DIRT = ['#3e2731', '#3e2731', '#733e39'];
+// What bursts from the ground: frames of a sprite (alternating along the line), tinted toward
+// tint if given, and the sparks it kicks up. 'bone': Grasping Dead's hands, for now the iron
+// thorns paled to bone with no leaves (tools/handoff-art.md: the art pair draws real hands).
+const THORN_LOOK = {
+  bramble: { sprite: 'thorn', frames: [0, 1], parts: [PC.m, PC.b, PC.e] },
+  iron: { sprite: 'thorn', frames: [2, 3], parts: [PC.m, PC.R, PC.N] },
+  bone: { sprite: 'thorn', frames: [2, 3], tint: '#c0cbdc', parts: [PC.z, PC.Z, PC.g] },
+};
 
 // A line of thorns bursting from the ground one after another, snaring all
-// they pierce. Each line hits a foe once.
+// they pierce. Each line hits a foe once. A weapon with `pin` holds them still a moment.
 export class Thorns {
-  constructor(g, w, x, y, ang) {
+  constructor(g, w, x, y, ang, look = null) {
     this.g = g;
     this.w = w;
     this.t = 0;
     this.iron = !!w.s.ring;
+    this.look = THORN_LOOK[look || (this.iron ? 'iron' : 'bramble')];
     this.sc = clamp(w.s.area, 1, 1.6);
     this.kx = Math.cos(ang);
     this.ky = Math.sin(ang);
@@ -562,7 +651,7 @@ export class Thorns {
     for (let i = 0; i < w.s.len; i++) {
       const sx = x + this.kx * step * (i + 1), sy = y + this.ky * step * (i + 1);
       if (g.world.solid(sx, sy)) break; // roots don't grow through walls
-      this.spikes.push({ x: sx + rand(-2, 2), y: sy + rand(-2, 2), at: i * 0.035, up: false, f: (i % 2) + (this.iron ? 2 : 0) });
+      this.spikes.push({ x: sx + rand(-2, 2), y: sy + rand(-2, 2), at: i * 0.035, up: false, f: this.look.frames[i % 2] });
     }
     this.end = this.spikes.length ? this.spikes[this.spikes.length - 1].at + THORN_RISE + THORN_HOLD + THORN_SINK : 0;
   }
@@ -580,9 +669,9 @@ export class Thorns {
         if (e.dead || this.hit.has(e.id)) continue;
         if (Math.hypot(e.x - s.x, e.y - s.y) > R + e.r) continue;
         this.hit.add(e.id);
-        g.hitEnemy(e, w.s.dmg, { w, kb: w.s.kb, kx: this.kx, ky: this.ky, slow: w.s.slow, slowT: this.iron ? 2.4 : 1.6 });
+        g.hitEnemy(e, w.s.dmg, { w, kb: w.s.kb, kx: this.kx, ky: this.ky, slow: w.s.slow, slowT: this.iron ? 2.4 : 1.6, pin: w.s.pin });
       }
-      g.particles.burst(s.x, s.y, 1, 4, this.iron ? [PC.m, PC.R, PC.N] : [PC.m, PC.b, PC.e], 45, 0.35, 1, P.FADE, { vz: 50 });
+      g.particles.burst(s.x, s.y, 1, 4, this.look.parts, 45, 0.35, 1, P.FADE, { vz: 50 });
     }
     return this.t < this.end;
   }
@@ -612,7 +701,8 @@ export class Thorns {
       const u = this.height(s);
       if (u <= 0) continue;
       // Crop from the tip down so the thorn grows out of the ground.
-      const img = SPR.thorn.frames[s.f].c;
+      const fr = SPR[this.look.sprite].frames[s.f], tc = this.look.tint;
+      const img = tc ? fr.variant('tint' + tc, (b) => tint(b, hexPack(tc), 0.5)) : fr.c;
       const hh = Math.max(1, Math.round(img.height * u));
       const [sx, sy] = toScreen(cam, s.x, s.y);
       ctx.drawImage(img, 0, 0, img.width, hh, Math.round(sx - (img.width * S) / 2), Math.round(sy + S - hh * S), Math.round(img.width * S), Math.round(hh * S));

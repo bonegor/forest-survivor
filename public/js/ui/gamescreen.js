@@ -352,10 +352,10 @@ class ChestOverlay {
     const iy = Math.round(cy + 30);
     if (opened) {
       const due = Math.min(items.length, Math.floor((this.t - 1.2) / 0.45) + 1);
+      // Everything was given as the chest was rolled (Game.rollChest): here it is only shown.
       while (this.revealed < due) {
         const it = items[this.revealed++];
         if (it.type === 'evolve') {
-          it.w.evolve();
           sfx('levelup');
           g.whiteFlash = 0.5;
         } else sfx('pick');

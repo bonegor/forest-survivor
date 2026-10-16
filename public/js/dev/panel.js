@@ -5,7 +5,7 @@
 
 import * as P from '../shared/profile.js';
 import { HEROES } from '../data/heroes.js';
-import { WEAPONS, BASE_WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { MODES } from '../data/difficulty.js';
 import { fmtTime } from '../engine/util.js';
@@ -360,7 +360,8 @@ export function createDevPanel(app) {
     liveTimer = setInterval(() => (root.classList.contains('open') && tab === 'run' ? tick() : null), 300);
 
     const pick = (opts) => el('select', {}, opts.map(([v, t]) => el('option', { value: v, textContent: t })));
-    const wSel = pick(BASE_WEAPONS.concat(Object.keys(WEAPONS).filter((id) => WEAPONS[id].exclusive)).filter((id, i, a) => a.indexOf(id) === i).map((id) => [id, WEAPONS[id].name]));
+    // Any hero's weapon, by class: the panel may give one from outside the hero's roster.
+    const wSel = pick(Object.values(HEROES).flatMap((h) => h.roster.map((id) => [id, `${WEAPONS[id].name} (${h.title})`])));
     const rSel = pick(PASSIVE_IDS.map((id) => [id, PASSIVES[id].name]));
     const bSel = pick(BOSSES.map((id) => [id, id]));
     const tIn = el('input', { value: fmtTime(g.time), size: 6 });

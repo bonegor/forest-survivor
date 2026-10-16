@@ -1,9 +1,9 @@
 // Weapon instances and the firing behaviour of every weapon kind.
 
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES } from '../data/weapons.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick } from '../engine/util.js';
-import { spawnProjectile } from './projectiles.js';
+import { spawnProjectile, shadowBlade } from './projectiles.js';
 import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode } from './effects.js';
 import { Minion } from './minions.js';
 import { PC, P } from './particles.js';
@@ -63,7 +63,9 @@ export class Weapon {
     this.recompute();
   }
 
+  // Into its evolved form; false for one that has none (an evolution itself).
   evolve() {
+    if (!this.def.evo) return false;
     const into = this.def.evo.into;
     this.id = into;
     this.def = WEAPONS[into];
@@ -76,6 +78,13 @@ export class Weapon {
     this.queue = 0; // the new form may not fire volleys
     this.handAt = null;
     this.recompute();
+    return true;
+  }
+
+  // A foe it struck has died (Game.killEnemy).
+  onKill(e) {
+    const K = KINDS[this.def.kind];
+    if (K.kill) K.kill(this, e);
   }
 
   // manual: struck by hand (strike), it waits ready instead of firing by itself.
@@ -142,6 +151,33 @@ export class Weapon {
 
 const muzzle = (g) => ({ x: g.player.x, y: g.player.y - 1 });
 const panOf = (g, x) => Math.max(-1, Math.min(1, (x - g.player.x) / 200));
+// The i-th shot of a fan, step radians apart: straight on, then one side and the other.
+const fan = (i, step) => Math.ceil(i / 2) * (i % 2 ? 1 : -1) * step;
+
+// An instant ray from (x, y) along ang, up to L px or the first wall: strikes every foe whose
+// body it crosses (but those in skip), drawn as a bright beam. Returns them, nearest first.
+function ray(g, w, x, y, ang, L, dmg, skip = null) {
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  let len = L;
+  for (let s = 8; s < L; s += 8) {
+    if (g.world.solid(x + dx * s, y + dy * s)) {
+      len = s;
+      break;
+    }
+  }
+  const width = 5 * Math.sqrt(w.s.area), hits = [];
+  for (const e of g.grid.query(x + (dx * len) / 2, y + (dy * len) / 2, len / 2 + 16)) {
+    if (e.dead || e.untargetable || (skip && skip.has(e))) continue;
+    const u = (e.x - x) * dx + (e.y - y) * dy;
+    if (u < -e.r || u > len + e.r) continue;
+    if (Math.abs((e.y - y) * dx - (e.x - x) * dy) > e.r + width) continue;
+    hits.push([u, e]);
+  }
+  hits.sort((a, b) => a[0] - b[0]);
+  for (const [, e] of hits) g.hitEnemy(e, dmg, { w, type: 'dark', kb: w.s.kb, kx: dx, ky: dy });
+  g.effects.push(new Bolt(g, [{ x, y: y - 6 }, { x: x + dx * len, y: y + dy * len - 6 }], 'ray', '#b55088'));
+  return hits.map((h) => h[1]);
+}
 
 export const KINDS = {
   sword: {
@@ -171,23 +207,25 @@ export const KINDS = {
     },
   },
 
+  // Arrows fly straight the way she faces (the way she last walked; standing, she keeps facing
+  // it), seeking nothing: a volley goes out as one tight fan.
   bow: {
     reach: 230,
     fire(w) {
-      const g = w.g, p = g.player;
-      w.targets = g.nearestEnemies(p.x, p.y, w.s.amount, 230);
+      w.baseAng = w.g.player.aim;
       w.volley++;
-      w.burst(w.s.amount, 0.07);
+      w.burst(w.s.amount, 0.03);
     },
-    // Struck by hand: the whole volley at the foe struck at; at none, the way he last walked.
+    // Struck by hand in a crypt: the volley flies at the foe the player strikes at, if any.
     aim(w, t) {
-      w.targets = t ? [t] : [];
+      const p = w.g.player, m = muzzle(w.g);
+      if (t) w.baseAng = Math.atan2(t.y - m.y, t.x - m.x);
+      else w.baseAng = p.aim;
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
-      const t = w.targets.length ? w.targets[i % w.targets.length] : null;
       const m = muzzle(g);
-      const ang = t ? Math.atan2(t.y - m.y, t.x - m.x) + (i >= w.targets.length ? rand(-0.15, 0.15) : 0) : p.aim + rand(-0.25, 0.25);
+      const ang = w.baseAng + fan(i, 0.06);
       // The ranger's release is recorded at the actual shot, including every
       // arrow in a volley. This is visual state; projectile timing is unchanged.
       // No arrow turns him, not even one at a foe behind him (facing.js).
@@ -195,7 +233,7 @@ export const KINDS = {
       const arrow = (a) =>
         spawnProjectile(g, {
           kind: 'arrow', sprite: 'arrow', x: m.x, y: m.y, z: p.id === 'archer' ? 19 : 7, ang: a, speed: 270 * w.s.speed, life: 1.2, r: 3,
-          dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w, trail: w.s.ring ? PC.c : PC.G,
+          dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w, trail: w.evolved ? PC.c : PC.G,
         });
       arrow(ang);
       if (w.s.ring && i === 0 && w.volley % 3 === 0) {
@@ -351,14 +389,20 @@ export const KINDS = {
     },
   },
 
+  // Shadow Blade: spinning blades thrown at the nearest foe (with none near, the way he faces),
+  // each cutting through all in its path; Shadowstrike's fly all round.
   daggers: {
-    reach: 230,
+    reach: 260,
     fire(w) {
-      const p = w.g.player;
-      w.baseAng = w.s.radial ? (w.baseAng || 0) + 0.38 : p.aim;
+      const g = w.g, p = g.player;
+      if (w.s.radial) w.baseAng = (w.baseAng || 0) + 0.38;
+      else {
+        const t = g.nearestEnemy(p.x, p.y, 260, (e) => !e.untargetable);
+        w.baseAng = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim;
+      }
       w.burst(w.s.amount, w.s.radial ? 0.02 : 0.045);
     },
-    // A fan of daggers struck by hand flies at the foe struck at; a ring flies all round anyway.
+    // A fan of blades struck by hand flies at the foe struck at; a ring flies all round anyway.
     aim(w, t) {
       const p = w.g.player;
       if (t && !w.s.radial) w.baseAng = Math.atan2(t.y - p.y, t.x - p.x);
@@ -366,14 +410,50 @@ export const KINDS = {
     shoot(w, i) {
       const g = w.g, p = g.player;
       const n = w.s.amount;
-      const ang = w.s.radial ? w.baseAng + (i / n) * TAU : w.baseAng + rand(-0.04, 0.04);
+      const ang = w.s.radial ? w.baseAng + (i / n) * TAU : w.baseAng + fan(i, 0.05);
       const off = w.s.radial ? 0 : (i - (n - 1) / 2) * 3;
-      spawnProjectile(g, {
-        kind: 'dagger', sprite: 'dagger', x: p.x - Math.sin(ang) * off, y: p.y - 1 + Math.cos(ang) * off, z: 7, ang,
-        speed: 330 * w.s.speed, life: 0.75, r: 3, dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w,
-        crit: w.s.critBonus || 0.05, trail: w.s.radial ? PC.P : null,
-      });
+      shadowBlade(g, w, p.x - Math.sin(ang) * off, p.y - 1 + Math.cos(ang) * off, ang, w.s.dmg, 0.75);
       if (i % 2 === 0) sfx('dagger', { pitch: rand(0.9, 1.2) });
+    },
+  },
+
+  // Shadow Clone: shadows of Kael that hunt the nearest foes for a while (Twin Shadows: for
+  // good), striking with his own eye for a weak spot. Called again only for those that are gone.
+  clone: {
+    fire(w) {
+      const g = w.g, p = g.player;
+      let mine = 0;
+      for (const m of g.minions) if (m.w === w) mine++;
+      const n = w.s.amount - mine;
+      if (n <= 0) return 0.5;
+      for (let i = 0; i < n; i++) {
+        const spot = g.world.freeSpot(p.x + rand(-16, 16), p.y + rand(-12, 12));
+        if (!spot) continue;
+        g.minions.push(new Minion(g, spot.x, spot.y, { w, look: 'shadow', dmg: w.s.dmg, dur: w.s.dur, speed: w.s.speed, kb: w.s.kb, blades: !!w.s.blades }));
+        g.particles.burst(spot.x, spot.y - 8, 6, 10, [PC.p, PC.q, PC.P], 50, 0.5, 1, P.FADE | P.GLOW, { vz: 30 });
+      }
+      sfx('blade', { pitch: 0.6 });
+    },
+  },
+
+  // Caltrops: scatters of spikes thrown behind the hero, so whatever follows him bleeds and
+  // slows; the hero's crits count, and Razor Field's cut deeper.
+  caltrops: {
+    fire(w) {
+      w.burst(w.s.amount, 0.12);
+    },
+    shoot(w, i) {
+      const g = w.g, p = g.player;
+      const ang = p.aim + Math.PI + fan(i, 0.45) + rand(-0.15, 0.15);
+      const d = rand(34, 52);
+      spawnProjectile(g, {
+        kind: 'flask', sprite: WEAPON_SPRITES.caltrop, x: p.x, y: p.y, tx: p.x + Math.cos(ang) * d, ty: p.y + Math.sin(ang) * d * 0.85,
+        life: 0.35, w, spin: 18,
+        onLand: (x, y) => {
+          g.effects.push(new Pool(g, w, x, y, 18 * w.s.area, w.s.dur, w.s.dmg, w.s.tick, 'spikes', false, { kb: 0, slow: w.s.slow, slowT: 0.6, critDmg: w.s.critDmg || 0 }));
+          sfx('dagger', { pitch: 0.7, pan: panOf(g, x) });
+        },
+      });
     },
   },
 
@@ -455,6 +535,111 @@ export const KINDS = {
         }
       }
       sfx('wood', { pitch: 0.6 });
+    },
+  },
+
+  // Grasping Dead: Bramble's lines (effects.js Thorns) as bony hands that grip harder; Hands
+  // of the Grave reach out all round and pin what they seize.
+  grasp: {
+    fire(w) {
+      const g = w.g, p = g.player;
+      const n = w.s.amount;
+      if (w.s.ring) {
+        const a0 = rand(TAU);
+        for (let i = 0; i < n; i++) g.effects.push(new Thorns(g, w, p.x, p.y, a0 + (i / n) * TAU, 'bone'));
+      } else {
+        const near = g.nearestEnemies(p.x, p.y, n, 160);
+        for (let i = 0; i < n; i++) {
+          const t = near[i];
+          const ang = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim + (i - (n - 1) / 2) * 0.5;
+          g.effects.push(new Thorns(g, w, p.x, p.y, ang, 'bone'));
+        }
+      }
+      sfx('bones', { pitch: 0.55 });
+    },
+  },
+
+  // Miasma: a poison cloud that follows the hero (effects.js Aura, its poison look), and a trail
+  // of pools seeping from his steps, one every few paces walked, that sink into the ground as
+  // they fade. Every pool of one weapon shares its hit channel, so where they overlap a foe is
+  // poisoned once. Pestilence: foes dying of it burst into a pool of their own.
+  miasma: {
+    tick(w) {
+      const g = w.g, p = g.player;
+      if (!w.fx || w.fx.dead) {
+        w.fx = new Aura(g, w, 'poison');
+        g.effects.push(w.fx);
+      }
+      if (w.lastX === undefined) {
+        w.lastX = p.x;
+        w.lastY = p.y;
+        w.walked = 0;
+      }
+      const d = Math.hypot(p.x - w.lastX, p.y - w.lastY);
+      w.lastX = p.x;
+      w.lastY = p.y;
+      if (d > 40) return; // carried off (a crypt's door, the stairs): no trail across the gap
+      w.walked += d;
+      const every = 9 * w.s.area;
+      if (w.walked < every) return;
+      w.walked -= every;
+      g.effects.push(new Pool(g, w, p.x + rand(-2, 2), p.y + rand(-2, 2), 12 * w.s.area, w.s.dur, w.s.dmg * 0.75, w.s.tick * 0.8, 'poison', false, { decay: true, sparse: true, kb: 0, dot: w.s.dot }));
+    },
+    kill(w, e) {
+      if (!w.s.plague || e.boss) return;
+      const g = w.g;
+      g.effects.push(new Pool(g, w, e.x, e.y, 14 * w.s.area, 2, w.s.dmg, w.s.tick, 'poison', false, { decay: true, sparse: true, kb: 0, dot: w.s.dot }));
+    },
+  },
+
+  // Bone Spear: spears of bone hurled at the nearest foes (the next spear at the next nearest),
+  // straight on through as many as they pierce.
+  bonespear: {
+    reach: 240,
+    fire(w) {
+      const g = w.g, p = g.player;
+      w.targets = g.nearestEnemies(p.x, p.y, w.s.amount, 240);
+      w.baseAng = p.aim;
+      w.burst(w.s.amount, 0.1);
+    },
+    aim(w, t) {
+      w.targets = t ? [t] : [];
+    },
+    shoot(w, i) {
+      const g = w.g, p = g.player;
+      const t = w.targets.length ? w.targets[i % w.targets.length] : null;
+      const ang = t && !t.dead ? Math.atan2(t.y - p.y + 4, t.x - p.x) : w.baseAng + fan(i, 0.12);
+      const lance = w.evolved;
+      spawnProjectile(g, {
+        kind: 'bonespear', sprite: WEAPON_SPRITES.bonespear, x: p.x, y: p.y - 2, z: 7, ang, speed: 200 * w.s.speed, life: 1.1, r: 4,
+        dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w, scale: 1.25, trail: lance ? PC.l : PC.Z,
+        glow: lance ? ['#9ee562', 18, 'green', 26] : null,
+      });
+      sfx('bones', { pitch: rand(1.2, 1.4), pan: Math.cos(ang) * 0.3 });
+    },
+  },
+
+  // Arcane Ray: an instant ray from the hero at the nearest foe (another at the next nearest
+  // for each ray more), searing everything along its line. Prismatic Ray splits on the first
+  // foe it strikes, a shorter ray leaping on to that foe's nearest neighbour.
+  arcane: {
+    reach: 190,
+    fire(w) {
+      const g = w.g, p = g.player;
+      const L = 190 * w.s.area;
+      const foes = g.nearestEnemies(p.x, p.y, w.s.amount, L);
+      if (!foes.length) return false;
+      for (const t of foes) {
+        const ang = Math.atan2(t.y - p.y, t.x - p.x);
+        const hit = ray(g, w, p.x, p.y, ang, L, w.s.dmg);
+        if (w.s.split && hit.length) {
+          const first = hit[0], skip = new Set(hit);
+          const next = g.nearestEnemy(first.x, first.y, 90 * w.s.area, (e) => !skip.has(e) && !e.untargetable);
+          if (next) ray(g, w, first.x, first.y, Math.atan2(next.y - first.y, next.x - first.x), 90 * w.s.area, w.s.dmg * 0.7, skip);
+        }
+      }
+      g.light(p.x, p.y, 60, 'purple', 0.8);
+      sfx('zap', { pitch: rand(1.5, 1.7) });
     },
   },
 

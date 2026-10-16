@@ -91,11 +91,12 @@ test('a legendary power counts once, however many pieces worn carry it', async (
 });
 
 test('a level-up always offers a full choice, filled with the Blessing, a heal and gold', async () => {
-  const {BASE_WEAPONS, MAX_WEAPON_LEVEL} = await mod('public/js/data/weapons.js');
+  const {MAX_WEAPON_LEVEL} = await mod('public/js/data/weapons.js');
   const {PASSIVES, PASSIVE_IDS} = await mod('public/js/data/passives.js');
   const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
   const p = g.player;
-  for (const id of BASE_WEAPONS) if (p.weapons.length < 6 && !g.ownsWeapon(id)) g.addWeapon(id, MAX_WEAPON_LEVEL);
+  // Every weapon of his roster: there is no other he could be offered.
+  for (const id of p.hero.roster) if (!g.ownsWeapon(id)) g.addWeapon(id, MAX_WEAPON_LEVEL);
   for (const w of p.weapons) { w.level = MAX_WEAPON_LEVEL; w.recompute(); }
   for (const id of PASSIVE_IDS.slice(0, 6)) g.addPassive(id, PASSIVES[id].max);
   p.weapons[0].level = MAX_WEAPON_LEVEL - 1;

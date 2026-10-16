@@ -17,9 +17,8 @@ export function rangerPose(g, spr, step) {
     const remaining=bow.cd/(p.buff('haste')?1.35:1);
     if(bow.queue||remaining<=0||remaining>release/fps)return null;
     k=Math.min(release-1,Math.floor(release-remaining*fps));
-    // The foe the volley's first arrow will fly at (bow.fire), if any.
-    const target=g.nearestEnemies(p.x,p.y,1,230)[0];
-    ang=target?Math.atan2(target.y-p.y,target.x-p.x):p.aim;
+    // The volley flies straight the way she faces (bow.fire).
+    ang=p.aim;
   }
   // No shot turns him (facing.js): he keeps facing the way he last walked, and an arrow
   // loosed behind him, walking or standing, shows no forward shot.
