@@ -26,3 +26,7 @@ gms/3001/sprites/lab/sheets/knight-online-maxime.png
 
 # Review boards and screenshots made by gms/3001/tools (review.mjs, shot.mjs)
 gms/3001/sprites/lab/review/
+
+# Menu-music toolchain fetched by hand (FluidSynth, the MuseScore General SoundFont): see tools/music/README.md
+tools/music/bin/
+tools/music/out/

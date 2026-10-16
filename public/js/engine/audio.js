@@ -36,9 +36,24 @@ if (typeof fetch === 'function' && typeof document !== 'undefined' && typeof Aud
     .then((r) => (r.ok ? r.json() : {}))
     .then((list) => {
       A.files = list && typeof list === 'object' ? list : {};
+      menuOverride();
       if (A.ctx && A.songName && A.files[A.songName]) startPiece(A.songName);
     })
     .catch(() => (A.files = {}));
+}
+
+// Debug only (?debug): the music audition page (debug/music/) can pick one of the menu-music
+// candidates in audio/music/menu/ to play as the title piece, so it is heard on the real menus.
+// It keeps the choice in localStorage as { file, gain }.
+function menuOverride() {
+  try {
+    if (!new URLSearchParams(location.search).has('debug')) return;
+    const pick = JSON.parse(localStorage.getItem('fs_menu_music') || 'null');
+    if (!pick || !/^[\w.-]+\.(ogg|mp3|wav)$/.test(pick.file)) return;
+    A.files.title = { file: 'menu/' + pick.file, gain: pick.gain > 0 ? pick.gain : 1 };
+  } catch {
+    // no localStorage, or a stale value: the listed title piece plays
+  }
 }
 
 export function initAudio() {
