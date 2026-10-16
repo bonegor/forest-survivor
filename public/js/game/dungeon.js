@@ -4,9 +4,10 @@
 //
 // The same builds the crypts off the forest roads: short, a handful of rooms, with no
 // horde and no seal. Packs of the night's foes sleep in the rooms, a named Skeleton
-// Archer, the lord, waits in the last, and the way back up is the stairs you came
-// down, shut while the lord lives: once it falls, moonlight runs along the shortest
-// walk there (A*).
+// Archer, the lord, waits in the last, and the stairs you came down are shut while the
+// lord lives. Once it falls, the wall nearest the hero (at least HOLE_AWAY tiles' walk
+// away) breaks open on a way up, and moonlight runs along the shortest walk there (A*);
+// the stairs he came down open too.
 
 import { SPR } from '../engine/sprites.js';
 import { drawText } from '../engine/font.js';
@@ -14,11 +15,14 @@ import { makeCanvas, mulberry32, hexToRgb, clamp, rand, TAU, pick, shuffle } fro
 import { FLOORS } from '../data/waves.js';
 import { PC, P } from './particles.js';
 import { glow } from './fxsprites.js';
+import { sfx } from '../engine/audio.js';
 
 const T = 16;
 const FLOOR = 0, WALL = 1, LAVA = 2, PROP = 3;
 // A crypt's lit way out: its pulses run this fast (px/s), this far apart (px).
 const WAY_SPEED = 90, WAY_GAP = 72;
+// How far from the hero (tiles' walk) the wall breaks open on a crypt's way out.
+export const HOLE_AWAY = 5;
 // A crypt's size in tiles, and how many rooms it has at most.
 const CRYPT_W = 52, CRYPT_H = 42, CRYPT_ROOMS = 6;
 
@@ -515,7 +519,7 @@ export class Dungeon {
     this.updateFlow(true);
   }
 
-  // A crypt: a sleeping pack in every side room, the lord in the last, the way out where you came in.
+  // A crypt: a sleeping pack in every side room, the lord in the last, the stairs up where you came in.
   populateCrypt(rooms) {
     const g = this.g, rng = this.rng, phase = g.phase;
     const st = g.spawner.stats(phase);
@@ -531,7 +535,8 @@ export class Dungeon {
     }
     const gr = this.guardRoom;
     this.guardian = g.spawner.spawnLord(gr.cx * T + T / 2, gr.cy * T + T / 2);
-    this.exit = { x: this.start.x, y: this.start.y + 2, armed: false };
+    // The stairs he came down (entrance), and the way out (exit): the same until the lord falls.
+    this.entrance = this.exit = { x: this.start.x, y: this.start.y + 2, armed: false };
     this.updateFlow(true);
   }
 
@@ -577,10 +582,10 @@ export class Dungeon {
       if (Math.random() < 0.3) g.particles.emit(s.x + rand(-10, 10), s.y + rand(-4, 8), 0, 0, 0, rand(10, 30), 1, 1, PC.L, P.GLOW | P.FADE, 0);
       if (onStairs(s)) g.descend();
     }
-    // A crypt's way back up, by the door: barred while its lord lives, live once the hero has
-    // stepped off it.
-    if (this.exit && g.state === 'play') {
-      const e = this.exit;
+    // A crypt's stairs back up, by the door: barred while its lord lives, live once the hero has
+    // stepped off them. Then the hole the lord's fall broke in the wall leads up too.
+    if (this.entrance && g.state === 'play') {
+      const e = this.entrance;
       if (!onStairs(e)) e.armed = true;
       else if (e.armed && this.exitOpen) g.leaveCrypt(false);
       else if (e.armed) {
@@ -588,6 +593,7 @@ export class Dungeon {
         g.banner('The way up is barred', `Slay ${this.guardian.name} first`, '#b55088', 2.4);
       }
     }
+    if (this.exit && this.exit.hole && g.state === 'play' && onStairs(this.exit)) g.leaveCrypt(false);
     if (this.way) this.updateWay(dt);
     // Torch embers.
     if (Math.random() < 0.3 && this.torches.length) {
@@ -667,13 +673,104 @@ export class Dungeon {
     return !!this.way || !this.guardian;
   }
 
-  // A crypt's lord has fallen: no new stairs; the way back up the stairs the hero came down is
-  // unbarred and lit instead, along the shortest walk there from wherever he stands (updateWay).
+  // A crypt's lord has fallen: no stairs down. The wall breaks open on a way up near the hero
+  // (holeSpot), the stairs he came down are unbarred, and the moonlight runs to the hole along the
+  // shortest walk there from wherever he stands (updateWay). With no wall to break, to the stairs.
   lightWayOut() {
     if (!this.crypt || !this.exit) return;
+    const hole = this.holeSpot();
+    if (hole) this.openHole(hole);
     this.way = { path: [], at: -1, t: 0 };
     this.updateWay(0);
-    this.g.banner('The way out is lit', 'Follow the moonlight back up', '#2ce8f5', 2.8);
+    this.g.banner(hole ? 'The wall breaks open' : 'The way out is lit', 'Follow the moonlight up', '#2ce8f5', 2.8);
+  }
+
+  // Where the wall gives way: a stretch of wall face (solid wall above it and to both sides, open
+  // floor below it and to both sides of that, no torch on it) at least HOLE_AWAY tiles' walk from
+  // the hero; the nearest such, by walk, then as the crow flies.
+  holeSpot() {
+    const p = this.g.player, { W, H } = this;
+    const px = Math.floor(p.x / T), py = Math.floor(p.y / T);
+    const dist = this.bfs(px, py, new Int16Array(W * H));
+    let best = null;
+    for (let ty = 1; ty < H - 1; ty++) {
+      for (let tx = 1; tx < W - 1; tx++) {
+        if (!this.isWall(tx, ty) || !this.isWall(tx, ty - 1) || !this.isWall(tx - 1, ty) || !this.isWall(tx + 1, ty)) continue;
+        if (this.tile(tx, ty + 1) !== FLOOR || this.tile(tx - 1, ty + 1) !== FLOOR || this.tile(tx + 1, ty + 1) !== FLOOR) continue;
+        if (this.torches.some((t) => t.x === tx * T + T / 2 && t.y === (ty + 1) * T - 4)) continue;
+        const d = dist[(ty + 1) * W + tx];
+        if (d < HOLE_AWAY) continue;
+        const e = Math.hypot(tx - px, ty + 1 - py);
+        if (!best || d < best.d || (d === best.d && e < best.e)) best = { tx, ty, d, e };
+      }
+    }
+    return best;
+  }
+
+  // The wall at (tx, ty) breaks open: a dark way up through it, moonlight spilling down its steps,
+  // rubble at its foot. Standing before it leaves the crypt (update).
+  openHole({ tx, ty }) {
+    const g = this.g, W = this.W;
+    this.exit = { x: tx * T + T / 2, y: (ty + 1) * T + 2, armed: true, hole: true };
+    for (const i of [ty * W + tx, (ty - 1) * W + tx, ty * W + tx - 1, ty * W + tx + 1, (ty + 1) * W + tx]) this.seen[i] = 1;
+    this.fogDirty = true;
+    this.paintHole(tx, ty);
+    const x = tx * T + T / 2, y = (ty + 1) * T;
+    g.particles.burst(x, y, 6, 24, [PC.a, PC.A, PC.N, PC.w], 70, 0.9, 2, P.GROUND | P.FADE, { vz: 70, grav: 240 });
+    g.particles.burst(x, y - 8, 10, 16, [PC.c, PC.w], 40, 1.2, 1, P.GLOW | P.FADE, { vz: 30, drag: 1 });
+    g.shake(0.45);
+    sfx('slam');
+  }
+
+  // The hole, painted into the baked ground over the wall's face (which runs 8 px above its tile):
+  // an arched opening with a dark rim, moonlight at its top, steps climbing away into the dark,
+  // cracks round it and fallen bricks at its foot. Rows from the face's top, columns across the tile.
+  paintHole(tx, ty) {
+    const ctx = this.canvas.getContext('2d'), th = this.theme;
+    const C = { o: '#0b0911', k: '#141625', s: '#1f2538', S: '#38456a', m: '#4f6f9c', M: '#a9dcff', c: th.faceMortar, r: th.face[2], R: th.face[0] };
+    const ox = tx * T, oy = ty * T - 8;
+    const put = (x, y, ch) => {
+      ctx.fillStyle = C[ch];
+      ctx.fillRect(ox + x, oy + y, 1, 1);
+    };
+    // The opening: columns 3-12 (centre 7.5), its arch over rows 4-8, open down to the floor (row 23),
+    // its sides broken a pixel further here and there.
+    const LEFT = { 10: 2, 11: 2, 15: 2, 19: 2, 20: 2 }, RIGHT = { 12: 13, 13: 13, 17: 13, 21: 13 };
+    const inside = (x, r) => {
+      if (r < 4 || r > 23 || x < (LEFT[r] ?? 3) || x > (RIGHT[r] ?? 12)) return false;
+      if (r >= 9) return true;
+      const dx = (x - 7.5) / 5, dy = (9 - r) / 5.5;
+      return dx * dx + dy * dy <= 1;
+    };
+    for (let r = 2; r <= 23; r++) {
+      for (let x = 1; x <= 14; x++) {
+        if (!inside(x, r)) {
+          // The rim: what touches the opening.
+          if (inside(x - 1, r) || inside(x + 1, r) || inside(x, r + 1) || inside(x, r - 1)) put(x, r, 'o');
+          continue;
+        }
+        let ch;
+        if (r <= 6) ch = 'M';
+        else if (r <= 8) ch = 'm';
+        else {
+          // Steps climbing away: a lit lip every three rows, the lower ones nearer and brighter.
+          const step = Math.floor((r - 9) / 3), lip = (r - 9) % 3 === 0, inset = Math.max(0, 2 - Math.floor(step / 2));
+          if (x - 3 < inset || 12 - x < inset || x < 3 || x > 12) ch = 'k';
+          else ch = lip ? (step >= 3 ? 'S' : 's') : step >= 4 && (r - 9) % 3 === 1 ? 's' : 'k';
+        }
+        put(x, r, ch);
+      }
+    }
+    // Cracks running off the opening, bricks knocked loose round it, and a heap of fallen ones at
+    // each side of its foot.
+    for (const [x, y] of [[0, 11], [1, 12], [0, 13], [15, 7], [14, 8], [15, 15], [14, 16], [5, 1], [6, 2], [10, 2], [11, 1], [12, 0]]) put(x, y, 'c');
+    for (const [x, y] of [[1, 7], [2, 7], [13, 10], [14, 10], [1, 17], [2, 17], [14, 20], [15, 20]]) put(x, y, 'o');
+    const HEAP = ['.rR.', 'oRrRo', 'ocrrco'];
+    HEAP.forEach((row, j) => [...row].forEach((ch, i) => {
+      if (ch === '.') return;
+      put(i - 1, 24 + j, ch);
+      put(16 - i, 24 + j, ch);
+    }));
   }
 
   // The lit way follows the hero: worked out again (A*) whenever he steps onto another tile.
@@ -857,10 +954,10 @@ export class Dungeon {
   drawGroundProps(ctx, cam, time) {
     const S = cam.S, img = SPR.stairs.frames[0].c;
     const w = img.width * S, h = img.height * S;
-    for (const s of [this.stairs, this.exit]) {
+    for (const s of [this.stairs, this.entrance]) {
       if (s) ctx.drawImage(img, Math.round((s.x - cam.x) * S - w / 2), Math.round((s.y - cam.y) * S - 2 * S), w, h);
     }
-    if (this.exit && !this.exitOpen) this.drawBars(ctx, cam, this.exit);
+    if (this.entrance && !this.exitOpen) this.drawBars(ctx, cam, this.entrance);
   }
 
   // Iron bars across a crypt's stairs up while its lord lives, each with its shadow.
@@ -927,8 +1024,9 @@ export class Dungeon {
       g.light(l.x, l.y, 48 + 6 * Math.sin(t * 2 + l.x), 'fire', 0.7);
     }
     if (this.stairs) g.light(this.stairs.x, this.stairs.y + 8, 90 + 10 * Math.sin(t * 3), 'green', 1);
-    // Moonlight down the crypt's stairs, brighter once the way out is lit.
-    if (this.exit) g.light(this.exit.x, this.exit.y + 6, (this.way ? 100 : 70) + 6 * Math.sin(t * 2), 'cyan', this.way ? 1 : 0.9);
+    // Moonlight down the crypt's stairs, brighter once the way out is lit, and through the hole.
+    if (this.entrance) g.light(this.entrance.x, this.entrance.y + 6, (this.way ? 100 : 70) + 6 * Math.sin(t * 2), 'cyan', this.way ? 1 : 0.9);
+    if (this.exit && this.exit.hole) g.light(this.exit.x, this.exit.y - 6, 100 + 6 * Math.sin(t * 2), 'cyan', 1);
     // The lit way: a pool of moonlight on every step of it, swelling as a pulse runs through.
     if (this.way) {
       for (const pt of this.way.path) {
@@ -961,8 +1059,8 @@ export class Dungeon {
       ctx.globalCompositeOperation = 'source-over';
     }
     // A barred way up glows with its lord's seal.
-    if (this.exit && !this.exitOpen) {
-      const e = this.exit, sz = (40 + 6 * Math.sin(time * 2.4)) * S;
+    if (this.entrance && !this.exitOpen) {
+      const e = this.entrance, sz = (40 + 6 * Math.sin(time * 2.4)) * S;
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.3 + 0.12 * Math.sin(time * 2.4);
       ctx.drawImage(glow('#b55088'), (e.x - cam.x) * S - sz / 2, (e.y + 7 - cam.y) * S - sz / 2, sz, sz);
@@ -1040,7 +1138,8 @@ export class Dungeon {
       }
       ctx.globalAlpha = big ? 1 : 0.85;
     }
-    if (this.exit) dot(this.exit.x, this.exit.y, this.exitOpen ? '#2ce8f5' : '#b55088', big ? 5 : 3);
+    if (this.entrance) dot(this.entrance.x, this.entrance.y, this.exitOpen ? '#2ce8f5' : '#b55088', big ? 5 : 3);
+    if (this.exit && this.exit.hole) dot(this.exit.x, this.exit.y - T, '#2ce8f5', big ? 5 : 3);
     const gd = this.guardian;
     if (gd && !gd.dead && this.seen[Math.floor(gd.y / T) * this.W + Math.floor(gd.x / T)]) dot(gd.x, gd.y, '#e43b44', big ? 5 : 3);
     for (const s of this.g.shrines) if (!s.used && this.seen[Math.floor(s.y / T) * this.W + Math.floor(s.x / T)]) dot(s.x, s.y, '#feae34', big ? 4 : 2);

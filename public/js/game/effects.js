@@ -206,10 +206,11 @@ export class Pool {
         const cands = g.grid.query(this.x, this.y, this.R + 12);
         for (let i = 0; i < cands.length; i++) {
           const e = cands[i];
-          if (e.dead || e.hitT[this.src] > g.time) continue;
+          // By the game's clock, which runs on in a crypt where the night's stands still.
+          if (e.dead || e.hitT[this.src] > g.clock) continue;
           const d = Math.hypot(e.x - this.x, e.y - this.y);
           if (d > this.R + e.r) continue;
-          e.hitT[this.src] = g.time + this.tick * 0.9;
+          e.hitT[this.src] = g.clock + this.tick * 0.9;
           g.hitEnemy(e, this.dmg, { w: this.w, type: this.look.num, kb: 0.1, kx: 0, ky: 0 });
         }
       }
@@ -278,10 +279,10 @@ export class Orbit {
       const cands = g.grid.query(bx, by, br + 12);
       for (let k = 0; k < cands.length; k++) {
         const e = cands[k];
-        if (e.dead || e.hitT[this.w.src] > g.time) continue;
+        if (e.dead || e.hitT[this.w.src] > g.clock) continue;
         const rr = br + e.r;
         if ((e.x - bx) ** 2 + (e.y - by) ** 2 > rr * rr) continue;
-        e.hitT[this.w.src] = g.time + s.tick;
+        e.hitT[this.w.src] = g.clock + s.tick;
         g.hitEnemy(e, s.dmg, { w: this.w, kb: s.kb, kx: Math.cos(a), ky: Math.sin(a) });
       }
       if (s.block) {

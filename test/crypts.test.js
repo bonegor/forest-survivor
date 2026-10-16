@@ -71,19 +71,19 @@ test('a crypt stops the night, and its lord drops gear and lights the way out', 
   frame(g);
   const drop = g.pickups.find(pk => pk.kind === 'item');
   assert.ok(drop, 'gear drops');
-  assert.equal(g.world.stairs, null, 'no new stairs: the way out is the way in');
-  assert.ok(g.world.way && g.world.way.path.length > 2, 'the way back to the stairs is lit');
+  assert.equal(g.world.stairs, null, 'no stairs down');
+  assert.ok(g.world.way && g.world.way.path.length > 2 && g.world.exit.hole, 'the way out is lit, to a hole broken in the wall');
   p.x = drop.x; p.y = drop.y; step(g, 10);
   assert.equal(g.itemQueue.length, 1);
   const it = g.itemQueue.shift();
   assert.deepEqual(I.sanitizeItem(it), it, 'a drop is one the server accepts');
   g.wearItem(it);
   assert.equal(g.gear[it.slot], it);
-  // Follow the light: it runs from where the hero stands to the stairs he came down.
+  // Follow the light: it runs from where the hero stands to the hole the lord's fall broke.
   step(g, 1);
   const path = g.world.way.path, exit = g.world.exit;
   assert.ok(Math.hypot(path[0].x - p.x, path[0].y - p.y) < 12, 'from where he stands');
-  assert.ok(Math.hypot(path.at(-1).x - exit.x, path.at(-1).y - exit.y) < 12, 'to the stairs');
+  assert.ok(Math.hypot(path.at(-1).x - exit.x, path.at(-1).y - exit.y) < 12, 'to the way out');
   for (const pt of path) {
     p.x = pt.x; p.y = pt.y + 4;
     step(g, 1);
@@ -133,6 +133,46 @@ test('once in, the stairs up are barred until the lord falls', () => gameCase((g
   for (let i = 0; i < 240 && g.inCrypt; i++) step(g, 1);
   assert.equal(g.inCrypt, null, 'and the same steps lead out');
 }));
+
+// Blades, flasks and glaives strike the same foe again after a moment (hitT). That moment was
+// counted on the night's clock, which stands still in a crypt: down there they struck each foe,
+// its lord too, once and never again.
+test('weapons that strike a foe again and again do so in a crypt as in the forest', () => {
+  for (const weapon of ['blades', 'flask', 'glaive']) {
+    const hits = {};
+    for (const below of [false, true]) {
+      const oldRandom = Math.random, oldBot = input.bot;
+      Math.random = mulberry32(5);
+      try {
+        const g = new Game({hero:'archer', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+        const p = g.player;
+        p.devGod = true;
+        g.spawner.update = () => {};
+        if (below) {
+          enterFirstCrypt(g, p);
+          assert.ok(g.inCrypt);
+          for (const e of g.enemies) e.dead = true;
+          step(g, 1);
+        }
+        p.weapons.length = 0;
+        const w = g.addWeapon(weapon);
+        const spot = g.world.freeSpot(p.x + 30, p.y);
+        const foe = g.spawnEnemy('zombie', spot.x, spot.y, {instant:true, hpMul:1e6});
+        foe.spd = 0;
+        let n = 0;
+        const hit = g.hitEnemy.bind(g);
+        g.hitEnemy = (e, d, o) => { if (e === foe && o.w === w) n++; return hit(e, d, o); };
+        step(g, 360);
+        hits[below ? 'crypt' : 'forest'] = n;
+      } finally {
+        input.bot = oldBot;
+        Math.random = oldRandom;
+      }
+    }
+    assert.ok(hits.forest >= 3, `${weapon}: strikes again in the forest (${hits.forest})`);
+    assert.ok(hits.crypt >= hits.forest - 1, `${weapon}: as often in a crypt (${hits.crypt} against ${hits.forest})`);
+  }
+});
 
 test('a Frost Rune wears off packs asleep in a crypt, not only the ones awake', () => gameCase((g, p) => {
   enterFirstCrypt(g, p);

@@ -206,8 +206,9 @@ export class Projectile {
         const dx = e.x - this.x, dy = e.y - this.y;
         if (dx * dx + dy * dy > rr * rr) continue;
         if (this.hitCd) {
-          if (e.hitT[this.w.src] > g.time) continue;
-          e.hitT[this.w.src] = g.time + this.hitCd;
+          // By the game's clock, which runs on in a crypt where the night's stands still.
+          if (e.hitT[this.w.src] > g.clock) continue;
+          e.hitT[this.w.src] = g.clock + this.hitCd;
         } else {
           if (this.hits.has(e.id)) continue;
           this.hits.add(e.id);

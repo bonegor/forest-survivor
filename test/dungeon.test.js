@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('../',import.meta.url));
 const mod = file => import(pathToFileURL(root + '/' + file).href);
 await mod('tools/headless.mjs');
 const {Game} = await mod('public/js/game/game.js');
-const {findPath} = await mod('public/js/game/dungeon.js');
+const {findPath, HOLE_AWAY} = await mod('public/js/game/dungeon.js');
 const {input} = await mod('public/js/engine/input.js');
 const {mulberry32} = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
@@ -144,7 +144,54 @@ test('a Dungeon guardian felled against a wall drops nothing into it', () => gam
   assert.ok(w.stairs, 'the stairs down open');
 }, 'dungeon'));
 
-test('the lit way out follows the hero, and the way out is the way in', () => gameCase((g) => {
+// How many tiles' walk from (x, y) to (x2, y2) in a crypt.
+const walk = (w, x, y, x2, y2) => w.bfs(Math.floor(x / T), Math.floor(y / T), new Int16Array(w.W * w.H))[Math.floor(y2 / T) * w.W + Math.floor(x2 / T)];
+
+// The user's call, 15 October 2026: "once they are finished, the boss is killed, the exit should not
+// be back at the entrance ... make a hole in the wall someplace at least 5 tiles away from the hero
+// and that is the exit ... still keep the path indicator to it".
+test('the lord falls, and the wall breaks open on a way out a short walk from the hero', () => gameCase((g) => {
+  enterCrypt(g);
+  const w = g.world, p = g.player, lord = g.enemies.find(e => e.lord);
+  p.x = lord.x - 30; p.y = lord.y;
+  assert.equal(w.exit, w.entrance, 'until then the way out is the stairs he came down');
+  g.hitEnemy(lord, 1e9, {});
+  step(g, 5);
+  const hole = w.exit, tx = Math.floor(hole.x / T), ty = Math.floor(hole.y / T);
+  assert.ok(hole.hole && hole !== w.entrance, 'a new way out');
+  assert.ok(w.isWall(tx, ty - 1) && w.isWall(tx, ty - 2) && w.isWall(tx - 1, ty - 1) && w.isWall(tx + 1, ty - 1), 'broken into a solid wall');
+  assert.ok(w.free(hole.x, hole.y), 'open floor before it');
+  const near = walk(w, p.x, p.y, hole.x, hole.y), back = walk(w, p.x, p.y, w.entrance.x, w.entrance.y);
+  assert.ok(near >= HOLE_AWAY, `at least ${HOLE_AWAY} tiles' walk away: ${near}`);
+  assert.ok(near < back / 2, `far shorter than the walk back to the stairs: ${near} against ${back}`);
+  assert.ok(g.banners.some(b => b.title === 'The wall breaks open'), 'and he is told');
+  assert.ok(w.exitOpen, 'the stairs he came down are open too');
+  // Walking up to the hole leaves the crypt, sealed for good.
+  p.x = hole.x; p.y = hole.y + 8;
+  for (let i = 0; i < 240 && g.inCrypt; i++) step(g, 1);
+  assert.equal(g.inCrypt, null, 'up through the hole, back in the forest');
+  assert.ok(g.cleared.has('2,0'));
+}));
+
+test('wherever the lord falls in a crypt, the wall breaks at least HOLE_AWAY tiles from the hero', () => {
+  for (const seed of [1, 2, 3, 4, 5, 6]) gameCase((g) => {
+    enterCrypt(g);
+    const w = g.world, p = g.player, lord = g.enemies.find(e => e.lord);
+    // The hero somewhere in each room in turn when the lord falls.
+    const room = w.rooms[seed % w.rooms.length];
+    p.x = room.cx * T + T / 2; p.y = room.cy * T + T / 2;
+    if (!w.free(p.x, p.y)) return;
+    g.hitEnemy(lord, 1e9, {});
+    step(g, 3);
+    assert.ok(w.exit.hole, `seed ${seed}: a hole`);
+    const d = walk(w, p.x, p.y, w.exit.x, w.exit.y);
+    assert.ok(d >= HOLE_AWAY && d < 40, `seed ${seed}: ${d} tiles' walk`);
+    const path = w.way.path;
+    assert.ok(Math.hypot(path.at(-1).x - w.exit.x, path.at(-1).y - w.exit.y) < 12, `seed ${seed}: the light runs to it`);
+  }, 's15', seed);
+});
+
+test('the lit way out follows the hero to the hole', () => gameCase((g) => {
   enterCrypt(g);
   const w = g.world, p = g.player, lord = g.enemies.find(e => e.lord);
   p.x = lord.x - 30; p.y = lord.y;
@@ -152,15 +199,15 @@ test('the lit way out follows the hero, and the way out is the way in', () => ga
   step(g, 5);
   assert.equal(w.stairs, null);
   const first = w.way.path;
-  assert.ok(first.length > 2 && first.every((pt, k) => k === 0 || pt.d > first[k - 1].d), 'from the hero to the stairs, distances rising');
+  assert.ok(first.length > 2 && first.every((pt, k) => k === 0 || pt.d > first[k - 1].d), 'from the hero to the hole, distances rising');
   // Somewhere else in the crypt: the light starts from there now.
   const room = w.rooms.find(r => r !== w.guardRoom && r !== w.startRoom);
   p.x = room.cx * T + T / 2; p.y = room.cy * T + T / 2;
   step(g, 2);
   const path = w.way.path;
   assert.ok(Math.hypot(path[0].x - p.x, path[0].y - p.y) < 12, 'it starts where he is');
-  assert.ok(Math.hypot(path.at(-1).x - w.exit.x, path.at(-1).y - w.exit.y) < 12, 'and ends on the stairs');
-  assert.deepEqual(w.marker().slice(0, 2), [w.exit.x, w.exit.y], 'the HUD points to them');
+  assert.ok(Math.hypot(path.at(-1).x - w.exit.x, path.at(-1).y - w.exit.y) < 12, 'and ends before the hole');
+  assert.deepEqual(w.marker().slice(0, 2), [w.exit.x, w.exit.y], 'the HUD points to it');
   for (const pt of path) assert.ok(w.free(pt.x, pt.y) && w.seen[Math.floor(pt.y / T) * w.W + Math.floor(pt.x / T)], 'on open floor, and shown through the dark');
   const k = path.map(pt => w.wayGlow(pt));
   assert.ok(Math.max(...k) > 0.9 && Math.min(...k) < 0.5, 'pulses of light run along it');

@@ -62,8 +62,8 @@ export class Minion {
       tx = tgt.x;
       ty = tgt.y;
     } else {
-      tx = p.x + Math.cos(this.wob + g.time * 0.7) * 26;
-      ty = p.y + Math.sin(this.wob + g.time * 0.7) * 18;
+      tx = p.x + Math.cos(this.wob + g.clock * 0.7) * 26;
+      ty = p.y + Math.sin(this.wob + g.clock * 0.7) * 18;
     }
     const dx = tx - this.x, dy = ty - this.y, d = Math.hypot(dx, dy) || 1;
     const reach = tgt ? this.r + tgt.r + 3 : 6;
