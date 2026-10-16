@@ -7,6 +7,7 @@ import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
 import { Game } from '../game/game.js';
+import { levelBonus } from '../game/player.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
@@ -184,7 +185,15 @@ class LevelUpOverlay {
     const pop = this.t < 0.25 ? 1.6 - 0.6 * ease.outBack(this.t / 0.25) : 1;
     const s = Math.min(1, (W - 40) / L.width) * pop;
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), Math.round(18 - (L.height * (s - 1)) / 2), Math.round(L.width * s), Math.round(L.height * s));
-    drawText(ctx, `LEVEL ${g.player.level - g.pendingLevels + 1}`, W / 2, 18 + L.height + 2, { align: 'center', color: '#8b9bb4' });
+    // The level, and what the levels themselves have given the hero by now (Player levelBonus).
+    const lvl = g.player.level - g.pendingLevels + 1, lb = levelBonus(lvl);
+    const pct = (v) => `+${Math.round((v - 1) * 100)}%`;
+    let line = `LEVEL ${lvl}`;
+    if (lvl > 1) {
+      const long = `${line} · ${pct(lb.might)} damage · ${pct(lb.hp)} health${lb.armor ? ` · +${lb.armor} armor` : ''}`;
+      line = textWidth(long) <= W - 8 ? long : `${line} · ${pct(lb.might)} dmg · ${pct(lb.hp)} hp${lb.armor ? ` · +${lb.armor} arm` : ''}`;
+    }
+    drawText(ctx, line, W / 2, 18 + L.height + 2, { align: 'center', color: '#8b9bb4' });
 
     ui.begin(dt);
     const n = this.choices.length;

@@ -47,7 +47,7 @@ There's no game server on Pages (its `/api` calls get a 404), so:
 | Pick a level-up card | 1–4, arrows + Enter, click | d-pad + A | tap |
 | Reroll level-up | R | Y | button |
 
-Weapons fire automatically, except in the crypts (below). Collect soul gems to level up; every level offers a choice of new weapons, weapon upgrades or relics. When fewer upgrades are left than a level-up offers (none, once the whole build is maxed), a stacking **Blessing of Valor** (+might, +health), a heal and gold fill the rest.
+Weapons fire automatically, except in the crypts (below). Collect soul gems to level up; every level offers a choice of new weapons, weapon upgrades or relics. Each level also makes the hero a little stronger, without limit: +0.5% damage a level, health growing 0.5% on itself a level (×1.48 by level 80, ×4.4 by 300), and a point of armor every 20 levels (`levelBonus` in `public/js/game/player.js`). The level-up screen shows what the levels have given so far. When fewer upgrades are left than a level-up offers (none, once the whole build is maxed), a stacking **Blessing of Valor** (+might, +health), a heal and gold fill the rest.
 
 **Quit Run** in the pause menu ends the run there and then, and you keep the gold you found. There is no saving a run to come back to: **Continue** on the title screen only appears when the game was closed mid-run, and picks it up from its last autosave.
 

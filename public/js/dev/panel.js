@@ -333,6 +333,7 @@ export function createDevPanel(app) {
       const ch = g.levelChoices(g.choiceCount());
       if (ch.length) g.applyChoice(ch[0]);
     }
+    p.recompute(); // what the levels themselves give (Player levelBonus)
     p.xp = 0;
     return `+${n} levels, cards picked automatically`;
   }

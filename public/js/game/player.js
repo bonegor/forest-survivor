@@ -17,6 +17,19 @@ export const BASE_MAGNET = 42;
 export const ARMOR_CUT = 0.1;
 export const ARMOR_MOST = 0.95;
 
+// What the levels themselves give, the user's: "level up make hero slightly stronger", then "do
+// not cap, let it go wild. Also, let it be exponential for health". From level 2 on, each level
+// adds LEVEL_MIGHT damage, multiplies health by LEVEL_HP (compounding), and every LEVEL_ARMOR
+// levels bring a point of armor. No cap.
+export const LEVEL_MIGHT = 0.005;
+export const LEVEL_HP = 1.005;
+export const LEVEL_ARMOR = 20;
+export const levelBonus = (level) => ({
+  might: 1 + LEVEL_MIGHT * (level - 1),
+  hp: LEVEL_HP ** (level - 1),
+  armor: Math.floor(level / LEVEL_ARMOR),
+});
+
 // What is left of a blow of raw damage against armor points.
 export function armored(raw, armor) {
   if (!(armor > 0)) return raw;
@@ -85,10 +98,11 @@ export class Player {
     const q = (this.gearB = gearBonuses(this.g.gear));
     const bonus = (k) => this.passiveSum(k) + q[k];
     const oldMax = this.maxHp || 0;
-    this.maxHp = Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * 0.02));
-    this.armor = (h.armor || 0) + m.armor + bonus('armor');
+    const lv = levelBonus(this.level);
+    this.maxHp = Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * 0.02) * lv.hp);
+    this.armor = (h.armor || 0) + m.armor + bonus('armor') + lv.armor;
     this.speedMul = (h.speed || 1) * m.speed * (1 + bonus('speed'));
-    this.might = (h.might || 1) * m.might * (1 + bonus('might') + this.blessings * 0.05);
+    this.might = (h.might || 1) * m.might * (1 + bonus('might') + this.blessings * 0.05) * lv.might;
     this.area = (h.area || 1) * m.area * (1 + bonus('area'));
     this.cooldown = Math.max(0.35, (h.cooldown || 1) * m.cooldown * (1 + bonus('cooldown')));
     this.amount = bonus('amount') + (m.amount || 0);
@@ -286,12 +300,15 @@ export class Player {
     if (this.g.mode === 's15' || this.g.mode === 'ranked') gain *= 1.1;
     else if (this.g.mode === 'dungeon') gain *= 1.15; // fewer foes down there
     this.xp += gain;
+    const was = this.level;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level++;
       this.xpNext = xpFor(this.level);
       this.g.queueLevelUp();
     }
+    // Stronger for the levels themselves (levelBonus), the health he gains with it.
+    if (this.level !== was) this.recompute();
   }
 
   addFury(v) {
