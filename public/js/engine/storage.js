@@ -7,12 +7,14 @@
 // store.unreadable so the title screen can offer a fresh start.
 // Settings always live in a small client cookie.
 //
-// The debug address (?debug; /debug forwards there) opens every hero and mode, in a save of its
+// The debug address (?DEBUG_FLAG, an unlisted token; an unlisted folder forwards there) opens every hero and mode, in a save of its
 // own (a client cookie even where the server is), so nothing played there touches the real one.
 
 import * as P from '../shared/profile.js';
+import { DEBUG_FLAG } from './debugflag.js';
 
-export const DEBUG = !!globalThis.location && new URLSearchParams(globalThis.location.search).has('debug');
+export { DEBUG_FLAG };
+export const DEBUG = !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
 const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
 const LOCAL_RUN = DEBUG ? 'fs_drun' : 'fs_lrun';
 
@@ -181,7 +183,7 @@ export const store = {
     return r.ok;
   },
 
-  // Debug only (?debug): upgrades set to any ranks, { id: rank }, at no cost.
+  // Debug only (the debug flag): upgrades set to any ranks, { id: rank }, at no cost.
   setUpgrades(ranks) {
     if (!DEBUG) return false;
     for (const [id, r] of Object.entries(ranks)) {

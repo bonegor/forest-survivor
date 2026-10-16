@@ -515,7 +515,7 @@ export class ArmoryScreen {
       const maxed = rank >= u.max;
       const cost = maxed ? 0 : upgradeCost(u.id, rank);
       const fid = 'u_' + u.id;
-      // Debug (?debug): free, each press a rank more, past the last back to none.
+      // Debug (the debug flag): free, each press a rank more, past the last back to none.
       if (DEBUG && ui.item(fid, cx, cy, cw, ch)) {
         app.store.setUpgrades({ [u.id]: maxed ? 0 : rank + 1 });
         sfx(maxed ? 'coin' : 'chest');

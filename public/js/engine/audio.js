@@ -7,6 +7,8 @@
 
 // Pieces that play once instead of looping.
 const ONCE = new Set(['victory', 'gameover']);
+import { DEBUG_FLAG } from './debugflag.js';
+
 const MUSIC_DIR = 'audio/music/';
 // Recorded music is mastered loud; this keeps it level with the sound effects.
 const FILE_LEVEL = 0.55;
@@ -42,12 +44,12 @@ if (typeof fetch === 'function' && typeof document !== 'undefined' && typeof Aud
     .catch(() => (A.files = {}));
 }
 
-// Debug only (?debug): the music audition page (an unlisted page, see the owner's link list) can pick one of the menu-music
+// Debug only (the debug flag): the music audition page (an unlisted page, see the owner's link list) can pick one of the menu-music
 // candidates in audio/music/menu/ to play as the title piece, so it is heard on the real menus.
 // It keeps the choice in localStorage as { file, gain }.
 function menuOverride() {
   try {
-    if (!new URLSearchParams(location.search).has('debug')) return;
+    if (!new URLSearchParams(location.search).has(DEBUG_FLAG)) return;
     const pick = JSON.parse(localStorage.getItem('fs_menu_music') || 'null');
     if (!pick || !/^[\w.-]+\.(ogg|mp3|wav)$/.test(pick.file)) return;
     A.files.title = { file: 'menu/' + pick.file, gain: pick.gain > 0 ? pick.gain : 1 };

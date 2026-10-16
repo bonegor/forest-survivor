@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { createServer } from '../server.js';
 import * as P from '../public/js/shared/profile.js';
 
-// The browser as the published game sees it at gamevibe.si/?debug: its cookies in a jar, and
+// The browser as the published game sees it at gamevibe.si/?<the debug flag>: its cookies in a jar, and
 // no game server (nor should it be asked).
 const jar = new Map();
 globalThis.document = {
@@ -19,25 +19,26 @@ globalThis.document = {
     else jar.set(pair.slice(0, i), pair.slice(i + 1));
   },
 };
-globalThis.location = { search: '?debug', hostname: 'gamevibe.si', protocol: 'https:' };
+const { DEBUG_FLAG } = await import('../public/js/engine/debugflag.js');
+globalThis.location = { search: '?' + DEBUG_FLAG, hostname: 'gamevibe.si', protocol: 'https:' };
 const realFetch = globalThis.fetch;
 // The player's own save, as the plain address keeps it: one hero, no Armory.
 const own = P.encodeState(P.packProfile({ ...P.defaultProfile(), gold: 40, up: { might: 1 } }));
 jar.set('fs_lprofile', own);
 const { store, DEBUG } = await import('../public/js/engine/storage.js');
 
-test('/debug forwards to the game with ?debug, on the server as on GitHub Pages', async () => {
+test('the debug folder forwards to the game with the debug flag, on the server as on GitHub Pages', async () => {
   const server = createServer({ secret: 'test-secret-'.padEnd(40, 'x'), devKey: '' });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    const bare = await realFetch(base + '/debug', { redirect: 'manual' });
+    const bare = await realFetch(base + '/cm2mqvquqkf', { redirect: 'manual' });
     assert.equal(bare.status, 301);
-    assert.equal(bare.headers.get('location'), '/debug/');
-    const page = await realFetch(base + '/debug/');
+    assert.equal(bare.headers.get('location'), '/cm2mqvquqkf/');
+    const page = await realFetch(base + '/cm2mqvquqkf/');
     assert.equal(page.status, 200);
     const html = await page.text();
-    assert.match(html, /<meta http-equiv="refresh" content="0; url=\.\.\/\?debug">/);
+    assert.ok(html.includes(`<meta http-equiv="refresh" content="0; url=../?${DEBUG_FLAG}">`), 'forwards with the flag');
     assert.match(html, /<meta name="robots" content="noindex">/);
     assert.ok(!/<script/.test(html), 'no script for the policy to block');
   } finally {
@@ -45,7 +46,7 @@ test('/debug forwards to the game with ?debug, on the server as on GitHub Pages'
   }
 });
 
-test('at ?debug every hero and mode is open, in a save of its own', async () => {
+test('at the debug flag every hero and mode is open, in a save of its own', async () => {
   assert.equal(DEBUG, true);
   globalThis.fetch = () => assert.fail('the debug save never asks a server');
   try {
@@ -72,7 +73,7 @@ test('at ?debug every hero and mode is open, in a save of its own', async () => 
   assert.equal(jar.get('fs_lprofile'), own);
 });
 
-test('at ?debug the Armory is set freely, at no cost', async () => {
+test('at the debug flag the Armory is set freely, at no cost', async () => {
   await store.init();
   const gold = store.profile.gold;
   assert.ok(store.setUpgrades({ might: 8, echo: 1, revival: 2 }));

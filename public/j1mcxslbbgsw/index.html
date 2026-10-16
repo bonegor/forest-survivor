@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Menu-music audition: plays the candidate loops in audio/music/menu/ (listed in its
        candidates.json, written by tools/music/render.mjs) and can set one as the title piece
-       of the debug game (?debug), through localStorage (js/engine/audio.js menuOverride).
+       of the debug game (the debug flag), through localStorage (js/engine/audio.js menuOverride).
        "Guitar sounds" plays the same short opening of two tunes on every guitar the renderer
        has (audio/music/menu/guitars/guitars.json, render.mjs --excerpt), to pick a sound. -->
   <meta name="robots" content="noindex">
@@ -53,7 +53,7 @@
 <body>
   <div class="wrap">
     <h1>Menu music</h1>
-    <p class="lede">Guitar loops for the title screen and menus. Play one here (it loops), or <b>use it in the menus</b> and open the <a href="../?debug">debug game</a> to hear it on the real title screen. The choice lives only in this browser. To compare guitar sounds, see <a href="#guitar-sounds">Guitar sounds</a> below.</p>
+    <p class="lede">Guitar loops for the title screen and menus. Play one here (it loops), or <b>use it in the menus</b> and open the <a href="../?2kr0cve2eu0">debug game</a> to hear it on the real title screen. The choice lives only in this browser. To compare guitar sounds, see <a href="#guitar-sounds">Guitar sounds</a> below.</p>
     <div class="bar">
       <div class="now" id="now">Nothing playing. Keys <kbd>1</kbd>–<kbd>9</kbd> play the first candidates, <kbd>Space</kbd> stops.</div>
       <label>Volume <input id="vol" type="range" min="0" max="1" step="0.01" value="0.6"></label>

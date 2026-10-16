@@ -189,7 +189,7 @@ The server checks every edit, so shipping the panel's code to players unlocks no
 
 ### The debug address
 
-`/debug` (it forwards to `/?debug`) opens the game with every hero and every mode unlocked, on GitHub Pages too. Each hero shows as having survived the night and beaten the Dungeon, which is what unlocks them. In the Armory every upgrade is free: each press adds a rank, and past the last it goes back to none; **MAX ALL** and **CLEAR ALL** set them all. It keeps a save of its own (the `fs_dprofile` and `fs_drun` cookies, never the server's), so whatever is played or set there leaves the player's own progress alone (`public/js/engine/storage.js`).
+An unlisted address (a random token as a query flag, `DEBUG_FLAG` in `public/js/engine/storage.js`; the owner's link list has it) opens the game with every hero and every mode unlocked, on GitHub Pages too. Each hero shows as having survived the night and beaten the Dungeon, which is what unlocks them. In the Armory every upgrade is free: each press adds a rank, and past the last it goes back to none; **MAX ALL** and **CLEAR ALL** set them all. It keeps a save of its own (the `fs_dprofile` and `fs_drun` cookies, never the server's), so whatever is played or set there leaves the player's own progress alone (`public/js/engine/storage.js`).
 
 ## Meta-progression (the Armory)
 
