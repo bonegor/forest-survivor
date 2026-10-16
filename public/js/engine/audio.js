@@ -42,7 +42,7 @@ if (typeof fetch === 'function' && typeof document !== 'undefined' && typeof Aud
     .catch(() => (A.files = {}));
 }
 
-// Debug only (?debug): the music audition page (debug/music/) can pick one of the menu-music
+// Debug only (?debug): the music audition page (an unlisted page, see the owner's link list) can pick one of the menu-music
 // candidates in audio/music/menu/ to play as the title piece, so it is heard on the real menus.
 // It keeps the choice in localStorage as { file, gain }.
 function menuOverride() {

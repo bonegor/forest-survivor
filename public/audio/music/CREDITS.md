@@ -10,7 +10,19 @@ SoundFont, whose notices travel with them: FluidR3 by Frank Wen (c) 2000-02; Flu
 Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19;
 MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/. The `*-ks.ogg`
 renders are a plucked-string synthesizer and contain no samples. `menu/candidates.json` lists them
-for the audition page (`debug/music/`).
+for the audition page (unlisted).
+
+The guitar-sound excerpts in `menu/guitars/` (20 seconds of two tunes through every guitar, for
+choosing a sound; `menu/guitars/guitars.json` says which font each one plays) carry samples of
+these fonts besides MuseScore_General:
+
+- GeneralUser GS v2.0.3 by S. Christian Collins (c) 1997-2025, https://www.schristiancollins.com/generaluser, GeneralUser GS License v2.0 (free use in music, private or commercial).
+- Spanish Classical Guitar (2019-06-18), recorded by Roberto (roberto@zenvoid.org) for the FreePats project, https://freepats.zenvoid.org/Guitar/acoustic-guitar.html, CC0 1.0.
+- FSBS Electric Guitar Clean #2 (Jazz) (2026-08-07), FreePats project, https://freepats.zenvoid.org/ElectricGuitar/clean-electric-guitar.html, CC0 1.0.
+- Concert Harp (2020-07-02), FreePats project, from the Versilian Community Sample Library by Versilian Studios LLC, https://freepats.zenvoid.org/OrchestralStrings/harp.html, CC0 1.0.
+- Ukulele (2026-08-11), recorded by Mateusz Dąbrowski for the FreePats project, https://freepats.zenvoid.org/GuitarFamily/ukulele.html, CC0 1.0.
+
+CC0 asks for nothing; the credit is given gladly. Full renders of the tunes play only MuseScore_General or the synthesizer.
 
 ## Required
 

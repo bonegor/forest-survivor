@@ -2,11 +2,11 @@
 // all, and every relic, read from the game's own data and drawn from its own art, as the game
 // builds its sprites (engine/sprites.js buildSprite). Read-only; works as plain static files.
 
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../../js/data/weapons.js';
-import { HEROES, HERO_ORDER, SHARED_WEAPONS, startWeapons } from '../../js/data/heroes.js';
-import { PASSIVES, PASSIVE_IDS } from '../../js/data/passives.js';
-import { ART } from '../../js/art/defs.js';
-import { buildSprite } from '../../js/engine/sprites.js';
+import { WEAPONS, MAX_WEAPON_LEVEL } from '../js/data/weapons.js';
+import { HEROES, HERO_ORDER, SHARED_WEAPONS, startWeapons } from '../js/data/heroes.js';
+import { PASSIVES, PASSIVE_IDS } from '../js/data/passives.js';
+import { ART } from '../js/art/defs.js';
+import { buildSprite } from '../js/engine/sprites.js';
 
 // Sprites are built as asked for, once each.
 const built = new Map();

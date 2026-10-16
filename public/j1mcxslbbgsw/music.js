@@ -1,9 +1,12 @@
 // The menu-music audition page (index.html): plays the candidates listed in
 // audio/music/menu/candidates.json and keeps the pick for the debug game in localStorage.
-const DIR = '../../audio/music/menu/';
+// "Guitar sounds" plays the short excerpts listed in audio/music/menu/guitars/guitars.json: the
+// same opening of a few tunes on each guitar, to compare the sounds.
+const DIR = '../audio/music/menu/';
 const KEY = 'fs_menu_music';
 const list = document.getElementById('list'), now = document.getElementById('now'), vol = document.getElementById('vol');
-let audio = null, playing = null, cands = [];
+const guitarsEl = document.getElementById('guitars');
+let audio = null, playing = null, cands = [], excerpts = [];
 
 const pick = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
 const setPick = (c) => { try { c ? localStorage.setItem(KEY, JSON.stringify({ file: c.file, gain: c.gain || 1 })) : localStorage.removeItem(KEY); } catch {} paint(); };
@@ -13,12 +16,18 @@ function stop() {
   playing = null;
   paint();
 }
+// A candidate loops; an excerpt plays once. Switching to another guitar's excerpt of the same
+// tune starts it where the last one was, for A/B listening.
 function play(c) {
+  const at = audio && playing && playing.excerpt && c.excerpt && playing.tune === c.tune ? audio.currentTime : 0;
   stop();
-  audio = new Audio(DIR + c.file);
-  audio.loop = true;
-  audio.volume = level(c);
-  audio.play().catch(() => { now.textContent = 'Could not play ' + c.file; });
+  const a = new Audio(DIR + c.file);
+  audio = a;
+  a.loop = !c.excerpt;
+  a.volume = level(c);
+  if (c.excerpt) a.addEventListener('ended', () => { if (audio === a) stop(); });
+  if (at > 0) a.addEventListener('loadedmetadata', () => { if (at < a.duration - 0.5) a.currentTime = at; }, { once: true });
+  a.play().catch(() => { now.textContent = 'Could not play ' + c.file; });
   playing = c;
   paint();
 }
@@ -47,6 +56,11 @@ function paint() {
     el.querySelector('.play').setAttribute('aria-pressed', playing === c ? 'true' : 'false');
     el.querySelector('.use').textContent = inUse && inUse.file === c.file ? 'In the menus' : 'Use in menus';
   }
+  for (const b of guitarsEl.querySelectorAll('.gplay')) {
+    const x = excerpts[Number(b.dataset.x)];
+    b.setAttribute('aria-pressed', playing === x ? 'true' : 'false');
+  }
+  for (const row of guitarsEl.querySelectorAll('.grow')) row.classList.toggle('playing', !!playing && playing.excerpt && playing.guitar === row.dataset.id);
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const fmt = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '');
@@ -81,4 +95,33 @@ fetch(DIR + 'candidates.json', { cache: 'no-cache' })
     }
     paint();
   })
-  .catch(() => { list.innerHTML = '<div class="empty">Could not load candidates.json.</div>'; });
+  .catch(() => { list.innerHTML = '<div class="empty">Could not load candidates.json.</div>'; })
+  .finally(loadGuitars);
+
+// Guitar sounds: one row per guitar, a play button per tune.
+function loadGuitars() {
+  fetch(DIR + 'guitars/guitars.json', { cache: 'no-cache' })
+    .then((r) => (r.ok ? r.json() : { guitars: [] }))
+    .then((m) => {
+      const guitars = (m && m.guitars) || [];
+      if (!guitars.length) { guitarsEl.innerHTML = '<div class="empty">No guitar sounds yet: tools/music/render.mjs --excerpt=20 writes them to audio/music/menu/guitars/.</div>'; return; }
+      const tunes = m.tunes && m.tunes.length ? m.tunes : [...new Set(guitars.flatMap((g) => Object.keys(g.files || {})))];
+      const titleOf = (t) => { const c = cands.find((x) => x.tune === t); return c ? c.title : t; };
+      excerpts = [];
+      guitarsEl.innerHTML = guitars.map((g) => `<div class="grow" data-id="${esc(g.id)}">
+          <span class="gname">${esc(g.label)}</span>
+          <span class="gplays">${tunes.map((t) => {
+            if (!g.files || !g.files[t]) return '';
+            const x = excerpts.push({ file: 'guitars/' + g.files[t], tune: t, guitar: g.id, title: titleOf(t), renderer: g.label, gain: 1, excerpt: true }) - 1;
+            return `<button class="gplay" data-x="${x}" aria-pressed="false" title="${esc(t)}">▶ ${esc(titleOf(t))}</button>`;
+          }).join('')}</span>
+          <span class="gsrc">${esc(g.source || '')}${g.licence ? ' · ' + esc(g.licence) : ''}</span>
+        </div>`).join('');
+      for (const b of guitarsEl.querySelectorAll('.gplay')) {
+        const x = excerpts[Number(b.dataset.x)];
+        b.addEventListener('click', () => (playing === x ? stop() : play(x)));
+      }
+      paint();
+    })
+    .catch(() => { guitarsEl.innerHTML = '<div class="empty">Could not load guitars/guitars.json.</div>'; });
+}
