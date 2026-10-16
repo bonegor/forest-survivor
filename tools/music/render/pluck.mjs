@@ -28,6 +28,22 @@ export const STEEL = {
   attackMs: 0.4, pol2: 0.3, strumMs: 6, maxFret: 20, level: 0.85, hp: 80, shelf: [150, -4], lp: 9000, knock: 8, click: 3,
   body: [[105, 4, 0.3], [220, 3.5, 0.28], [460, 2.5, 0.14]],
 };
+// Softer variants for render.mjs --guitar=ks-warm / ks-steel-soft (render/guitars.mjs): a rounder
+// pluck (the excitation low-passed harder, less noise in it, picked further from the bridge and
+// eased in over a few milliseconds), a longer ring at the fundamental with the top dying sooner,
+// a darker output and a little more body.
+export const NYLON_WARM = {
+  ...NYLON, name: 'nylon-warm', t60Base: 4.8, t60Hi: 0.45, pick: 0.2, excLo: 450, excHi: 1800, noise: 0.3,
+  attackMs: 2.6, pol2: 0.32, lp: 4500, knock: 2, shelf: [150, -5],
+  body: [[98, 4, 0.32], [200, 3.5, 0.42], [410, 2.5, 0.2]],
+};
+export const STEEL_SOFT = {
+  ...STEEL, name: 'steel-soft', t60Base: 6.0, t60Hi: 1.0, pick: 0.19, excLo: 1100, excHi: 4000, noise: 0.35,
+  attackMs: 1.4, lp: 9000, knock: 5, click: 0, shelf: [150, -3.5],
+  body: [[105, 4, 0.36], [220, 3.5, 0.34], [460, 2.5, 0.15]],
+};
+export const KS_PRESETS = { nylon: NYLON, steel: STEEL, 'nylon-warm': NYLON_WARM, 'steel-soft': STEEL_SOFT };
+
 // General MIDI guitars; anything else is played as nylon (and reported).
 export function guitarFor(program) {
   if (program === 24) return NYLON;
@@ -73,8 +89,9 @@ export function designLoop(f0, t0, t1, sr) {
 
 // The pluck: one period of noise and of an ideal plucked-string pulse (a rectangle with the
 // pick position as its duty), each low-passed by velocity, combed at the pick position and
-// brought to unit RMS, mixed half and half. The pick position is a fraction of the sounding
-// length, so it grows up the neck: high frets sound rounder, as on a real guitar.
+// brought to unit RMS, mixed half and half (P.noise, if given, is the noise's share). The pick
+// position is a fraction of the sounding length, so it grows up the neck: high frets sound
+// rounder, as on a real guitar.
 function excitation(M, f0, v, pick, P, rnd, sr) {
   const fc = Math.max(3 * f0, P.excLo * Math.pow(P.excHi / P.excLo, Math.pow(v, 1.2)));
   const al = 1 - Math.exp((-TAU * fc) / sr);
@@ -95,7 +112,8 @@ function excitation(M, f0, v, pick, P, rnd, sr) {
   const noise = new Float64Array(M), pulse = new Float64Array(M);
   for (let i = 0; i < M; i++) { noise[i] = rnd() * 2 - 1; pulse[i] = i < P0 ? 1 : 0; }
   const a = shape(noise), b = shape(pulse), e = new Float64Array(M);
-  for (let i = 0; i < M; i++) e[i] = 0.5 * a[i] + 0.5 * b[i];
+  const nz = P.noise ?? 0.5;
+  for (let i = 0; i < M; i++) e[i] = nz * a[i] + (1 - nz) * b[i];
   return e;
 }
 
@@ -182,12 +200,13 @@ function tone(x, hpHz, [shelfHz, shelfDb], lpHz, sr) {
 
 // ------------------------------------------------------------------- render --
 
-// notes/ctrl/programs as read by smf.readNotes; loopSec the exact loop length.
+// notes/ctrl/programs as read by smf.readNotes; loopSec the exact loop length. voices (optional):
+// a Map from channel to the preset that plays it, instead of the one its program picks.
 // Returns a stereo stem per channel, each exactly one loop (N samples) long, with its reverb
 // send (CC91), and what happened on the way.
 // With verify, a third copy is rendered and compared with the second: the difference is how far
 // the kept loop is from repeating itself exactly (it should be rounding noise).
-export function renderPluck({ notes, ctrl, programs, loopSec, sr = 44100, seed = 'song', verify = true }) {
+export function renderPluck({ notes, ctrl, programs, loopSec, sr = 44100, seed = 'song', verify = true, voices = null }) {
   const N = Math.round(loopSec * sr), COPIES = verify ? 3 : 2, T = COPIES * N, warn = [], stems = [];
   const chans = [...new Set(notes.map((n) => n.ch))].sort((a, b) => a - b);
   const stats = { notes: 0, voices: 0, periodicMismatch: 0, guitars: {} };
@@ -197,7 +216,7 @@ export function renderPluck({ notes, ctrl, programs, loopSec, sr = 44100, seed =
   for (const ch of chans) {
     if (ch === 9) { warn.push('channel 10 (drums) skipped'); continue; }
     const prog = programs.has(ch) ? programs.get(ch) : 0;
-    let P = guitarFor(prog);
+    let P = (voices && voices.get(ch)) || guitarFor(prog);
     if (!P) { warn.push(`channel ${ch + 1}: program ${prog} is not a guitar, played as nylon`); P = NYLON; }
     stats.guitars[ch + 1] = P.name;
     const cn = notes.filter((n) => n.ch === ch);

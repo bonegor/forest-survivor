@@ -1,0 +1,1789 @@
+{
+  "excerpt": "the first ~20 s (whole bars), let ring and faded",
+  "tunes": [
+    "menu-v2",
+    "menu-v3"
+  ],
+  "guitars": [
+    {
+      "id": "ms-nylon",
+      "label": "MuseScore nylon",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-nylon.ogg",
+        "menu-v3": "menu-v3-ms-nylon.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1090,
+            "hfPct": 2.65,
+            "hfDb": -15.8,
+            "atkHfPct": 4.3,
+            "atkCrestDb": 10.54,
+            "atkBodyDb": 6.05,
+            "delayMs": 8.4,
+            "delaySpreadMs": 3.4,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 312,
+            "hfPct": 0.03,
+            "hfDb": -34.8,
+            "atkHfPct": 0.08,
+            "atkCrestDb": 8.24,
+            "atkBodyDb": 1.32,
+            "delayMs": 11.5,
+            "delaySpreadMs": 26.8,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 764,
+            "hfPct": 1.75,
+            "hfDb": -17.6,
+            "atkHfPct": 0.6,
+            "atkCrestDb": 8.45,
+            "atkBodyDb": 3.22,
+            "delayMs": 9,
+            "delaySpreadMs": 17.1,
+            "attacks": 58
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1026,
+            "hfPct": 2.04,
+            "hfDb": -16.9,
+            "atkHfPct": 1.7,
+            "atkCrestDb": 8.42,
+            "atkBodyDb": 5.48,
+            "delayMs": 9.5,
+            "delaySpreadMs": 3.3,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 384,
+            "hfPct": 0.08,
+            "hfDb": -30.9,
+            "atkHfPct": 0.1,
+            "atkCrestDb": 8.25,
+            "atkBodyDb": 1.62,
+            "delayMs": 14.4,
+            "delaySpreadMs": 23.6,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 710,
+            "hfPct": 1.21,
+            "hfDb": -19.2,
+            "atkHfPct": 1.04,
+            "atkCrestDb": 8.91,
+            "atkBodyDb": 3.86,
+            "delayMs": 12.3,
+            "delaySpreadMs": 12.9,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ms-steel",
+      "label": "MuseScore steel",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-steel.ogg",
+        "menu-v3": "menu-v3-ms-steel.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1064,
+            "hfPct": 8.04,
+            "hfDb": -10.9,
+            "atkHfPct": 9.95,
+            "atkCrestDb": 9.33,
+            "atkBodyDb": 4.77,
+            "delayMs": 11.1,
+            "delaySpreadMs": 2.9,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 487,
+            "hfPct": 1.87,
+            "hfDb": -17.3,
+            "atkHfPct": 2.04,
+            "atkCrestDb": 9.09,
+            "atkBodyDb": 2.01,
+            "delayMs": 12.3,
+            "delaySpreadMs": 22.4,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 872,
+            "hfPct": 6.19,
+            "hfDb": -12.1,
+            "atkHfPct": 6.1,
+            "atkCrestDb": 9.2,
+            "atkBodyDb": 3.24,
+            "delayMs": 12.4,
+            "delaySpreadMs": 19.3,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1018,
+            "hfPct": 8.08,
+            "hfDb": -10.9,
+            "atkHfPct": 8.74,
+            "atkCrestDb": 9.16,
+            "atkBodyDb": 4.52,
+            "delayMs": 11.5,
+            "delaySpreadMs": 3.2,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 560,
+            "hfPct": 2.83,
+            "hfDb": -15.5,
+            "atkHfPct": 5.56,
+            "atkCrestDb": 9.57,
+            "atkBodyDb": 1.82,
+            "delayMs": 12.2,
+            "delaySpreadMs": 19.7,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 810,
+            "hfPct": 5.87,
+            "hfDb": -12.3,
+            "atkHfPct": 7.04,
+            "atkCrestDb": 9.22,
+            "atkBodyDb": 3.57,
+            "delayMs": 13.4,
+            "delaySpreadMs": 17.4,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ms-jazz",
+      "label": "MuseScore jazz guitar (warm)",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-jazz.ogg",
+        "menu-v3": "menu-v3-ms-jazz.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 959,
+            "hfPct": 1.22,
+            "hfDb": -19.1,
+            "atkHfPct": 0.93,
+            "atkCrestDb": 7.15,
+            "atkBodyDb": 1.91,
+            "delayMs": 8.9,
+            "delaySpreadMs": 2.5,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 322,
+            "hfPct": 0.03,
+            "hfDb": -35.2,
+            "atkHfPct": 0.04,
+            "atkCrestDb": 8.71,
+            "atkBodyDb": 0.62,
+            "delayMs": 4.7,
+            "delaySpreadMs": 19.7,
+            "attacks": 58
+          },
+          "mix": {
+            "centroidHz": 745,
+            "hfPct": 0.72,
+            "hfDb": -21.4,
+            "atkHfPct": 0.5,
+            "atkCrestDb": 8.26,
+            "atkBodyDb": 1.35,
+            "delayMs": 8.6,
+            "delaySpreadMs": 17.1,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1146,
+            "hfPct": 2.36,
+            "hfDb": -16.3,
+            "atkHfPct": 1.91,
+            "atkCrestDb": 8.69,
+            "atkBodyDb": 1.77,
+            "delayMs": 9.3,
+            "delaySpreadMs": 2.3,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 477,
+            "hfPct": 0.21,
+            "hfDb": -26.7,
+            "atkHfPct": 0.35,
+            "atkCrestDb": 9.63,
+            "atkBodyDb": 1.16,
+            "delayMs": 8.4,
+            "delaySpreadMs": 15.5,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 833,
+            "hfPct": 1.34,
+            "hfDb": -18.7,
+            "atkHfPct": 1.16,
+            "atkCrestDb": 8.71,
+            "atkBodyDb": 1.41,
+            "delayMs": 10.3,
+            "delaySpreadMs": 15.5,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ms-clean",
+      "label": "MuseScore clean electric",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-clean.ogg",
+        "menu-v3": "menu-v3-ms-clean.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 2139,
+            "hfPct": 18.98,
+            "hfDb": -7.2,
+            "atkHfPct": 29.38,
+            "atkCrestDb": 9.16,
+            "atkBodyDb": 2.11,
+            "delayMs": 9.1,
+            "delaySpreadMs": 3.7,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 590,
+            "hfPct": 2.02,
+            "hfDb": -16.9,
+            "atkHfPct": 2.72,
+            "atkCrestDb": 9.49,
+            "atkBodyDb": 0.87,
+            "delayMs": 5.6,
+            "delaySpreadMs": 23.9,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 1490,
+            "hfPct": 12.18,
+            "hfDb": -9.1,
+            "atkHfPct": 12.33,
+            "atkCrestDb": 9.65,
+            "atkBodyDb": 1.51,
+            "delayMs": 8.7,
+            "delaySpreadMs": 18.8,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 2200,
+            "hfPct": 20.08,
+            "hfDb": -7,
+            "atkHfPct": 32.09,
+            "atkCrestDb": 9.58,
+            "atkBodyDb": 2.29,
+            "delayMs": 10.2,
+            "delaySpreadMs": 3,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 671,
+            "hfPct": 2.67,
+            "hfDb": -15.7,
+            "atkHfPct": 3.54,
+            "atkCrestDb": 10.1,
+            "atkBodyDb": 0.98,
+            "delayMs": 13.1,
+            "delaySpreadMs": 26.1,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 1431,
+            "hfPct": 11.34,
+            "hfDb": -9.5,
+            "atkHfPct": 15.37,
+            "atkCrestDb": 10.04,
+            "atkBodyDb": 1.59,
+            "delayMs": 11.7,
+            "delaySpreadMs": 22.7,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ms-12string",
+      "label": "MuseScore 12-string",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-12string.ogg",
+        "menu-v3": "menu-v3-ms-12string.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1536,
+            "hfPct": 17.08,
+            "hfDb": -7.7,
+            "atkHfPct": 14.74,
+            "atkCrestDb": 9.97,
+            "atkBodyDb": 8.74,
+            "delayMs": 11.5,
+            "delaySpreadMs": 4.8,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 572,
+            "hfPct": 2.62,
+            "hfDb": -15.8,
+            "atkHfPct": 4.43,
+            "atkCrestDb": 9.08,
+            "atkBodyDb": 1.08,
+            "delayMs": 13.2,
+            "delaySpreadMs": 26.9,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 1200,
+            "hfPct": 12.34,
+            "hfDb": -9.1,
+            "atkHfPct": 7.88,
+            "atkCrestDb": 9.37,
+            "atkBodyDb": 2.48,
+            "delayMs": 12.8,
+            "delaySpreadMs": 19.7,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1281,
+            "hfPct": 12.94,
+            "hfDb": -8.9,
+            "atkHfPct": 8.84,
+            "atkCrestDb": 9.25,
+            "atkBodyDb": 4.85,
+            "delayMs": 12.3,
+            "delaySpreadMs": 4.5,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 618,
+            "hfPct": 3.25,
+            "hfDb": -14.9,
+            "atkHfPct": 6.26,
+            "atkCrestDb": 9.8,
+            "atkBodyDb": 0.41,
+            "delayMs": 15,
+            "delaySpreadMs": 25.5,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 976,
+            "hfPct": 8.8,
+            "hfDb": -10.6,
+            "atkHfPct": 8.22,
+            "atkCrestDb": 9.57,
+            "atkBodyDb": 3.33,
+            "delayMs": 14.4,
+            "delaySpreadMs": 15.1,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ms-ukulele",
+      "label": "MuseScore \"ukulele\" (filtered nylon)",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-ukulele.ogg",
+        "menu-v3": "menu-v3-ms-ukulele.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1083,
+            "hfPct": 2.73,
+            "hfDb": -15.6,
+            "atkHfPct": 5.74,
+            "atkCrestDb": 10.55,
+            "atkBodyDb": 6.03,
+            "delayMs": 8.4,
+            "delaySpreadMs": 3.3,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 318,
+            "hfPct": 0.19,
+            "hfDb": -27.1,
+            "atkHfPct": 0.68,
+            "atkCrestDb": 8.47,
+            "atkBodyDb": 1.29,
+            "delayMs": 11.4,
+            "delaySpreadMs": 25.4,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 762,
+            "hfPct": 1.88,
+            "hfDb": -17.3,
+            "atkHfPct": 1.06,
+            "atkCrestDb": 8.56,
+            "atkBodyDb": 3.25,
+            "delayMs": 9.2,
+            "delaySpreadMs": 16.8,
+            "attacks": 58
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1006,
+            "hfPct": 1.75,
+            "hfDb": -17.6,
+            "atkHfPct": 1.64,
+            "atkCrestDb": 8.5,
+            "atkBodyDb": 5.49,
+            "delayMs": 9.5,
+            "delaySpreadMs": 3.2,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 383,
+            "hfPct": 0.23,
+            "hfDb": -26.4,
+            "atkHfPct": 0.69,
+            "atkCrestDb": 8.47,
+            "atkBodyDb": 1.7,
+            "delayMs": 14.3,
+            "delaySpreadMs": 23.9,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 697,
+            "hfPct": 1.14,
+            "hfDb": -19.4,
+            "atkHfPct": 1.26,
+            "atkCrestDb": 9.01,
+            "atkBodyDb": 3.87,
+            "delayMs": 12.4,
+            "delaySpreadMs": 12.7,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ms-mandolin",
+      "label": "MuseScore \"mandolin\" (filtered steel)",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-mandolin.ogg",
+        "menu-v3": "menu-v3-ms-mandolin.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 979,
+            "hfPct": 6.73,
+            "hfDb": -11.7,
+            "atkHfPct": 7.32,
+            "atkCrestDb": 9,
+            "atkBodyDb": 5.69,
+            "delayMs": 10.9,
+            "delaySpreadMs": 2.2,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 503,
+            "hfPct": 2.13,
+            "hfDb": -16.7,
+            "atkHfPct": 3.11,
+            "atkCrestDb": 9.1,
+            "atkBodyDb": 2.07,
+            "delayMs": 12.4,
+            "delaySpreadMs": 22.4,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 814,
+            "hfPct": 5.35,
+            "hfDb": -12.7,
+            "atkHfPct": 5.79,
+            "atkCrestDb": 9.12,
+            "atkBodyDb": 3.5,
+            "delayMs": 12.8,
+            "delaySpreadMs": 18.4,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 929,
+            "hfPct": 6.57,
+            "hfDb": -11.8,
+            "atkHfPct": 6.45,
+            "atkCrestDb": 8.93,
+            "atkBodyDb": 5.35,
+            "delayMs": 11.2,
+            "delaySpreadMs": 2.2,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 546,
+            "hfPct": 2.64,
+            "hfDb": -15.8,
+            "atkHfPct": 4.89,
+            "atkCrestDb": 9.52,
+            "atkBodyDb": 1.99,
+            "delayMs": 12,
+            "delaySpreadMs": 19.7,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 750,
+            "hfPct": 4.92,
+            "hfDb": -13.1,
+            "atkHfPct": 5.89,
+            "atkCrestDb": 9.22,
+            "atkBodyDb": 4.08,
+            "delayMs": 13.1,
+            "delaySpreadMs": 16.4,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ms-harp",
+      "label": "MuseScore harp",
+      "source": "MuseScore General 0.2",
+      "licence": "MIT",
+      "credit": [
+        "FluidR3 by Frank Wen (c) 2000-02; FluidR3Mono by Michael Cowgill (c) 2014-17; MuseScore_General adaptation by S. Christian Collins (c) 2018-19; MIT licence, https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-ms-harp.ogg",
+        "menu-v3": "menu-v3-ms-harp.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 557,
+            "hfPct": 0.25,
+            "hfDb": -26.1,
+            "atkHfPct": 0.31,
+            "atkCrestDb": 8.74,
+            "atkBodyDb": 5.98,
+            "delayMs": 5.6,
+            "delaySpreadMs": 1.7,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 308,
+            "hfPct": 0,
+            "hfDb": -44.9,
+            "atkHfPct": 0.01,
+            "atkCrestDb": 7.19,
+            "atkBodyDb": 3.62,
+            "delayMs": 8.1,
+            "delaySpreadMs": 6.7,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 467,
+            "hfPct": 0.17,
+            "hfDb": -27.6,
+            "atkHfPct": 0.03,
+            "atkCrestDb": 7.82,
+            "atkBodyDb": 3.71,
+            "delayMs": 8.5,
+            "delaySpreadMs": 13.2,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 507,
+            "hfPct": 0.1,
+            "hfDb": -30,
+            "atkHfPct": 0.21,
+            "atkCrestDb": 6.8,
+            "atkBodyDb": 5.48,
+            "delayMs": 5.6,
+            "delaySpreadMs": 2.3,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 323,
+            "hfPct": 0,
+            "hfDb": -44.3,
+            "atkHfPct": 0.01,
+            "atkCrestDb": 7.69,
+            "atkBodyDb": 2.73,
+            "delayMs": 8.8,
+            "delaySpreadMs": 12.2,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 424,
+            "hfPct": 0.06,
+            "hfDb": -32.1,
+            "atkHfPct": 0.02,
+            "atkCrestDb": 7.73,
+            "atkBodyDb": 4.08,
+            "delayMs": 7.6,
+            "delaySpreadMs": 7.1,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "gu-nylon",
+      "label": "GeneralUser nylon",
+      "source": "GeneralUser GS 2.0.3",
+      "licence": "GeneralUser GS License v2.0 (free use, commercial included)",
+      "credit": [
+        "GeneralUser GS v2.0.3 by S. Christian Collins (c) 1997-2025, https://www.schristiancollins.com/generaluser, GeneralUser GS License v2.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-gu-nylon.ogg",
+        "menu-v3": "menu-v3-gu-nylon.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 814,
+            "hfPct": 3.01,
+            "hfDb": -15.2,
+            "atkHfPct": 4.51,
+            "atkCrestDb": 9.8,
+            "atkBodyDb": 6.14,
+            "delayMs": 18.4,
+            "delaySpreadMs": 9.3,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 351,
+            "hfPct": 0.37,
+            "hfDb": -24.3,
+            "atkHfPct": 0.45,
+            "atkCrestDb": 8.66,
+            "atkBodyDb": 2.28,
+            "delayMs": 33.6,
+            "delaySpreadMs": 56.4,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 671,
+            "hfPct": 2.24,
+            "hfDb": -16.5,
+            "atkHfPct": 1.01,
+            "atkCrestDb": 9.03,
+            "atkBodyDb": 3.48,
+            "delayMs": 21.2,
+            "delaySpreadMs": 46.4,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 686,
+            "hfPct": 2.32,
+            "hfDb": -16.3,
+            "atkHfPct": 3.54,
+            "atkCrestDb": 9.48,
+            "atkBodyDb": 5.63,
+            "delayMs": 21.4,
+            "delaySpreadMs": 8.7,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 395,
+            "hfPct": 0.71,
+            "hfDb": -21.5,
+            "atkHfPct": 1.13,
+            "atkCrestDb": 8.72,
+            "atkBodyDb": 2.5,
+            "delayMs": 35.1,
+            "delaySpreadMs": 37.1,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 567,
+            "hfPct": 1.79,
+            "hfDb": -17.5,
+            "atkHfPct": 2.66,
+            "atkCrestDb": 9.12,
+            "atkBodyDb": 3.64,
+            "delayMs": 23.2,
+            "delaySpreadMs": 37.6,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "gu-steel",
+      "label": "GeneralUser steel",
+      "source": "GeneralUser GS 2.0.3",
+      "licence": "GeneralUser GS License v2.0 (free use, commercial included)",
+      "credit": [
+        "GeneralUser GS v2.0.3 by S. Christian Collins (c) 1997-2025, https://www.schristiancollins.com/generaluser, GeneralUser GS License v2.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-gu-steel.ogg",
+        "menu-v3": "menu-v3-gu-steel.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1968,
+            "hfPct": 22.16,
+            "hfDb": -6.5,
+            "atkHfPct": 25.45,
+            "atkCrestDb": 10.27,
+            "atkBodyDb": 4.62,
+            "delayMs": 14.5,
+            "delaySpreadMs": 14.5,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 483,
+            "hfPct": 1.8,
+            "hfDb": -17.4,
+            "atkHfPct": 2.16,
+            "atkCrestDb": 8.87,
+            "atkBodyDb": 1.85,
+            "delayMs": 20.7,
+            "delaySpreadMs": 28.3,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 1361,
+            "hfPct": 14.09,
+            "hfDb": -8.5,
+            "atkHfPct": 10.94,
+            "atkCrestDb": 9.63,
+            "atkBodyDb": 2.5,
+            "delayMs": 17.4,
+            "delaySpreadMs": 31.1,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1857,
+            "hfPct": 24.53,
+            "hfDb": -6.1,
+            "atkHfPct": 29.39,
+            "atkCrestDb": 10.16,
+            "atkBodyDb": 4.55,
+            "delayMs": 16.9,
+            "delaySpreadMs": 15.6,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 494,
+            "hfPct": 2.36,
+            "hfDb": -16.3,
+            "atkHfPct": 3.37,
+            "atkCrestDb": 9.16,
+            "atkBodyDb": 1.96,
+            "delayMs": 21.6,
+            "delaySpreadMs": 25.3,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 1147,
+            "hfPct": 13.27,
+            "hfDb": -8.8,
+            "atkHfPct": 17.32,
+            "atkCrestDb": 9.65,
+            "atkBodyDb": 3.32,
+            "delayMs": 20,
+            "delaySpreadMs": 20.4,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "gu-jazz",
+      "label": "GeneralUser jazz guitar",
+      "source": "GeneralUser GS 2.0.3",
+      "licence": "GeneralUser GS License v2.0 (free use, commercial included)",
+      "credit": [
+        "GeneralUser GS v2.0.3 by S. Christian Collins (c) 1997-2025, https://www.schristiancollins.com/generaluser, GeneralUser GS License v2.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-gu-jazz.ogg",
+        "menu-v3": "menu-v3-gu-jazz.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 763,
+            "hfPct": 0.53,
+            "hfDb": -22.7,
+            "atkHfPct": 0.78,
+            "atkCrestDb": 7.07,
+            "atkBodyDb": 3.8,
+            "delayMs": 4.1,
+            "delaySpreadMs": 1.7,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 233,
+            "hfPct": 0.02,
+            "hfDb": -38,
+            "atkHfPct": 0.02,
+            "atkCrestDb": 7.64,
+            "atkBodyDb": 1.78,
+            "delayMs": 10,
+            "delaySpreadMs": 15.1,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 595,
+            "hfPct": 0.4,
+            "hfDb": -24,
+            "atkHfPct": 0.15,
+            "atkCrestDb": 8.04,
+            "atkBodyDb": 2.61,
+            "delayMs": 7.3,
+            "delaySpreadMs": 17.4,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 720,
+            "hfPct": 0.56,
+            "hfDb": -22.5,
+            "atkHfPct": 0.8,
+            "atkCrestDb": 7.75,
+            "atkBodyDb": 3.69,
+            "delayMs": 4.6,
+            "delaySpreadMs": 1.8,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 251,
+            "hfPct": 0.03,
+            "hfDb": -34.9,
+            "atkHfPct": 0.06,
+            "atkCrestDb": 7.6,
+            "atkBodyDb": 2.24,
+            "delayMs": 12,
+            "delaySpreadMs": 13,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 513,
+            "hfPct": 0.37,
+            "hfDb": -24.4,
+            "atkHfPct": 0.35,
+            "atkCrestDb": 8.37,
+            "atkBodyDb": 3.06,
+            "delayMs": 7.2,
+            "delaySpreadMs": 12.9,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "gu-clean",
+      "label": "GeneralUser clean electric",
+      "source": "GeneralUser GS 2.0.3",
+      "licence": "GeneralUser GS License v2.0 (free use, commercial included)",
+      "credit": [
+        "GeneralUser GS v2.0.3 by S. Christian Collins (c) 1997-2025, https://www.schristiancollins.com/generaluser, GeneralUser GS License v2.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-gu-clean.ogg",
+        "menu-v3": "menu-v3-gu-clean.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1180,
+            "hfPct": 4.54,
+            "hfDb": -13.4,
+            "atkHfPct": 5.88,
+            "atkCrestDb": 7.63,
+            "atkBodyDb": 3.08,
+            "delayMs": 5.9,
+            "delaySpreadMs": 2.9,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 780,
+            "hfPct": 1.85,
+            "hfDb": -17.3,
+            "atkHfPct": 1.9,
+            "atkCrestDb": 9.9,
+            "atkBodyDb": 1.37,
+            "delayMs": 7.8,
+            "delaySpreadMs": 15.2,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 1083,
+            "hfPct": 3.88,
+            "hfDb": -14.1,
+            "atkHfPct": 3.53,
+            "atkCrestDb": 9.16,
+            "atkBodyDb": 2.34,
+            "delayMs": 8,
+            "delaySpreadMs": 13.6,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1471,
+            "hfPct": 9.78,
+            "hfDb": -10.1,
+            "atkHfPct": 6.57,
+            "atkCrestDb": 8.82,
+            "atkBodyDb": 3.43,
+            "delayMs": 7.2,
+            "delaySpreadMs": 3.4,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 873,
+            "hfPct": 3.53,
+            "hfDb": -14.5,
+            "atkHfPct": 7.41,
+            "atkCrestDb": 11.69,
+            "atkBodyDb": 1.97,
+            "delayMs": 5.6,
+            "delaySpreadMs": 11.4,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 1237,
+            "hfPct": 7.41,
+            "hfDb": -11.3,
+            "atkHfPct": 6.99,
+            "atkCrestDb": 10.19,
+            "atkBodyDb": 2.76,
+            "delayMs": 8.6,
+            "delaySpreadMs": 8.9,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "gu-12string",
+      "label": "GeneralUser 12-string",
+      "source": "GeneralUser GS 2.0.3",
+      "licence": "GeneralUser GS License v2.0 (free use, commercial included)",
+      "credit": [
+        "GeneralUser GS v2.0.3 by S. Christian Collins (c) 1997-2025, https://www.schristiancollins.com/generaluser, GeneralUser GS License v2.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-gu-12string.ogg",
+        "menu-v3": "menu-v3-gu-12string.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1822,
+            "hfPct": 19.57,
+            "hfDb": -7.1,
+            "atkHfPct": 23.7,
+            "atkCrestDb": 9.59,
+            "atkBodyDb": 3.37,
+            "delayMs": 16,
+            "delaySpreadMs": 14.5,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 650,
+            "hfPct": 4.11,
+            "hfDb": -13.9,
+            "atkHfPct": 4.55,
+            "atkCrestDb": 9.18,
+            "atkBodyDb": 1.98,
+            "delayMs": 19.7,
+            "delaySpreadMs": 25.8,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 1393,
+            "hfPct": 14.17,
+            "hfDb": -8.5,
+            "atkHfPct": 13.17,
+            "atkCrestDb": 9.62,
+            "atkBodyDb": 2.39,
+            "delayMs": 16.1,
+            "delaySpreadMs": 30.6,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1753,
+            "hfPct": 21.22,
+            "hfDb": -6.7,
+            "atkHfPct": 27.5,
+            "atkCrestDb": 9.97,
+            "atkBodyDb": 3.03,
+            "delayMs": 17.8,
+            "delaySpreadMs": 14.6,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 815,
+            "hfPct": 7.09,
+            "hfDb": -11.5,
+            "atkHfPct": 7.33,
+            "atkCrestDb": 9.59,
+            "atkBodyDb": 2.04,
+            "delayMs": 17.7,
+            "delaySpreadMs": 16.2,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 1338,
+            "hfPct": 15.26,
+            "hfDb": -8.2,
+            "atkHfPct": 19.16,
+            "atkCrestDb": 10.02,
+            "atkBodyDb": 2.66,
+            "delayMs": 19.2,
+            "delaySpreadMs": 20.3,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "gu-harp",
+      "label": "GeneralUser harp",
+      "source": "GeneralUser GS 2.0.3",
+      "licence": "GeneralUser GS License v2.0 (free use, commercial included)",
+      "credit": [
+        "GeneralUser GS v2.0.3 by S. Christian Collins (c) 1997-2025, https://www.schristiancollins.com/generaluser, GeneralUser GS License v2.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-gu-harp.ogg",
+        "menu-v3": "menu-v3-gu-harp.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 629,
+            "hfPct": 0.31,
+            "hfDb": -25.1,
+            "atkHfPct": 1.22,
+            "atkCrestDb": 9.51,
+            "atkBodyDb": 4.36,
+            "delayMs": 4.9,
+            "delaySpreadMs": 5,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 277,
+            "hfPct": 0,
+            "hfDb": -44.8,
+            "atkHfPct": 0.01,
+            "atkCrestDb": 7.48,
+            "atkBodyDb": 0.55,
+            "delayMs": 12.7,
+            "delaySpreadMs": 24.3,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 510,
+            "hfPct": 0.21,
+            "hfDb": -26.8,
+            "atkHfPct": 0.05,
+            "atkCrestDb": 7.83,
+            "atkBodyDb": 2.05,
+            "delayMs": 8.1,
+            "delaySpreadMs": 18.6,
+            "attacks": 57
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 528,
+            "hfPct": 0.12,
+            "hfDb": -29,
+            "atkHfPct": 0.61,
+            "atkCrestDb": 8.49,
+            "atkBodyDb": 3.82,
+            "delayMs": 6.4,
+            "delaySpreadMs": 8.4,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 311,
+            "hfPct": 0,
+            "hfDb": -43.2,
+            "atkHfPct": 0.02,
+            "atkCrestDb": 7.64,
+            "atkBodyDb": 1.2,
+            "delayMs": 13.3,
+            "delaySpreadMs": 26.1,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 438,
+            "hfPct": 0.08,
+            "hfDb": -31.1,
+            "atkHfPct": 0.03,
+            "atkCrestDb": 7.94,
+            "atkBodyDb": 2.2,
+            "delayMs": 9.8,
+            "delaySpreadMs": 18.6,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "fp-classical",
+      "label": "FreePats Spanish classical",
+      "source": "FreePats Spanish Classical Guitar 2019-06-18",
+      "licence": "CC0 1.0",
+      "credit": [
+        "Spanish Classical Guitar (2019-06-18), recorded by Roberto (roberto@zenvoid.org) for the FreePats project, https://freepats.zenvoid.org/Guitar/acoustic-guitar.html, CC0 1.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-fp-classical.ogg",
+        "menu-v3": "menu-v3-fp-classical.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 704,
+            "hfPct": 1.76,
+            "hfDb": -17.5,
+            "atkHfPct": 4.31,
+            "atkCrestDb": 8.24,
+            "atkBodyDb": 4.19,
+            "delayMs": 8.2,
+            "delaySpreadMs": 19.3,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 284,
+            "hfPct": 0.2,
+            "hfDb": -27,
+            "atkHfPct": 0.08,
+            "atkCrestDb": 7.52,
+            "atkBodyDb": 3.58,
+            "delayMs": 13.1,
+            "delaySpreadMs": 23.2,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 560,
+            "hfPct": 1.23,
+            "hfDb": -19.1,
+            "atkHfPct": 0.36,
+            "atkCrestDb": 8.32,
+            "atkBodyDb": 3.25,
+            "delayMs": 11.6,
+            "delaySpreadMs": 21.3,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 609,
+            "hfPct": 1.07,
+            "hfDb": -19.7,
+            "atkHfPct": 2.17,
+            "atkCrestDb": 8.02,
+            "atkBodyDb": 3.27,
+            "delayMs": 13.6,
+            "delaySpreadMs": 17.6,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 316,
+            "hfPct": 0.24,
+            "hfDb": -26.2,
+            "atkHfPct": 0.18,
+            "atkCrestDb": 7.71,
+            "atkBodyDb": 3.8,
+            "delayMs": 12.2,
+            "delaySpreadMs": 25,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 480,
+            "hfPct": 0.73,
+            "hfDb": -21.4,
+            "atkHfPct": 0.61,
+            "atkCrestDb": 8.16,
+            "atkBodyDb": 2.86,
+            "delayMs": 14.1,
+            "delaySpreadMs": 23.9,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "fp-jazz",
+      "label": "FreePats jazz electric",
+      "source": "FreePats FSBS Electric Guitar Clean #2 (Jazz), bridge, small, 2026-08-07",
+      "licence": "CC0 1.0",
+      "credit": [
+        "FSBS Electric Guitar Clean #2 (Jazz) (2026-08-07), FreePats project, https://freepats.zenvoid.org/ElectricGuitar/clean-electric-guitar.html, CC0 1.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-fp-jazz.ogg",
+        "menu-v3": "menu-v3-fp-jazz.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 1973,
+            "hfPct": 15.78,
+            "hfDb": -8,
+            "atkHfPct": 18.24,
+            "atkCrestDb": 8.77,
+            "atkBodyDb": 1.83,
+            "delayMs": 6.6,
+            "delaySpreadMs": 7.7,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 613,
+            "hfPct": 1.51,
+            "hfDb": -18.2,
+            "atkHfPct": 1.52,
+            "atkCrestDb": 8.97,
+            "atkBodyDb": 0.52,
+            "delayMs": 5.9,
+            "delaySpreadMs": 24.6,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 1433,
+            "hfPct": 10.15,
+            "hfDb": -9.9,
+            "atkHfPct": 11.03,
+            "atkCrestDb": 9.26,
+            "atkBodyDb": 1.15,
+            "delayMs": 6.6,
+            "delaySpreadMs": 17.2,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 2099,
+            "hfPct": 18.12,
+            "hfDb": -7.4,
+            "atkHfPct": 17.93,
+            "atkCrestDb": 9.31,
+            "atkBodyDb": 2.05,
+            "delayMs": 7,
+            "delaySpreadMs": 5.1,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 811,
+            "hfPct": 3.05,
+            "hfDb": -15.2,
+            "atkHfPct": 3.17,
+            "atkCrestDb": 9.51,
+            "atkBodyDb": 0.77,
+            "delayMs": 14.4,
+            "delaySpreadMs": 24.6,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 1479,
+            "hfPct": 10.66,
+            "hfDb": -9.7,
+            "atkHfPct": 12,
+            "atkCrestDb": 9.63,
+            "atkBodyDb": 1.26,
+            "delayMs": 10,
+            "delaySpreadMs": 21,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "fp-harp",
+      "label": "FreePats concert harp",
+      "source": "FreePats Concert Harp 2020-07-02 (Versilian Community Sample Library)",
+      "licence": "CC0 1.0",
+      "credit": [
+        "Concert Harp (2020-07-02), FreePats project, from the Versilian Community Sample Library by Versilian Studios LLC, https://freepats.zenvoid.org/OrchestralStrings/harp.html, CC0 1.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-fp-harp.ogg",
+        "menu-v3": "menu-v3-fp-harp.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 801,
+            "hfPct": 0.65,
+            "hfDb": -21.9,
+            "atkHfPct": 1.15,
+            "atkCrestDb": 7.59,
+            "atkBodyDb": 7.07,
+            "delayMs": 8.6,
+            "delaySpreadMs": 10,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 317,
+            "hfPct": 0.01,
+            "hfDb": -41.5,
+            "atkHfPct": 0.02,
+            "atkCrestDb": 7.36,
+            "atkBodyDb": 2.22,
+            "delayMs": 14,
+            "delaySpreadMs": 37.2,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 636,
+            "hfPct": 0.41,
+            "hfDb": -23.9,
+            "atkHfPct": 0.1,
+            "atkCrestDb": 8.04,
+            "atkBodyDb": 3.33,
+            "delayMs": 12.8,
+            "delaySpreadMs": 24.6,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 682,
+            "hfPct": 0.48,
+            "hfDb": -23.2,
+            "atkHfPct": 0.68,
+            "atkCrestDb": 7.66,
+            "atkBodyDb": 8.54,
+            "delayMs": 8.1,
+            "delaySpreadMs": 8.1,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 362,
+            "hfPct": 0.01,
+            "hfDb": -42.4,
+            "atkHfPct": 0.01,
+            "atkCrestDb": 7.9,
+            "atkBodyDb": 1.96,
+            "delayMs": 17.8,
+            "delaySpreadMs": 33.4,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 536,
+            "hfPct": 0.27,
+            "hfDb": -25.8,
+            "atkHfPct": 0.25,
+            "atkCrestDb": 8.27,
+            "atkBodyDb": 4.58,
+            "delayMs": 13.4,
+            "delaySpreadMs": 23,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "fp-ukulele",
+      "label": "FreePats ukulele lead + classical",
+      "source": "FreePats Ukulele + Spanish Classical Guitar",
+      "licence": "CC0 1.0",
+      "credit": [
+        "Ukulele (2026-08-11), recorded by Mateusz Dąbrowski for the FreePats project, https://freepats.zenvoid.org/GuitarFamily/ukulele.html, CC0 1.0",
+        "Spanish Classical Guitar (2019-06-18), recorded by Roberto (roberto@zenvoid.org) for the FreePats project, https://freepats.zenvoid.org/Guitar/acoustic-guitar.html, CC0 1.0"
+      ],
+      "files": {
+        "menu-v2": "menu-v2-fp-ukulele.ogg",
+        "menu-v3": "menu-v3-fp-ukulele.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 909,
+            "hfPct": 1.91,
+            "hfDb": -17.2,
+            "atkHfPct": 2.68,
+            "atkCrestDb": 9.88,
+            "atkBodyDb": 4.51,
+            "delayMs": 6.1,
+            "delaySpreadMs": 3.4,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 284,
+            "hfPct": 0.2,
+            "hfDb": -27,
+            "atkHfPct": 0.08,
+            "atkCrestDb": 7.52,
+            "atkBodyDb": 3.58,
+            "delayMs": 13.1,
+            "delaySpreadMs": 23.2,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 672,
+            "hfPct": 1.25,
+            "hfDb": -19,
+            "atkHfPct": 0.4,
+            "atkCrestDb": 8.31,
+            "atkBodyDb": 3.79,
+            "delayMs": 10.8,
+            "delaySpreadMs": 18.4,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 916,
+            "hfPct": 1.87,
+            "hfDb": -17.3,
+            "atkHfPct": 4.08,
+            "atkCrestDb": 9.51,
+            "atkBodyDb": 4.63,
+            "delayMs": 6.9,
+            "delaySpreadMs": 14.3,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 316,
+            "hfPct": 0.24,
+            "hfDb": -26.2,
+            "atkHfPct": 0.18,
+            "atkCrestDb": 7.71,
+            "atkBodyDb": 3.8,
+            "delayMs": 12.2,
+            "delaySpreadMs": 25,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 632,
+            "hfPct": 1.13,
+            "hfDb": -19.5,
+            "atkHfPct": 0.98,
+            "atkCrestDb": 8.91,
+            "atkBodyDb": 3.82,
+            "delayMs": 10,
+            "delaySpreadMs": 12.9,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ks",
+      "label": "Plucked synth",
+      "source": "Plucked-string synth (render/pluck.mjs)",
+      "licence": "original, no samples",
+      "credit": [],
+      "files": {
+        "menu-v2": "menu-v2-ks.ogg",
+        "menu-v3": "menu-v3-ks.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 731,
+            "hfPct": 0.42,
+            "hfDb": -23.8,
+            "atkHfPct": 1.23,
+            "atkCrestDb": 7.69,
+            "atkBodyDb": 5.96,
+            "delayMs": 0.9,
+            "delaySpreadMs": 2.1,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 427,
+            "hfPct": 0.07,
+            "hfDb": -31.4,
+            "atkHfPct": 0.26,
+            "atkCrestDb": 8.31,
+            "atkBodyDb": 4.02,
+            "delayMs": 1.5,
+            "delaySpreadMs": 4.2,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 626,
+            "hfPct": 0.29,
+            "hfDb": -25.3,
+            "atkHfPct": 0.26,
+            "atkCrestDb": 8.54,
+            "atkBodyDb": 4.2,
+            "delayMs": 2.2,
+            "delaySpreadMs": 5.3,
+            "attacks": 59
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 1001,
+            "hfPct": 3.09,
+            "hfDb": -15.1,
+            "atkHfPct": 7.58,
+            "atkCrestDb": 9.48,
+            "atkBodyDb": 4.26,
+            "delayMs": 0.5,
+            "delaySpreadMs": 2.1,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 686,
+            "hfPct": 1.43,
+            "hfDb": -18.5,
+            "atkHfPct": 4.47,
+            "atkCrestDb": 10.29,
+            "atkBodyDb": 3.06,
+            "delayMs": 0.9,
+            "delaySpreadMs": 8.7,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 878,
+            "hfPct": 2.57,
+            "hfDb": -15.9,
+            "atkHfPct": 5.72,
+            "atkCrestDb": 9.94,
+            "atkBodyDb": 3.62,
+            "delayMs": 1.2,
+            "delaySpreadMs": 5.3,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ks-warm",
+      "label": "Plucked synth, warm",
+      "source": "Plucked-string synth (render/pluck.mjs)",
+      "licence": "original, no samples",
+      "credit": [],
+      "files": {
+        "menu-v2": "menu-v2-ks-warm.ogg",
+        "menu-v3": "menu-v3-ks-warm.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 664,
+            "hfPct": 0.27,
+            "hfDb": -25.7,
+            "atkHfPct": 0.69,
+            "atkCrestDb": 6.36,
+            "atkBodyDb": 4.51,
+            "delayMs": 2.3,
+            "delaySpreadMs": 1.9,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 352,
+            "hfPct": 0.02,
+            "hfDb": -36.5,
+            "atkHfPct": 0.06,
+            "atkCrestDb": 8.35,
+            "atkBodyDb": 2.78,
+            "delayMs": 3.4,
+            "delaySpreadMs": 7,
+            "attacks": 58
+          },
+          "mix": {
+            "centroidHz": 560,
+            "hfPct": 0.2,
+            "hfDb": -27.1,
+            "atkHfPct": 0.09,
+            "atkCrestDb": 7.98,
+            "atkBodyDb": 3.14,
+            "delayMs": 3.8,
+            "delaySpreadMs": 6.2,
+            "attacks": 58
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 623,
+            "hfPct": 0.19,
+            "hfDb": -27.1,
+            "atkHfPct": 0.5,
+            "atkCrestDb": 6.48,
+            "atkBodyDb": 4.3,
+            "delayMs": 2.8,
+            "delaySpreadMs": 2.5,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 352,
+            "hfPct": 0.03,
+            "hfDb": -35.5,
+            "atkHfPct": 0.08,
+            "atkCrestDb": 8.73,
+            "atkBodyDb": 2.58,
+            "delayMs": 3.4,
+            "delaySpreadMs": 8.3,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 500,
+            "hfPct": 0.13,
+            "hfDb": -28.7,
+            "atkHfPct": 0.21,
+            "atkCrestDb": 8.52,
+            "atkBodyDb": 3.53,
+            "delayMs": 4.6,
+            "delaySpreadMs": 8.4,
+            "attacks": 57
+          }
+        }
+      }
+    },
+    {
+      "id": "ks-steel-soft",
+      "label": "Plucked synth, soft steel",
+      "source": "Plucked-string synth (render/pluck.mjs)",
+      "licence": "original, no samples",
+      "credit": [],
+      "files": {
+        "menu-v2": "menu-v2-ks-steel-soft.ogg",
+        "menu-v3": "menu-v3-ks-steel-soft.ogg"
+      },
+      "metrics": {
+        "menu-v2": {
+          "lead": {
+            "centroidHz": 754,
+            "hfPct": 1.16,
+            "hfDb": -19.3,
+            "atkHfPct": 2.24,
+            "atkCrestDb": 7.42,
+            "atkBodyDb": 3.52,
+            "delayMs": 2,
+            "delaySpreadMs": 2.5,
+            "attacks": 24
+          },
+          "rhythm": {
+            "centroidHz": 446,
+            "hfPct": 0.33,
+            "hfDb": -24.8,
+            "atkHfPct": 0.74,
+            "atkCrestDb": 9.3,
+            "atkBodyDb": 2.3,
+            "delayMs": 2.2,
+            "delaySpreadMs": 5.8,
+            "attacks": 59
+          },
+          "mix": {
+            "centroidHz": 661,
+            "hfPct": 0.92,
+            "hfDb": -20.3,
+            "atkHfPct": 0.93,
+            "atkCrestDb": 8.73,
+            "atkBodyDb": 2.57,
+            "delayMs": 2.6,
+            "delaySpreadMs": 8.9,
+            "attacks": 58
+          }
+        },
+        "menu-v3": {
+          "lead": {
+            "centroidHz": 729,
+            "hfPct": 1.11,
+            "hfDb": -19.6,
+            "atkHfPct": 2.46,
+            "atkCrestDb": 7.48,
+            "atkBodyDb": 3.42,
+            "delayMs": 2.5,
+            "delaySpreadMs": 3.3,
+            "attacks": 35
+          },
+          "rhythm": {
+            "centroidHz": 463,
+            "hfPct": 0.45,
+            "hfDb": -23.5,
+            "atkHfPct": 1.11,
+            "atkCrestDb": 9.72,
+            "atkBodyDb": 2.28,
+            "delayMs": 2,
+            "delaySpreadMs": 9.8,
+            "attacks": 55
+          },
+          "mix": {
+            "centroidHz": 615,
+            "hfPct": 0.9,
+            "hfDb": -20.5,
+            "atkHfPct": 1.4,
+            "atkCrestDb": 9.23,
+            "atkBodyDb": 2.88,
+            "delayMs": 3,
+            "delaySpreadMs": 9.4,
+            "attacks": 57
+          }
+        }
+      }
+    }
+  ]
+}

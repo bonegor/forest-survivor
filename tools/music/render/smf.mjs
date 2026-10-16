@@ -1,6 +1,7 @@
 // Standard MIDI File reading and writing for the menu-music renderer (tools/music/render.mjs):
-// enough to copy a song's MIDI with its programs changed and a silent tail added for FluidSynth,
-// and to read its notes for the plucked-string synth. No dependencies.
+// enough to copy a song's MIDI with its voices (bank and program) changed, cut short, or with a
+// silent tail added for FluidSynth, and to read its notes for the plucked-string synth. No
+// dependencies.
 
 // ------------------------------------------------------------------ reading --
 
@@ -80,6 +81,79 @@ export function writeMidi({ format = 1, division, tracks }) {
     for (let i = 0; i < body.length; i += 8192) out.push(...body.slice(i, i + 8192));
   }
   return Buffer.from(out);
+}
+
+// The voice of each listed channel set, in place: map is a Map (or object) from channel (0-15) to
+// { bank, program }. Every program change of that channel becomes the given program, with a bank
+// select just before it (CC0 = bank, CC32 = 0, which FluidSynth's default GS mode reads as the
+// bank); a channel without a program change gets one at tick 0, in the first track that plays on
+// the channel. The channel's own bank selects are dropped. Returns the midi.
+export function setPrograms(midi, map) {
+  const want = map instanceof Map ? map : new Map(Object.entries(map).map(([k, v]) => [Number(k), v]));
+  for (const [ch, v] of want) {
+    if (!Number.isInteger(v.program) || v.program < 0 || v.program > 127) throw new Error(`ch${ch + 1}: bad program ${v.program}`);
+    const bank = v.bank ?? 0;
+    if (!Number.isInteger(bank) || bank < 0 || bank > 127) throw new Error(`ch${ch + 1}: bad bank ${bank}`);
+    let seen = false;
+    for (const evs of midi.tracks) {
+      for (let i = evs.length - 1; i >= 0; i--) {
+        const e = evs[i];
+        if (e.kind !== 'ch' || (e.status & 15) !== ch) continue;
+        const hi = e.status & 0xf0;
+        if (hi === 0xb0 && (e.data[0] === 0 || e.data[0] === 32)) evs.splice(i, 1);
+        else if (hi === 0xc0) {
+          evs.splice(i, 1, { tick: e.tick, kind: 'ch', status: 0xb0 | ch, data: [0, bank] }, { tick: e.tick, kind: 'ch', status: 0xb0 | ch, data: [32, 0] },
+            { tick: e.tick, kind: 'ch', status: 0xc0 | ch, data: [v.program] });
+          seen = true;
+        }
+      }
+    }
+    if (!seen) {
+      const evs = midi.tracks.find((t) => t.some((e) => e.kind === 'ch' && (e.status & 15) === ch)) || midi.tracks[0];
+      evs.unshift({ tick: 0, kind: 'ch', status: 0xb0 | ch, data: [0, bank] }, { tick: 0, kind: 'ch', status: 0xb0 | ch, data: [32, 0] },
+        { tick: 0, kind: 'ch', status: 0xc0 | ch, data: [v.program] });
+    }
+  }
+  return midi;
+}
+
+// Every note-on of channel `ch` gets the velocity fn(pitch, velocity) returns (rounded, 1-127),
+// in place. Returns how many changed and the largest change.
+export function mapVelocities(midi, ch, fn) {
+  let changed = 0, most = 0;
+  for (const evs of midi.tracks) for (const e of evs) {
+    if (!isNoteOn(e) || (e.status & 15) !== ch) continue;
+    const v = Math.max(1, Math.min(127, Math.round(fn(e.data[0], e.data[1]))));
+    if (v !== e.data[1]) { changed++; most = Math.max(most, Math.abs(v - e.data[1])); e.data[1] = v; }
+  }
+  return { changed, most };
+}
+
+// The first bars of a song, for a short excerpt: the notes that start before `endTick`, every
+// one released by `endTick` at the latest; everything else (controllers, tempo) kept. In place;
+// returns the midi.
+export function cutMidi(midi, endTick) {
+  for (const evs of midi.tracks) {
+    const open = new Map(); // ch*128+pitch -> count of notes started before the cut and not yet off
+    const out = [];
+    for (const e of [...evs].sort((a, b) => a.tick - b.tick)) {
+      if (e.kind === 'meta' && e.type === 0x2f) continue;
+      if (isNoteOn(e)) {
+        if (e.tick >= endTick) continue;
+        const k = (e.status & 15) * 128 + e.data[0];
+        open.set(k, (open.get(k) || 0) + 1);
+        out.push(e);
+      } else if (isNoteOff(e)) {
+        const k = (e.status & 15) * 128 + e.data[0];
+        if (!open.get(k)) continue; // its note was cut
+        open.set(k, open.get(k) - 1);
+        out.push(e.tick > endTick ? { ...e, tick: endTick } : e);
+      } else if (e.tick <= endTick) out.push(e);
+    }
+    evs.length = 0;
+    evs.push(...out);
+  }
+  return midi;
 }
 
 export const isNoteOn = (e) => e.kind === 'ch' && (e.status & 0xf0) === 0x90 && e.data[1] > 0;
