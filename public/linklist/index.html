@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Every address the game has, in one place: the game, the debug pages, the review pages,
+       the Sprite Lab, the repository, and the server's API (which GitHub Pages doesn't have). -->
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forest Survivor links</title>
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #0d0b14; --panel: #171424; --line: #2d2840; --text: #e8e4d9; --muted: #8b9bb4; --accent: #feae34; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
+    body { font: 15px/1.5 system-ui, "Segoe UI", sans-serif; padding: 24px 16px 60px; }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 26px; margin: 0 0 4px; }
+    .lede { color: var(--muted); margin: 0 0 18px; }
+    h2 { font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 22px 0 6px; }
+    ul { list-style: none; margin: 0; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+    li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 10px 14px; border-top: 1px solid var(--line); }
+    li:first-child { border-top: 0; }
+    a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+    .what { color: var(--text); flex: 1; min-width: 200px; }
+    .path { color: var(--muted); font: 13px/1.4 ui-monospace, Consolas, monospace; }
+    .note { color: var(--muted); font-size: 13px; width: 100%; }
+    footer { color: var(--muted); font-size: 13px; margin-top: 22px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Forest Survivor — all the links</h1>
+    <p class="lede">Everything the site serves. The debug pages keep a save of their own, so nothing played there touches your real progress.</p>
+
+    <h2>Play</h2>
+    <ul>
+      <li><a href="../">The game</a><span class="what">Title screen, your own save.</span><span class="path">/</span></li>
+      <li><a href="../?debug">Debug game</a><span class="what">Every hero and mode open, the Armory free; its own save (<code>?debug</code>). Press <kbd>`</kbd> in a run for the developer panel (on this machine only).</span><span class="path">/?debug</span></li>
+    </ul>
+
+    <h2>Reference and auditions</h2>
+    <ul>
+      <li><a href="../debug/weapons/">Weapons</a><span class="what">Each hero's signature weapon, the shared weapons, every level's text, evolutions and relics — built from the game's own data.</span><span class="path">/debug/weapons/</span></li>
+      <li><a href="../debug/music/">Menu music</a><span class="what">The candidate guitar loops and the guitar-sound A/B set; "Use in menus" plays a pick on the debug game's title screen.</span><span class="path">/debug/music/</span></li>
+      <li><a href="../97sjbk94u6md/">Hero sprite review</a><span class="what">Pick the Ranger, Sorcerer and Necromancer versions and tune their colours; saves come out as "FS …" codes.</span><span class="path">/97sjbk94u6md/</span></li>
+      <li><a href="../debug/">Debug landing</a><span class="what">Forwards to the debug game; links to the pages above.</span><span class="path">/debug/</span></li>
+    </ul>
+
+    <h2>Elsewhere</h2>
+    <ul>
+      <li><a href="https://lab.gamevibe.si" rel="noopener">Sprite Lab</a><span class="what">Every proposed sprite and the music scout, in the owner's codespace (owner only).</span><span class="path">lab.gamevibe.si</span></li>
+      <li><a href="https://github.com/bonegor/forest-survivor" rel="noopener">Repository</a><span class="what">Source, README, the publishing workflow.</span><span class="path">github.com/bonegor/forest-survivor</span></li>
+    </ul>
+
+    <h2>Game server only (not on GitHub Pages)</h2>
+    <ul>
+      <li><span class="what"><code>GET /api/state</code> · <code>POST /api/run</code> · <code>POST /api/checkpoint</code> · <code>POST /api/buy</code> · <code>POST /api/refund</code> · <code>POST /api/reset</code></span><span class="note">The save API, when the game runs on its Node server (<code>npm start</code>, http://localhost:3000). On Pages the save is a browser cookie instead.</span></li>
+      <li><span class="what"><code>GET /api/dev</code> · <code>POST /api/dev/login</code> · <code>POST /api/dev/logout</code> · <code>POST /api/dev/profile</code></span><span class="note">Developer mode (<code>npm run dev</code>, or <code>DEV_KEY</code>).</span></li>
+      <li><span class="what"><a href="http://localhost:3001">Sprite Lab, local</a></span><span class="note"><code>npm run lab</code>, port 3001.</span></li>
+    </ul>
+
+    <footer>This page: <span class="path">/linklist/</span>. The README has the long form of all of it.</footer>
+  </div>
+</body>
+</html>
