@@ -18,6 +18,8 @@ import { glow } from './fxsprites.js';
 import { sfx } from '../engine/audio.js';
 
 const T = 16;
+// How far a monster sees the hero, given a clear line between them: as far as he sees (reveal).
+export const SIGHT = 10 * T;
 const FLOOR = 0, WALL = 1, LAVA = 2, PROP = 3;
 // A crypt's lit way out: its pulses run this fast (px/s), this far apart (px).
 const WAY_SPEED = 90, WAY_GAP = 72;
@@ -142,6 +144,8 @@ export class Dungeon {
   // crypt: { name, theme } for a crypt off the forest road, else a Dungeon Run floor.
   constructor(g, floor, seed, crypt = null) {
     this.g = g;
+    // Monsters here chase the hero only once they have seen him (Enemy.aware, sees, wander).
+    this.vision = true;
     this.floor = floor;
     this.crypt = crypt;
     this.info = crypt ? { name: crypt.name, theme: crypt.theme, guardian: null } : FLOORS[floor - 1];
@@ -873,6 +877,34 @@ export class Dungeon {
       if (this.solid(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) return false;
     }
     return true;
+  }
+
+  // Whether monster e sees the hero p: near enough, with no wall between them.
+  sees(e, p) {
+    return (p.x - e.x) ** 2 + (p.y - e.y) ** 2 <= SIGHT * SIGHT && this.lineOfSight(e.x, e.y, p.x, p.y);
+  }
+
+  // Where a monster that hasn't seen the hero strolls: to a spot of open floor it can see a few
+  // tiles off, then, there or after a while, to another. Its heading, or [0, 0] to stand.
+  wander(e, dt) {
+    const w = e.data;
+    w.wt = (w.wt ?? 0) - dt;
+    if (w.wx === undefined || w.wt <= 0 || (w.wx - e.x) ** 2 + (w.wy - e.y) ** 2 < 16) {
+      w.wt = rand(2, 4);
+      w.wx = e.x;
+      w.wy = e.y;
+      for (let k = 0; k < 6; k++) {
+        const a = rand(TAU), d = rand(2, 6) * T;
+        const x = e.x + Math.cos(a) * d, y = e.y + Math.sin(a) * d;
+        if (this.free(x, y) && this.lineOfSight(e.x, e.y, x, y)) {
+          w.wx = x;
+          w.wy = y;
+          break;
+        }
+      }
+    }
+    const dx = w.wx - e.x, dy = w.wy - e.y, l = Math.hypot(dx, dy);
+    return l < 1 ? [0, 0] : [dx / l, dy / l];
   }
 
   steer(e, target) {

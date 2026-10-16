@@ -150,7 +150,7 @@ export class Spawner {
           const a = (i / ev.count) * TAU;
           const spot = g.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
           if (!spot) continue;
-          g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true });
+          g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true });
           placed++;
         }
         if (placed) g.banner('You are surrounded!', '', '#e43b44', 1.6);
@@ -165,7 +165,7 @@ export class Spawner {
         for (let i = 0; i < ev.count; i++) {
           const off = (i / ev.count - 0.5) * 120;
           const x = sx - dy * off + rand(-10, 10), y = sy + dx * off + rand(-10, 10);
-          const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6 });
+          const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6, aware: true });
           if (e) e.spd *= 1.2;
         }
         sfx('charge');
@@ -174,7 +174,7 @@ export class Spawner {
       case 'pack': {
         const pt = g.world.spawnPoint(g, 30);
         if (!pt) break;
-        for (let i = 0; i < ev.count; i++) g.spawnEnemy(ev.enemy, pt.x + rand(-20, 20), pt.y + rand(-20, 20), st);
+        for (let i = 0; i < ev.count; i++) g.spawnEnemy(ev.enemy, pt.x + rand(-20, 20), pt.y + rand(-20, 20), { ...st, aware: true });
         break;
       }
       default:

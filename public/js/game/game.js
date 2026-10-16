@@ -23,7 +23,6 @@ import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
 import { Lighting } from './lighting.js';
 import { SpatialGrid } from './grid.js';
-import { jostle } from './crowd.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
 import { Dungeon } from './dungeon.js';
@@ -395,7 +394,8 @@ export class Game {
 
   summonRing(type, n, R, o = {}) {
     const p = this.player;
-    const st = { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, ...o };
+    // Summoned round the hero by a boss: they know where he is (Enemy.aware).
+    const st = { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, aware: true, ...o };
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + rand(-0.2, 0.2);
       const spot = this.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
@@ -411,6 +411,8 @@ export class Game {
     }
     if (e.sleeping) this.bossIntro(e);
     if (e.dormant) this.wakePack(e);
+    // Hit, it knows where the hero is, in a dungeon too (Enemy.aware).
+    e.aware = true;
     const p = this.player;
     let d = dmg * p.might;
     if (p.buff('fury')) d *= 1.6;
@@ -497,7 +499,7 @@ export class Game {
     }
     if (e.def.split && !o.noSplit) {
       for (let i = 0; i < e.def.splitN; i++) {
-        const c = this.spawnEnemy(e.def.split, e.x + rand(-5, 5), e.y + rand(-5, 5), { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, instant: true });
+        const c = this.spawnEnemy(e.def.split, e.x + rand(-5, 5), e.y + rand(-5, 5), { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, instant: true, aware: true });
         if (c) {
           c.kx = rand(-60, 60);
           c.ky = rand(-60, 60);
@@ -835,7 +837,12 @@ export class Game {
 
   // A crypt's pack wakes together.
   wakePack(e) {
-    for (const o of this.enemies) if (o.dormant && o.pack === e.pack) o.dormant = false;
+    for (const o of this.enemies) {
+      if (o.dormant && o.pack === e.pack) {
+        o.dormant = false;
+        o.aware = true;
+      }
+    }
   }
 
   // Gear from the pickup screen: wear it (selling what it replaces), or sell it, or sell what is worn.
@@ -1411,9 +1418,10 @@ export class Game {
     if (this.state === 'play') this.heroMilestone();
   }
 
-  // None can stand inside the hero, and foes bump into one another and into props (barrels,
-  // crates...) and spread out (crowd.js): last, so that pushing one off the hero can't leave it
-  // standing in another.
+  // Foes pass through one another and through props (barrels, crates...), and in the forest
+  // through the trees, so nothing holds a horde up; the only thing they can't do is stand inside
+  // the hero. Dungeon walls alone stop them (Dungeon.collide). The user's rule: "They cannot bump
+  // into anything, apart from, obviously, in the dungeon where there is no space."
   separate() {
     const E = this.enemies, p = this.player;
     for (let i = 0; i < E.length; i++) {
@@ -1428,7 +1436,6 @@ export class Game {
         }
       }
     }
-    jostle(E, p.x, p.y);
   }
 
   relocate() {

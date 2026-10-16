@@ -15,6 +15,8 @@ import { faceAlong, faceAttack } from './facing.js';
 
 export const SRC = { BURN: 16, ULT: 17, SHATTER: 18, RELIC: 19, MISC: 20, POOL: 15 };
 const N_SRC = 24;
+// How much of its speed a monster that hasn't seen the hero strolls at (Dungeon.wander).
+export const STROLL = 0.5;
 // Champions aren't pushed by blows: a blow stops one for HOLD seconds instead, and it
 // can't be stopped again until HOLD_EVERY seconds after that, so hits can't pin it.
 export const HOLD = 0.2, HOLD_EVERY = 0.6;
@@ -92,6 +94,11 @@ export class Enemy {
     this.sleeping = !!o.sleeping; // dungeon guardians wait for you
     this.lord = !!o.lord; // the named boss at the end of a crypt
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
+    // Whether it knows where the hero is. In a dungeon one doesn't until it has seen him or been
+    // hit (update); what is sent at him (o.aware: a ring, a swarm, a pack), a boss, one that
+    // wakes by its own rule (sleeping) and the thief always do. In the forest every one does.
+    this.aware = !!(o.aware || def.boss || o.sleeping || def.ai === 'flee');
+    this.lookT = 0;
     this.pack = o.pack || 0;
     this.phase = 0;
     this.drops = o.drops || null;
@@ -153,6 +160,20 @@ export class Enemy {
       if (Math.random() < 0.3) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick([PC.o, PC.y]), P.GLOW | P.FADE, 0);
     }
 
+    // In a dungeon (world.vision) a monster that hasn't seen the hero doesn't know where he is:
+    // it strolls about (Dungeon.wander) and looks out for him (Dungeon.sees). Once it has seen
+    // him, or been hit, it follows him, round corners too (the user's "follow the hero on
+    // vision"). Out in the forest every monster knows.
+    let unaware = false;
+    if (!this.aware) {
+      if (!g.world.vision) this.aware = true;
+      else if ((this.lookT -= dt) <= 0) {
+        this.lookT = rand(0.15, 0.3);
+        this.aware = g.world.sees(this, p);
+      }
+      unaware = !this.aware;
+    }
+
     let sp = this.spd * g.diff.speed;
     if (this.slowT > 0) sp *= 1 - this.slowF;
     if (this.freezeT > 0) sp = 0;
@@ -167,6 +188,12 @@ export class Enemy {
       this.lockT -= dt;
       dx = this.lockX;
       dy = this.lockY;
+    } else if (unaware) {
+      // Neither chasing nor shooting nor charging at a hero it hasn't seen.
+      const d = g.world.wander(this, dt);
+      dx = d[0];
+      dy = d[1];
+      sp *= STROLL;
     } else if (this.ai) {
       const r = this.ai(this, dt, sp);
       dx = r[0];

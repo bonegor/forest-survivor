@@ -77,7 +77,7 @@ There are **two difficulties**, chosen on the trial screen and remembered with t
 
 Ranked is always Veteran, since it keeps one best time per hero. A night survived on either counts on the unlock ladder.
 
-Monsters bump into one another and into props, so a horde gathers round the hero in a crowd instead of one heap, and tree trunks stop them as they stop the hero (Wraiths drift through everything, and bats and imps fly over the trees). Dungeon walls stop everyone.
+Monsters pass through one another, through props and through the trees: the only thing they can't do is stand inside the hero. Dungeon walls stop them all but Wraiths, bats and imps. In a dungeon (a Dungeon Run floor or a crypt) a monster doesn't know where the hero is until it has seen him (ten tiles, as far as he sees, with no wall between) or been struck. Until then it strolls about; from then on it follows him round corners. What is sent at him (a ring, a swarm, a pack, a boss's summons), the bosses and the thief always know where he is.
 
 The whole game runs **10% faster than real time** (`GAME_SPEED` in `public/js/data/difficulty.js`): the clock, the hero, the monsters, everything in a run, though not the menus. The 15-minute night passes in about 13⅔ minutes.
 
