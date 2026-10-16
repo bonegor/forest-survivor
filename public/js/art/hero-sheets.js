@@ -1,6 +1,7 @@
 // Heroes picked in the Sprite Lab, as baked from its sheets by tools/bake-heroes.mjs: the
 // frames exactly as picked, packed as palette indices (public/assets/heroes), with the
 // animation lists and rates the lab plays them at. Their outlines are in the frames already.
+import ARCHER from '../../assets/heroes/archer.js';
 import MAGE from '../../assets/heroes/mage.js';
 import NECROMANCER from '../../assets/heroes/necromancer.js';
 import ROGUE from '../../assets/heroes/rogue.js';
@@ -15,14 +16,19 @@ function decode(data) {
   });
 }
 
-// The in-game sprite. emissive: palette keys that glow in the dark, as the art's own source sets them.
+// The in-game sprite. What glows in the dark: the colours baked with it (data.glow), or
+// emissive, palette keys as the art's own source sets them.
 function sheet(data, more = {}) {
   let frames;
   return {
     gen: () => (frames ??= decode(data)),
     idle: data.idle, walk: data.walk, attack: data.attack, attackFps: data.attackFps,
     motionRate: data.motionRate, idleRate: data.idleRate, anchorY: data.anchorY,
-    fitW: data.fitW, fitH: data.fitH, selfBob: data.selfBob, outline: false, ...more,
+    fitW: data.fitW, fitH: data.fitH, selfBob: data.selfBob, outline: false,
+    // A ranger's bow (game/ranger-animation.js): the frame the arrow leaves on, her shots on the move.
+    ...(data.attackRelease != null ? { attackRelease: data.attackRelease, attackWalk: data.attackWalk } : {}),
+    ...(data.glow ? { glow: data.glow } : {}),
+    ...more,
   };
 }
 
@@ -50,16 +56,20 @@ function pose(def) {
       return { w, h, d };
     }));
   };
-  return { gen, fps: def.idleRate * 1.6, hires: 1.5, emissive: def.emissive, outline: false };
+  return { gen, fps: def.idleRate * 1.6, hires: 1.5, emissive: def.emissive, glow: def.glow, outline: false };
 }
 
-// Eldrin, Remaster V3: his ice and the ember of his casts glow.
-export const MAGE_SHEET = sheet(MAGE, { emissive: 'cXof' });
-// Morvath, Remaster V3: the greens and reds his source marks as burning glow.
-export const NECROMANCER_SHEET = sheet(NECROMANCER, { emissive: 'lix' });
+// Picked on the hero review page on 15 October 2026 and animated in the lab
+// (gms/3001/sprites/lab/src/animated-oct15), in the colours saved there:
+// Lyra as Silverleaf, her moonstone glowing; Eldrin as the Grand Archmage, his fire glowing;
+// Morvath as Soulflame, crowned, his eyes and the crown's gem glowing.
+export const ARCHER_SHEET = sheet(ARCHER);
+export const MAGE_SHEET = sheet(MAGE);
+export const NECROMANCER_SHEET = sheet(NECROMANCER);
 // Kael as the Eclipse Wraith, in the colours of its tweak.
 export const ROGUE_SHEET = sheet(ROGUE);
 
+export const ARCHER_POSE = pose(ARCHER_SHEET);
 export const MAGE_POSE = pose(MAGE_SHEET);
 export const NECROMANCER_POSE = pose(NECROMANCER_SHEET);
 export const ROGUE_POSE = pose(ROGUE_SHEET);

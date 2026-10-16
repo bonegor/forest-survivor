@@ -456,7 +456,7 @@ function mossmantle() {
 }
 
 // ---- D: an elven huntress, silver hair, a leaf mantle and a moonstone bow -------------------
-const D_PAL = {
+export const D_PAL = {
   o: '#1c1b24',
   A: '#4b4a66', B: '#8a8bb0', C: '#c6c9e0', D: '#f4f6ff',
   s: '#b87563', t: '#eeb08c', u: '#fde0c0', i: '#2e8a6e', m: '#c96a6a',
@@ -465,150 +465,153 @@ const D_PAL = {
   U: '#7a6a52', V: '#b8a684', W: '#e8dcc0', G: '#8ff0dd',
   q: '#e6c25a', z: '#f2f0e6',
 };
+// Silverleaf's parts, by name, back to front: the animated ranger (src/animated-oct15/archer.js)
+// moves them pose by pose.
+export const SILVERLEAF = {
+  // Hip quiver at the back, white fletchings edged in teal.
+  quiver: [12, 22, [
+    '.o..o....',
+    'ozoozo...',
+    'ozcozco..',
+    'ozcozco..',
+    '.ojjjjo..',
+    '..okkjko.',
+    '..okkjko.',
+    '...okjho.',
+    '...okjho.',
+    '....okho.',
+    '....ooo..',
+  ]],
+  // Back leg, set back for a wider stance: dark legging, soft boot.
+  backLeg: [16, 30, [
+    '...ohho',
+    '...ohjo',
+    '..ohjo.',
+    '..ojkjo',
+    '..ohjjo',
+    '.ohjjo.',
+    '.ohjjo.',
+    '.ohjjo.',
+    '.ohjjjo',
+    '.oooooo',
+  ]],
+  // Leather bodice, belt with a gold buckle, teal tunic skirt split at the front.
+  torso: [19, 22, [
+    'ojkkkkjo..',
+    'ojkllkjo..',
+    'ojkllkjho.',
+    '.ojkkjho..',
+    '.ohhqhho..',
+    'obcccbbo..',
+    'obcdcbbao.',
+    'obccbbaabo',
+    '.oobooaoo.',
+  ]],
+  // Front leg.
+  frontLeg: [24, 30, [
+    '.ohjo..',
+    '.ohjo..',
+    '.ohjo..',
+    '.okllo.',
+    '.ojkko.',
+    '.ojkko.',
+    '.ojkko.',
+    '.ojkko.',
+    '.ojkkko',
+    '.oooooo',
+  ]],
+  // Pale birch bow, drawn before the arm, with a moonstone above the grip (it glows at night).
+  bow: [31, 18, [
+    '..o.....',
+    '.oqo....',
+    '.oWo....',
+    '.ooWoo..',
+    '.o.oWo..',
+    '.o.oWo..',
+    '.o..oGo.',
+    '.o..oGo.',
+    '.o..oVo.',
+    '.o...oVo',
+    '.o...oVo',
+    '.o...oVo',
+    '.o..oVo.',
+    '.o..oVo.',
+    '.o..oUo.',
+    '.o.oVo..',
+    '.o.oVo..',
+    '.ooVoo..',
+    '.oVo....',
+    '.oqo....',
+    '..o.....',
+  ]],
+  // Bow arm: sleeve, bare forearm, leather bracer, wrist at the grip.
+  bowArm: [27, 23, [
+    'ocbo....',
+    'otto....',
+    'ottso...',
+    '.ojkko..',
+    '..ojklo.',
+    '...ottto',
+    '....oooo',
+  ]],
+  // Teal leaf mantle over the shoulders, a gold leaf brooch at the throat.
+  mantle: [16, 18, [
+    '...oo..........',
+    '..ocdo.........',
+    '.ocddcoooooooo.',
+    'ocddccccccccqco',
+    'ocdcccccccbbqbo',
+    'obccccbbbbbbbbo',
+    '.obbbbbo.obbbo.',
+    '..obbbo...obo..',
+    '...ooo.....o...',
+  ]],
+  // Long silver hair: one lock falls from the back of the head and tapers to a point.
+  hair: [14, 10, [
+    '....oooo',
+    '...oDDCC',
+    '..oDCCCB',
+    '..oCCCBB',
+    '.oDCCBBA',
+    '.oCCBBA.',
+    '.oCCBBA.',
+    '.oCBBAo.',
+    'oCCBBAo.',
+    'oCBBAo..',
+    'oBBAo...',
+    '.oAo....',
+    '..o.....',
+  ]],
+  // Head: silver hair parted over the brow, a pointed ear, a 3/4 face with jade eyes.
+  head: [19, 8, [
+    '...ooooo....',
+    '..oDDCCCoo..',
+    '.oDDCCCCCCo.',
+    'CDDCCCCCCCCo',
+    'CDCCCCCCCBCo',
+    'CCCCCCBCBuBo',
+    'BBCCCBuuuuuo',
+    'BBCCBuouuouo',
+    'BBBCBuiuuito',
+    'BABBAtuuuto.',
+    'AoABAsttmo..',
+    'o.oooosso...',
+  ]],
+  // The pointed ear, through the hair.
+  ear: [17, 9, [
+    'oo....',
+    'ouo...',
+    '.ouo..',
+    '.otuo.',
+    '..otuo',
+    '..ostto',
+    '...oo..',
+  ]],
+  // The hand wraps the grip.
+  hand: [34, 27, ['ouuuo', 'tttto', '.ooo.']],
+};
 function silverleaf() {
-  return paint(D_PAL, [
-    // Hip quiver at the back, white fletchings edged in teal.
-    [12, 22, [
-      '.o..o....',
-      'ozoozo...',
-      'ozcozco..',
-      'ozcozco..',
-      '.ojjjjo..',
-      '..okkjko.',
-      '..okkjko.',
-      '...okjho.',
-      '...okjho.',
-      '....okho.',
-      '....ooo..',
-    ]],
-    // Back leg, set back for a wider stance: dark legging, soft boot.
-    [16, 30, [
-      '...ohho',
-      '...ohjo',
-      '..ohjo.',
-      '..ojkjo',
-      '..ohjjo',
-      '.ohjjo.',
-      '.ohjjo.',
-      '.ohjjo.',
-      '.ohjjjo',
-      '.oooooo',
-    ]],
-    // Leather bodice, belt with a gold buckle, teal tunic skirt split at the front.
-    [19, 22, [
-      'ojkkkkjo..',
-      'ojkllkjo..',
-      'ojkllkjho.',
-      '.ojkkjho..',
-      '.ohhqhho..',
-      'obcccbbo..',
-      'obcdcbbao.',
-      'obccbbaabo',
-      '.oobooaoo.',
-    ]],
-    // Front leg.
-    [24, 30, [
-      '.ohjo..',
-      '.ohjo..',
-      '.ohjo..',
-      '.okllo.',
-      '.ojkko.',
-      '.ojkko.',
-      '.ojkko.',
-      '.ojkko.',
-      '.ojkkko',
-      '.oooooo',
-    ]],
-    // Pale birch bow, drawn before the arm, with a moonstone above the grip (it glows at night).
-    [31, 18, [
-      '..o.....',
-      '.oqo....',
-      '.oWo....',
-      '.ooWoo..',
-      '.o.oWo..',
-      '.o.oWo..',
-      '.o..oGo.',
-      '.o..oGo.',
-      '.o..oVo.',
-      '.o...oVo',
-      '.o...oVo',
-      '.o...oVo',
-      '.o..oVo.',
-      '.o..oVo.',
-      '.o..oUo.',
-      '.o.oVo..',
-      '.o.oVo..',
-      '.ooVoo..',
-      '.oVo....',
-      '.oqo....',
-      '..o.....',
-    ]],
-    // Bow arm: sleeve, bare forearm, leather bracer, wrist at the grip.
-    [27, 23, [
-      'ocbo....',
-      'otto....',
-      'ottso...',
-      '.ojkko..',
-      '..ojklo.',
-      '...ottto',
-      '....oooo',
-    ]],
-    // Teal leaf mantle over the shoulders, a gold leaf brooch at the throat.
-    [16, 18, [
-      '...oo..........',
-      '..ocdo.........',
-      '.ocddcoooooooo.',
-      'ocddccccccccqco',
-      'ocdcccccccbbqbo',
-      'obccccbbbbbbbbo',
-      '.obbbbbo.obbbo.',
-      '..obbbo...obo..',
-      '...ooo.....o...',
-    ]],
-    // Long silver hair: one lock falls from the back of the head and tapers to a point.
-    [14, 10, [
-      '....oooo',
-      '...oDDCC',
-      '..oDCCCB',
-      '..oCCCBB',
-      '.oDCCBBA',
-      '.oCCBBA.',
-      '.oCCBBA.',
-      '.oCBBAo.',
-      'oCCBBAo.',
-      'oCBBAo..',
-      'oBBAo...',
-      '.oAo....',
-      '..o.....',
-    ]],
-    // Head: silver hair parted over the brow, a pointed ear, a 3/4 face with jade eyes.
-    [19, 8, [
-      '...ooooo....',
-      '..oDDCCCoo..',
-      '.oDDCCCCCCo.',
-      'CDDCCCCCCCCo',
-      'CDCCCCCCCBCo',
-      'CCCCCCBCBuBo',
-      'BBCCCBuuuuuo',
-      'BBCCBuouuouo',
-      'BBBCBuiuuito',
-      'BABBAtuuuto.',
-      'AoABAsttmo..',
-      'o.oooosso...',
-    ]],
-    // The pointed ear, through the hair.
-    [17, 9, [
-      'oo....',
-      'ouo...',
-      '.ouo..',
-      '.otuo.',
-      '..otuo',
-      '..ostto',
-      '...oo..',
-    ]],
-    // The hand wraps the grip.
-    [34, 27, ['ouuuo', 'tttto', '.ooo.']],
-  ]);
+  return paint(D_PAL, Object.values(SILVERLEAF));
 }
 
 const model = (fn) => {

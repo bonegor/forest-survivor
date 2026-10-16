@@ -5,7 +5,6 @@ import {Game} from '../public/js/game/game.js';
 import {SPR} from '../public/js/engine/sprites.js';
 import {input} from '../public/js/engine/input.js';
 import {defaultProfile,metaBonuses} from '../public/js/shared/profile.js';
-import {RANGER_VERDANT} from '../public/js/art/ranger-verdant.js';
 import {bounds,flipX} from '../public/js/engine/pixels.js';
 
 const context={globalAlpha:1,drawImage(){}};
@@ -21,14 +20,23 @@ function run(fn){
 }
 
 test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors',()=>{
-  const frames=RANGER_VERDANT.gen();
-  for(const [i,f] of frames.entries()){
+  const spr=SPR.archer;
+  assert.equal(spr.frames.length,88,'idle, walk, shots and the shots on the move');
+  for(const [i,fr] of spr.frames.entries()){
+    const f=fr.buf;
     assert.deepEqual([f.w,f.h],[48,48]);
     const b=bounds(f);
-    assert.ok(b.x0>0&&b.y0>0&&b.x1<47&&b.y1<47,`pose ${i} has transparent safety padding`);
-    assert.equal(b.y1,RANGER_VERDANT.anchorY-1,`pose ${i}: a supporting boot stays on the ground`);
+    assert.ok(b.x0>0&&b.y0>0&&b.x1<=47&&b.y1<47,`pose ${i} has transparent safety padding`);
+    assert.equal(b.y1,spr.anchorY-1,`pose ${i}: a supporting boot stays on the ground`);
     assert.deepEqual(flipX(flipX(f)).d,f.d);
   }
+});
+
+test('the ranger is Silverleaf as picked: her moonstone glows, her bow keeps its timing',()=>{
+  const spr=SPR.archer;
+  assert.deepEqual([spr.idle.length,spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[8,8,8,5,14]);
+  assert.deepEqual(spr.attackWalk.map(r=>r.length),[8,8,8,8,8,8,8,8]);
+  assert.ok(spr.frames.every(f=>f.em),'the moonstone glows in every frame');
 });
 
 test('the real ranger movement clock plays all eight phases at 12 fps',()=>run((g,p,w)=>{

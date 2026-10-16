@@ -2,8 +2,7 @@
 
 import { portrait } from './portraits.js';
 import { KNIGHT_PLUMED } from './knight-plumed.js';
-import { RANGER_VERDANT } from './ranger-verdant.js';
-import { MAGE_SHEET, MAGE_POSE, NECROMANCER_SHEET, NECROMANCER_POSE, ROGUE_SHEET, ROGUE_POSE } from './hero-sheets.js';
+import { ARCHER_SHEET, ARCHER_POSE, MAGE_SHEET, MAGE_POSE, NECROMANCER_SHEET, NECROMANCER_POSE, ROGUE_SHEET, ROGUE_POSE } from './hero-sheets.js';
 import { KNIGHT_PORTRAIT_V2 } from './knight-portrait-v2.js';
 
 export const HERO_ART = {
@@ -15,13 +14,10 @@ export const HERO_ART = {
   knight_pose: KNIGHT_PORTRAIT_V2,
   knight_camp: { gen: () => [portrait('knight', 'camp')], hires: 2, picture: 'img/knight-figure.png' },
 
-  // Lyra shares the plumed knight's native scale and animated equipment.
-  archer: RANGER_VERDANT,
-
-  // Menu poses, like the knight's: the hero panel shows the ranger's picture
-  // (tools/portraits/archer-scene.png), the campfire the painted ranger cut out
-  // (tools/portraits/archer.png).
-  archer_pose: { gen: () => [portrait('archer', 'scene')], hires: 3, small: 'archer_camp' },
+  // Lyra as Silverleaf, picked on 15 October 2026 (hero-sheets.js): her menu pose is her idle
+  // loop. The campfire still shows the painted ranger cut out (tools/portraits/archer.png).
+  archer: ARCHER_SHEET,
+  archer_pose: ARCHER_POSE,
   archer_camp: { gen: () => [portrait('archer', 'camp')], hires: 2, picture: 'img/archer-figure.png' },
 
   // Eldrin, Morvath and Kael as picked in the Sprite Lab (hero-sheets.js): the Sorcerer and the

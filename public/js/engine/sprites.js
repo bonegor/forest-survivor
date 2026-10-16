@@ -95,8 +95,10 @@ export class Frame {
 export const SPR = {};
 
 // One sprite definition built into outlined frames (the sprite lab uses this too).
+// What glows unlit: def.emissive, palette keys (as in art/palette.js); or def.glow, the colours
+// themselves (packed), for art drawn in colours of its own.
 export function buildSprite(name, def) {
-  const emissive = def.emissive ? new Set([...def.emissive].map((ch) => pal[ch])) : null;
+  const emissive = def.emissive ? new Set([...def.emissive].map((ch) => pal[ch])) : def.glow && def.glow.length ? new Set(def.glow) : null;
   const thin = def.thin ? new Set([...def.thin].map((ch) => pal[ch])) : null;
   const frames = resolveFrames(def).map((raw) => {
     let b = Array.isArray(raw) ? px.fromRows(raw, pal) : raw;

@@ -26,7 +26,6 @@ export const HEROES = {
     title: 'Ranger',
     sprite: 'archer',
     pose: 'archer_pose',
-    picture: 'img/archer-scene.png',
     weapon: 'bow',
     color: '#63c74d',
     stats: { maxHp: 100, speed: 1.15, crit: 0.12, projSpeed: 1.1 },

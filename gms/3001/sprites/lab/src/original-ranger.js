@@ -1,7 +1,10 @@
+// Lyra as the game drew her until the pick of 15 October 2026 shipped (Silverleaf, animated in
+// src/animated-oct15/archer.js), kept here to compare against. Was public/js/art/ranger-verdant.js.
+//   node gms/3001/tools/build.mjs gms/3001/sprites/lab/src/original-ranger.js
 // Lyra: an original, compact pixel ranger to accompany the plumed knight.
 // The same model is drawn in every pose; cloth, limbs and bow have their own
 // motion. These are native pixels, with no smoothing or per-frame resizing.
-import { makeBuf, hexPack } from '../engine/pixels.js';
+import { makeBuf, hexPack } from '../../../../../public/js/engine/pixels.js';
 
 export const RANGER_PALETTE = {
   o: '#211d2a', a: '#263c36', b: '#365b42', c: '#5c8b51',
@@ -175,3 +178,9 @@ export const RANGER_VERDANT = {
   motionRate: 12 / (9.8 * 1.15), idleRate: 6 / 1.6,
   anchorY: FOOT, fitW: 36, fitH: 34, selfBob: true, outline: false,
 };
+
+export default [{
+  cls: 'archer', id: 'original-verdant', name: 'Original · Lyra (until 15 October)',
+  description: 'The ranger the game drew until Silverleaf was picked: hooded, in green and leather, with her bow shots and shots on the move.',
+  collection: 'Originals', def: RANGER_VERDANT,
+}];

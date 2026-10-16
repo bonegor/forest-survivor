@@ -16,15 +16,19 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const lab = join(root, 'gms/3001/sprites/lab');
 const assets = resolve(process.env.LAB_ASSETS || join(root, '../forest-survivor-assets'));
 
-// What ships, by the game's sprite name: the pick in the lab (role/id).
+// What ships, by the game's sprite name: the pick in the lab (role/id). The picks of 15 October
+// were tuned on the hero review page and animated in the lab (src/animated-oct15): each is already
+// in the colours the user saved there.
 const BAKE = {
-  mage: 'mage/remaster-v3',
-  necromancer: 'necromancer/remaster-v3',
+  archer: 'archer/silverleaf-picked',
+  mage: 'mage/grand-archmage-picked',
+  necromancer: 'necromancer/soulflame-picked',
   rogue: 'rogue/eclipse-wraith-tweak-1',
 };
 const OURS = new Set(['made for Forest Survivor', "the game's own"]);
 
 const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'));
+const packHex = (h) => (parseInt(h.slice(1, 3), 16) | (parseInt(h.slice(3, 5), 16) << 8) | (parseInt(h.slice(5, 7), 16) << 16) | (255 << 24)) >>> 0;
 const catalog = readJson(join(lab, 'catalog.json')).entries;
 const versions = [lab, join(assets, 'sprites/lab')].flatMap((d) => (existsSync(join(d, 'versions.json')) ? readJson(join(d, 'versions.json')).entries.map((e) => ({ ...e, dir: d })) : []));
 
@@ -42,7 +46,10 @@ mkdirSync(out, { recursive: true });
 for (const [name, pick] of Object.entries(BAKE)) {
   const e = entryFor(pick);
   if (!OURS.has(e.licence)) throw new Error(`${pick}: licence "${e.licence}" is not the game's to publish`);
-  if ((e.rows || ['right']).length !== 1) throw new Error(`${pick}: only sheets of one row (facing right) are baked`);
+  // The first row faces right; any others are its glow, which the game makes itself from the
+  // glowing colours (entry.glow).
+  const rows = e.rows || ['right'];
+  if (rows[0] !== 'right' || rows.slice(1).some((r) => !r.startsWith('glow'))) throw new Error(`${pick}: rows ${rows}: only a sheet facing right (and its glow) is baked`);
   const file = join(e.dir, e.sheet);
   const png = readPng(file);
   if (png.w < e.w * e.frames || png.h < e.h) throw new Error(`${pick}: ${e.sheet} is ${png.w}x${png.h}, too small for ${e.frames} frames of ${e.w}x${e.h}`);
@@ -70,6 +77,10 @@ for (const [name, pick] of Object.entries(BAKE)) {
     pick: `lab:${pick}`, name: e.name, w: e.w, h: e.h, anchorY: e.anchorY ?? e.h - 1,
     idle: e.idle, walk: e.walk, attack: e.attack && e.attack.length ? e.attack : null, attackFps: e.attackFps || 0,
     motionRate: e.motionRate || 1, idleRate: e.idleRate ?? 4, selfBob: !!e.selfBob, fitW: e.fitW || e.w, fitH: e.fitH || e.h,
+    // A ranger's bow: the frame the arrow leaves on, and her shots on the move.
+    ...(e.attackRelease !== null && e.attackRelease !== undefined ? { attackRelease: e.attackRelease, attackWalk: e.attackWalk } : {}),
+    // What glows unlit at night, as the colours themselves (packed as the palette is).
+    ...(e.glow && e.glow.length ? { glow: e.glow.map(packHex) } : {}),
     indexBytes, palette, frames: encoded,
   };
   const head = `// ${e.name}, picked in the Sprite Lab (lab:${pick}); ${e.licence}.\n// Baked by tools/bake-heroes.mjs from its sheet: ${data.frames.length} frames of ${e.w}x${e.h}, ${palette.length - 1} colours.\n`;
