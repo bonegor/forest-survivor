@@ -41,6 +41,7 @@ export class Player {
     this.blessings = 0; // stacking rewards once the build is complete
     this.weapons = [];
     this.strikeAt = null; // when the last blow struck by hand began (Game.strike)
+    this.strikeAng = 0; // and which way it was struck
     this.strikeBuf = 0; // a strike pressed before the weapon was ready, kept a moment
     this.fury = 0;
     this.ult = null; // active ultimate state
@@ -114,6 +115,7 @@ export class Player {
   // clock). The one blow that may turn him: standing, he turns to the foe the player strikes at.
   strike(ang, at) {
     this.strikeAt = at;
+    this.strikeAng = ang;
     this.face = faceAttack(this.face, this.moving, Math.cos(ang), Math.sin(ang));
   }
 

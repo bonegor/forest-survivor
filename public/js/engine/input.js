@@ -13,7 +13,7 @@ const BIND = {
   back: { keys: ['Escape', 'Backspace'], pad: [1] },
   pause: { keys: ['Escape', 'KeyP'], pad: [9] },
   ult: { keys: ['Space', 'KeyE', 'KeyQ'], pad: [2, 7, 6] },
-  // A blow struck by hand, where the hero fights that way (the knight in the crypts).
+  // A blow struck by hand, where the hero fights that way (every hero, in the crypts).
   // Not Ctrl: with WASD, Ctrl+W closes the browser tab and no page can stop it.
   strike: { keys: ['KeyX', 'ShiftLeft', 'ShiftRight'], pad: [5, 4] },
   map: { keys: ['Tab', 'KeyM'], pad: [8] },

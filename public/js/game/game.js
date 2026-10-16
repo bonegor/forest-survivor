@@ -15,6 +15,7 @@ import { input } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, shuffle, mulberry32, hash2 } from '../engine/util.js';
 import { Player, ULT_DURATION, xpFor } from './player.js';
 import { rangerPose } from './ranger-animation.js';
+import { faceAlong } from './facing.js';
 import { Weapon } from './weapons.js';
 import { Enemy, makeEnemyPool, SRC } from './enemies.js';
 import { Pickup, gemTierValue } from './pickups.js';
@@ -55,13 +56,17 @@ export const PROP_LOOT = [
   { kind: null, w: 0.05 },
 ];
 
-// A blow struck by hand on the hero's sprite: its attack from two frames before the middle one,
-// the blow frame, where the blade lands (delay seconds in). Null for a sprite with no attack.
+// A blow struck by hand on the hero's sprite: its attack from two frames before the blow frame,
+// where the blade lands or the shot leaves (delay seconds in): the bow's release, else the
+// middle frame. Null for a sprite with no attack.
 export function strikeClip(spr) {
   if (!spr.attack || !spr.attack.length || !spr.attackFps) return null;
-  const hit = Math.floor(spr.attack.length / 2), from = Math.max(0, hit - 2);
+  const hit = spr.attackRelease ?? Math.floor(spr.attack.length / 2), from = Math.max(0, hit - 2);
   return { from, hit, delay: (hit - from) / spr.attackFps };
 }
+
+// What a hand-struck weapon is called on to do, for the crypt's banner (Game.enterCrypt).
+const STRIKE_VERB = { bow: 'shoot', fireball: 'cast', meteor: 'cast', daggers: 'throw', summon: 'raise the dead' };
 
 // Crypt names, picked by the crossroads; the night's minute picks the stone.
 const CRYPT_KIND = ['Crypt', 'Barrow', 'Tomb', 'Ossuary', 'Sepulchre', 'Vault'];
@@ -648,11 +653,11 @@ export class Game {
 
   // ------------------------------------------------------------ crypts --
 
-  // A hero who fights by hand below (HEROES caveStrike: the knight): in a crypt only his main
-  // weapon fights, and only when the player strikes (X or Shift; a pad's shoulder
-  // buttons; a second finger on a touch screen).
+  // Every hero fights by hand below: in a crypt only his own weapon (the knight's sword, the
+  // ranger's bow, ...) fights, and only when the player strikes (X or either Shift; a pad's
+  // shoulder buttons; a second finger on a touch screen).
   get caveStrike() {
-    return !!this.inCrypt && !!this.player.hero.caveStrike;
+    return !!this.inCrypt;
   }
 
   // The hero's own weapon, or what it evolved into.
@@ -662,16 +667,18 @@ export class Game {
   }
 
   // A blow struck by the player (Player.update reads the keys), once the weapon is ready: at
-  // the nearest foe in reach (on the move, only one ahead of him, as he keeps facing the way
-  // he walks), else straight ahead. The sprite plays its attack, and the blade lands on its
-  // blow frame (strikeClip).
+  // the nearest foe in its reach (Weapon.reach; a sword on the move, only one ahead of him, as
+  // he keeps facing the way he walks), else straight ahead, or for a shot the way he last
+  // walked. The sprite plays its attack, and the blade lands or the shot leaves on its blow
+  // frame (strikeClip).
   strike() {
     const p = this.player, w = this.mainWeapon();
     if (!w || w.cd > 0 || p.dead) return false;
-    const t = this.nearestEnemy(p.x, p.y, 34 * w.s.area + 26, p.moving ? (e) => (e.x - p.x) * p.face >= 0 : null);
-    const ang = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.face < 0 ? Math.PI : 0;
+    const melee = w.def.kind === 'sword';
+    const t = this.nearestEnemy(p.x, p.y, w.reach, melee && p.moving ? (e) => (e.x - p.x) * p.face >= 0 : null);
+    const ang = t ? Math.atan2(t.y - p.y, t.x - p.x) : !melee ? p.aim : p.face < 0 ? Math.PI : 0;
     p.strike(ang, this.clock);
-    w.strike(ang, strikeClip(SPR[p.hero.sprite])?.delay ?? 0);
+    w.strike(ang, strikeClip(SPR[p.hero.sprite])?.delay ?? 0, t);
     return true;
   }
 
@@ -703,18 +710,16 @@ export class Game {
       this.snapCam();
       this.objective = '';
       this.banner(name, 'Here the night stands still. Slay its lord to leave', '#b55088', 3.2);
-      if (this.caveStrike) {
-        // The other weapons wait outside: their blades and auras go out until he is back.
-        const main = this.mainWeapon();
-        for (const w of p.weapons) {
-          if (w === main || !w.fx) continue;
-          w.fx.dead = true;
-          w.fx = null;
-          w.cd = Math.min(w.cd, 0.35);
-        }
-        const keys = input.device === 'pad' ? 'RB' : input.device === 'touch' ? 'Tap a second finger' : 'X or Shift';
-        this.banner(`Your ${main ? main.def.name : 'weapon'} alone`, `${keys} to strike`, '#feae34', 4);
+      // The other weapons wait outside: their blades and auras go out until he is back.
+      const main = this.mainWeapon();
+      for (const w of p.weapons) {
+        if (w === main || !w.fx) continue;
+        w.fx.dead = true;
+        w.fx = null;
+        w.cd = Math.min(w.cd, 0.35);
       }
+      const keys = input.device === 'pad' ? 'RB' : input.device === 'touch' ? 'Tap a second finger' : 'X or Shift';
+      this.banner(`Your ${main ? main.def.name : 'weapon'} alone`, `${keys} to ${STRIKE_VERB[main?.def.kind] || 'strike'}`, '#feae34', 4);
       playMusic('crypt');
     });
   }
@@ -1597,15 +1602,17 @@ export class Game {
     const moving = p.moving;
     // Walk cycles step a little faster so planted feet slide less against the ground.
     const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
-    // Walk/idle remains the base. The ranger draws before the bow is ready and
-    // releases with its real projectile; the knight uses attacks for manual strikes.
+    // Walk/idle remains the base. In the forest the ranger draws before the bow is ready and
+    // releases with its real projectile; in a crypt every hero plays his attack for a blow
+    // struck by hand, when it is struck the way he faces (on the move a shot may fly behind
+    // him), the ranger his shot on the move too.
     let fr = moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate));
     const clip = this.caveStrike && p.strikeAt !== null ? strikeClip(spr) : null;
-    if (clip) {
-      const k = clip.from + Math.floor((this.clock - p.strikeAt) * spr.attackFps);
-      if (k < spr.attack.length) fr = spr.frames[spr.attack[k]];
+    if (clip && faceAlong(p.face, Math.cos(p.strikeAng), Math.sin(p.strikeAng)) === p.face) {
+      const k = clip.from + Math.floor((this.clock - p.strikeAt) * spr.attackFps + 1e-6);
+      if (k < spr.attack.length) fr = spr.frames[moving && spr.attackWalk ? spr.attackWalk[k][step % spr.walk.length] : spr.attack[k]];
     }
-    const bowPose = rangerPose(this, spr, step);
+    const bowPose = this.caveStrike ? null : rangerPose(this, spr, step);
     if (bowPose) fr = bowPose.frame;
     const flip = bowPose ? bowPose.flip : p.face < 0;
     let img = p.flash > 0 ? fr.white(flip) : fr.get(flip);

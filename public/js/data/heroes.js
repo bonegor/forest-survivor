@@ -9,8 +9,7 @@ export const HEROES = {
     pose: 'knight_pose', // shown on the menus instead of the in-game sprite
     picture: 'img/knight-portrait-v2.png',
     portrait: true,
-    weapon: 'sword',
-    caveStrike: true, // in the crypts: his sword alone, struck by the player (Game.caveStrike)
+    weapon: 'sword', // in the crypts each hero has his own weapon alone, struck by the player (Game.caveStrike)
     color: '#0099db',
     // regenMul scales every kind of regeneration he gets (his own, Troll Blood, the Armory's
     // Recovery, the Protection shrine, Sanctuary) in step with his doubled health.

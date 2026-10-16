@@ -10,8 +10,8 @@
 // One exception: a monster's (or minion's) blow, shot or charge begun standing still turns it
 // toward its target first. On the move it keeps facing the way it goes, even striking behind
 // itself. The hero turns only by walking: standing still he stays as he last faced, whatever
-// his weapons hit, behind or beside him. Only a blow the player strikes by hand (the knight's
-// sword in the crypts) turns him, standing, to the foe it is struck at.
+// his weapons hit, behind or beside him. Only a blow the player strikes by hand (in the crypts,
+// where every hero fights so) turns him, standing, to the foe it is struck at.
 
 // How far from straight up or down a move must lean (the sideways share of it) to turn a sprite.
 export const STRAIGHT = 0.12;

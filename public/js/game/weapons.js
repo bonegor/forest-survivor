@@ -18,6 +18,7 @@ export class Weapon {
     this.cd = 0.35;
     this.queue = 0;
     this.queueT = 0;
+    this.handAt = null; // when a blow struck by hand lands or fires, on the game's clock (strike)
     this.gap = 0.1;
     this.shot = 0;
     this.volley = 0;
@@ -73,6 +74,7 @@ export class Weapon {
     }
     this.cd = 0.2;
     this.queue = 0; // the new form may not fire volleys
+    this.handAt = null;
     this.recompute();
   }
 
@@ -83,6 +85,15 @@ export class Weapon {
     if (!K.fire) return;
     const haste = this.g.player.buff('haste') ? 1.35 : 1;
     this.cd -= dt * haste;
+    // A blow struck by hand waits for the sprite's blow frame, by the clock it is drawn by.
+    if (this.handAt !== null) {
+      if (this.g.clock < this.handAt) return;
+      this.handAt = null;
+      if (!K.shoot) {
+        const r = K.fire(this);
+        if (typeof r === 'number') this.cd = r;
+      }
+    }
     if (manual) this.cd = Math.max(0, this.cd);
     else if (this.cd <= 0) {
       const r = K.fire(this);
@@ -105,18 +116,27 @@ export class Weapon {
     this.shot = 0;
   }
 
-  // One blow struck by hand (Game.strike): a sword swings toward ang, its first slash landing
-  // after delay; any other weapon simply fires.
-  strike(ang, delay) {
+  // How far a blow struck by hand looks for a foe to aim at (Game.strike): a sword's swing, or
+  // as far as the weapon looks for one by itself.
+  get reach() {
+    return KINDS[this.def.kind].reach ?? 34 * this.s.area + 26;
+  }
+
+  // One blow struck by hand (Game.strike), its first slash landing or first shot leaving delay
+  // seconds on (update): a sword swings toward ang; a bow, a fireball or daggers fire at the foe
+  // struck at, if any (aim); anything else fires as it would by itself.
+  strike(ang, delay, target = null) {
     this.cd = this.s.cd;
-    if (this.def.kind !== 'sword') {
-      const r = KINDS[this.def.kind].fire(this);
+    this.handAt = this.g.clock + delay;
+    const K = KINDS[this.def.kind];
+    if (this.def.kind === 'sword') {
+      this.aimAng = ang;
+      this.burst(this.s.amount, 0.11);
+    } else if (K.shoot) {
+      const r = K.fire(this);
       if (typeof r === 'number') this.cd = r;
-      return;
+      if (K.aim) K.aim(this, target);
     }
-    this.aimAng = ang;
-    this.burst(this.s.amount, 0.11);
-    this.queueT = delay;
   }
 }
 
@@ -152,11 +172,16 @@ export const KINDS = {
   },
 
   bow: {
+    reach: 230,
     fire(w) {
       const g = w.g, p = g.player;
       w.targets = g.nearestEnemies(p.x, p.y, w.s.amount, 230);
       w.volley++;
       w.burst(w.s.amount, 0.07);
+    },
+    // Struck by hand: the whole volley at the foe struck at; at none, the way he last walked.
+    aim(w, t) {
+      w.targets = t ? [t] : [];
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
@@ -181,12 +206,16 @@ export const KINDS = {
   },
 
   fireball: {
+    reach: 190,
     fire(w) {
       const g = w.g, p = g.player;
       const near = g.nearestEnemies(p.x, p.y, 8, 190);
       w.targets = [];
       for (let i = 0; i < w.s.amount; i++) w.targets.push(near.length ? pick(near) : null);
       w.burst(w.s.amount, 0.13);
+    },
+    aim(w, t) {
+      w.targets = w.targets.map(() => t);
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
@@ -201,6 +230,7 @@ export const KINDS = {
   },
 
   meteor: {
+    reach: 190,
     fire(w) {
       const g = w.g;
       const picks = g.enemiesOnScreen(true);
@@ -322,10 +352,16 @@ export const KINDS = {
   },
 
   daggers: {
+    reach: 230,
     fire(w) {
       const p = w.g.player;
       w.baseAng = w.s.radial ? (w.baseAng || 0) + 0.38 : p.aim;
       w.burst(w.s.amount, w.s.radial ? 0.02 : 0.045);
+    },
+    // A fan of daggers struck by hand flies at the foe struck at; a ring flies all round anyway.
+    aim(w, t) {
+      const p = w.g.player;
+      if (t && !w.s.radial) w.baseAng = Math.atan2(t.y - p.y, t.x - p.x);
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
@@ -342,6 +378,7 @@ export const KINDS = {
   },
 
   summon: {
+    reach: 190,
     fire(w) {
       const g = w.g, p = g.player;
       let mine = 0;

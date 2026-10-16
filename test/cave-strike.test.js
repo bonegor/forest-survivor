@@ -11,7 +11,7 @@ import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const context = { globalAlpha: 1, drawImage() {} };
 const step = (g, n = 1) => { for (let i = 0; i < n; i++) g.update(1 / 60); };
-const shown = (g) => { g.drawPlayer(context, g.cam); return SPR.knight.frames.indexOf(g.player._rect[4]); };
+const shown = (g) => { g.drawPlayer(context, g.cam); return SPR[g.player.hero.sprite].frames.indexOf(g.player._rect[4]); };
 const slashes = (g) => g.effects.filter((e) => e instanceof Slash).length;
 // One frame with a key pressed, as the browser's keydown and the frame's end leave it.
 function press(g, code) {
@@ -143,13 +143,94 @@ test('back in the forest every weapon fights by itself again, and he only walks'
   assert.ok(g.effects.some((e) => e.persistent && e.w?.id === 'aura'), 'and the aura');
 }));
 
-test('other heroes fight in the crypts as they always have', () => gameCase((g, p) => {
-  enterStartCrypt(g, p);
-  assert.equal(g.caveStrike, false);
-  let fired = false;
-  for (let i = 0; i < 120 && !fired; i++) {
+// The user: "in the dungeons, every hero should have available only its main weapon, make it so -
+// knight has sword, ranger has the bow, etc", and "the other weapons dont fire in there, and the
+// player uses left x or rhight shift.....but maybe also leftshift".
+const OWN = { archer: 'arrow', mage: 'fireball', rogue: 'dagger', necromancer: 'minion' };
+const made = (g, what) => (what === 'minion' ? g.minions.filter((m) => !m.dead).length : g.projectiles.filter((pr) => pr.kind === what).length);
+
+for (const [hero, what] of Object.entries(OWN)) {
+  test(`in a crypt the ${hero} has their own weapon alone, and it waits for the player`, () => gameCase((g, p) => {
+    g.addWeapon('axe');
+    g.addWeapon('aura');
+    g.addWeapon('lightning');
+    step(g, 120);
+    assert.ok(g.effects.some((e) => e.persistent && e.w?.id === 'aura'), 'outside, the aura is out');
+    enterStartCrypt(g, p);
+    assert.ok(g.caveStrike);
+    assert.ok(!g.effects.some((e) => e.persistent && !e.dead), 'the aura is left outside');
+    const w = g.mainWeapon();
+    assert.equal(w.id, p.hero.weapon);
+    const foe = g.spawnEnemy('zombie', p.x - 40, p.y, { instant: true, hpMul: 1e6 });
+    foe.spd = 0;
+    for (const m of g.minions) m.dead = true;
+    for (const pr of g.projectiles) pr.dead = true;
     step(g);
-    fired = g.projectiles.length > 0;
+    const hits = new Set();
+    const hit = g.hitEnemy.bind(g);
+    g.hitEnemy = (e, d, o) => { if (o?.w) hits.add(o.w.id); return hit(e, d, o); };
+    for (let i = 0; i < 180; i++) {
+      step(g);
+      assert.equal(made(g, what), 0, 'nothing until the player strikes');
+      assert.equal(g.projectiles.length, 0, 'and the axe stays quiet');
+    }
+    assert.deepEqual([...hits].filter((id) => id !== w.id), [], 'nor does the lightning strike');
+    w.cd = 0;
+    press(g, 'ShiftLeft');
+    assert.notEqual(p.strikeAt, null, 'left Shift strikes');
+    assert.equal(p.face, -1, 'standing, the hero turns to the foe');
+    const spr = SPR[p.hero.sprite], clip = strikeClip(spr);
+    let left = null, frame = -1;
+    for (let i = 0; i < 60 && left === null; i++) {
+      step(g);
+      if (made(g, what)) {
+        left = g.clock - p.strikeAt;
+        frame = shown(g);
+      }
+    }
+    assert.notEqual(left, null, 'it fires');
+    if (clip) {
+      assert.ok(Math.abs(left - clip.delay) < 2 / 60, `on the blow frame, ${clip.delay}s in, not ${left}`);
+      assert.equal(frame, spr.attack[clip.hit], 'as the sprite strikes');
+    } else assert.ok(left < 2 / 60, `at once, with no attack to play (${left})`);
+    if (what !== 'minion') {
+      const shot = g.projectiles.find((pr) => pr.kind === what);
+      assert.ok(shot.vx < 0 && Math.abs(shot.vy) < Math.abs(shot.vx), 'at the foe');
+    }
+    step(g, 60);
+    assert.ok(!g.projectiles.some((pr) => pr.kind === 'axe'), 'the axe still waits outside');
+    assert.ok(![...hits].some((id) => id !== w.id), `only the ${w.def.name} has struck (${[...hits]})`);
+  }, hero));
+}
+
+test('the ranger shoots a foe 200 px off, one behind her too, and on the move shows only a shot ahead', () => gameCase((g, p) => {
+  enterStartCrypt(g, p);
+  const w = g.mainWeapon(), spr = SPR.archer, clip = strikeClip(spr);
+  assert.equal(clip.hit, spr.attackRelease, 'the arrow leaves on the release');
+  const foe = g.spawnEnemy('zombie', p.x + 200, p.y, { instant: true, hpMul: 1e6 });
+  foe.spd = 0;
+  step(g);
+  w.cd = 0;
+  press(g, 'KeyX');
+  step(g, 12);
+  const arrow = g.projectiles.find((pr) => pr.kind === 'arrow');
+  assert.ok(arrow && arrow.vx > 0 && Math.abs(arrow.vy) < arrow.vx * 0.2, 'straight at the foe 200 px off');
+  // Walking right with the foe behind her: the arrow flies back at it, and she walks on.
+  for (const pr of g.projectiles) pr.dead = true;
+  foe.x = p.x - 60;
+  foe.y = p.y;
+  input.bot = { x: 1, y: 0 };
+  step(g, 3);
+  w.cd = 0;
+  press(g, 'KeyX');
+  let back = null;
+  for (let i = 0; i < 20; i++) {
+    step(g);
+    assert.equal(p.face, 1, 'she keeps facing the way she walks');
+    const fr = shown(g);
+    assert.ok(!spr.attack.includes(fr) && !spr.attackWalk.flat().includes(fr), 'no shot ahead is shown');
+    back ||= g.projectiles.find((pr) => pr.kind === 'arrow');
   }
-  assert.ok(fired, 'the ranger\'s bow fires by itself below');
+  input.bot = { x: 0, y: 0 };
+  assert.ok(back && back.vx < 0, 'the arrow flies behind her');
 }, 'archer'));

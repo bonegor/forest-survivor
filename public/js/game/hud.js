@@ -117,7 +117,7 @@ export class Hud {
   drawSlots(ctx, p) {
     let x = 3;
     const y = 9;
-    // In a crypt where he fights by hand, the weapons left outside are dimmed.
+    // In a crypt, where he fights by hand with his own weapon alone, the others are dimmed.
     const main = this.g.caveStrike ? this.g.mainWeapon() : null;
     for (let i = 0; i < 6; i++) {
       const w = p.weapons[i];

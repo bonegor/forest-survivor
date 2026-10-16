@@ -134,9 +134,11 @@ test('once in, the stairs up are barred until the lord falls', () => gameCase((g
   assert.equal(g.inCrypt, null, 'and the same steps lead out');
 }));
 
-// Blades, flasks and glaives strike the same foe again after a moment (hitT). That moment was
-// counted on the night's clock, which stands still in a crypt: down there they struck each foe,
-// its lord too, once and never again.
+// Blades, flasks and glaives strike the same foe again after a moment (hitT), as do the pools a
+// Meteor Storm leaves and a Necromancer's skeletons. That moment was counted on the night's clock,
+// which stands still in a crypt: down there they struck each foe, its lord too, once and never
+// again. Below only the hero's own weapon fights, struck by hand (Game.caveStrike), so here each
+// is made his own and the strike key is held.
 test('weapons that strike a foe again and again do so in a crypt as in the forest', () => {
   for (const weapon of ['blades', 'flask', 'glaive']) {
     const hits = {};
@@ -156,6 +158,8 @@ test('weapons that strike a foe again and again do so in a crypt as in the fores
         }
         p.weapons.length = 0;
         const w = g.addWeapon(weapon);
+        p.hero = {...p.hero, weapon};
+        if (below) input.held.add('KeyX');
         const spot = g.world.freeSpot(p.x + 30, p.y);
         const foe = g.spawnEnemy('zombie', spot.x, spot.y, {instant:true, hpMul:1e6});
         foe.spd = 0;
@@ -166,6 +170,7 @@ test('weapons that strike a foe again and again do so in a crypt as in the fores
         hits[below ? 'crypt' : 'forest'] = n;
       } finally {
         input.bot = oldBot;
+        input.held.delete('KeyX');
         Math.random = oldRandom;
       }
     }
