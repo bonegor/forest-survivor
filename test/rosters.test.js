@@ -72,16 +72,19 @@ test("a level-up offers new weapons from the hero's own roster alone", () => {
   }
 });
 
-test('a weapon from outside the roster, from an older save, is kept and grows but is never offered new', () => {
-  const cp = sanitizeCheckpoint({ mode: 's15', diff: 'hard', hero: 'knight', level: 10, hp: 50, weapons: [['sword', 2], ['bow', 3]] });
+test('a weapon from outside the roster, from an older save, becomes one of his own at the same level', () => {
+  // A Knight saved with the Ranger's bow at 3 and her Stormstring: the bow becomes his next weapon
+  // at 3, the evolution a weapon at its top level; nothing of another class comes back.
+  const cp = sanitizeCheckpoint({ mode: 's15', diff: 'hard', hero: 'knight', level: 10, hp: 50, weapons: [['sword', 2], ['bow', 3], ['stormstring', 8]] });
   gameCase('knight', (g, p) => {
-    assert.deepEqual(p.weapons.map((w) => w.id), ['sword', 'bow']);
-    const cards = [];
-    for (let i = 0; i < 300; i++) cards.push(...g.levelChoices(4).filter((c) => c.type === 'weapon'));
-    for (const c of cards) if (c.isNew) assert.ok(p.hero.roster.includes(c.id), `new: ${c.id}`);
-    assert.ok(cards.some((c) => c.id === 'bow' && !c.isNew && c.level === 4), 'the bow is offered its next level');
-    assert.ok(!cards.some((c) => c.isNew && !p.hero.roster.includes(c.id)), 'and nothing else from outside');
+    assert.deepEqual(p.weapons.map((w) => [w.id, w.level]), [['sword', 2], ['axe', 3], ['blades', MAX_WEAPON_LEVEL]]);
+    for (let i = 0; i < 300; i++) for (const c of g.levelChoices(4)) if (c.type === 'weapon') assert.ok(p.hero.roster.includes(c.id), c.id);
   }, { checkpoint: cp });
+  // A Necromancer saved with a bow alone still gets a weapon of his own.
+  const cp2 = sanitizeCheckpoint({ mode: 's15', diff: 'hard', hero: 'necromancer', level: 4, hp: 50, weapons: [['bow', 5]] });
+  gameCase('necromancer', (g, p) => {
+    assert.deepEqual(p.weapons.map((w) => [w.id, w.level]), [['raise', 5]]);
+  }, { checkpoint: cp2 });
 });
 
 test('the bow looses its arrows straight the way the hero faces, whatever foes are about', () => {

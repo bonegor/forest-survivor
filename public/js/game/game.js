@@ -1225,8 +1225,16 @@ export class Game {
     p.xpNext = xpFor(cp.level);
     p.fury = cp.fury;
     p.rerolls = cp.rerolls;
-    // Weapons from outside his roster (a run saved before the rosters) are kept, and still grow.
-    for (const [id, lvl] of cp.weapons) if (WEAPONS[id]) this.addWeapon(id, lvl);
+    // A weapon from outside his roster (a run saved before the rosters) becomes one of his own at
+    // the same level, the next he doesn't hold: his build stays as strong, and stays his class's.
+    const roster = p.hero.roster;
+    const mine = (id) => roster.includes(id) || roster.some((r) => WEAPONS[r].evo?.into === id);
+    for (const [id, lvl] of cp.weapons) if (WEAPONS[id] && mine(id)) this.addWeapon(id, lvl);
+    for (const [id, lvl] of cp.weapons) {
+      if (!WEAPONS[id] || mine(id)) continue;
+      const sub = roster.find((r) => !this.ownsWeapon(r) && !this.ownsWeapon(WEAPONS[r].evo?.into));
+      if (sub) this.addWeapon(sub, WEAPONS[id].evolved ? MAX_WEAPON_LEVEL : lvl);
+    }
     if (!p.weapons.length) for (const id of startWeapons(p.hero)) this.addWeapon(id);
     for (const [id, r] of cp.passives) if (PASSIVES[id]) p.passives.set(id, Math.min(r, PASSIVES[id].max));
     p.blessings = cp.bless || 0;
