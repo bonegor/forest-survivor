@@ -241,6 +241,27 @@ export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
   return 0;
 }
 
+// A box to tick, its label beside it, as wide as checkboxWidth makes it. Returns true when it is
+// clicked, tapped or confirmed (Enter, Space, the pad's A): the caller flips what it shows.
+// color: the tick's and the label's while ticked.
+const TICK = [[0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [5, 1], [6, 0]];
+export const checkboxWidth = (label) => textWidth(label) + 22;
+export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
+  const hit = button(ctx, ui, id, x, y, checkboxWidth(label), 13, '', { pointer: true });
+  const f = ui.focused(id), color = o.color || '#fee761';
+  const bx = Math.round(x) + 5, by = Math.round(y) + 2;
+  ctx.fillStyle = on ? color : '#5a6988';
+  ctx.fillRect(bx, by, 9, 9);
+  ctx.fillStyle = '#0d0b14';
+  ctx.fillRect(bx + 1, by + 1, 7, 7);
+  if (on) {
+    ctx.fillStyle = color;
+    for (const [tx, ty] of TICK) ctx.fillRect(bx + 1 + tx, by + 1 + ty, 1, 2);
+  }
+  drawText(ctx, label, bx + 13, y + 3, { color: f ? '#fee761' : on ? color : '#8b9bb4' });
+  return hit;
+}
+
 // Big gradient title text built from the bitmap font, smoothed with Scale2x.
 const logoCache = new Map();
 export function logo(text, colors = ['#fff6c2', '#fee761', '#feae34', '#f77622', '#be4a2f', '#a22633'], outline = '#181425') {

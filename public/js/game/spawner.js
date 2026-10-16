@@ -6,6 +6,7 @@ import { EVENTS, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RA
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
 import { rand, randi, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
+import { NIGHTMARE } from '../data/difficulty.js';
 
 const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
 
@@ -17,6 +18,10 @@ export const isFew = (type) => !!(ENEMIES[type]?.shot || ENEMIES[type]?.charge);
 // from minute 9 of the night on (difficulty.js late), in the steady horde and the timed swarms,
 // rings and packs alike. Veteran (and so Ranked) never.
 export const lateMore = (diff, phase) => (diff.late && minuteOf(phase) >= diff.late.from ? diff.late.more : 1);
+
+// All the more the run sends: Normal's late horde (lateMore) and, on a Nightmare, twice as many
+// again (difficulty.js NIGHTMARE), on either difficulty. Never on Ranked (Game.nightmare).
+export const hordeMore = (g, phase) => lateMore(g.diff, phase) * (g.nightmare ? NIGHTMARE.more : 1);
 
 export class Spawner {
   constructor(g) {
@@ -60,10 +65,10 @@ export class Spawner {
   }
 
   // How many foes the steady horde keeps up at a phase: the rules' numbers, a tenth fewer on a
-  // dungeon floor, and Normal's late horde on top (lateMore).
+  // dungeon floor, and Normal's late horde and a Nightmare's double on top (hordeMore).
   target(phase) {
     const g = this.g;
-    return targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * lateMore(g.diff, phase);
+    return targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * hordeMore(g, phase);
   }
 
   update(dt) {
@@ -151,7 +156,7 @@ export class Spawner {
 
   fire(ev, phase) {
     const g = this.g, p = g.player;
-    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1) * lateMore(g.diff, phase))) };
+    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1) * hordeMore(g, phase))) };
     const st = this.stats(phase);
     const cam = g.cam;
     switch (ev.type) {

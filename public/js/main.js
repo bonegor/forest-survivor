@@ -27,7 +27,7 @@ const app = {
   scene: new MenuScene(),
   store,
   settings: loadSettings(),
-  choice: { hero: 'knight', mode: 's15', diff: 'medium' }, // diff: as last chosen (settings), below
+  choice: { hero: 'knight', mode: 's15', diff: 'medium', nightmare: false }, // diff, nightmare: as last chosen (settings), below
   screen: null,
   screenName: '',
   audioUnlocked: false,
@@ -60,8 +60,10 @@ const app = {
   },
 };
 
-// Normal or Veteran, as the player last chose (the trial screen saves it with the settings).
+// Normal or Veteran, and Nightmare or not, as the player last chose (the trial screen saves them
+// with the settings).
 app.choice.diff = app.settings.diff === 'hard' ? 'hard' : 'medium';
+app.choice.nightmare = app.settings.nightmare === true;
 
 // Scanline overlay for the optional CRT look.
 let scan = null;

@@ -1,6 +1,6 @@
 // A single run: owns every system and runs the update/draw loop.
 
-import { diffFor } from '../data/difficulty.js';
+import { diffFor, nightmareFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
@@ -100,6 +100,8 @@ export class Game {
     // Normal or Veteran (data/difficulty.js), as chosen; Veteran without.
     this.diff = diffFor(o.mode, o.diff);
     this.diffId = this.diff.id;
+    // A Nightmare, twice the monsters (data/difficulty.js NIGHTMARE), as chosen; never on Ranked.
+    this.nightmare = nightmareFor(o.mode, o.nightmare);
     this.settings = o.settings || {};
     this.seed = Math.floor(Math.random() * 2 ** 31);
     this.duration = this.mode === 's15' ? 15 * 60 : Infinity;
@@ -1293,6 +1295,7 @@ export class Game {
       victory,
       mode: this.mode,
       diff: this.diffId,
+      nightmare: this.nightmare,
       hero: p.id,
       time: Math.floor(this.time),
       gold: this.gold,

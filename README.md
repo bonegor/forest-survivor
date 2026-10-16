@@ -78,9 +78,11 @@ There are **two difficulties**, chosen on the trial screen and remembered with t
 
 Ranked is always Veteran, since it keeps one best time per hero. A night survived on either counts on the unlock ladder.
 
+**Nightmare** is a box beside the two, ticked or not on the trial screen and remembered with the settings like the difficulty (off at first). On either difficulty it sends twice as many monsters, in the steady horde and the timed swarms, rings and packs alike, on top of Normal's late 30%, in Survival and on a Dungeon Run; each monster is as strong as ever, and the crypts' sleeping packs, champions, thieves, bosses and their summons come as they would (`NIGHTMARE` in `public/js/data/difficulty.js`, `hordeMore` in `public/js/game/spawner.js`). No more than 900 monsters stand at once all the same (`Game.spawnEnemy`), and a Nightmare's horde reaches that late in the night: on Normal from 9:00, on Veteran from about 10:30. It pays its gold ×1.5 on top of the difficulty's (×1.5 on Normal, ×2.25 on Veteran), kept modest (twice the monsters bring in a little more gold of their own: with the Knight on Normal the gem-collecting bot found 2047 gold in a Nightmare night against 1906); its victory bonus is the difficulty's, and a win counts as one on its difficulty. The HUD says NIGHTMARE beside the clock, and the results screen after the mode. Ranked keeps one best time per hero, so it is never a Nightmare: on its trial card the box isn't shown.
+
 Monsters pass through one another, through props and through the trees: the only thing they can't do is stand inside the hero. Dungeon walls stop them all but Wraiths, bats and imps. On a Dungeon Run floor the horde hunts the hero from anywhere, round the walls by the shortest walk. In a crypt a monster doesn't know where the hero is until it has seen him (ten tiles, as far as he sees, with no wall between) or been struck. Until then it strolls about, or sleeps with its pack; from then on it follows him round corners. What is sent at him (a ring, a swarm, a pack, a boss's summons), the bosses and the thief always know where he is.
 
-The whole game runs **10% faster than real time** (`GAME_SPEED` in `public/js/data/difficulty.js`): the clock, the hero, the monsters, everything in a run, though not the menus. The 15-minute night passes in about 13⅔ minutes.
+The whole game runs **32% faster than real time** (`GAME_SPEED` in `public/js/data/difficulty.js`): the clock, the hero, the monsters, everything in a run, though not the menus. The 15-minute night passes in about 11 minutes 22 seconds, the 5:00 on the clock that brings in the next hero in about 3:47, and every warning (a boss's telegraphed blow) is about a quarter shorter in real time than its seconds. The bots play at the game's own pace, a second of play to a second on the clock.
 
 ### The unlock ladder
 
@@ -140,7 +142,7 @@ The server keeps **no database**. The only thing it writes to disk is its cookie
 | Cookie | Holds | Set by |
 | --- | --- | --- |
 | `fs_profile` | gold, wins per mode and difficulty (Normal counts as the old Medium, Veteran as Hard), records, Armory ranks, unlocked heroes, each hero's achievements (night survived, Dungeon beaten), Ranked personal bests, the gear each hero wears | server, encrypted (AES-256-GCM), HttpOnly |
-| `fs_settings` | volume, screen shake, damage numbers, CRT, FPS | browser |
+| `fs_settings` | volume, screen shake, damage numbers, CRT, FPS, and the difficulty and Nightmare box last chosen | browser |
 
 There is no cookie for a run: nothing of a run is saved while it lasts, only its results when it ends (above). A run cookie left by an older version of the game (`fs_run`, or `fs_lrun` / `fs_drun` with static hosting) is deleted when the game loads.
 
@@ -150,7 +152,7 @@ If the save exists but can't be decrypted (damaged, tampered with, or written un
 
 **When deploying, set `COOKIE_SECRET` to a long random value and keep it stable.** If the key changes, for example because `.data/` isn't persisted between deploys, every existing save becomes unreadable at once.
 
-Run reports are clamped server-side: gold is capped by run length (at most two hours for the 15-minute night with its crypts), gear by how many crypt lords the run could have reached (four to a crypt, a crypt every 45 seconds of its time and the one by the start), a victory only counts if the run lasted long enough to be one, a run that doesn't say it was played on Veteran is paid as Normal, and a run in a mode the hero hasn't unlocked yet is refused. The game runs in the browser, though, so these are bounds, not proof: the cookies can't be forged, but a hand-made run report within the bounds is still paid. The unlock ladder lives in `public/js/shared/profile.js`, shared by the server and the browser.
+Run reports are clamped server-side: gold is capped by run length (at most two hours for the 15-minute night with its crypts), gear by how many crypt lords the run could have reached (four to a crypt, a crypt every 45 seconds of its time and the one by the start), a victory only counts if the run lasted long enough to be one, a run that doesn't say it was played on Veteran is paid as Normal, one that doesn't say it was a Nightmare (or says so in Ranked) is paid as none, and a run in a mode the hero hasn't unlocked yet is refused. The game runs in the browser, though, so these are bounds, not proof: the cookies can't be forged, but a hand-made run report within the bounds is still paid. The unlock ladder lives in `public/js/shared/profile.js`, shared by the server and the browser.
 
 If the game is served as plain static files (no `/api`), it falls back to plain client-side cookies with the same rules (they can't be meaningfully encrypted without a server, since the key would ship in the page). An unreadable one gets the same fresh-start prompt. A game server that is there but not answering (no connection, or a 5xx) is not mistaken for static hosting: the title screen says it can't be reached and offers to try again. A run the server doesn't take is never faked either: the results screen says its gold isn't saved and offers to save again.
 
@@ -159,7 +161,7 @@ If the game is served as plain static files (no `/api`), it falls back to plain 
 | Method | Path | Body | Effect |
 | --- | --- | --- | --- |
 | GET | `/api/state` | — | the profile, plus `unreadable: { profile: true }` when the save can't be decrypted; deletes a run cookie left from an older version |
-| POST | `/api/run` | `{ mode, diff, hero, victory, time, gold, kills, level, floor }` | a run has ended: pay out gold, record wins, achievements and Ranked bests; the reward lists anything newly unlocked |
+| POST | `/api/run` | `{ mode, diff, nightmare, hero, victory, time, gold, kills, level, floor }` | a run has ended: pay out gold, record wins, achievements and Ranked bests; the reward lists anything newly unlocked |
 | POST | `/api/buy` | `{ id }` | buy an Armory rank |
 | POST | `/api/refund` | — | refund all Armory ranks |
 | POST | `/api/reset` | — | wipe progress |
@@ -195,7 +197,7 @@ Gold from runs buys permanent ranks: Might, Armor, Vitality, Recovery, Haste, Re
 
 A point of **armor**, wherever it comes from (the Armory, the Knight's own two, the Plate Armor relic, gear), takes a tenth off what is left of each blow, or 1 damage if that is more. So every point adds a little less: one takes 10%, five 41%, ten 65%. All of it together never stops more than 95% of a blow, and a blow always does at least 1 (`armored` in `public/js/game/player.js`).
 
-The 15-minute night was tuned, on what is now Veteran, so a fresh profile can't win it and a full Armory can: with the Knight, the gem-collecting bot died in 33 of 35 seeded games without the Armory and won all 35 with every rank (`node tools/bots.mjs --bot=gems --runs=35 --armory=none` and `--armory=max`; add `--diff=normal` for Normal). That was before armor took a tenth of a blow a point, which makes the Knight and any armored build sturdier, and before the levels' strength was doubled and the breakables tripled (16 October 2026): since then the same bot, without the Armory, has won 4 of 4 seeded nights with the Knight on Veteran (1 of 4 before), and on Normal, now at 70% less monster health, 4 of 4 with the Knight and the Necromancer alike. What spawns when is a table of minute pockets in `public/js/data/waves.js`.
+The 15-minute night was tuned, on what is now Veteran, so a fresh profile can't win it and a full Armory can: with the Knight, the gem-collecting bot died in 33 of 35 seeded games without the Armory and won all 35 with every rank (`node tools/bots.mjs --bot=gems --runs=35 --armory=none` and `--armory=max`; add `--diff=normal` for Normal). That was before armor took a tenth of a blow a point, which makes the Knight and any armored build sturdier, and before the levels' strength was doubled and the breakables tripled (16 October 2026): since then the same bot, without the Armory, has won 4 of 4 seeded nights with the Knight on Veteran (1 of 4 before), and on Normal, now at 70% less monster health, 4 of 4 with the Knight and the Necromancer alike. A Nightmare (`--nightmare`) on Normal didn't stop the Knight on seed 1: he won it too, with 51 735 kills against 34 191 and at level 134 against 108, the doubled horde's gems carrying him further. What spawns when is a table of minute pockets in `public/js/data/waves.js`.
 
 ## Project layout
 
@@ -258,6 +260,7 @@ npm run bots                                    # every strategy · Knight · 15
 node tools/bots.mjs --bot=idle,circle,kite --hero=knight --mode=s15 --runs=10 --seed=1
 node tools/bots.mjs --bot=kite:r=40,kite:r=60 --hero=all --max=10:00 --each
 node tools/bots.mjs --bot=gems --pick=all --armory=max --json=tools/out/gems.json
+node tools/bots.mjs --bot=gems --diff=normal --nightmare   # Normal, twice the monsters
 node tools/bots.mjs --list                      # strategies, their parameters and the level-up policies
 ```
 

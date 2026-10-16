@@ -7,7 +7,11 @@ import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engi
 import { MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { RANKS } from '../shared/profile.js';
+import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
+
+// Beside the clock on a Nightmare (twice the monsters; never Ranked).
+const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
 
 const ORB_R = 21, ORB_S = ORB_R * 2 + 6;
 
@@ -213,7 +217,9 @@ export class Hud {
     if (g.mode === 'dungeon') {
       drawText(ctx, `FLOOR ${g.floor} · ${g.floorName.toUpperCase()}`, cx, 10, { align: 'center', color: ['#ffffff', '#c0cbdc', '#8b9bb4'] });
       if (g.objective) drawText(ctx, g.objective, cx, 21, { align: 'center', color: '#feae34' });
-      drawText(ctx, fmtTime(g.time), cx, 32, { align: 'center', color: '#8b9bb4' });
+      const clock = fmtTime(g.time);
+      drawText(ctx, clock, cx, 32, { align: 'center', color: '#8b9bb4' });
+      if (g.nightmare) drawText(ctx, NIGHTMARE_TAG, cx + Math.ceil(textWidth(clock) / 2) + 5, 32, { color: '#e43b44' });
     } else if (g.mode === 'ranked') {
       // Endless: the clock counts up; the bar fills toward the next rank.
       const c = textCanvas(fmtTime(g.time), g.bestBeaten ? ['#ffffff', '#9ee562', '#63c74d'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
@@ -238,6 +244,8 @@ export class Hud {
       // A tiny moon/sun showing the night's progress.
       ctx.fillStyle = u > 0.93 ? '#feae34' : '#c0cbdc';
       ctx.fillRect(cx - 30 + Math.round(58 * u), 29, 2, 6);
+      // Where Ranked shows its best time.
+      if (g.nightmare) drawText(ctx, NIGHTMARE_TAG, cx + 34, 29, { color: '#e43b44' });
     }
     // In a crypt the clock above stands still.
     if (g.inCrypt) drawText(ctx, `${g.inCrypt.name.toUpperCase()} · TIME STANDS STILL`, cx, 38, { align: 'center', color: '#b55088' });

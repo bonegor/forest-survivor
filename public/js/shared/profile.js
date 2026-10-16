@@ -15,6 +15,8 @@
 //
 // Two difficulties (data/difficulty.js): Normal is recorded as the old Medium,
 // Veteran as the old Hard, so saves keep their shape and old Easy wins stay on record.
+// A Nightmare (twice the monsters, on either) is recorded as its difficulty, and pays a
+// little more gold (NIGHTMARE_GOLD).
 
 import { RARITIES, LEGENDARY, MAX_LORDS, sanitizeGear, packGear, sameItem, itemPrice } from './items.js';
 
@@ -59,6 +61,9 @@ export const UPGRADES = [
 
 // What the gold a run found is worth, by difficulty (runReward); the trial screen says so.
 export const DIFF_GOLD = { easy: 0.75, medium: 1, hard: 1.5 };
+// A Nightmare's gold is worth this much more again, on either difficulty: a modest bonus for the
+// harder night. Its victory bonus is the difficulty's.
+export const NIGHTMARE_GOLD = 1.5;
 const VICTORY_BONUS = { s15: 200, dungeon: 400 };
 const DIFF_BONUS = { easy: 1, medium: 1.5, hard: 2.5 };
 // Upper bounds used to reject absurd run reports.
@@ -251,16 +256,20 @@ export function sanitizeRun(raw) {
   const found = raw.mode === 'dungeon' ? 0 : int(raw.found, 0, MAX_LORDS * (Math.floor(realTime / SECS_PER_CRYPT) + 1));
   // A win only counts if the run lasted long enough to be one. Ranked never ends in victory.
   const victory = raw.mode !== 'ranked' && raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
+  // A Nightmare (data/difficulty.js), twice the monsters, only as a run says it was, and never on
+  // Ranked. A win still counts as its difficulty's.
+  const nightmare = raw.mode !== 'ranked' && raw.nightmare === true;
   return {
     mode: raw.mode,
     diff,
+    nightmare,
     hero: isId(raw.hero) ? raw.hero : 'knight',
     victory,
     time,
     // Selling what the crypts gave pays too; applyRun adds what selling worn gear paid.
     gold: int(raw.gold, 0, 100 + realTime * MAX_GOLD_PER_SEC + found * RARITIES[LEGENDARY].price),
     claim: int(raw.gold, 0, 1e9),
-    kills: int(raw.kills, 0, 50 + time * 60),
+    kills: int(raw.kills, 0, 50 + time * 60 * (nightmare ? 2 : 1)),
     level: int(raw.level, 1, 999),
     floor: int(raw.floor, 1, 3),
     realTime,
@@ -271,9 +280,10 @@ export function sanitizeRun(raw) {
 }
 
 export function runReward(run) {
-  const collected = Math.round(run.gold * DIFF_GOLD[run.diff]);
+  const multiplier = DIFF_GOLD[run.diff] * (run.nightmare ? NIGHTMARE_GOLD : 1);
+  const collected = Math.round(run.gold * multiplier);
   const bonus = run.victory ? Math.round(VICTORY_BONUS[run.mode] * DIFF_BONUS[run.diff]) : 0;
-  return { collected, bonus, total: collected + bonus, multiplier: DIFF_GOLD[run.diff] };
+  return { collected, bonus, total: collected + bonus, multiplier };
 }
 
 export function applyRun(profile, rawRun) {

@@ -8,9 +8,9 @@ import { overlay, picture, presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp } from '../engine/util.js';
 import { HEROES, HERO_ORDER, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
-import { MODES, NORMAL, VETERAN } from '../data/difficulty.js';
+import { MODES, NORMAL, VETERAN, NIGHTMARE } from '../data/difficulty.js';
 import { UPGRADES, upgradeCost, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
-import { panel, button, stepper, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
+import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars } from './ladder.js';
 
 const UP_ICONS = {
@@ -422,14 +422,18 @@ export class ModeScreen {
       drawText(ctx, line, W / 2, ty, { align: 'center', color: lockedFocus ? '#feae34' : '#c0cbdc' });
       ty += 9;
     }
-    // Normal or Veteran (data/difficulty.js), remembered with the settings. Ranked keeps one best
-    // per hero, so it is always Veteran.
+    // Normal or Veteran (data/difficulty.js), and beside them the Nightmare box (twice the
+    // monsters), all remembered with the settings. Ranked keeps one best per hero, so it is always
+    // Veteran and never a Nightmare: there the box isn't shown.
     ty += 5;
     if (mode === 'ranked') {
-      drawText(ctx, 'Ranked is always played as Veteran', W / 2, ty, { align: 'center', color: '#8b9bb4' });
-      ty += 9;
+      for (const line of wrapText(`Ranked is always played as Veteran, never as a ${NIGHTMARE.name}`, W - 20)) {
+        drawText(ctx, line, W / 2, ty, { align: 'center', color: '#8b9bb4' });
+        ty += 9;
+      }
     } else {
-      const bw = 64, gap = 8, bx = Math.round(W / 2 - bw - gap / 2);
+      const label = NIGHTMARE.name.toUpperCase(), nightmare = app.choice.nightmare === true;
+      const bw = 64, gap = 8, bx = Math.round(W / 2 - (2 * (bw + gap) + checkboxWidth(label)) / 2);
       [NORMAL, VETERAN].forEach((d, i) => {
         const dx = bx + i * (bw + gap), on = app.choice.diff === d.id;
         if (on) {
@@ -442,11 +446,21 @@ export class ModeScreen {
           sfx('select');
         }
       });
+      if (checkbox(ctx, ui, 'nightmare', bx + 2 * (bw + gap), ty, label, nightmare, { color: '#f6757a' })) {
+        app.choice.nightmare = app.settings.nightmare = !nightmare;
+        saveSettings(app.settings);
+      }
       ty += 19;
       const d = app.choice.diff === VETERAN.id ? VETERAN : NORMAL;
       for (const line of wrapText(d.desc, W - 20)) {
         drawText(ctx, line, W / 2, ty, { align: 'center', color: '#8b9bb4' });
         ty += 9;
+      }
+      if (app.choice.nightmare === true) {
+        for (const line of wrapText(NIGHTMARE.desc, W - 20)) {
+          drawText(ctx, line, W / 2, ty, { align: 'center', color: '#f6757a' });
+          ty += 9;
+        }
       }
     }
     const dy = ty + 6;

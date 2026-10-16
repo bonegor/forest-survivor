@@ -11,10 +11,10 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { isFew } from '../public/js/game/spawner.js';
 import { armored } from '../public/js/game/player.js';
-import { NORMAL, VETERAN } from '../public/js/data/difficulty.js';
-import { mulberry32 } from '../public/js/engine/util.js';
+import { NORMAL, VETERAN, GAME_SPEED } from '../public/js/data/difficulty.js';
+import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { targetCount } from '../public/js/data/waves.js';
-import { defaultProfile, metaBonuses, runReward, DIFF_GOLD } from '../public/js/shared/profile.js';
+import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
 
 function game(o = {}, seed = 7) {
   const oldRandom = Math.random;
@@ -211,5 +211,19 @@ test('the gold a difficulty pays is the profile\'s alone, and its card says so',
     assert.ok(d.desc.endsWith(`Gold x${DIFF_GOLD[d.id]}.`), d.desc);
     const run = { mode: 's15', diff: d.id, victory: false, gold: 100 };
     assert.equal(runReward(run).collected, Math.round(100 * DIFF_GOLD[d.id]));
+  }
+});
+
+// The user (16 October 2026): the general game speed 20% up, on the 10% faster than real time it was.
+test('a run goes 32% faster than real time: the night in about 11:22, the next hero at about 3:47', () => {
+  assert.equal(GAME_SPEED, 1.32);
+  assert.ok(Math.abs(GAME_SPEED / 1.1 - 1.2) < 1e-9, '20% faster than the 1.1 it was');
+  assert.equal(fmtTime(15 * 60 / GAME_SPEED + 0.5), '11:22', 'the 15-minute night in real time');
+  assert.equal(fmtTime(HERO_UNLOCK_TIME / GAME_SPEED + 0.5), '03:47', 'the 5:00 that brings in the next hero');
+  // A real second of frames moves a run's clock on GAME_SPEED seconds; the bots keep the game's own pace.
+  for (const pace of [GAME_SPEED, undefined]) {
+    const g = game({ pace }), t0 = g.time;
+    for (let i = 0; i < 60; i++) g.update(1 / 60);
+    assert.ok(Math.abs(g.time - t0 - (pace || 1)) < 1e-9, `pace ${pace}: ${g.time - t0} s on the clock`);
   }
 });

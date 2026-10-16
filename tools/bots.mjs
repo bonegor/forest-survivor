@@ -30,6 +30,7 @@ const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options
   --hz=N        simulation steps per second (default: 60, like a 60 Hz screen)
   --armory=X    Armory ranks: none, max, or might:5,armor:3 (default: none)
   --diff=X      normal or veteran (default: veteran, the game as it was tuned)
+  --nightmare   twice the monsters, on top of the difficulty (not in Ranked; default: off)
   --jobs=N      games played in parallel (default: one per core, less one)
   --each        print a line per game
   --json=FILE   write every game's result to FILE
@@ -70,6 +71,7 @@ async function main(argv) {
   const max = parseTime(opts.max ?? '60:00');
   const armory = parseArmory(opts.armory ?? 'none');
   const diff = { normal: 'medium', veteran: 'hard' }[opts.diff ?? 'veteran'] ?? fail('--diff must be normal or veteran');
+  const nightmare = opts.nightmare === undefined ? false : opts.nightmare === true || fail('--nightmare takes no value');
   if (opts.json === true) fail('--json needs a file name: --json=tools/out/bots.json');
   // Catch a bad strategy or parameter here rather than in every worker.
   for (const spec of bots) {
@@ -83,7 +85,7 @@ async function main(argv) {
     combos.push({ bot, pick, hero, mode });
   }
   const jobs = [];
-  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, seed: seed0 + i, hz, max, armory, diff });
+  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, seed: seed0 + i, hz, max, armory, diff, nightmare });
 
   const cores = os.availableParallelism ? os.availableParallelism() : os.cpus().length;
   const workers = Math.max(1, Math.min(jobs.length, posInt(opts.jobs ?? Math.max(1, cores - 1), 'jobs')));
@@ -102,7 +104,7 @@ async function main(argv) {
   const same = dims.filter((k) => !varying.includes(k)).map((k) => (k === 'pick' ? 'pick ' : '') + combos[0][k]);
   const seeds = runs > 1 ? `seeds ${seed0}-${seed0 + runs - 1}` : `seed ${seed0}`;
   const arm = Object.keys(armory).length ? 'armory ' + Object.entries(armory).map(([k, r]) => k + ':' + r).join(',') : 'no armory';
-  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, diff === 'medium' ? 'Normal' : 'Veteran'].join(' · ')}`);
+  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, diff === 'medium' ? 'Normal' : 'Veteran', ...(nightmare ? ['Nightmare'] : [])].join(' · ')}`);
   console.log(`${jobs.length} game${jobs.length > 1 ? 's' : ''} on ${workers} worker${workers > 1 ? 's' : ''} in ${secs.toFixed(1)} s\n`);
 
   const rows = combos.map((c) => ({ c, s: summarize(results.filter((r) => dims.every((k) => r[k] === c[k]))) }));
@@ -122,7 +124,7 @@ async function main(argv) {
   if (opts.json) {
     const file = resolve(String(opts.json));
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify({ options: { bots, picks, heroes, modes, runs, seed: seed0, hz, max, armory }, results }, null, 1));
+    writeFileSync(file, JSON.stringify({ options: { bots, picks, heroes, modes, runs, seed: seed0, hz, max, armory, nightmare }, results }, null, 1));
     console.log(`\nWrote ${results.length} results to ${file}`);
   }
 }
@@ -234,7 +236,7 @@ function listStrategies() {
 // --------------------------------------------------------------- options --
 
 function parseArgs(argv) {
-  const known = ['bot', 'pick', 'hero', 'mode', 'runs', 'seed', 'max', 'hz', 'armory', 'diff', 'jobs', 'each', 'json', 'list', 'help'];
+  const known = ['bot', 'pick', 'hero', 'mode', 'runs', 'seed', 'max', 'hz', 'armory', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
   const opts = {};
   for (const a of argv) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(a);

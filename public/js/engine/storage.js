@@ -221,8 +221,9 @@ export const store = {
   },
 };
 
-// diff: Normal ('medium') or Veteran ('hard'), as last chosen on the trial screen.
-const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, crt: false, fps: false, diff: 'medium' };
+// diff: Normal ('medium') or Veteran ('hard'), and nightmare: its box ticked or not, as last
+// chosen on the trial screen.
+const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, crt: false, fps: false, diff: 'medium', nightmare: false };
 
 export function loadSettings() {
   try {

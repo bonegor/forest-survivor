@@ -11,7 +11,7 @@ import { levelBonus } from '../game/player.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PASSIVES, FILLERS } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
-import { MODES, GAME_SPEED } from '../data/difficulty.js';
+import { MODES, GAME_SPEED, NIGHTMARE } from '../data/difficulty.js';
 import { metaBonuses, rankTitle, unlocksNext } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText } from './ladder.js';
@@ -26,6 +26,7 @@ export class GameScreen {
       hero,
       mode,
       diff: app.choice.diff || 'medium', // Normal or Veteran: Normal unless chosen, as the trial screen shows
+      nightmare: app.choice.nightmare === true, // twice the monsters, if ticked there (never on Ranked)
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       meta: metaBonuses(app.store.profile),
       gear: app.store.profile.gear[hero], // this hero's own
@@ -705,7 +706,7 @@ class ResultsOverlay {
     const res = this.res;
     this.reward = null;
     this.gs.app.store.submitRun({
-      mode: res.mode, diff: res.diff, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, floor: res.floor,
+      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
     }).then((r) => {
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
@@ -727,7 +728,7 @@ class ResultsOverlay {
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), 8, Math.round(L.width * s), Math.round(L.height * s));
     ctx.globalAlpha = 1;
     const ranked = res.mode === 'ranked';
-    const sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub}`;
+    const sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}`;
     drawText(ctx, sub, W / 2, 12 + L.height * s, { align: 'center', color: '#8b9bb4' });
     if (this.t < 0.6) return null;
     // Personal bests and anything this run unlocked, shown above the gold.

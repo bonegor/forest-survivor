@@ -1,4 +1,4 @@
-import { DIFF_GOLD } from '../shared/profile.js';
+import { DIFF_GOLD, NIGHTMARE_GOLD } from '../shared/profile.js';
 
 // How much tougher than the old Hard monsters are, round on round of tuning:
 // their numbers (+10%, +10%, +20%), health (+10%, +10%, +10%, +20%) and
@@ -64,9 +64,24 @@ export const DIFFS = { medium: NORMAL, hard: VETERAN };
 // tests, older saves) plays it too: the game as it was tuned.
 export const diffFor = (mode, id) => (mode === 'ranked' ? VETERAN : DIFFS[id] || VETERAN);
 
+// Nightmare, the user's (16 October 2026): a box to tick on the trial screen that doubles the
+// number of monsters. On top of Normal or Veteran, twice as many of the night's monsters come, in
+// the steady horde and the timed swarms, rings and packs alike (spawner.js hordeMore), each as
+// strong as ever. Not on Ranked, which keeps one best time per hero. The gold it brings home is
+// the profile's to weigh (shared/profile.js NIGHTMARE_GOLD).
+export const NIGHTMARE = {
+  name: 'Nightmare',
+  more: 2,
+  desc: `Nightmare: twice as many monsters. Gold x${NIGHTMARE_GOLD} on top.`,
+};
+
+// Whether a run is a Nightmare: only as chosen, and never on Ranked.
+export const nightmareFor = (mode, on) => mode !== 'ranked' && on === true;
+
 // The whole game runs this much faster than real time: the night's clock, the hero, the monsters,
-// everything in a run (not the menus), so the 15-minute night passes in about 13⅔ minutes.
-export const GAME_SPEED = 1.1;
+// everything in a run (not the menus), so the 15-minute night passes in about 11 minutes 22
+// seconds, and every warning (a boss's telegraphed blow) is about a quarter shorter in real time.
+export const GAME_SPEED = 1.32;
 
 export const MODES = {
   s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn in the Darkwood.' },

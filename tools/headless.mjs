@@ -37,20 +37,21 @@ buildSprites();
 
 // Plays one game until it ends or `max` seconds of game time pass, and
 // returns how it went. bot: a spec ('circle:r=60') or a strategy object;
-// armory: Armory ranks, e.g. { might: 5, armor: 3 }; diff: 'medium' (Normal) or 'hard' (Veteran).
+// armory: Armory ranks, e.g. { might: 5, armor: 3 }; diff: 'medium' (Normal) or 'hard' (Veteran);
+// nightmare: twice the monsters (data/difficulty.js NIGHTMARE; never in Ranked).
 export function playGame(o = {}) {
-  const { hero = 'knight', mode = 's15', diff = 'hard', bot = 'autopilot', params, label, pick = 'build', seed = 1, hz = 60, max = 3600, armory = {}, crypts = false } = o;
+  const { hero = 'knight', mode = 's15', diff = 'hard', nightmare = false, bot = 'autopilot', params, label, pick = 'build', seed = 1, hz = 60, max = 3600, armory = {}, crypts = false } = o;
   if (!HEROES[hero]) throw new Error(`Unknown hero "${hero}" (${Object.keys(HEROES).join(', ')})`);
   if (!MODES[mode]) throw new Error(`Unknown mode "${mode}" (${Object.keys(MODES).join(', ')})`);
   const random = Math.random;
   Math.random = mulberry32(seed);
   try {
     const meta = P.metaBonuses(P.sanitizeProfile({ up: armory })); // ranks clamped like a real save
-    const g = new Game({ hero, mode, diff, meta, settings: {}, crypts });
+    const g = new Game({ hero, mode, diff, nightmare, meta, settings: {}, crypts });
     const d = new Driver(g, { bot, params, label, pick, hz, rng: mulberry32(Math.imul(seed, 0x9e3779b1) ^ 0x5bd1e995) });
     const t0 = performance.now();
     d.run(max);
-    return { bot: d.bot.name, pick: d.pickName, hero, mode, diff: g.diffId, seed, ...d.summary(), ms: Math.round(performance.now() - t0) };
+    return { bot: d.bot.name, pick: d.pickName, hero, mode, diff: g.diffId, nightmare: g.nightmare, seed, ...d.summary(), ms: Math.round(performance.now() - t0) };
   } finally {
     Math.random = random;
   }
