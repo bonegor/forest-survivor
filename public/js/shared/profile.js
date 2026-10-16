@@ -387,6 +387,10 @@ export function sanitizeCheckpoint(raw) {
     weapons: items(raw.weapons),
     passives: items(raw.passives),
     bless: int(raw.bless, 0, 999),
+    // The filler the player chose for every level-up once nothing else is left (Game FILLERS).
+    auto: ['bless', 'heal', 'gold'].includes(raw.auto) ? raw.auto : null,
+    // The level a Phoenix Heart was spent at this run (null: none was).
+    phoenixLostAt: Number.isFinite(raw.phoenixLostAt) ? int(raw.phoenixLostAt, 1, 999) : null,
     gear: sanitizeGear(raw.gear),
     cleared: cryptKeys(raw.cleared),
     lost: cryptKeys(raw.lost),

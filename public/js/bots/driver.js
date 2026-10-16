@@ -80,6 +80,8 @@ export class Driver {
     const g = this.g;
     if (g.state === 'chest') g.state = 'play';
     if ((g.state === 'play' || g.state === 'levelup') && g.pendingLevels > 0) {
+      // The run's auto-pick first, as the game screen does (a bot's run never sets one).
+      g.resolveAutoLevels();
       while (g.pendingLevels > 0) {
         const cards = g.levelChoices(g.choiceCount());
         g.applyChoice(cards[this.choose(cards)]);

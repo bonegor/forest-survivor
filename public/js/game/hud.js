@@ -230,7 +230,7 @@ export class Hud {
     } else {
       drawText(ctx, `${Math.floor(p.fury)}%`, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: '#e8b796' });
     }
-    if (g.player.revivals > 0) ctx.drawImage(SPR.i_revival.frames[0].c, ox + hpImg.width - 6, oy - 8, 12, 12);
+    if (g.player.revives > 0) ctx.drawImage(SPR.i_revival.frames[0].c, ox + hpImg.width - 6, oy - 8, 12, 12);
   }
 
   drawBoss(ctx, W, t) {

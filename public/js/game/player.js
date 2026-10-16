@@ -122,6 +122,12 @@ export class Player {
     for (const w of this.weapons) w.recompute();
   }
 
+  // Revives left: the Second Winds counted down in `revivals`, and those relics give while held
+  // (the Phoenix Heart's, spent first: hurt).
+  get revives() {
+    return this.revivals + this.passiveSum('revivals');
+  }
+
   // Worn gear changed mid-run: its stats now, and a revive more or less from a legendary.
   gearChanged() {
     const before = this.gearB.revival;
@@ -268,11 +274,15 @@ export class Player {
         // Wind is kept for the forest, where a fall is the end.
         this.hp = 0;
         g.faint();
-      } else if (this.revivals > 0) {
-        this.revivals--;
+      } else if (this.revives > 0) {
+        // A relic that raises him (the Phoenix Heart) is the revive spent first, and goes with
+        // it; a Second Wind (the Armory's, a legendary's) waits for the next fall.
+        const relic = [...this.passives.keys()].find((id) => PASSIVES[id].stat.revivals);
+        if (relic) g.spendRelic(relic);
+        else this.revivals--;
         this.hp = Math.round(this.maxHp * 0.6);
         this.invuln = 2.5;
-        g.revive();
+        g.revive(relic);
       } else {
         this.hp = 0;
         this.dead = true;

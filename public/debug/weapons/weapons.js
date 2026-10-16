@@ -145,6 +145,10 @@ function relicTable() {
       const hero = signatureOf.get(wid);
       return `${d.name} → ${WEAPONS[d.evo.into].name}${hero ? ` (${hero.title})` : ''}`;
     });
+    // The Phoenix Heart's rules (data/passives.js): it evolves them all, and comes and goes.
+    if (r.evolvesAny) evolves.push(`Any weapon at level ${MAX_WEAPON_LEVEL}, its own relic held or not`);
+    if (r.afterSignature) evolves.push("Offered only once the hero's own weapon has evolved");
+    if (r.stat.revivals) evolves.push(`Spent by the revive it gives; offered again ${r.again} levels on`);
     return h('tr', {},
       h('td', { class: 'icon' }, pixels(r.icon, 2)),
       h('td', {}, r.name),
@@ -167,7 +171,7 @@ function build() {
       h('div', { class: 'cards' }, SHARED_WEAPONS.map((w) => card(w)))),
     h('section', { id: 'relics' },
       h('h2', { class: 'sec' }, 'Relics'),
-      h('p', { class: 'note' }, 'Shared by all. A weapon at its top level evolves when a chest is opened, if the hero holds its relic.'),
+      h('p', { class: 'note' }, 'Shared by all. A weapon at its top level evolves when a chest is opened, if the hero holds its relic (or the Phoenix Heart, which evolves any).'),
       relicTable()));
   toc.replaceChildren(
     ...HERO_ORDER.map((id) => h('a', { href: '#h-' + id }, HEROES[id].title)),

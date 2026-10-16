@@ -34,6 +34,7 @@ const STYLES = {
 
 const MAX = 170;
 const LIFE = 0.85;
+const TEXT_LIFE = 1.6; // words last longer than numbers (Numbers.text)
 // The shine's sweep across the digits: when, and how wide (text pixels).
 const SHINE_FROM = 0.05, SHINE_FOR = 0.32, SHINE_W = 3;
 
@@ -59,6 +60,30 @@ export class Numbers {
       n.str = (STYLES[style].prefix || '') + n.value;
       return;
     }
+    const n = this.spawn(x, y, style);
+    n.value = value;
+    n.boost = boostFor(value, style);
+    n.str = (STYLES[style].prefix || '') + value;
+    n.spin = style === 'crit' ? rand(-0.25, 0.25) : 0;
+    if (target) target._num = n;
+  }
+
+  // A few words rather than a number (a level-up the run's auto-pick took: "Blessing ×17"), in
+  // a style's colours, rising slowly and lasting longer. Shown even with damage numbers off:
+  // it is the only word of what the level gave.
+  text(x, y, str, style = 'gold') {
+    const n = this.spawn(x, y, style);
+    n.x = x;
+    n.vx = 0;
+    n.vz = 22;
+    n.grav = 0;
+    n.life = TEXT_LIFE;
+    n.boost = 1.1;
+    n.str = str;
+    n.font = 'normal';
+  }
+
+  spawn(x, y, style) {
     let n;
     if (this.list.length >= MAX) {
       n = this.list.shift();
@@ -68,16 +93,17 @@ export class Numbers {
     n.z = 0;
     n.vx = rand(-22, 22);
     n.vz = rand(62, 86);
+    n.grav = 210;
     n.t = 0;
-    n.value = value;
+    n.life = LIFE;
+    n.value = 0;
     n.style = style;
-    n.boost = boostFor(value, style);
-    n.str = (STYLES[style].prefix || '') + value;
+    n.font = 'bold';
     n.alive = true;
-    n.spin = style === 'crit' ? rand(-0.25, 0.25) : 0;
+    n.spin = 0;
     n.seed = (Math.random() * 1000) | 0;
-    if (target) target._num = n;
     this.list.push(n);
+    return n;
   }
 
   update(dt) {
@@ -85,7 +111,7 @@ export class Numbers {
     for (let i = L.length - 1; i >= 0; i--) {
       const n = L[i];
       n.t += dt;
-      if (n.t >= LIFE) {
+      if (n.t >= n.life) {
         n.alive = false;
         L.splice(i, 1);
         this.pool.push(n);
@@ -93,7 +119,7 @@ export class Numbers {
       }
       n.x += n.vx * dt;
       n.z += n.vz * dt;
-      n.vz -= 210 * dt;
+      n.vz -= n.grav * dt;
       n.vx *= Math.exp(-2 * dt);
     }
   }
@@ -106,14 +132,14 @@ export class Numbers {
       let k;
       if (t < 0.06) k = 0.3 + (1.75 - 0.3) * (t / 0.06);
       else if (t < 0.2) k = 1.75 - 0.75 * ease.outCubic((t - 0.06) / 0.14);
-      else k = 1 - Math.max(0, t - 0.55) * 0.6;
+      else k = 1 - Math.max(0, t - (n.life - 0.3)) * 0.6;
       const scale = st.scale * n.boost * k * S;
-      const alpha = clamp(t > LIFE * 0.65 ? 1 - (t - LIFE * 0.65) / (LIFE * 0.35) : 1, 0, 1);
+      const alpha = clamp(t > n.life * 0.65 ? 1 - (t - n.life * 0.65) / (n.life * 0.35) : 1, 0, 1);
       const sx = (n.x - cam.x) * S;
       const sy = (n.y - n.z - cam.y) * S;
       if (sx < -200 || sy < -200 || sx > cam.pxW + 200 || sy > cam.pxH + 200) continue;
       const color = st.cycle ? st.cycle[(Math.floor(t * 16) + n.seed) % st.cycle.length] : st.color;
-      const c = textCanvas(n.str, color, '#181425', st.edge || null, 'bold');
+      const c = textCanvas(n.str, color, '#181425', st.edge || null, n.font);
       const w = c.width * scale, h = c.height * scale;
       const spin = n.spin && t < 0.3;
       ctx.globalAlpha = alpha;
@@ -127,7 +153,7 @@ export class Numbers {
       ctx.drawImage(c, X, Y, Math.round(w), Math.round(h));
       // The shine: a band of the digits drawn white, sweeping left to right as it lands.
       if (!st.plain && t > SHINE_FROM && t < SHINE_FROM + SHINE_FOR) {
-        const wc = textCanvas(n.str, '#ffffff', '#181425', st.edge || null, 'bold');
+        const wc = textCanvas(n.str, '#ffffff', '#181425', st.edge || null, n.font);
         const at = Math.round(-SHINE_W + ((t - SHINE_FROM) / SHINE_FOR) * (c.width + SHINE_W));
         const x0 = Math.max(0, at), x1 = Math.min(c.width, at + SHINE_W);
         if (x1 > x0) {

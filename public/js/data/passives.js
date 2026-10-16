@@ -14,6 +14,17 @@ export const PASSIVES = {
   luck: { name: 'Lucky Clover', icon: 'i_luck', max: 5, desc: 'Luck {+10%}: crits, drops and chests.', stat: { luck: 0.1, crit: 0.02 } },
   amount: { name: 'Echo Rune', icon: 'i_amount', max: 2, desc: 'Weapons fire {+1} extra projectile.', stat: { amount: 1 }, weight: 0.45 },
   growth: { name: "Scholar's Crown", icon: 'i_growth', max: 5, desc: 'Experience {+7%}.', stat: { growth: 0.07 } },
+  // The owner's: "+1 revive, evolves any weapon. Available once you have evolved your main
+  // weapon. If you die it disappears and you CAN get it again at some level up." Offered only
+  // once one of the hero's own signature weapons has evolved (afterSignature); while held, any
+  // weapon at its top level evolves at a chest, its relic held or not (evolvesAny); it is the
+  // revive spent first when he falls, and goes with it, to be offered again `again` levels on
+  // (Game.relicOffered, Player.hurt).
+  phoenix: {
+    name: 'Phoenix Heart', icon: 'i_revival', // placeholder (tools/handoff-art.md)
+    max: 1, desc: 'Rise {once} from death. Any weapon at its peak {evolves}, with or without its relic.',
+    stat: { revivals: 1 }, weight: 0.35, evolvesAny: true, afterSignature: true, again: 5,
+  },
 };
 
 export const PASSIVE_IDS = Object.keys(PASSIVES);

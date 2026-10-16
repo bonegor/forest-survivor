@@ -6,7 +6,7 @@ import { sfx, playMusic } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
-import { Game } from '../game/game.js';
+import { Game, isFiller } from '../game/game.js';
 import { levelBonus } from '../game/player.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
@@ -75,6 +75,8 @@ export class GameScreen {
       if (input.pressed('map') && (g.mode === 'dungeon' || g.inCrypt)) g.showMap = !g.showMap;
       if (input.pressed('fps')) app.settings.fps = !app.settings.fps;
       if (!app.devHold) g.update(dt); // the developer panel can freeze the action
+      // Levels the run's auto-pick takes need no screen (Game.resolveAutoLevels).
+      if (g.state === 'play' && g.pendingLevels > 0) g.resolveAutoLevels();
       if (g.state === 'play' && g.pendingLevels > 0) {
         g.state = 'levelup';
         this.open(new LevelUpOverlay(this));
@@ -132,7 +134,10 @@ function choiceInfo(g, c) {
   return { name: 'Roast Chicken', icon: 'i_vitality', desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44' };
 }
 
-class LevelUpOverlay {
+// What the pause menu calls each filler a run's level-ups always take (Game.autoPick).
+const AUTO_NAMES = { bless: 'Blessing of Valor', heal: 'Roast Chicken', gold: 'Gold' };
+
+export class LevelUpOverlay {
   constructor(gs) {
     this.gs = gs;
     this.g = gs.game;
@@ -144,22 +149,28 @@ class LevelUpOverlay {
 
   roll() {
     this.choices = this.g.levelChoices(this.g.choiceCount());
+    // Nothing but the fillers (the whole build maxed, which lasts unless a Phoenix Heart is
+    // spent): each card offers ALWAYS, and no reroll is spent on them.
+    this.fillersOnly = this.choices.every(isFiller);
+    this.always = -1; // the card whose ALWAYS is ticked
     this.t = 0;
     this.gs.app.ui.focusId = 'c0';
   }
 
-  choose(i) {
-    const g = this.g;
-    g.applyChoice(this.choices[i]);
+  // Takes card i; with its ALWAYS ticked (or Shift held), every level-up from now on takes it
+  // unseen, and so do any levels still waiting.
+  choose(i, always = this.always === i) {
+    const g = this.g, c = this.choices[i];
+    if (always && this.fillersOnly) g.autoPick = c.type;
+    g.applyChoice(c);
     g.pendingLevels--;
     sfx('pick');
-    if (g.pendingLevels > 0) {
-      this.roll();
-      this.gs.app.ui.lock(0.3);
-      return null;
-    }
     g.state = 'play';
-    return 'close';
+    if (g.resolveAutoLevels()) return 'close';
+    g.state = 'levelup';
+    this.roll();
+    this.gs.app.ui.lock(0.3);
+    return null;
   }
 
   draw(ctx, W, H, dt) {
@@ -198,20 +209,23 @@ class LevelUpOverlay {
     ui.begin(dt);
     const n = this.choices.length;
     const vertical = W < 300;
+    const always = this.fillersOnly; // each card has its ALWAYS toggle: under it, or beside it when stacked
     let result = null;
     const top = 18 + L.height + 14;
     const avail = H - top - 26;
+    const shown = this.choices;
     for (let i = 0; i < n; i++) {
+      if (result || this.choices !== shown) break; // a card was taken: the next level's cards come next frame
       const info = choiceInfo(g, this.choices[i]);
       let x, y, w, h;
       if (vertical) {
-        w = W - 16;
+        w = W - 16 - (always ? 56 : 0);
         h = Math.min(56, Math.floor(avail / n) - 4);
         x = 8;
         y = top + i * (h + 4);
       } else {
         w = Math.min(118, Math.floor((W - 20 - (n - 1) * 6) / n));
-        h = Math.min(156, avail);
+        h = Math.min(156, avail - (always ? 15 : 0));
         x = Math.round(W / 2 - (n * w + (n - 1) * 6) / 2) + i * (w + 6);
         y = top;
       }
@@ -220,7 +234,26 @@ class LevelUpOverlay {
       y += Math.round((1 - ease.outCubic(k)) * 40);
       if (k <= 0) continue;
       const id = 'c' + i;
-      if (ui.item(id, x, y, w, h)) result = this.choose(i);
+      if (ui.item(id, x, y, w, h) && !result) result = this.choose(i);
+      if (always && !result) {
+        const on = this.always === i;
+        const tx = vertical ? x + w + 6 : x + 8, ty = vertical ? y + Math.floor(h / 2) - 6 : y + h + 3;
+        const tw = vertical ? 48 : w - 16;
+        if (button(ctx, ui, 'a' + i, tx, ty, tw, 12, '  ALWAYS', { color: on ? '#fee761' : '#8b9bb4', pointer: false })) {
+          this.always = on ? -1 : i;
+          sfx(on ? 'back' : 'pick');
+        }
+        // The tick box, left of the word.
+        const bx = Math.round(tx + tw / 2 - textWidth('  ALWAYS') / 2), by = ty + 3;
+        ctx.fillStyle = on ? '#fee761' : '#5a6988';
+        ctx.fillRect(bx, by, 6, 6);
+        ctx.fillStyle = on ? '#feae34' : '#181425';
+        ctx.fillRect(bx + 1, by + 1, 4, 4);
+        if (on) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(bx + 2, by + 2, 2, 2);
+        }
+      }
       const f = ui.focused(id);
       const lift = f ? -2 : 0;
       panel(ctx, x, y + lift, w, h, { trim: f ? ['#ffffff', info.color] : [info.color, '#262b44'], rivets: f });
@@ -264,7 +297,13 @@ class LevelUpOverlay {
       drawText(ctx, String(i + 1), x + 5, y + lift + 4, { color: '#3a4466', outline: null });
     }
     const p = g.player;
-    if (p.rerolls > 0 && this.t > 0.3) {
+    if (always) {
+      // What ALWAYS does, and where it is undone. (No reroll: fillers are all there is.)
+      const keys = input.device === 'kb' ? ` · Shift+1-${n}` : '';
+      const lines = [`ALWAYS takes that card at every level-up from now on${keys} · undo it in the pause menu`, `ALWAYS: every level-up from now on${keys} · undo in pause`, 'ALWAYS: every level-up · undo in pause'];
+      const hint = lines.find((s) => textWidth(s) <= W - 8) || lines[lines.length - 1];
+      drawText(ctx, hint, W / 2, H - 12, { align: 'center', color: this.always >= 0 ? '#fee761' : '#8b9bb4' });
+    } else if (p.rerolls > 0 && this.t > 0.3 && !result) {
       if (button(ctx, ui, 'reroll', Math.round(W / 2 - 45), H - 20, 90, 13, `REROLL ×${p.rerolls}`, { color: '#2ce8f5' }) || input.pressed('reroll')) {
         p.rerolls--;
         sfx('teleport');
@@ -273,14 +312,14 @@ class LevelUpOverlay {
     }
     ui.end();
     const keys = ['one', 'two', 'three', 'four'];
-    for (let i = 0; i < n; i++) if (input.pressed(keys[i]) && ui.lockT <= 0 && this.t > 0.3) result = this.choose(i);
+    for (let i = 0; i < n; i++) if (!result && input.pressed(keys[i]) && ui.lockT <= 0 && this.t > 0.3) result = this.choose(i, this.always === i || input.down('always'));
     return result;
   }
 }
 
 // ------------------------------------------------------------------ chest --
 
-class ChestOverlay {
+export class ChestOverlay {
   constructor(gs, kind) {
     this.gs = gs;
     this.g = gs.game;
@@ -371,22 +410,22 @@ class ChestOverlay {
           name = d.name;
           sub = 'EVOLVED!';
           color = '#f77622';
-        } else if (it.type === 'weapon') {
-          icon = WEAPONS[it.id].icon;
-          name = WEAPONS[it.id].name;
-          sub = `LV ${it.level}`;
-          color = '#c0cbdc';
+        } else if (it.type === 'weapon' || it.type === 'passive') {
+          const d = (it.type === 'weapon' ? WEAPONS : PASSIVES)[it.id];
+          icon = d.icon;
+          name = d.name;
+          sub = it.isNew ? 'NEW!' : `LV ${it.level}`;
+          color = it.type === 'weapon' ? (it.isNew ? '#0099db' : '#c0cbdc') : it.isNew ? '#63c74d' : '#9ee562';
         } else {
-          icon = PASSIVES[it.id].icon;
-          name = PASSIVES[it.id].name;
-          sub = `LV ${it.level}`;
-          color = '#9ee562';
+          // A filler, once the whole build is maxed: the run's auto-pick, else a Blessing.
+          ({ icon, name, color } = choiceInfo(g, it));
+          sub = it.type === 'bless' ? `x${it.level}` : it.type === 'gold' ? `+${it.value}` : `+${Math.round(it.value * 100)}%`;
         }
         const big = smoothScaled(SPR[icon].frames[0], 1);
         ctx.drawImage(big, x - big.width / 2, iy);
         const lines = wrapText(name, slot - 6);
         lines.forEach((ln, j) => drawText(ctx, ln, x, iy + 34 + j * 9, { align: 'center', color }));
-        drawText(ctx, sub, x, iy + 34 + lines.length * 9, { align: 'center', color: it.type === 'evolve' ? '#fee761' : '#8b9bb4' });
+        drawText(ctx, sub, x, iy + 34 + lines.length * 9, { align: 'center', color: it.type === 'evolve' || it.isNew ? '#fee761' : '#8b9bb4' });
       });
       if (items.some((it) => it.type === 'evolve') && this.revealed > 0) {
         const L = logo('EVOLUTION!', ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f']);
@@ -548,7 +587,7 @@ class ItemOverlay {
 
 // ------------------------------------------------------------------ pause --
 
-class PauseOverlay {
+export class PauseOverlay {
   constructor(gs) {
     this.gs = gs;
     this.g = gs.game;
@@ -595,10 +634,22 @@ class PauseOverlay {
     const statY = Math.max(by, sy) + 2;
     const stats = `TIME ${fmtTime(g.time)} · LV ${p.level} · KILLS ${fmtNum(g.kills)} · GOLD ${fmtNum(g.gold)}`;
     const note = this.confirm ? 'Quitting ends the run. The gold you found is kept.' : stats;
-    drawText(ctx, note, W / 2, Math.min(statY, y + ph - 50), { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
+    const auto = AUTO_NAMES[g.autoPick];
+    drawText(ctx, note, W / 2, Math.min(statY, y + ph - (auto ? 66 : 50)), { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
     ui.begin(dt);
     const bw = Math.min(90, (pw - 30) / 2);
     const row1 = y + ph - 38, row2 = y + ph - 20;
+    // The filler every level-up takes since the player ticked ALWAYS on it, and the way back to
+    // being asked (Game.autoPick).
+    if (auto) {
+      const label = `Level-ups: always ${auto}`, aw = 64, lw = textWidth(label);
+      const lx = Math.round(W / 2 - (lw + 6 + aw) / 2), ay = row1 - 17;
+      drawText(ctx, label, lx, ay + 3, { color: '#fee761' });
+      if (button(ctx, ui, 'ask', lx + lw + 6, ay, aw, 12, 'ASK AGAIN', { color: '#2ce8f5', pointer: false })) {
+        g.autoPick = null;
+        ui.focusId = 'resume';
+      }
+    }
     if (button(ctx, ui, 'resume', Math.round(W / 2 - bw - 4), row1, bw, 13, 'RESUME') || (input.pressed('pause') && ui.lockT <= 0)) {
       g.state = 'play';
       return 'close';

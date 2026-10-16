@@ -39,6 +39,13 @@ const PICKUP_FAR = 1400;
 // own weight and resistance. A third of the old 75 since 15 October 2026 (the user's call).
 export const KNOCKBACK = 25;
 
+// The cards a level-up falls back on once fewer upgrades are left than it offers (none at all
+// once the whole build is maxed): a stacking Blessing of Valor, a heal, and a purse of gold that
+// grows with the night. With nothing else left a level-up shows just these three, and the
+// player may tick ALWAYS on one: the run's level-ups then take it unseen (Game.autoPick).
+export const FILLERS = ['bless', 'heal', 'gold'];
+export const isFiller = (c) => FILLERS.includes(c.type);
+
 // What a broken barrel, crate, urn or lantern leaves, by weight (null: nothing). Luck
 // multiplies the treasures' weights, so better luck only ever makes each of them likelier.
 // The horde drops no potions, so nearly half of all props hold one: about as many reach
@@ -109,6 +116,10 @@ export class Game {
     this.boss = null;
     this.result = null;
     this.pendingLevels = 0;
+    // The filler the player chose to take at every level-up once nothing else is left (one of
+    // FILLERS, or null: ask). For this run only; the pause menu clears it.
+    this.autoPick = null;
+    this.phoenixLostAt = null; // the level a Phoenix Heart was spent at this run (Game.relicOffered)
     this.chestQueue = [];
     this.showMap = false;
     this.floor = o.checkpoint?.floor ?? 1;
@@ -251,9 +262,13 @@ export class Game {
     return this.player.weapons.some((w) => w.id === id || (w.def.evolved && WEAPONS[id].evo && WEAPONS[id].evo.into === w.id));
   }
 
-  // A level-up's cards. New weapons: the hero's own signature and those shared by all, never
-  // another class's signature (weaponsFor); any weapon he holds grows.
-  levelChoices(n) {
+  // Everything a level-up card or a chest can still give, each with its weight: a weapon he
+  // holds grows (3); a new weapon while a slot is free (1: the hero's own signature and those
+  // shared by all, never another class's, weaponsFor); a relic he holds grows (twice its
+  // weight); a new relic while a slot is free (about half its weight; the Phoenix Heart only
+  // when relicOffered says so). Empty once the whole build is maxed, and it stays so: an
+  // evolution adds nothing to choose. (Only a Phoenix Heart spent frees a slot again.)
+  upgradePool() {
     const p = this.player;
     const pool = [];
     for (const w of p.weapons) {
@@ -266,27 +281,66 @@ export class Game {
       if (rank < PASSIVES[id].max) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
     }
     if (p.passives.size < 6) {
-      for (const id of PASSIVE_IDS) if (!p.passives.has(id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
+      for (const id of PASSIVE_IDS) {
+        if (!p.passives.has(id) && this.relicOffered(id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
+      }
     }
-    const out = [];
+    return pool;
+  }
+
+  // Whether a relic he doesn't hold may be offered. The Phoenix Heart (afterSignature) only once
+  // one of the hero's own signature weapons has evolved, and, if one was spent this run, not
+  // until `again` levels after.
+  relicOffered(id) {
+    const r = PASSIVES[id], p = this.player;
+    if (!r.afterSignature) return true;
+    const evolved = p.weapons.some((w) => w.evolved && p.hero.unique.some((u) => WEAPONS[u].evo?.into === w.id));
+    return evolved && (this.phoenixLostAt == null || p.level - this.phoenixLostAt >= (r.again || 0));
+  }
+
+  // A relic used up (the Phoenix Heart, by the revive it gave): gone, its slot free again, and
+  // remembered so it is not offered again too soon (relicOffered).
+  spendRelic(id) {
+    const p = this.player;
+    p.passives.delete(id);
+    p.recompute();
+    this.phoenixLostAt = p.level;
+  }
+
+  // Up to n different upgrades, drawn from the pool by weight.
+  drawUpgrades(n) {
+    const pool = this.upgradePool(), out = [];
     while (out.length < n && pool.length) {
       const c = weighted(pool, (x) => x.weight);
       out.push(c);
       pool.splice(pool.indexOf(c), 1);
     }
-    // With few upgrades left (none, once the build is maxed), the Blessing, a heal and gold fill
-    // the rest, so a level-up always offers a full choice.
-    for (const extra of [{ type: 'bless' }, { type: 'heal', value: 0.35 }, { type: 'gold', value: 30 }]) {
-      if (out.length < n) out.push(extra);
-    }
     return out;
+  }
+
+  // A level-up's cards: n drawn from the pool, the fillers after them while there is room. With
+  // nothing left to draw, the three fillers alone (a four-card level-up shows three, no copy).
+  levelChoices(n) {
+    const out = this.drawUpgrades(n);
+    for (const type of FILLERS) if (out.length < n) out.push(this.filler(type));
+    return out;
+  }
+
+  // A filler card: the Blessing; a heal of 35%; gold that grows with the night and with the
+  // hero's greed, as every coin he picks up does.
+  filler(type) {
+    if (type === 'heal') return { type, value: 0.35 };
+    if (type === 'gold') return { type, value: Math.max(1, Math.round(30 * (1 + this.phase / 10) * this.player.greed)) };
+    return { type: 'bless' };
   }
 
   choiceCount() {
     return Math.random() < 0.06 + (this.player.luck - 1) * 0.6 ? 4 : 3;
   }
 
-  applyChoice(c) {
+  // Gives what a card (or a chest's draw) holds. quiet: no sound or number of its own, for
+  // whatever shows it instead (the chest screen, a burst of auto-picked levels).
+  applyChoice(c, quiet = false) {
     const p = this.player;
     if (c.type === 'weapon') {
       const w = p.weapons.find((x) => x.id === c.id);
@@ -297,13 +351,43 @@ export class Game {
       p.recompute();
     } else if (c.type === 'gold') {
       this.gold += c.value;
-      sfx('coin');
+      this.stats.gold += c.value;
+      if (!quiet) sfx('coin');
     } else if (c.type === 'heal') {
-      p.heal(p.maxHp * c.value);
+      p.heal(p.maxHp * c.value, quiet);
     } else if (c.type === 'bless') {
       p.blessings++;
       p.recompute();
     }
+  }
+
+  // Level-ups that need no screen: once nothing but the fillers is left and the player ticked
+  // ALWAYS on one (autoPick), every waiting level takes it at once, with no pause. Every place
+  // that would open the level-up screen asks here first (the game screen, the screen itself for
+  // the next waiting level, the bots, the developer panel). The levels' own sound and beam
+  // played as they came (queueLevelUp); one line over the hero says what the lot gave
+  // ("Blessing ×17", "+35% health", "+41 gold"). True when no level-up is left waiting.
+  resolveAutoLevels() {
+    const n = this.pendingLevels;
+    if (n <= 0) return true;
+    // While the level-up screen is open its cards come first.
+    if (this.state === 'levelup' || !FILLERS.includes(this.autoPick) || this.upgradePool().length) return false;
+    const p = this.player;
+    let gold = 0, heal = 0;
+    for (let i = 0; i < n; i++) {
+      const c = this.filler(this.autoPick);
+      this.applyChoice(c, true);
+      if (c.type === 'gold') gold += c.value;
+      else if (c.type === 'heal') heal += c.value;
+    }
+    this.pendingLevels = 0;
+    const [text, style, sound] =
+      this.autoPick === 'gold' ? [`+${gold} gold`, 'gold', 'coin']
+      : this.autoPick === 'heal' ? [`+${Math.min(100, Math.round(heal * 100))}% health`, 'heal', 'heal']
+      : [`Blessing ×${p.blessings}`, 'holy', 'pick'];
+    this.numbers.text(p.x, p.y - 22, text, style);
+    sfx(sound);
+    return true;
   }
 
   queueLevelUp() {
@@ -316,13 +400,18 @@ export class Game {
     this.pushback(p.x, p.y, 50, 160);
   }
 
+  // Weapons a chest may evolve: at their top level, with their relic held, or with any relic that
+  // evolves them all (the Phoenix Heart, which evolving doesn't use up).
   evolvable() {
     const p = this.player;
-    return p.weapons.filter((w) => !w.evolved && w.level >= MAX_WEAPON_LEVEL && w.def.evo && p.passives.has(w.def.evo.with));
+    const any = [...p.passives.keys()].some((id) => PASSIVES[id].evolvesAny);
+    return p.weapons.filter((w) => !w.evolved && w.level >= MAX_WEAPON_LEVEL && w.def.evo && (any || p.passives.has(w.def.evo.with)));
   }
 
-  // What a chest holds, given at once: an evolution if one is ready, else upgrades to what the
-  // hero holds (never a new weapon), and gold. The chest screen only shows them, one by one.
+  // What a chest holds, given at once: an evolution if one is ready, then draws from the
+  // level-up cards' own pool (a new weapon or relic too, while a slot is free), and gold. With
+  // the pool empty, each draw is the run's auto-pick if the player chose one, else a Blessing of
+  // Valor. The chest screen only shows them, one by one.
   rollChest(kind = 'elite') {
     const p = this.player;
     const items = [];
@@ -337,19 +426,14 @@ export class Game {
     if (kind === 'boss') n = r < 0.35 ? 5 : 3;
     else n = r < 0.04 ? 5 : r < 0.2 ? 3 : 1;
     if (items.length) n = Math.max(0, n - 2);
-    const up = () => {
-      const opts = [];
-      for (const w of p.weapons) if (!w.maxed) opts.push({ type: 'weapon', id: w.id });
-      for (const [id, rank] of p.passives) if (rank < PASSIVES[id].max) opts.push({ type: 'passive', id });
-      return opts.length ? pick(opts) : null;
-    };
     for (let i = 0; i < n; i++) {
-      const u = up();
-      if (!u) break;
+      const u = this.drawUpgrades(1)[0] || this.filler(this.autoPick || 'bless');
       items.push(u);
-      // Apply as we go so later rolls see the new levels.
-      this.applyChoice(u);
-      u.level = u.type === 'weapon' ? p.weapons.find((w) => w.id === u.id).level : p.passives.get(u.id);
+      // Apply as we go so later draws see the new levels.
+      this.applyChoice(u, true);
+      if (u.type === 'weapon') u.level = p.weapons.find((w) => w.id === u.id).level;
+      else if (u.type === 'passive') u.level = p.passives.get(u.id);
+      else if (u.type === 'bless') u.level = p.blessings;
     }
     const gold = Math.round(rand(15, 40) * (1 + this.phase / 10) * (kind === 'boss' ? 3 : 1));
     return { items, gold };
@@ -1020,11 +1104,15 @@ export class Game {
     }
   }
 
-  revive() {
+  // The hero rises (Player.hurt): by a relic spent for it (the Phoenix Heart), or a Second Wind.
+  revive(relic = null) {
     const p = this.player;
     this.whiteFlash = 1;
     sfx('relic');
-    this.banner('Second Wind!', 'You rise again', '#feae34', 2.5);
+    if (relic) {
+      this.banner(`${PASSIVES[relic].name}!`, 'You rise from the ashes', '#f77622', 2.5);
+      this.numbers.text(p.x, p.y - 22, `${PASSIVES[relic].name} spent`, 'fire');
+    } else this.banner('Second Wind!', 'You rise again', '#feae34', 2.5);
     this.effects.push(new Beam(this, p.x, p.y, '#feae34', 1.5, 160));
     explode(this, p.x, p.y, 90, 120, null, 'holy', { kb: 3 });
   }
@@ -1183,6 +1271,8 @@ export class Game {
       weapons: p.weapons.map((w) => [w.id, w.level, w.evolved ? 1 : 0]),
       passives: [...p.passives.entries()].map(([id, r]) => [id, r, 0]),
       bless: p.blessings,
+      auto: this.autoPick, // the filler every level-up takes once nothing else is left, or null
+      phoenixLostAt: this.phoenixLostAt, // the level a Phoenix Heart was spent at, or null
       gear: this.gear,
       cleared: [...this.cleared],
       lost: [...this.lost],
@@ -1236,6 +1326,8 @@ export class Game {
     if (!p.weapons.length) for (const id of startWeapons(p.hero)) this.addWeapon(id);
     for (const [id, r] of cp.passives) if (PASSIVES[id]) p.passives.set(id, Math.min(r, PASSIVES[id].max));
     p.blessings = cp.bless || 0;
+    this.autoPick = FILLERS.includes(cp.auto) ? cp.auto : null;
+    this.phoenixLostAt = cp.phoenixLostAt ?? null;
     p.recompute();
     p.hp = Math.min(p.maxHp, cp.hp);
     p.xp = cp.xp;

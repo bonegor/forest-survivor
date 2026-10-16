@@ -325,14 +325,22 @@ export function createDevPanel(app) {
     return 'Level up: pick a card';
   }
 
-  // Many levels at once, taking the first card offered each time.
+  // Many levels at once, taking the first card offered each time; or, once nothing but the
+  // fillers is left and the player ticked ALWAYS on one, the run's own auto-pick, all at once
+  // as a burst of levels in play would be (Game.resolveAutoLevels).
   function levelUpAuto(g, p, n) {
+    const auto = () => g.autoPick && g.state !== 'levelup' && !g.upgradePool().length;
     for (let i = 0; i < n; i++) {
       p.level++;
       p.xpNext = xpFor(p.level);
+      if (auto()) {
+        g.pendingLevels++;
+        continue;
+      }
       const ch = g.levelChoices(g.choiceCount());
       if (ch.length) g.applyChoice(ch[0]);
     }
+    g.resolveAutoLevels();
     p.recompute(); // what the levels themselves give (Player levelBonus)
     p.xp = 0;
     return `+${n} levels, cards picked automatically`;
@@ -436,6 +444,7 @@ export function createDevPanel(app) {
           if (busy(g2)) return busy(g2);
           p.devGod = false;
           p.revivals = 0;
+          for (const id of [...p.passives.keys()]) if (PASSIVES[id].stat.revivals) p.passives.delete(id); // a Phoenix Heart too
           p.invuln = 0;
           app.devHold = false;
           p.hurt(1e9);
