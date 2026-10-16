@@ -93,7 +93,7 @@ export const RANKED_EVENT_EVERY = 2.5; // phase minutes
 // (it was 1-4 single props), a crypt's chamber `crypt`: "drop them back down to like a few per
 // chamber" (the user, 16 October 2026; it was `room`'s 3-12, some 150-220 boxes a crypt). Each
 // site holds `boxes` of them. What each one holds: game.js PROP_LOOT.
-export const PROP_SITES = { every: [16 / 3, 26 / 3], most: 45, room: [3, 12], crypt: [1, 2], boxes: [2, 5] };
+export const PROP_SITES = { every: [16 / 3, 26 / 3], most: 45, room: [1, 1], crypt: [1, 1], boxes: [2, 5] };
 
 // Dungeon floors: theme, starting phase and the guardian waiting at the end.
 export const FLOORS = [

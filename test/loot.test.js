@@ -156,7 +156,7 @@ test('the forest puts down three times the breakable sites it did, each of 2 to 
   }
 });
 
-test('a dungeon room has three times the sites it did, rows of boxes along its walls that stay put', () => {
+test('a dungeon room has a row of boxes along a wall that stays put', () => {
   const oldRandom = Math.random;
   Math.random = mulberry32(4);
   try {
@@ -183,17 +183,17 @@ test('a dungeon room has three times the sites it did, rows of boxes along its w
       g.relocate();
       assert.equal(g.enemies.filter(e => e.prop && !e.dead).length, props.length, 'none fade while he is away');
     }
-    // It was 1-4 single props a room; now 3-12 sites of 2-5, less where a wall or another box is.
-    assert.ok(boxes / rooms > 3 * 2.5 * 1.5, `${(boxes / rooms).toFixed(1)} boxes a room`);
+    // One row of 2-5 a room, less where a wall or another box is: about three boxes a chamber.
+    assert.ok(boxes / rooms >= 2 && boxes / rooms <= 5, `${(boxes / rooms).toFixed(1)} boxes a room`);
     assert.ok(lonely < boxes * 0.1, `${lonely} of ${boxes} boxes stand alone`);
   } finally {
     Math.random = oldRandom;
   }
 });
 
-// The user, 16 October 2026: "drop them back down to like a few per chamber". A crypt's chamber
-// has a row or two of boxes (2 to 10 of them); a Dungeon Run floor's rooms keep their 3 to 12 rows.
-test('a crypt chamber holds one or two rows of boxes; a Dungeon Run floor keeps its many', () => {
+// The user, 16 October 2026: "closer to 3 boxes per chamber". A crypt's chamber and a Dungeon Run
+// floor's room alike hold one row of 2 to 5 boxes.
+test('a crypt chamber and a dungeon room each hold one row of boxes, about three', () => {
   const oldRandom = Math.random, oldSites = Dungeon.prototype.propSites;
   const drawn = {crypt: [], floor: []};
   Math.random = mulberry32(8);
@@ -203,11 +203,11 @@ test('a crypt chamber holds one or two rows of boxes; a Dungeon Run floor keeps 
     return n;
   };
   try {
-    assert.deepEqual(PROP_SITES.crypt, [1, 2]);
-    assert.deepEqual(PROP_SITES.room, [3, 12], 'the floors as they were');
+    assert.deepEqual(PROP_SITES.crypt, [1, 1]);
+    assert.deepEqual(PROP_SITES.room, [1, 1], 'the floors the same');
     const run = new Game({hero:'knight', mode:'dungeon', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
     assert.equal(drawn.floor.length, run.world.rooms.length, 'a floor draws for each room');
-    assert.ok(drawn.floor.every(n => n >= 3 && n <= 12), `floor rows ${drawn.floor}`);
+    assert.ok(drawn.floor.every(n => n === 1), `floor rows ${drawn.floor}`);
     let rooms = 0, boxes = 0, most = 0;
     const crypts = 6, T = 16;
     for (let k = 0; k < crypts; k++) {
@@ -222,17 +222,16 @@ test('a crypt chamber holds one or two rows of boxes; a Dungeon Run floor keeps 
           const tx = Math.floor(e.x / T), ty = Math.floor(e.y / T);
           return tx > r.x && tx < r.x + r.w - 1 && ty > r.y && ty < r.y + r.h - 1;
         }).length;
-        assert.ok(n <= 2 * PROP_SITES.boxes[1], `${n} boxes in a chamber`);
+        assert.ok(n <= PROP_SITES.boxes[1], `${n} boxes in a chamber`);
         most = Math.max(most, n);
       }
       rooms += w.rooms.length;
       boxes += props.length;
     }
-    assert.ok(drawn.crypt.every(n => n === 1 || n === 2), `crypt rows ${drawn.crypt}`);
-    assert.deepEqual([...new Set(drawn.crypt)].sort(), [1, 2], 'one row and two both turn up');
-    // 1-2 rows of 2-5: about 5 a chamber, less where a wall or another box is; it was some 18.
-    assert.ok(boxes / rooms >= 2 && boxes / rooms <= 7, `${(boxes / rooms).toFixed(1)} boxes a chamber, ${most} at most`);
-    assert.ok(boxes / crypts < 80, `${(boxes / crypts).toFixed(0)} boxes a crypt (it was 150-220)`);
+    assert.ok(drawn.crypt.every(n => n === 1), `crypt rows ${drawn.crypt}`);
+    // One row of 2-5: about three a chamber, less where a wall or another box is.
+    assert.ok(boxes / rooms >= 2 && boxes / rooms <= 5, `${(boxes / rooms).toFixed(1)} boxes a chamber, ${most} at most`);
+    assert.ok(boxes / crypts < 60, `${(boxes / crypts).toFixed(0)} boxes a crypt`);
   } finally {
     Math.random = oldRandom;
     Dungeon.prototype.propSites = oldSites;

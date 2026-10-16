@@ -517,8 +517,8 @@ export class Dungeon {
     this.flow = new Int16Array(W * H).fill(-1);
   }
 
-  // How many rows of breakables a room has along its walls (data/waves.js PROP_SITES): a few in a
-  // crypt's chamber, many more in a Dungeon Run floor's room.
+  // How many rows of breakables a room has along its walls (data/waves.js PROP_SITES): one row of
+  // 2-5 a chamber, in a crypt and on a Dungeon Run floor alike (the owner: about three boxes a room).
   propSites() {
     return this.rng.int(...(this.crypt ? PROP_SITES.crypt : PROP_SITES.room));
   }
