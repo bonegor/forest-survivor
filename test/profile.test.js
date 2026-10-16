@@ -92,7 +92,28 @@ test('dungeon runs record the deepest floor', () => {
   assert.equal(p.best.dungeon, 2);
   p = P.applyRun(p, { mode: 'dungeon', diff: 'medium', victory: true, time: 1200, floor: 3 }).profile;
   assert.equal(p.best.dungeon, 4);
-  assert.equal(p.wins.dungeon[2], 1);
+  assert.equal(p.wins.dungeon[1], 1, 'a Normal win');
+});
+
+// The user: "let us have veteran + normal. Veteran is the current setup and normal is that all
+// the monsters have their damage cause reduced by 50% and the number of ranged monsters spawn +
+// wolver + any other monsters that lunges is reduced to 1/3".
+test('a Normal run pays gold as the old Medium, a Veteran one as the old Hard; Ranked is always Veteran', () => {
+  const p = veteran();
+  const normal = P.applyRun(p, { mode: 's15', diff: 'medium', victory: true, time: 900, gold: 100 });
+  assert.equal(normal.run.diff, 'medium');
+  assert.deepEqual([normal.reward.collected, normal.reward.bonus, normal.reward.multiplier], [100, 300, 1]);
+  assert.equal(normal.profile.wins.s15[1], 1);
+  assert.ok(P.hasFeat(normal.profile, 'knight', P.FEAT.survivalHard), 'a night survived on Normal counts on the ladder');
+  const vet = P.applyRun(p, { mode: 's15', diff: 'hard', victory: true, time: 900, gold: 100 });
+  assert.deepEqual([vet.reward.collected, vet.reward.bonus, vet.reward.multiplier], [150, 500, 1.5]);
+  assert.equal(vet.profile.wins.s15[2], 1);
+  p.feats.necromancer |= P.FEAT.dungeon; // Ranked open
+  const ranked = P.applyRun(p, { mode: 'ranked', diff: 'medium', hero: 'knight', time: 300, gold: 10 });
+  assert.equal(ranked.ok, true);
+  assert.equal(ranked.run.diff, 'hard', 'Ranked keeps one best per hero, so it is always Veteran');
+  assert.equal(P.sanitizeCheckpoint({ mode: 'ranked', diff: 'medium', hero: 'knight' }).diff, 'hard');
+  assert.equal(P.sanitizeCheckpoint({ mode: 's15', diff: 'medium', hero: 'knight' }).diff, 'medium');
 });
 
 test('buying and refunding upgrades', () => {
@@ -222,6 +243,8 @@ test('metaBonuses reflect upgrade ranks', () => {
   p.up = { might: 2, armor: 1, revival: 1 };
   const m = P.metaBonuses(p);
   assert.equal(m.might, 1.1);
+  // An Armory rank of Armor is one point of armor, which now takes a tenth off a blow
+  // (Player.hurt armored): the user's "just denote that as armor +1".
   assert.equal(m.armor, 1);
   assert.equal(m.revival, 1);
   assert.equal(m.cooldown, 1);

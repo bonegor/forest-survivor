@@ -8,7 +8,7 @@ import { overlay, picture, presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp, ease } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
-import { MODES } from '../data/difficulty.js';
+import { MODES, NORMAL, VETERAN } from '../data/difficulty.js';
 import { UPGRADES, upgradeCost, totalWins, metaBonuses, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { panel, button, stepper, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars } from './ladder.js';
@@ -434,6 +434,33 @@ export class ModeScreen {
     for (const line of wrapText(desc, W - 20)) {
       drawText(ctx, line, W / 2, ty, { align: 'center', color: lockedFocus ? '#feae34' : '#c0cbdc' });
       ty += 9;
+    }
+    // Normal or Veteran (data/difficulty.js), remembered with the settings. Ranked keeps one best
+    // per hero, so it is always Veteran.
+    ty += 5;
+    if (mode === 'ranked') {
+      drawText(ctx, 'Ranked is always played as Veteran', W / 2, ty, { align: 'center', color: '#8b9bb4' });
+      ty += 9;
+    } else {
+      const bw = 64, gap = 8, bx = Math.round(W / 2 - bw - gap / 2);
+      [NORMAL, VETERAN].forEach((d, i) => {
+        const dx = bx + i * (bw + gap), on = app.choice.diff === d.id;
+        if (on) {
+          ctx.fillStyle = '#feae34';
+          ctx.fillRect(dx - 2, ty - 2, bw + 4, 17);
+        }
+        if (button(ctx, ui, 'd_' + d.id, dx, ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4' })) {
+          app.choice.diff = app.settings.diff = d.id;
+          saveSettings(app.settings);
+          sfx('select');
+        }
+      });
+      ty += 19;
+      const d = app.choice.diff === VETERAN.id ? VETERAN : NORMAL;
+      for (const line of wrapText(d.desc, W - 20)) {
+        drawText(ctx, line, W / 2, ty, { align: 'center', color: '#8b9bb4' });
+        ty += 9;
+      }
     }
     const dy = ty + 6;
     let beginY = dy + 14;

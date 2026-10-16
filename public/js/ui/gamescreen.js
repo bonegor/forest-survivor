@@ -26,6 +26,7 @@ export class GameScreen {
     this.game = new Game({
       hero,
       mode,
+      diff: app.choice.diff, // Normal or Veteran; a saved run keeps its own (checkpoint)
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       meta: metaBonuses(app.store.profile),
       gear: app.store.profile.gear[hero], // this hero's own

@@ -1,6 +1,6 @@
 // A single run: owns every system and runs the update/draw loop.
 
-import { RULES } from '../data/difficulty.js';
+import { diffFor } from '../data/difficulty.js';
 import { HEROES } from '../data/heroes.js';
 import { WEAPONS, BASE_WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
@@ -75,8 +75,9 @@ const CRYPT_OF = ['the Hollow King', 'Saint Aldwyn', 'the Nameless', 'Mourn', 't
 export class Game {
   constructor(o) {
     this.mode = o.mode;
-    this.diffId = RULES.id;
-    this.diff = RULES;
+    // Normal or Veteran (data/difficulty.js), as chosen or as the saved run was; Veteran without.
+    this.diff = diffFor(o.mode, o.checkpoint?.diff ?? o.diff);
+    this.diffId = this.diff.id;
     this.settings = o.settings || {};
     this.seed = o.checkpoint?.seed ?? Math.floor(Math.random() * 2 ** 31);
     this.duration = this.mode === 's15' ? 15 * 60 : Infinity;

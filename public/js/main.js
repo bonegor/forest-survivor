@@ -27,7 +27,7 @@ const app = {
   scene: new MenuScene(),
   store,
   settings: loadSettings(),
-  choice: { hero: 'knight', mode: 's15' },
+  choice: { hero: 'knight', mode: 's15', diff: 'medium' }, // diff: as last chosen (settings), below
   screen: null,
   screenName: '',
   audioUnlocked: false,
@@ -63,6 +63,9 @@ const app = {
     else document.exitFullscreen?.();
   },
 };
+
+// Normal or Veteran, as the player last chose (the trial screen saves it with the settings).
+app.choice.diff = app.settings.diff === 'hard' ? 'hard' : 'medium';
 
 // Scanline overlay for the optional CRT look.
 let scan = null;

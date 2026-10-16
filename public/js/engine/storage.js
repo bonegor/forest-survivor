@@ -259,7 +259,8 @@ export const store = {
   },
 };
 
-const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, crt: false, fps: false };
+// diff: Normal ('medium') or Veteran ('hard'), as last chosen on the trial screen.
+const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, crt: false, fps: false, diff: 'medium' };
 
 export function loadSettings() {
   try {

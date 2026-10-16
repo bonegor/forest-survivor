@@ -71,7 +71,13 @@ Every second crossroads has a **crypt** beside its shrine, so whichever way you 
 - **Dungeon Run — 3 floors.** Each floor's guardian sleeps behind a seal until you've slain enough foes and spent long enough on the floor. Kill it, take the stairs, and defeat the Demon Lord on floor 3. Your build carries over between floors.
 - **Ranked — endless.** No dawn. The night keeps getting deadlier, the four lords return in rotation every 4½ minutes, and past the half-hour a blood moon rises. Your score is how long you last, kept as a personal best per hero with a rank title (Peasant, Squire, Knight, Champion, Paladin, Warlord, Hero at 30 minutes, Legend at 40, Mythic at 50, Immortal at an hour).
 
-There is **one difficulty** for every mode for now: the old Hard, with about 45% more monsters that each have about 93% more health and deal about 2.3× the damage. Monsters bump into one another and into props, so a horde gathers round the hero in a crowd instead of one heap, and tree trunks stop them as they stop the hero (Wraiths drift through everything, and bats and imps fly over the trees). Dungeon walls stop everyone. Every run pays gold at the old Hard rate.
+There are **two difficulties**, chosen on the trial screen and remembered with the settings (`public/js/data/difficulty.js`):
+- **Veteran:** the old Hard, with about 45% more monsters that each have about 93% more health and deal about 2.3× the damage. It pays gold at the old Hard rate (×1.5).
+- **Normal:** Veteran with every blow the hero takes halved, after his armor, from monsters, their shots and the bosses alike. A third as many of the monsters that shoot or lunge come (Cultists, Dire Wolves, Orc Brutes, Hellhounds), in the steady horde, the packs and the crypts; other kinds take their place, so the horde is as big. It pays gold at the old Medium rate (×1).
+
+Ranked is always Veteran, since it keeps one best time per hero. A night survived on either counts on the unlock ladder.
+
+Monsters bump into one another and into props, so a horde gathers round the hero in a crowd instead of one heap, and tree trunks stop them as they stop the hero (Wraiths drift through everything, and bats and imps fly over the trees). Dungeon walls stop everyone.
 
 The whole game runs **10% faster than real time** (`GAME_SPEED` in `public/js/data/difficulty.js`): the clock, the hero, the monsters, everything in a run, though not the menus. The 15-minute night passes in about 13⅔ minutes.
 
@@ -120,7 +126,7 @@ The server keeps **no database**. The only thing it writes to disk is its cookie
 
 | Cookie | Holds | Set by |
 | --- | --- | --- |
-| `fs_profile` | gold, wins per mode (still split by the old difficulties; new wins count as Hard), records, Armory ranks, unlocked heroes, each hero's achievements (night survived, Dungeon beaten), Ranked personal bests, the gear each hero wears | server, encrypted (AES-256-GCM), HttpOnly |
+| `fs_profile` | gold, wins per mode and difficulty (Normal counts as the old Medium, Veteran as Hard), records, Armory ranks, unlocked heroes, each hero's achievements (night survived, Dungeon beaten), Ranked personal bests, the gear each hero wears | server, encrypted (AES-256-GCM), HttpOnly |
 | `fs_run` | a run to pick up again if the game is closed mid-run: hero, build, level, floor, time, gear worn, crypts cleared, shrines used, bosses still fighting (Survival and Ranked autosave every minute, the Dungeon at each floor; cleared the moment the hero falls) | server, encrypted (AES-256-GCM), HttpOnly |
 | `fs_settings` | volume, screen shake, damage numbers, CRT, FPS | browser |
 
@@ -172,9 +178,11 @@ The server checks every edit, so shipping the panel's code to players unlocks no
 
 ## Meta-progression (the Armory)
 
-Gold from runs buys permanent ranks: Might, Armor, Vitality, Recovery, Haste, Reach, Swiftness, Magnetism, Fortune, Wisdom, Greed, Insight (rerolls), Endurance (effect duration), Velocity (projectile speed), Echo (+1 projectile for every weapon) and Second Wind (up to two revives). Ranks can be refunded at any time.
+Gold from runs buys permanent ranks: Might, Armor, Vitality, Recovery, Haste, Reach, Swiftness, Magnetism, Fortune, Wisdom, Greed, Insight (rerolls), Endurance (effect duration), Velocity (projectile speed), Echo (+1 projectile for every weapon) and Second Wind (up to two revives). Ranks can be refunded at any time. Each rank of Armor is a point of armor.
 
-The 15-minute night is tuned so a fresh profile can't win it and a full Armory can: with the Knight, the gem-collecting bot dies in 33 of 35 seeded games without the Armory and wins all 35 with every rank (`node tools/bots.mjs --bot=gems --runs=35 --armory=none` and `--armory=max`). What spawns when is a table of minute pockets in `public/js/data/waves.js`.
+A point of **armor**, wherever it comes from (the Armory, the Knight's own two, the Plate Armor relic, gear), takes a tenth off what is left of each blow, or 1 damage if that is more. So every point adds a little less: one takes 10%, five 41%, ten 65%. All of it together never stops more than 95% of a blow, and a blow always does at least 1 (`armored` in `public/js/game/player.js`).
+
+The 15-minute night was tuned, on what is now Veteran, so a fresh profile can't win it and a full Armory can: with the Knight, the gem-collecting bot died in 33 of 35 seeded games without the Armory and won all 35 with every rank (`node tools/bots.mjs --bot=gems --runs=35 --armory=none` and `--armory=max`; add `--diff=normal` for Normal). That was before armor took a tenth of a blow a point, which makes the Knight and any armored build sturdier; it hasn't been measured again since. What spawns when is a table of minute pockets in `public/js/data/waves.js`.
 
 ## Project layout
 
@@ -220,7 +228,7 @@ node tools/preview.mjs knight bat --scale=8      # render sprites to tools/out/s
 node tools/play.mjs smoke                        # headless screenshots (needs the server running)
 node tools/play.mjs sim --hero=archer --mode=s15 --secs=900   # bot plays a run, logs progress
 node tools/play.mjs ui                           # screenshot every menu and overlay
-node tools/balance.mjs --hero=knight --configs=s15:easy,s15:hard --runs=2   # bot balance report
+node tools/balance.mjs --hero=knight --configs=s15:medium,s15:hard --runs=2   # bot balance report (Normal, Veteran)
 node tools/watch.mjs --mode=s15 --from=0 --to=600 --every=60                # gameplay screenshots over a run
 node tools/bots.mjs --bot=idle,circle,kite --runs=10                         # bots compared headlessly, no server needed
 ```

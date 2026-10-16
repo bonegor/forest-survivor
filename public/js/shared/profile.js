@@ -237,8 +237,8 @@ export function nextHeroUnlock(profile) {
 export function sanitizeRun(raw) {
   if (!raw || typeof raw !== 'object') return null;
   if (!MODES.includes(raw.mode)) return null;
-  // One difficulty for every run, whatever an older client reports.
-  const diff = 'hard';
+  // Normal ('medium') or Veteran ('hard'); Ranked is always Veteran, and so is anything else.
+  const diff = raw.diff === 'medium' && raw.mode !== 'ranked' ? 'medium' : 'hard';
   const time = int(raw.time, 0, MAX_TIME[raw.mode]);
   // The night's clock stands still in a crypt, so a run can last longer than its time.
   const realTime = int(raw.realTime, time, MAX_REAL_TIME[raw.mode]);
@@ -372,7 +372,7 @@ export function sanitizeCheckpoint(raw) {
   const cp = {
     v: VERSION,
     mode: raw.mode,
-    diff: raw.diff,
+    diff: raw.diff === 'medium' && raw.mode !== 'ranked' ? 'medium' : 'hard',
     hero: raw.hero,
     floor: int(raw.floor, 1, 3),
     seed: int(raw.seed, 0, 2 ** 31 - 1),

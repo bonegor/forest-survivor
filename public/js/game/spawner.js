@@ -3,11 +3,15 @@
 // crypt, where the night stands still; a crypt brings its own packs and lord.
 
 import { EVENTS, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY } from '../data/waves.js';
-import { CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
+import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
 import { rand, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
 
 const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
+
+// The monsters that shoot (Cultists) or lunge (Dire Wolves, Orc Brutes, Hellhounds), of which
+// Normal sends a third as many (difficulty.js few).
+export const isFew = (type) => !!(ENEMIES[type]?.shot || ENEMIES[type]?.charge);
 
 export class Spawner {
   constructor(g) {
@@ -31,10 +35,17 @@ export class Spawner {
     this.acc = 1.5;
   }
 
-  // One of the monsters the current pocket of the night allows, by weight.
+  // One of the monsters the current pocket of the night allows, by weight. Where the rules send
+  // fewer of those that shoot or lunge, one picked comes only that often (few); otherwise another
+  // kind comes in its place, so the horde is as big and they are that many times fewer.
   pickType(phase, exclude) {
     const rows = Object.entries(pocketAt(minuteOf(phase)).spawn).filter(([type]) => !exclude || !exclude.includes(type));
-    const r = weighted(rows, (row) => row[1]);
+    let r = weighted(rows, (row) => row[1]);
+    const few = this.g.diff.few;
+    if (r && few < 1 && isFew(r[0]) && Math.random() >= few) {
+      const rest = rows.filter(([type]) => !isFew(type));
+      if (rest.length) r = weighted(rest, (row) => row[1]);
+    }
     return r ? r[0] : 'skeleton';
   }
 
@@ -128,7 +139,7 @@ export class Spawner {
 
   fire(ev, phase) {
     const g = this.g, p = g.player;
-    ev = { ...ev, count: Math.round(ev.count * g.diff.horde) };
+    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1))) };
     const st = this.stats(phase);
     const cam = g.cam;
     switch (ev.type) {

@@ -11,6 +11,17 @@ import { faceAlong, faceAttack } from './facing.js';
 
 export const BASE_SPEED = 70;
 export const BASE_MAGNET = 42;
+// Armor, the user's: "10% + min 1 damage (but just denote that as armor +1) ... it can only stop
+// 95% damage". Each point takes ARMOR_CUT off what is left of a blow, or 1 if that is more, and
+// all of it together never more than ARMOR_MOST of the blow: every point adds a little less.
+export const ARMOR_CUT = 0.1;
+export const ARMOR_MOST = 0.95;
+
+// What is left of a blow of raw damage against armor points.
+export function armored(raw, armor) {
+  if (!(armor > 0)) return raw;
+  return Math.max(raw * (1 - ARMOR_MOST), Math.min(raw * (1 - ARMOR_CUT) ** armor, raw - armor));
+}
 
 export function xpFor(level) {
   if (level < 20) return 5 + (level - 1) * 10;
@@ -215,11 +226,11 @@ export class Player {
   hurt(amount, src) {
     const g = this.g;
     if (this.dead || this.untouchable || this.devGod || g.state === 'faint') return 0;
-    let dmg = amount * g.diff.dmg;
-    dmg = Math.max(1, dmg - this.armor);
+    let dmg = armored(amount * g.diff.dmg, this.armor);
     if (this.buff('protection')) dmg *= 0.5;
     if (this.ult && this.ult.type === 'whirlwind') dmg *= 0.5;
-    dmg = Math.round(dmg);
+    // Normal halves what he takes, after all of that (difficulty.js hurt). A blow always lands.
+    dmg = Math.max(1, Math.round(dmg * g.diff.hurt));
     this.hp -= dmg;
     this.invuln = 0.6;
     this.flash = 0.12;
