@@ -200,6 +200,8 @@ function createStatic(publicDir) {
     let info;
     try {
       info = await stat(file);
+      // A folder asked for without its slash (/debug): on to its index, as GitHub Pages does.
+      if (info.isDirectory() && !rel.endsWith('/')) return send(res, 301, null, { Location: pathname + '/' });
       if (!info.isFile()) throw new Error('not a file');
     } catch {
       return send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });

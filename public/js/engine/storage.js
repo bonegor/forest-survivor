@@ -6,11 +6,23 @@
 // Either way, a save that exists but can't be read is flagged in
 // store.unreadable so the title screen can offer a fresh start.
 // Settings always live in a small client cookie.
+//
+// The debug address (?debug; /debug forwards there) opens every hero and mode, in a save of its
+// own (a client cookie even where the server is), so nothing played there touches the real one.
 
 import * as P from '../shared/profile.js';
 
-const LOCAL_PROFILE = 'fs_lprofile';
-const LOCAL_RUN = 'fs_lrun';
+export const DEBUG = !!globalThis.location && new URLSearchParams(globalThis.location.search).has('debug');
+const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
+const LOCAL_RUN = DEBUG ? 'fs_drun' : 'fs_lrun';
+
+// Every hero in, and as if each had survived the night and beaten the Dungeon: every mode open
+// to every hero (shared/profile.js canPlay).
+export function unlockEverything(p) {
+  p.heroes = [...P.HERO_ORDER];
+  for (const h of P.HERO_ORDER) p.feats[h] = (p.feats[h] || 0) | P.FEAT.survivalHard | P.FEAT.dungeon;
+  return p;
+}
 const SETTINGS = 'fs_settings';
 const MAX_AGE = 60 * 60 * 24 * 400;
 
@@ -51,7 +63,7 @@ export const store = {
   offline: false, // the game's server can't be reached: nothing can be loaded or saved
 
   async init() {
-    for (let attempt = 0; ; attempt++) {
+    for (let attempt = 0; !DEBUG; attempt++) {
       try {
         const data = await api('state');
         if (!data.server) throw new Error('not our server');
@@ -79,6 +91,7 @@ export const store = {
     const profile = rawProfile ? P.decodeState(rawProfile) : null;
     const run = rawRun ? P.decodeState(rawRun) : null;
     this.profile = P.sanitizeProfile(profile);
+    if (DEBUG) unlockEverything(this.profile);
     this.checkpoint = P.sanitizeCheckpoint(run);
     const bad = { profile: !!rawProfile && !profile, run: !!rawRun && !run };
     this.unreadable = bad.profile || bad.run ? bad : null;
@@ -168,6 +181,20 @@ export const store = {
     return r.ok;
   },
 
+  // Debug only (?debug): upgrades set to any ranks, { id: rank }, at no cost.
+  setUpgrades(ranks) {
+    if (!DEBUG) return false;
+    for (const [id, r] of Object.entries(ranks)) {
+      const u = P.UPGRADES.find((x) => x.id === id);
+      if (!u) continue;
+      const rank = Math.max(0, Math.min(u.max, Math.floor(r)));
+      if (rank) this.profile.up[id] = rank;
+      else delete this.profile.up[id];
+    }
+    this.saveLocal();
+    return true;
+  },
+
   async refund() {
     if (this.mode === 'server') {
       const data = await api('refund', {});
@@ -225,6 +252,7 @@ export const store = {
       return;
     }
     this.profile = P.defaultProfile();
+    if (DEBUG) unlockEverything(this.profile);
     this.checkpoint = null;
     writeCookie(LOCAL_PROFILE, null);
     writeCookie(LOCAL_RUN, null);

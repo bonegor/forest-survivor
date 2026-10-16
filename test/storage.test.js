@@ -18,3 +18,9 @@ test('the published static game has no developer mode; on this machine it has', 
     delete globalThis.location;
   }
 });
+
+test('away from the debug address the Armory is only bought, never set', () => {
+  const before = JSON.stringify(store.profile);
+  assert.equal(store.setUpgrades({ might: 8 }), false);
+  assert.equal(JSON.stringify(store.profile), before);
+});

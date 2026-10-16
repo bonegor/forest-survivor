@@ -3,7 +3,7 @@
 import { input } from '../engine/input.js';
 import { sfx, playMusic, setVolumes, initAudio } from '../engine/audio.js';
 import { SPR, smoothScaled, walkFrame, loopFrame } from '../engine/sprites.js';
-import { saveSettings } from '../engine/storage.js';
+import { saveSettings, DEBUG } from '../engine/storage.js';
 import { overlay, picture, presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp, ease } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
@@ -130,7 +130,8 @@ export class TitleScreen {
     const wins = totalWins(p);
     ctx.drawImage(SPR.h_trophy.frames[0].c, W - 14 - textWidth(String(wins)), H - 13);
     drawText(ctx, String(wins), W - 5, H - 12, { align: 'right', color: '#fee761' });
-    drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress kept in cookies (offline)', W / 2, H - 12, { align: 'center', color: '#3a4466' });
+    if (DEBUG) drawText(ctx, 'Debug: everything unlocked, saved apart from your own progress', W / 2, H - 12, { align: 'center', color: '#feae34' });
+    else drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress kept in cookies (offline)', W / 2, H - 12, { align: 'center', color: '#3a4466' });
   }
 
   // A save exists but can't be read: say so and offer a clean start instead of
@@ -484,7 +485,12 @@ export class ArmoryScreen {
       const maxed = rank >= u.max;
       const cost = maxed ? 0 : upgradeCost(u.id, rank);
       const fid = 'u_' + u.id;
-      if (ui.item(fid, cx, cy, cw, ch, { disabled: maxed || prof.gold < cost })) {
+      // Debug (?debug): free, each press a rank more, past the last back to none.
+      if (DEBUG && ui.item(fid, cx, cy, cw, ch)) {
+        app.store.setUpgrades({ [u.id]: maxed ? 0 : rank + 1 });
+        sfx(maxed ? 'coin' : 'chest');
+        this.flash[u.id] = 0.5;
+      } else if (!DEBUG && ui.item(fid, cx, cy, cw, ch, { disabled: maxed || prof.gold < cost })) {
         app.store.buy(u.id).then((ok) => {
           if (ok) {
             sfx('chest');
@@ -504,6 +510,7 @@ export class ArmoryScreen {
         ctx.fillRect(cx + 21 + r * 5, cy + 14, 4, 3);
       }
       if (maxed) drawText(ctx, 'MAX', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#63c74d' });
+      else if (DEBUG) drawText(ctx, 'FREE', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#feae34' });
       else {
         drawText(ctx, String(cost), cx + cw - 4, cy + ch - 11, { align: 'right', color: prof.gold >= cost ? '#fee761' : '#a22633' });
       }
@@ -516,9 +523,19 @@ export class ArmoryScreen {
       void meta;
       drawText(ctx, `${focusUp.name}: ${focusUp.desc} per rank (${rank}/${focusUp.max})`, W / 2, iy, { align: 'center', color: '#c0cbdc' });
     }
+    if (DEBUG) drawText(ctx, 'Debug: each press adds a rank, free; past the last, back to none', W / 2, iy + 10, { align: 'center', color: '#feae34' });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('title');
     const spent = Object.keys(prof.up).length > 0;
-    if (button(ctx, ui, 'refund', W - 88, H - 20, 80, 13, 'REFUND ALL', { disabled: !spent })) {
+    if (DEBUG) {
+      if (button(ctx, ui, 'maxall', W - 172, H - 20, 80, 13, 'MAX ALL')) {
+        app.store.setUpgrades(Object.fromEntries(UPGRADES.map((u) => [u.id, u.max])));
+        sfx('chest');
+      }
+      if (button(ctx, ui, 'clearall', W - 88, H - 20, 80, 13, 'CLEAR ALL', { disabled: !spent })) {
+        app.store.setUpgrades(Object.fromEntries(UPGRADES.map((u) => [u.id, 0])));
+        sfx('coin');
+      }
+    } else if (button(ctx, ui, 'refund', W - 88, H - 20, 80, 13, 'REFUND ALL', { disabled: !spent })) {
       app.store.refund().then(() => sfx('coin'));
     }
     ui.end();

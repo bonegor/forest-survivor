@@ -31,7 +31,7 @@ One-time setup, in the repository's **Settings → Pages**:
 There's no game server on Pages (its `/api` calls get a 404), so:
 
 - **The save is a plain browser cookie** (see Saving). A player can read and edit their own with the browser's tools. That reaches no one else, since players share nothing.
-- **Developer mode is off.** The panel opens only on this machine (localhost).
+- **Developer mode is off.** The panel opens only on this machine (localhost). The debug address (below) works there, though.
 - **The page carries the server's content security policy** in a meta tag, all of it but `frame-ancestors`, which a meta tag can't set.
 - **Saves belong to the domain.** A move to another domain, or to a game server, starts every player afresh.
 
@@ -165,6 +165,10 @@ The server checks every edit, so shipping the panel's code to players unlocks no
 
 - **Save file:** presets for each rung of the ladder (fresh start, Survival ladder done, Dungeon open to all, unlock everything, +10 000 gold, max/clear Armory); gold, owned heroes, every hero's achievements and Ranked best, victories, Armory ranks, records; delete the saved run; and a raw JSON editor for anything else.
 - **This run:** live status; invincibility; freeze the game; +1 level (choose a card) or +10 levels (cards picked for you); full heal and fury; max or evolve all weapons; give any weapon or relic; open a chest; kill all foes; skip or set the clock; spawn any boss; next dungeon floor; win or die now. Results still go through the normal rules, so a developer win records wins and unlocks like a real one.
+
+### The debug address
+
+`/debug` (it forwards to `/?debug`) opens the game with every hero and every mode unlocked, on GitHub Pages too. Each hero shows as having survived the night and beaten the Dungeon, which is what unlocks them. In the Armory every upgrade is free: each press adds a rank, and past the last it goes back to none; **MAX ALL** and **CLEAR ALL** set them all. It keeps a save of its own (the `fs_dprofile` and `fs_drun` cookies, never the server's), so whatever is played or set there leaves the player's own progress alone (`public/js/engine/storage.js`).
 
 ## Meta-progression (the Armory)
 
