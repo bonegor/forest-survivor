@@ -245,6 +245,68 @@ test('a lord drops gear and a chest half the time, gear alone a quarter, a chest
   });
 });
 
+// The user (16 October 2026): "the gear in the crypts depends on luck; it should not. It should
+// be RNG, but no luck effect." On the same dice a lord leaves the very same things at luck 1 and at
+// luck 2 (the Lucky Clover, the Shadow's +20% and the Armory's Fortune all multiply it): the same
+// drop of the three, gear of the same rarity, the same gold, and a chest that holds as much as a
+// champion's at plain luck. Luck still fills a champion's chest (and brings the horde's coins:
+// test/loot.test.js).
+test('luck plays no part in what a crypt lord leaves: its drop, its gear, its gold or its chest', () => {
+  // One lord felled `kills` times at the hero's luck, on dice seeded alike; what each fall leaves.
+  const fell = (luck, kills) => gameCase((g, p) => {
+    enterFirstCrypt(g, p, 10);
+    const lord = g.enemies.find(e => e.lord);
+    lord.dead = true; // the other three stand, so the wall holds
+    p.luck = luck;
+    Math.random = mulberry32(2026);
+    const falls = [];
+    for (let i = 0; i < kills; i++) {
+      g.pickups.length = 0;
+      g.effects.length = 0;
+      g.lordDefeated(lord);
+      const item = g.pickups.find(pk => pk.kind === 'item'), chest = g.pickups.find(pk => pk.kind === 'chest');
+      const gold = g.pickups.filter(pk => pk.kind === 'coin' || pk.kind === 'goldpile').reduce((s, pk) => s + pk.value, 0);
+      falls.push({item: item ? item.opts.item : null, chest: chest ? chest.opts.kind : null, gold});
+    }
+    assert.equal(p.luck, luck, 'the luck held all along');
+    return {falls, minute: g.inCrypt.minute, depth: g.inCrypt.depth};
+  });
+  const kills = 700, plain = fell(1, kills), lucky = fell(2, kills);
+  assert.deepEqual(lucky.falls, plain.falls, 'the same drops, the same gear and the same gold at luck 2 as at luck 1');
+  // And the luckier hero's lords roll as the table and the luck-free odds say.
+  const drops = [0, 0, 0], rarities = [0, 0, 0, 0, 0];
+  for (const f of lucky.falls) {
+    drops[f.item && f.chest ? 0 : f.item ? 1 : 2]++;
+    if (f.item) rarities[f.item.rarity]++;
+    if (f.chest) assert.equal(f.chest, 'lord', "a lord's own chest");
+  }
+  drops.forEach((d, i) => assert.ok(Math.abs(d / kills - [0.5, 0.25, 0.25][i]) < 0.06, `drops at luck 2: ${drops}`));
+  const pieces = drops[0] + drops[1], odds = I.rarityOdds(lucky.minute, lucky.depth);
+  rarities.forEach((r, i) => assert.ok(Math.abs(r / pieces - odds[i]) < 0.06, `rarities at luck 2: ${rarities} of ${pieces}, odds ${odds.map(o => o.toFixed(3))}`));
+  // The roll itself takes no luck: the same dice, the same piece, whatever luck is passed.
+  for (let k = 0; k < 500; k++) {
+    const o = {minute: k % 16, depth: 1 + (k % 3)};
+    assert.deepEqual(I.rollItem(mulberry32(k), {...o, luck: 2}), I.rollItem(mulberry32(k), o));
+    assert.deepEqual(I.rarityOdds(o.minute, o.depth, 2), I.rarityOdds(o.minute, o.depth));
+  }
+  // The draws in `n` chests of a kind at the hero's luck, on dice seeded alike (nothing evolves or
+  // is given, so every chest starts alike).
+  const draws = (kind, luck, n = 3000) => gameCase((g, p) => {
+    p.luck = luck;
+    g.evolvable = () => [];
+    g.drawUpgrades = () => [];
+    g.applyChoice = () => {};
+    Math.random = mulberry32(31);
+    let d = 0;
+    for (let i = 0; i < n; i++) d += g.rollChest(kind).items.length;
+    return d;
+  });
+  const lord1 = draws('lord', 1), champ1 = draws('elite', 1), champ2 = draws('elite', 2);
+  assert.equal(draws('lord', 2), lord1, "a lord's chest holds as much at luck 2 as at luck 1");
+  assert.equal(lord1, champ1, "and as much as a champion's at plain luck");
+  assert.ok(champ2 > champ1 * 1.15, `luck still fills a champion's chest: ${champ1} draws at luck 1, ${champ2} at luck 2`);
+});
+
 test('a crypt of four lords, every one dropping gear: the run report keeps all four, and no more', () => gameCase((g, p) => {
   enterFirstCrypt(g, p, 10);
   const lords = g.enemies.filter(e => e.lord);

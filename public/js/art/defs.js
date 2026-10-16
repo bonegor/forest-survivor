@@ -14,6 +14,8 @@
 //   fps: 4                  // menu poses: loop every frame at this rate
 //   hires: 3                // menu poses painted at n times the detail: drawn at 1/n the usual scale
 //   small: 'name'           // a smaller cut of a hires pose, for when it does not fit
+//   palette: { p: '#7a4a80' } // colours drawn instead: palette keys, or the art's own '#rrggbb'
+//   rim: '#8b9bb4'          // a 1px ring outside the outline (palette and rim: tuned.js)
 // }
 
 import { HERO_ART } from './heroes.js';
@@ -22,8 +24,22 @@ import { BOSS_ART } from './bosses.js';
 import { PICKUP_ART, PROJECTILE_ART, ICON_ART } from './items.js';
 import { PROC_ART } from './procgen.js';
 import { PROP_ART } from './props.js';
+import { TUNED } from './tuned.js';
 
-export const ART = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...PROC_ART, ...PROP_ART };
+// The art as drawn, and as the game draws it: with the colour tunes baked from the sprite tuner.
+export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...PROC_ART, ...PROP_ART };
+export const ART = withTunes(DRAWN, TUNED);
+
+// Art with colour tunes (tuned.js, by tools/bake-tune.mjs) laid over it: a sprite's palette
+// override and its rim. A new table; the art files themselves stay as drawn.
+export function withTunes(art, tuned) {
+  const out = { ...art };
+  for (const [name, t] of Object.entries(tuned)) {
+    if (!out[name]) continue;
+    out[name] = { ...out[name], ...(t.palette ? { palette: t.palette } : {}), ...(t.rim ? { rim: t.rim } : {}) };
+  }
+  return out;
+}
 
 // Returns frames as row arrays, or as pixel buffers for procedural defs.
 export function resolveFrames(def) {

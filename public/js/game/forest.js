@@ -15,7 +15,7 @@ const TRUNK = { oak1: 3.5, oak2: 3.5, oak3: 3.5, pine1: 2.5, pine2: 2.5, deadtre
 const SHRINE_NEAR = 2400, SHRINE_FAR = 2800;
 
 // Ambient light over the course of the night (survival progress 0..1).
-const NIGHT = [
+export const NIGHT = [
   [0, [150, 136, 186]],
   [0.1, [118, 120, 172]],
   [0.5, [102, 110, 164]],

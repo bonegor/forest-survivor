@@ -154,6 +154,8 @@ export class Spawner {
     }
   }
 
+  // A timed swarm, ring or pack. At the cap of monsters it comes in full all the same (sent:
+  // Game.recycleFar), each of them in the place of one off the screen.
   fire(ev, phase) {
     const g = this.g, p = g.player;
     ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1) * hordeMore(g, phase))) };
@@ -167,7 +169,7 @@ export class Spawner {
           const a = (i / ev.count) * TAU;
           const spot = g.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
           if (!spot) continue;
-          g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true });
+          g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true });
           placed++;
         }
         if (placed) g.banner('You are surrounded!', '', '#e43b44', 1.6);
@@ -182,7 +184,7 @@ export class Spawner {
         for (let i = 0; i < ev.count; i++) {
           const off = (i / ev.count - 0.5) * 120;
           const x = sx - dy * off + rand(-10, 10), y = sy + dx * off + rand(-10, 10);
-          const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6, aware: true });
+          const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6, aware: true, sent: true });
           if (e) e.spd *= 1.2;
         }
         sfx('charge');
@@ -191,7 +193,7 @@ export class Spawner {
       case 'pack': {
         const pt = g.world.spawnPoint(g, 30);
         if (!pt) break;
-        for (let i = 0; i < ev.count; i++) g.spawnEnemy(ev.enemy, pt.x + rand(-20, 20), pt.y + rand(-20, 20), { ...st, aware: true });
+        for (let i = 0; i < ev.count; i++) g.spawnEnemy(ev.enemy, pt.x + rand(-20, 20), pt.y + rand(-20, 20), { ...st, aware: true, sent: true });
         break;
       }
       default:
@@ -213,6 +215,7 @@ export class Spawner {
       elite: true,
       mod,
       name,
+      sent: true,
     });
     if (e) {
       e.xp *= 8;
@@ -249,7 +252,7 @@ export class Spawner {
     const a = rand(TAU);
     const spot = g.world.freeSpot(p.x + Math.cos(a) * 120, p.y + Math.sin(a) * 100);
     if (!spot) return;
-    const e = g.spawnEnemy('thief', spot.x, spot.y, { hpMul: monsterHp(phase, g.mode) * g.diff.hp, instant: true });
+    const e = g.spawnEnemy('thief', spot.x, spot.y, { hpMul: monsterHp(phase, g.mode) * g.diff.hp, instant: true, sent: true });
     if (e) {
       g.banner('A Gilded Thief!', 'Catch it before it escapes!', '#feae34', 2);
       sfx('coin');

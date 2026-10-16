@@ -1,15 +1,19 @@
 // Developer panel: an HTML overlay for editing the save file and bending the
 // current run. Loaded on demand (` key, or ?dev in the URL). On a server it
 // only works in developer mode (npm run dev, or DEV_KEY + login); the server
-// checks every edit, so shipping this file to players unlocks nothing.
+// checks every edit, so shipping this file to players unlocks nothing. At the
+// debug address (storage.js DEBUG) it works wherever the game is served, GitHub
+// Pages too: the debug game's save is a client cookie of its own (fs_dprofile).
 
 import * as P from '../shared/profile.js';
-import { HEROES } from '../data/heroes.js';
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
+import { HEROES, SHARED_WEAPONS } from '../data/heroes.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { MODES } from '../data/difficulty.js';
 import { ENEMIES } from '../data/enemies.js';
+import { FLOORS, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, minuteOf, pocketAt } from '../data/waves.js';
 import { fmtTime } from '../engine/util.js';
+import { DEBUG } from '../engine/storage.js';
 import { xpFor } from '../game/player.js';
 import { goalText } from '../ui/ladder.js';
 
@@ -68,6 +72,9 @@ function el(tag, props = {}, ...kids) {
 }
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
+// What the run tab's lists of weapons and relics show, to rebuild them when it changes (renderRun).
+const kitSig = (p) => `${p.weapons.map((w) => `${w.id}:${w.level}`)}|${[...p.passives]}`;
+const foeName = (id) => (ENEMIES[id] ? (ENEMIES[id].title ? `${ENEMIES[id].name}, ${ENEMIES[id].title}` : ENEMIES[id].name) : id);
 const parseTime = (s) => {
   const t = String(s).trim();
   if (/^\d+:\d{1,2}$/.test(t)) {
@@ -119,9 +126,11 @@ export function createDevPanel(app) {
     render();
   }
 
+  // At the debug address the save is the debug game's own client cookie wherever the game is
+  // served, so the panel is open there with no server to ask.
   async function refreshStatus() {
-    status = await store.devStatus();
-    const where = status.local ? 'offline save (client cookie)' : status.open ? 'server, open dev mode' : 'server, key login';
+    status = DEBUG ? { enabled: true, open: true, authed: true, local: true, debug: true } : await store.devStatus();
+    const where = status.debug ? 'debug save (its own cookie)' : status.local ? 'offline save (client cookie)' : status.open ? 'server, open dev mode' : 'server, key login';
     stLabel.textContent = status.authed ? where : status.enabled ? 'login required' : 'off';
   }
 
@@ -310,7 +319,24 @@ export function createDevPanel(app) {
 
   // ------------------------------------------------------------ this run --
 
-  const act = (label, fn, cls) => el('button', { textContent: label, class: cls || '', on: { click: () => { const g = game(); if (!g) return; const r = fn(g, g.player); say(typeof r === 'string' ? r : label, 'ok'); } } });
+  // A button acting on the live run: fn(game, player) may answer with a line to show, or
+  // { warn } for one refused. The run tab then shows the run as it is now (refreshRun).
+  let refreshRun = () => {};
+  const act = (label, fn, cls, props = {}) => el('button', {
+    textContent: label,
+    class: cls || '',
+    ...props,
+    on: {
+      click: () => {
+        const g = game();
+        if (!g) return;
+        const r = fn(g, g.player);
+        if (r && r.warn) say(r.warn, 'warn');
+        else say(typeof r === 'string' ? r : label, 'ok');
+        refreshRun();
+      },
+    },
+  });
 
   // One level through the normal level-up screen.
   function levelUp(p) {
@@ -342,21 +368,100 @@ export function createDevPanel(app) {
   // Ending or leaving a run only makes sense while it is actually playing.
   const busy = (g) => (g.state === 'play' ? null : g.state === 'levelup' || g.state === 'chest' ? 'Finish the level-up or chest screen first' : `Not now (${g.state})`);
 
+  // One level down, and from level 1 gone (dropWeapon). An evolved weapon has no levels to lose.
+  function lowerWeapon(g, w) {
+    if (w.level <= 1) return dropWeapon(g, w);
+    w.level--;
+    w.recompute();
+    return `${w.def.name} L${w.level}`;
+  }
+
+  // Any weapon, his own too (Game.removeWeapon), but never his last.
+  function dropWeapon(g, w) {
+    if (!g.player.weapons.includes(w)) return 'Already gone';
+    return g.removeWeapon(w.id) ? `${w.def.name} taken away` : { warn: 'His last weapon stays: give him another first' };
+  }
+
+  // A relic at a rank, or gone at 0; his stats follow.
+  function setRelic(p, id, rank) {
+    const r = Math.min(rank, PASSIVES[id].max);
+    if (r > 0) p.passives.set(id, r);
+    else p.passives.delete(id);
+    p.recompute();
+    return r > 0 ? `${PASSIVES[id].name} rank ${r}` : `${PASSIVES[id].name} taken away`;
+  }
+
+  // What the clock's minute brings: that minute's pocket of the horde (data/waves.js POCKETS),
+  // the commonest first, and the boss that comes next.
+  function minuteText(g) {
+    const m = minuteOf(g.phase), pk = pocketAt(m), [a, b] = pk.minutes;
+    const foes = Object.entries(pk.spawn).sort((x, y) => y[1] - x[1]).map(([id]) => foeName(id)).join(', ');
+    const sp = g.spawner;
+    let boss;
+    if (g.mode === 'dungeon') boss = `This floor's guardian: ${foeName(FLOORS[g.floor - 1].guardian)}.`;
+    else if (g.mode === 'ranked') boss = `Next boss: ${foeName(RANKED_BOSSES[sp.bossIdx % RANKED_BOSSES.length])} at ${fmtTime((sp.bossIdx + 1) * RANKED_BOSS_EVERY)}.`;
+    else {
+      const next = (SURVIVAL_BOSSES[g.mode] || [])[sp.bossIdx];
+      boss = next ? `Next boss: ${foeName(next.id)} at ${fmtTime(next.at)}.` : 'No boss left before dawn.';
+    }
+    return `Minute ${Math.floor(m)} of the night (pocket ${a}-${b === Infinity ? '' : b}): ${foes}. ${boss}`;
+  }
+
   function renderRun() {
     const g = game();
+    refreshRun = () => {};
     if (!g) {
       body.append(el('h3', { textContent: 'No run in progress' }), el('p', { class: 'note', textContent: 'Start a run and come back here: these tools act on the live game.' }));
       return;
     }
     const live = el('div', { class: 'live' });
+    const brings = el('p', { class: 'note' });
+    // What he holds, each weapon and relic to raise, lower or take away; rebuilt whenever the
+    // build changes, by a button here or a card in play.
+    const kit = el('div');
+    let shown = '';
+    const fillKit = () => {
+      const p = g.player, top = body.scrollTop;
+      shown = kitSig(p);
+      kit.textContent = '';
+      kit.append(
+        el('h3', { textContent: `Weapons ${p.weapons.length}/${MAX_WEAPONS}` }),
+        el('table', {}, p.weapons.map((w) => el('tr', { 'data-weapon': w.id },
+          el('td', { textContent: w.def.name }),
+          el('td', { textContent: w.evolved ? 'evolved' : `L${w.level}` }),
+          el('td', {},
+            act('−1', (g2) => lowerWeapon(g2, w), '', { disabled: w.evolved, title: w.level > 1 ? 'A level down' : 'At level 1: takes it away' }),
+            ' ', act('+1', () => { w.levelUp(); return `${w.def.name} L${w.level}`; }, '', { disabled: w.maxed }),
+            ' ', act('evolve', () => { w.level = MAX_WEAPON_LEVEL; w.evolve(); return `Evolved into ${w.def.name}`; }, '', { disabled: !w.def.evo }),
+            ' ', act('remove', (g2) => dropWeapon(g2, w)),
+          ),
+        ))),
+        el('h3', { textContent: `Relics ${p.passives.size}/${MAX_RELICS}` }),
+        p.passives.size
+          ? el('table', {}, [...p.passives].map(([id, rank]) => el('tr', { 'data-relic': id },
+            el('td', { textContent: PASSIVES[id].name }),
+            el('td', { textContent: `${rank}/${PASSIVES[id].max}` }),
+            el('td', {},
+              act('−1', (g2, p2) => setRelic(p2, id, (p2.passives.get(id) || 0) - 1), '', { title: rank > 1 ? 'A rank down' : 'At rank 1: takes it away' }),
+              ' ', act('+1', (g2, p2) => setRelic(p2, id, (p2.passives.get(id) || 0) + 1), '', { disabled: rank >= PASSIVES[id].max }),
+              ' ', act('remove', (g2, p2) => setRelic(p2, id, 0)),
+            ),
+          )))
+          : el('p', { class: 'note', textContent: 'None: give one above.' }),
+      );
+      body.scrollTop = top;
+    };
     const tick = () => {
       const p = g.player;
       live.textContent = `${MODES[g.mode].name}${g.mode === 'dungeon' ? ` · floor ${g.floor}` : ''}\n` +
         `time ${fmtTime(g.time)} · phase ${g.phase.toFixed(1)} · state ${g.state}\n` +
         `L${p.level} · HP ${Math.ceil(p.hp)}/${p.maxHp} · fury ${Math.floor(p.fury)} · blessings ${p.blessings}\n` +
         `${g.enemies.filter((e) => !e.dead).length} foes · ${g.kills} kills · ${g.gold} gold${g.boss && !g.boss.dead ? ` · boss ${g.boss.def.name} ${Math.ceil(g.boss.hp)}` : ''}`;
+      brings.textContent = minuteText(g);
+      if (kitSig(p) !== shown) fillKit();
     };
     tick();
+    refreshRun = tick;
     clearInterval(liveTimer);
     liveTimer = setInterval(() => (root.classList.contains('open') && tab === 'run' ? tick() : null), 300);
 
@@ -368,8 +473,19 @@ export function createDevPanel(app) {
     ]);
     const rSel = pick(PASSIVE_IDS.map((id) => [id, PASSIVES[id].name]));
     const bSel = pick(BOSSES.map((id) => [id, id]));
-    const tIn = el('input', { value: fmtTime(g.time), size: 6 });
+    // The clock, set to any second or moved a minute or five (Game.setTime): the horde, the
+    // timed swarms and the bosses follow it, backward too.
+    const tIn = el('input', { value: fmtTime(g.time), size: 6, title: 'm:ss, or seconds' });
     tIn.style.width = '60px';
+    const clock = (label, to) => act(label, (g2) => {
+      const t = to(g2);
+      if (t == null) return { warn: 'Type the time as m:ss, or in seconds' };
+      g2.setTime(t);
+      tIn.value = fmtTime(g2.time);
+      return `Time ${fmtTime(g2.time)}`;
+    });
+    const setBtn = clock('Set', () => (/^\d+(:\d{1,2})?$/.test(tIn.value.trim()) ? parseTime(tIn.value) : null));
+    tIn.addEventListener('keydown', (e) => e.key === 'Enter' && setBtn.click());
 
     body.append(
       el('h3', { textContent: 'Status' }), live,
@@ -391,7 +507,7 @@ export function createDevPanel(app) {
       el('div', { class: 'row' }, wSel, act('Give weapon', (g2, p) => {
         const id = wSel.value;
         if (g2.ownsWeapon(id)) return 'Already owned';
-        if (p.weapons.length >= 6) return 'All six slots are full';
+        if (p.weapons.length >= MAX_WEAPONS) return `All ${MAX_WEAPONS} slots are full`;
         g2.addWeapon(id);
         return `Gave ${WEAPONS[id].name}`;
       })),
@@ -402,11 +518,18 @@ export function createDevPanel(app) {
         p.recompute();
         return `${PASSIVES[id].name} rank ${r + 1}`;
       })),
+      kit,
+      el('h3', { textContent: 'Time' }),
+      el('div', { class: 'row' },
+        clock('−1 min', (g2) => g2.time - 60),
+        clock('+1 min', (g2) => g2.time + 60),
+        clock('+5 min', (g2) => g2.time + 300),
+        tIn, setBtn,
+      ),
+      brings,
       el('h3', { textContent: 'World' }),
       el('div', { class: 'row' },
         act('Kill all foes', (g2) => { let n = 0; for (const e of [...g2.enemies]) if (!e.dead && !e.prop && !e.sealed) { g2.hitEnemy(e, 1e12, {}); n++; } return `${n} slain`; }),
-        act('+1 minute', (g2) => skip(g2, 60)),
-        act('+5 minutes', (g2) => skip(g2, 300)),
         g.mode === 'dungeon' && act('Next floor', (g2) => {
           if (g2.floor >= 3) return 'Already on the last floor';
           if (busy(g2)) return busy(g2);
@@ -415,7 +538,6 @@ export function createDevPanel(app) {
           return 'Descending';
         }),
       ),
-      el('div', { class: 'row' }, tIn, act('Set time', (g2) => skip(g2, parseTime(tIn.value) - g2.time))),
       el('div', { class: 'row' }, bSel, act('Spawn boss', (g2, p) => {
         const pt = g2.world.spawnPoint(g2, 30) || { x: p.x + 90, y: p.y };
         g2.spawnBoss(bSel.value, pt.x, pt.y);
@@ -446,12 +568,6 @@ export function createDevPanel(app) {
       ),
       el('p', { class: 'note', textContent: 'Results still go through the normal rules: wins, unlocks and Ranked bests are recorded as if earned.' }),
     );
-  }
-
-  function skip(g, s) {
-    g.time = Math.max(0, g.time + s);
-    if (g.mode === 'dungeon') g.floorTime = Math.max(0, g.floorTime + s);
-    return `Time ${fmtTime(g.time)}`;
   }
 
   // --------------------------------------------------------------- render --

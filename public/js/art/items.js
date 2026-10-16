@@ -146,7 +146,19 @@ export const PROJECTILE_ART = {
   flask: { emissive: 'oyY', frames: [['.bB..', '..G..', '.GGG.', 'GoyoG', 'GyYyG', 'GoyoG', '.GGG.']] },
   blueflask: { emissive: 'cUw', frames: [['.bB..', '..G..', '.GGG.', 'GUcUG', 'GcwcG', 'GUcUG', '.GGG.']] },
   darkbolt: { emissive: 'Piw', outline: false, frames: [['..PP..', '.PiiP.', 'Piwwip', 'Piwwip', '.PiiP.', '..PP..'].map((r) => r.replace(/p/g, 'P'))] },
-  bone: { emissive: '', frames: [['z.......z', 'zzZZZZZzz', 'z.......z']] },
+  // The Bone King's thrown bone, drawn near its own size (15 x 6): knobbed ends, a grey
+  // underside, embers smouldering at the knobs so it reads as his.
+  bone: {
+    emissive: 'zZyY',
+    frames: [[
+      '.zz.........zz.',
+      'zzzZ.......zzzZ',
+      '.zZzzzzzzzzzzZ.',
+      '.ZZZZZZZZZZZZZ.',
+      'yZZy.......yZZy',
+      '.yY.........Yy.',
+    ]],
+  },
   skullbolt: { emissive: 'lz', frames: [['..lll..', '.lzzzl.', 'lzkzkzl', 'lzzzzzl', '.zkzkz.', '..lll..']] },
   firebolt: { emissive: 'oyYf', outline: false, frames: [['....oyy..', '..ooyYYy.', 'ooyyYffYy', '..ooyYYy.', '....oyy..']] },
   meteor: {

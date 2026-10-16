@@ -7,6 +7,7 @@ import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
 import { Game } from '../game/game.js';
+import { clockCountsDown, clockTime } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PASSIVES, FILLERS } from '../data/passives.js';
@@ -63,7 +64,7 @@ export class GameScreen {
 
   // What a touch does. In play a finger steers, a second one strikes, and the pause button and the
   // fury orb are buttons; with an overlay up a touch is only a tap on it: no stick, no strike, and
-  // no pause or ultimate under its buttons (REROLL, COLLECT, TRY AGAIN). Fingers already down as
+  // no pause or ultimate under its buttons (REROLL, COLLECT, RETURN TO CAMP). Fingers already down as
   // it opens let go, so a steering finger's lift is no click on it.
   touchFor(overlay) {
     if (overlay && input.joystickEnabled) input.releaseTouches();
@@ -644,7 +645,8 @@ export class PauseOverlay {
       sy += 15;
     }
     const statY = Math.max(by, sy) + 2;
-    const stats = `TIME ${fmtTime(g.time)} · LV ${p.level} · KILLS ${fmtNum(g.kills)} · GOLD ${fmtNum(g.gold)}`;
+    // The clock the HUD showed: in a timed run, the time left.
+    const stats = `${clockCountsDown(g) ? 'TIME LEFT' : 'TIME'} ${fmtTime(clockTime(g))} · LV ${p.level} · KILLS ${fmtNum(g.kills)} · GOLD ${fmtNum(g.gold)}`;
     const note = this.confirm ? 'Quitting ends the run. The gold you found is kept.' : stats;
     const auto = FILLERS[g.autoPick]?.short;
     drawText(ctx, note, W / 2, Math.min(statY, y + ph - (auto ? 66 : 50)), { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
@@ -699,7 +701,7 @@ class ResultsOverlay {
     this.res = res;
     this.submit();
     if (res.victory) playMusic('title');
-    gs.app.ui.focusId = 'again';
+    gs.app.ui.focusId = 'camp';
   }
 
   submit() {
@@ -792,11 +794,8 @@ class ResultsOverlay {
     ui.begin(dt);
     if (unsaved && this.reward.down && button(ctx, ui, 'resubmit', Math.round(W / 2 - 50), gy + 10, 100, 13, 'SAVE AGAIN')) this.submit();
     const by = Math.min(H - 20, y + ph + 6);
-    if (button(ctx, ui, 'again', Math.round(W / 2 - 104), by, 100, 14, 'TRY AGAIN')) {
-      app.choice = { ...app.choice, hero: res.hero, mode: res.mode }; // the difficulty as chosen
-      app.startRun();
-    }
-    if (button(ctx, ui, 'camp', Math.round(W / 2 + 4), by, 100, 14, 'RETURN TO CAMP')) app.go('title');
+    // One way on: back to camp (the owner dropped TRY AGAIN, so every run begins from the hero screen).
+    if (button(ctx, ui, 'camp', Math.round(W / 2 - 50), by, 100, 14, 'RETURN TO CAMP')) app.go('title');
     ui.end();
     return null;
   }

@@ -31,6 +31,35 @@ export const levelBonus = (level) => ({
   armor: Math.floor(level / LEVEL_ARMOR),
 });
 
+// The fury orb, out of 100: what fills it. The owner's, 16 October 2026: it "should not be
+// permanently ready, pressing it should be a decision". It was 0.75 a kill, and at thousands of
+// kills a minute it was full every few seconds from about minute 5.
+// - kill: a kill of the horde while the hero kills slowly. The faster he kills, the less each is
+//   worth: kill / (1 + kills a minute / pace), the kills a minute counted over about the last
+//   `window` seconds (killShare). So the horde's kills fill no more than kill × pace a minute
+//   (30, an orb every 3 1/3 minutes) however many fall, and its odd fury orb (hordeOrb, the chance
+//   for a lone kill) thins out the same way, but never below orbFloor of it, so the horde still
+//   drops one now and then (the owner's rule: gems, the odd coin and fury orbs): 0.1 to 0.4 orbs
+//   a minute at the late night's 1000 to 4000 kills.
+// - boss, lord, champion: what killing one gives.
+// - hit: what striking one down from full health to nothing gives, a blow its share of that (a
+//   boss: the orb over the fight, a boss's tool). The ultimate's own blows give none.
+// - hurt: what losing his whole health would give, a blow its share (a quarter: a fifth of the
+//   orb), so a hero in trouble gets his ultimate.
+// A fury orb, from a box or the horde, gives 40 (Pickup.collect).
+export const FURY = {
+  kill: 0.75,
+  pace: 40,
+  window: 15,
+  hordeOrb: 0.002,
+  orbFloor: 0.05,
+  boss: 35,
+  lord: 25,
+  champion: 8,
+  hit: { boss: 100, lord: 60, champion: 30 },
+  hurt: 80,
+};
+
 // What is left of a blow of raw damage against armor points.
 export function armored(raw, armor) {
   if (!(armor > 0)) return raw;
@@ -69,6 +98,7 @@ export class Player {
     this.strikeAng = 0; // and which way it was struck
     this.strikeBuf = 0; // a strike pressed before the weapon was ready, kept a moment
     this.fury = 0;
+    this.recentKills = 0; // the horde's kills, each fading over FURY.window seconds (killShare)
     this.ult = null; // active ultimate state
     this.invuln = 0;
     this.flash = 0;
@@ -210,6 +240,7 @@ export class Player {
       this.hp = Math.min(this.maxHp, this.hp + h * this.regenMul);
     }
 
+    this.recentKills *= Math.exp(-dt / FURY.window);
     this.invuln = Math.max(0, this.invuln - dt);
     this.swingT = Math.max(0, (this.swingT || 0) - dt);
     this.flash = Math.max(0, this.flash - dt);
@@ -256,7 +287,7 @@ export class Player {
     this.hp -= dmg;
     this.invuln = 0.6;
     this.flash = 0.12;
-    this.fury = Math.min(100, this.fury + 2.5);
+    this.addFury((FURY.hurt * dmg) / this.maxHp);
     g.stats.damageTaken += dmg;
     if (src && src.boss) g.stats.fromBoss += dmg;
     else if (src) g.stats.fromMobs += dmg;
@@ -325,6 +356,28 @@ export class Player {
 
   addFury(v) {
     this.fury = Math.min(100, this.fury + v);
+  }
+
+  // What a kill of the horde is worth to the orb now, as a share of a lone kill's (FURY): the
+  // faster he is killing, the less.
+  get killShare() {
+    return 1 / (1 + (this.recentKills * 60) / FURY.window / FURY.pace);
+  }
+
+  // A kill's charge: a boss's, a lord's or a champion's is fixed, one of the horde's shrinks with
+  // the pace of the killing (killShare).
+  furyKill(e) {
+    if (e.boss) return this.addFury(FURY.boss);
+    if (e.lord) return this.addFury(FURY.lord);
+    if (e.elite) return this.addFury(FURY.champion);
+    this.addFury(FURY.kill * this.killShare);
+    this.recentKills++;
+  }
+
+  // A blow of dmg on a boss, a lord or a champion: the share of its health it took.
+  furyHit(e, dmg) {
+    const k = e.boss ? FURY.hit.boss : e.lord ? FURY.hit.lord : e.elite ? FURY.hit.champion : 0;
+    if (k) this.addFury((k * dmg) / e.maxHp);
   }
 }
 

@@ -5,7 +5,7 @@ import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, monsterHp, minuteOf } from '../data/waves.js';
+import { FLOORS, monsterHp, minuteOf, HORDE_CAP, EVENTS, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
@@ -13,11 +13,11 @@ import { sfx, playMusic, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { input } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2 } from '../engine/util.js';
-import { Player, ULT_DURATION } from './player.js';
+import { Player, ULT_DURATION, FURY } from './player.js';
 import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
 import { Weapon, aimAt } from './weapons.js';
-import { Enemy, makeEnemyPool } from './enemies.js';
+import { Enemy, makeEnemyPool, drawNightEdge } from './enemies.js';
 import { Pickup } from './pickups.js';
 import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
@@ -266,6 +266,57 @@ export class Game {
     return w;
   }
 
+  // The developer panel's (dev/panel.js): a weapon taken away (by its id, or the id it evolved
+  // from), his own as freely as any other, but never his last (false: he keeps it). Its hit
+  // channel is free for the next weapon; its blades or aura go out, and what else of it is about
+  // (pools, shots, the raised dead) fades out at once.
+  removeWeapon(id) {
+    const p = this.player, w = p.weapons.find((x) => x.id === id || WEAPONS[id]?.evo?.into === x.id);
+    if (!w || p.weapons.length <= 1) return false;
+    p.weapons.splice(p.weapons.indexOf(w), 1);
+    if (!p.weapons.some((x) => x.src === w.src) && !this.freeSrc.includes(w.src)) this.freeSrc.push(w.src);
+    w.fx = null;
+    for (const fx of this.effects) {
+      if (fx.w !== w) continue;
+      if (fx.persistent) fx.dead = true; // an orbit of blades, an aura
+      else if (fx.dur > fx.t + 0.4) fx.dur = fx.t + 0.4; // a pool, as one that runs out
+    }
+    for (const s of this.projectiles) {
+      if (s.w !== w) continue;
+      s.onLand = null; // a flask in the air breaks on nothing
+      s.life = Math.min(s.life, 0.15);
+    }
+    for (const m of this.minions) if (m.w === w) m.life = Math.min(m.life, 0.6);
+    return true;
+  }
+
+  // The developer panel's: the night's clock set to any second, and all that runs by it with it.
+  // The horde comes from that minute's pocket by itself (phase); timed swarms and bosses whose
+  // time has passed count as done, and those still to come, after a jump back too, wait for
+  // theirs: none comes on the jump itself. A Dungeon floor's clock moves as far; Ranked's rank and
+  // best are as they would be. The game's own clock (clock: hit cooldowns, animations) runs on
+  // unbroken, so nothing waits out a jump back.
+  setTime(seconds) {
+    const t = Math.max(0, seconds), d = t - this.time, sp = this.spawner;
+    this.time = t;
+    this.cryptTime -= d;
+    if (this.mode === 'dungeon') this.floorTime = Math.max(0, this.floorTime + d);
+    const ph = this.phase, from = this.mode === 'dungeon' ? FLOORS[this.floor - 1].phase0 + 1.5 : 0;
+    sp.eventIdx = EVENTS.findIndex((e) => e.at > ph && e.at >= from);
+    if (sp.eventIdx < 0) sp.eventIdx = EVENTS.length;
+    sp.loopAt = 0;
+    if (this.mode === 'ranked') {
+      sp.bossIdx = Math.floor(t / RANKED_BOSS_EVERY);
+      this.rankIdx = RANKS.findLastIndex(([min]) => t >= min * 60);
+      this.bestBeaten = this.rankedBest > 0 && t > this.rankedBest;
+    } else if (SURVIVAL_BOSSES[this.mode]) {
+      const bosses = SURVIVAL_BOSSES[this.mode];
+      sp.bossIdx = 0;
+      while (sp.bossIdx < bosses.length && bosses[sp.bossIdx].at <= t) sp.bossIdx++;
+    }
+    return t;
+  }
+
   addPassive(id, rank = 1) {
     this.player.passives.set(id, rank);
     this.player.recompute();
@@ -448,7 +499,8 @@ export class Game {
       w.evolve();
     }
     let n = 1;
-    const r = Math.random() / p.luck;
+    // Luck makes a chest richer, but not a crypt lord's ('lord', drawn as a champion's at plain luck).
+    const r = Math.random() / (kind === 'lord' ? 1 : p.luck);
     if (kind === 'boss') n = r < 0.35 ? 5 : 3;
     else n = r < 0.04 ? 5 : r < 0.2 ? 3 : 1;
     if (items.length) n = Math.max(0, n - 2);
@@ -474,19 +526,23 @@ export class Game {
 
   // ----------------------------------------------------------- enemies --
 
-  // Past 900 foes nothing more spawns, except a boss (o.always). Props standing don't count:
-  // a dungeon floor's stand all floor long.
+  // Past 900 foes (HORDE_CAP.most) a new one comes only in the place of one far off-screen
+  // (recycleFar), else not at all; a boss comes all the same (o.always). What is sent at the hero
+  // (o.sent, o.summoned) may take any off-screen. Props standing don't count (a dungeon floor's
+  // stand all floor long), and a new one comes whatever the count, taking no foe's place (spawnProp).
   spawnEnemy(type, x, y, o = {}) {
-    if (this.enemies.length - this.propCount > 900 && !o.always) return null;
+    if (this.enemies.length - this.propCount > HORDE_CAP.most && !o.always && !this.recycleFar(o.sent || o.summoned)) return null;
     const e = this.enemyPool.get().init(this, type, x, y, o);
     this.enemies.push(e);
+    const cap = this.horde;
+    if (cap && cap.frame === this.frame && !e.prop) cap.live++;
     return e;
   }
 
   spawnProp(type, x, y) {
     const spot = this.world.freeSpot(x, y);
     if (!spot) return null;
-    return this.spawnEnemy(type, spot.x, spot.y, { instant: true });
+    return this.spawnEnemy(type, spot.x, spot.y, { instant: true, always: true });
   }
 
   spawnBoss(id, x, y, o = {}) {
@@ -515,8 +571,9 @@ export class Game {
 
   summonRing(type, n, R, o = {}) {
     const p = this.player;
-    // Summoned round the hero by a boss: they know where he is (Enemy.aware).
-    const st = { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, aware: true, ...o };
+    // Summoned round the hero by a boss: they know where he is (Enemy.aware), and at the cap they
+    // come in full and are never the ones that make room (recycleFar).
+    const st = { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, aware: true, summoned: true, ...o };
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + rand(-0.2, 0.2);
       const spot = this.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
@@ -548,6 +605,10 @@ export class Game {
     if (e.mod && e.mod.id === 'stone') d *= 0.65;
     if (e.freezeT > 0 && o.shatter) d *= 1.5;
     d = Math.max(1, Math.round(d));
+    // A blow on a boss, a lord or a champion charges the orb by the share of its health it takes
+    // (FURY.hit); the ultimate's own blows don't (o.ult, or o.noFury for Shadow Dance's blades,
+    // which keep their own strength).
+    if (!o.ult && !o.noFury && (e.boss || e.lord || e.elite)) p.furyHit(e, Math.min(d, e.hp));
     e.hp -= d;
     if (!e.prop) e.flash = 0.09;
     else e.flash = 0.06;
@@ -593,7 +654,7 @@ export class Game {
     this.combo++;
     this.comboT = 2;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
-    p.addFury(e.boss ? 35 : e.lord ? 25 : e.elite ? 8 : 0.75);
+    p.furyKill(e);
     if (o.w) {
       o.w.kills++;
       if (o.w.onKill) o.w.onKill(e);
@@ -620,7 +681,7 @@ export class Game {
       // The horde leaves its soul gems and, now and then, a coin or a fury orb: nothing else.
       const r = Math.random();
       if (r < 0.014 * luck) this.addPickup('coin', e.x, e.y, 1);
-      else if (r < 0.016 * luck) this.addPickup('fury', e.x, e.y);
+      else if (r < (0.014 + FURY.hordeOrb * Math.max(p.killShare, FURY.orbFloor)) * luck) this.addPickup('fury', e.x, e.y);
     }
     if (e.def.split && !o.noSplit) {
       for (let i = 0; i < e.def.splitN; i++) {
@@ -748,9 +809,11 @@ export class Game {
 
   // A crypt's lord has fallen, and leaves its coins, its gold and, rolled lord by lord (LORD_DROPS
   // in shared/items.js), a piece of gear, a champion's chest or both. The last one's fall breaks
-  // the wall open on a way out (Dungeon.lightWayOut).
+  // the wall open on a way out (Dungeon.lightWayOut). Luck plays no part in any of it: the drop,
+  // the gear's rarity (the night's minute and the crypt's depth only) and the chest ('lord',
+  // Game.rollChest) are plain chance.
   lordDefeated(e) {
-    const p = this.player, c = this.inCrypt;
+    const c = this.inCrypt;
     const left = this.world.lordsLeft ? this.world.lordsLeft().length : 0;
     // The last one down: cleared now, however the hero leaves, so no more lords (and no more gear)
     // from going back in.
@@ -773,11 +836,11 @@ export class Game {
     const [gearAt, chestAt] = drop.item && drop.chest ? this.dropSpots(e.x, e.y) : [e, e];
     let it = null;
     if (drop.item) {
-      it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1, luck: p.luck });
+      it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1 });
       this.itemsFound++;
       this.addPickup('item', gearAt.x, gearAt.y, 0, { item: it });
     }
-    if (drop.chest) this.addPickup('chest', chestAt.x, chestAt.y, 0, { kind: 'elite' });
+    if (drop.chest) this.addPickup('chest', chestAt.x, chestAt.y, 0, { kind: 'lord' });
     const R = it && RARITIES[it.rarity];
     const what = it ? `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()}${drop.chest ? ' and a chest' : ''}` : 'A chest';
     const rest = left ? `. ${LORDS_WORD[left] || left} ${left === 1 ? 'lord remains' : 'lords remain'}` : '';
@@ -1045,18 +1108,25 @@ export class Game {
     return pk;
   }
 
+  // At most 380 gems lie about. Past that, the one lying farthest from the hero (in the forest,
+  // where gems never fade, often where he fought minutes ago) gives its XP to this new one, which
+  // falls where he fights now: XP no longer piles up in a gem he left far behind.
   dropGem(x, y, value) {
-    let gems = 0;
-    for (const pk of this.pickups) if (pk.kind === 'gem') gems++;
-    if (gems > 380) {
-      // Fold the XP into the oldest gem rather than flooding the floor.
-      for (const pk of this.pickups) {
-        if (pk.kind === 'gem' && !pk.pulled) {
-          pk.value += value;
-          pk.setLook();
-          return;
-        }
+    const p = this.player;
+    let gems = 0, far = null, farD = -1;
+    for (const pk of this.pickups) {
+      if (pk.kind !== 'gem' || pk.dead) continue;
+      gems++;
+      if (pk.pulled) continue; // on its way to him already
+      const d = (pk.x - p.x) ** 2 + (pk.y - p.y) ** 2;
+      if (d > farD) {
+        far = pk;
+        farD = d;
       }
+    }
+    if (gems >= 380 && far) {
+      far.dead = true;
+      value += far.value;
     }
     this.addPickup('gem', x, y, value);
   }
@@ -1538,6 +1608,54 @@ export class Game {
     }
   }
 
+  // Room for one more foe at the cap (spawnEnemy; data/waves.js HORDE_CAP). The one farthest from
+  // the hero, if it stands HORDE_CAP.far screen diagonals off or more, simply vanishes: never seen,
+  // so it doesn't die (no drops, no kill, no XP). What is sent at him (sent: a ring, a swarm, a
+  // pack, a champion, the thief, a boss's summons) may take the farthest anywhere off the screen,
+  // as many as it brings; the steady horde HORDE_CAP.perFrame a frame at most. Never a boss, a
+  // crypt's lord, a champion, the thief, a boss's summons or a sleeping pack. The horde is counted
+  // and those off the screen listed once a frame, however many spawns ask. Returns whether there is
+  // room now: there may be already, with the foes killed this frame not yet swept away.
+  recycleFar(sent) {
+    const E = this.enemies;
+    const c = (this.horde ??= { frame: -1, of: null, live: 0, used: 0, far2: 0, list: [], ids: [], d2: [], recycled: 0 });
+    if (c.frame !== this.frame || c.of !== E) {
+      const p = this.player, cam = this.cam, m = HORDE_CAP.edge;
+      const far = Math.hypot(cam.W, cam.H) * HORDE_CAP.far;
+      const x0 = cam.x - m, x1 = cam.x + cam.W + m, y0 = cam.y - m, y1 = cam.y + cam.H + m;
+      c.frame = this.frame;
+      c.of = E;
+      c.live = c.used = 0;
+      c.far2 = far * far;
+      c.list.length = c.ids.length = c.d2.length = 0;
+      for (const e of E) {
+        if (e.dead || e.prop) continue;
+        c.live++;
+        if (e.boss || e.lord || e.elite || e.summoned || e.sleeping || e.dormant || e.type === 'thief') continue;
+        if (e.x > x0 && e.x < x1 && e.y > y0 && e.y < y1) continue;
+        const dx = e.x - p.x, dy = e.y - p.y;
+        c.list.push(e);
+        c.ids.push(e.id);
+        c.d2.push(dx * dx + dy * dy);
+      }
+    }
+    if (c.live <= HORDE_CAP.most) return true;
+    if (!sent && c.used >= HORDE_CAP.perFrame) return false;
+    // The farthest still standing. One gone since (killed, or made room) is passed over, and one
+    // swept away and back from the pool as another foe has another id.
+    let best = -1;
+    for (let i = 0; i < c.list.length; i++) {
+      if (c.list[i].dead || c.list[i].id !== c.ids[i]) continue;
+      if (best < 0 || c.d2[i] > c.d2[best]) best = i;
+    }
+    if (best < 0 || (!sent && c.d2[best] < c.far2)) return false;
+    c.list[best].dead = true;
+    c.live--;
+    c.used++;
+    c.recycled++;
+    return true;
+  }
+
   // -------------------------------------------------------------- draw --
 
   draw(ctx) {
@@ -1622,6 +1740,8 @@ export class Game {
     this.light(p.x, p.y - 6, (this.mode === 'dungeon' ? 130 : 125) * flick, 'warm', 1);
     this.light(p.x, p.y - 8, 46, 'white', 0.7);
     this.lighting.render(ctx, c, this.world.ambient());
+    // The horde lifted out of the dark and edged in light (enemies.js NIGHT_EDGE).
+    drawNightEdge(ctx, c, this);
 
     // Unlit / additive layers.
     for (const o of list) {
@@ -1725,6 +1845,7 @@ export class Game {
     ctx.globalAlpha = s.used ? 0.6 : 1;
     ctx.drawImage(img, X, Y, w, h);
     ctx.globalAlpha = 1;
+    s._rect = [X, Y, w, h, s.spr.frames[0]]; // what it hides of the horde's night layer (drawNightEdge)
   }
 
   drawCrypt(ctx, c, d) {

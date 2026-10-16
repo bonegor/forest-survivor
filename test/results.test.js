@@ -1,6 +1,6 @@
 // The results screen reports a run as it was played. Its difficulty goes with the report, so a
 // Normal run is paid and recorded as Normal (a report without one was taken for Veteran, ×1.5);
-// TRY AGAIN plays the same difficulty again; and a run the store didn't take says so, rather
+// the results screen leads back to camp only; and a run the store didn't take says so, rather
 // than counting up "+0 GOLD".
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -101,18 +101,14 @@ test('a Normal run is reported as Normal, and paid ×1', async () => {
   assert.equal(vet.store.profile.gold, 180);
 });
 
-test('TRY AGAIN plays the difficulty the run was played on', async () => {
-  for (const diff of ['medium', 'hard']) {
-    const app = makeApp({ hero: 'knight', mode: 's15', diff });
-    const gs = await playToResults(app);
-    for (let f = 0; f < 150; f++) frame(gs); // the results show at 0.6 s, then a second's lock
-    click(gs, 'again');
-    assert.ok(app.screen !== gs, 'a new run');
-    assert.equal(app.choice.diff, diff);
-    assert.equal(app.screen.game.diffId, diff);
-    assert.equal(app.screen.game.mode, 's15');
-    app.screen.leave();
-  }
+test('the results screen leads only back to camp', async () => {
+  const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
+  const gs = await playToResults(app);
+  for (let f = 0; f < 150; f++) frame(gs);
+  assert.ok(!gs.app.ui.items.some((i) => i.id === 'again'), 'no TRY AGAIN');
+  assert.ok(gs.app.ui.items.some((i) => i.id === 'camp'), 'RETURN TO CAMP is there');
+  click(gs, 'camp');
+  assert.equal(app.went, 'title', 'back to camp');
 });
 
 test('a run the store pays nothing for says it was not saved, and a run with nothing to pay does not', async () => {

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- The sprite tuner: every hero, monster, boss and minion as the game ships it, built by the
+       game's own code (js/art, js/engine/sprites.js), with sliders on its palette colours
+       (js/art/tune.js) and previews in the night's light as js/game/lighting.js casts it. Its
+       codes are baked into the game by tools/bake-tune.mjs. Nothing is sent anywhere: work in
+       progress stays in this browser (localStorage). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sprite Tuner · Forest Survivor</title>
+  <link rel="icon" href="../favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Forest Survivor · Sprite tuner</div>
+  <h1>Tune the sprites for the night</h1>
+  <p class="lead">Every hero, monster, boss and minion as the game ships it now. Pick one and move its colours; each card shows it at its real size, four times larger, and in the game's night light over the forest, a crypt and the catacombs. <b>Luma</b> is how light its pixels are on average, outline left out: below about 90 a monster is lost in the dark. Your work stays in this browser. When a sprite looks right, copy its code, or all your changes, and send it to Claude to bake into the game.</p>
+
+  <div class="bar">
+    <div class="seg" id="light" role="group" aria-label="Light">
+      <span>Light</span>
+      <button type="button" data-light="day" aria-pressed="false" title="The sprite as drawn, no night">Day</button>
+      <button type="button" data-light="dark" aria-pressed="true" title="The night's ambient light only, as at the edge of the screen">Night</button>
+      <button type="button" data-light="lamp100" aria-pressed="false" title="The night plus the hero's lamp, 100 px away">Night, 100 px from the hero</button>
+      <button type="button" data-light="lamp60" aria-pressed="false" title="The night plus the hero's lamp, 60 px away">60 px</button>
+    </div>
+    <div class="seg" id="filter" role="group" aria-label="Show">
+      <span>Show</span>
+      <button type="button" data-filter="all" aria-pressed="true">All</button>
+      <button type="button" data-filter="hero" aria-pressed="false">Heroes</button>
+      <button type="button" data-filter="monster" aria-pressed="false">Monsters</button>
+      <button type="button" data-filter="boss" aria-pressed="false">Bosses</button>
+      <button type="button" data-filter="minion" aria-pressed="false">Minions</button>
+      <button type="button" data-filter="changed" aria-pressed="false">Changed</button>
+    </div>
+    <button type="button" id="animate" aria-pressed="false">Animate</button>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="layout">
+    <main>
+      <div class="grid" id="grid" aria-label="Sprites"></div>
+    </main>
+
+    <aside>
+      <section class="card" id="tools">
+        <div class="tabs" role="tablist" aria-label="What the sliders tune">
+          <button type="button" role="tab" id="tabOne" aria-selected="true">This sprite</button>
+          <button type="button" role="tab" id="tabGroup" aria-selected="false">All monsters</button>
+        </div>
+        <div class="head"><h2 id="pname">Loading…</h2><span class="badge" id="pcat"></span></div>
+        <p class="desc" id="pdesc"></p>
+        <div class="compare" id="compare">
+          <figure><figcaption>As shipped · luma <b id="lumaBefore">–</b></figcaption><canvas id="before" aria-label="The sprite as shipped, in the chosen light"></canvas></figure>
+          <figure><figcaption>Tuned · luma <b id="lumaAfter">–</b></figcaption><canvas id="after" aria-label="The sprite as tuned, in the chosen light"></canvas></figure>
+        </div>
+        <div class="row hidden" id="scope">
+          <span>Applies to</span>
+          <label><input type="checkbox" data-scope="monster"> Monsters</label>
+          <label><input type="checkbox" data-scope="boss"> Bosses</label>
+          <label><input type="checkbox" data-scope="minion"> Minions</label>
+          <label><input type="checkbox" data-scope="hero"> Heroes</label>
+          <span class="note">The group's sliders add to each sprite's own; a sprite's own outline and rim win.</span>
+        </div>
+        <div id="sliders"></div>
+        <div class="row">
+          <span>Outline</span>
+          <input type="color" id="ink" aria-label="Outline colour">
+          <button type="button" id="inkReset">As shipped</button>
+          <span class="note" id="inkNote"></span>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="rim"> Rim</label>
+          <input type="color" id="rimColour" value="#8b9bb4" aria-label="Rim colour">
+          <span class="note">A 1 px pale ring outside the outline, so a dark sprite keeps its shape on dark ground.</span>
+        </div>
+        <div class="buttons"><button type="button" id="reset">Reset this sprite</button></div>
+        <div class="code" id="codeRow"><input id="code" readonly aria-label="Code for this sprite"><button type="button" id="copy">Copy</button></div>
+      </section>
+
+      <section class="card">
+        <h3>Beside the hero</h3>
+        <canvas id="lineup" aria-label="The hero beside the sprite and a few monsters, at their sizes in the game"></canvas>
+        <div class="row"><label>Hero <select id="hero"></select></label><span class="note">At their sizes in the game, in the light chosen above, over the forest.</span></div>
+      </section>
+
+      <section class="card">
+        <h3>All changes</h3>
+        <p class="note" id="summary"></p>
+        <div class="buttons">
+          <button type="button" class="primary" id="copyAll">Copy all changes</button>
+          <button type="button" id="resetAll">Reset everything</button>
+        </div>
+        <details id="paste">
+          <summary>Paste codes</summary>
+          <p class="note">Paste "FS tune …" codes, or what <b>Copy all changes</b> gave, to bring that work back.</p>
+          <textarea id="pasteText" aria-label="Codes to restore" spellcheck="false"></textarea>
+          <div class="buttons"><button type="button" id="restore">Restore</button></div>
+          <p class="note" id="pasteNote"></p>
+        </details>
+      </section>
+    </aside>
+  </div>
+  <p id="status" role="status"></p>
+</div>
+<script type="module" src="tuner.js"></script>
+</body>
+</html>

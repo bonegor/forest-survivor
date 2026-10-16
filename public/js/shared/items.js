@@ -4,8 +4,8 @@
 // Every function here is pure and treats its input as untrusted.
 
 // What each of a crypt's lords leaves besides its coins and gold, rolled lord by lord, every
-// lord alike (Game.lordDefeated): the user's "50% both a gear item and a champion's chest, 25%
-// item only, 25% chest only" (16 October 2026). The odds add up to 1.
+// lord alike and whatever the hero's luck (Game.lordDefeated): the user's "50% both a gear item
+// and a champion's chest, 25% item only, 25% chest only" (16 October 2026). The odds add up to 1.
 export const LORD_DROPS = [
   { odds: 0.5, item: true, chest: true },
   { odds: 0.25, item: true, chest: false },
@@ -103,20 +103,22 @@ export function statRange(stat, rarity) {
   return [lo, Math.max(lo, Math.round(s.hi * m))];
 }
 
-// Rarity odds improve later in the night (`minute`), in crypts farther from the
-// start (`depth` 1 for the nearest ring) and with the hero's luck (1 = none).
+// Rarity odds improve later in the night (`minute`) and in crypts farther from the
+// start (`depth` 1 for the nearest ring), and with nothing else: the hero's luck plays no part
+// in what a crypt's lords leave, their gear, their drop or their chest (the user, 16 October
+// 2026: "It should be RNG, but no luck effect").
 const BASE_ODDS = [55, 30, 12, 3, 0.5];
 const BOOST = [-0.75, 0.1, 2, 5, 12];
-export function rarityOdds(minute, depth = 1, luck = 1) {
-  const s = Math.max(0, minute / 15 + (depth - 1) * 0.15 + (luck - 1) * 0.5);
+export function rarityOdds(minute, depth = 1) {
+  const s = Math.max(0, minute / 15 + (depth - 1) * 0.15);
   const w = BASE_ODDS.map((b, i) => b * Math.max(0.1, 1 + s * BOOST[i]));
   const sum = w.reduce((a, b) => a + b, 0);
   return w.map((v) => v / sum);
 }
 
 // A new item. `rng` is a mulberry32-style generator: rng() in [0, 1) with rng.int(lo, hi).
-export function rollItem(rng, { minute = 0, depth = 1, luck = 1, slot = null } = {}) {
-  const odds = rarityOdds(minute, depth, luck);
+export function rollItem(rng, { minute = 0, depth = 1, slot = null } = {}) {
+  const odds = rarityOdds(minute, depth);
   let r = rng(), rarity = 0;
   while (rarity < LEGENDARY && r >= odds[rarity]) r -= odds[rarity++];
   slot = SLOTS.includes(slot) ? slot : SLOTS[rng.int(0, SLOTS.length - 1)];

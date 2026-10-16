@@ -29,8 +29,10 @@ function blast(g, x, y, r, dmg, style = 'dark') {
   sfx('slam');
 }
 
+// A shot leaves the boss's chest, or opts.out px out from it along its own line.
 function shoot(g, e, ang, kind, speed, dmg, opts) {
-  g.eshots.push(new EnemyShot(g, e.x, e.y - 10, ang, speed, dmg * g.dmgScale * g.bossPower, kind, opts));
+  const out = (opts && opts.out) || 0;
+  g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, opts));
 }
 
 function ring(g, e, n, kind, speed, dmg, off = 0, opts) {
@@ -77,7 +79,9 @@ export const BOSS_AI = {
         onDone: () => {
           if (!still(e, id)) return;
           blast(g, e.x, e.y, R, 24, 'dark');
-          ring(g, e, e.phase ? 15 : 11, 'bone', 85, 11, rand(TAU));
+          // Each bone sets off out along its own line, about 10 px from the next (19 px round
+          // him, 25 for the ring of 15), so the ring never stacks on one point.
+          ring(g, e, e.phase ? 15 : 11, 'bone', 85, 11, rand(TAU), { out: e.phase ? 25 : 19 });
         },
       }));
       return [0, 0, 0];

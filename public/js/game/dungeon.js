@@ -45,7 +45,7 @@ const heading = (x, y) => {
   return HEADING;
 };
 
-const THEMES = {
+export const THEMES = {
   crypt: {
     floor: ['#2d3453', '#343c5e', '#3b4468', '#434d73'],
     mortar: '#1c1f33',

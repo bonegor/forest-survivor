@@ -95,6 +95,25 @@ export const RANKED_EVENT_EVERY = 2.5; // phase minutes
 // site holds `boxes` of them. What each one holds: game.js PROP_LOOT.
 export const PROP_SITES = { every: [16 / 3, 26 / 3], most: 45, room: [1, 1], crypt: [1, 1], boxes: [2, 5] };
 
+// The most monsters that stand at once, props aside (Game.spawnEnemy). Past `most` a new one comes
+// only in the place of one that stands well off-screen, which simply vanishes, never seen
+// (Game.recycleFar; the owner's "recycle those far away, throw them out ... if they are far
+// offscreen it makes sense", 16 October 2026): the farthest from the hero, if it is `far` screen
+// diagonals from him or more. 0.6 of one (413 world px on a 1080p screen's 600×338) is beyond any
+// corner of the screen and farther than anywhere the horde comes in (Forest.spawnPoint: the
+// screen's edge, 374 px at most), yet nearer than where the forest moves its stragglers back in
+// (Forest.tooFar, 510 px a side), so that in the forest some do stand that far: those a hero on
+// the move leaves behind. In 45 s at the cap on a Veteran Nightmare at 11:00, a Knight standing
+// still had none past 380 px (nothing recycled, the spawns refused), one kiting about a hundred
+// recycled, one running straight on some fourteen hundred. A lower `far` would recycle monsters
+// just come in at the screen's edge; past 0.74 the forest's moving them back would always come
+// first. Boxes don't count and come all the same (Game.spawnProp). The steady horde makes room
+// for `perFrame` a frame at most, so a burst can't churn it; what is sent at the hero (a ring, a
+// swarm, a pack, a champion, the thief, a boss's summons) comes in full: it may take any foe off
+// the screen, `edge` px or more beyond its border (the tallest monster's height), as many as it
+// brings.
+export const HORDE_CAP = { most: 900, far: 0.6, perFrame: 20, edge: 32 };
+
 // Dungeon floors: theme, starting phase and the guardian waiting at the end.
 export const FLOORS = [
   { n: 1, name: 'The Crypt', theme: 'crypt', phase0: 0, rate: 1.15, cap: 13, guardian: 'boneking' },

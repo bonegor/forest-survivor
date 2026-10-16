@@ -3,7 +3,7 @@
 import { initView, view, presentUI } from './engine/view.js';
 import { initInput, input } from './engine/input.js';
 import { buildSprites } from './engine/sprites.js';
-import { store, loadSettings, saveSettings } from './engine/storage.js';
+import { store, loadSettings, saveSettings, DEBUG } from './engine/storage.js';
 import { initAudio, setVolumes } from './engine/audio.js';
 import { drawText } from './engine/font.js';
 import { makeCanvas } from './engine/util.js';
@@ -142,11 +142,14 @@ async function boot() {
   canvas.focus();
   app.go('title');
   requestAnimationFrame(loop);
-  // Developer panel: loaded on demand with ` (or straight away with ?dev), where developer
-  // mode is on (the server's --dev or DEV_KEY, or the static game on this machine).
+  // Developer panel: loaded on demand with ` (or straight away with ?dev, for its DEV button),
+  // where developer mode is on (the server's --dev or DEV_KEY, or the static game on this
+  // machine), and at the debug address wherever it is served, GitHub Pages too, its DEV button
+  // there from the start (a phone has no `). The debug game keeps a save of its own, a client
+  // cookie (storage.js DEBUG), so what the panel does there never reaches a player's.
   let devPanel = null;
   const openDev = async () => {
-    if (!devPanel && !(await store.devStatus()).enabled) return null;
+    if (!devPanel && !DEBUG && !(await store.devStatus()).enabled) return null;
     devPanel = devPanel || (await import('./dev/panel.js')).createDevPanel(app);
     return devPanel;
   };
@@ -155,7 +158,7 @@ async function boot() {
     e.preventDefault();
     openDev().then((p) => p?.toggle());
   });
-  if (new URLSearchParams(location.search).has('dev')) openDev();
+  if (DEBUG || new URLSearchParams(location.search).has('dev')) openDev();
 }
 
 // Hooks for automated play-testing (tools/balance.mjs, play.mjs, watch.mjs):

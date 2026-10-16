@@ -70,6 +70,7 @@ test('the horde leaves soul gems and now and then a coin or a fury orb; champion
       const counts = {};
       for (let i = 0; i < n; i++) {
         g.pickups.length = 0;
+        p.recentKills = 0; // a lone kill each: the horde's fury orb thins out as the killing quickens (Player.killShare)
         g.killEnemy(g.spawnEnemy(type, p.x + 60, p.y, {instant: true, ...o}));
         for (const e of g.enemies) g.enemyPool.put(e);
         g.enemies.length = 0;

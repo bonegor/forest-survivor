@@ -2,11 +2,11 @@
 // this class; boss behaviour lives in bosses.js.
 
 import { ENEMIES } from '../data/enemies.js';
-import { SPR, TINTS } from '../engine/sprites.js';
-import { hexPack } from '../engine/pixels.js';
+import { SPR, TINTS, nightBuf, canvasFromBuf } from '../engine/sprites.js';
+import { hexPack, makeBuf, pack } from '../engine/pixels.js';
 import { OUTLINE } from '../art/palette.js';
 import { sfx } from '../engine/audio.js';
-import { rand, TAU, clamp, pick } from '../engine/util.js';
+import { rand, TAU, clamp, pick, makeCanvas } from '../engine/util.js';
 import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { EnemyShot } from './projectiles.js';
@@ -41,6 +41,18 @@ function aim(x, y, k) {
 const AWAY = { x: 0, y: 0 };
 let nextId = 1;
 
+// The night edge: the owner's "monsters more visible against the night". Out in the dark the
+// lighting darkens a monster to the ambient light, a dark one down to the ground's own shade.
+// So after the lighting each is drawn again unlit over its lit self (drawNightEdge), at alpha
+// nightFloor(ambient): enough that it shows no darker than `floor` of its own colours (lit, it
+// is at the ambient's brightness M; with f of the rest unlit, M + f·(1 − M) = floor), none once
+// the light is that bright (dawn). With it, 1 px outside its ink outline, a ring of `ring` at
+// `ringA` of that alpha, a light edge parting it from the ground. Within `near` px of the hero,
+// whose own light shows it, it fades out to nothing at him. Bosses and crypt lords have a light
+// and rim of their own and get none, nor do boxes; champions keep their gold outline with no
+// ring round it; the Necromancer's allies are ringed in `allyRing`.
+export const NIGHT_EDGE = { floor: 0.75, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.6, near: 60 };
+
 export class Enemy {
   constructor() {
     this.hitT = new Float32Array(N_SRC);
@@ -54,6 +66,8 @@ export class Enemy {
     // (hidden class) and the hot code reading them stays fast. Unset, as they would be absent.
     this._rect = undefined; // draw
     this._bob = undefined; // draw
+    this._look = -1; // draw: its night look (NIGHT_LOOKS), -1 for none
+    this._img = null; // draw: the picture it was drawn as
     this._cell = undefined; // grid.js
     this._shown = undefined; // hud.js, a boss's health shown
     this._mTick = undefined; // minions.js
@@ -124,6 +138,7 @@ export class Enemy {
     this.sleeping = !!o.sleeping; // dungeon guardians wait for you
     this.lord = !!o.lord; // one of a crypt's named bosses, each asleep in a room of its own
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
+    this.summoned = !!o.summoned; // called up round the hero by a boss (Game.summonRing)
     // Whether it knows where the hero is. In a crypt one doesn't until it has seen him or been
     // hit (update); what is sent at him (o.aware: a ring, a swarm, a pack), a boss, one that
     // wakes by its own rule (sleeping) and the thief always do. In the forest and on a Dungeon Run
@@ -443,12 +458,21 @@ export class Enemy {
     const S = cam.S;
     const fr = this.spr.frames[this.frameIndex()];
     const flip = this.face < 0;
-    let img;
-    if (this.flash > 0) img = fr.white(flip);
-    else if (this.freezeT > 0) img = fr.variant('frozen', TINTS.frozen, flip);
-    else if (this.state === 'wind' && Math.floor(this.life * 20) % 2) img = fr.variant('burn', TINTS.burn, flip);
-    else if (this.elite) img = fr.variant('eliteo', eliteOutlineBuf, flip);
+    let img, look = 0;
+    if (this.flash > 0) {
+      img = fr.white(flip);
+      look = -1;
+    } else if (this.freezeT > 0) {
+      img = fr.variant('frozen', TINTS.frozen, flip);
+      look = 1;
+    } else if (this.state === 'wind' && Math.floor(this.life * 20) % 2) {
+      img = fr.variant('burn', TINTS.burn, flip);
+      look = 2;
+    } else if (this.elite) img = fr.variant('eliteo', eliteOutlineBuf, flip);
     else img = fr.get(flip);
+    // Its night look, as drawn (a champion's unringed). A white flash needs no lifting.
+    this._look = look < 0 || this.boss || this.lord || this.prop ? -1 : this.elite ? look + 3 : look;
+    this._img = img;
 
     let sx = this.scale, sy = this.scale;
     if (this.flash > 0) {
@@ -487,6 +511,7 @@ export class Enemy {
       const k = 1 - this.spawnT / this.spawnMax;
       const vis = Math.max(1, Math.round(img.height * k));
       ctx.drawImage(img, 0, 0, img.width, vis, Math.round(X), Math.round(by + h - vis * S * sy), Math.round(w), Math.round(vis * S * sy));
+      this._look = -1;
       return;
     }
     if (this.spawnT > 0) alpha *= 1 - this.spawnT / this.spawnMax;
@@ -512,6 +537,15 @@ export class Enemy {
       ctx.drawImage(fr.variant('rim' + col, (b) => rimBuf(b, col), flip), Math.round(X), Math.round(Y), Math.round(w), Math.round(h));
       ctx.globalAlpha = 1;
     }
+  }
+
+  // How much of its night layer shows (NIGHT_EDGE): as much as of its body, fading in as that
+  // does when it appears, and over NIGHT_RISE seconds once it has risen from the ground.
+  nightShare() {
+    let a = this.alpha;
+    if (this.spawnT > 0) a *= 1 - this.spawnT / this.spawnMax;
+    else if (this.def.rise && this.life < this.spawnMax + NIGHT_RISE) a *= Math.max(0, this.life - this.spawnMax) / NIGHT_RISE;
+    return a;
   }
 
   rimColor() {
@@ -540,18 +574,154 @@ export class Enemy {
 }
 
 const GOLD = hexPack('#feae34');
-// Champions get a gold outline instead of the ink one.
+// Champions get a gold outline instead of the ink one (a tuned sprite's own ink: b.ink).
 function eliteOutlineBuf(b) {
-  const out = { w: b.w, h: b.h, d: b.d.slice() };
-  for (let i = 0; i < out.d.length; i++) if (out.d[i] === OUTLINE) out.d[i] = GOLD;
+  const out = { w: b.w, h: b.h, d: b.d.slice() }, ink = b.ink ?? OUTLINE;
+  for (let i = 0; i < out.d.length; i++) if (out.d[i] === ink) out.d[i] = GOLD;
   return out;
 }
 
+// ------------------------------------------------------------ the night edge --
+
+// How strongly the night layer is drawn under ambient light [r, g, b] (0–255): NIGHT_EDGE.
+export function nightFloor(amb) {
+  const m = (0.299 * amb[0] + 0.587 * amb[1] + 0.114 * amb[2]) / 255, f = NIGHT_EDGE.floor;
+  return m < f ? (f - m) / (1 - m) : 0;
+}
+
+// The night layers are drawn first into a canvas of their own the size of the screen, in the
+// order Game.draw drew the scene (its y-sorted list, then the bosses over it), each over those
+// behind it as the figures themselves are; and whatever else was drawn there (a tree, a box, the
+// hero, a crypt, a foe flashing white, a boss) cuts its own shape out of them. So nothing shows
+// through what stands in front of it, a foe through a tree or through another foe. A hole round
+// the hero fades them out near him; then the one canvas goes over the lit scene at the floor's
+// alpha. Called after the lighting, before the unlit layers (eyes, glows) that go over it.
+// `n`: the night canvas's context (tests pass their own).
+export function drawNightEdge(ctx, cam, g, n = nightContext(cam)) {
+  const f = nightFloor(g.world.ambient());
+  if (f <= 0) return;
+  const p = g.player;
+  n.globalCompositeOperation = 'source-over';
+  n.globalAlpha = 1;
+  n.imageSmoothingEnabled = false;
+  n.clearRect(0, 0, cam.pxW, cam.pxH);
+  let any = false, cut = false;
+  for (const o of g.drawList) {
+    let fr, key, fn, flip, X, Y, w, h, a;
+    if (o instanceof Enemy && o._look >= 0) {
+      a = o.nightShare();
+      const r = o._rect, look = NIGHT_LOOKS[o._look];
+      fr = o.spr.frames[o.frameIndex()];
+      key = look[0];
+      fn = look[1];
+      flip = r[4];
+      X = Math.round(r[0]);
+      Y = Math.round(r[1]);
+      w = Math.round(r[2]);
+      h = Math.round(r[3]);
+    } else if (o.minion) {
+      if (o.rise > 0) continue;
+      const m = o.rect(cam);
+      a = o.life < 1 ? o.life : 1;
+      fr = m.fr;
+      key = ALLY_LOOK[0];
+      fn = ALLY_LOOK[1];
+      flip = m.flip;
+      X = m.X;
+      Y = m.Y;
+      w = m.w;
+      h = m.h;
+    } else {
+      // Not lifted: cuts its shape out of those behind it.
+      if (any) cut = nightCut(n, o, p, cut);
+      continue;
+    }
+    if (a < 0.02) continue;
+    if (cut) n.globalCompositeOperation = 'source-over';
+    cut = false;
+    const ux = w / fr.w, uy = h / fr.h;
+    n.globalAlpha = a;
+    n.drawImage(fr.variant(key, fn, flip), X - ux, Y - uy, w + 2 * ux, h + 2 * uy);
+    any = true;
+  }
+  if (!any) return;
+  for (const e of g.topList) cut = nightCut(n, e, p, cut);
+  // Fading out near the hero, to nothing at the middle of his light.
+  const S = cam.S, R = NIGHT_EDGE.near * S;
+  n.globalCompositeOperation = 'destination-out';
+  n.globalAlpha = 1;
+  n.imageSmoothingEnabled = true;
+  n.drawImage(nightHole(), (p.x - cam.x) * S - R, (p.y - 6 - cam.y) * S - R, R * 2, R * 2);
+  n.imageSmoothingEnabled = false;
+  n.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = f;
+  ctx.drawImage(n.canvas, 0, 0);
+  ctx.globalAlpha = 1;
+}
+
+// One thing drawn in the scene and not lifted, cutting its shape out of the night layers behind
+// it: a foe (as drawn: _img over _rect), the hero, or a tree, box, crypt or shrine (_rect, its
+// frame last). Returns that the night canvas is cutting now.
+function nightCut(n, o, p, cut) {
+  const r = o._rect;
+  const foe = o instanceof Enemy;
+  if (!r || (o === p && p.dead) || (foe && o.spawnT > 0 && o.def.rise)) return cut;
+  if (!cut) n.globalCompositeOperation = 'destination-out';
+  n.globalAlpha = 1;
+  // Exactly where it was drawn: a foe rounds its rectangle as it draws, the rest draw at theirs.
+  if (foe) n.drawImage(o._img, Math.round(r[0]), Math.round(r[1]), Math.round(r[2]), Math.round(r[3]));
+  else n.drawImage(r[4].get(r[5]), r[0], r[1], r[2], r[3]);
+  return true;
+}
+
+let nightC = null, holeC = null;
+// The night canvas, the size of the screen.
+function nightContext(cam) {
+  if (!nightC) nightC = makeCanvas(cam.pxW, cam.pxH);
+  if (nightC.width !== cam.pxW || nightC.height !== cam.pxH) {
+    nightC.width = cam.pxW;
+    nightC.height = cam.pxH;
+  }
+  return nightC.getContext('2d');
+}
+
+// The hole round the hero: opaque at its middle, clear at its edge, straight between.
+export function nightHoleBuf(size = 64) {
+  const b = makeBuf(size, size), c = (size - 1) / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const k = 1 - Math.hypot(x - c, y - c) / c;
+      if (k > 0) b.d[y * size + x] = pack(0, 0, 0, Math.round(255 * k));
+    }
+  }
+  return b;
+}
+const nightHole = () => (holeC ??= canvasFromBuf(nightHoleBuf()));
+
+// How long a risen foe's night layer takes to fade in (s).
+const NIGHT_RISE = 0.3;
+// A ring colour, at its share of the layer's alpha.
+const ringOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.ringA));
+const RING = ringOf(NIGHT_EDGE.ring);
+// A foe's night looks, by Enemy._look: as drawn plain, frozen, winding up; then a champion's,
+// unringed round its gold outline. [variant key, how it is built from the frame]
+export const NIGHT_LOOKS = [
+  ['night', (b) => nightBuf(b, RING)],
+  ['night-frozen', (b) => nightBuf(TINTS.frozen(b), RING)],
+  ['night-burn', (b) => nightBuf(TINTS.burn(b), RING)],
+  ['night-eliteo', (b) => nightBuf(eliteOutlineBuf(b), 0)],
+  ['night-frozen-e', (b) => nightBuf(TINTS.frozen(b), 0)],
+  ['night-burn-e', (b) => nightBuf(TINTS.burn(b), 0)],
+];
+// An ally's, ringed in green so that a skeleton of the hero's reads apart from the horde's.
+const ALLY_RING = ringOf(NIGHT_EDGE.allyRing);
+export const ALLY_LOOK = ['night-ally', (b) => nightBuf(b, ALLY_RING)];
+
 // Just a boss's outline, in its colour: drawn unlit over the boss.
 function rimBuf(b, color) {
-  const c = hexPack(color);
+  const c = hexPack(color), ink = b.ink ?? OUTLINE;
   const out = { w: b.w, h: b.h, d: new Uint32Array(b.d.length) };
-  for (let i = 0; i < out.d.length; i++) if (b.d[i] === OUTLINE) out.d[i] = c;
+  for (let i = 0; i < out.d.length; i++) if (b.d[i] === ink) out.d[i] = c;
   return out;
 }
 

@@ -29,9 +29,9 @@ export function shadowBlade(g, w, x, y, ang, dmg, life) {
 }
 
 // One of the blades of Shadow Dance, his ultimate (effects.js ShadowDance): no weapon's, of a
-// strength of its own.
+// strength of its own, and like every ultimate's blow it charges no fury (noFury: Game.hitEnemy).
 export function danceBlade(g, x, y, ang) {
-  return spawnProjectile(g, { ...BLADE, x, y: y - 1, ang, speed: 300, life: 0.6, dmg: 18, pierce: 2, kb: 0.4, crit: 0.35, trail: PC.P });
+  return spawnProjectile(g, { ...BLADE, x, y: y - 1, ang, speed: 300, life: 0.6, dmg: 18, pierce: 2, kb: 0.4, crit: 0.35, trail: PC.P, noFury: true });
 }
 
 export function releaseProjectile(p) {
@@ -90,6 +90,7 @@ export class Projectile {
     this.shatter = o.shatter || 0;
     this.crit = o.crit || 0;
     this.trail = o.trail ?? null;
+    this.noFury = !!o.noFury; // an ultimate's (danceBlade): its blows charge no fury
     this.trailT = 0;
     this.hitCd = o.hitCd || 0;
     if (!this.hits) this.hits = new Set();
@@ -241,7 +242,7 @@ export class Projectile {
         const sp = Math.hypot(this.vx, this.vy) || 1;
         g.hitEnemy(e, this.dmg, {
           w: this.w, type: this.type, kb: this.kb, kx: this.vx / sp, ky: this.vy / sp, crit: this.crit,
-          slow: this.slow, slowT: this.slowT, freeze: this.freeze, shatter: this.shatter,
+          slow: this.slow, slowT: this.slowT, freeze: this.freeze, shatter: this.shatter, noFury: this.noFury,
         });
         if (this.kind === 'fireball') {
           this.impact();
@@ -341,10 +342,12 @@ const SHOT_GROW = 1.25;
 const SHOT_LOOK = {
   // The Cultist's: a big, slow orb, easy to see coming.
   darkbolt: { sprite: 'darkbolt', glow: '#b55088', light: 'purple', scale: 1.5 },
-  // The Bone King's: big, and burning gold so they can't hide in the dark or the horde. Drawn
-  // 33 px long, a bone hits wherever it crosses the hero's body: a bar 12 px either side of its
-  // drawn centre, 4 px thick, turning with it.
-  bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, scale: 2.4, reach: 12, r: 4 },
+  // The Bone King's: tumbling bones with burning gold at the knobs, so they can't hide in the
+  // dark or the horde. A sprite of their own size, drawn only the quarter bigger (19 px long; at
+  // three times the old 9 px sprite they were 33 px slabs that stacked into a checkerboard). A
+  // bone hits wherever it crosses the hero's body: a bar 9 px either side of its drawn centre,
+  // 4 px thick, turning with it.
+  bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, reach: 9, r: 4 },
   skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green' },
   firebolt: { sprite: 'firebolt', glow: '#f77622', light: 'fire' },
   arrow: { sprite: 'arrow', glow: null, light: null },
@@ -380,7 +383,7 @@ export class EnemyShot {
     this.size = SHOT_GROW * (this.look.scale || 1);
     this.r = opts.r ?? this.look.r ?? 3;
     this.life = opts.life ?? 4;
-    this.rot = 0;
+    this.rot = ang; // a tumbling shot sets off end first, along its flight
     this.dead = false;
     this.accel = opts.accel || 0;
     this.homing = opts.homing || 0;

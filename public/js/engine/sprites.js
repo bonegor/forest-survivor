@@ -16,6 +16,16 @@ export const PALETTE_CSS = PALETTE_KEYS.map((k) => PAL[k]);
 const packedToIndex = new Map(PALETTE_KEYS.map((k, i) => [pal[k], i]));
 export const colorIndex = (key) => PALETTE_KEYS.indexOf(key);
 
+// A colour a tuned sprite is drawn in (def.palette), added to the list so its death burst keeps
+// it. A particle holds its colour in a byte: past 256 colours a burst leaves that colour out.
+function addColour(c) {
+  if (packedToIndex.has(c) || PALETTE_CSS.length >= 256) return;
+  const hex = `#${[c & 255, (c >>> 8) & 255, (c >>> 16) & 255].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  packedToIndex.set(c, PALETTE_CSS.length);
+  PALETTE_KEYS.push(hex);
+  PALETTE_CSS.push(hex);
+}
+
 export function bufToCanvas(buf) {
   const c = makeCanvas(buf.w, buf.h);
   const g = c.getContext('2d');
@@ -59,14 +69,16 @@ export class Frame {
     return v[flip ? 1 : 0];
   }
 
-  // Opaque pixels as [x, y, paletteIndex, ...] for pixel-burst deaths.
+  // Opaque pixels as [x, y, paletteIndex, ...] for pixel-burst deaths: not the outline, nor a
+  // tuned sprite's rim.
   get pixels() {
     if (!this._pixels) {
       const list = px.opaqueList(this.buf);
       const out = [];
+      const ink = this.buf.ink ?? OUTLINE, rim = this.buf.rim;
       for (let i = 0; i < list.length; i += 3) {
-        const idx = packedToIndex.get(list[i + 2]);
-        if (idx !== undefined && list[i + 2] !== OUTLINE) out.push(list[i], list[i + 1], idx);
+        const c = list[i + 2], idx = packedToIndex.get(c);
+        if (idx !== undefined && c !== ink && c !== rim) out.push(list[i], list[i + 1], idx);
       }
       this._pixels = out;
     }
@@ -94,22 +106,83 @@ export class Frame {
 
 export const SPR = {};
 
+// A tuned sprite's colours (def.palette, baked by tools/bake-tune.mjs into art/tuned.js): from a
+// palette key, or from a colour the art is drawn in itself ('#rrggbb', the heroes' sheets), to the
+// colour drawn instead. Keyed and given without alpha: a pixel keeps its own.
+function recolouring(def) {
+  if (!def.palette) return null;
+  const map = new Map();
+  for (const [from, to] of Object.entries(def.palette)) {
+    const c = from.length === 1 ? pal[from] : px.hexPack(from);
+    if (c !== undefined) map.set(c & 0xffffff, px.hexPack(to) & 0xffffff);
+  }
+  return map.size ? map : null;
+}
+function swap(map, c) {
+  const n = map ? map.get(c & 0xffffff) : undefined;
+  return n === undefined ? c : ((c & 0xff000000) | n) >>> 0;
+}
+function recoloured(b, map) {
+  const out = px.makeBuf(b.w, b.h);
+  for (let i = 0; i < b.d.length; i++) out.d[i] = b.d[i] >>> 24 ? swap(map, b.d[i]) : b.d[i];
+  return out;
+}
+const touchesEdge = (b) => {
+  for (let x = 0; x < b.w; x++) if (b.d[x] >>> 24 || b.d[(b.h - 1) * b.w + x] >>> 24) return true;
+  for (let y = 0; y < b.h; y++) if (b.d[y * b.w] >>> 24 || b.d[y * b.w + b.w - 1] >>> 24) return true;
+  return false;
+};
+const unpad = (b) => {
+  const out = px.makeBuf(b.w - 2, b.h - 2);
+  for (let y = 0; y < out.h; y++) out.d.set(b.d.subarray((y + 1) * b.w + 1, (y + 1) * b.w + 1 + out.w), y * out.w);
+  return out;
+};
+
+// A sprite definition's frames as pixel buffers, outlined and in its tuned colours, with no
+// canvas (tools/preview.mjs draws them too). def.palette recolours it; def.rim ('#rrggbb') rings
+// it with 1 px outside the outline, growing the frames by a pixel a side only if the art reaches
+// their edge (anchorY then moves down with it). A tuned sprite's buffers carry its outline colour
+// (buf.ink) and rim (buf.rim), for what looks for the outline (a champion's gold one).
+export function spriteBuffers(def) {
+  const map = recolouring(def);
+  const ink = swap(map, OUTLINE);
+  const keys = (s) => (s ? new Set([...s].map((ch) => swap(map, pal[ch]))) : null);
+  const emissive = def.emissive ? keys(def.emissive) : def.glow && def.glow.length ? new Set(def.glow.map((c) => swap(map, c))) : null;
+  const thin = keys(def.thin);
+  let frames = resolveFrames(def).map((raw) => {
+    let b = Array.isArray(raw) ? px.fromRows(raw, pal) : raw;
+    if (map) b = recoloured(b, map);
+    if (def.outline !== false) b = px.outline(b, ink, false, thin);
+    return b;
+  });
+  let anchorY = def.anchorY;
+  const rim = def.rim ? px.hexPack(def.rim) : 0;
+  if (rim) {
+    const grow = frames.some(touchesEdge);
+    frames = frames.map((b) => (grow ? px.outline(b, rim, false, thin) : unpad(px.outline(b, rim, false, thin))));
+    if (grow && anchorY != null) anchorY += 1;
+  }
+  if (map || rim) {
+    for (const b of frames) {
+      b.ink = ink;
+      if (rim) b.rim = rim;
+    }
+  }
+  return { frames, emissive, anchorY };
+}
+
 // One sprite definition built into outlined frames (the sprite lab uses this too).
 // What glows unlit: def.emissive, palette keys (as in art/palette.js); or def.glow, the colours
 // themselves (packed), for art drawn in colours of its own.
 export function buildSprite(name, def) {
-  const emissive = def.emissive ? new Set([...def.emissive].map((ch) => pal[ch])) : def.glow && def.glow.length ? new Set(def.glow) : null;
-  const thin = def.thin ? new Set([...def.thin].map((ch) => pal[ch])) : null;
-  const frames = resolveFrames(def).map((raw) => {
-    let b = Array.isArray(raw) ? px.fromRows(raw, pal) : raw;
-    if (def.outline !== false) b = px.outline(b, OUTLINE, false, thin);
-    return new Frame(b, emissive);
-  });
+  const built = spriteBuffers(def);
+  const frames = built.frames.map((b) => new Frame(b, built.emissive));
+  if (def.palette) for (const to of Object.values(def.palette)) addColour(px.hexPack(to));
   return { name, frames, walk: def.walk || null, idle: def.idle || null,
     motionRate: def.motionRate || 1, idleRate: def.idleRate ?? 4,
     attack: def.attack || null, attackFps: def.attackFps || 0, selfBob: !!def.selfBob,
     attackRelease: def.attackRelease ?? null, attackWalk: def.attackWalk || null,
-    anchorY: def.anchorY ?? frames[0].h - 1,
+    anchorY: built.anchorY ?? frames[0].h - 1,
     fitW: def.fitW || frames[0].w, fitH: def.fitH || frames[0].h,
     fps: def.fps || 0, hires: def.hires || 1, small: def.small || null, picture: def.picture || null, w: frames[0].w, h: frames[0].h };
 }
@@ -146,6 +219,14 @@ export const TINTS = {
   burn: (b) => px.tint(b, px.hexPack('#ff6a3d'), 0.35),
   dim: (b) => px.tint(b, px.hexPack('#181425'), 0.55),
 };
+
+// The night look of a frame (enemies.js NIGHT_EDGE): its own pixels and, with `ring` (packed,
+// its alpha kept), a 1 px ring round its outline, none of the ring where the frame is; without
+// one, just the frame. Either way (w+2)×(h+2), the frame a pixel in from each side, so a foe's
+// night layer is one drawImage whatever it is ringed with.
+export function nightBuf(b, ring) {
+  return ring ? px.outline(b, ring) : px.pad(b, 1);
+}
 
 // Build a canvas from a raw pixel buffer (procedural textures).
 export function canvasFromBuf(buf) {

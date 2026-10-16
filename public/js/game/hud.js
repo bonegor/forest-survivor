@@ -1,7 +1,7 @@
 // In-game HUD, drawn into the low-res UI canvas (1 unit = 1 art pixel).
 
-import { drawText, textCanvas, textWidth } from '../engine/font.js';
-import { SPR } from '../engine/sprites.js';
+import { drawText, textCanvas, textWidth, GLYPH_H } from '../engine/font.js';
+import { SPR, buildSprite } from '../engine/sprites.js';
 import { input } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
@@ -112,6 +112,108 @@ class Orb {
   }
 }
 
+// Where a line of text drawn at y ends, its outline and all.
+const lineBottom = (y) => y + GLYPH_H + 1;
+// A boss's bar: lower in a dungeon or a crypt, under their own lines.
+const bossBarY = (g) => (g.mode === 'dungeon' || g.inCrypt ? 48 : 40);
+
+// The clock the HUD shows, and the pause screen with it: a timed run's time left; Ranked's and a
+// Dungeon Run's time so far.
+export const clockCountsDown = (g) => g.mode !== 'dungeon' && g.mode !== 'ranked';
+export const clockTime = (g) => (clockCountsDown(g) ? Math.max(0, g.duration - g.time) : g.time);
+
+// The markers at the screen's edge: an arrow, and beside it, on the inner side, the icon of what it
+// points at, so that colour is not all that tells a boss from a Shrine of Fury, or a chest from the
+// thief. The arrow keeps within MARK_R of where it stands (its tip, its bob, rounding); the icon's
+// middle is MARK_IN further in. The band's edges go round from the top: top, right, bottom, left.
+const MARK_R = 9, MARK_IN = 11;
+const IN_X = [0, -1, 0, 1], IN_Y = [1, 0, -1, 0];
+// The icons: 6×6, 8×8 with the outline. A shrine's gem (#) is its shrine's colour.
+const MARK_ART = {
+  boss: ['.zzzz.', 'zzzzzz', 'zxzzxz', 'zxzzxz', '.zzzz.', '.zkkz.'],
+  chest: ['.bbbb.', 'bBBBBb', 'yyYYyy', 'bByyBb', 'bBBBBb', 'bbbbbb'],
+  coin: ['.yyyy.', 'yYYYyo', 'yYyyyo', 'yYyyyo', 'yyyyoo', '.oooo.'],
+  crypt: ['.NNNN.', 'NNppNN', 'NpPPpN', 'NpPPpN', 'NpPPpN', 'NNNNNN'],
+  stairs: ['....GG', '....Gg', '..GGgg', '..Gggg', 'GGgggg', 'Gggggg'],
+  shrine: ['..##..', '.#w##.', '..##..', '.GGgg.', '.Gggg.', 'GGgggg'],
+};
+const SHRINE_GEMS = { fury: 'r', haste: 'c', fortune: 'y', wisdom: 'j', protection: 'L' };
+// What the world's own marker is, told by its colour (Dungeon.marker): the stairs down, a crypt's
+// way out, a guardian or a lord asleep.
+const WORLD_MARKS = { '#63c74d': 'stairs', '#2ce8f5': 'stairs', '#e43b44': 'boss' };
+let MARKS = null;
+function marks() {
+  if (MARKS) return MARKS;
+  const icon = (rows) => buildSprite('mark', { frames: [rows] }).frames[0].c;
+  MARKS = { shrine: {} };
+  for (const [id, rows] of Object.entries(MARK_ART)) if (id !== 'shrine') MARKS[id] = icon(rows);
+  for (const [id, gem] of Object.entries(SHRINE_GEMS)) MARKS.shrine[id] = icon(MARK_ART.shrine.map((r) => r.replaceAll('#', gem)));
+  return MARKS;
+}
+
+// This frame's band the markers stand on, and the boxes ([x, y, w, h]) they keep off
+// (Hud.markerBand); where a marker stands (placeMarker). Reused from frame to frame.
+const BAND = { top: 0, right: 0, bottom: 0, left: 0 };
+const KEEP = Array.from({ length: 10 }, () => [0, 0, 0, 0]);
+let keepN = 0;
+function keep(x, y, w, h) {
+  const k = KEEP[keepN++];
+  k[0] = x;
+  k[1] = y;
+  k[2] = w;
+  k[3] = h;
+}
+const SPOT = { x: 0, y: 0, edge: 0 };
+
+// The point u of the way round the band, clockwise from its top-left corner, into SPOT.
+function bandPoint(u) {
+  const b = BAND, w = b.right - b.left, h = b.bottom - b.top, round = 2 * (w + h);
+  u = ((u % round) + round) % round;
+  if (u < w) (SPOT.x = b.left + u), (SPOT.y = b.top), (SPOT.edge = 0);
+  else if (u < w + h) (SPOT.x = b.right), (SPOT.y = b.top + u - w), (SPOT.edge = 1);
+  else if (u < 2 * w + h) (SPOT.x = b.right - (u - w - h)), (SPOT.y = b.bottom), (SPOT.edge = 2);
+  else (SPOT.x = b.left), (SPOT.y = b.bottom - (u - 2 * w - h)), (SPOT.edge = 3);
+}
+
+// Whether a marker standing at SPOT, arrow and icon, is clear of every box it keeps off.
+function spotClear() {
+  const x = SPOT.x, y = SPOT.y, ix = x + IN_X[SPOT.edge] * MARK_IN, iy = y + IN_Y[SPOT.edge] * MARK_IN;
+  const x0 = Math.min(x - MARK_R, ix - 5), x1 = Math.max(x + MARK_R, ix + 5);
+  const y0 = Math.min(y - MARK_R, iy - 5), y1 = Math.max(y + MARK_R, iy + 5);
+  for (let i = 0; i < keepN; i++) {
+    const k = KEEP[i];
+    if (x0 < k[0] + k[2] && x1 > k[0] && y0 < k[1] + k[3] && y1 > k[1]) return false;
+  }
+  return true;
+}
+
+// Where the marker toward HUD point (sx, sy) stands, into SPOT: where the line from the band's
+// middle toward it crosses the band, or, if that is on something it keeps off, the nearest spot
+// along the band that is not.
+function placeMarker(sx, sy) {
+  const b = BAND, w = b.right - b.left, h = b.bottom - b.top;
+  const a = Math.atan2(sy - (b.top + b.bottom) / 2, sx - (b.left + b.right) / 2), c = Math.cos(a), s = Math.sin(a);
+  const kx = w / 2 / Math.abs(c || 1e-6), ky = h / 2 / Math.abs(s || 1e-6);
+  let u;
+  if (kx < ky) u = c > 0 ? w + h / 2 + s * kx : 2 * w + (3 * h) / 2 - s * kx;
+  else u = s > 0 ? w + h + w / 2 - c * ky : w / 2 + c * ky;
+  bandPoint(u);
+  if (spotClear()) return;
+  for (let d = 1; d < w + h; d++) {
+    bandPoint(u + d);
+    if (spotClear()) return;
+    bandPoint(u - d);
+    if (spotClear()) return;
+  }
+  bandPoint(u);
+}
+
+// The elites named this frame (the nearest the hero), and how far each is (squared).
+const NAMED = 3;
+const NEAR = new Array(NAMED).fill(null), NEAR_D = new Float64Array(NAMED);
+// Over a foe's head, in HUD pixels (overHead).
+const AT = { x: 0, y: 0 };
+
 export class Hud {
   constructor(g) {
     this.g = g;
@@ -132,6 +234,7 @@ export class Hud {
     this.drawBoss(ctx, W, t);
     this.drawNames(ctx, W, H);
     this.drawIndicators(ctx, W, H, t);
+    this.drawSpeech(ctx, W, H);
     this.drawCombo(ctx, W, H, t);
     this.drawBanners(ctx, W, H);
     if (g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, g.showMap);
@@ -233,7 +336,7 @@ export class Hud {
       drawText(ctx, cur[1].toUpperCase(), cx - 34, 29, { align: 'right', color: '#fee761' });
       if (g.rankedBest) drawText(ctx, `BEST ${fmtTime(Math.max(g.rankedBest, g.bestBeaten ? g.time : 0))}`, cx + 34, 29, { color: g.bestBeaten ? '#63c74d' : '#8b9bb4' });
     } else {
-      const remain = Math.max(0, g.duration - g.time);
+      const remain = clockTime(g);
       const c = textCanvas(fmtTime(remain), remain < 60 ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
       ctx.drawImage(c, cx - c.width, 9, c.width * 2, c.height * 2);
       const u = g.time / g.duration;
@@ -270,24 +373,38 @@ export class Hud {
     const fImg = (full ? this.furyFull : this.fury).render(p.fury / 100, t, full);
     const fx = W - fImg.width - 4, fy = H - fImg.height - 4;
     ctx.drawImage(fImg, fx, fy);
+    // The ultimate's name above the orb, flush with its right edge (centred, a long one ran off).
     if (p.ult) {
-      drawText(ctx, p.hero.ultName.toUpperCase(), fx + fImg.width / 2, fy - 11, { align: 'center', color: '#f6757a' });
+      drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: '#f6757a' });
     } else if (full) {
       const key = input.device === 'pad' ? 'X' : input.device === 'touch' ? 'TAP' : 'SPACE';
       const blink = Math.floor(t * 3) % 2 === 0;
       drawText(ctx, key, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: blink ? '#ffffff' : '#fee761' });
-      drawText(ctx, p.hero.ultName.toUpperCase(), fx + fImg.width / 2, fy - 11, { align: 'center', color: blink ? '#fee761' : '#f6757a' });
+      drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: blink ? '#fee761' : '#f6757a' });
     } else {
       drawText(ctx, `${Math.floor(p.fury)}%`, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: '#e8b796' });
     }
     if (g.player.revives > 0) ctx.drawImage(SPR.i_revival.frames[0].c, ox + hpImg.width - 6, oy - 8, 12, 12);
   }
 
+  // The ultimate's name as the HUD shows it.
+  ultLabel() {
+    return (this.ultName ??= this.g.player.hero.ultName.toUpperCase());
+  }
+
+  // How far down the HUD's lines at the top reach: the clock and its bar; a dungeon's floor, seal
+  // and clock lines; a crypt's line; a boss's bar and name under them.
+  topLines() {
+    const g = this.g;
+    if (g.boss && !g.boss.dead) return lineBottom(bossBarY(g) + 9);
+    return lineBottom(g.inCrypt ? 38 : g.mode === 'dungeon' ? 32 : 29);
+  }
+
   drawBoss(ctx, W, t) {
     const b = this.g.boss;
     if (!b || b.dead) return;
     const w = Math.min(220, W - 120);
-    const x = Math.floor(W / 2 - w / 2), y = this.g.mode === 'dungeon' || this.g.inCrypt ? 48 : 40;
+    const x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g);
     const f = clamp(b.hp / b.maxHp, 0, 1);
     b._shown = b._shown === undefined ? f : b._shown + (f - b._shown) * 0.06;
     ctx.fillStyle = '#181425';
@@ -309,30 +426,41 @@ export class Hud {
     drawText(ctx, label, W / 2, y + 9, { align: 'center', color: ['#fee761', '#feae34', '#be4a2f'] });
   }
 
-  drawNames(ctx, W, H) {
-    const g = this.g, cam = g.cam;
+  // Where over a foe's head its name or its speech goes, in HUD pixels, into AT; false if that is
+  // well off the screen.
+  overHead(e, W, H) {
+    const cam = this.g.cam;
     // World positions to HUD pixels: the world is drawn smaller than the HUD.
     const z = cam.S / view.S;
+    AT.x = (e.x - cam.x) * z;
+    AT.y = (e.y - e.h - 6 - cam.y) * z;
+    return AT.x >= -40 && AT.y >= -20 && AT.x <= W + 40 && AT.y <= H + 20;
+  }
+
+  drawNames(ctx, W, H) {
+    const g = this.g, cam = g.cam, p = g.player;
+    const z = cam.S / view.S;
+    // Only the elites nearest the hero are named, so that a pack's names do not pile up; the rest
+    // show their health alone. One that speaks shows its words instead.
+    NEAR.fill(null);
+    let named = 0;
     for (const e of g.enemies) {
-      if (e.dead || (!e.elite && !e.boss && !e.speech && e.type !== 'thief')) continue;
-      const x = (e.x - cam.x) * z, y = (e.y - e.h - 6 - cam.y) * z;
-      if (x < -40 || y < -20 || x > W + 40 || y > H + 20) continue;
-      if (e.speech) {
-        e.speech.t -= 1 / 60;
-        if (e.speech.t <= 0) e.speech = null;
-        else {
-          const tw = textWidth(e.speech.text);
-          ctx.fillStyle = '#181425';
-          ctx.fillRect(Math.round(x - tw / 2 - 4), Math.round(y - 14), tw + 8, 13);
-          ctx.fillStyle = '#ead4aa';
-          ctx.fillRect(Math.round(x - tw / 2 - 3), Math.round(y - 13), tw + 6, 11);
-          ctx.fillRect(Math.round(x - 1), Math.round(y - 2), 3, 2);
-          drawText(ctx, e.speech.text, Math.round(x), Math.round(y - 11), { align: 'center', color: '#3e2731', outline: null });
-          continue;
-        }
+      if (e.dead || !e.elite || e.speech || !this.overHead(e, W, H)) continue;
+      const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+      if (named === NAMED && d >= NEAR_D[NAMED - 1]) continue;
+      let i = named < NAMED ? named++ : NAMED - 1;
+      for (; i > 0 && NEAR_D[i - 1] > d; i--) {
+        NEAR[i] = NEAR[i - 1];
+        NEAR_D[i] = NEAR_D[i - 1];
       }
+      NEAR[i] = e;
+      NEAR_D[i] = d;
+    }
+    for (const e of g.enemies) {
+      if (e.dead || e.speech || (!e.elite && e.type !== 'thief') || !this.overHead(e, W, H)) continue;
+      const x = AT.x, y = AT.y;
       if (e.elite) {
-        drawText(ctx, e.name, Math.round(x), Math.round(y - 9), { align: 'center', color: e.mod ? e.mod.color : '#feae34' });
+        if (NEAR.includes(e)) drawText(ctx, e.name, Math.round(x), Math.round(y - 9), { align: 'center', color: e.mod ? e.mod.color : '#feae34' });
         const w = 26, f = clamp(e.hp / e.maxHp, 0, 1);
         ctx.fillStyle = '#181425';
         ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 4);
@@ -347,7 +475,6 @@ export class Hud {
       }
     }
     // Player health bar (classic survivors style).
-    const p = g.player;
     if (!p.dead) {
       const x = Math.round((p.x - cam.x) * z), y = Math.round((p.y - cam.y + 3) * z);
       const f = clamp(p.hp / p.maxHp, 0, 1);
@@ -360,33 +487,79 @@ export class Hud {
     }
   }
 
-  // Arrows at the screen's edge toward what's worth finding off it: the boss, shrines, crypts,
-  // chests, the thief and the world's own marker (the stairs, a sleeping lord), in that order.
-  drawIndicators(ctx, W, H, t) {
-    const g = this.g;
-    if (g.boss && !g.boss.dead) this.pointer(ctx, W, H, t, g.boss.x, g.boss.y - 10, '#e43b44');
-    for (const s of g.shrines) if (!s.used) this.pointer(ctx, W, H, t, s.x, s.y - 10, SHRINE_COLORS[s.type]);
-    for (const d of g.crypts) if (!d.sealed) this.pointer(ctx, W, H, t, d.x, d.y - 12, '#b55088');
-    for (const pk of g.pickups) if (pk.kind === 'chest') this.pointer(ctx, W, H, t, pk.x, pk.y, '#feae34');
-    for (const e of g.enemies) if (e.type === 'thief' && !e.dead) this.pointer(ctx, W, H, t, e.x, e.y, '#fee761');
-    if (g.world.marker) {
-      const m = g.world.marker();
-      if (m) this.pointer(ctx, W, H, t, m[0], m[1], m[2]);
+  // What a boss says: after the names and the edge markers, over them; on the screen, and below
+  // its own name at the top, not on it.
+  drawSpeech(ctx, W, H) {
+    const top = this.topLines() + 1;
+    for (const e of this.g.enemies) {
+      if (e.dead || !e.speech || !this.overHead(e, W, H)) continue;
+      e.speech.t -= 1 / 60;
+      if (e.speech.t <= 0) {
+        e.speech = null;
+        continue;
+      }
+      const tw = textWidth(e.speech.text);
+      const x = Math.round(clamp(AT.x, tw / 2 + 5, W - tw / 2 - 5)), y = Math.round(Math.max(AT.y, top + 14));
+      ctx.fillStyle = '#181425';
+      ctx.fillRect(Math.round(x - tw / 2 - 4), y - 14, tw + 8, 13);
+      ctx.fillStyle = '#ead4aa';
+      ctx.fillRect(Math.round(x - tw / 2 - 3), y - 13, tw + 6, 11);
+      ctx.fillRect(Math.round(clamp(AT.x, x - tw / 2, x + tw / 2) - 1), y - 2, 3, 2);
+      drawText(ctx, e.speech.text, x, y - 11, { align: 'center', color: '#3e2731', outline: null });
     }
   }
 
-  // One of those arrows, toward world point (wx, wy), unless that is on screen.
-  pointer(ctx, W, H, t, wx, wy, col) {
+  // Markers at the screen's edge toward what's worth finding off it: the boss, shrines, crypts,
+  // chests, the thief and the world's own marker (the stairs, a sleeping lord), in that order.
+  drawIndicators(ctx, W, H, t) {
+    const g = this.g, m = marks();
+    this.markerBand(W, H);
+    if (g.boss && !g.boss.dead) this.pointer(ctx, W, H, t, g.boss.x, g.boss.y - 10, '#e43b44', m.boss);
+    for (const s of g.shrines) if (!s.used) this.pointer(ctx, W, H, t, s.x, s.y - 10, SHRINE_COLORS[s.type], m.shrine[s.type]);
+    for (const d of g.crypts) if (!d.sealed) this.pointer(ctx, W, H, t, d.x, d.y - 12, '#b55088', m.crypt);
+    for (const pk of g.pickups) if (pk.kind === 'chest') this.pointer(ctx, W, H, t, pk.x, pk.y, '#feae34', m.chest);
+    for (const e of g.enemies) if (e.type === 'thief' && !e.dead) this.pointer(ctx, W, H, t, e.x, e.y, '#fee761', m.coin);
+    if (g.world.marker) {
+      const w = g.world.marker();
+      if (w) this.pointer(ctx, W, H, t, w[0], w[1], w[2], m[w[3] || WORLD_MARKS[w[2]]]);
+    }
+  }
+
+  // This frame's band for the markers, inset from the screen's edge and below the HUD's lines at
+  // the top (a boss's bar and name, a dungeon's floor and seal lines), and what they keep off: the
+  // slots, the orbs in the bottom corners with the phoenix feather and the ultimate's name over
+  // them, a dungeon's minimap (Dungeon.drawMinimap) and the combo at the right edge (drawCombo:
+  // its count, its word under it and its timer over it, from 10 kills on; 69 x 37 at rest, up to
+  // 82 x 46 as a four-digit count swells).
+  markerBand(W, H) {
+    const g = this.g, p = g.player;
+    BAND.top = Math.max(52, this.topLines() + MARK_R);
+    BAND.bottom = H - 30;
+    BAND.left = 14;
+    BAND.right = W - 14;
+    keepN = 0;
+    keep(0, 0, 3 + 18 * Math.max(MAX_WEAPONS, MAX_RELICS), 49);
+    if (p.buffs.size) keep(0, 49, 3 + 28 * p.buffs.size, 12);
+    keep(0, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
+    keep(W - ORB_S - 4, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
+    if (p.revives > 0) keep(ORB_S - 2, H - ORB_S - 12, 12, 12);
+    if (p.ult || p.fury >= 100) {
+      const tw = textWidth(this.ultLabel());
+      keep(W - 5 - tw, H - ORB_S - 16, tw + 2, GLYPH_H + 2);
+    }
+    if (g.world.drawMinimap && !g.showMap) keep(W - g.world.W - 6, 34, g.world.W + 4, g.world.H + 4);
+    if (g.combo >= 10) keep(W - 88, Math.round(H * 0.42) - 20, 88, 48);
+  }
+
+  // One of those markers, toward world point (wx, wy), unless that is on screen: an arrow in its
+  // colour and the icon of what it points at.
+  pointer(ctx, W, H, t, wx, wy, col, icon) {
     const cam = this.g.cam;
     const z = cam.S / view.S;
-    // Markers live on a rectangle inset from the HUD bands.
-    const top = 52, bottom = H - 30, left = 14, right = W - 14;
-    const cx = (left + right) / 2, cy = (top + bottom) / 2;
     const sx = (wx - cam.x) * z, sy = (wy - cam.y) * z;
     if (sx > 8 && sy > 8 && sx < W - 8 && sy < H - 8) return;
-    const a = Math.atan2(sy - cy, sx - cx);
-    const k = Math.min((right - left) / 2 / Math.abs(Math.cos(a) || 1e-6), (bottom - top) / 2 / Math.abs(Math.sin(a) || 1e-6));
-    const x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k;
+    placeMarker(sx, sy);
+    const x = SPOT.x, y = SPOT.y, a = Math.atan2(sy - y, sx - x);
     const bob = Math.sin(t * 6) * 1.5;
     ctx.save();
     ctx.translate(Math.round(x + Math.cos(a) * bob), Math.round(y + Math.sin(a) * bob));
@@ -404,6 +577,7 @@ export class Hud {
     ctx.lineTo(-3, 3);
     ctx.fill();
     ctx.restore();
+    if (icon) ctx.drawImage(icon, Math.round(x + IN_X[SPOT.edge] * MARK_IN - icon.width / 2), Math.round(y + IN_Y[SPOT.edge] * MARK_IN - icon.height / 2));
   }
 
   drawCombo(ctx, W, H, t) {
@@ -440,7 +614,8 @@ export class Hud {
 
   drawBanners(ctx, W, H) {
     const g = this.g;
-    let y = Math.round(H * 0.22);
+    // Below the lines at the top: a boss's own banner came down on its name.
+    let y = Math.max(Math.round(H * 0.22), this.topLines() + 4);
     for (const b of g.banners) {
       const u = b.t / b.dur;
       const a = u < 0.12 ? u / 0.12 : u > 0.8 ? (1 - u) / 0.2 : 1;

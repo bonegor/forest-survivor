@@ -102,16 +102,16 @@ test('a hero who sets off five seconds late still reaches a Gilded Thief; one wh
   assert.ok(never.escaped && never.far > 300, `left alone it gets away: ${JSON.stringify(never)}`);
 });
 
-test('the Bone King rings 11 bones round him (15 when wounded), fans five every 3.75 s, each drawn big', () => gameCase((g) => {
+test('the Bone King rings 11 bones round him (15 when wounded), fans five every 3.75 s', () => gameCase((g) => {
   step(g, 2);
   const p = g.player;
   p.devGod = true;
   for (const w of p.weapons) w.update = () => {};
   const king = g.spawnBoss('boneking', p.x + 100, p.y);
-  let bones = 0, bone = null;
+  let bones = 0;
   const push = g.eshots.push.bind(g.eshots);
   g.eshots.push = (...shots) => {
-    for (const s of shots) if (s.kind === 'bone') { bones++; bone = s; }
+    for (const s of shots) if (s.kind === 'bone') bones++;
     return push(...shots);
   };
   const thrown = (setup, seconds) => { bones = 0; setup(); step(g, seconds * 60); return bones; };
@@ -121,10 +121,7 @@ test('the Bone King rings 11 bones round him (15 when wounded), fans five every 
   king.hp = king.maxHp * 0.4;
   assert.equal(thrown(() => { king.cdT = 0; }, 2.5), 15, 'below half health: a third more than 11');
   assert.equal(thrown(() => { king.cdT = 99; king.cd3 = 0; }, 15), 4 * 5, 'the aimed fan of five: four in 15 s, not five');
-  // Drawn a fifth bigger than the 2.5 times its sprite it was.
-  let k = 0;
-  bone.draw({globalAlpha: 1, drawImage(img, x, y, w) { k = w / (img.width * g.cam.S); }}, g.cam);
-  assert.ok(Math.abs(k - 2.5 * 1.2) < 0.05, `drawn at ${k.toFixed(2)} times its sprite`);
+  // How big a bone is drawn: test/bone-shot.test.js.
 }));
 
 test('a bone that is drawn crossing the hero hurts; one drawn clear of him does not', () => gameCase((g) => {
@@ -140,7 +137,7 @@ test('a bone that is drawn crossing the hero hurts; one drawn clear of him does 
     for (let i = 0; i < 160 && b.update(1/60); i++);
     return p.hp < p.maxHp;
   };
-  // Drawn 8 px up and 33 px long, a bone on a track 14 px behind his feet sweeps his chest;
+  // Drawn 8 px up and 19 px long, a bone on a track 14 px behind his feet sweeps his chest;
   // under the old rule (3 px from the feet) it flew through him.
   assert.ok(pass(-14, 0), 'flat, across the chest');
   assert.ok(pass(-14, Math.PI / 2), 'upright, across the chest');

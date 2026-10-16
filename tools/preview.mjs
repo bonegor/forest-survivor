@@ -1,9 +1,14 @@
 // Renders sprite definitions to a PNG sheet so the pixel art can be reviewed
 // without a browser:  node tools/preview.mjs [filter] [--scale=4] [--out=file]
+// Sprites are drawn as the game builds them (engine/sprites.js spriteBuffers), colour tunes
+// (art/tuned.js) included; --tuned=<file> lays a bake written elsewhere over them instead
+// (tools/bake-tune.mjs --out=<file>), to look before it goes in.
 import { mkdirSync } from 'node:fs';
-import { ART, resolveFrames } from '../public/js/art/defs.js';
-import { packedPalette, OUTLINE } from '../public/js/art/palette.js';
-import { fromRows, outline, makeBuf, blit, scaleN, pack, hexPack } from '../public/js/engine/pixels.js';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { ART, DRAWN, withTunes } from '../public/js/art/defs.js';
+import { spriteBuffers } from '../public/js/engine/sprites.js';
+import { makeBuf, blit, scaleN, pack, hexPack } from '../public/js/engine/pixels.js';
 import { GLYPHS } from '../public/js/engine/fontdata.js';
 import { writePng } from './png.mjs';
 
@@ -14,8 +19,8 @@ const SCALE = Number(opt('scale', 4));
 const out = opt('out', 'tools/out/sheet.png');
 const bgHex = opt('bg', '#2f3d33');
 
-const pal = packedPalette();
-const names = Object.keys(ART).filter((n) => !filters.length || filters.some((f) => n.includes(f)));
+const art = opt('tuned') ? withTunes(DRAWN, (await import(pathToFileURL(resolve(opt('tuned'))).href)).TUNED) : ART;
+const names = Object.keys(art).filter((n) => !filters.length || filters.some((f) => n.includes(f)));
 
 function textBuf(str, color) {
   const glyphs = [...str].map((ch) => (GLYPHS[ch] || GLYPHS['?']).split('/'));
@@ -29,15 +34,7 @@ function textBuf(str, color) {
   return buf;
 }
 
-const items = names.map((name) => {
-  const def = ART[name];
-  const frames = resolveFrames(def).map((rows) => {
-    const b = Array.isArray(rows) ? fromRows(rows, pal) : rows;
-    const thin = def.thin ? new Set([...def.thin].map((ch) => pal[ch])) : null;
-    return def.outline === false ? b : outline(b, def.outlineColor ? hexPack(def.outlineColor) : OUTLINE, false, thin);
-  });
-  return { name, frames };
-});
+const items = names.map((name) => ({ name, frames: spriteBuffers(art[name]).frames }));
 
 // Simple shelf packing.
 const MAXW = Number(opt('width', 900));
