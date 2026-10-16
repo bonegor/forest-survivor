@@ -47,7 +47,7 @@ There's no game server on Pages (its `/api` calls get a 404), so:
 | Pick a level-up card | 1–4, arrows + Enter, click | d-pad + A | tap |
 | Reroll level-up | R | Y | button |
 
-Weapons fire automatically, except in the crypts (below). Collect soul gems to level up; every level offers a choice of new weapons (only the hero's own, below), weapon upgrades or relics. Each level also makes the hero a little stronger, without limit: +0.5% damage a level, health growing 0.5% on itself a level (×1.48 by level 80, ×4.4 by 300), and a point of armor every 20 levels (`levelBonus` in `public/js/game/player.js`). The level-up screen shows what the levels have given so far. When fewer upgrades are left than a level-up offers (none, once the whole build is maxed), a stacking **Blessing of Valor** (+might, +health), a heal and gold fill the rest.
+Weapons fire automatically, except in the crypts (below). Collect soul gems to level up; every level offers a choice of new weapons (the hero's own signature and those shared by all, below), weapon upgrades or relics. Each level also makes the hero a little stronger, without limit: +0.5% damage a level, health growing 0.5% on itself a level (×1.48 by level 80, ×4.4 by 300), and a point of armor every 20 levels (`levelBonus` in `public/js/game/player.js`). The level-up screen shows what the levels have given so far. When fewer upgrades are left than a level-up offers (none, once the whole build is maxed), a stacking **Blessing of Valor** (+might, +health), a heal and gold fill the rest.
 
 **Quit Run** in the pause menu ends the run there and then, and you keep the gold you found. There is no saving a run to come back to: **Continue** on the title screen only appears when the game was closed mid-run, and picks it up from its last autosave.
 
@@ -103,32 +103,36 @@ The hero screen always shows your next goal, stars mark what each hero has conqu
 
 ### Weapons and evolutions
 
-Every weapon belongs to one hero. Each has four: the one he starts with (the Necromancer starts with two) and the rest, which only his own level-ups offer; no hero ever sees another's. Relics are shared by all, and a hero's four weapons each evolve with a different one. An evolution is better than its weapon at level 8 in every way (`test/rosters.test.js` checks every stat). Each hero's `roster` and `start` are in `public/js/data/heroes.js`, the weapons in `public/js/data/weapons.js`.
+Each hero has a **signature weapon** no other hero can find (the Necromancer has two, and starts with both); every other weapon is **shared by all**, offered to any hero on his level-ups. Relics are shared by all too. A weapon at level 8 with its relic evolves when a chest is opened, into something better than it in every way (`test/signature-weapons.test.js` checks every stat). Each hero's `unique` and `start` are in `public/js/data/heroes.js` (with `SHARED_WEAPONS` and `weaponsFor`), the weapons in `public/js/data/weapons.js`. `/debug/weapons/` shows them all, with every level's card and each evolution.
+
+**Signature weapons**
 
 | Hero | Weapon | + Relic | Evolves into |
 | --- | --- | --- | --- |
 | Knight | Longsword *(starts)* | Gauntlets of Might | Excalibur |
-| | Throwing Axe | Giant's Belt | Whirlwind |
-| | Guardian Blades | Plate Armor | Aegis |
-| | Consecration | Troll Blood | Sanctuary |
 | Ranger | Hunting Bow *(starts)*: arrows fly straight the way she faces | Eagle Feather | Stormstring |
-| | Moonglaive | Lodestone | Lodestar |
-| | Bramble | Plate Armor | Briarheart |
-| | Will-o'-Wisps | Lucky Clover | Fae Lanterns |
 | Sorcerer | Fireball *(starts)* | Spellbook | Meteor Storm |
-| | Chain Lightning | Echo Rune | Thunderstorm |
-| | Frost Nova | Vitality Amulet | Frozen Heart |
-| | Arcane Ray: an instant ray through every foe in its line | Giant's Belt | Prismatic Ray: it splits on the first foe it strikes |
 | Shadow | Shadow Blade *(starts)*: spinning blades at the nearest foe, through all in their path | Swift Boots | Shadowstrike |
-| | Firebomb Flask | Hourglass | Hellfire |
-| | Caltrops: spikes thrown behind him, that cut and slow what follows | Lucky Clover | Razor Field |
-| | Shadow Clone: a shade of Kael that hunts for a while | Spellbook | Twin Shadows: two that never fade, throwing blades |
-| Necromancer | Raise Dead *(starts)* | Scholar's Crown | Legion of the Damned |
-| | Miasma *(starts)*: a poison cloud about him, and a trail of it from his steps | Troll Blood | Pestilence: what dies in it bursts into poison |
-| | Bone Spear | Eagle Feather | Spine Lance |
-| | Grasping Dead: bony hands claw up in a line and grip hard | Hourglass | Hands of the Grave |
+| Necromancer | Raise Dead *(starts; his weapon in the crypts)* | Scholar's Crown | Legion of the Damned |
+| Necromancer | Miasma *(starts)*: a poison cloud about him, and a trail of it from his steps | Troll Blood | Pestilence: what dies in it bursts into poison |
 
-A run saved before the rosters keeps the weapons it had, and they still level up. The newer weapons draw borrowed icons and sprites until their own are drawn (`tools/handoff-art.md`).
+**Shared by all**
+
+| Weapon | + Relic | Evolves into |
+| --- | --- | --- |
+| Throwing Axe | Giant's Belt | Whirlwind |
+| Guardian Blades | Plate Armor | Aegis |
+| Consecration | Troll Blood | Sanctuary |
+| Moonglaive | Lodestone | Lodestar |
+| Bramble | Plate Armor | Briarheart |
+| Will-o'-Wisps | Lucky Clover | Fae Lanterns |
+| Chain Lightning | Echo Rune | Thunderstorm |
+| Frost Nova | Vitality Amulet | Frozen Heart |
+| Arcane Ray: an instant ray through every foe in its line | Giant's Belt | Prismatic Ray: it splits on the first foe it strikes |
+| Firebomb Flask | Hourglass | Hellfire |
+| Caltrops: spikes thrown behind the hero, that cut and slow what follows | Lucky Clover | Razor Field |
+
+A run saved holding another class's signature (from before the signatures) comes back with the hero's own signature in its place if he lacks it, else a shared weapon he doesn't hold, at the same level.
 
 ## Saving: everything lives in cookies
 
@@ -278,7 +282,7 @@ autopilot    3     2   15:00  13:55  10:14-15:00  18039   70.0       62     2.0 
 | `random` | takes a new random heading every `every` seconds | `every=1` |
 | `autopilot` | plays like a decent player: circles the horde, dodges missiles and slams, hunts bosses while healthy, loots when calm, finds the dungeon's guardian and stairs | |
 
-All of them press the ultimate when it is ready unless given `ult=0`. When a bot doesn't choose its own level-up cards, `--pick` does: `first`, `random`, `weapons`, `relics`, or `build` (the default: grow weapons, add the rest of the hero's four, the ones that clear the horde round him first, then the relics that evolve them, then useful relics). None of the strategies aims, so a weapon that flies only where the hero faces (the Hunting Bow) fares badly with any of them: they walk away from foes, or stand.
+All of them press the ultimate when it is ready unless given `ult=0`. When a bot doesn't choose its own level-up cards, `--pick` does: `first`, `random`, `weapons`, `relics`, or `build` (the default: grow weapons, add up to four, the shared ones that suit the hero first, then the relics that evolve them, then useful relics). None of the strategies aims, so a weapon that flies only where the hero faces (the Hunting Bow) fares badly with any of them: they walk away from foes, or stand.
 
 ### Writing a strategy
 

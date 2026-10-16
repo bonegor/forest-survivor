@@ -95,8 +95,9 @@ test('a level-up always offers a full choice, filled with the Blessing, a heal a
   const {PASSIVES, PASSIVE_IDS} = await mod('public/js/data/passives.js');
   const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
   const p = g.player;
-  // Every weapon of his roster: there is no other he could be offered.
-  for (const id of p.hero.roster) if (!g.ownsWeapon(id)) g.addWeapon(id, MAX_WEAPON_LEVEL);
+  // All six slots full of his weapons: no new one can be offered.
+  const {weaponsFor} = await mod('public/js/data/heroes.js');
+  for (const id of weaponsFor(p.hero)) if (p.weapons.length < 6 && !g.ownsWeapon(id)) g.addWeapon(id, MAX_WEAPON_LEVEL);
   for (const w of p.weapons) { w.level = MAX_WEAPON_LEVEL; w.recompute(); }
   for (const id of PASSIVE_IDS.slice(0, 6)) g.addPassive(id, PASSIVES[id].max);
   p.weapons[0].level = MAX_WEAPON_LEVEL - 1;

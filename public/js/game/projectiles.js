@@ -17,7 +17,7 @@ export function spawnProjectile(g, o) {
   return p;
 }
 
-// One of the Shadow's spinning blades (Shadow Blade, Shadowstrike, Twin Shadows' clones):
+// One of the Shadow's spinning blades (Shadow Blade, Shadowstrike):
 // through everything in its path, his crits keener with an evolved one's critBonus.
 export function shadowBlade(g, w, x, y, ang, dmg, life) {
   return spawnProjectile(g, {

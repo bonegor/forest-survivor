@@ -4,11 +4,11 @@
 // Effect interface: update(dt) -> keep?; drawGround / draw / drawGlow(ctx, cam).
 
 import { SPR } from '../engine/sprites.js';
-import { tint, hexPack } from '../engine/pixels.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, lerp, clamp, ease, angleDiff, pick } from '../engine/util.js';
 import { ringSprite, discSprite, slashFrame, glow, beamSprite, shadowSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
+import { WEAPON_SPRITES } from '../data/weapons.js';
 
 function blitCentered(ctx, img, sx, sy, scale) {
   const w = img.width * scale, h = img.height * scale;
@@ -164,8 +164,8 @@ const POOL_LOOK = {
   hell: { disc: ['#0099db', '#124e89', '#262b44'], parts: [PC.c, PC.w, PC.U], glow: '#2ce8f5', light: 'cyan', num: 'frost' },
   holy: { disc: ['#feae34', '#be4a2f', '#3e2731'], parts: [PC.Y, PC.w, PC.y], glow: '#feae34', light: 'holy', num: 'holy' },
   poison: { disc: ['#63c74d', '#3e8948', '#193c3e'], parts: [PC.l, PC.L, PC.e], glow: '#63c74d', light: 'green', num: 'poison', dot: 'poison' },
-  // Caltrops: dark ground strewn with steel spikes (marks), no glow, hardly a spark.
-  spikes: { disc: ['#3a4466', '#262b44', '#181425'], parts: [PC.G, PC.g], glow: null, light: null, num: 'normal', emit: 0.15, alpha: 0.35, marks: true },
+  // Caltrops: dark ground strewn with caltrops (marks: the sprite drawn at each), no glow, hardly a spark.
+  spikes: { disc: ['#3a4466', '#262b44', '#181425'], parts: [PC.G, PC.g], glow: null, light: null, num: 'normal', emit: 0.15, alpha: 0.35, marks: WEAPON_SPRITES.caltrop },
 };
 
 // A pool on the ground that hurts what stands in it every `tick`. opts: hostile (hurts the
@@ -265,17 +265,13 @@ export class Pool {
       ctx.globalAlpha = (this.look.alpha ?? 0.75) * this.alpha;
       blitCentered(ctx, discSprite(R, this.look.disc, 0.55), sx, sy, cam.S);
     }
-    // Caltrops: a little steel cross for each spike, catching the light on top.
+    // Caltrops: the look's sprite (its small ground frame) at a dozen marks at most, every other one mirrored.
     if (this.marks) {
-      const S = cam.S, k = R / this.R;
+      const S = cam.S, k = R / this.R, fr = SPR[this.look.marks].frames[1], w = fr.w * S, h = fr.h * S;
       ctx.globalAlpha = this.alpha;
-      for (let i = 0; i < this.marks.length; i += 2) {
-        const mx = Math.round(sx + this.marks[i] * k * S), my = Math.round(sy + this.marks[i + 1] * k * S);
-        ctx.fillStyle = '#8b9bb4';
-        ctx.fillRect(mx - S, my, S * 3, S);
-        ctx.fillRect(mx, my - S, S, S * 3);
-        ctx.fillStyle = '#e8f4ff';
-        ctx.fillRect(mx, my - S, S, S);
+      for (let i = 0; i < Math.min(this.marks.length, 24); i += 2) {
+        const mx = Math.round(sx + this.marks[i] * k * S - w / 2), my = Math.round(sy + this.marks[i + 1] * k * S - h / 2);
+        ctx.drawImage(fr.get(i & 2), mx, my, w, h);
       }
     }
     ctx.globalAlpha = 1;
@@ -624,24 +620,22 @@ export class Meteor {
 
 const THORN_RISE = 0.07, THORN_HOLD = 0.4, THORN_SINK = 0.15;
 const DIRT = ['#3e2731', '#3e2731', '#733e39'];
-// What bursts from the ground: frames of a sprite (alternating along the line), tinted toward
-// tint if given, and the sparks it kicks up. 'bone': Grasping Dead's hands, for now the iron
-// thorns paled to bone with no leaves (tools/handoff-art.md: the art pair draws real hands).
+// What bursts from the ground: frames of a sprite (alternating along the line), and the sparks
+// it kicks up. Bramble's thorns, Briarheart's iron.
 const THORN_LOOK = {
   bramble: { sprite: 'thorn', frames: [0, 1], parts: [PC.m, PC.b, PC.e] },
   iron: { sprite: 'thorn', frames: [2, 3], parts: [PC.m, PC.R, PC.N] },
-  bone: { sprite: 'thorn', frames: [2, 3], tint: '#c0cbdc', parts: [PC.z, PC.Z, PC.g] },
 };
 
 // A line of thorns bursting from the ground one after another, snaring all
-// they pierce. Each line hits a foe once. A weapon with `pin` holds them still a moment.
+// they pierce. Each line hits a foe once.
 export class Thorns {
-  constructor(g, w, x, y, ang, look = null) {
+  constructor(g, w, x, y, ang) {
     this.g = g;
     this.w = w;
     this.t = 0;
     this.iron = !!w.s.ring;
-    this.look = THORN_LOOK[look || (this.iron ? 'iron' : 'bramble')];
+    this.look = THORN_LOOK[this.iron ? 'iron' : 'bramble'];
     this.sc = clamp(w.s.area, 1, 1.6);
     this.kx = Math.cos(ang);
     this.ky = Math.sin(ang);
@@ -669,7 +663,7 @@ export class Thorns {
         if (e.dead || this.hit.has(e.id)) continue;
         if (Math.hypot(e.x - s.x, e.y - s.y) > R + e.r) continue;
         this.hit.add(e.id);
-        g.hitEnemy(e, w.s.dmg, { w, kb: w.s.kb, kx: this.kx, ky: this.ky, slow: w.s.slow, slowT: this.iron ? 2.4 : 1.6, pin: w.s.pin });
+        g.hitEnemy(e, w.s.dmg, { w, kb: w.s.kb, kx: this.kx, ky: this.ky, slow: w.s.slow, slowT: this.iron ? 2.4 : 1.6 });
       }
       g.particles.burst(s.x, s.y, 1, 4, this.look.parts, 45, 0.35, 1, P.FADE, { vz: 50 });
     }
@@ -701,8 +695,7 @@ export class Thorns {
       const u = this.height(s);
       if (u <= 0) continue;
       // Crop from the tip down so the thorn grows out of the ground.
-      const fr = SPR[this.look.sprite].frames[s.f], tc = this.look.tint;
-      const img = tc ? fr.variant('tint' + tc, (b) => tint(b, hexPack(tc), 0.5)) : fr.c;
+      const img = SPR[this.look.sprite].frames[s.f].c;
       const hh = Math.max(1, Math.round(img.height * u));
       const [sx, sy] = toScreen(cam, s.x, s.y);
       ctx.drawImage(img, 0, 0, img.width, hh, Math.round(sx - (img.width * S) / 2), Math.round(sy + S - hh * S), Math.round(img.width * S), Math.round(hh * S));

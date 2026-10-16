@@ -2,23 +2,21 @@
 // Stats: dmg, cd (seconds), amount, area (x), speed (x), dur (s), pierce,
 // kb (knockback), plus a few kind-specific extras.
 //
-// Every weapon belongs to one hero class: each hero's `roster` (data/heroes.js) lists the four
-// he can find, the one (or two) he starts with among them. An evolution is better than its
-// weapon at level 8 on every stat it has (test/rosters.test.js).
+// Each hero class has a signature weapon of its own (the Necromancer two), no other hero's to
+// find; every other weapon is shared by all (`unique`, SHARED_WEAPONS in data/heroes.js). Below,
+// each class's signature comes first in its section, then shared weapons. An evolution is better
+// than its weapon at level 8 on every stat it has (test/signature-weapons.test.js).
 
 export const MAX_WEAPON_LEVEL = 8;
 
-// Placeholder art for the newer weapons, until the art pair delivers sprites of their own
-// (tools/handoff-art.md): each name here is the one place to swap.
+// The sprites the newer weapons throw (art/items.js): each name here is the one place to swap.
 export const WEAPON_SPRITES = {
-  shadowblade: 'dagger', // Shadow Blade and Shadowstrike, spun as they fly
-  bonespear: 'bone', // Bone Spear and Spine Lance, drawn at 1.25x
-  caltrop: 'dagger', // a scatter of Caltrops in the air
-  clone: 'rogue', // Shadow Clone: Kael's own sprite, drawn dark and half-seen
+  shadowblade: 'shadowblade', // Shadow Blade and Shadowstrike, spun as they fly
+  caltrop: 'caltrop', // a scatter of Caltrops in the air, and each one on the ground
 };
 
 export const WEAPONS = {
-  // ------------------------------------------------------------ the Knight
+  // ------------------------------- the Knight's signature, then shared weapons
   sword: {
     name: 'Longsword',
     icon: 'i_sword',
@@ -88,7 +86,7 @@ export const WEAPONS = {
     evo: { into: 'sanctuary', with: 'regen' },
   },
 
-  // ------------------------------------------------------------ the Ranger
+  // ------------------------------- the Ranger's signature, then shared weapons
   bow: {
     name: 'Hunting Bow',
     icon: 'i_bow',
@@ -158,7 +156,7 @@ export const WEAPONS = {
     evo: { into: 'faelights', with: 'luck' },
   },
 
-  // ---------------------------------------------------------- the Sorcerer
+  // ----------------------------- the Sorcerer's signature, then shared weapons
   fireball: {
     name: 'Fireball',
     icon: 'i_fireball',
@@ -212,7 +210,7 @@ export const WEAPONS = {
   },
   arcane: {
     name: 'Arcane Ray',
-    icon: 'i_lightning', // placeholder (tools/handoff-art.md)
+    icon: 'i_arcane',
     kind: 'arcane',
     desc: 'A ray of pure force sears through every foe in its line.',
     base: { dmg: 16, cd: 1.8, amount: 1, area: 1, kb: 0.5 },
@@ -228,10 +226,10 @@ export const WEAPONS = {
     evo: { into: 'prismatic', with: 'area' },
   },
 
-  // ------------------------------------------------------------ the Shadow
+  // ------------------------------- the Shadow's signature, then shared weapons
   daggers: {
     name: 'Shadow Blade',
-    icon: 'i_daggers',
+    icon: 'i_shadowblade',
     kind: 'daggers',
     desc: 'Spinning blades seek the nearest foe and cut through all in their path.',
     base: { dmg: 8, cd: 0.6, amount: 1, speed: 1, pierce: 99, kb: 0.4 },
@@ -265,7 +263,7 @@ export const WEAPONS = {
   },
   caltrops: {
     name: 'Caltrops',
-    icon: 'i_frost', // placeholder (tools/handoff-art.md)
+    icon: 'i_caltrops',
     kind: 'caltrops',
     desc: 'Iron spikes scattered behind you cut and slow whatever follows.',
     base: { dmg: 9, cd: 2.2, amount: 1, area: 1, dur: 4, tick: 0.5, slow: 0.4, kb: 0 },
@@ -280,25 +278,8 @@ export const WEAPONS = {
     ],
     evo: { into: 'razorfield', with: 'luck' },
   },
-  clone: {
-    name: 'Shadow Clone',
-    icon: 'i_daggers', // placeholder (tools/handoff-art.md)
-    kind: 'clone',
-    desc: 'Your shadow steps out to hunt, striking where foes are weakest.',
-    base: { dmg: 12, cd: 8, amount: 1, dur: 6, speed: 1, kb: 0.3 },
-    levels: [
-      { dur: 2, text: 'Clone lingers {+2s}.' },
-      { dmg: 5, text: 'Damage {+5}.' },
-      { cd: -1.5, text: 'Summoned {faster}.' },
-      { amount: 1, text: 'A {second} clone.' },
-      { dmg: 6, speed: 0.2, text: 'Damage {+6}, moves {+20%} faster.' },
-      { dur: 2, cd: -1, text: 'Lingers {+2s}, summoned faster.' },
-      { dmg: 8, text: 'Damage {+8}.' },
-    ],
-    evo: { into: 'twinshadows', with: 'cooldown' },
-  },
 
-  // ------------------------------------------------------- the Necromancer
+  // -------------------------------------------- the Necromancer's two signatures
   raise: {
     name: 'Raise Dead',
     icon: 'i_raise',
@@ -318,7 +299,7 @@ export const WEAPONS = {
   },
   miasma: {
     name: 'Miasma',
-    icon: 'i_aura', // placeholder (tools/handoff-art.md)
+    icon: 'i_miasma',
     kind: 'miasma',
     desc: 'A poison cloud hangs about you, and seeps from your steps.',
     // dmg and tick: the cloud's; the trail's pools do three quarters of it, a little faster.
@@ -334,40 +315,6 @@ export const WEAPONS = {
       { dot: 3, tick: -0.07, text: 'Poison {+3} a second, ticks faster.' },
     ],
     evo: { into: 'pestilence', with: 'regen' },
-  },
-  bonespear: {
-    name: 'Bone Spear',
-    icon: 'i_bow', // placeholder (tools/handoff-art.md)
-    kind: 'bonespear',
-    desc: 'A spear of bone flies at the nearest foe, through all in its way.',
-    base: { dmg: 14, cd: 1.5, amount: 1, speed: 1, pierce: 3, kb: 0.8 },
-    levels: [
-      { dmg: 5, text: 'Damage {+5}.' },
-      { amount: 1, text: '{+1} spear.' },
-      { pierce: 1, text: 'Pierce {+1}.' },
-      { dmg: 6, speed: 0.15, text: 'Damage {+6}, flies {+15%} faster.' },
-      { amount: 1, text: '{+1} spear.' },
-      { pierce: 2, cd: -0.2, text: 'Pierce {+2}, hurled faster.' },
-      { dmg: 8, text: 'Damage {+8}.' },
-    ],
-    evo: { into: 'spinelance', with: 'projspeed' },
-  },
-  grasp: {
-    name: 'Grasping Dead',
-    icon: 'i_thorns', // placeholder (tools/handoff-art.md)
-    kind: 'grasp',
-    desc: 'Skeletal hands claw up from the ground in a line, holding fast all they seize.',
-    base: { dmg: 13, cd: 2.4, amount: 1, area: 1, len: 7, slow: 0.5, kb: 0.2 },
-    levels: [
-      { amount: 1, text: '{+1} line of hands.' },
-      { dmg: 6, text: 'Damage {+6}.' },
-      { len: 3, text: 'Hands reach {farther}.' },
-      { area: 0.2, slow: 0.1, text: 'Area {+20%}, grip harder.' },
-      { amount: 1, dmg: 5, text: '{+1} line, damage {+5}.' },
-      { cd: -0.4, text: 'Erupts {faster}.' },
-      { len: 3, dmg: 8, text: 'Reach {farther}, damage {+8}.' },
-    ],
-    evo: { into: 'gravehands', with: 'duration' },
   },
 
   // ------------------------------------------------------------- evolutions
@@ -461,7 +408,7 @@ export const WEAPONS = {
   },
   prismatic: {
     name: 'Prismatic Ray',
-    icon: 'i_thunderstorm', // placeholder (tools/handoff-art.md)
+    icon: 'i_prismatic',
     kind: 'arcane',
     evolved: true,
     desc: 'Rays split on the first foe they strike and leap to the next.',
@@ -485,21 +432,11 @@ export const WEAPONS = {
   },
   razorfield: {
     name: 'Razor Field',
-    icon: 'i_frozenheart', // placeholder (tools/handoff-art.md)
+    icon: 'i_razorfield',
     kind: 'caltrops',
     evolved: true,
     desc: 'A wide field of razors bleeds the slowed horde; its crits cut deeper.',
     base: { dmg: 24, cd: 1.5, amount: 4, area: 1.5, dur: 6, tick: 0.35, slow: 0.6, kb: 0, critDmg: 0.75 },
-  },
-  // Two shadows that never fade: as many as at level 8, but for good (dur 999), each throwing
-  // Shadowstrike's spinning blades all round.
-  twinshadows: {
-    name: 'Twin Shadows',
-    icon: 'i_shadowstrike', // placeholder (tools/handoff-art.md)
-    kind: 'clone',
-    evolved: true,
-    desc: 'Two shadows fight beside you for good, blades flying from them all round.',
-    base: { dmg: 36, cd: 2, amount: 2, dur: 999, speed: 1.5, kb: 0.5, blades: 1 },
   },
   legion: {
     name: 'Legion of the Damned',
@@ -511,26 +448,10 @@ export const WEAPONS = {
   },
   pestilence: {
     name: 'Pestilence',
-    icon: 'i_sanctuary', // placeholder (tools/handoff-art.md)
+    icon: 'i_pestilence',
     kind: 'miasma',
     evolved: true,
     desc: 'A great plague cloud; foes dying in it burst into poison of their own.',
     base: { dmg: 11, area: 1.6, tick: 0.3, kb: 0, dur: 4, dot: 11, plague: 1 },
-  },
-  spinelance: {
-    name: 'Spine Lance',
-    icon: 'i_stormstring', // placeholder (tools/handoff-art.md)
-    kind: 'bonespear',
-    evolved: true,
-    desc: 'Lances of spine fly faster and run through everything.',
-    base: { dmg: 40, cd: 1.1, amount: 4, speed: 1.45, pierce: 99, kb: 1.1 },
-  },
-  gravehands: {
-    name: 'Hands of the Grave',
-    icon: 'i_briarheart', // placeholder (tools/handoff-art.md)
-    kind: 'grasp',
-    evolved: true,
-    desc: 'The dead reach up in every direction and pin foes where they stand.',
-    base: { dmg: 38, cd: 1.7, amount: 6, area: 1.35, len: 14, slow: 0.8, kb: 0.3, ring: 1, pin: 0.6 },
   },
 };

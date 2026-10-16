@@ -1,13 +1,14 @@
-// Every weapon belongs to one hero class. The owner, 16 October 2026: each class has a roster of
-// four weapons, the Necromancer starting with two of his; relics stay shared; the bow fires
-// straight, the Shadow Blade seeks the nearest foe and cuts through all; an evolution beats its
-// weapon at level 8 on every stat.
+// Each class has a signature weapon of its own, and every other weapon is shared by all. The
+// owner, 16 October 2026: "we can't make a rip-off of another class's weapon available to
+// others". The Necromancer starts with both of his; relics stay shared; the bow fires straight,
+// the Shadow Blade seeks the nearest foe and cuts through all; an evolution beats its weapon at
+// level 8 on every stat.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { Pool, Aura } from '../public/js/game/effects.js';
-import { HEROES, startWeapons } from '../public/js/data/heroes.js';
+import { HEROES, startWeapons, SHARED_WEAPONS, weaponsFor } from '../public/js/data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { input } from '../public/js/engine/input.js';
@@ -33,58 +34,65 @@ function gameCase(hero, fn, o = {}) {
 }
 
 const foe = (g, dx, dy, o = {}) => g.spawnEnemy('zombie', g.player.x + dx, g.player.y + dy, { instant: true, hpMul: 1e5, ...o });
+const saved = (hero, weapons) => sanitizeCheckpoint({ mode: 's15', diff: 'hard', hero, level: 10, hp: 50, weapons });
+const held = (p) => p.weapons.map((w) => [w.id, w.level]);
 
-test('each hero has four weapons of his own, his own weapon and what he starts with among them', () => {
-  const owner = new Map();
-  for (const h of Object.values(HEROES)) {
-    assert.equal(h.roster.length, 4, h.id);
-    assert.ok(h.roster.includes(h.weapon), `${h.id}: his crypt weapon is his`);
-    for (const id of startWeapons(h)) assert.ok(h.roster.includes(id), `${h.id} starts with ${id}, one of his`);
-    const relics = h.roster.map((id) => WEAPONS[id].evo.with);
-    assert.equal(new Set(relics).size, 4, `${h.id}: each weapon evolves with a relic of its own (${relics})`);
-    for (const id of h.roster) {
-      assert.ok(WEAPONS[id] && !WEAPONS[id].evolved, `${h.id}: ${id}`);
-      assert.ok(!owner.has(id), `${id} belongs to ${owner.get(id)} and ${h.id}`);
-      owner.set(id, h.id);
-    }
+const SIGNATURES = { knight: ['sword'], archer: ['bow'], mage: ['fireball'], rogue: ['daggers'], necromancer: ['raise', 'miasma'] };
+
+test('each class has its signature weapon, and every other weapon is shared by all', () => {
+  for (const [id, h] of Object.entries(HEROES)) {
+    assert.deepEqual(h.unique, SIGNATURES[id], id);
+    assert.ok(h.unique.includes(h.weapon), `${id}: the weapon he strikes with in a crypt is his own`);
+    for (const w of startWeapons(h)) assert.ok(h.unique.includes(w), `${id} starts with ${w}, his own`);
+    assert.deepEqual(weaponsFor(h), [...h.unique, ...SHARED_WEAPONS], `${id}: his own and the shared`);
   }
-  for (const [id, d] of Object.entries(WEAPONS)) if (!d.evolved) assert.ok(owner.has(id), `${id} belongs to a hero`);
+  assert.deepEqual([...SHARED_WEAPONS].sort(), ['arcane', 'aura', 'axe', 'blades', 'caltrops', 'flask', 'frost', 'glaive', 'lightning', 'thorns', 'wisps']);
+  for (const gone of ['bonespear', 'clone', 'grasp', 'spinelance', 'twinshadows', 'gravehands']) assert.equal(WEAPONS[gone], undefined, `${gone} is out of the game`);
 });
 
 test('the Necromancer starts with Raise Dead and Miasma, both at level 1; the others with their one weapon', () => {
   for (const id of Object.keys(HEROES)) {
     gameCase(id, (g, p) => {
       const want = id === 'necromancer' ? ['raise', 'miasma'] : [HEROES[id].weapon];
-      assert.deepEqual(p.weapons.map((w) => [w.id, w.level]), want.map((w) => [w, 1]), id);
+      assert.deepEqual(held(p), want.map((w) => [w, 1]), id);
       assert.equal(g.mainWeapon().id, HEROES[id].weapon, `${id}: the weapon he strikes with in a crypt`);
     });
   }
 });
 
-test("a level-up offers new weapons from the hero's own roster alone", () => {
+test("every class's signature is offered to it alone, and the shared weapons reach every class", () => {
   for (const id of Object.keys(HEROES)) {
     gameCase(id, (g, p) => {
+      p.weapons.length = 0; // holding nothing, he may be offered anything that is his to find
       const offered = new Set();
-      for (let i = 0; i < 400; i++) for (const c of g.levelChoices(4)) if (c.type === 'weapon' && c.isNew) offered.add(c.id);
-      const others = p.hero.roster.filter((w) => !startWeapons(p.hero).includes(w));
-      assert.deepEqual([...offered].sort(), others.sort(), id);
+      for (let i = 0; i < 600; i++) for (const c of g.levelChoices(4)) if (c.type === 'weapon' && c.isNew) offered.add(c.id);
+      assert.deepEqual([...offered].sort(), [...weaponsFor(p.hero)].sort(), id);
     });
   }
 });
 
-test('a weapon from outside the roster, from an older save, becomes one of his own at the same level', () => {
-  // A Knight saved with the Ranger's bow at 3 and her Stormstring: the bow becomes his next weapon
-  // at 3, the evolution a weapon at its top level; nothing of another class comes back.
-  const cp = sanitizeCheckpoint({ mode: 's15', diff: 'hard', hero: 'knight', level: 10, hp: 50, weapons: [['sword', 2], ['bow', 3], ['stormstring', 8]] });
+test("a run saved with another class's signature gets his own back, else a shared weapon, at the same level", () => {
+  // A Knight saved with the Ranger's bow at 3 and her Stormstring beside his sword and the shared
+  // Guardian Blades: the blades stay; he holds his sword, so the bow and the Stormstring become
+  // the first shared weapons he doesn't hold, at 3 and at the top level.
   gameCase('knight', (g, p) => {
-    assert.deepEqual(p.weapons.map((w) => [w.id, w.level]), [['sword', 2], ['axe', 3], ['blades', MAX_WEAPON_LEVEL]]);
-    for (let i = 0; i < 300; i++) for (const c of g.levelChoices(4)) if (c.type === 'weapon') assert.ok(p.hero.roster.includes(c.id), c.id);
-  }, { checkpoint: cp });
-  // A Necromancer saved with a bow alone still gets a weapon of his own.
-  const cp2 = sanitizeCheckpoint({ mode: 's15', diff: 'hard', hero: 'necromancer', level: 4, hp: 50, weapons: [['bow', 5]] });
+    const [a, b] = SHARED_WEAPONS.filter((w) => w !== 'blades');
+    assert.deepEqual(held(p), [['sword', 2], ['blades', 4], [a, 3], [b, MAX_WEAPON_LEVEL]]);
+    for (let i = 0; i < 300; i++) for (const c of g.levelChoices(4)) if (c.type === 'weapon') assert.ok(weaponsFor(p.hero).includes(c.id), c.id);
+  }, { checkpoint: saved('knight', [['sword', 2], ['bow', 3], ['stormstring', 8], ['blades', 4]]) });
+  // A Necromancer saved with a bow alone gets Raise Dead at its level.
   gameCase('necromancer', (g, p) => {
-    assert.deepEqual(p.weapons.map((w) => [w.id, w.level]), [['raise', 5]]);
-  }, { checkpoint: cp2 });
+    assert.deepEqual(held(p), [['raise', 5]]);
+  }, { checkpoint: saved('necromancer', [['bow', 5]]) });
+  // With Raise Dead, the bow becomes Miasma, the Shadow Blade a shared weapon.
+  gameCase('necromancer', (g, p) => {
+    assert.deepEqual(held(p), [['raise', 2], ['miasma', 5], [SHARED_WEAPONS[0], 3]]);
+  }, { checkpoint: saved('necromancer', [['raise', 2], ['bow', 5], ['daggers', 3]]) });
+  // A weapon since taken out of the game (Spine Lance, the Bone Spear's evolution) becomes a
+  // shared weapon at its level.
+  gameCase('necromancer', (g, p) => {
+    assert.deepEqual(held(p), [['raise', 3], ['miasma', 2], [SHARED_WEAPONS[0], MAX_WEAPON_LEVEL]]);
+  }, { checkpoint: saved('necromancer', [['raise', 3], ['miasma', 2], ['spinelance', 8]]) });
 });
 
 test('the bow looses its arrows straight the way the hero faces, whatever foes are about', () => {
@@ -171,12 +179,13 @@ test('a second chest rolled before the first is shown never evolves the same wea
   });
 });
 
-// Each newer weapon, and its evolution, at work in a real game: a ring of tough foes about a
+// The newer weapons, and their evolutions, at work in a real game: a ring of tough foes about a
 // hero who walks a small circle (so what is thrown behind him or left in his steps meets them).
+// The shared ones in the hands of a hero whose class has nothing like them.
 const AT_WORK = {
-  necromancer: ['miasma', 'bonespear', 'grasp', 'pestilence', 'spinelance', 'gravehands'],
-  mage: ['arcane', 'prismatic'],
-  rogue: ['daggers', 'caltrops', 'clone', 'shadowstrike', 'razorfield', 'twinshadows'],
+  necromancer: ['miasma', 'pestilence'],
+  knight: ['arcane', 'prismatic', 'caltrops', 'razorfield'],
+  rogue: ['daggers', 'shadowstrike'],
   archer: ['bow', 'stormstring'],
 };
 for (const [hero, ids] of Object.entries(AT_WORK)) {
@@ -202,9 +211,7 @@ for (const [hero, ids] of Object.entries(AT_WORK)) {
 
 // What an evolution has over its weapon at level 8: every stat the weapon has, strictly better
 // (a lower cooldown or tick, else more). Two things count as no better yet no worse: piercing
-// at 99 (through all, which there is no beating), and a stat neither uses (0 at both). And a
-// weapon whose evolution lasts for good (dur 999) may keep as many as it had: Twin Shadows' two
-// shadows never fade, where level 8's two come and go.
+// at 99 (through all, which there is no beating), and a stat neither uses (0 at both).
 const LOWER = new Set(['cd', 'tick']);
 test('every evolution beats its weapon at level 8 on every stat', () => {
   const into = new Set();
@@ -219,13 +226,11 @@ test('every evolution beats its weapon at level 8 on every stat', () => {
     into.add(d.evo.into);
     const l8 = { ...d.base };
     for (const lv of d.levels) for (const [k, v] of Object.entries(lv)) if (k !== 'text') l8[k] = (l8[k] || 0) + v;
-    const forGood = (e.base.dur ?? 0) >= 999 && (l8.dur ?? 0) < 999;
     for (const [k, v] of Object.entries(l8)) {
       const ev = e.base[k] ?? (k === 'cd' ? 1 : undefined);
       assert.notEqual(ev, undefined, `${d.evo.into} has ${k}`);
       if (k === 'pierce' && v >= 99 && ev >= 99) continue;
       if (v === 0 && ev === 0) continue;
-      if (k === 'amount' && forGood && ev >= v) continue;
       const better = LOWER.has(k) ? ev < v - 1e-9 : ev > v + 1e-9;
       assert.ok(better, `${d.evo.into} ${k} ${ev} against ${id} at level 8: ${+v.toFixed(3)}`);
     }

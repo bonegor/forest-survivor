@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Weapons reference: every hero's signature weapons and the weapons shared by all, with each
+       level's card, each evolution and the relic it takes, and every relic. Read-only, built by
+       weapons.js from the game's own data (js/data) and art (js/art, drawn as the game draws it). -->
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weapons</title>
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #0d0b14; --panel: #171424; --panel-2: #1f1b2e; --line: #2d2840; --text: #e8e4d9; --muted: #8b9bb4; --accent: #feae34; --evo: #f77622; --hero: #feae34; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
+    body { font: 15px/1.5 system-ui, "Segoe UI", sans-serif; padding: 24px 16px 80px; }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 26px; margin: 0 0 4px; }
+    .lede { color: var(--muted); margin: 0 0 14px; max-width: 70ch; }
+    a { color: var(--muted); }
+    b { color: var(--accent); font-weight: 600; }
+    canvas { display: block; image-rendering: pixelated; flex: none; }
+    .toc { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px 14px; background: rgba(13, 11, 20, .95); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 18px; font-size: 14px; }
+    .toc a { text-decoration: none; }
+    .toc a:hover { color: var(--text); }
+    section { margin: 0 0 30px; scroll-margin-top: 56px; }
+    .hero { display: flex; gap: 16px; align-items: flex-end; border-bottom: 2px solid var(--hero); padding-bottom: 10px; margin-bottom: 14px; }
+    .hero h2, .sec { font-size: 21px; margin: 0; }
+    .hero .title { color: var(--hero); font-size: 14px; letter-spacing: .06em; text-transform: uppercase; }
+    .hero p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+    .hero p strong { color: var(--text); font-weight: 600; }
+    .sec { border-bottom: 2px solid var(--line); padding-bottom: 8px; margin-bottom: 14px; }
+    .sec + .note { color: var(--muted); margin: -6px 0 14px; font-size: 14px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .card.sig { border-color: var(--hero); }
+    .head { display: flex; gap: 10px; align-items: center; }
+    .head h3 { font-size: 17px; margin: 0; line-height: 1.2; }
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+    .tag { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+    .tag.sig { color: var(--hero); border-color: var(--hero); }
+    .tag.start { color: #9ee562; border-color: #3e8948; }
+    .desc { margin: 0; }
+    .stats { display: flex; flex-wrap: wrap; gap: 4px; }
+    .stat { font: 12px/1.6 ui-monospace, Consolas, monospace; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+    .stat span { color: var(--text); }
+    ol.levels { margin: 0; padding-left: 0; list-style: none; font-size: 14px; }
+    ol.levels li { display: flex; gap: 8px; padding: 1px 0; border-top: 1px solid #221e33; }
+    ol.levels li:first-child { border-top: 0; }
+    ol.levels .lv { color: var(--muted); font: 12px/1.9 ui-monospace, Consolas, monospace; min-width: 2.6em; flex: none; }
+    .evo { margin-top: auto; background: var(--panel-2); border: 1px solid #4b2d1f; border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+    .evo .head h4 { margin: 0; font-size: 15px; color: var(--evo); }
+    .evo .with { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .evo .with span { min-width: 0; }
+    .evo .desc { font-size: 14px; }
+    .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 6px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
+    th { color: var(--muted); font-weight: 600; border-top: 0; background: var(--panel); white-space: nowrap; }
+    td.icon { width: 40px; }
+    td .evolves { color: var(--muted); }
+    .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+    @media (max-width: 520px) { .hero { align-items: center; } h1 { font-size: 22px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Weapons</h1>
+    <p class="lede">Each hero has a <b>signature weapon</b> no other hero can find (the Necromancer has two, and starts with both); every other weapon is <b>shared by all</b>. Every card's text, each evolution and the relic it takes, drawn from the game's own data and art. See also the <a href="../music/">menu music</a>, or play the <a href="../../?debug">debug game</a>.</p>
+    <nav class="toc" id="toc" aria-label="Sections"></nav>
+    <div id="page"><div class="empty">Loading the armoury…</div></div>
+  </div>
+  <script type="module" src="weapons.js"></script>
+</body>
+</html>

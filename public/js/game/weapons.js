@@ -417,25 +417,6 @@ export const KINDS = {
     },
   },
 
-  // Shadow Clone: shadows of Kael that hunt the nearest foes for a while (Twin Shadows: for
-  // good), striking with his own eye for a weak spot. Called again only for those that are gone.
-  clone: {
-    fire(w) {
-      const g = w.g, p = g.player;
-      let mine = 0;
-      for (const m of g.minions) if (m.w === w) mine++;
-      const n = w.s.amount - mine;
-      if (n <= 0) return 0.5;
-      for (let i = 0; i < n; i++) {
-        const spot = g.world.freeSpot(p.x + rand(-16, 16), p.y + rand(-12, 12));
-        if (!spot) continue;
-        g.minions.push(new Minion(g, spot.x, spot.y, { w, look: 'shadow', dmg: w.s.dmg, dur: w.s.dur, speed: w.s.speed, kb: w.s.kb, blades: !!w.s.blades }));
-        g.particles.burst(spot.x, spot.y - 8, 6, 10, [PC.p, PC.q, PC.P], 50, 0.5, 1, P.FADE | P.GLOW, { vz: 30 });
-      }
-      sfx('blade', { pitch: 0.6 });
-    },
-  },
-
   // Caltrops: scatters of spikes thrown behind the hero, so whatever follows him bleeds and
   // slows; the hero's crits count, and Razor Field's cut deeper.
   caltrops: {
@@ -538,27 +519,6 @@ export const KINDS = {
     },
   },
 
-  // Grasping Dead: Bramble's lines (effects.js Thorns) as bony hands that grip harder; Hands
-  // of the Grave reach out all round and pin what they seize.
-  grasp: {
-    fire(w) {
-      const g = w.g, p = g.player;
-      const n = w.s.amount;
-      if (w.s.ring) {
-        const a0 = rand(TAU);
-        for (let i = 0; i < n; i++) g.effects.push(new Thorns(g, w, p.x, p.y, a0 + (i / n) * TAU, 'bone'));
-      } else {
-        const near = g.nearestEnemies(p.x, p.y, n, 160);
-        for (let i = 0; i < n; i++) {
-          const t = near[i];
-          const ang = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim + (i - (n - 1) / 2) * 0.5;
-          g.effects.push(new Thorns(g, w, p.x, p.y, ang, 'bone'));
-        }
-      }
-      sfx('bones', { pitch: 0.55 });
-    },
-  },
-
   // Miasma: a poison cloud that follows the hero (effects.js Aura, its poison look), and a trail
   // of pools seeping from his steps, one every few paces walked, that sink into the ground as
   // they fade. Every pool of one weapon shares its hit channel, so where they overlap a foe is
@@ -589,33 +549,6 @@ export const KINDS = {
       if (!w.s.plague || e.boss) return;
       const g = w.g;
       g.effects.push(new Pool(g, w, e.x, e.y, 14 * w.s.area, 2, w.s.dmg, w.s.tick, 'poison', false, { decay: true, sparse: true, kb: 0, dot: w.s.dot }));
-    },
-  },
-
-  // Bone Spear: spears of bone hurled at the nearest foes (the next spear at the next nearest),
-  // straight on through as many as they pierce.
-  bonespear: {
-    reach: 240,
-    fire(w) {
-      const g = w.g, p = g.player;
-      w.targets = g.nearestEnemies(p.x, p.y, w.s.amount, 240);
-      w.baseAng = p.aim;
-      w.burst(w.s.amount, 0.1);
-    },
-    aim(w, t) {
-      w.targets = t ? [t] : [];
-    },
-    shoot(w, i) {
-      const g = w.g, p = g.player;
-      const t = w.targets.length ? w.targets[i % w.targets.length] : null;
-      const ang = t && !t.dead ? Math.atan2(t.y - p.y + 4, t.x - p.x) : w.baseAng + fan(i, 0.12);
-      const lance = w.evolved;
-      spawnProjectile(g, {
-        kind: 'bonespear', sprite: WEAPON_SPRITES.bonespear, x: p.x, y: p.y - 2, z: 7, ang, speed: 200 * w.s.speed, life: 1.1, r: 4,
-        dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w, scale: 1.25, trail: lance ? PC.l : PC.Z,
-        glow: lance ? ['#9ee562', 18, 'green', 26] : null,
-      });
-      sfx('bones', { pitch: rand(1.2, 1.4), pan: Math.cos(ang) * 0.3 });
     },
   },
 

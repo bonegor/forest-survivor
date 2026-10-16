@@ -1,26 +1,20 @@
-// Allies: undead raised by the Necromancer, and the Shadow's clones. They seek out nearby foes,
-// strike at them, and crumble when their time runs out. Enemies ignore them, and nothing bumps
+// Allies: undead raised by the Necromancer. They seek out nearby foes, strike at them, and
+// crumble when their time runs out. Enemies ignore them, and nothing bumps
 // into them: they never stand in the hero's way or a monster's.
 
-import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
+import { SPR, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, clamp } from '../engine/util.js';
 import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { explode } from './effects.js';
-import { shadowBlade } from './projectiles.js';
 import { faceAlong, faceAttack } from './facing.js';
-import { WEAPON_SPRITES } from '../data/weapons.js';
 
 // How each kind of ally looks and fights: its sprite, pace (px/s), body, time between blows,
-// glow, shadow, the dirt it rises from, the dust it crumbles to. tint and alpha draw it as
-// something else (the clone: Kael's own sprite as a dark, half-seen shade); crit is a bonus to
-// the hero's own crit chance on its blows.
+// glow, shadow, the dirt it rises from, the dust it crumbles to.
 const LOOKS = {
   skeleton: { sprite: 'minion', speed: 64, r: 5, atk: 0.6, glow: '#63c74d', glowSize: 26, shadow: 9, rise: [PC.l, PC.b], dust: [PC.z, PC.Z, PC.l] },
   knight: { sprite: 'legionnaire', speed: 58, r: 6, atk: 0.75, glow: '#63c74d', glowSize: 34, shadow: 12, rise: [PC.l, PC.b], dust: [PC.z, PC.Z, PC.l] },
-  // A backstabber: quick on his feet, a fifth likelier to find the weak spot than the hero.
-  shadow: { sprite: WEAPON_SPRITES.clone, speed: 92, r: 5, atk: 0.45, glow: '#8f5bb0', glowSize: 26, shadow: 9, rise: [PC.p, PC.q], dust: [PC.p, PC.q, PC.P], tint: 'shadow', alpha: 0.6, crit: 0.2 },
 };
 
 // How the minions share out the foes, cheaply. Each goes for the nearest foe, but every
@@ -62,17 +56,15 @@ export class Minion {
     this.y = y;
     this.w = o.w || null;
     this.knight = !!o.knight;
-    this.look = LOOKS[o.look || (this.knight ? 'knight' : 'skeleton')];
+    this.look = LOOKS[this.knight ? 'knight' : 'skeleton'];
     this.spr = SPR[this.look.sprite];
     this.dmg = o.dmg;
-    this.kb = o.kb ?? (this.knight ? 1 : 0.7);
+    this.kb = this.knight ? 1 : 0.7;
     this.life = this.maxLife = o.dur;
     this.speed = this.look.speed * (o.speed || 1);
     this.r = this.look.r;
     this.burst = !!o.burst;
     this.ult = !!o.ult;
-    this.blades = !!o.blades; // Twin Shadows: throws a ring of the Shadow's blades now and then
-    this.bladeT = this.blades ? rand(0.4, 1.1) : 0;
     this.rise = 0.45;
     this.atk = rand(0.1, 0.4);
     this.retarget = 0;
@@ -149,7 +141,6 @@ export class Minion {
     // It faces the way it walks; standing, it keeps facing, but for turning to strike (facing.js).
     if (this.moving) this.face = faceAlong(this.face, dx, dy);
     this.anim += dt * (this.moving ? 6 : 1.5);
-    if (this.blades && (this.bladeT -= dt) <= 0) this.throwBlades();
     // Never lose the master.
     if (Math.hypot(this.x - p.x, this.y - p.y) > 260) {
       const spot = g.world.freeSpot(p.x + rand(-20, 20), p.y + rand(-14, 14));
@@ -224,17 +215,8 @@ export class Minion {
         if (e.dead || Math.hypot(e.x - cx, e.y - cy) > 13 + e.r) continue;
         g.hitEnemy(e, this.dmg, { w: this.w, kb: this.kb, kx: nx, ky: ny, ult: this.ult });
       }
-    } else g.hitEnemy(tgt, this.dmg, { w: this.w, kb: this.kb, kx: nx, ky: ny, ult: this.ult, crit: this.look.crit || 0 });
+    } else g.hitEnemy(tgt, this.dmg, { w: this.w, kb: this.kb, kx: nx, ky: ny, ult: this.ult });
     g.particles.burst(tgt.x, tgt.y - 4, 4, 3, [this.look.dust[2], PC.w], 40, 0.2, 1, P.GLOW | P.FADE, {});
-  }
-
-  // Twin Shadows: six of the Shadow's spinning blades all round, at half the clone's damage.
-  throwBlades() {
-    this.bladeT = 1.1;
-    if (!this.w) return;
-    const a0 = rand(TAU);
-    for (let i = 0; i < 6; i++) shadowBlade(this.g, this.w, this.x, this.y - 6, a0 + (i / 6) * TAU, this.dmg * 0.5, 0.6);
-    sfx('dagger', { pitch: rand(1.1, 1.3) });
   }
 
   crumble() {
@@ -242,7 +224,7 @@ export class Minion {
     g.particles.burst(this.x, this.y - 6, 6, 10, this.look.dust, 60, 0.8, 1, P.GROUND | P.FADE, { vz: 70, grav: 260 });
     if (this.burst) {
       explode(g, this.x, this.y - 4, 26, this.dmg * 1.5, this.w, 'soul');
-    } else if (!this.look.tint) sfx('bones', { pitch: 1.3 });
+    } else sfx('bones', { pitch: 1.3 });
   }
 
   rect(cam) {
@@ -250,7 +232,7 @@ export class Minion {
     const n = Math.floor(this.anim);
     const fr = this.moving ? walkFrame(this.spr, n) : idleFrame(this.spr, n);
     const flip = this.face < 0;
-    const img = this.look.tint ? fr.variant(this.look.tint, TINTS[this.look.tint], flip) : fr.get(flip);
+    const img = fr.get(flip);
     const lunge = this.swing > 0 ? this.face * 2 : 0;
     const w = img.width * S, h = img.height * S;
     const X = Math.round((this.x + lunge - cam.x) * S - w / 2), Y = Math.round((this.y - cam.y - this.spr.anchorY) * S);
@@ -268,7 +250,7 @@ export class Minion {
   draw(ctx, cam) {
     const { img, X, Y, w, h } = this.rect(cam);
     const fade = this.life < 1 ? this.life : 1;
-    ctx.globalAlpha = fade * (this.look.alpha ?? 1);
+    ctx.globalAlpha = fade;
     if (this.rise > 0) {
       const k = 1 - this.rise / 0.45;
       const vis = Math.max(1, Math.round(img.height * k));
@@ -278,7 +260,7 @@ export class Minion {
   }
 
   drawEmissive(ctx, cam) {
-    if (this.rise > 0 || this.look.tint) return;
+    if (this.rise > 0) return;
     const { fr, flip, X, Y, w, h } = this.rect(cam);
     if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, X, Y, w, h);
   }

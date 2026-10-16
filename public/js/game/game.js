@@ -1,8 +1,8 @@
 // A single run: owns every system and runs the update/draw loop.
 
 import { diffFor } from '../data/difficulty.js';
-import { HEROES, startWeapons } from '../data/heroes.js';
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
+import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
@@ -152,7 +152,7 @@ export class Game {
     this.freeSrc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
     this.spawner = new Spawner(this);
     setUltDaggerSpawner((g, x, y, a) =>
-      spawnProjectile(g, { kind: 'dagger', sprite: 'dagger', x, y: y - 1, z: 7, ang: a, speed: 300, life: 0.6, r: 3, dmg: 18, pierce: 2, kb: 0.4, crit: 0.35, trail: PC.P }),
+      spawnProjectile(g, { kind: 'dagger', sprite: WEAPON_SPRITES.shadowblade, x, y: y - 1, z: 7, ang: a, speed: 300, life: 0.6, r: 3, dmg: 18, pierce: 2, kb: 0.4, crit: 0.35, spin: 22, trail: PC.P }),
     );
 
     if (this.mode === 'dungeon') this.enterFloor(this.floor, true);
@@ -251,8 +251,8 @@ export class Game {
     return this.player.weapons.some((w) => w.id === id || (w.def.evolved && WEAPONS[id].evo && WEAPONS[id].evo.into === w.id));
   }
 
-  // A level-up's cards. New weapons come from the hero's own roster alone; any weapon he holds
-  // grows, one from outside it too (a run saved before the rosters).
+  // A level-up's cards. New weapons: the hero's own signature and those shared by all, never
+  // another class's signature (weaponsFor); any weapon he holds grows.
   levelChoices(n) {
     const p = this.player;
     const pool = [];
@@ -260,7 +260,7 @@ export class Game {
       if (!w.maxed) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: 3 });
     }
     if (p.weapons.length < 6) {
-      for (const id of p.hero.roster) if (!this.ownsWeapon(id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
+      for (const id of weaponsFor(p.hero)) if (!this.ownsWeapon(id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
     }
     for (const [id, rank] of p.passives) {
       if (rank < PASSIVES[id].max) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
@@ -455,8 +455,6 @@ export class Game {
       e.freezeT = Math.max(e.freezeT, 1.6);
       e.shatterOnDeath = o.shatter;
     }
-    // Pinned (Hands of the Grave): held where it stands a moment. Bosses aren't.
-    if (o.pin && !e.boss && !e.prop) e.holdT = Math.max(e.holdT, o.pin);
     if (this.numbers.enabled && !o.noNum) this.numbers.add(e.x, e.y - e.h * 0.85, d, crit ? 'crit' : o.type || 'normal', e);
     if (o.w) o.w.dmgDealt += d;
     this.stats.damage += d;
@@ -726,8 +724,7 @@ export class Game {
       this.snapCam();
       this.objective = '';
       this.banner(name, 'Here the night stands still. Slay its lord to leave', '#b55088', 3.2);
-      // The other weapons wait outside: their blades and auras go out until he is back, and
-      // what they called up (the Shadow's clones) stays behind.
+      // The other weapons wait outside: their blades and auras go out until he is back.
       const main = this.mainWeapon();
       for (const w of p.weapons) {
         if (w === main || !w.fx) continue;
@@ -735,7 +732,6 @@ export class Game {
         w.fx = null;
         w.cd = Math.min(w.cd, 0.35);
       }
-      this.minions = this.minions.filter((m) => !m.w || m.w === main);
       const keys = input.device === 'pad' ? 'RB' : input.device === 'touch' ? 'Tap a second finger' : 'X or Shift';
       this.banner(`Your ${main ? main.def.name : 'weapon'} alone`, `${keys} to ${STRIKE_VERB[main?.def.kind] || 'strike'}`, '#feae34', 4);
       playMusic('crypt');
@@ -1225,15 +1221,17 @@ export class Game {
     p.xpNext = xpFor(cp.level);
     p.fury = cp.fury;
     p.rerolls = cp.rerolls;
-    // A weapon from outside his roster (a run saved before the rosters) becomes one of his own at
-    // the same level, the next he doesn't hold: his build stays as strong, and stays his class's.
-    const roster = p.hero.roster;
-    const mine = (id) => roster.includes(id) || roster.some((r) => WEAPONS[r].evo?.into === id);
-    for (const [id, lvl] of cp.weapons) if (WEAPONS[id] && mine(id)) this.addWeapon(id, lvl);
+    // Shared weapons, and his own signature, come back as they were. Another class's signature
+    // (a run saved before the signatures), or a weapon since taken out of the game, becomes his
+    // own signature if he lacks it, else a shared weapon he doesn't hold, at the same level (an
+    // evolved one at the top): his build stays as strong, with nothing of another class's.
+    const allowed = weaponsFor(p.hero);
+    const his = (id) => !!WEAPONS[id] && allowed.some((a) => a === id || WEAPONS[a].evo?.into === id);
+    for (const [id, lvl] of cp.weapons) if (his(id)) this.addWeapon(id, lvl);
     for (const [id, lvl] of cp.weapons) {
-      if (!WEAPONS[id] || mine(id)) continue;
-      const sub = roster.find((r) => !this.ownsWeapon(r) && !this.ownsWeapon(WEAPONS[r].evo?.into));
-      if (sub) this.addWeapon(sub, WEAPONS[id].evolved ? MAX_WEAPON_LEVEL : lvl);
+      if (his(id)) continue;
+      const sub = allowed.find((a) => !this.ownsWeapon(a));
+      if (sub) this.addWeapon(sub, WEAPONS[id]?.evolved ? MAX_WEAPON_LEVEL : lvl);
     }
     if (!p.weapons.length) for (const id of startWeapons(p.hero)) this.addWeapon(id);
     for (const [id, r] of cp.passives) if (PASSIVES[id]) p.passives.set(id, Math.min(r, PASSIVES[id].max));
