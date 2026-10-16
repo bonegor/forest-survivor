@@ -51,7 +51,7 @@ function menuOverride() {
   try {
     if (!new URLSearchParams(location.search).has(DEBUG_FLAG)) return;
     const pick = JSON.parse(localStorage.getItem('fs_menu_music') || 'null');
-    if (!pick || !/^[\w.-]+\.(ogg|mp3|wav)$/.test(pick.file)) return;
+    if (!pick || !/^(found\/)?[\w.-]+\.(ogg|mp3|wav)$/.test(pick.file)) return;
     A.files.title = { file: 'menu/' + pick.file, gain: pick.gain > 0 ? pick.gain : 1 };
   } catch {
     // no localStorage, or a stale value: the listed title piece plays

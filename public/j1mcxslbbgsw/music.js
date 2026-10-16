@@ -63,7 +63,8 @@ function paint() {
   for (const row of guitarsEl.querySelectorAll('.grow')) row.classList.toggle('playing', !!playing && playing.excerpt && playing.guitar === row.dataset.id);
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-const fmt = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '');
+// Rounded to the second first, so 119.6 s is 2:00, not 1:60.
+const fmt = (s) => (s ? `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}` : '');
 
 fetch(DIR + 'candidates.json', { cache: 'no-cache' })
   .then((r) => (r.ok ? r.json() : { candidates: [] }))
@@ -79,7 +80,7 @@ fetch(DIR + 'candidates.json', { cache: 'no-cache' })
       const div = document.createElement('div');
       div.className = 'tune';
       div.innerHTML = `<h2>${esc(c0.title)} <span class="meta">${esc(tune)}</span></h2>
-        <div class="meta">${esc(c0.key || '')} · ${esc(c0.timeSig || '')} · ${c0.bpm || ''} BPM · ${c0.bars || ''} bars · ${fmt(c0.seconds)}</div>
+        <div class="meta">${[c0.key, c0.timeSig, c0.bpm && `${c0.bpm} BPM`, c0.bars && `${c0.bars} bars`, fmt(c0.seconds)].filter(Boolean).map(esc).join(' · ')}</div>
         <p>${esc(c0.description || '')}</p>
         <div class="cands">${cs.map((c) => `<div class="cand" data-i="${c.i}">
           <button class="play" aria-pressed="false">▶ ${esc(c.renderer)}</button>

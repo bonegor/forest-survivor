@@ -42,3 +42,21 @@ CC0 asks for nothing; the credit is given gladly. Full renders of the tunes play
 | dungeon-catacombs.ogg | Dungeon Run, floor 2 | Haunting Chiptune Loop [Void Estate], haunted arcade version | Zane Little Music | https://opengameart.org/content/haunting-chiptune-loop-void-estate |
 
 All CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+
+## Found recordings: menu-music candidates (`menu/found/`)
+
+Recordings by other musicians, listed in `menu/candidates.json` for the audition page. Every file
+here has been changed from the original: converted to Ogg Vorbis (44.1 kHz stereo, quality 4),
+silence trimmed from the ends, and loudness normalised to about -16 LUFS integrated with at most
+3 dB of peak limiting (the three quietest sit lower and carry a playback gain instead). "Loop-ready"
+means the last few seconds of the closing ring-out were faded and moved under the start, so the
+file repeats without a gap. The changes are ours; the musicians do not endorse this game.
+
+- **menu/found/romance-anonimo.ogg**: "Romance Anónimo" (the anonymous 19th-century Spanish Romance), performed by Jim Greeninger. Source: https://commons.wikimedia.org/wiki/File:Romance_An%C3%B3nimo_(Jeux_interdits).ogg (from Musopen, https://musopen.org/music/570/francisco-tarrega/romance-de-juegos-prohibidos/). CC0 1.0, https://creativecommons.org/publicdomain/zero/1.0/; credit given gladly. Changed: cut before the closing applause with a 0.5 s fade, plus the changes above.
+- **menu/found/pachelbel-sarabande.ogg**: "Sarabande" from Johann Pachelbel's Suite in F-sharp minor, P. 439, arranged for guitar and performed by Bert Alink. Source: https://commons.wikimedia.org/wiki/File:Pachelbel_-_Suite_in_F-sharp_minor,_P._439_-_IV._Sarabande_(Guitar).ogg (also IMSLP #463136, https://imslp.org/wiki/Suite_in_F-sharp_minor,_P.439_(Pachelbel,_Johann)). Licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. Changed: resampled from 48 kHz, made loop-ready, plus the changes above.
+- **menu/found/ravel-menuet.ogg**: "Mouvement de menuet" from Maurice Ravel's Sonatine, M. 40, transcribed for two guitars and performed by the Tomasi-Musso Guitar Duo (Davide Giovanni Tomasi and Marco Musso; audio by Drew Henderson). Source: https://commons.wikimedia.org/wiki/File:Ravel%27s_Sonatine,_M._40_-_II._Mouvement_de_menuet_(2_guitars)_-_Tomasi-Musso_Guitar_Duo.ogg, from https://www.youtube.com/watch?v=hgY96JUV4lY. Licensed CC BY 3.0, https://creativecommons.org/licenses/by/3.0/. Changed: resampled from 48 kHz, made loop-ready, plus the changes above.
+- **menu/found/breezy-may.ogg**: "Breezy May (Acoustic)" by Axletree. Source: https://freemusicarchive.org/music/Axletree/Sunset_EP/Breezy_May_Acoustic (the file as mirrored at https://commons.wikimedia.org/wiki/File:02_-_Breezy_May_Acoustic.ogg). Licensed CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. Changed: 5 s of silence cut from the start, made loop-ready, plus the changes above.
+- **menu/found/through-the-leaves.ogg**: “Through the Leaves” by Matthew C. Wright (www.matthewcwright.com). Listen: https://matthewcwright.com/16g0d. License: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. Source: https://freemusicarchive.org/music/matthew-c-wright/dreamy-royalty-free-acoustic-guitar-sweater-weather/pretty-royalty-free-guitar-through-the-leaves/. Changed: room noise cut from both ends, made loop-ready, plus the changes above.
+- **menu/found/the-bard.ogg**: "The Bard" by Pyerye, posted on OpenGameArt by Alundra. Source: https://opengameart.org/content/the-bard. Licensed CC BY 3.0, https://creativecommons.org/licenses/by/3.0/. Changed: made loop-ready, plus the changes above.
+
+The compositions by Pachelbel and Ravel, and the anonymous Romance, are in the public domain. The arrangements and recordings are under the licences above.
