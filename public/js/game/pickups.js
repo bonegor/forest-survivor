@@ -3,7 +3,7 @@
 import { SPR } from '../engine/sprites.js';
 import { RARITIES } from '../shared/items.js';
 import { sfx } from '../engine/audio.js';
-import { rand, TAU } from '../engine/util.js';
+import { rand } from '../engine/util.js';
 import { shadowSprite, glow, glint } from './fxsprites.js';
 import { PC, P } from './particles.js';
 
@@ -35,6 +35,9 @@ const GEAR_LIGHT = [null, null, 'cyan', 'purple', 'gold'];
 // Items that fly to you inside the magnet radius.
 const MAGNETIC = new Set(['gem', 'coin', 'goldpile', 'potion', 'fury']);
 
+// The shadows pickups cast: a chest's, a soul gem's and the rest's, made on first use.
+let shadows = null;
+
 export class Pickup {
   constructor(g, kind, x, y, value = 1, opts = {}) {
     this.g = g;
@@ -51,6 +54,13 @@ export class Pickup {
     this.speed = 0;
     this.dead = false;
     this.opts = opts;
+    // Where it was last drawn, [X, Y, w, h, frame]: one array for its whole life, which _rect
+    // points at while it is on screen (draw).
+    this._r = [0, 0, 0, 0, 0];
+    this._rect = null;
+    // Its glow sprite and the colour it was made for (drawGlow, drawBling).
+    this._glow = null;
+    this._glowFor = null;
     this.setLook();
   }
 
@@ -190,7 +200,8 @@ export class Pickup {
     this._rect = null;
     if (sx < -40 || sy < -40 || sx > cam.pxW + 40 || sy > cam.pxH + 40) return;
     const big = this.kind === 'chest', k = this.kind === 'gem' ? GEM_SIZE : 1;
-    const sh = shadowSprite(big ? 14 : this.kind === 'gem' ? 5 * GEM_SIZE : 6);
+    shadows ||= [shadowSprite(14), shadowSprite(5 * GEM_SIZE), shadowSprite(6)];
+    const sh = shadows[big ? 0 : this.kind === 'gem' ? 1 : 2];
     ctx.globalAlpha = 0.45;
     ctx.drawImage(sh, Math.round(sx - (sh.width * S) / 2), Math.round(sy - (sh.height * S) / 2), sh.width * S, sh.height * S);
     ctx.globalAlpha = 1;
@@ -205,15 +216,22 @@ export class Pickup {
     const w = img.width * S * k, h = img.height * S * k;
     const X = Math.round(sx - w / 2), Y = Math.round(sy - h - (this.z + bob + 1) * S);
     ctx.drawImage(img, X, Y, w, h);
-    this._rect = [X, Y, w, h, fi];
+    const r = this._r;
+    r[0] = X;
+    r[1] = Y;
+    r[2] = w;
+    r[3] = h;
+    r[4] = fi;
+    this._rect = r;
   }
 
   // Unlit, over the night's darkness: what glows in a pickup (a gem's facets, a coin's shine)
   // stays as bright as neon.
   drawEmissive(ctx) {
-    if (!this._rect) return;
-    const [X, Y, w, h, fi] = this._rect;
-    const em = this.sprite.frames[fi].em;
+    const r = this._rect;
+    if (!r) return;
+    const X = r[0], Y = r[1], w = r[2], h = r[3];
+    const em = this.sprite.frames[r[4]].em;
     if (em) ctx.drawImage(em, X, Y, w, h);
   }
 
@@ -225,7 +243,7 @@ export class Pickup {
     const big = this.kind === 'chest' || this.kind === 'relic' || this.kind === 'elixir' || this.kind === 'item';
     const s = (big ? 40 : this.kind === 'gem' ? 12 : 14) * S;
     ctx.globalAlpha = big ? 0.55 + 0.15 * Math.sin(this.t * 5) : 0.45;
-    ctx.drawImage(glow(this.glowColor), sx - s / 2, sy - s / 2, s, s);
+    ctx.drawImage(this.glowSprite(), sx - s / 2, sy - s / 2, s, s);
     ctx.globalAlpha = 1;
     if (this.lightKey) this.g.light(this.x, this.y, big ? 70 : 26, this.lightKey, 0.8);
   }
@@ -233,16 +251,16 @@ export class Pickup {
   // Soul gems, casino style: a glow that beats like marquee lights, a glint that twinkles across
   // the facets (the richer the gem, the more often), and twinkles circling the two richest.
   drawBling(ctx, S, sx, sy) {
-    const r = this.rank, t = this.t, G = S * GEM_SIZE;
+    const r = this.rank, t = this.t, G = S * GEM_SIZE, rect = this._rect;
     // Around the gem as drawn, bob and all.
-    if (this._rect) sy = this._rect[1] + this._rect[3] / 2;
+    if (rect) sy = rect[1] + rect[3] / 2;
     const beat = Math.sin(t * 7);
     const s = (12 + r * 3) * G * (1 + 0.12 * beat);
     ctx.globalAlpha = 0.42 + 0.2 * beat;
-    ctx.drawImage(glow(this.glowColor), sx - s / 2, sy - s / 2, s, s);
+    ctx.drawImage(this.glowSprite(), sx - s / 2, sy - s / 2, s, s);
     const k = Math.max(1, Math.round(S));
-    if (this._rect) {
-      const [X, Y, w, h] = this._rect;
+    if (rect) {
+      const X = rect[0], Y = rect[1], w = rect[2], h = rect[3];
       const ph = (t % (1.8 - r * 0.3)) / 0.32;
       if (ph < 1) {
         const a = Math.sin(ph * Math.PI);
@@ -258,8 +276,13 @@ export class Pickup {
     ctx.globalAlpha = 1;
     if (this.value >= 5) this.g.light(this.x, this.y, 26, this.lightKey, 0.8);
   }
-}
 
-export function gemTierValue(v) {
-  return GEM_TIERS.find((t) => v >= t[0])[0];
+  // Its glow (fxsprites.js glow), looked up again only when its colour changes (setLook).
+  glowSprite() {
+    if (!this._glow || this._glowFor !== this.glowColor) {
+      this._glowFor = this.glowColor;
+      this._glow = glow(this.glowColor);
+    }
+    return this._glow;
+  }
 }

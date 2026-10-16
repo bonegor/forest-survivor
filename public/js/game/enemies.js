@@ -13,7 +13,7 @@ import { EnemyShot } from './projectiles.js';
 import { BOSS_AI } from './bosses.js';
 import { faceAlong, faceAttack } from './facing.js';
 
-export const SRC = { BURN: 16, ULT: 17, SHATTER: 18, RELIC: 19, MISC: 20, POOL: 15 };
+// Hit cooldown channels a foe keeps (hitT): one for each weapon the hero holds (Game.freeSrc).
 const N_SRC = 24;
 // How much of its speed a monster that hasn't seen the hero strolls at (Dungeon.wander).
 export const STROLL = 0.5;
@@ -28,11 +28,38 @@ export const THIEF_NEAR = 100, THIEF_FAR = 180, THIEF_JOG = 0.3;
 export const thiefPace = (d) => clamp((THIEF_FAR - d) / (THIEF_FAR - THIEF_NEAR), THIEF_JOG, 1);
 // The sparks a foe gives off while it burns or sickens (Enemy.addDot).
 const DOT_SPARKS = { fire: [PC.o, PC.y], poison: [PC.l, PC.L] };
+// What charger() and caster() return: a heading and a share of the monster's own speed. The one
+// triple is reused by the next call, so it is read at once (Enemy.update), never kept.
+const AIM = [0, 0, 0];
+function aim(x, y, k) {
+  AIM[0] = x;
+  AIM[1] = y;
+  AIM[2] = k;
+  return AIM;
+}
+// The spot a fleeing thief makes for this frame (Enemy.update), reused likewise.
+const AWAY = { x: 0, y: 0 };
 let nextId = 1;
 
 export class Enemy {
   constructor() {
     this.hitT = new Float32Array(N_SRC);
+    // Where it was last drawn, [X, Y, w, h, flip (1 or 0)]: one array for its whole life, which
+    // _rect points at once it has been drawn (draw, drawEmissive).
+    this._r = [0, 0, 0, 0, 0];
+    // Its shadow and the width it was made for (drawShadow).
+    this._sh = null;
+    this._shW = 0;
+    // What other code stores on a foe, there from the start so that every foe has one shape
+    // (hidden class) and the hot code reading them stays fast. Unset, as they would be absent.
+    this._rect = undefined; // draw
+    this._bob = undefined; // draw
+    this._cell = undefined; // grid.js
+    this._shown = undefined; // hud.js, a boss's health shown
+    this._mTick = undefined; // minions.js
+    this._mOn = undefined;
+    this.shatterOnDeath = undefined; // Game.hitEnemy
+    this.sealed = undefined; // dungeon.js, a guardian
   }
 
   init(g, type, x, y, o = {}) {
@@ -92,7 +119,6 @@ export class Enemy {
     this.wob = rand(TAU);
     this.life = 0;
     this._num = null;
-    this.untargetable = false;
     this.alpha = def.alpha || 1;
     this.squash = 0;
     this.sleeping = !!o.sleeping; // dungeon guardians wait for you
@@ -106,7 +132,6 @@ export class Enemy {
     this.lookT = 0;
     this.pack = o.pack || 0;
     this.phase = 0;
-    this.drops = o.drops || null;
     this.speech = null;
     this.shake = 0;
     this.ai = this.boss ? BOSS_AI[type] : null;
@@ -114,10 +139,6 @@ export class Enemy {
     if (this.mod && this.mod.id === 'swift') this.spd *= 1.45;
     if (this.mod && this.mod.id === 'brutal') this.dmg *= 1.5;
     return this;
-  }
-
-  get hostile() {
-    return !this.prop && !this.dead;
   }
 
   update(dt) {
@@ -159,7 +180,7 @@ export class Enemy {
       this.dotTick -= dt;
       if (this.dotTick <= 0) {
         this.dotTick = 0.5;
-        g.hitEnemy(this, this.dotDps * 0.5, { type: this.dotType, kb: 0, src: SRC.BURN, w: this.dotW });
+        g.hitEnemy(this, this.dotDps * 0.5, { type: this.dotType, kb: 0, noCrit: true, w: this.dotW });
         if (this.dead) return;
       }
       if (Math.random() < 0.3) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick(DOT_SPARKS[this.dotType]), P.GLOW | P.FADE, 0);
@@ -264,7 +285,9 @@ export class Enemy {
         }
         case 'flee': {
           const l = Math.hypot(this.x - p.x, this.y - p.y) || 1;
-          const d = g.world.steer(this, { x: this.x + ((this.x - p.x) / l) * 60, y: this.y + ((this.y - p.y) / l) * 60 });
+          AWAY.x = this.x + ((this.x - p.x) / l) * 60;
+          AWAY.y = this.y + ((this.y - p.y) / l) * 60;
+          const d = g.world.steer(this, AWAY);
           dx = d[0];
           dy = d[1];
           sp *= thiefPace(l);
@@ -336,7 +359,7 @@ export class Enemy {
           this.stateT = c.dur;
           sfx('charge', { pan: clamp((this.x - p.x) / 200, -1, 1) });
         }
-        return [this.lockX, this.lockY, 0];
+        return aim(this.lockX, this.lockY, 0);
       case 'dash':
         this.stateT -= dt;
         this.shake = 0;
@@ -345,7 +368,7 @@ export class Enemy {
           this.state = 'move';
           this.cdT = c.cd * rand(0.8, 1.2);
         }
-        return [this.lockX, this.lockY, c.spd / Math.max(1, this.spd)];
+        return aim(this.lockX, this.lockY, c.spd / Math.max(1, this.spd));
       default: {
         const d = g.world.steer(this, p);
         if (this.cdT <= 0 && dist < c.range && dist > 20 && this.freezeT <= 0) {
@@ -356,7 +379,7 @@ export class Enemy {
           this.lockY = (p.y - this.y) / l;
           this.face = faceAttack(this.face, false, this.lockX, this.lockY);
         }
-        return [d[0], d[1], 1];
+        return aim(d[0], d[1], 1);
       }
     }
   }
@@ -375,18 +398,18 @@ export class Enemy {
         g.eshots.push(new EnemyShot(g, this.x, this.y - 2, ang, s.spd, s.dmg * g.dmgScale, s.kind));
         sfx('enemyshot', { pan: clamp((this.x - p.x) / 200, -1, 1) });
       }
-      return [0, 0, 0];
+      return aim(0, 0, 0);
     }
     if (this.cdT <= 0 && dist < s.range && g.world.lineOfSight(this.x, this.y, p.x, p.y)) {
       this.state = 'wind';
       this.stateT = s.wind;
       // A shot wound up standing still: it turns toward the hero first (facing.js).
       this.face = faceAttack(this.face, false, dx, dy);
-      return [0, 0, 0];
+      return aim(0, 0, 0);
     }
-    if (dist < s.range * 0.6) return [-dx / dist, -dy / dist, 0.8];
+    if (dist < s.range * 0.6) return aim(-dx / dist, -dy / dist, 0.8);
     const d = g.world.steer(this, p);
-    return [d[0], d[1], 1];
+    return aim(d[0], d[1], 1);
   }
 
   // ------------------------------------------------------------- drawing --
@@ -401,7 +424,12 @@ export class Enemy {
 
   drawShadow(ctx, cam) {
     const S = cam.S;
-    const sh = shadowSprite(Math.max(6, this.spr.w * 0.7 * this.scale));
+    const sw = Math.max(6, this.spr.w * 0.7 * this.scale);
+    if (sw !== this._shW) {
+      this._shW = sw;
+      this._sh = shadowSprite(sw);
+    }
+    const sh = this._sh;
     const sx = (this.x - cam.x) * S, sy = (this.y - cam.y) * S;
     let a = 0.55;
     if (this.def.fly) a = 0.35;
@@ -447,7 +475,13 @@ export class Enemy {
       this._bob = bob;
     } else this._bob = 0;
     const by = Y - this._bob - (this.def.fly ? 6 * S : 0);
-    this._rect = [X, by, w, h, flip];
+    const r = this._r;
+    r[0] = X;
+    r[1] = by;
+    r[2] = w;
+    r[3] = h;
+    r[4] = flip ? 1 : 0;
+    this._rect = r;
     let alpha = this.alpha;
     if (this.spawnT > 0 && this.def.rise) {
       const k = 1 - this.spawnT / this.spawnMax;
@@ -466,7 +500,7 @@ export class Enemy {
   drawEmissive(ctx, cam) {
     if (!this._rect || this.spawnT > 0) return;
     const fr = this.spr.frames[this.frameIndex()];
-    const [X, Y, w, h, flip] = this._rect;
+    const r = this._rect, X = r[0], Y = r[1], w = r[2], h = r[3], flip = r[4];
     if (fr.em && this.flash <= 0) {
       ctx.globalAlpha = this.alpha;
       ctx.drawImage(flip ? fr.emf : fr.em, Math.round(X), Math.round(Y), Math.round(w), Math.round(h));

@@ -1,7 +1,7 @@
-// The guitars the menu-music renderer can play a song on: node tools/music/render.mjs --guitar=<id>.
-// Each guitar says what plays the song's lead guitar and what plays the rest of its guitars
-// (role "rhythm", or any role but "lead"); channels whose program is not a guitar (GM 24-31) keep
-// their own voice on MuseScore General. A part is one of
+// tools/music/render/guitars.mjs — the guitars the menu-music renderer can play a song on:
+// node tools/music/render.mjs --guitar=<id>. Each guitar says what plays the song's lead guitar and
+// what plays the rest of its guitars (role "rhythm", or any role but "lead"); channels whose program
+// is not a guitar (GM 24-31) keep their own voice on MuseScore General. A part is one of
 //   { engine: 'sf', font, bank, program, gainDb }  a SoundFont preset through FluidSynth (no
 //                                                  program: the song's own, from bank 0)
 //   { engine: 'ks', preset, gainDb }               the plucked-string synth of render/pluck.mjs

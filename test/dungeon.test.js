@@ -124,9 +124,11 @@ test('a crypt lord felled against a wall drops nothing into it', () => gameCase(
   p.x = w.exit.x; p.y = w.exit.y - 20;
   const spots = byTheWall(w, room);
   assert.ok(spots.length > 8, 'a room has walls');
-  // Its own lords first: each one set by the wall then falls as the last, and drops gear.
+  // Its own lords first: each one set by the wall then falls as the last, and drops gear, a
+  // chest or both (side by side).
   for (const e of g.enemies.filter(e => e.lord)) g.hitEnemy(e, 1e9, {});
   step(g, 2);
+  const kinds = new Set();
   for (const s of spots.filter((_, i) => i % 3 === 0)) {
     for (const pk of g.pickups) pk.dead = true;
     const [dx, dy] = s.dirs[0];
@@ -134,9 +136,12 @@ test('a crypt lord felled against a wall drops nothing into it', () => gameCase(
     const lord = g.spawner.spawnLord(s.x * T + T / 2 + dx * 6, s.y * T + T / 2 + dy * 6);
     g.hitEnemy(lord, 1e9, {});
     step(g, 150);
-    assert.ok(g.pickups.some(pk => !pk.dead && pk.kind === 'item'), 'gear dropped');
+    const drops = g.pickups.filter(pk => !pk.dead && (pk.kind === 'item' || pk.kind === 'chest'));
+    assert.ok(drops.length, 'gear or a chest dropped');
+    for (const pk of drops) kinds.add(pk.kind);
     allReachable(g);
   }
+  assert.deepEqual([...kinds].sort(), ['chest', 'item'], 'gear and chests alike');
 }));
 
 test('a Dungeon guardian felled against a wall drops nothing into it', () => gameCase((g) => {

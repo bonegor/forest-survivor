@@ -185,8 +185,9 @@ test('a forged run report is held to what its mode allows', () => {
   const forged = { mode: 's15', diff: 'hard', hero: 'knight', victory: true, time: 900, kills: 1e6, level: 999, floor: 1, gold: 1e9, realTime: 14400, found: 721 };
   const r = P.applyRun(p, forged);
   assert.ok(r.ok);
-  // Two hours at most for the night with its crypts, and a find every 45 seconds at most.
-  const cap = Math.round((100 + 7200 * 12 + (7200 / 45 + 1) * 750) * 1.5) + 500;
+  // Two hours at most for the night with its crypts, and a crypt every 45 seconds at most, each
+  // with four lords at most, each of them dropping one find at most.
+  const cap = Math.round((100 + 7200 * 12 + 4 * (7200 / 45 + 1) * 750) * 1.5) + 500;
   assert.ok(r.reward.total <= cap, `paid ${r.reward.total}, at most ${cap}`);
   assert.equal(P.sanitizeRun({ ...forged, mode: 'dungeon' }).found, 0, 'the Dungeon has no crypts, so nothing is found in it');
 });

@@ -1,6 +1,5 @@
-#!/usr/bin/env node
-// Menu-music renderer: turns the composer's MIDI (tools/music/out/<id>.mid, written by
-// build-midi.mjs from tools/music/songs/<id>.mjs) into seamless guitar loops for the audition
+// tools/music/render.mjs — the menu-music renderer: turns the composer's MIDI (tools/music/out/<id>.mid,
+// written by build-midi.mjs from tools/music/songs/<id>.mjs) into seamless guitar loops for the audition
 // page (unlisted), as public/audio/music/menu/<id>-<renderer>.ogg plus candidates.json.
 //
 //   node tools/music/render.mjs [id...] [--only=sf,sf-steel,ks] [--guitar=<id>,...] [--keep-wav] [--q=5] [--max-kb=2560]
@@ -14,9 +13,9 @@
 // set, "all" every one) into <id>-<guitar>.ogg. Every renderer gives one dry stem per guitar,
 // exactly one loop long with its own ring-out wrapped onto its start; render/mix.mjs balances them
 // (the song's render.leadOverRhythmDb) and adds a hall (its render.reverb, e.g. "small hall, ~20%
-// wet, 1.6 s"). The loop is then brought to -16 LUFS (static gain and a loop-aware limiter, true
-// peak under -1.5 dBTP) and encoded as Ogg Vorbis. --test renders a built-in test tune to
-// tools/music/out/test/.
+// wet, 1.6 s" or { wetPct: 20, t60: 1.6 }). The loop is then brought to -16 LUFS (static gain and a
+// loop-aware limiter, true peak under -1.5 dBTP) and encoded as Ogg Vorbis, in the work folder, then
+// moved into place. --test renders the test tune of render/test-song.mjs to tools/music/out/test/.
 // --excerpt=<s> renders instead the first whole bars nearest <s> seconds of each song, let ring
 // and faded, into public/audio/music/menu/guitars/<id>-<guitar>.ogg (q4 unless --q) and lists them
 // in guitars.json there, for the audition page's "Guitar sounds" (default guitars: listen).
@@ -31,7 +30,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseMidi, writeMidi, tempoMap, readNotes, setPrograms, cutMidi, mapVelocities } from './render/smf.mjs';
+import { encodeMidi, writeMidi } from './midi.mjs';
+import { validate, durationSeconds, noteName, GM_GUITARS, OPEN_STRINGS, isGuitar, topNote } from './song.mjs';
+import { parseMidi, tempoMap, readNotes, setPrograms, cutMidi, mapVelocities } from './render/smf.mjs';
 import { readWav, wavF32 } from './render/wav.mjs';
 import { renderPluck, KS_PRESETS } from './render/pluck.mjs';
 import { mixStems } from './render/mix.mjs';
@@ -39,6 +40,7 @@ import { limitLoop, peakDb, seamCheck, levelCheck, onsets, octaveBands } from '.
 import { GUITARS, FONTS, guitarIds, fontsOf } from './render/guitars.mjs';
 import { timbre, attackTimes } from './render/timbre.mjs';
 import { trimSf2 } from './render/sf2trim.mjs';
+import { updateJson } from './render/manifest.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -61,11 +63,10 @@ const SF_OPTS = ['synth.chorus.active=0', 'synth.reverb.active=0', 'synth.dynami
 // Without a hint in the song: a small hall.
 const DEFAULT_REVERB = { pct: 18, t60: 1.4 };
 const RENDERERS = ['sf', 'sf-steel', 'ks'];
-const GM = { 24: 'nylon', 25: 'steel', 26: 'jazz', 27: 'clean', 28: 'muted', 29: 'overdrive', 30: 'distortion', 31: 'harmonics' };
 // An excerpt rings this long after its last bar, the last EX_FADE seconds faded out.
 const EX_RING = 3, EX_FADE = 2.5;
 
-// ------------------------------------------------------------------ arguments --
+// ── arguments ──────────────────────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
 const flag = (name) => args.find((a) => a === `--${name}` || a.startsWith(`--${name}=`));
@@ -95,10 +96,17 @@ function die(msg) { console.error('render: ' + msg); process.exit(1); }
 const rel = (p) => path.relative(ROOT, p).replace(/\\/g, '/');
 const fmt = (x, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : String(x));
 
-// -------------------------------------------------------------------- tools --
+// ── tools ──────────────────────────────────────────────────────────────────────────────────────
+
+// What each tool is, for the message when it cannot be found.
+const TOOLS = new Map([[FFMPEG, { name: 'ffmpeg', env: 'FFMPEG' }], [FLUIDSYNTH, { name: 'FluidSynth', env: 'FLUIDSYNTH' }]]);
 
 function run(cmd, argv, opts = {}) {
   const r = spawnSync(cmd, argv, { maxBuffer: 1 << 30, ...opts });
+  if (r.error?.code === 'ENOENT') {
+    const t = TOOLS.get(cmd) || { name: path.basename(cmd), env: null };
+    die(`${t.name} not found (${cmd}). Install it as tools/music/README.md says ("Toolchain")${t.env ? `, or point ${t.env} at it` : ''}.`);
+  }
   if (r.error) die(`${path.basename(cmd)} failed to start: ${r.error.message}`);
   if (r.status !== 0) die(`${path.basename(cmd)} exited ${r.status}: ${String(r.stderr).slice(-800)}`);
   return r;
@@ -108,7 +116,8 @@ function run(cmd, argv, opts = {}) {
 function ebur(file) {
   const r = run(FFMPEG, ['-hide_banner', '-nostats', '-i', file, '-af', 'ebur128=peak=true', '-f', 'null', '-']);
   const s = String(r.stderr), sum = s.slice(s.lastIndexOf('Summary:'));
-  const num = (re) => { const m = sum.match(re); return m ? Number(m[1]) : NaN; };
+  // "-inf" (silence) is -Infinity, not NaN; a value missing from the summary is NaN
+  const num = (re) => { const m = sum.match(re); return !m ? NaN : m[1] === '-inf' ? -Infinity : Number(m[1]); };
   return { I: num(/I:\s+(-?[\d.]+|-inf) LUFS/), LRA: num(/LRA:\s+([\d.]+) LU/), TP: num(/Peak:\s+(-?[\d.]+|-inf) dBFS/) };
 }
 
@@ -126,15 +135,18 @@ function decode(file) {
   return [L, R];
 }
 
-// ------------------------------------------------------------------- songs --
+// ── songs ──────────────────────────────────────────────────────────────────────────────────────
 
 let SONG_ORDER = []; // every song id, in songs.json's order: the order of candidates.json
 
 async function loadSongs() {
-  if (TEST) {
-    const { song, songToMidi } = await import('./render/test-song.mjs');
+  if (TEST) { // built and checked like a real song
+    const { song } = await import('./render/test-song.mjs');
+    const rep = validate(song);
+    for (const w of rep.warnings) console.warn(`render: ${song.id}: ${w}`);
+    if (!rep.ok) die(`${song.id} (render/test-song.mjs) does not validate:\n  ${rep.errors.join('\n  ')}`);
     const mid = path.join(OUT, 'test', `${song.id}.mid`);
-    fs.writeFileSync(mid, songToMidi(song));
+    writeMidi(song, mid);
     return [{ meta: song, mid }];
   }
   let list = [];
@@ -164,32 +176,40 @@ async function loadSongs() {
   return songs;
 }
 
-// The song's render hints: lead over rhythm in dB, and the hall ("~20% wet, 1.6 s"). "x% wet" is
-// read as a mix knob: wet against dry is x : (100 - x) in level.
+// The song's render hints: lead over rhythm in dB, and the hall, as { wetPct: 20, t60: 1.6 } or as
+// text ("small hall, ~20% wet, 1.6 s"). "x% wet" is read as a mix knob: wet against dry is
+// x : (100 - x) in level.
 function hintsOf(meta) {
-  const r = meta.render || {}, text = String(r.reverb || '');
-  const pct = Number((text.match(/(\d+(?:\.\d+)?)\s*%/) || [])[1] || DEFAULT_REVERB.pct);
-  const t60 = Number((text.match(/(\d+(?:\.\d+)?)\s*s\b/) || [])[1] || DEFAULT_REVERB.t60);
+  const r = meta.render || {};
+  let pct, t60;
+  if (r.reverb && typeof r.reverb === 'object') {
+    ({ wetPct: pct = DEFAULT_REVERB.pct, t60 = DEFAULT_REVERB.t60 } = r.reverb);
+    if (!(pct > 0 && pct < 100 && t60 > 0)) die(`${meta.id}: render.reverb wants { wetPct: 0 < x < 100, t60: seconds > 0 }`);
+  } else {
+    const text = String(r.reverb || '');
+    pct = Number((text.match(/(\d+(?:\.\d+)?)\s*%/) || [])[1] || DEFAULT_REVERB.pct);
+    t60 = Number((text.match(/(\d+(?:\.\d+)?)\s*s\b/) || [])[1] || DEFAULT_REVERB.t60);
+  }
   const roles = new Map((meta.tracks || []).filter((t) => Number.isInteger(t.channel)).map((t) => [t.channel, t.role]));
   return { leadOverRhythmDb: Number.isFinite(r.leadOverRhythmDb) ? r.leadOverRhythmDb : null, t60, pct, wetDb: 20 * Math.log10(pct / (100 - pct)), roles };
 }
 
 const sigOf = (ts) => (Array.isArray(ts) ? ts : String(ts || '4/4').split('/').map(Number));
 
-// ------------------------------------------------------------ MIDI checks --
+// ── MIDI checks ────────────────────────────────────────────────────────────────────────────────
 
 // What a guitarist (or the renderer) would trip over. Places are 0-based bar and beat, as in the songs.
 function midiChecks(midi, notes, problems, loopSec, programs, sig) {
   const [num, den] = sig, unit = (midi.division * 4) / den, bar = num * unit;
   const at = (tick) => `bar ${Math.floor(tick / bar)} beat ${+((tick % bar) / unit).toFixed(2)}`;
-  const out = [], chName = (ch) => `ch${ch + 1} (${GM[programs.get(ch)] || 'program ' + programs.get(ch)})`;
+  const out = [], chName = (ch) => `ch${ch + 1} (${GM_GUITARS[programs.get(ch)]?.short || 'program ' + programs.get(ch)})`;
   const chans = [...new Set(notes.map((n) => n.ch))];
   for (const ch of chans) {
     const cn = notes.filter((n) => n.ch === ch), prog = programs.get(ch);
-    const top = prog === 24 ? 83 : 86;
-    const low = cn.filter((n) => n.pitch < 40), high = cn.filter((n) => n.pitch > top);
-    if (low.length) out.push(`${chName(ch)}: ${low.length} note(s) below E2 (40), e.g. pitch ${low[0].pitch} at ${at(low[0].startTick)}`);
-    if (high.length) out.push(`${chName(ch)}: ${high.length} note(s) above ${top === 83 ? 'B5 (83, 19th fret)' : 'D6 (86)'}, e.g. pitch ${high[0].pitch} at ${at(high[0].startTick)}`);
+    const bottom = OPEN_STRINGS[0], top = topNote(prog);
+    const low = cn.filter((n) => n.pitch < bottom), high = cn.filter((n) => n.pitch > top);
+    if (low.length) out.push(`${chName(ch)}: ${low.length} note(s) below ${noteName(bottom)} (${bottom}), e.g. pitch ${low[0].pitch} at ${at(low[0].startTick)}`);
+    if (high.length) out.push(`${chName(ch)}: ${high.length} note(s) above ${noteName(top)} (${top}, fret ${top - OPEN_STRINGS[5]}), e.g. pitch ${high[0].pitch} at ${at(high[0].startTick)}`);
     // simultaneous notes, by MIDI on/off
     const ev = cn.flatMap((n) => [[n.startTick, 1], [n.endTick, -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     let cur = 0, max = 0, maxAt = 0, over = 0;
@@ -213,7 +233,7 @@ function midiChecks(midi, notes, problems, loopSec, programs, sig) {
   return out;
 }
 
-// ------------------------------------------------------------------ guitars --
+// ── guitars ────────────────────────────────────────────────────────────────────────────────────
 
 // The file FluidSynth loads for a font of render/guitars.mjs: the font itself, or for one marked
 // `trim` a copy with its samples starting at their attack, made once (again if the font is newer).
@@ -246,7 +266,7 @@ function planFor(tag, midi, nInfo, hints) {
   const allKs = [g.lead, g.rhythm].every((p) => p.engine === 'ks' && !p.preset);
   const chans = [...new Set(midi.tracks.flatMap((evs) => evs.filter((e) => e.kind === 'ch').map((e) => e.status & 15)))].sort((x, y) => x - y);
   for (const ch of chans) {
-    const prog = nInfo.programs.get(ch), guitar = prog >= 24 && prog <= 31 && ch !== 9;
+    const prog = nInfo.programs.get(ch), guitar = isGuitar(prog) && ch !== 9;
     if (allKs) plan.set(ch, g.lead);
     else if (!guitar) plan.set(ch, { engine: 'sf', font: 'musescore' });
     else plan.set(ch, hints.roles.get(ch) === 'lead' ? g.lead : g.rhythm);
@@ -281,7 +301,7 @@ function renderSF(song, midi, loopSec, tag, plan) {
     }
     m.tracks[0].push({ tick: endTick, kind: 'ch', status: 0xb0 | ch, data: [3, 0] }); // CC3: undefined, silent
     const base = path.join(WORK, `${song.meta.id}-${tag}-ch${ch + 1}`);
-    fs.writeFileSync(base + '.mid', writeMidi(m));
+    fs.writeFileSync(base + '.mid', encodeMidi(m));
     run(FLUIDSYNTH, ['-ni', '-q', '-F', base + '.wav', '-r', String(SR), '-O', 'float', '-T', 'wav', '-g', String(SF_GAIN),
       ...SF_OPTS.flatMap((o) => ['-o', o]), sfFile, base + '.mid']);
     const w = readWav(fs.readFileSync(base + '.wav'));
@@ -344,7 +364,7 @@ function stemTimbre(stems, nInfo, hints, until) {
   return out;
 }
 
-const labelOf = (tag, guitarProgs) => (tag === 'sf' ? 'MuseScore ' + (guitarProgs.map((p) => GM[p]).join('+') || 'guitar') : GUITARS[tag].label);
+const labelOf = (tag, guitarProgs) => (tag === 'sf' ? 'MuseScore ' + (guitarProgs.map((p) => GM_GUITARS[p].short).join('+') || 'guitar') : GUITARS[tag].label);
 
 // Stems -> the song's balance and hall -> one stereo loop.
 function mixdown(rendered, hints) {
@@ -353,27 +373,56 @@ function mixdown(rendered, hints) {
   return { channels: m.channels, info: { ...rendered.info, mix: m.info, rawPeakDb: +peakDb(m.channels).toFixed(1) } };
 }
 
-// ------------------------------------------------------- master and check --
+// ── master and check ───────────────────────────────────────────────────────────────────────────
 
-function finish(song, tag, raw, loopSec, onsetsWanted) {
-  const id = `${song.meta.id}-${tag}`;
-  const rawWav = path.join(WORK, `${id}.raw.wav`), mWav = path.join(WORK, `${id}.wav`), ogg = path.join(PUBLISH, `${id}.ogg`);
+// Static gain to TARGET_I and the loop-aware limiter under a ceiling, encoded into the work folder
+// and measured there by ffmpeg; round again until the true peak and loudness are on target (and the
+// file is under maxKb, a quality step lower each time). At most 10 rounds: the last file encoded is
+// kept, with a warning if it is off target. The numbers returned are those of that file.
+function master(id, raw, { q, maxKb = Infinity, meta }) {
+  const rawWav = path.join(WORK, `${id}.raw.wav`), mWav = path.join(WORK, `${id}.wav`), ogg = path.join(WORK, `${id}.ogg`);
   fs.writeFileSync(rawWav, wavF32(raw.channels, SR));
   const before = ebur(rawWav);
-  let gain = Math.pow(10, (TARGET_I - before.I) / 20), ceilDb = -2.0, q = Q0, lim, after, kb, capped = false;
-  for (let it = 0; it < 10; it++) {
+  if (!Number.isFinite(before.I)) die(`${id}: ffmpeg measures the mix at ${before.I} LUFS: it is silent (or the meter failed)`);
+  let gain = Math.pow(10, (TARGET_I - before.I) / 20), ceilDb = -2.0, capped = false, settled = false, lim, after, kb, shipped;
+  for (let it = 0; it < 10 && !settled; it++) {
     lim = limitLoop(raw.channels, gain, Math.pow(10, ceilDb / 20), SR);
     if (lim.maxReductionDb > MAX_LIMIT_DB + 0.05) { gain *= Math.pow(10, (MAX_LIMIT_DB - lim.maxReductionDb) / 20); capped = true; continue; }
     fs.writeFileSync(mWav, wavF32(lim.channels, SR));
-    encodeOgg(mWav, ogg, q, { title: `${song.meta.title} (${tag})`, comment: 'tools/music/render.mjs' });
+    encodeOgg(mWav, ogg, q, meta);
+    shipped = { lim, gain, ceilDb, q };
     kb = Math.round(fs.statSync(ogg).size / 1024);
     after = ebur(ogg);
-    if (kb > MAX_KB && q > 1) { q--; continue; }
+    if (!Number.isFinite(after.I) || !Number.isFinite(after.TP)) die(`${id}: ffmpeg measures the encoded file at ${after.I} LUFS, ${after.TP} dBTP`);
+    if (kb > maxKb && q > 1) { q--; continue; }
     if (after.TP > TARGET_TP) { ceilDb -= after.TP - TARGET_TP + 0.1; continue; }
     if (!capped && Math.abs(after.I - TARGET_I) > 0.3) { gain *= Math.pow(10, (TARGET_I - after.I) / 20); continue; }
-    break;
+    settled = true;
   }
-  if (!after) die(`${id}: the mastering did not settle`);
+  if (!after) die(`${id}: the mastering did not settle (the limiter never came under ${MAX_LIMIT_DB} dB)`);
+  if (!settled) {
+    const off = [after.TP > TARGET_TP && `true peak ${fmt(after.TP)} dBTP over ${TARGET_TP}`, !capped && Math.abs(after.I - TARGET_I) > 0.3 && `${fmt(after.I)} LUFS, not ${TARGET_I}`,
+      kb > maxKb && `${kb} KB over ${maxKb}`].filter(Boolean);
+    console.warn(`render: ${id}: the mastering did not settle in 10 rounds; kept the last file (${off.join('; ') || 'off target'})`);
+  }
+  return { rawWav, mWav, ogg, before, after, kb, capped, settled, ...shipped };
+}
+
+// The encoded file from the work folder into its place (public/...): a rename, so the tracked file
+// is never half written.
+function publish(src, dst) {
+  try { fs.renameSync(src, dst); } catch (e) {
+    if (e.code !== 'EXDEV') throw e;
+    const tmp = `${dst}.${process.pid}.tmp`;
+    fs.copyFileSync(src, tmp); fs.renameSync(tmp, dst); fs.rmSync(src);
+  }
+}
+
+function finish(song, tag, raw, loopSec, onsetsWanted) {
+  const id = `${song.meta.id}-${tag}`;
+  const { rawWav, mWav, ogg, before, after, kb, capped, settled, lim, gain, ceilDb, q } = master(id, raw, {
+    q: Q0, maxKb: MAX_KB, meta: { title: `${song.meta.title} (${tag})`, comment: 'tools/music/render.mjs' },
+  });
   const dec = decode(ogg), N = raw.channels[0].length;
   const seam = seamCheck(dec), seamPre = seamCheck(lim.channels), lv = levelCheck(dec, SR);
   // what the codec changed, at the two ends against the whole loop
@@ -381,8 +430,9 @@ function finish(song, tag, raw, loopSec, onsetsWanted) {
   const codec = dec[0].length === N ? { startDb: +err(0, 2048).toFixed(1), endDb: +err(N - 2048, N).toFixed(1), wholeDb: +err(0, N).toFixed(1) } : null;
   if (KEEP) fs.writeFileSync(path.join(WORK, `${id}-x3.wav`), wavF32(dec.map((c) => { const o = new Float32Array(c.length * 3); o.set(c); o.set(c, c.length); o.set(c, 2 * c.length); return o; }), SR));
   else { fs.rmSync(rawWav); fs.rmSync(mWav); }
+  publish(ogg, path.join(PUBLISH, `${id}.ogg`));
   return {
-    id, file: `${id}.ogg`, kb, q, seconds: +(dec[0].length / SR).toFixed(3), samples: dec[0].length, expectSamples: N,
+    id, file: `${id}.ogg`, kb, q, settled, seconds: +(dec[0].length / SR).toFixed(3), samples: dec[0].length, expectSamples: N,
     before: { I: before.I, TP: before.TP, LRA: before.LRA, peak: +peakDb(raw.channels).toFixed(2) },
     after: { I: after.I, TP: after.TP, LRA: after.LRA, peak: +peakDb(dec).toFixed(2) },
     gameGain: after.I < TARGET_I - 0.5 ? +Math.pow(10, (TARGET_I - after.I) / 20).toFixed(2) : 1,
@@ -407,24 +457,13 @@ function finishExcerpt(song, tag, raw, exSec) {
     for (let i = 0; i < fi; i++) c[i] *= i / fi;
     for (let i = Math.max(0, f0); i < n; i++) c[i] *= 0.5 + 0.5 * Math.cos((Math.PI * (i - f0)) / (n - f0));
   }
-  const rawWav = path.join(WORK, `${id}.raw.wav`), mWav = path.join(WORK, `${id}.wav`), ogg = path.join(PUBLISH, `${id}.ogg`);
-  fs.writeFileSync(rawWav, wavF32(raw.channels, SR));
-  const before = ebur(rawWav);
-  let gain = Math.pow(10, (TARGET_I - before.I) / 20), ceilDb = -2.0, lim, after, capped = false;
-  for (let it = 0; it < 10; it++) {
-    lim = limitLoop(raw.channels, gain, Math.pow(10, ceilDb / 20), SR);
-    if (lim.maxReductionDb > MAX_LIMIT_DB + 0.05) { gain *= Math.pow(10, (MAX_LIMIT_DB - lim.maxReductionDb) / 20); capped = true; continue; }
-    fs.writeFileSync(mWav, wavF32(lim.channels, SR));
-    encodeOgg(mWav, ogg, Q0, { title: `${song.meta.title}, first ${fmt(exSec, 0)} s (${tag})`, album: 'Forest Survivor menu-music guitar sounds', comment: 'tools/music/render.mjs --excerpt' });
-    after = ebur(ogg);
-    if (after.TP > TARGET_TP) { ceilDb -= after.TP - TARGET_TP + 0.1; continue; }
-    if (!capped && Math.abs(after.I - TARGET_I) > 0.3) { gain *= Math.pow(10, (TARGET_I - after.I) / 20); continue; }
-    break;
-  }
-  if (!after) die(`${id}: the mastering did not settle`);
+  const { rawWav, mWav, ogg, before, after, kb, capped, settled, lim, gain } = master(id, raw, {
+    q: Q0, meta: { title: `${song.meta.title}, first ${fmt(exSec, 0)} s (${tag})`, album: 'Forest Survivor menu-music guitar sounds', comment: 'tools/music/render.mjs --excerpt' },
+  });
   if (!KEEP) { fs.rmSync(rawWav); fs.rmSync(mWav); }
+  publish(ogg, path.join(PUBLISH, `${id}.ogg`));
   return {
-    id, file: `${id}.ogg`, kb: Math.round(fs.statSync(ogg).size / 1024), q: Q0, seconds: +(n / SR).toFixed(2), excerptSec: +exSec.toFixed(2),
+    id, file: `${id}.ogg`, kb, q: Q0, settled, seconds: +(n / SR).toFixed(2), excerptSec: +exSec.toFixed(2),
     before: { I: before.I, TP: before.TP }, after: { I: after.I, TP: after.TP, LRA: after.LRA },
     gameGain: after.I < TARGET_I - 0.5 ? +Math.pow(10, (TARGET_I - after.I) / 20).toFixed(2) : 1,
     limiter: { capped, gainDb: +(20 * Math.log10(gain)).toFixed(2), maxReductionDb: +lim.maxReductionDb.toFixed(2) },
@@ -433,7 +472,7 @@ function finishExcerpt(song, tag, raw, exSec) {
   };
 }
 
-// ------------------------------------------------------------------- main --
+// ── main ───────────────────────────────────────────────────────────────────────────────────────
 
 const songs = await loadSongs();
 if (!songs.length) die('no songs to render: compose tools/music/songs/<id>.mjs and run node tools/music/build-midi.mjs first (or try --test)');
@@ -441,6 +480,9 @@ for (const tag of TAGS) for (const f of fontsOf(tag)) {
   if (!fs.existsSync(f.file)) die(`${tag}: SoundFont ${rel(f.file)} is missing (see tools/music/README.md, "Guitars")`);
   if (f.auditionOnly && !EXCERPT) die(`${tag}: ${f.name} is for the listening set only (--excerpt), not for full renders`);
 }
+// the tools, before any rendering: ffmpeg always, FluidSynth when a SoundFont plays
+run(FFMPEG, ['-hide_banner', '-version']);
+if (TAGS.some((tag) => fontsOf(tag).length)) run(FLUIDSYNTH, ['--version']);
 
 const results = [], issues = {};
 for (const song of songs) {
@@ -450,8 +492,8 @@ for (const song of songs) {
   const ticksLoop = song.meta.bars * barTicks;
   const tm = tempoMap(full);
   const loopSec = tm.toSec(ticksLoop);
-  // songs.json knows the beat unit of its bpm (a dotted quarter in 6/8); without it, quarters
-  const metaSec = song.meta.durationSeconds ?? (song.meta.bars * sig[0] * (60 / song.meta.bpm) * 4) / sig[1];
+  // songs.json has the length; without it, bars and bpm the way song.mjs counts them (a dotted quarter in 6/8)
+  const metaSec = song.meta.durationSeconds ?? durationSeconds({ bpm: song.meta.bpm, timeSig: sig, bars: song.meta.bars });
   if (Math.abs(loopSec - metaSec) > 0.002) console.warn(`render: ${song.meta.id}: loop is ${fmt(loopSec, 3)} s in the MIDI but ${fmt(metaSec, 3)} s by bars/bpm; the MIDI wins`);
   // An excerpt plays a cut-down copy of the MIDI and rings EX_RING seconds past its last bar.
   let midi = full, renderSec = loopSec, ex = null;
@@ -467,7 +509,7 @@ for (const song of songs) {
   // distinct attack times (50 ms apart) a listener could count, for the onset check
   let attacks = 0, lastT = -1;
   for (const n of nInfo.notes) if (n.start < loopSec && n.start - lastT > 0.05) { attacks++; lastT = n.start; }
-  const guitarProgs = [...new Set([...nInfo.programs.values()].filter((p) => p >= 24 && p <= 31))];
+  const guitarProgs = [...new Set([...nInfo.programs.values()].filter(isGuitar))];
   const allSteel = guitarProgs.every((p) => p === 25);
   console.log(`\n${song.meta.id}: "${song.meta.title}", ${song.meta.bars} bars of ${sig.join('/')} at ${song.meta.bpm} BPM = ${fmt(loopSec, 3)} s, ${nInfo.notes.length} notes, programs ${[...nInfo.programs].map(([c, p]) => `ch${c + 1}:${p}`).join(' ')}`);
   if (ex) console.log(`  excerpt: bars 0-${ex.bars - 1} = ${fmt(ex.sec, 2)} s, ringing on ${EX_RING} s`);
@@ -506,47 +548,49 @@ const listenOrder = (tag) => { const i = LISTEN.indexOf(tag); return i < 0 ? 1e9
 
 if (EXCERPT) {
   // guitars.json: one entry per guitar, its excerpt of each tune; the ones just made replace
-  // their namesakes, the rest stay if their files do.
+  // their namesakes, the rest stay if their files do. Merged with the file as it is when written.
   const manPath = path.join(PUBLISH, 'guitars.json');
-  let old = [];
-  try { old = JSON.parse(fs.readFileSync(manPath, 'utf8')).guitars || []; } catch { old = []; }
-  const byId = new Map(old.map((g) => [g.id, g]));
-  for (const r of results) {
-    const g = GUITARS[r.tag];
-    const prev = byId.get(r.tag) || {};
-    byId.set(r.tag, {
-      id: r.tag, label: g.label, source: g.source, licence: g.licence, credit: fontsOf(r.tag).map((f) => f.credit),
-      files: { ...prev.files, [r.tune]: r.file },
-      metrics: { ...prev.metrics, [r.tune]: { lead: r.timbre.lead, rhythm: r.timbre.rhythm, mix: r.timbre.mix } },
-    });
-  }
-  const all = [...byId.values()].filter((g) => GUITARS[g.id]).map((g) => {
-    const G = GUITARS[g.id];
-    g = { id: g.id, label: G.label, source: G.source, licence: G.licence, credit: fontsOf(g.id).map((f) => f.credit), files: g.files, metrics: g.metrics };
-    for (const [t, f] of Object.entries(g.files)) if (!fs.existsSync(path.join(PUBLISH, f))) { delete g.files[t]; if (g.metrics) delete g.metrics[t]; }
-    return g;
-  }).filter((g) => Object.keys(g.files).length).sort((a, b) => listenOrder(a.id) - listenOrder(b.id));
-  const tunes = [...new Set(all.flatMap((g) => Object.keys(g.files)))];
-  fs.writeFileSync(manPath, JSON.stringify({ excerpt: `the first ~${EXCERPT} s (whole bars), let ring and faded`, tunes, guitars: all }, null, 2) + '\n');
+  const { guitars: all } = updateJson(manPath, (cur) => {
+    const byId = new Map((cur?.guitars || []).map((g) => [g.id, g]));
+    for (const r of results) {
+      const g = GUITARS[r.tag];
+      const prev = byId.get(r.tag) || {};
+      byId.set(r.tag, {
+        id: r.tag, label: g.label, source: g.source, licence: g.licence, credit: fontsOf(r.tag).map((f) => f.credit),
+        files: { ...prev.files, [r.tune]: r.file },
+        metrics: { ...prev.metrics, [r.tune]: { lead: r.timbre.lead, rhythm: r.timbre.rhythm, mix: r.timbre.mix } },
+      });
+    }
+    const guitars = [...byId.values()].filter((g) => GUITARS[g.id]).map((g) => {
+      const G = GUITARS[g.id];
+      g = { id: g.id, label: G.label, source: G.source, licence: G.licence, credit: fontsOf(g.id).map((f) => f.credit), files: g.files, metrics: g.metrics };
+      for (const [t, f] of Object.entries(g.files)) if (!fs.existsSync(path.join(PUBLISH, f))) { delete g.files[t]; if (g.metrics) delete g.metrics[t]; }
+      return g;
+    }).filter((g) => Object.keys(g.files).length).sort((a, b) => listenOrder(a.id) - listenOrder(b.id));
+    const tunes = [...new Set(guitars.flatMap((g) => Object.keys(g.files)))];
+    return { excerpt: `the first ~${EXCERPT} s (whole bars), let ring and faded`, tunes, guitars };
+  });
   fs.writeFileSync(path.join(WORK, 'guitars-report.json'), JSON.stringify({ results: results.map(({ meta, ...r }) => r) }, null, 2));
   console.log(`\n${all.length} guitar(s) in ${rel(manPath)}; full numbers in ${rel(path.join(WORK, 'guitars-report.json'))}`);
 } else {
   // candidates.json: the ones just made replace their namesakes, the rest stay if their files do.
+  // Merged with the file as it is when written (another render may have added to it meanwhile).
   const manPath = path.join(PUBLISH, 'candidates.json');
-  let old = [];
-  try { old = JSON.parse(fs.readFileSync(manPath, 'utf8')).candidates || []; } catch { old = []; }
   const made = results.map((r) => ({
     id: r.id, tune: r.tune, title: r.meta.title, renderer: r.label, file: r.file, key: r.meta.key || '',
     timeSig: sigOf(r.meta.timeSig).join('/'), bpm: r.meta.bpm, bars: r.meta.bars, seconds: +r.loopSec.toFixed(1), kb: r.kb, gain: r.gameGain,
     description: r.meta.description || '',
   }));
-  const keep = old.filter((c) => !made.some((m) => m.id === c.id) && fs.existsSync(path.join(PUBLISH, c.file)) && !(REPLACE && songs.some((sg) => sg.meta.id === c.tune)));
   const order = [...SONG_ORDER, ...songs.map((s) => s.meta.id).filter((id) => !SONG_ORDER.includes(id))];
-  const all = [...keep, ...made].sort((a, b) => {
-    const ta = order.indexOf(a.tune), tb = order.indexOf(b.tune);
-    return (ta < 0 ? 1e9 : ta) - (tb < 0 ? 1e9 : tb) || a.tune.localeCompare(b.tune) || tagOrder(a.id.slice(a.tune.length + 1)) - tagOrder(b.id.slice(b.tune.length + 1));
+  const { candidates: all } = updateJson(manPath, (cur) => {
+    const keep = (cur?.candidates || []).filter((c) => !made.some((m) => m.id === c.id) && fs.existsSync(path.join(PUBLISH, c.file)) && !(REPLACE && songs.some((sg) => sg.meta.id === c.tune)));
+    return {
+      candidates: [...keep, ...made].sort((a, b) => {
+        const ta = order.indexOf(a.tune), tb = order.indexOf(b.tune);
+        return (ta < 0 ? 1e9 : ta) - (tb < 0 ? 1e9 : tb) || a.tune.localeCompare(b.tune) || tagOrder(a.id.slice(a.tune.length + 1)) - tagOrder(b.id.slice(b.tune.length + 1));
+      }),
+    };
   });
-  fs.writeFileSync(manPath, JSON.stringify({ candidates: all }, null, 2) + '\n');
   fs.writeFileSync(path.join(WORK, 'report.json'), JSON.stringify({ results: results.map(({ meta, ...r }) => r), issues }, null, 2));
   console.log(`\n${all.length} candidate(s) in ${rel(manPath)}; full numbers in ${rel(path.join(WORK, 'report.json'))}`);
 }

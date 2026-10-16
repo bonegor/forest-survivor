@@ -9,7 +9,7 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { Pool, Aura } from '../public/js/game/effects.js';
 import { HEROES, startWeapons, SHARED_WEAPONS, weaponsFor } from '../public/js/data/heroes.js';
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, statsAt } from '../public/js/data/weapons.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
@@ -199,10 +199,10 @@ test('every evolution beats its weapon at level 8 on every stat', () => {
     assert.ok(PASSIVES[d.evo.with], `${id} evolves with a relic`);
     assert.ok(!into.has(d.evo.into), `${d.evo.into} is one weapon's evolution`);
     into.add(d.evo.into);
-    const l8 = { ...d.base };
-    for (const lv of d.levels) for (const [k, v] of Object.entries(lv)) if (k !== 'text') l8[k] = (l8[k] || 0) + v;
+    const l8 = statsAt(d, MAX_WEAPON_LEVEL);
     for (const [k, v] of Object.entries(l8)) {
-      const ev = e.base[k] ?? (k === 'cd' ? 1 : undefined);
+      // One that lasts for good (eternal) outlasts any duration.
+      const ev = e.base[k] ?? (k === 'cd' ? 1 : k === 'dur' && e.base.eternal ? Infinity : undefined);
       assert.notEqual(ev, undefined, `${d.evo.into} has ${k}`);
       if (k === 'pierce' && v >= 99 && ev >= 99) continue;
       if (v === 0 && ev === 0) continue;
@@ -211,4 +211,125 @@ test('every evolution beats its weapon at level 8 on every stat', () => {
     }
   }
   for (const [id, d] of Object.entries(WEAPONS)) if (d.evolved) assert.ok(into.has(id), `${id} is some weapon's evolution`);
+});
+
+// How a weapon's stats at a level were worked out, three ways, before data/weapons.js statsAt:
+// the game's (Weapon.recompute: its defaults under the base, then the steps up to the level; an
+// evolution's base alone), and the weapons page's and the test above's (the base and every
+// step, for level 8).
+const OLD_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
+function oldGame(def, level) {
+  const b = { ...OLD_DEFAULTS, ...def.base };
+  if (!def.evolved) {
+    for (let i = 0; i < level - 1; i++) {
+      for (const [k, v] of Object.entries(def.levels[i])) if (k !== 'text') b[k] = (b[k] || 0) + v;
+    }
+  }
+  return b;
+}
+function oldTop(def) {
+  const s = { ...def.base };
+  for (const lv of def.levels) for (const [k, v] of Object.entries(lv)) if (k !== 'text') s[k] = (s[k] || 0) + v;
+  return s;
+}
+
+test('statsAt gives every weapon at every level what the game, the weapons page and the tests worked out', () => {
+  for (const [id, def] of Object.entries(WEAPONS)) {
+    for (let lv = 1; lv <= MAX_WEAPON_LEVEL; lv++) assert.deepEqual(statsAt(def, lv, OLD_DEFAULTS), oldGame(def, lv), `${id} at level ${lv}`);
+    if (!def.evolved) assert.deepEqual(statsAt(def, MAX_WEAPON_LEVEL), oldTop(def), `${id} at level ${MAX_WEAPON_LEVEL}`);
+  }
+  // And a weapon in play has them, where the hero's own multipliers don't come in.
+  gameCase('knight', (g, p) => {
+    for (const [id, def] of Object.entries(WEAPONS)) {
+      for (const lv of [1, 4, MAX_WEAPON_LEVEL]) {
+        p.weapons.length = 0;
+        const w = g.addWeapon(id, lv), old = oldGame(def, def.evolved ? MAX_WEAPON_LEVEL : lv);
+        for (const k of Object.keys(old)) {
+          if (!['amount', 'area', 'cd', 'speed', 'dur', 'tick'].includes(k)) assert.equal(w.s[k], old[k], `${id} level ${lv}: ${k}`);
+        }
+      }
+    }
+  });
+});
+
+test('Pestilence: a foe its poison kills bursts into a pool of its own; a boss does not', () => {
+  gameCase('necromancer', (g, p) => {
+    p.weapons.length = 0;
+    const w = g.addWeapon('pestilence');
+    const pools = () => g.effects.filter((e) => e instanceof Pool && e.w === w);
+    // Out of its cloud's reach, and the hero stands still: no pool but what a death leaves.
+    const f = foe(g, 70, 0, { hpMul: 1 });
+    f.spd = 0;
+    f.addDot('poison', 1e4, 1.5, w);
+    step(g, 40);
+    assert.ok(f.dead, 'the poison killed it');
+    const burst = pools().filter((pl) => pl.x === f.x && pl.y === f.y);
+    assert.equal(burst.length, 1, 'it burst into a pool where it fell');
+    assert.ok(burst[0].decay, 'one that sinks away as the trail\'s do');
+    const n = pools().length;
+    const boss = g.spawnEnemy('boneking', p.x - 70, p.y, { instant: true, hpMul: 0.001 });
+    g.hitEnemy(boss, 1e6, { w, type: 'poison', kb: 0, noCrit: true });
+    assert.ok(boss.dead);
+    assert.equal(pools().length, n, 'a boss leaves none');
+    // Plain Miasma has no plague.
+    p.weapons.length = 0;
+    const m = g.addWeapon('miasma');
+    const before = g.effects.length;
+    m.onKill(foe(g, 0, 60));
+    assert.equal(g.effects.length, before, 'Miasma\'s dead leave none');
+  });
+});
+
+test('Miasma lays no pool across a jump (a crypt\'s door, the stairs): its trail goes on from where he lands', () => {
+  gameCase('necromancer', (g, p) => {
+    const w = p.weapons.find((x) => x.id === 'miasma');
+    const pools = () => g.effects.filter((e) => e instanceof Pool && e.w === w);
+    w.update(1 / 60); // it marks where he stands
+    const n = pools().length;
+    w.walked = 0;
+    p.x += 120; // carried off
+    w.update(1 / 60);
+    assert.equal(pools().length, n, 'no pool for the gap');
+    assert.equal(w.walked, 0, 'and none owed for it');
+    p.x += 30; // a stride on from there
+    w.update(1 / 60);
+    assert.equal(pools().length, n + 1, 'walking on, the trail goes on');
+  });
+});
+
+test('Aegis never goes out; Guardian Blades do, in their time', () => {
+  gameCase('knight', (g, p) => {
+    p.weapons.length = 0;
+    const blades = g.addWeapon('blades');
+    blades.cd = 0;
+    step(g, 2);
+    const orbit = blades.fx;
+    assert.ok(orbit && !orbit.dead);
+    step(g, Math.ceil(blades.s.dur * 60) + 2);
+    assert.ok(orbit.dead, `gone after ${blades.s.dur} s`);
+    p.weapons.length = 0;
+    const aegis = g.addWeapon('aegis');
+    aegis.cd = 0;
+    step(g, 2);
+    const ring = aegis.fx;
+    assert.ok(ring && !ring.dead && ring.alpha === 1);
+    ring.t = 1e5; // longer than any run
+    step(g, 60);
+    assert.ok(!ring.dead && aegis.fx === ring && ring.alpha === 1, 'still turning, as bright');
+  });
+});
+
+test('Shadow Dance throws blades of its own: no weapon\'s, of a set strength', () => {
+  gameCase('rogue', (g, p) => {
+    p.weapons.length = 0;
+    g.startUlt('shadowdance');
+    step(g, 6);
+    const blades = g.projectiles.filter((pr) => pr.kind === 'dagger');
+    assert.ok(blades.length >= 4, `${blades.length} blades`);
+    for (const b of blades) {
+      assert.equal(b.w, null);
+      assert.deepEqual([b.dmg, b.pierce, b.kb, b.crit, b.spin], [18, 2, 0.4, 0.35, 22]);
+      assert.ok(Math.abs(Math.hypot(b.vx, b.vy) - 300) < 1e-6, 'at 300 px/s');
+    }
+  });
 });

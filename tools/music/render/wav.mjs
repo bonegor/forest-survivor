@@ -1,4 +1,5 @@
-// WAV reading (16/24/32-bit PCM, 32/64-bit float, plain or extensible) and 32-bit float writing.
+// tools/music/render/wav.mjs — WAV reading (16/24/32-bit PCM, 32/64-bit float, plain or extensible) and
+// 32-bit float writing.
 
 export function readWav(buf) {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);

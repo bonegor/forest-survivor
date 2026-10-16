@@ -7,6 +7,7 @@ const mod = file => import(pathToFileURL(root + '/' + file).href);
 await mod('tools/headless.mjs');
 const {Game, PROP_LOOT} = await mod('public/js/game/game.js');
 const {PROP_SITES} = await mod('public/js/data/waves.js');
+const {Dungeon} = await mod('public/js/game/dungeon.js');
 const {ENEMIES} = await mod('public/js/data/enemies.js');
 const {mulberry32} = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
@@ -187,6 +188,54 @@ test('a dungeon room has three times the sites it did, rows of boxes along its w
     assert.ok(lonely < boxes * 0.1, `${lonely} of ${boxes} boxes stand alone`);
   } finally {
     Math.random = oldRandom;
+  }
+});
+
+// The user, 16 October 2026: "drop them back down to like a few per chamber". A crypt's chamber
+// has a row or two of boxes (2 to 10 of them); a Dungeon Run floor's rooms keep their 3 to 12 rows.
+test('a crypt chamber holds one or two rows of boxes; a Dungeon Run floor keeps its many', () => {
+  const oldRandom = Math.random, oldSites = Dungeon.prototype.propSites;
+  const drawn = {crypt: [], floor: []};
+  Math.random = mulberry32(8);
+  Dungeon.prototype.propSites = function () {
+    const n = oldSites.call(this);
+    drawn[this.crypt ? 'crypt' : 'floor'].push(n);
+    return n;
+  };
+  try {
+    assert.deepEqual(PROP_SITES.crypt, [1, 2]);
+    assert.deepEqual(PROP_SITES.room, [3, 12], 'the floors as they were');
+    const run = new Game({hero:'knight', mode:'dungeon', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+    assert.equal(drawn.floor.length, run.world.rooms.length, 'a floor draws for each room');
+    assert.ok(drawn.floor.every(n => n >= 3 && n <= 12), `floor rows ${drawn.floor}`);
+    let rooms = 0, boxes = 0, most = 0;
+    const crypts = 6, T = 16;
+    for (let k = 0; k < crypts; k++) {
+      const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+      g.enemies.length = 0;
+      const before = drawn.crypt.length;
+      new Dungeon(g, 1, 1000 + k, {name:'Crypt of Tests', theme:['crypt', 'catacombs', 'inferno'][k % 3], lords:2 + (k % 3)});
+      const w = g.world, props = g.enemies.filter(e => e.prop);
+      assert.equal(drawn.crypt.length - before, w.rooms.length, 'a crypt draws for each chamber');
+      for (const r of w.rooms) {
+        const n = props.filter(e => {
+          const tx = Math.floor(e.x / T), ty = Math.floor(e.y / T);
+          return tx > r.x && tx < r.x + r.w - 1 && ty > r.y && ty < r.y + r.h - 1;
+        }).length;
+        assert.ok(n <= 2 * PROP_SITES.boxes[1], `${n} boxes in a chamber`);
+        most = Math.max(most, n);
+      }
+      rooms += w.rooms.length;
+      boxes += props.length;
+    }
+    assert.ok(drawn.crypt.every(n => n === 1 || n === 2), `crypt rows ${drawn.crypt}`);
+    assert.deepEqual([...new Set(drawn.crypt)].sort(), [1, 2], 'one row and two both turn up');
+    // 1-2 rows of 2-5: about 5 a chamber, less where a wall or another box is; it was some 18.
+    assert.ok(boxes / rooms >= 2 && boxes / rooms <= 7, `${(boxes / rooms).toFixed(1)} boxes a chamber, ${most} at most`);
+    assert.ok(boxes / crypts < 80, `${(boxes / crypts).toFixed(0)} boxes a crypt (it was 150-220)`);
+  } finally {
+    Math.random = oldRandom;
+    Dungeon.prototype.propSites = oldSites;
   }
 });
 

@@ -1,5 +1,6 @@
-// The plucked-string guitar synth of the menu-music renderer: extended Karplus-Strong, no
-// samples, no dependencies. Each note is a string loop (a delay line, a one-pole loss filter
+// tools/music/render/pluck.mjs — the plucked-string guitar synth of the menu-music renderer: extended
+// Karplus-Strong, no samples (filters and random numbers from render/dsp.mjs, the guitar's strings and
+// frets from song.mjs). Each note is a string loop (a delay line, a one-pole loss filter
 // designed per note for its decay time at the fundamental and at a high partial, and an
 // allpass for exact tuning) excited by a pluck: noise and an ideal plucked-string pulse, low-
 // passed by velocity and combed at the pick position. A second, quieter loop a fraction of a
@@ -13,19 +14,19 @@
 // has already run several times round, and the second copy kept, so the end of the loop rings
 // into its start exactly as it does when it repeats.
 
-const TAU = 2 * Math.PI;
-const OPEN = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4
+import { TAU, clamp, highpass4, lowShelf, mulberry32, hashString } from './dsp.mjs';
+import { OPEN_STRINGS as OPEN, fretsOf } from '../song.mjs';
 
 // Tuned by octave bands against MuseScore General's guitars on a test tune: within about 7 dB
 // from 125 Hz to 8 kHz, a little brighter than its (very dark) nylon.
 export const NYLON = {
   name: 'nylon', t60Base: 4.0, t60Exp: 0.6, t60Hi: 0.2, t60Rel: 0.25, pick: 0.17, excLo: 600, excHi: 2500,
-  attackMs: 1.2, pol2: 0.28, strumMs: 4, maxFret: 19, level: 1, hp: 85, shelf: [150, -6], lp: 3500, knock: 3, click: 0,
+  attackMs: 1.2, pol2: 0.28, strumMs: 4, maxFret: fretsOf(24), level: 1, hp: 85, shelf: [150, -6], lp: 3500, knock: 3, click: 0,
   body: [[98, 4, 0.25], [200, 3.5, 0.35], [410, 2.5, 0.18]],
 };
 export const STEEL = {
   name: 'steel', t60Base: 5.5, t60Exp: 0.55, t60Hi: 0.75, t60Rel: 0.3, pick: 0.13, excLo: 1500, excHi: 5000,
-  attackMs: 0.4, pol2: 0.3, strumMs: 6, maxFret: 20, level: 0.85, hp: 80, shelf: [150, -4], lp: 9000, knock: 8, click: 3,
+  attackMs: 0.4, pol2: 0.3, strumMs: 6, maxFret: fretsOf(25), level: 0.85, hp: 80, shelf: [150, -4], lp: 9000, knock: 8, click: 3,
   body: [[105, 4, 0.3], [220, 3.5, 0.28], [460, 2.5, 0.14]],
 };
 // Softer variants for render.mjs --guitar=ks-warm / ks-steel-soft (render/guitars.mjs): a rounder
@@ -48,23 +49,12 @@ export const KS_PRESETS = { nylon: NYLON, steel: STEEL, 'nylon-warm': NYLON_WARM
 export function guitarFor(program) {
   if (program === 24) return NYLON;
   if (program === 25) return STEEL;
-  if (program === 26) return { ...STEEL, name: 'jazz', t60Hi: 0.4, excHi: 4000, pick: 0.2, level: 0.9 };
-  if (program >= 27 && program <= 31) return { ...STEEL, name: 'electric' };
+  if (program === 26) return { ...STEEL, name: 'jazz', t60Hi: 0.4, excHi: 4000, pick: 0.2, level: 0.9, maxFret: fretsOf(26) };
+  if (program >= 27 && program <= 31) return { ...STEEL, name: 'electric', maxFret: fretsOf(program) };
   return null;
 }
 
-// ------------------------------------------------------------------ helpers --
-
-function mulberry32(a) {
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
-const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+// ── the string ─────────────────────────────────────────────────────────────────────────────────
 
 // One string loop: delay M, one-pole loss b0/(1 - a z^-1), allpass C, for pitch f0 and the
 // 60 dB decay times t0 (at the fundamental) and t1 (at a high partial).
@@ -174,31 +164,15 @@ function bandAdd(src, dst, f, Q, gain, sr) {
 
 // The body's radiation: a 4th-order Butterworth high-pass and a low shelf (a guitar radiates
 // its lowest fundamentals weakly), then a one-pole low-pass, in place.
-function biquad(x, [b0, b1, b2, a0, a1, a2]) {
-  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < x.length; i++) {
-    const v = x[i], y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = v; y2 = y1; y1 = y;
-    x[i] = y;
-  }
-}
 function tone(x, hpHz, [shelfHz, shelfDb], lpHz, sr) {
-  for (const Q of [0.5412, 1.3066]) {
-    const w = (TAU * hpHz) / sr, al = Math.sin(w) / (2 * Q), cw = Math.cos(w);
-    biquad(x, [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2, 1 + al, -2 * cw, 1 - al]);
-  }
-  { // RBJ low shelf, slope 1
-    const A = Math.pow(10, shelfDb / 40), w = (TAU * shelfHz) / sr, cw = Math.cos(w), al = Math.sin(w) / Math.SQRT2, sa = 2 * Math.sqrt(A) * al;
-    biquad(x, [A * (A + 1 - (A - 1) * cw + sa), 2 * A * (A - 1 - (A + 1) * cw), A * (A + 1 - (A - 1) * cw - sa),
-      A + 1 + (A - 1) * cw + sa, -2 * (A - 1 + (A + 1) * cw), A + 1 + (A - 1) * cw - sa]);
-  }
+  highpass4(x, hpHz, sr);
+  lowShelf(x, shelfHz, shelfDb, sr);
   const lpA = 1 - Math.exp((-TAU * lpHz) / sr);
   let z = 0;
   for (let i = 0; i < x.length; i++) { z += lpA * (x[i] - z); x[i] = z; }
 }
 
-// ------------------------------------------------------------------- render --
+// ── render ─────────────────────────────────────────────────────────────────────────────────────
 
 // notes/ctrl/programs as read by smf.readNotes; loopSec the exact loop length. voices (optional):
 // a Map from channel to the preset that plays it, instead of the one its program picks.
@@ -233,7 +207,7 @@ export function renderPluck({ notes, ctrl, programs, loopSec, sr = 44100, seed =
     };
 
     // Per-note life, the same in every repeat: timing jitter, detune, a strum across chords.
-    const rndOf = (i) => mulberry32(hash(`${seed}:${ch}:${i}`));
+    const rndOf = (i) => mulberry32(hashString(`${seed}:${ch}:${i}`));
     const base = cn.map((n, i) => {
       const r = rndOf(i);
       return { n, i, jitter: (r() - 0.5) * 0.003, cents: (r() - 0.5) * 6, noiseSeed: (r() * 4294967296) >>> 0, strum: 0 };

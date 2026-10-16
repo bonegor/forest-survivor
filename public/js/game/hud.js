@@ -4,61 +4,103 @@ import { drawText, textCanvas, textWidth } from '../engine/font.js';
 import { SPR } from '../engine/sprites.js';
 import { input } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
-import { MAX_WEAPON_LEVEL } from '../data/weapons.js';
+import { MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { RANKS } from '../shared/profile.js';
 import { view } from '../engine/view.js';
 
-const ORB_R = 21;
+const ORB_R = 21, ORB_S = ORB_R * 2 + 6;
+
+// An orb's shape, the same for every orb and every frame: what each pixel of its square is. The
+// glass's rims never change, so only the liquid inside is painted again each frame.
+const OUT = 0, INK = 1, RIM_LIT = 2, RIM_DARK = 3, LIQUID = 4;
+const RIMS = [null, [24, 20, 37], [254, 174, 52], [190, 74, 47]];
+const SHAPE = new Uint8Array(ORB_S * ORB_S);
+// Over the liquid, the glass: 0 clear, 1 its sheen (lightens), 2 its shaded edge (darkens).
+const GLASS = new Uint8Array(ORB_S * ORB_S);
+{
+  const s = ORB_S, R = ORB_R, cx = s / 2, cy = s / 2;
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s; x++) {
+      const p = y * s + x, dx = x + 0.5 - cx, dy = y + 0.5 - cy, r = Math.hypot(dx, dy);
+      if (r > R + 2.5) SHAPE[p] = OUT;
+      else if (r > R + 1.5) SHAPE[p] = INK;
+      else if (r > R + 0.5) SHAPE[p] = dx + dy < 0 ? RIM_LIT : RIM_DARK;
+      else if (r > R - 0.5) SHAPE[p] = INK;
+      else {
+        SHAPE[p] = LIQUID;
+        if (Math.hypot(dx + R * 0.38, dy + R * 0.42) < R * 0.28) GLASS[p] = 1;
+        else if (r > R - 2.5 && dx + dy > R * 0.6) GLASS[p] = 2;
+      }
+    }
+  }
+}
+// The liquid's tones, by depth from the surface (an orb's own colours), and the dark above it.
+const DEEP = 0, MID = 1, TOP = 2, FOAM = 3, EMPTY = 4;
+const EMPTY_RGB = [13, 11, 20];
+// This frame's surface height and rising bubbles, column by column (Orb.render).
+const WAVE = new Float64Array(ORB_S), BUBBLE = new Uint8Array(ORB_S);
 
 // Liquid orb rendered per-pixel into a small canvas.
 class Orb {
   constructor(colors) {
     this.colors = colors.map(hexToRgb);
-    const s = ORB_R * 2 + 6;
+    const s = ORB_S;
     this.c = makeCanvas(s, s);
     this.g = this.c.getContext('2d');
     this.img = this.g.createImageData(s, s);
     this.shown = 1;
+    // Each tone (deep, mid, top, foam, then the empty dark) under clear glass, its sheen and its
+    // shaded edge, as red, green, blue; and the same lit by the glow of a full orb, each frame.
+    const rgb = [...this.colors, EMPTY_RGB];
+    this.tones = new Float64Array(rgb.length * 9);
+    rgb.forEach((col, k) => {
+      for (let ch = 0; ch < 3; ch++) {
+        const c = col[ch], i = k * 9 + ch;
+        this.tones[i] = c;
+        this.tones[i + 3] = c + (255 - c) * 0.35;
+        this.tones[i + 6] = c * 0.75;
+      }
+    });
+    this.lit = new Uint8ClampedArray(this.tones.length);
+    // The rims once, and the whole orb opaque: the square outside it stays clear.
+    const d = this.img.data;
+    for (let p = 0; p < s * s; p++) {
+      if (SHAPE[p] === OUT) continue;
+      const col = RIMS[SHAPE[p]];
+      if (col) {
+        d[p * 4] = col[0];
+        d[p * 4 + 1] = col[1];
+        d[p * 4 + 2] = col[2];
+      }
+      d[p * 4 + 3] = 255;
+    }
   }
 
   render(frac, t, glow) {
     this.shown += (frac - this.shown) * 0.15;
-    const s = this.c.width, R = ORB_R, cx = s / 2, cy = s / 2;
-    const d = this.img.data;
-    const [deep, mid, top, foam] = this.colors;
+    const s = ORB_S, R = ORB_R, cy = s / 2;
+    const d = this.img.data, tones = this.tones, lit = this.lit;
     const level = cy + R - 2 * R * clamp(this.shown, 0, 1);
+    const shine = 40 * (0.5 + 0.5 * Math.sin(t * 8));
+    for (let k = 0; k < tones.length; k++) lit[k] = glow ? Math.min(255, tones[k] + shine) : tones[k];
+    for (let x = 0; x < s; x++) {
+      WAVE[x] = Math.sin(x * 0.45 + t * 3) * 1.1 + Math.sin(x * 0.2 - t * 2) * 0.8;
+      BUBBLE[x] = Math.floor((t * 7 + x * 13) % 9) === 0 ? 1 : 0;
+    }
     for (let y = 0; y < s; y++) {
+      const depth = (y - level) / (2 * R);
+      const tone = depth < 0.08 ? FOAM : depth < 0.3 ? TOP : depth < 0.65 ? MID : DEEP;
+      // Rising bubbles.
+      const bubbles = Math.floor(y + t * 20) % 11 === 0;
       for (let x = 0; x < s; x++) {
-        const i = (y * s + x) * 4;
-        const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-        const r = Math.hypot(dx, dy);
-        let col = null, a = 255;
-        if (r > R + 2.5) {
-          d[i + 3] = 0;
-          continue;
-        } else if (r > R + 1.5) col = [24, 20, 37];
-        else if (r > R + 0.5) col = (dx + dy < 0 ? [254, 174, 52] : [190, 74, 47]);
-        else if (r > R - 0.5) col = [24, 20, 37];
-        else {
-          const wave = Math.sin(x * 0.45 + t * 3) * 1.1 + Math.sin(x * 0.2 - t * 2) * 0.8;
-          if (y + 0.5 > level + wave) {
-            const depth = (y - level) / (2 * R);
-            col = depth < 0.08 ? foam : depth < 0.3 ? top : depth < 0.65 ? mid : deep;
-            // Rising bubbles.
-            const bx = Math.floor((t * 7 + x * 13) % 9);
-            if (bx === 0 && (Math.floor(y + t * 20) % 11) === 0) col = foam;
-          } else col = [13, 11, 20];
-          // Glass sheen.
-          const sh = Math.hypot(dx + R * 0.38, dy + R * 0.42);
-          if (sh < R * 0.28) col = col.map((c) => c + (255 - c) * 0.35);
-          else if (r > R - 2.5 && dx + dy > R * 0.6) col = col.map((c) => c * 0.75);
-          if (glow) col = col.map((c) => Math.min(255, c + 40 * (0.5 + 0.5 * Math.sin(t * 8))));
-        }
-        d[i] = col[0];
-        d[i + 1] = col[1];
-        d[i + 2] = col[2];
-        d[i + 3] = a;
+        const p = y * s + x;
+        if (SHAPE[p] !== LIQUID) continue;
+        const k = y + 0.5 > level + WAVE[x] ? (bubbles && BUBBLE[x] ? FOAM : tone) : EMPTY;
+        const j = k * 9 + GLASS[p] * 3, i = p * 4;
+        d[i] = lit[j];
+        d[i + 1] = lit[j + 1];
+        d[i + 2] = lit[j + 2];
       }
     }
     this.g.putImageData(this.img, 0, 0);
@@ -119,7 +161,7 @@ export class Hud {
     const y = 9;
     // In a crypt, where he fights by hand with his own weapon alone, the others are dimmed.
     const main = this.g.caveStrike ? this.g.mainWeapon() : null;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < MAX_WEAPONS; i++) {
       const w = p.weapons[i];
       if (main && w && w !== main) ctx.globalAlpha = 0.3;
       this.slot(ctx, x, y, w ? SPR[w.def.icon] : null, w ? (w.evolved ? -1 : w.level) : 0, MAX_WEAPON_LEVEL, w && w.evolved);
@@ -128,7 +170,7 @@ export class Hud {
     }
     x = 3;
     const ps = [...p.passives.entries()];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < MAX_RELICS; i++) {
       const e = ps[i];
       this.slot(ctx, x, y + 21, e ? SPR[PASSIVES[e[0]].icon] : null, e ? e[1] : 0, e ? PASSIVES[e[0]].max : 5, false, true);
       x += 18;
@@ -310,46 +352,50 @@ export class Hud {
     }
   }
 
+  // Arrows at the screen's edge toward what's worth finding off it: the boss, shrines, crypts,
+  // chests, the thief and the world's own marker (the stairs, a sleeping lord), in that order.
   drawIndicators(ctx, W, H, t) {
-    const g = this.g, cam = g.cam;
-    const z = cam.S / view.S;
-    const targets = [];
-    if (g.boss && !g.boss.dead) targets.push([g.boss.x, g.boss.y - 10, '#e43b44', 'skull']);
-    for (const s of g.shrines) if (!s.used) targets.push([s.x, s.y - 10, SHRINE_COLORS[s.type], 'shrine']);
-    for (const d of g.crypts) if (!d.sealed) targets.push([d.x, d.y - 12, '#b55088', 'crypt']);
-    for (const pk of g.pickups) if (pk.kind === 'chest') targets.push([pk.x, pk.y, '#feae34', 'chest']);
-    for (const e of g.enemies) if (e.type === 'thief' && !e.dead) targets.push([e.x, e.y, '#fee761', 'thief']);
+    const g = this.g;
+    if (g.boss && !g.boss.dead) this.pointer(ctx, W, H, t, g.boss.x, g.boss.y - 10, '#e43b44');
+    for (const s of g.shrines) if (!s.used) this.pointer(ctx, W, H, t, s.x, s.y - 10, SHRINE_COLORS[s.type]);
+    for (const d of g.crypts) if (!d.sealed) this.pointer(ctx, W, H, t, d.x, d.y - 12, '#b55088');
+    for (const pk of g.pickups) if (pk.kind === 'chest') this.pointer(ctx, W, H, t, pk.x, pk.y, '#feae34');
+    for (const e of g.enemies) if (e.type === 'thief' && !e.dead) this.pointer(ctx, W, H, t, e.x, e.y, '#fee761');
     if (g.world.marker) {
       const m = g.world.marker();
-      if (m) targets.push(m);
+      if (m) this.pointer(ctx, W, H, t, m[0], m[1], m[2]);
     }
+  }
+
+  // One of those arrows, toward world point (wx, wy), unless that is on screen.
+  pointer(ctx, W, H, t, wx, wy, col) {
+    const cam = this.g.cam;
+    const z = cam.S / view.S;
     // Markers live on a rectangle inset from the HUD bands.
     const top = 52, bottom = H - 30, left = 14, right = W - 14;
     const cx = (left + right) / 2, cy = (top + bottom) / 2;
-    for (const [wx, wy, col] of targets) {
-      const sx = (wx - cam.x) * z, sy = (wy - cam.y) * z;
-      if (sx > 8 && sy > 8 && sx < W - 8 && sy < H - 8) continue;
-      const a = Math.atan2(sy - cy, sx - cx);
-      const k = Math.min((right - left) / 2 / Math.abs(Math.cos(a) || 1e-6), (bottom - top) / 2 / Math.abs(Math.sin(a) || 1e-6));
-      const x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k;
-      const bob = Math.sin(t * 6) * 1.5;
-      ctx.save();
-      ctx.translate(Math.round(x + Math.cos(a) * bob), Math.round(y + Math.sin(a) * bob));
-      ctx.rotate(a);
-      ctx.fillStyle = '#181425';
-      ctx.beginPath();
-      ctx.moveTo(6, 0);
-      ctx.lineTo(-4, -5);
-      ctx.lineTo(-4, 5);
-      ctx.fill();
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.moveTo(4, 0);
-      ctx.lineTo(-3, -3);
-      ctx.lineTo(-3, 3);
-      ctx.fill();
-      ctx.restore();
-    }
+    const sx = (wx - cam.x) * z, sy = (wy - cam.y) * z;
+    if (sx > 8 && sy > 8 && sx < W - 8 && sy < H - 8) return;
+    const a = Math.atan2(sy - cy, sx - cx);
+    const k = Math.min((right - left) / 2 / Math.abs(Math.cos(a) || 1e-6), (bottom - top) / 2 / Math.abs(Math.sin(a) || 1e-6));
+    const x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k;
+    const bob = Math.sin(t * 6) * 1.5;
+    ctx.save();
+    ctx.translate(Math.round(x + Math.cos(a) * bob), Math.round(y + Math.sin(a) * bob));
+    ctx.rotate(a);
+    ctx.fillStyle = '#181425';
+    ctx.beginPath();
+    ctx.moveTo(6, 0);
+    ctx.lineTo(-4, -5);
+    ctx.lineTo(-4, 5);
+    ctx.fill();
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(4, 0);
+    ctx.lineTo(-3, -3);
+    ctx.lineTo(-3, 3);
+    ctx.fill();
+    ctx.restore();
   }
 
   drawCombo(ctx, W, H, t) {

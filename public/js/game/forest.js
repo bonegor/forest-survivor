@@ -6,7 +6,6 @@
 import { SPR } from '../engine/sprites.js';
 import { makeCanvas, hash2, fbm, rand, lerp, clamp, pick } from '../engine/util.js';
 import { PC, P } from './particles.js';
-import { glow } from './fxsprites.js';
 import { CHUNK as CH, TREE_NAMES, layoutChunk, paintChunk, shrinesNear, cryptsNear, start, trimCaches } from './darkwood.js';
 
 // Half the width of each tree's trunk at its foot.
@@ -24,6 +23,9 @@ const NIGHT = [
   [0.95, [176, 146, 166]],
   [1, [240, 214, 190]],
 ];
+
+// What steer() returns: the one pair, filled again by the next call.
+const HEADING = [0, 0];
 
 export class Forest {
   constructor(g, seed) {
@@ -279,10 +281,14 @@ export class Forest {
     return true;
   }
 
+  // Monster e's heading toward target, [dx, dy], straight at it out here. The returned pair is
+  // reused by the next call: read it at once, don't keep it.
   steer(e, target) {
     const dx = target.x - e.x, dy = target.y - e.y;
     const l = Math.hypot(dx, dy) || 1;
-    return [dx / l, dy / l];
+    HEADING[0] = dx / l;
+    HEADING[1] = dy / l;
+    return HEADING;
   }
 
   freeSpot(x, y) {
@@ -338,5 +344,3 @@ function makeFogTexture(seed) {
   ctx.putImageData(img, 0, 0);
   return c;
 }
-
-export { glow };

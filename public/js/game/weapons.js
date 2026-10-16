@@ -1,12 +1,22 @@
 // Weapon instances and the firing behaviour of every weapon kind.
 
-import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES } from '../data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weapons.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
 import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode } from './effects.js';
 import { Minion } from './minions.js';
 import { PC, P } from './particles.js';
+
+// What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
+const STAT_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
+// How much sooner every weapon is ready again under a Shrine of Haste (Weapon.update; the ranger's
+// draw keeps time with it, ranger-animation.js). He walks faster too (Player.moveSpeed).
+export const HASTE = 1.35;
+
+// The way from p (anything with an x and a y) to the foe t; with no foe, fallback: by default the
+// way the hero faces (p.aim).
+export const aimAt = (p, t, fallback = p.aim) => (t ? Math.atan2(t.y - p.y, t.x - p.x) : fallback);
 
 export class Weapon {
   constructor(g, id, src) {
@@ -39,12 +49,7 @@ export class Weapon {
   }
 
   recompute() {
-    const b = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0, ...this.def.base };
-    if (!this.def.evolved) {
-      for (let i = 0; i < this.level - 1; i++) {
-        for (const [k, v] of Object.entries(this.def.levels[i])) if (k !== 'text') b[k] = (b[k] || 0) + v;
-      }
-    }
+    const b = statsAt(this.def, this.level, STAT_DEFAULTS);
     const p = this.g.player;
     this.s = {
       ...b,
@@ -92,7 +97,7 @@ export class Weapon {
     const K = KINDS[this.def.kind];
     if (K.tick) K.tick(this, dt);
     if (!K.fire) return;
-    const haste = this.g.player.buff('haste') ? 1.35 : 1;
+    const haste = this.g.player.buff('haste') ? HASTE : 1;
     this.cd -= dt * haste;
     // A blow struck by hand waits for the sprite's blow frame, by the clock it is drawn by.
     if (this.handAt !== null) {
@@ -167,7 +172,7 @@ function ray(g, w, x, y, ang, L, dmg, skip = null) {
   }
   const width = 5 * Math.sqrt(w.s.area), hits = [];
   for (const e of g.grid.query(x + (dx * len) / 2, y + (dy * len) / 2, len / 2 + 16)) {
-    if (e.dead || e.untargetable || (skip && skip.has(e))) continue;
+    if (e.dead || (skip && skip.has(e))) continue;
     const u = (e.x - x) * dx + (e.y - y) * dy;
     if (u < -e.r || u > len + e.r) continue;
     if (Math.abs((e.y - y) * dx - (e.x - x) * dy) > e.r + width) continue;
@@ -184,8 +189,7 @@ export const KINDS = {
     fire(w) {
       // Swing at the closest foe; with none in reach, the way the hero last moved.
       const p = w.g.player;
-      const t = w.g.nearestEnemy(p.x, p.y, 34 * w.s.area + 26);
-      w.aimAng = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim;
+      w.aimAng = aimAt(p, w.g.nearestEnemy(p.x, p.y, w.reach));
       w.burst(w.s.amount, 0.11);
     },
     shoot(w, i) {
@@ -218,9 +222,7 @@ export const KINDS = {
     },
     // Struck by hand in a crypt: the volley flies at the foe the player strikes at, if any.
     aim(w, t) {
-      const p = w.g.player, m = muzzle(w.g);
-      if (t) w.baseAng = Math.atan2(t.y - m.y, t.x - m.x);
-      else w.baseAng = p.aim;
+      w.baseAng = aimAt(muzzle(w.g), t, w.g.player.aim);
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
@@ -247,7 +249,7 @@ export const KINDS = {
     reach: 190,
     fire(w) {
       const g = w.g, p = g.player;
-      const near = g.nearestEnemies(p.x, p.y, 8, 190);
+      const near = g.nearestEnemies(p.x, p.y, 8, w.reach);
       w.targets = [];
       for (let i = 0; i < w.s.amount; i++) w.targets.push(near.length ? pick(near) : null);
       w.burst(w.s.amount, 0.13);
@@ -258,7 +260,7 @@ export const KINDS = {
     shoot(w, i) {
       const g = w.g, p = g.player;
       const t = w.targets[i];
-      const ang = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim + rand(-0.4, 0.4);
+      const ang = t ? aimAt(p, t) : p.aim + rand(-0.4, 0.4);
       spawnProjectile(g, {
         kind: 'fireball', sprite: 'fireball', x: p.x, y: p.y, z: 8, ang, speed: 150 * w.s.speed, life: 1.6, r: 4,
         dmg: w.s.dmg, pierce: 0, kb: w.s.kb, w, explodeR: 24 * w.s.area, type: 'fire',
@@ -271,7 +273,7 @@ export const KINDS = {
     reach: 190,
     fire(w) {
       const g = w.g;
-      const picks = g.enemiesOnScreen(true);
+      const picks = g.enemiesOnScreen();
       for (let i = 0; i < w.s.amount; i++) {
         const t = picks.length ? pick(picks) : null;
         const p = g.player;
@@ -335,14 +337,13 @@ export const KINDS = {
   blades: {
     fire(w) {
       const g = w.g;
-      if (w.fx && !w.fx.dead) {
-        if (w.s.dur > 100) return 0.5; // Aegis never expires
-        return 0.2;
-      }
+      // Aegis's blades never go out (eternal): it only looks in now and then for an orbit put out
+      // (by a crypt's door: Game.enterCrypt).
+      if (w.fx && !w.fx.dead) return w.s.eternal ? 0.5 : 0.2;
       w.fx = new Orbit(g, w);
       g.effects.push(w.fx);
       sfx('blade');
-      return w.s.dur + w.s.cd;
+      return w.s.eternal ? 0.5 : w.s.dur + w.s.cd;
     },
   },
 
@@ -362,7 +363,7 @@ export const KINDS = {
     },
     shoot(w) {
       const g = w.g;
-      const cands = g.enemiesOnScreen(true).filter((e) => !w.struck.has(e));
+      const cands = g.enemiesOnScreen().filter((e) => !w.struck.has(e));
       if (!cands.length) return;
       let cur = pick(cands);
       w.struck.add(cur);
@@ -372,7 +373,7 @@ export const KINDS = {
       const strike = (e, d) => {
         g.hitEnemy(e, d, { w, type: 'shock', kb: w.s.kb, kx: rand(-1, 1), ky: rand(-1, 1) });
         g.particles.burst(e.x, e.y, 6, 8, [PC.c, PC.w, PC.U], 80, 0.35, 1, P.GLOW | P.FADE, { vz: 40 });
-        g.light(e.x, e.y, 50, 'cyan', 0.9, 0.15);
+        g.light(e.x, e.y, 50, 'cyan', 0.9);
         if (w.s.blast) explode(g, e.x, e.y, 22 * w.s.area, d * 0.5, w, 'shock');
       };
       strike(cur, dmg);
@@ -396,16 +397,13 @@ export const KINDS = {
     fire(w) {
       const g = w.g, p = g.player;
       if (w.s.radial) w.baseAng = (w.baseAng || 0) + 0.38;
-      else {
-        const t = g.nearestEnemy(p.x, p.y, 260, (e) => !e.untargetable);
-        w.baseAng = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim;
-      }
+      else w.baseAng = aimAt(p, g.nearestEnemy(p.x, p.y, w.reach));
       w.burst(w.s.amount, w.s.radial ? 0.02 : 0.045);
     },
     // A fan of blades struck by hand flies at the foe struck at; a ring flies all round anyway.
     aim(w, t) {
       const p = w.g.player;
-      if (t && !w.s.radial) w.baseAng = Math.atan2(t.y - p.y, t.x - p.x);
+      if (t && !w.s.radial) w.baseAng = aimAt(p, t);
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
@@ -489,7 +487,7 @@ export const KINDS = {
       if (w.s.ring) ang = w.baseAng + (i / n) * TAU;
       else {
         const t = w.targets.length ? w.targets[i % w.targets.length] : null;
-        ang = t ? Math.atan2(t.y - p.y, t.x - p.x) + (i >= w.targets.length ? rand(-0.5, 0.5) : 0) : p.aim + rand(-0.6, 0.6);
+        ang = t ? aimAt(p, t) + (i >= w.targets.length ? rand(-0.5, 0.5) : 0) : p.aim + rand(-0.6, 0.6);
       }
       spawnProjectile(g, {
         kind: 'glaive', sprite: w.s.pull ? 'starglaive' : 'glaive', x: p.x, y: p.y - 1, z: 6, ang, speed: 250 * w.s.speed,
@@ -509,11 +507,7 @@ export const KINDS = {
         for (let i = 0; i < n; i++) g.effects.push(new Thorns(g, w, p.x, p.y, a0 + (i / n) * TAU));
       } else {
         const near = g.nearestEnemies(p.x, p.y, n, 160);
-        for (let i = 0; i < n; i++) {
-          const t = near[i];
-          const ang = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim + (i - (n - 1) / 2) * 0.5;
-          g.effects.push(new Thorns(g, w, p.x, p.y, ang));
-        }
+        for (let i = 0; i < n; i++) g.effects.push(new Thorns(g, w, p.x, p.y, aimAt(p, near[i], p.aim + (i - (n - 1) / 2) * 0.5)));
       }
       sfx('wood', { pitch: 0.6 });
     },
@@ -559,16 +553,15 @@ export const KINDS = {
     reach: 190,
     fire(w) {
       const g = w.g, p = g.player;
-      const L = 190 * w.s.area;
+      const L = w.reach * w.s.area;
       const foes = g.nearestEnemies(p.x, p.y, w.s.amount, L);
       if (!foes.length) return false;
       for (const t of foes) {
-        const ang = Math.atan2(t.y - p.y, t.x - p.x);
-        const hit = ray(g, w, p.x, p.y, ang, L, w.s.dmg);
+        const hit = ray(g, w, p.x, p.y, aimAt(p, t), L, w.s.dmg);
         if (w.s.split && hit.length) {
           const first = hit[0], skip = new Set(hit);
-          const next = g.nearestEnemy(first.x, first.y, 90 * w.s.area, (e) => !skip.has(e) && !e.untargetable);
-          if (next) ray(g, w, first.x, first.y, Math.atan2(next.y - first.y, next.x - first.x), 90 * w.s.area, w.s.dmg * 0.7, skip);
+          const next = g.nearestEnemy(first.x, first.y, 90 * w.s.area, (e) => !skip.has(e));
+          if (next) ray(g, w, first.x, first.y, aimAt(first, next), 90 * w.s.area, w.s.dmg * 0.7, skip);
         }
       }
       g.light(p.x, p.y, 60, 'purple', 0.8);

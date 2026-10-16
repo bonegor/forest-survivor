@@ -7,7 +7,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { Game, FILLERS, isFiller } from '../public/js/game/game.js';
+import { Game, isFiller } from '../public/js/game/game.js';
+import { FILLER_IDS, PASSIVES } from '../public/js/data/passives.js';
 import { GameScreen, LevelUpOverlay, ChestOverlay, PauseOverlay } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
@@ -77,7 +78,7 @@ function sayings(g) {
 test('a maxed build is offered the three fillers, even on a four-card level-up, and no reroll', () => {
   screen((g, gs, p) => {
     maxOut(g);
-    assert.deepEqual(g.levelChoices(4).map((c) => c.type), FILLERS, 'three cards, no copy for a fourth');
+    assert.deepEqual(g.levelChoices(4).map((c) => c.type), FILLER_IDS, 'three cards, no copy for a fourth');
     g.choiceCount = () => 4;
     g.state = 'levelup';
     g.pendingLevels = 1;
@@ -320,5 +321,59 @@ test('a Purse of Gold grows with the night and the hero\'s greed, and counts as 
     g.applyChoice(purse);
     assert.equal(g.gold, gold + purse.value);
     assert.equal(g.stats.gold, found + purse.value);
+  });
+});
+
+test('a Phoenix Heart spent frees its slot: the auto-pick hands the level-ups back to their screen', () => {
+  screen((g, gs, p) => {
+    maxOut(g);
+    // The Knight's sword evolved, and the Phoenix Heart held in another relic's place.
+    p.weapons.find((w) => w.id === 'sword').evolve();
+    p.passives.delete([...p.passives.keys()][0]);
+    g.applyChoice({ type: 'passive', id: 'phoenix' });
+    assert.ok(g.fillersOnly(), 'nothing left to offer but the fillers');
+    g.autoPick = 'gold';
+    levelUp(p, 1);
+    gs.frame(1 / 60);
+    assert.ok(gs.overlay === null && g.state === 'play' && g.pendingLevels === 0, 'a level taken unseen');
+    // He falls and rises by it: the heart is spent, and the relics can be offered again.
+    g.spendRelic('phoenix');
+    assert.ok(!g.fillersOnly() && !g.autoReady());
+    levelUp(p, 1);
+    gs.frame(1 / 60);
+    assert.equal(g.state, 'levelup');
+    assert.ok(gs.overlay instanceof LevelUpOverlay && !gs.overlay.fillersOnly, 'its screen is back, upgrades on it');
+    assert.ok(gs.overlay.choices.some((c) => c.type === 'passive' && c.isNew), 'a relic for the free slot');
+    assert.equal(g.autoPick, 'gold', 'ALWAYS kept for when the build is full again');
+    // And the heart itself comes back among them in its time (Game.relicOffered).
+    const heart = () => g.upgradePool().some((c) => c.id === 'phoenix');
+    assert.ok(!heart());
+    p.level += PASSIVES.phoenix.again;
+    assert.ok(heart());
+  });
+});
+
+test('a chest\'s gold is the hero\'s once, opened on its screen or by a bot', () => {
+  screen((g, gs) => {
+    const gold = g.gold, found = g.stats.gold;
+    g.state = 'chest';
+    const chest = new ChestOverlay(gs, 'elite');
+    assert.ok(chest.roll.gold > 0);
+    assert.equal(g.gold, gold + chest.roll.gold, 'given as it is rolled');
+    assert.equal(g.stats.gold, found + chest.roll.gold, 'and counted as gold found');
+    for (let i = 0; i < 30; i++) chest.draw(ctx, 480, 270, 0.15);
+    assert.equal(g.gold, gold + chest.roll.gold, 'showing it gives no more');
+    // A bot's chest, settled as the game screen would.
+    g.state = 'play';
+    const d = new Driver(g, { bot: 'idle:ult=0' });
+    const roll = g.rollChest;
+    let rolled = null;
+    g.rollChest = (kind) => (rolled = roll.call(g, kind));
+    const before = g.gold;
+    g.chestQueue.push('boss');
+    d.settle();
+    d.detach();
+    assert.ok(rolled && rolled.gold > 0);
+    assert.equal(g.gold, before + rolled.gold);
   });
 });

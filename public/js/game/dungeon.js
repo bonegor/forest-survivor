@@ -13,11 +13,14 @@ import { SPR } from '../engine/sprites.js';
 import { drawText } from '../engine/font.js';
 import { makeCanvas, mulberry32, hexToRgb, clamp, rand, TAU, pick, shuffle } from '../engine/util.js';
 import { FLOORS, PROP_SITES } from '../data/waves.js';
+import { MAX_LORDS } from '../shared/items.js';
 import { PC, P } from './particles.js';
 import { glow } from './fxsprites.js';
 import { sfx } from '../engine/audio.js';
 
-const T = 16;
+// A tile's size (px), here T for short.
+export const TILE = 16;
+const T = TILE;
 // How far a monster sees the hero, given a clear line between them: as far as he sees (reveal).
 export const SIGHT = 10 * T;
 const FLOOR = 0, WALL = 1, LAVA = 2, PROP = 3;
@@ -30,10 +33,17 @@ export const HOLE_AWAY = 5;
 const CRYPT_W = 70, CRYPT_H = 56, CRYPT_ROOMS = 12;
 // How many lords sleep in a crypt: two in the night's first five minutes, three from minute 5,
 // four from minute 10, and one more (still four at most) in a crypt three rings or more from
-// the start.
-export const cryptLords = (minute, depth = 1) => Math.min(4, 2 + Math.floor(minute / 5) + (depth >= 3 ? 1 : 0));
+// the start. Four at most (MAX_LORDS, which the server's bound on a run's gear counts on).
+export const cryptLords = (minute, depth = 1) => Math.min(MAX_LORDS, 2 + Math.floor(minute / 5) + (depth >= 3 ? 1 : 0));
 // A lord's guard: the pack in its room, this much of what a room that size holds.
 const GUARD = 0.6;
+// What steer() and wander() return: the one pair, filled again by the next call.
+const HEADING = [0, 0];
+const heading = (x, y) => {
+  HEADING[0] = x;
+  HEADING[1] = y;
+  return HEADING;
+};
 
 const THEMES = {
   crypt: {
@@ -507,15 +517,21 @@ export class Dungeon {
     this.flow = new Int16Array(W * H).fill(-1);
   }
 
+  // How many rows of breakables a room has along its walls (data/waves.js PROP_SITES): a few in a
+  // crypt's chamber, many more in a Dungeon Run floor's room.
+  propSites() {
+    return this.rng.int(...(this.crypt ? PROP_SITES.crypt : PROP_SITES.room));
+  }
+
   populate() {
     const g = this.g, rng = this.rng;
     const rooms = this.rooms.filter((r) => r !== this.startRoom && r !== this.guardRoom);
-    // Breakables hugging the walls: in each room its sites (data/waves.js PROP_SITES), each a row
-    // of 2-5 along one wall, never two on a tile. The rooms' middles, where the hero starts and
-    // the guardians sleep, stay clear.
+    // Breakables hugging the walls: in each room its sites (propSites), each a row of 2-5 along
+    // one wall, never two on a tile. The rooms' middles, where the hero starts and the guardians
+    // sleep, stay clear.
     const boxed = new Set();
     for (const r of this.rooms) {
-      const sites = rng.int(...PROP_SITES.room);
+      const sites = this.propSites();
       for (let i = 0; i < sites; i++) {
         const side = rng.int(0, 3), n = rng.int(...PROP_SITES.boxes);
         // The west and east walls run north-south, the north and south ones east-west.
@@ -958,7 +974,8 @@ export class Dungeon {
   }
 
   // Where a monster that hasn't seen the hero strolls: to a spot of open floor it can see a few
-  // tiles off, then, there or after a while, to another. Its heading, or [0, 0] to stand.
+  // tiles off, then, there or after a while, to another. Its heading, or [0, 0] to stand: the
+  // pair steer() returns too, reused by the next call.
   wander(e, dt) {
     const w = e.data;
     w.wt = (w.wt ?? 0) - dt;
@@ -977,18 +994,20 @@ export class Dungeon {
       }
     }
     const dx = w.wx - e.x, dy = w.wy - e.y, l = Math.hypot(dx, dy);
-    return l < 1 ? [0, 0] : [dx / l, dy / l];
+    return l < 1 ? heading(0, 0) : heading(dx / l, dy / l);
   }
 
+  // Monster e's heading toward target, [dx, dy]: toward the hero, down the flow field round the
+  // walls. The returned pair is reused by the next call: read it at once, don't keep it.
   steer(e, target) {
     const dx = target.x - e.x, dy = target.y - e.y;
     const l = Math.hypot(dx, dy) || 1;
     const p = this.g.player;
-    if (target !== p) return [dx / l, dy / l];
+    if (target !== p) return heading(dx / l, dy / l);
     const tx = Math.floor(e.x / T), ty = Math.floor(e.y / T);
     const W = this.W;
     const d0 = this.flow[ty * W + tx];
-    if (d0 <= 2 && d0 >= 0) return [dx / l, dy / l];
+    if (d0 <= 2 && d0 >= 0) return heading(dx / l, dy / l);
     let best = -1, bd = d0 < 0 ? 32767 : d0;
     for (let oy = -1; oy <= 1; oy++) {
       for (let ox = -1; ox <= 1; ox++) {
@@ -1002,10 +1021,10 @@ export class Dungeon {
         best = ny * W + nx;
       }
     }
-    if (best < 0) return [dx / l, dy / l];
+    if (best < 0) return heading(dx / l, dy / l);
     const bx = (best % W) * T + T / 2 - e.x, by = ((best / W) | 0) * T + T / 2 - e.y;
     const bl = Math.hypot(bx, by) || 1;
-    return [bx / bl, by / bl];
+    return heading(bx / bl, by / bl);
   }
 
   freeSpot(x, y) {

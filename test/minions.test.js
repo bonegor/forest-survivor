@@ -133,3 +133,54 @@ test('skeletons taken into a crypt chase nothing left in the forest', () =>
     assert.ok(g.inCrypt, 'in the crypt');
     assert.ok(ms.every((m) => !m.target || g.enemies.includes(m.target)), 'every target is a crypt monster');
   }, 5, { crypts: true }));
+
+// The user, 16 October 2026: minions break boxes as the hero's weapons do, but only in passing. A
+// blow struck at a foe breaks any box in its swing; they never go for a box, nor stop at one.
+const barrels = (g, p, spots) => spots.map(([dx, dy]) => g.spawnEnemy('barrel', p.x + dx, p.y + dy, { instant: true }));
+
+test('a skeleton striking a foe breaks the barrel beside it, and a death knight likewise', () => {
+  for (const knight of [false, true])
+    game((g, p) => {
+      const [e] = foes(g, [[p.x + 50, p.y]]);
+      const [barrel] = barrels(g, p, [[50, 9]]);
+      const m = new Minion(g, p.x + 30, p.y, { dmg: 50, dur: 99, knight });
+      m.rise = 0;
+      g.minions.push(m);
+      let onBox = false;
+      for (let i = 0; i < 90; i++) {
+        g.update(1 / 60);
+        if (m.target && m.target.prop) onBox = true;
+      }
+      assert.equal(m.target, e, 'on the foe');
+      assert.ok(!onBox, 'never on the barrel');
+      assert.ok(barrel.dead, `${knight ? 'a knight' : 'a skeleton'}: the barrel beside its foe is broken`);
+      assert.ok(g.pickups.length > 0, 'and what it held lies there');
+    });
+});
+
+test('with no foe about, skeletons leave the boxes be: they never go for one', () =>
+  game((g, p) => {
+    const boxes = barrels(g, p, [[40, 0], [-36, 20], [0, -44], [60, 30], [20, 14]]);
+    const ms = skeletons(g, p, 4);
+    let targeted = false;
+    for (let i = 0; i < 180; i++) {
+      g.update(1 / 60);
+      if (ms.some((m) => m.target)) targeted = true;
+    }
+    assert.ok(!targeted, 'no box is ever a target');
+    assert.ok(ms.every((m) => m.hits === 0), 'no blow struck');
+    assert.ok(boxes.every((b) => !b.dead), 'every box stands');
+    assert.ok(ms.every((m) => Math.hypot(m.x - p.x, m.y - p.y) < 50), 'they keep by the hero');
+  }));
+
+test('a skeleton walks through a row of boxes to its foe, breaking none it only passes', () =>
+  game((g, p) => {
+    const [e] = foes(g, [[p.x + 90, p.y]]);
+    const row = barrels(g, p, [[40, -10], [40, 0], [40, 10]]);
+    const [m] = skeletons(g, p, 1);
+    run(g, 2);
+    assert.equal(m.target, e);
+    assert.ok(m.x > p.x + 70, `it got through to its foe (${Math.round(m.x - p.x)} px on)`);
+    assert.ok(m.hits > 0, 'and strikes it');
+    assert.ok(row.every((b) => !b.dead), 'the boxes it walked through stand');
+  }));

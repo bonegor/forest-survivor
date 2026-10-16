@@ -6,12 +6,10 @@
 
 import { input } from '../engine/input.js';
 import { WEAPONS } from '../data/weapons.js';
-import { PASSIVES } from '../data/passives.js';
+import { PASSIVES, FILLERS } from '../data/passives.js';
+import { TILE as T } from '../game/dungeon.js';
 import { botFrom } from './strategies.js';
 import { PICKS } from './picks.js';
-
-const T = 16; // dungeon tile size (dungeon.js)
-const CARD_NAMES = { bless: 'Blessing of Valor', heal: 'Roast Chicken', gold: 'Purse of Gold' };
 
 export class Driver {
   // o: { bot: 'kite:r=60' | strategy, params, label, pick: 'build', hz: 60, rng }
@@ -89,10 +87,8 @@ export class Driver {
       }
       g.state = 'play';
     } else if (g.state === 'play' && g.chestQueue.length) {
-      // The roll gives what it holds, an evolution too, as the chest screen's does.
-      const roll = g.rollChest(g.chestQueue.shift());
-      g.gold += roll.gold;
-      g.stats.gold += roll.gold;
+      // The roll gives what it holds, an evolution and its gold too, as the chest screen's does.
+      g.rollChest(g.chestQueue.shift());
     } else if (g.state === 'play' && g.itemQueue.length) {
       // Wear it unless something rarer is worn there.
       const it = g.itemQueue.shift(), worn = g.gear[it.slot];
@@ -150,7 +146,7 @@ export class Driver {
 
 function cardInfo(c) {
   const def = c.type === 'weapon' ? WEAPONS[c.id] : c.type === 'passive' ? PASSIVES[c.id] : null;
-  return { type: c.type, id: c.id ?? c.type, name: def ? def.name : CARD_NAMES[c.type], level: c.level ?? 0, isNew: !!c.isNew, value: c.value ?? 0 };
+  return { type: c.type, id: c.id ?? c.type, name: def ? def.name : FILLERS[c.type].name, level: c.level ?? 0, isNew: !!c.isNew, value: c.value ?? 0 };
 }
 
 const byDist = (a, b) => a.d - b.d;

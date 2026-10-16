@@ -1,7 +1,7 @@
-// Brightness and attack by numbers, for comparing guitars without listening (render.mjs puts
-// them in out/render/report.json and, for the listening set, in guitars.json). A "clanky" guitar
-// has a hard, bright attack, so besides the overall brightness this looks at the first 30 ms of
-// each note:
+// tools/music/render/timbre.mjs — brightness and attack by numbers, for comparing guitars without
+// listening (render.mjs puts them in out/render/report.json and, for the listening set, in
+// guitars.json). A "clanky" guitar has a hard, bright attack, so besides the overall brightness this
+// looks at the first 30 ms of each note:
 //   centroidHz  spectral centroid of the whole signal (averaged power spectrum, 40 Hz-16 kHz)
 //   hfPct       share of the energy above 3 kHz (a 4th-order Butterworth high-pass), in %
 //   atkHfPct    the same share inside the attack windows (3 ms before to 27 ms after each attack)
@@ -14,25 +14,7 @@
 // The attack numbers are medians over the given onsets (seconds), which should be notes at least
 // ~80 ms from the one before, so each window holds one pluck.
 
-const TAU = 2 * Math.PI;
-
-function biquad(x, [b0, b1, b2, a0, a1, a2]) {
-  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < x.length; i++) {
-    const v = x[i], y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = v; y2 = y1; y1 = y;
-    x[i] = y;
-  }
-}
-function highpass(x, f, sr) {
-  const out = Float64Array.from(x);
-  for (const Q of [0.5412, 1.3066]) {
-    const w = (TAU * f) / sr, al = Math.sin(w) / (2 * Q), cw = Math.cos(w);
-    biquad(out, [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2, 1 + al, -2 * cw, 1 - al]);
-  }
-  return out;
-}
+import { TAU, highpass4, fft } from './dsp.mjs';
 
 const median = (a) => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length & 1 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const db = (x) => 10 * Math.log10(x + 1e-30);
@@ -40,7 +22,7 @@ const db = (x) => 10 * Math.log10(x + 1e-30);
 export function timbre(chans, sr, onsetSec = []) {
   const n = chans[0].length, mono = new Float64Array(n);
   for (const c of chans) for (let i = 0; i < n; i++) mono[i] += c[i] / chans.length;
-  const hp = highpass(mono, 3000, sr);
+  const hp = highpass4(Float64Array.from(mono), 3000, sr);
   let eAll = 0, eHi = 0;
   for (let i = 0; i < n; i++) { eAll += mono[i] * mono[i]; eHi += hp[i] * hp[i]; }
 
@@ -107,26 +89,4 @@ export function attackTimes(notes, chans, until, gap = 0.08) {
     last = nt.start;
   }
   return out;
-}
-
-function fft(re, im) {
-  const n = re.length;
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
-  }
-  for (let len = 2; len <= n; len <<= 1) {
-    const ang = (-2 * Math.PI) / len, wr = Math.cos(ang), wi = Math.sin(ang);
-    for (let i = 0; i < n; i += len) {
-      let cr = 1, ci = 0;
-      for (let k = 0; k < len / 2; k++) {
-        const a = i + k, b = a + len / 2;
-        const tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
-        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
-        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
-      }
-    }
-  }
 }

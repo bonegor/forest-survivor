@@ -1,59 +1,43 @@
-// A short test tune in the composer's song format (see tools/music/song.mjs), and a minimal
-// converter to MIDI, so `node tools/music/render.mjs --test` can exercise the whole pipeline
-// before (or without) the real tunes. The real tunes go through tools/music/build-midi.mjs.
-import { writeMidi } from './smf.mjs';
+// tools/music/render/test-song.mjs — a short tune for `node tools/music/render.mjs --test`, written like a
+// real song (song.mjs's helpers and finish(), checked by validate(), written by midi.mjs), so the whole
+// pipeline can be tried before (or without) the real tunes in tools/music/songs/.
+//
+// A minor, 6/8 at a dotted quarter of 75 (an eighth every 0.27 s), 8 bars, 12.8 s: nylon arpeggios under
+// a steel melody in dotted quarters whose last note is held to the loop point.
 
+import { kit, finish } from '../song.mjs';
+
+const BPM = 75, TS = [6, 8], BARS = 8;
+const K = kit({ bpm: BPM, timeSig: TS });
+
+// one bar each: the bass, then up and back down the chord
 const ARPS = {
   Am: [45, 52, 57, 60, 57, 52], F: [41, 48, 53, 57, 53, 48], C: [48, 55, 60, 64, 60, 55], G: [43, 50, 55, 59, 55, 50],
   Dm: [50, 57, 62, 65, 62, 57], E: [40, 47, 52, 56, 52, 47], E7: [40, 47, 50, 56, 50, 47],
 };
 const PROG = ['Am', 'F', 'C', 'G', 'Am', 'Dm', 'E', 'E7'];
+// [pitch, eighths]; the last note runs past the loop point and finish() cuts it there
 const MEL = [[76, 3], [72, 3], [69, 3], [72, 3], [67, 3], [76, 3], [74, 6], [72, 3], [76, 3], [77, 3], [74, 3], [71, 3], [68, 3], [71, 3], [76, 6]];
 
-export const song = {
+// the bass rings through its bar, the five notes over it last a quarter each
+const arpeggio = PROG.flatMap((ch, bar) => ARPS[ch].flatMap((p, beat) => K.note(bar, beat, p, beat === 0 ? 6 : 2, beat === 0 ? 84 : 62 + ((beat * 7) % 11))));
+const melody = K.melody(0, 0, MEL.map(([p, dur], i) => [p, dur, 80 + (i % 3) * 6]), { accent: false });
+
+export const song = finish({
   id: 'zz-test',
   title: 'Pipeline test',
-  bpm: 112,
-  timeSig: [6, 8],
-  bars: 8,
+  bpm: BPM,
+  timeSig: TS,
+  bars: BARS,
   key: 'A minor',
-  description: 'A test tune for the renderer: nylon arpeggios under a steel melody, its last note ringing over the loop end.',
-  render: { leadOverRhythmDb: 3, reverb: 'small hall, ~18% wet, 1.4 s' },
+  description: 'A test tune for the renderer: nylon arpeggios under a steel melody, its last note held to the loop point.',
+  sections: [{ bar: 0, name: 'A' }, { bar: 4, name: "A'" }],
+  // the structured form of the hall (songs may also write it as text, "small hall, ~18% wet, 1.4 s")
+  render: { leadOverRhythmDb: 3, reverb: { wetPct: 18, t60: 1.4 } },
   tracks: [
-    {
-      name: 'Arpeggio', role: 'rhythm', program: 24, channel: 0, pan: -0.35, volume: 100, reverb: 40,
-      notes: PROG.flatMap((ch, bar) => ARPS[ch].map((pitch, beat) => ({ bar, beat, pitch, dur: beat === 0 ? 6 : 2, vel: beat === 0 ? 84 : 62 + ((beat * 7) % 11) }))),
-    },
-    {
-      name: 'Melody', role: 'lead', program: 25, channel: 1, pan: 0.35, volume: 96, reverb: 36,
-      notes: (() => { let t = 0; return MEL.map(([pitch, dur], i) => { const n = { bar: Math.floor(t / 6), beat: t % 6, pitch, dur, vel: 80 + (i % 3) * 6 }; t += dur; return n; }); })(),
-    },
+    { name: 'Arpeggio (nylon)', role: 'rhythm', program: 24, channel: 0, pan: 42, volume: 100, reverb: 40, notes: arpeggio },
+    { name: 'Melody (steel)', role: 'lead', program: 25, channel: 1, pan: 86, volume: 96, reverb: 36, notes: melody },
   ],
-};
+}, { humanize: false });
 
-// Song (bar/beat in denominator notes) -> MIDI, PPQ 480. Pan -1..1 -> CC10, volume 0..127 -> CC7.
-export function songToMidi(s) {
-  const division = 480, [num, den] = s.timeSig, unit = (division * 4) / den;
-  const us = Math.round(60e6 / s.bpm);
-  const meta = [
-    { tick: 0, kind: 'meta', type: 0x51, data: [(us >> 16) & 255, (us >> 8) & 255, us & 255] },
-    { tick: 0, kind: 'meta', type: 0x58, data: [num, Math.log2(den), 24, 8] },
-    { tick: s.bars * num * unit, kind: 'meta', type: 0x2f, data: [] },
-  ];
-  const tracks = [meta];
-  for (const tr of s.tracks) {
-    const ch = tr.channel, ev = [
-      { tick: 0, kind: 'meta', type: 0x03, data: [...Buffer.from(tr.name)] },
-      { tick: 0, kind: 'ch', status: 0xc0 | ch, data: [tr.program] },
-      { tick: 0, kind: 'ch', status: 0xb0 | ch, data: [7, tr.volume] },
-      { tick: 0, kind: 'ch', status: 0xb0 | ch, data: [10, Math.max(0, Math.min(127, Math.round(64 + tr.pan * 63)))] },
-      { tick: 0, kind: 'ch', status: 0xb0 | ch, data: [91, tr.reverb ?? 40] },
-    ];
-    for (const n of tr.notes) {
-      const t0 = Math.round((n.bar * num + n.beat) * unit), t1 = Math.round(t0 + n.dur * unit);
-      ev.push({ tick: t0, kind: 'ch', status: 0x90 | ch, data: [n.pitch, n.vel] }, { tick: t1, kind: 'ch', status: 0x80 | ch, data: [n.pitch, 0] });
-    }
-    tracks.push(ev);
-  }
-  return writeMidi({ format: 1, division, tracks });
-}
+export default song;

@@ -89,9 +89,11 @@ export const RANKED_EVENT_EVERY = 2.5; // phase minutes
 // Breakable sites: barrels and crates, urns, or a lantern among barrels and crates. The user's
 // "triple the current spawn" and "the box sites have 2-5 boxes" (16 October 2026). In the forest
 // a site turns up every `every` seconds (it was 16-26) while fewer than `most` props stand (it was
-// 10, at fewer than 2½ to a site); a dungeon room has `room` sites along its walls (it was 1-4
-// single props). Each site holds `boxes` of them. What each one holds: game.js PROP_LOOT.
-export const PROP_SITES = { every: [16 / 3, 26 / 3], most: 45, room: [3, 12], boxes: [2, 5] };
+// 10, at fewer than 2½ to a site); a Dungeon Run floor's room has `room` sites along its walls
+// (it was 1-4 single props), a crypt's chamber `crypt`: "drop them back down to like a few per
+// chamber" (the user, 16 October 2026; it was `room`'s 3-12, some 150-220 boxes a crypt). Each
+// site holds `boxes` of them. What each one holds: game.js PROP_LOOT.
+export const PROP_SITES = { every: [16 / 3, 26 / 3], most: 45, room: [3, 12], crypt: [1, 2], boxes: [2, 5] };
 
 // Dungeon floors: theme, starting phase and the guardian waiting at the end.
 export const FLOORS = [

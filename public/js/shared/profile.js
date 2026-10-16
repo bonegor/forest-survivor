@@ -16,7 +16,7 @@
 // Two difficulties (data/difficulty.js): Normal is recorded as the old Medium,
 // Veteran as the old Hard, so saves keep their shape and old Easy wins stay on record.
 
-import { RARITIES, LEGENDARY, sanitizeGear, packGear, sameItem, itemPrice } from './items.js';
+import { RARITIES, LEGENDARY, MAX_LORDS, sanitizeGear, packGear, sameItem, itemPrice } from './items.js';
 
 // 3: each hero's own gear, and heroes unlocked by time (2: one set of gear, heroes bought).
 export const VERSION = 3;
@@ -57,7 +57,8 @@ export const UPGRADES = [
   { id: 'revival', name: 'Second Wind', desc: '+1 revive per run', max: 2, cost: 1800 },
 ];
 
-const DIFF_GOLD = { easy: 0.75, medium: 1, hard: 1.5 };
+// What the gold a run found is worth, by difficulty (runReward); the trial screen says so.
+export const DIFF_GOLD = { easy: 0.75, medium: 1, hard: 1.5 };
 const VICTORY_BONUS = { s15: 200, dungeon: 400 };
 const DIFF_BONUS = { easy: 1, medium: 1.5, hard: 2.5 };
 // Upper bounds used to reject absurd run reports.
@@ -65,8 +66,11 @@ const MAX_TIME = { s15: 16 * 60, dungeon: 3 * 60 * 60, ranked: 4 * 60 * 60 };
 // A run's time played, crypts included (the night's clock stands still in them): the
 // 15-minute night with at most an hour and three quarters below ground; the Dungeon has none.
 const MAX_REAL_TIME = { s15: 2 * 60 * 60, dungeon: MAX_TIME.dungeon, ranked: MAX_TIME.ranked };
-// A crypt's lord gives one piece of gear, and the next crypt is about a minute's walk on.
-const SECS_PER_FIND = 45;
+// Each of a crypt's lords drops a piece of gear at most, and a crypt holds MAX_LORDS of them at
+// most (shared/items.js LORD_DROPS); one crypt is a step from the start and the next about a
+// minute's walk on. So a run finds no more than MAX_LORDS pieces for each crypt it could have
+// reached: the one by the start, and one more every SECS_PER_CRYPT of its time.
+const SECS_PER_CRYPT = 45;
 const MAX_GOLD_PER_SEC = 12;
 const MIN_WIN_TIME = { s15: 15 * 60 - 5, dungeon: 4 * 60 };
 
@@ -243,8 +247,8 @@ export function sanitizeRun(raw) {
   const time = int(raw.time, 0, MAX_TIME[raw.mode]);
   // The night's clock stands still in a crypt, so a run can last longer than its time.
   const realTime = int(raw.realTime, time, MAX_REAL_TIME[raw.mode]);
-  // At most one item from each crypt's lord, and the Dungeon has no crypts.
-  const found = raw.mode === 'dungeon' ? 0 : int(raw.found, 0, Math.floor(realTime / SECS_PER_FIND) + 1);
+  // At most one item from each crypt's lord, MAX_LORDS to a crypt, and the Dungeon has no crypts.
+  const found = raw.mode === 'dungeon' ? 0 : int(raw.found, 0, MAX_LORDS * (Math.floor(realTime / SECS_PER_CRYPT) + 1));
   // A win only counts if the run lasted long enough to be one. Ranked never ends in victory.
   const victory = raw.mode !== 'ranked' && raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
   return {

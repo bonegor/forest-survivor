@@ -2,7 +2,6 @@
 
 import { SPR } from '../engine/sprites.js';
 import { rand, TAU, lerp } from '../engine/util.js';
-import { sfx } from '../engine/audio.js';
 import { shadowSprite, glow, crescentSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { explode } from './effects.js';
@@ -17,13 +16,22 @@ export function spawnProjectile(g, o) {
   return p;
 }
 
+// What every one of the Shadow's spinning blades is.
+const BLADE = { kind: 'dagger', sprite: WEAPON_SPRITES.shadowblade, z: 7, r: 3, spin: 22 };
+
 // One of the Shadow's spinning blades (Shadow Blade, Shadowstrike):
 // through everything in its path, his crits keener with an evolved one's critBonus.
 export function shadowBlade(g, w, x, y, ang, dmg, life) {
   return spawnProjectile(g, {
-    kind: 'dagger', sprite: WEAPON_SPRITES.shadowblade, x, y, z: 7, ang, speed: 330 * w.s.speed, life, r: 3, dmg,
-    pierce: w.s.pierce || 99, kb: w.s.kb, w, crit: w.s.critBonus || 0.05, spin: 22, trail: w.evolved ? PC.P : null,
+    ...BLADE, x, y, ang, speed: 330 * w.s.speed, life, dmg,
+    pierce: w.s.pierce || 99, kb: w.s.kb, w, crit: w.s.critBonus || 0.05, trail: w.evolved ? PC.P : null,
   });
+}
+
+// One of the blades of Shadow Dance, his ultimate (effects.js ShadowDance): no weapon's, of a
+// strength of its own.
+export function danceBlade(g, x, y, ang) {
+  return spawnProjectile(g, { ...BLADE, x, y: y - 1, ang, speed: 300, life: 0.6, dmg: 18, pierce: 2, kb: 0.4, crit: 0.35, trail: PC.P });
 }
 
 export function releaseProjectile(p) {
@@ -32,6 +40,12 @@ export function releaseProjectile(p) {
   p.onLand = null;
   pool.push(p);
 }
+
+// The sparks of a missile's blow (Projectile.update): a wisp's in its trail's colour, made once
+// for each colour, and any other's.
+const HIT_SPARKS = [PC.w, PC.G];
+const WISP_SPARKS = new Map();
+const wispSparks = (trail) => WISP_SPARKS.get(trail) || WISP_SPARKS.set(trail, [PC.w, trail]).get(trail);
 
 const GLOWS = {
   fireball: ['#f77622', 30, 'fire', 46],
@@ -156,7 +170,7 @@ export class Projectile {
         this.retarget -= dt;
         const tg = this.target;
         if (!tg || tg.dead || this.hits.has(tg.id) || this.retarget <= 0) {
-          this.target = g.nearestEnemy(this.x, this.y, 220, (e) => !this.hits.has(e.id) && !e.untargetable);
+          this.target = g.nearestEnemy(this.x, this.y, 220, (e) => !this.hits.has(e.id));
           this.retarget = 0.3;
         }
         const sp = this.v0 * Math.min(1.6, 0.35 + this.t * 1.6);
@@ -212,7 +226,7 @@ export class Projectile {
       const cands = g.grid.query(this.x, this.y, this.r + 16);
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
-        if (e.dead || e.untargetable) continue;
+        if (e.dead) continue;
         const rr = this.r + e.r;
         const dx = e.x - this.x, dy = e.y - this.y;
         if (dx * dx + dy * dy > rr * rr) continue;
@@ -233,8 +247,8 @@ export class Projectile {
           this.impact();
           return false;
         }
-        if (this.kind === 'wisp') g.particles.burst(this.x, this.y, this.z, 5, [PC.w, this.trail], 60, 0.3, 1, P.GLOW | P.FADE, {});
-        else g.particles.burst(this.x, this.y, this.z, 3, [PC.w, PC.G], 50, 0.2, 1, P.FADE, {});
+        if (this.kind === 'wisp') g.particles.burst(this.x, this.y, this.z, 5, wispSparks(this.trail), 60, 0.3, 1, P.GLOW | P.FADE);
+        else g.particles.burst(this.x, this.y, this.z, 3, HIT_SPARKS, 50, 0.2, 1, P.FADE);
         if (--this.pierce < 0) {
           this.dead = true;
           return false;
@@ -433,5 +447,3 @@ export class EnemyShot {
     this.g.light(this.x, this.y, 30 * k, this.look.light, 0.8);
   }
 }
-
-export { sfx };

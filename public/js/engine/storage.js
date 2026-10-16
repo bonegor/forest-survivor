@@ -14,7 +14,6 @@
 import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
 
-export { DEBUG_FLAG };
 export const DEBUG = !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
 const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
 // The game once kept a run to pick up again in these (the server's own, fs_run, it deletes

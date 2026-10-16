@@ -1,15 +1,18 @@
-// tools/music/midi.mjs — a zero-dependency Standard MIDI File writer (and a small reader for self-checks).
+// tools/music/midi.mjs — the Standard MIDI File writer: a song to MIDI, and the one encoder every MIDI file goes
+// through (render.mjs's edited copies too). Reading is render/smf.mjs's.
 //
 // writeMidi(song, filePath) writes format 1, PPQ 480:
 //   track 0  conductor: song title, time signature, tempo, optional key signature, section markers
 //   track n  one per song track: name, program change, CC7 volume, CC10 pan, CC91 reverb (if given), notes
 // Every track ends exactly at the loop point (bars × beats-per-bar × ticks-per-beat). Notes that would
 // ring past it are cut there; a renderer should let them (and the reverb) decay into the next pass.
-// No running status. At equal ticks: meta, program, controllers, note-offs, then note-ons.
+// No running status. At equal ticks: meta events, then note-offs, then everything else in list order
+// (program, controllers, note-ons).
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { unitSeconds, isCompound, start } from './song.mjs';
+import { isNoteOff } from './render/smf.mjs';
 
 export const PPQ = 480;
 
@@ -22,7 +25,36 @@ export function vlq(n) {
 const be32 = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
 const be16 = (n) => [(n >>> 8) & 255, n & 255];
 const text = (s) => [...Buffer.from(String(s), 'utf8')];
-const meta = (type, data) => [0xff, type, ...vlq(data.length), ...data];
+
+// ── encoding ───────────────────────────────────────────────────────────────────────────────────
+
+/** Encodes event lists, in render/smf.mjs's form, as a Standard MIDI File (a Buffer):
+ *  { format = 1, division = PPQ, tracks: [[event, ...], ...] }, events
+ *  { tick, kind: 'meta', type, data } | { tick, kind: 'sysex', status, data } | { tick, kind: 'ch', status, data }.
+ *  Each track ends (End of Track) at its latest event, any End of Track in the list included. */
+export function encodeMidi({ format = 1, division = PPQ, tracks }) {
+  const order = (e) => (e.kind === 'meta' ? 0 : isNoteOff(e) ? 1 : 2);
+  const chunks = tracks.map((evs) => {
+    const sorted = evs.filter((e) => !(e.kind === 'meta' && e.type === 0x2f))
+      .map((e, i) => [e, i]).sort((x, y) => x[0].tick - y[0].tick || order(x[0]) - order(y[0]) || x[1] - y[1]).map((x) => x[0]);
+    const endTick = evs.reduce((m, e) => Math.max(m, e.tick), 0);
+    const body = [];
+    let last = 0;
+    for (const e of sorted) {
+      body.push(...vlq(e.tick - last));
+      last = e.tick;
+      if (e.kind === 'meta') body.push(0xff, e.type, ...vlq(e.data.length), ...e.data);
+      else if (e.kind === 'sysex') body.push(e.status, ...vlq(e.data.length), ...e.data);
+      else body.push(e.status, ...e.data);
+    }
+    body.push(...vlq(endTick - last), 0xff, 0x2f, 0x00);
+    return Buffer.concat([Buffer.from([...text('MTrk'), ...be32(body.length)]), Buffer.from(body)]);
+  });
+  const header = Buffer.from([...text('MThd'), ...be32(6), ...be16(tracks.length > 1 ? 1 : format), ...be16(tracks.length), ...be16(division)]);
+  return Buffer.concat([header, ...chunks]);
+}
+
+// ── songs ──────────────────────────────────────────────────────────────────────────────────────
 
 /** Ticks and tempo for a song. */
 export function timing(song) {
@@ -33,56 +65,57 @@ export function timing(song) {
   return { num, den, tpu, barTicks: num * tpu, endTick: song.bars * num * tpu, usPerQuarter };
 }
 
-function chunk(events, endTick) {
-  events.sort((a, b) => a.tick - b.tick || a.order - b.order || a.seq - b.seq);
-  const body = [];
-  let last = 0;
-  for (const e of events) {
-    body.push(...vlq(e.tick - last), ...e.bytes);
-    last = e.tick;
-  }
-  body.push(...vlq(endTick - last), 0xff, 0x2f, 0x00);
-  return { bytes: Buffer.from([...text('MTrk'), ...be32(body.length), ...body]), events: events.length + 1 };
-}
-
-/** Builds the file in memory: { bytes, info: { endTick, tracks: [{ name, events, notes }] } }. */
-export function buildMidi(song) {
+/** A song as event lists for encodeMidi(): { format: 1, division: PPQ, tracks }. */
+export function songEvents(song) {
   const t = timing(song);
   const { num, den, tpu, endTick } = t;
-  let seq = 0;
-  const ev = (list, tick, order, bytes) => list.push({ tick, order, seq: seq++, bytes });
+  const meta = (tick, type, data) => ({ tick, kind: 'meta', type, data });
+  const msg = (tick, status, ...data) => ({ tick, kind: 'ch', status, data });
 
-  const cond = [];
-  ev(cond, 0, 0, meta(0x03, text(song.title)));
   const clocks = isCompound(song.timeSig) ? 36 : (24 * 4) / den;
-  ev(cond, 0, 0, meta(0x58, [num, Math.log2(den), clocks, 8]));
-  ev(cond, 0, 0, meta(0x51, [(t.usPerQuarter >> 16) & 255, (t.usPerQuarter >> 8) & 255, t.usPerQuarter & 255]));
-  if (song.keySig) ev(cond, 0, 0, meta(0x59, [song.keySig[0] & 255, song.keySig[1] ? 1 : 0]));
-  for (const s of song.sections ?? []) ev(cond, s.bar * num * tpu, 0, meta(0x06, text(s.name)));
-  const chunks = [chunk(cond, endTick)];
-  const info = { endTick, tracks: [{ name: 'conductor', events: chunks[0].events, notes: 0 }] };
+  const cond = [
+    meta(0, 0x03, text(song.title)),
+    meta(0, 0x58, [num, Math.log2(den), clocks, 8]),
+    meta(0, 0x51, [(t.usPerQuarter >> 16) & 255, (t.usPerQuarter >> 8) & 255, t.usPerQuarter & 255]),
+  ];
+  if (song.keySig) cond.push(meta(0, 0x59, [song.keySig[0] & 255, song.keySig[1] ? 1 : 0]));
+  for (const s of song.sections ?? []) {
+    if (!Number.isInteger(s.bar) || s.bar < 0 || s.bar >= song.bars) throw new RangeError(`section ${JSON.stringify(s.name)}: bar ${s.bar} is not a whole bar in 0..${song.bars - 1}`);
+    cond.push(meta(s.bar * num * tpu, 0x06, text(s.name)));
+  }
+  cond.push(meta(endTick, 0x2f, []));
+  const tracks = [cond];
 
   for (const tr of song.tracks) {
     const ch = tr.channel & 15;
-    const list = [];
-    ev(list, 0, 0, meta(0x03, text(tr.name)));
-    ev(list, 0, 1, [0xc0 | ch, tr.program & 127]);
-    ev(list, 0, 2, [0xb0 | ch, 7, tr.volume & 127]);
-    ev(list, 0, 2, [0xb0 | ch, 10, tr.pan & 127]);
-    if (tr.reverb != null) ev(list, 0, 2, [0xb0 | ch, 91, tr.reverb & 127]);
+    const evs = [
+      meta(0, 0x03, text(tr.name)),
+      msg(0, 0xc0 | ch, tr.program & 127),
+      msg(0, 0xb0 | ch, 7, tr.volume & 127),
+      msg(0, 0xb0 | ch, 10, tr.pan & 127),
+    ];
+    if (tr.reverb != null) evs.push(msg(0, 0xb0 | ch, 91, tr.reverb & 127));
     for (const n of tr.notes) {
       const s = start(n, num);
       const on = Math.min(Math.round(s * tpu), endTick - 1);
       const off = Math.max(on + 1, Math.min(Math.round((s + n.dur) * tpu), endTick));
-      ev(list, on, 4, [0x90 | ch, n.pitch & 127, Math.max(1, Math.min(127, n.vel))]);
-      ev(list, off, 3, [0x80 | ch, n.pitch & 127, 64]);
+      evs.push(msg(on, 0x90 | ch, n.pitch & 127, Math.max(1, Math.min(127, n.vel))), msg(off, 0x80 | ch, n.pitch & 127, 64));
     }
-    const c = chunk(list, endTick);
-    chunks.push(c);
-    info.tracks.push({ name: tr.name, events: c.events, notes: tr.notes.length });
+    evs.push(meta(endTick, 0x2f, []));
+    tracks.push(evs);
   }
-  const header = Buffer.from([...text('MThd'), ...be32(6), ...be16(1), ...be16(chunks.length), ...be16(PPQ)]);
-  return { bytes: Buffer.concat([header, ...chunks.map((c) => c.bytes)]), info };
+  return { format: 1, division: PPQ, tracks };
+}
+
+/** Builds the file in memory: { bytes, info: { endTick, tracks: [{ name, events, notes }] } }. */
+export function buildMidi(song) {
+  const { tracks } = songEvents(song);
+  const names = ['conductor', ...song.tracks.map((tr) => tr.name)];
+  const info = {
+    endTick: timing(song).endTick,
+    tracks: tracks.map((evs, i) => ({ name: names[i], events: evs.length, notes: i ? song.tracks[i - 1].notes.length : 0 })),
+  };
+  return { bytes: encodeMidi({ format: 1, division: PPQ, tracks }), info };
 }
 
 export function writeMidi(song, filePath) {
@@ -90,49 +123,4 @@ export function writeMidi(song, filePath) {
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, bytes);
   return { ...info, bytes: bytes.length };
-}
-
-/** Reads a Standard MIDI File back (running status supported): { format, division, tracks: [{ events, endTick }] }.
- *  Events: { tick, kind: 'meta'|'on'|'off'|'cc'|'program'|'other'|'sysex', type?, data, channel? } */
-export function parseMidi(buf) {
-  let p = 0;
-  const id = () => buf.toString('latin1', p, (p += 4));
-  const u32 = () => { const v = buf.readUInt32BE(p); p += 4; return v; };
-  const u16 = () => { const v = buf.readUInt16BE(p); p += 2; return v; };
-  const rv = () => { let v = 0, b; do { b = buf[p++]; v = (v << 7) | (b & 0x7f); } while (b & 0x80); return v; };
-  if (id() !== 'MThd') throw new Error('not a MIDI file (no MThd)');
-  const hlen = u32();
-  const format = u16(), ntrks = u16(), division = u16();
-  p = 8 + hlen;
-  const tracks = [];
-  while (p < buf.length) {
-    const cid = id(), len = u32(), end = p + len;
-    if (end > buf.length) throw new Error(`chunk ${cid} runs past the end of the file`);
-    if (cid !== 'MTrk') { p = end; continue; }
-    let tick = 0, status = 0, sawEnd = false;
-    const events = [];
-    while (p < end) {
-      tick += rv();
-      if (buf[p] & 0x80) status = buf[p++];
-      else if (!status) throw new Error(`data byte without status at ${p}`);
-      if (status === 0xff) {
-        const type = buf[p++], l = rv();
-        events.push({ tick, kind: 'meta', type, data: buf.subarray(p, p + l) });
-        p += l; status = 0;
-        if (type === 0x2f) sawEnd = true;
-      } else if (status === 0xf0 || status === 0xf7) {
-        const l = rv(); events.push({ tick, kind: 'sysex', data: buf.subarray(p, p + l) }); p += l; status = 0;
-      } else {
-        const hi = status & 0xf0, nd = hi === 0xc0 || hi === 0xd0 ? 1 : 2;
-        const data = [...buf.subarray(p, p + nd)]; p += nd;
-        const kind = hi === 0x90 ? (data[1] > 0 ? 'on' : 'off') : hi === 0x80 ? 'off' : hi === 0xb0 ? 'cc' : hi === 0xc0 ? 'program' : 'other';
-        events.push({ tick, kind, channel: status & 15, data });
-      }
-    }
-    if (p !== end) throw new Error('track chunk length mismatch');
-    if (!sawEnd) throw new Error('track without End of Track');
-    tracks.push({ events, endTick: tick });
-  }
-  if (tracks.length !== ntrks) throw new Error(`header says ${ntrks} tracks, found ${tracks.length}`);
-  return { format, division, tracks };
 }

@@ -1,9 +1,13 @@
 // tools/music/song.mjs — the menu-music song format, the helpers the songs are written with, and validate().
-// Zero dependencies.
+// No dependencies but the game's seeded random numbers (public/js/engine/util.js).
 //
-// A song (one seamless loop: bar `bars` is bar 0 again):
+// A song (one seamless loop: bar `bars` is bar 0 again), in songs/<id>.mjs (the file is named by its id):
 //   { id, title, bpm, timeSig: [num, den], bars, key, description, sections?: [{ bar, name }],
+//     brief?: { bpm?: [lo, hi], bars?: [lo, hi], seconds?: [lo, hi] }, render?: { ... },
 //     tracks: [{ name, role: 'lead' | 'rhythm', program, channel, pan, volume, reverb?, notes }] }
+//   sections  markers at whole bars 0..bars-1.   brief  the ranges a commission asked for: validate()
+//   warns outside them (no brief, no such warnings).   pan, volume, reverb  0..127 (CC10, CC7, CC91).
+//   velRange  [lo, hi], set by finish(): the velocities the song means to keep to (validate() warns outside).
 // A note: { bar, beat, pitch, dur, vel }
 //   beat  0-based position inside the bar in units of the time signature's denominator note
 //         (6/8: eighths, so beat 3 is the 4th eighth; 3/4, 4/4, 2/4: quarters). Floats are fine.
@@ -12,6 +16,8 @@
 // denominator note (3/4, 4/4, 2/4 → quarters). unitSeconds(song) converts.
 //
 // Pitches may be written as numbers or names ('F#5', 'Bb3', 'C4').
+
+import { mulberry32 } from '../../public/js/engine/util.js';
 
 const EPS = 1e-6;
 const r6 = (x) => Math.round(x * 1e6) / 1e6;
@@ -31,7 +37,6 @@ export const noteName = (n) => NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12)
 
 // ── time ───────────────────────────────────────────────────────────────────────────────────────
 export const isCompound = ([num, den]) => den === 8 && num % 3 === 0 && num > 3;
-export const pulseUnits = (ts) => (isCompound(ts) ? 3 : 1);
 export const bpmUnit = (ts) => (isCompound(ts) ? 'dotted quarter' : ({ 2: 'half', 4: 'quarter', 8: 'eighth', 16: 'sixteenth' })[ts[1]] ?? `1/${ts[1]}`);
 const unitSecondsOf = (bpm, ts) => (isCompound(ts) ? 60 / bpm / 3 : 60 / bpm);
 export const unitSeconds = (song) => unitSecondsOf(song.bpm, song.timeSig);
@@ -52,8 +57,6 @@ function needNum(o) {
 function mk(abs, p, dur, vel, num) {
   return { ...place(abs, num), pitch: pitch(p), dur: r6(dur), vel: Math.round(vel) };
 }
-/** Re-express notes so every beat is inside its bar (0 <= beat < num). */
-export const normalize = (notes, num) => notes.map((n) => ({ ...n, ...place(start(n, num), num) }));
 
 // ── building blocks ────────────────────────────────────────────────────────────────────────────
 export function note(bar, beat, p, dur, vel = 80, opts) {
@@ -206,8 +209,6 @@ export function comp(startBar, prog, pat, opts = {}) {
 
 // ── transforming notes ─────────────────────────────────────────────────────────────────────────
 export const transpose = (notes, semis) => notes.map((n) => ({ ...n, pitch: n.pitch + semis }));
-export const shiftBars = (notes, bars) => notes.map((n) => ({ ...n, bar: n.bar + bars }));
-export const scaleVel = (notes, k = 1, add = 0) => notes.map((n) => ({ ...n, vel: Math.round(n.vel * k + add) }));
 
 /** Copy the notes that start in bars [fromBar, fromBar + count) to toBar, optionally re-shaped. */
 export function repeatBars(notes, fromBar, count, toBar, opts = {}) {
@@ -255,15 +256,11 @@ export function contour(notes, amount = 0.4, limit = 5) {
   return notes;
 }
 
-function rng(seed) { // mulberry32
-  let a = seed >>> 0;
-  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
 /** Deterministic, tiny timing (units) and velocity wobble; never moves a note before 0. */
 export function humanize(notes, opts = {}) {
   const num = needNum(opts);
   const { seed = 1, time = 0, vel = 0 } = opts;
-  const rnd = rng(seed);
+  const rnd = mulberry32(seed);
   return notes.map((n) => {
     const dt = (rnd() + rnd() - 1) * time, dv = Math.round((rnd() + rnd() - 1) * vel);
     const s = start(n, num);
@@ -306,20 +303,25 @@ export function tidy(notes, opts = {}) {
   return out.map(({ _s, ...n }) => ({ ...n, ...place(_s, num) }));
 }
 
-export const clampVel = (notes, lo = 55, hi = 110) => notes.map((n) => ({ ...n, vel: Math.max(lo, Math.min(hi, Math.round(n.vel))) }));
+/** The velocities a song keeps to unless it says otherwise (finish's velLo / velHi). */
+export const VEL_RANGE = [55, 110];
+export const clampVel = (notes, lo = VEL_RANGE[0], hi = VEL_RANGE[1]) => notes.map((n) => ({ ...n, vel: Math.max(lo, Math.min(hi, Math.round(n.vel))) }));
 
-/** Final pass for a song: humanize (ms / velocity), tidy, cut at the loop point, clamp velocities. */
+/** Final pass for a song: humanize (ms / velocity), tidy, cut at the loop point, clamp velocities
+ *  to [velLo, velHi] (recorded as song.velRange for validate()). */
 export function finish(song, opts = {}) {
   const [num] = song.timeSig;
   const us = unitSeconds(song);
   const end = song.bars * num;
   const h = opts.humanize ?? { ms: 6, vel: 3 };
+  const lo = opts.velLo ?? VEL_RANGE[0], hi = opts.velHi ?? VEL_RANGE[1];
   song.tracks.forEach((t, i) => {
     let ns = t.notes;
     if (h && (h.ms || h.vel)) ns = humanize(ns, { num, seed: 1000 + 17 * i + (h.seed ?? 0), time: (h.ms ?? 0) / 1000 / us, vel: h.vel ?? 0 });
     ns = tidy(ns, { num, end, edge: 0.03 / us });
-    t.notes = clampVel(ns, opts.velLo ?? 55, opts.velHi ?? 110);
+    t.notes = clampVel(ns, lo, hi);
   });
+  song.velRange = [lo, hi];
   return song;
 }
 
@@ -357,10 +359,31 @@ export function kit({ bpm, timeSig, cutMs = 40, hamMs = 70, strumMs = 25 }) {
   };
 }
 
+// ── guitars ────────────────────────────────────────────────────────────────────────────────────
+// The one source for the guitar's range: validate(), the renderer's MIDI checks and the plucked synth's
+// string allocation all read it.
+/** The open strings in standard tuning, low to high: E2 A2 D3 G3 B3 E4. */
+export const OPEN_STRINGS = [40, 45, 50, 55, 59, 64];
+/** General MIDI's guitars (programs 24-31): name, the short name the renderer's labels use, and the
+ *  frets on the neck (a classical guitar has 19, a steel-string acoustic 20, an electric 22). */
+export const GM_GUITARS = {
+  24: { name: 'Acoustic Guitar (nylon)', short: 'nylon', frets: 19 },
+  25: { name: 'Acoustic Guitar (steel)', short: 'steel', frets: 20 },
+  26: { name: 'Electric Guitar (jazz)', short: 'jazz', frets: 22 },
+  27: { name: 'Electric Guitar (clean)', short: 'clean', frets: 22 },
+  28: { name: 'Electric Guitar (muted)', short: 'muted', frets: 22 },
+  29: { name: 'Overdriven Guitar', short: 'overdrive', frets: 22 },
+  30: { name: 'Distortion Guitar', short: 'distortion', frets: 22 },
+  31: { name: 'Guitar Harmonics', short: 'harmonics', frets: 22 },
+};
+export const isGuitar = (program) => Object.hasOwn(GM_GUITARS, program);
+/** Frets on the neck for a program (a steel-string's 20 for anything not a GM guitar). */
+export const fretsOf = (program) => GM_GUITARS[program]?.frets ?? 20;
+/** The highest note a program's guitar can play: the top string at its last fret. */
+export const topNote = (program) => OPEN_STRINGS[5] + fretsOf(program);
+
 // ── validation ─────────────────────────────────────────────────────────────────────────────────
-const STRINGS = [40, 45, 50, 55, 59, 64];
-const MAX_FRET = 20;
-function stringFit(pitches) {
+function stringFit(pitches, maxFret) {
   const ps = [...pitches].sort((a, b) => b - a);
   const used = Array(6).fill(false);
   let best = Infinity;
@@ -373,8 +396,8 @@ function stringFit(pitches) {
       return;
     }
     for (let s = 0; s < 6; s++) {
-      const f = ps[i] - STRINGS[s];
-      if (used[s] || f < 0 || f > MAX_FRET) continue;
+      const f = ps[i] - OPEN_STRINGS[s];
+      if (used[s] || f < 0 || f > maxFret) continue;
       used[s] = true; frets.push(f); go(i + 1); frets.pop(); used[s] = false;
     }
   };
@@ -391,24 +414,45 @@ export function validate(song) {
   const [num, den] = song.timeSig;
   if (!(Number.isInteger(num) && num > 0 && [2, 4, 8, 16].includes(den))) E(`bad timeSig ${song.timeSig}`);
   if (!(song.bpm >= 40 && song.bpm <= 240)) E(`bpm ${song.bpm} out of 40..240`);
-  else if (song.bpm < 88 || song.bpm > 136) W(`bpm ${song.bpm} is outside the brief's ~92..132`);
   if (!Number.isInteger(song.bars) || song.bars < 1) E(`bad bar count ${song.bars}`);
-  else if (song.bars < 32 || song.bars > 48) W(`${song.bars} bars (brief: 32..48)`);
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(song.id)) E(`id "${song.id}" must be lower-case letters, digits and dashes (it names the files)`);
   const secs = durationSeconds(song);
-  if (secs < 50 || secs > 110) W(`loop lasts ${secs.toFixed(1)} s (brief: about 60..100)`);
+  // the commission's ranges, if the song carries them
+  const brief = song.brief ?? {};
+  const range = (k) => {
+    const r = brief[k];
+    if (r == null) return null;
+    if (!(Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[0] <= r[1])) { E(`brief.${k} must be [lo, hi]`); return null; }
+    return r;
+  };
+  const out = (x, r) => r && (x < r[0] || x > r[1]);
+  const bBpm = range('bpm'), bBars = range('bars'), bSecs = range('seconds');
+  if (out(song.bpm, bBpm)) W(`bpm ${song.bpm} is outside the brief's ${bBpm[0]}..${bBpm[1]}`);
+  if (out(song.bars, bBars)) W(`${song.bars} bars (brief: ${bBars[0]}..${bBars[1]})`);
+  if (out(secs, bSecs)) W(`loop lasts ${secs.toFixed(1)} s (brief: ${bSecs[0]}..${bSecs[1]})`);
+  // section markers: whole bars inside the loop
+  if (song.sections != null && !Array.isArray(song.sections)) E('sections must be a list of { bar, name }');
+  else for (const s of song.sections ?? []) {
+    if (!Number.isInteger(s?.bar) || s.bar < 0 || s.bar >= song.bars) E(`section ${JSON.stringify(s?.name)}: bar ${s?.bar} must be a whole number in 0..${song.bars - 1}`);
+    if (typeof s?.name !== 'string' || !s.name) E(`section at bar ${s?.bar}: needs a name`);
+  }
+  const [velLo, velHi] = song.velRange ?? VEL_RANGE;
   const end = song.bars * num;
   const us = unitSeconds(song);
   const chans = new Set();
+  // one guitar alone (fingerstyle: bass, inner notes and tune on one track) plays the whole neck
+  const solo = song.tracks.length === 1;
   for (const t of song.tracks) {
     const tag = `[${t.name}]`;
     const lead = t.role === 'lead' || /lead|melody/i.test(t.name);
+    const frets = fretsOf(t.program), top = topNote(t.program);
     if (!Number.isInteger(t.channel) || t.channel < 0 || t.channel > 15) E(`${tag} bad channel ${t.channel}`);
     else if (t.channel === 9) W(`${tag} channel 10 (index 9) is the GM drum channel`);
     if (chans.has(t.channel)) W(`${tag} shares channel ${t.channel} with another track`);
     chans.add(t.channel);
     for (const k of ['program', 'pan', 'volume']) if (!(Number.isInteger(t[k]) && t[k] >= 0 && t[k] <= 127)) E(`${tag} bad ${k} ${t[k]}`);
     if (!t.notes?.length) { E(`${tag} has no notes`); continue; }
-    const hi = lead ? 84 : 76, soft = lead ? [55, 83] : [40, 72];
+    const hi = lead ? top : Math.min(76, top), soft = lead ? [55, 83] : [40, 72];
     let outSoft = 0, velOut = 0;
     const ns = t.notes.map((n) => ({ ...n, s: start(n, num) })).sort((a, b) => a.s - b.s);
     for (const n of ns) {
@@ -420,14 +464,14 @@ export function validate(song) {
       if (n.s >= end - EPS) E(`${at}: starts at/after the loop end (bar ${song.bars})`);
       if (!(n.dur > 0)) E(`${at}: duration must be > 0`);
       if (n.s + n.dur > end + 2 + EPS) E(`${at}: rings ${r6(n.s + n.dur - end)} beats past the loop end (max 2)`);
-      if (!Number.isInteger(n.pitch) || n.pitch < 40) E(`${at}: below the guitar's low E (40)`);
-      else if (n.pitch > hi) E(`${at}: above ${hi} for a ${lead ? 'lead' : 'rhythm'} track`);
+      if (!Number.isInteger(n.pitch) || n.pitch < OPEN_STRINGS[0]) E(`${at}: below the guitar's low E (${OPEN_STRINGS[0]})`);
+      else if (n.pitch > hi) E(`${at}: above ${noteName(hi)} (${hi}) for a ${lead ? 'lead' : 'rhythm'} track${hi === top ? ` (${frets} frets)` : ''}`);
       else if (n.pitch < soft[0] || n.pitch > soft[1]) outSoft++;
       if (!Number.isInteger(n.vel) || n.vel < 1 || n.vel > 127) E(`${at}: velocity ${n.vel} not in 1..127`);
-      else if (n.vel < 55 || n.vel > 110) velOut++;
+      else if (n.vel < velLo || n.vel > velHi) velOut++;
     }
-    if (outSoft / ns.length > 0.12) W(`${tag} ${outSoft} notes (${Math.round((100 * outSoft) / ns.length)}%) outside the comfortable ${soft[0]}..${soft[1]}`);
-    if (velOut) W(`${tag} ${velOut} velocities outside 55..110`);
+    if (!solo && outSoft / ns.length > 0.12) W(`${tag} ${outSoft} notes (${Math.round((100 * outSoft) / ns.length)}%) outside the comfortable ${soft[0]}..${soft[1]}`);
+    if (velOut) W(`${tag} ${velOut} velocities outside ${velLo}..${velHi}`);
     // identical pitches overlapping
     const lastEnd = new Map();
     for (const n of ns) {
@@ -444,9 +488,9 @@ export function validate(song) {
       const t0 = ns[i].s;
       const sounding = ns.filter((n) => n.s <= t0 + EPS && n.s + n.dur > t0 + EPS);
       if (sounding.length > 6) { over6++; if (over6 <= 3) E(`${tag} bar ${ns[i].bar} beat ${r6(ns[i].beat)}: ${sounding.length} notes sounding at once (max 6)`); continue; }
-      if (stringFit(sounding.map((n) => n.pitch)) === Infinity) { unplace++; if (exU.length < 3) exU.push(`bar ${ns[i].bar} beat ${r6(ns[i].beat)} [${sounding.map((n) => noteName(n.pitch)).join(' ')}]`); }
+      if (stringFit(sounding.map((n) => n.pitch), frets) === Infinity) { unplace++; if (exU.length < 3) exU.push(`bar ${ns[i].bar} beat ${r6(ns[i].beat)} [${sounding.map((n) => noteName(n.pitch)).join(' ')}]`); }
       const gest = ns.filter((n) => n.s >= t0 - EPS && n.s < t0 + group);
-      if (gest.length >= 3 && stringFit(gest.map((n) => n.pitch)) > 4) { wide++; if (exW.length < 3) exW.push(`bar ${ns[i].bar} beat ${r6(ns[i].beat)} [${gest.map((n) => noteName(n.pitch)).join(' ')}]`); }
+      if (gest.length >= 3 && stringFit(gest.map((n) => n.pitch), frets) > 4) { wide++; if (exW.length < 3) exW.push(`bar ${ns[i].bar} beat ${r6(ns[i].beat)} [${gest.map((n) => noteName(n.pitch)).join(' ')}]`); }
     }
     if (over6 > 3) E(`${tag} ...and ${over6 - 3} more instants with more than 6 notes`);
     if (unplace) W(`${tag} ${unplace} instants where the ringing notes can't all sit on six strings (the hand would damp some): ${exU.join(', ')}`);

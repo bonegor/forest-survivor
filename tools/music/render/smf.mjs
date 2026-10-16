@@ -1,10 +1,14 @@
-// Standard MIDI File reading and writing for the menu-music renderer (tools/music/render.mjs):
-// enough to copy a song's MIDI with its voices (bank and program) changed, cut short, or with a
-// silent tail added for FluidSynth, and to read its notes for the plucked-string synth. No
-// dependencies.
+// tools/music/render/smf.mjs — the Standard MIDI File reader, and the edits the renderer makes to a
+// song's MIDI (tools/music/render.mjs): its voices (bank and program) changed, cut short, velocities
+// remapped, and its notes read with their times for the plucked-string synth. Writing is
+// tools/music/midi.mjs's encodeMidi(). No dependencies.
 
-// ------------------------------------------------------------------ reading --
+// ── reading ────────────────────────────────────────────────────────────────────────────────────
 
+/** Reads a Standard MIDI File (running status supported): { format, division, tracks: [[event, ...]] },
+ *  events { tick, kind: 'meta', type, data } | { tick, kind: 'sysex', status, data } |
+ *  { tick, kind: 'ch', status, data } (data: arrays of bytes; End of Track kept as a meta event).
+ *  Throws on a file that is cut short or whose chunks and header disagree. */
 export function parseMidi(buf) {
   const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let p = 0;
@@ -19,6 +23,7 @@ export function parseMidi(buf) {
   const tracks = [];
   for (let t = 0; t < ntracks && p < b.length; t++) {
     const id = str(4), len = u32(), end = p + len;
+    if (end > b.length) throw new Error(`chunk ${id} runs past the end of the file`);
     if (id !== 'MTrk') { p = end; t--; continue; }
     const ev = [];
     let tick = 0, running = 0;
@@ -27,6 +32,7 @@ export function parseMidi(buf) {
       tick += vlq();
       let st = b[p];
       if (st & 0x80) p++; else st = running; // running status
+      if (!st) throw new Error(`track ${tracks.length}: a data byte without a status at byte ${p}`);
       if (st === 0xff) {
         const type = b[p++], n = vlq();
         ev.push({ tick, kind: 'meta', type, data: Array.from(b.subarray(p, p + n)) });
@@ -42,46 +48,17 @@ export function parseMidi(buf) {
         p += n;
       }
     }
-    p = end;
+    if (p !== end) throw new Error(`track ${tracks.length}: its events run past its chunk`);
     tracks.push(ev);
   }
+  if (tracks.length !== ntracks) throw new Error(`the header says ${ntracks} tracks, the file has ${tracks.length}`);
   return { format, division, tracks };
 }
 
-// ------------------------------------------------------------------ writing --
+export const isNoteOn = (e) => e.kind === 'ch' && (e.status & 0xf0) === 0x90 && e.data[1] > 0;
+export const isNoteOff = (e) => e.kind === 'ch' && ((e.status & 0xf0) === 0x80 || ((e.status & 0xf0) === 0x90 && e.data[1] === 0));
 
-export function writeMidi({ format = 1, division, tracks }) {
-  const out = [];
-  const u32 = (v) => out.push((v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255);
-  const u16 = (v) => out.push((v >>> 8) & 255, v & 255);
-  const vlq = (v, arr) => {
-    const bytes = [v & 0x7f];
-    while ((v >>>= 7)) bytes.unshift((v & 0x7f) | 0x80);
-    arr.push(...bytes);
-  };
-  out.push(...'MThd'.split('').map((c) => c.charCodeAt(0)));
-  u32(6); u16(tracks.length > 1 ? 1 : format); u16(tracks.length); u16(division);
-  for (const evs of tracks) {
-    const body = [];
-    // Stable sort by tick; at one tick note-offs go before note-ons, so a repeated note is struck again.
-    const order = (e) => (e.kind === 'meta' ? 0 : e.kind === 'ch' && isNoteOff(e) ? 1 : 2);
-    const sorted = evs.filter((e) => !(e.kind === 'meta' && e.type === 0x2f))
-      .map((e, i) => [e, i]).sort((x, y) => x[0].tick - y[0].tick || order(x[0]) - order(y[0]) || x[1] - y[1]).map((x) => x[0]);
-    const endTick = evs.reduce((m, e) => Math.max(m, e.tick), 0);
-    let last = 0;
-    for (const e of sorted) {
-      vlq(e.tick - last, body); last = e.tick;
-      if (e.kind === 'meta') { body.push(0xff, e.type); vlq(e.data.length, body); body.push(...e.data); }
-      else if (e.kind === 'sysex') { body.push(e.status); vlq(e.data.length, body); body.push(...e.data); }
-      else body.push(e.status, ...e.data);
-    }
-    vlq(endTick - last, body); body.push(0xff, 0x2f, 0x00);
-    out.push(...'MTrk'.split('').map((c) => c.charCodeAt(0)));
-    u32(body.length);
-    for (let i = 0; i < body.length; i += 8192) out.push(...body.slice(i, i + 8192));
-  }
-  return Buffer.from(out);
-}
+// ── editing ────────────────────────────────────────────────────────────────────────────────────
 
 // The voice of each listed channel set, in place: map is a Map (or object) from channel (0-15) to
 // { bank, program }. Every program change of that channel becomes the given program, with a bank
@@ -156,10 +133,7 @@ export function cutMidi(midi, endTick) {
   return midi;
 }
 
-export const isNoteOn = (e) => e.kind === 'ch' && (e.status & 0xf0) === 0x90 && e.data[1] > 0;
-export const isNoteOff = (e) => e.kind === 'ch' && ((e.status & 0xf0) === 0x80 || ((e.status & 0xf0) === 0x90 && e.data[1] === 0));
-
-// -------------------------------------------------------------------- time --
+// ── time ───────────────────────────────────────────────────────────────────────────────────────
 
 // Seconds at a tick, through every tempo change in any track (default 120 BPM).
 export function tempoMap(midi) {
@@ -185,7 +159,7 @@ export function tempoMap(midi) {
   return { toSec, toTick, tempos: segs.map((s) => 60e6 / s.us) };
 }
 
-// --------------------------------------------------------------- the notes --
+// ── the notes ──────────────────────────────────────────────────────────────────────────────────
 
 // Notes per channel with their times, and each channel's program and controller changes.
 export function readNotes(midi) {
@@ -223,11 +197,4 @@ export function readNotes(midi) {
   notes.sort((a, b) => a.start - b.start || a.ch - b.ch || a.pitch - b.pitch);
   ctrl.sort((a, b) => a.tick - b.tick);
   return { notes, ctrl, programs, problems };
-}
-
-// The value of a controller on a channel at a tick (the last change at or before it).
-export function ccAt(ctrl, ch, cc, tick, dflt) {
-  let v = dflt;
-  for (const c of ctrl) { if (c.tick > tick) break; if (c.ch === ch && c.cc === cc) v = c.value; }
-  return v;
 }

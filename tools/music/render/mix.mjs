@@ -1,12 +1,12 @@
-// The mixer shared by every renderer: guitar stems (one per MIDI channel, already panned, each
-// exactly one loop long and periodic) are balanced so the lead sits the song's chosen number of
-// dB over the rhythm (by BS.1770 loudness), summed, and sent to a stereo hall with the song's
-// decay time and wet level. The hall runs round the loop twice and keeps the second pass, so its
-// tail from the loop's end carries on into its start.
+// tools/music/render/mix.mjs — the mixer shared by every renderer: guitar stems (one per MIDI
+// channel, already panned, each exactly one loop long and periodic) are balanced so the lead sits
+// the song's chosen number of dB over the rhythm (by BS.1770 loudness), summed, and sent to a stereo
+// hall with the song's decay time and wet level. The hall runs round the loop twice and keeps the
+// second pass, so its tail from the loop's end carries on into its start.
 
-const TAU = 2 * Math.PI;
+import { TAU, biquad } from './dsp.mjs';
 
-// ----------------------------------------------------------------- loudness --
+// ── loudness ───────────────────────────────────────────────────────────────────────────────────
 
 // BS.1770-4 integrated loudness (LUFS) of a stereo signal: K-weighting, 400 ms blocks with 75%
 // overlap, absolute gate at -70 LUFS and relative gate 10 LU under the gated mean.
@@ -33,23 +33,15 @@ function kWeight(x, sr) {
   let K = Math.tan((Math.PI * 1681.974450955533) / sr), Q = 0.7071752369554196;
   const Vh = Math.pow(10, 3.999843853973347 / 20), Vb = Math.pow(Vh, 0.4996667741545416);
   let a0 = 1 + K / Q + K * K;
-  biquad(out, (Vh + (Vb * K) / Q + K * K) / a0, (2 * (K * K - Vh)) / a0, (Vh - (Vb * K) / Q + K * K) / a0, (2 * (K * K - 1)) / a0, (1 - K / Q + K * K) / a0);
+  // (coefficients already divided by a0: the sections' a0 is 1)
+  biquad(out, [(Vh + (Vb * K) / Q + K * K) / a0, (2 * (K * K - Vh)) / a0, (Vh - (Vb * K) / Q + K * K) / a0, 1, (2 * (K * K - 1)) / a0, (1 - K / Q + K * K) / a0]);
   K = Math.tan((Math.PI * 38.13547087602444) / sr); Q = 0.5003270373238773;
   a0 = 1 + K / Q + K * K;
-  biquad(out, 1, -2, 1, (2 * (K * K - 1)) / a0, (1 - K / Q + K * K) / a0);
+  biquad(out, [1, -2, 1, 1, (2 * (K * K - 1)) / a0, (1 - K / Q + K * K) / a0]);
   return out;
 }
 
-function biquad(x, b0, b1, b2, a1, a2) {
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < x.length; i++) {
-    const v = x[i], y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = v; y2 = y1; y1 = y;
-    x[i] = y;
-  }
-}
-
-// -------------------------------------------------------------------- hall --
+// ── hall ───────────────────────────────────────────────────────────────────────────────────────
 
 // A Freeverb-style hall: eight damped combs and four allpasses a side, the combs' feedback set
 // for the decay time t60; a high-pass on the send keeps the bass dry, a short pre-delay keeps
@@ -99,7 +91,7 @@ export function hall(inL, inR, sr, { t60 = 1.4, damp = 0.25, preMs = 12, hpHz = 
   return [L, R];
 }
 
-// ------------------------------------------------------------------- mix --
+// ── mix ────────────────────────────────────────────────────────────────────────────────────────
 
 // stems: [{ ch, role ('lead' | 'rhythm' | undefined), send (0..1), channels: [L, R] }], all N long.
 // leadOverRhythmDb: null to leave the stems as they are. wetDb: hall RMS against the dry mix.

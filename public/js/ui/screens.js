@@ -5,12 +5,12 @@ import { sfx, playMusic, setVolumes, initAudio } from '../engine/audio.js';
 import { SPR, smoothScaled, walkFrame, loopFrame } from '../engine/sprites.js';
 import { saveSettings, DEBUG } from '../engine/storage.js';
 import { overlay, picture, presentBackdrop } from '../engine/view.js';
-import { fmtTime, fmtNum, clamp, ease } from '../engine/util.js';
+import { fmtTime, fmtNum, clamp } from '../engine/util.js';
 import { HEROES, HERO_ORDER, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { MODES, NORMAL, VETERAN } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, totalWins, metaBonuses, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
-import { panel, button, stepper, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
+import { UPGRADES, upgradeCost, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
+import { panel, button, stepper, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars } from './ladder.js';
 
 const UP_ICONS = {
@@ -369,9 +369,9 @@ export class ModeScreen {
     ui.begin(dt);
     const prof = app.store.profile;
     const hero = app.choice.hero;
-    const modes = ['s15', 'dungeon', 'ranked'];
-    const cw = Math.min(110, Math.floor((W - 24) / 3) - 6), ch = 84;
-    const total = 3 * cw + 12;
+    const modes = Object.keys(MODES);
+    const cw = Math.min(110, Math.floor((W - 24) / modes.length) - 6), ch = 84;
+    const total = modes.length * cw + (modes.length - 1) * 6;
     let x = Math.round(W / 2 - total / 2);
     const y = 34;
     let focusMode = null;
@@ -533,8 +533,6 @@ export class ArmoryScreen {
     const iy = 30 + rows * (ch + 4) + 2;
     if (focusUp) {
       const rank = prof.up[focusUp.id] || 0;
-      const meta = metaBonuses(prof);
-      void meta;
       drawText(ctx, `${focusUp.name}: ${focusUp.desc} per rank (${rank}/${focusUp.max})`, W / 2, iy, { align: 'center', color: '#c0cbdc' });
     }
     if (DEBUG) drawText(ctx, 'Debug: each press adds a rank, free; past the last, back to none', W / 2, iy + 10, { align: 'center', color: '#feae34' });
@@ -683,5 +681,3 @@ export class OptionsScreen {
     return null;
   }
 }
-
-export { ease };

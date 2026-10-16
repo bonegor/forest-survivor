@@ -1,8 +1,9 @@
-// A copy of an SF2 SoundFont whose samples start at their attack: some recorded fonts (FreePats'
-// Spanish classical guitar) keep 0-35 ms of near-silence before each pluck, different for every
-// sample, which plays as loose timing. Only the sample headers change (each sample's start moves
-// to just before the first point reaching `threshold` of its early peak, back to a zero
-// crossing), so the copy is the same sounds with the dead air skipped. 16-bit SF2 only (not SF3).
+// tools/music/render/sf2trim.mjs — a copy of an SF2 SoundFont whose samples start at their attack:
+// some recorded fonts (FreePats' Spanish classical guitar) keep 0-35 ms of near-silence before each
+// pluck, different for every sample, which plays as loose timing. Only the sample headers change
+// (each sample's start moves to just before the first point reaching `threshold` of its early
+// peak, back to a zero crossing), so the copy is the same sounds with the dead air skipped. 16-bit
+// SF2 only (not SF3).
 
 import fs from 'node:fs';
 

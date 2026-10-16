@@ -55,6 +55,28 @@ test('every hero in six legendaries, and every record at its most, still fits th
   assert.deepEqual(P.sanitizeProfile(P.decodeState(plain)), clean, 'encoded, decoded, the same profile');
 });
 
+// Every crypt lord may drop gear now, up to four a crypt (items.js MAX_LORDS), so a run may report
+// four times the finds it could; the hero still wears six pieces at most, so the report stays small.
+test('the largest run report, six legendaries worn and every find the bound allows, is still small', () => {
+  const legend = (slot) => {
+    const stats = {};
+    for (const id of I.POOLS[slot].slice(-4)) stats[id] = I.statRange(id, I.LEGENDARY)[1];
+    return { slot, rarity: I.LEGENDARY, stats, power: 'undying', seed: 999999 };
+  };
+  const gear = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+  const report = { mode: 's15', diff: 'hard', hero: 'necromancer', victory: true, time: 960, gold: 1e9, kills: 1e12, level: 999, floor: 3, gear, realTime: 7200, found: 1e9 };
+  const run = P.sanitizeRun(report);
+  assert.equal(run.found, I.MAX_LORDS * (7200 / 45 + 1), 'four finds for every crypt two hours could reach');
+  assert.deepEqual(run.gear, gear);
+  const json = JSON.stringify({ ...report, found: run.found });
+  assert.ok(json.length <= P.MAX_STATE / 4, `${json.length} characters of JSON`);
+  assert.ok(P.encodeState({ ...report, found: run.found }).length <= P.MAX_STATE / 2, 'and encoded');
+  // The new pieces are kept: the profile it leaves fits the cookie as before.
+  const r = P.applyRun(P.defaultProfile(), { ...report, hero: 'knight', found: run.found });
+  assert.deepEqual(r.profile.gear.knight, gear);
+  assert.ok(P.encodeState(P.packProfile(r.profile)).length * 1.25 <= P.MAX_STATE);
+});
+
 test('applyRun pays gold, records wins and clamps impossible reports', () => {
   let p = P.defaultProfile();
   const r = P.applyRun(p, { mode: 's15', diff: 'hard', victory: true, time: 900, gold: 400, kills: 3000, level: 40 });

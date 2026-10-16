@@ -5,7 +5,7 @@ import { PASSIVES } from '../data/passives.js';
 import { gearBonuses } from '../shared/items.js';
 import { input } from '../engine/input.js';
 import { sfx } from '../engine/audio.js';
-import { clamp, damp, rand, TAU } from '../engine/util.js';
+import { clamp, damp, rand } from '../engine/util.js';
 import { PC, P } from './particles.js';
 import { faceAlong, faceAttack } from './facing.js';
 
@@ -329,4 +329,3 @@ export class Player {
 }
 
 export const ULT_DURATION = { whirlwind: 3.5, arrowstorm: 3, cataclysm: 2.6, shadowdance: 3, deadrise: 0.8 };
-export { TAU };

@@ -1,3 +1,5 @@
+import { DIFF_GOLD } from '../shared/profile.js';
+
 // How much tougher than the old Hard monsters are, round on round of tuning:
 // their numbers (+10%, +10%, +20%), health (+10%, +10%, +10%, +20%) and
 // damage (+10%, +10%, +20%, +10%, +20%), then BUMPS more rounds of +10% to
@@ -14,6 +16,7 @@ const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS;
 // what this difficulty takes every monster's health down to, the crypts' lords too
 // (hp has it in already), and late sends more of the night's monsters from a minute
 // of it on (spawner.js lateMore). The id stays 'hard' so saves and run reports keep their shape.
+// The gold a run brings home is the profile's to weigh (shared/profile.js DIFF_GOLD).
 export const VETERAN = {
   id: 'hard',
   name: 'Veteran',
@@ -23,12 +26,11 @@ export const VETERAN = {
   horde: MORE,
   speed: 1.12,
   elite: 1.35,
-  gold: 1.5,
   hurt: 1,
   few: 1,
   health: 1,
   late: null,
-  desc: 'The night at full strength. Gold x1.5.',
+  desc: `The night at full strength. Gold x${DIFF_GOLD.hard}.`,
 };
 
 // Normal's monsters, the user's (16 October 2026): "monster health -70%", and "in the last 6
@@ -48,21 +50,18 @@ export const NORMAL = {
   id: 'medium',
   name: 'Normal',
   hp: VETERAN.hp * NORMAL_HEALTH,
-  gold: 1,
   hurt: 0.5,
   few: 1 / 3,
   health: NORMAL_HEALTH,
   late: NORMAL_LATE,
-  desc: 'Monsters have 70% less health and hit half as hard; fewer shoot or charge, more come late. Gold x1.',
+  desc: `Monsters have 70% less health and hit half as hard; fewer shoot or charge, more come late. Gold x${DIFF_GOLD.medium}.`,
 };
 
 // By id, as a run report and the profile's wins keep it.
 export const DIFFS = { medium: NORMAL, hard: VETERAN };
 
-// What a run without a choice plays (bots, tests, older saves): the game as it was tuned.
-export const RULES = VETERAN;
-
-// Ranked keeps one best time per hero, so it is always Veteran.
+// Ranked keeps one best time per hero, so it is always Veteran; a run without a choice (bots,
+// tests, older saves) plays it too: the game as it was tuned.
 export const diffFor = (mode, id) => (mode === 'ranked' ? VETERAN : DIFFS[id] || VETERAN);
 
 // The whole game runs this much faster than real time: the night's clock, the hero, the monsters,

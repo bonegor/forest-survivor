@@ -2,23 +2,23 @@
 
 import { diffFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
-import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES } from '../data/weapons.js';
-import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
+import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf } from '../data/waves.js';
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
-import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice } from '../shared/items.js';
+import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx, playMusic, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { input } from '../engine/input.js';
-import { rand, pick, chance, TAU, clamp, damp, weighted, shuffle, mulberry32, hash2 } from '../engine/util.js';
+import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2 } from '../engine/util.js';
 import { Player, ULT_DURATION } from './player.js';
 import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
-import { Weapon } from './weapons.js';
-import { Enemy, makeEnemyPool, SRC } from './enemies.js';
-import { Pickup, gemTierValue } from './pickups.js';
+import { Weapon, aimAt } from './weapons.js';
+import { Enemy, makeEnemyPool } from './enemies.js';
+import { Pickup } from './pickups.js';
 import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
 import { Lighting } from './lighting.js';
@@ -27,8 +27,8 @@ import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
 import { Dungeon, cryptLords } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
-import { releaseProjectile, spawnProjectile } from './projectiles.js';
-import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, setUltDaggerSpawner } from './effects.js';
+import { releaseProjectile } from './projectiles.js';
+import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor } from './effects.js';
 import { shadowSprite, glow, splatSprite, vignette } from './fxsprites.js';
 import { Minion } from './minions.js';
 
@@ -39,12 +39,23 @@ const PICKUP_FAR = 1400;
 // own weight and resistance. A third of the old 75 since 15 October 2026 (the user's call).
 export const KNOCKBACK = 25;
 
-// The cards a level-up falls back on once fewer upgrades are left than it offers (none at all
-// once the whole build is maxed): a stacking Blessing of Valor, a heal, and a purse of gold that
-// grows with the night. With nothing else left a level-up shows just these three, and the
-// player may tick ALWAYS on one: the run's level-ups then take it unseen (Game.autoPick).
-export const FILLERS = ['bless', 'heal', 'gold'];
-export const isFiller = (c) => FILLERS.includes(c.type);
+// Whether a card is one of the fillers a level-up falls back on once fewer upgrades are left than
+// it offers (data/passives.js FILLERS). With nothing else left a level-up shows just these three,
+// and the player may tick ALWAYS on one: the run's level-ups then take it unseen (Game.autoPick).
+export const isFiller = (c) => FILLER_IDS.includes(c.type);
+
+// A foe the hero's weapons may pick out, to aim, cast or chain at (nearestEnemy, nearestEnemies,
+// enemiesOnScreen): alive, no prop (a barrel or a crate breaks only to what happens to hit it),
+// and not still rising out of the ground. A monster that rises (def.rise) is passed over for the
+// first 0.45 s of its 0.75 s rise, while spawnT is above 0.3; every other one fades in within a
+// quarter second and is never passed over. A blow that lands where one rises still hurts it.
+export const targetable = (e) => !e.dead && !e.prop && e.spawnT <= 0.3;
+
+// Game.dropSpots: how far apart two drops lie, side by side or one above the other, and where the
+// second goes from the first when neither way is open (a tile on, any way).
+const DROP_GAP = 10;
+const DROP_SIDES = [[DROP_GAP, 0], [0, DROP_GAP]];
+const DROP_ON = [[16, 0], [-16, 0], [0, 16], [0, -16]];
 
 // What each broken barrel, crate, urn or lantern leaves, by weight: at plain luck the weights
 // are the odds, and every one holds something. The user's (16 October 2026): "one third of boxes
@@ -122,7 +133,7 @@ export class Game {
     this.result = null;
     this.pendingLevels = 0;
     // The filler the player chose to take at every level-up once nothing else is left (one of
-    // FILLERS, or null: ask). For this run only; the pause menu clears it.
+    // FILLER_IDS, or null: ask). For this run only; the pause menu clears it.
     this.autoPick = null;
     this.phoenixLostAt = null; // the level a Phoenix Heart was spent at this run (Game.relicOffered)
     this.chestQueue = [];
@@ -167,9 +178,6 @@ export class Game {
     this.player = new Player(this, o.hero, o.meta);
     this.freeSrc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
     this.spawner = new Spawner(this);
-    setUltDaggerSpawner((g, x, y, a) =>
-      spawnProjectile(g, { kind: 'dagger', sprite: WEAPON_SPRITES.shadowblade, x, y: y - 1, z: 7, ang: a, speed: 300, life: 0.6, r: 3, dmg: 18, pierce: 2, kb: 0.4, crit: 0.35, spin: 22, trail: PC.P }),
-    );
 
     if (this.mode === 'dungeon') this.enterFloor(this.floor);
     else {
@@ -277,13 +285,13 @@ export class Game {
     for (const w of p.weapons) {
       if (!w.maxed) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: 3 });
     }
-    if (p.weapons.length < 6) {
+    if (p.weapons.length < MAX_WEAPONS) {
       for (const id of weaponsFor(p.hero)) if (!this.ownsWeapon(id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
     }
     for (const [id, rank] of p.passives) {
       if (rank < PASSIVES[id].max) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
     }
-    if (p.passives.size < 6) {
+    if (p.passives.size < MAX_RELICS) {
       for (const id of PASSIVE_IDS) {
         if (!p.passives.has(id) && this.relicOffered(id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
       }
@@ -325,7 +333,7 @@ export class Game {
   // nothing left to draw, the three fillers alone (a four-card level-up shows three, no copy).
   levelChoices(n) {
     const out = this.drawUpgrades(n);
-    for (const type of FILLERS) if (out.length < n) out.push(this.filler(type));
+    for (const type of FILLER_IDS) if (out.length < n) out.push(this.filler(type));
     return out;
   }
 
@@ -348,7 +356,7 @@ export class Game {
     if (c.type === 'weapon') {
       const w = p.weapons.find((x) => x.id === c.id);
       if (w) w.levelUp();
-      else if (!this.ownsWeapon(c.id) && p.weapons.length < 6) this.addWeapon(c.id);
+      else if (!this.ownsWeapon(c.id) && p.weapons.length < MAX_WEAPONS) this.addWeapon(c.id);
     } else if (c.type === 'passive') {
       p.passives.set(c.id, (p.passives.get(c.id) || 0) + 1);
       p.recompute();
@@ -373,8 +381,7 @@ export class Game {
   resolveAutoLevels() {
     const n = this.pendingLevels;
     if (n <= 0) return true;
-    // While the level-up screen is open its cards come first.
-    if (this.state === 'levelup' || !FILLERS.includes(this.autoPick) || this.upgradePool().length) return false;
+    if (!this.autoReady()) return false;
     const p = this.player;
     let gold = 0, heal = 0;
     for (let i = 0; i < n; i++) {
@@ -391,6 +398,20 @@ export class Game {
     this.numbers.text(p.x, p.y - 22, text, style);
     sfx(sound);
     return true;
+  }
+
+  // Whether nothing is left to offer but the fillers: the whole build maxed, as it stays unless a
+  // Phoenix Heart is spent (its slot free again). A level-up then shows the three fillers alone,
+  // each with its ALWAYS (LevelUpOverlay).
+  fillersOnly() {
+    return !this.upgradePool().length;
+  }
+
+  // Whether a level-up waiting is taken unseen now (resolveAutoLevels, the developer panel): the
+  // player ticked ALWAYS on a filler (autoPick), nothing else is left to offer, and the level-up
+  // screen isn't open (its cards come first).
+  autoReady() {
+    return this.state !== 'levelup' && FILLER_IDS.includes(this.autoPick) && this.fillersOnly();
   }
 
   queueLevelUp() {
@@ -414,7 +435,7 @@ export class Game {
   // What a chest holds, given at once: an evolution if one is ready, then draws from the
   // level-up cards' own pool (a new weapon or relic too, while a slot is free), and gold. With
   // the pool empty, each draw is the run's auto-pick if the player chose one, else a Blessing of
-  // Valor. The chest screen only shows them, one by one.
+  // Valor. The gold is the hero's at once too. The chest screen only shows them, one by one.
   rollChest(kind = 'elite') {
     const p = this.player;
     const items = [];
@@ -439,6 +460,8 @@ export class Game {
       else if (u.type === 'bless') u.level = p.blessings;
     }
     const gold = Math.round(rand(15, 40) * (1 + this.phase / 10) * (kind === 'boss' ? 3 : 1));
+    this.gold += gold;
+    this.stats.gold += gold;
     return { items, gold };
   }
 
@@ -514,7 +537,8 @@ export class Game {
     if (p.buff('fury')) d *= 1.6;
     if (o.ult) d *= 1 + p.level * 0.04;
     let crit = false;
-    if (!o.src || o.src !== SRC.BURN) {
+    // A tick of damage over time (Enemy.addDot) never crits.
+    if (!o.noCrit) {
       crit = Math.random() < p.crit + (o.crit || 0);
       if (crit) d *= p.critMult + (o.critDmg || 0);
     }
@@ -720,9 +744,9 @@ export class Game {
     if (this.mode !== 'dungeon' || this.floor < 3) playMusic(this.mode === 'dungeon' ? 'dungeon-' + FLOORS[this.floor - 1].theme : 'forest');
   }
 
-  // A crypt's lord has fallen, and leaves its coins and something more: each but the last a
-  // champion's chest and a little gold; the last a piece of gear and more gold, and the wall
-  // breaks open on a way out (Dungeon.lightWayOut).
+  // A crypt's lord has fallen, and leaves its coins, its gold and, rolled lord by lord (LORD_DROPS
+  // in shared/items.js), a piece of gear, a champion's chest or both. The last one's fall breaks
+  // the wall open on a way out (Dungeon.lightWayOut).
   lordDefeated(e) {
     const p = this.player, c = this.inCrypt;
     const left = this.world.lordsLeft ? this.world.lordsLeft().length : 0;
@@ -741,19 +765,22 @@ export class Game {
     sfx('bigexplode');
     explode(this, e.x, e.y - 8, 40, 0, null, 'fire');
     for (let i = 0; i < 10; i++) this.addPickup('coin', e.x, e.y, 2);
-    if (left) {
-      this.addPickup('chest', e.x, e.y, 0, { kind: 'elite' });
-      this.addPickup('goldpile', e.x, e.y, 20);
-      this.banner(`${e.name} is slain!`, `A chest dropped. ${LORDS_WORD[left] || left} ${left === 1 ? 'lord remains' : 'lords remain'}`, '#feae34', 3.2);
-    } else {
-      const it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1, luck: p.luck });
+    this.addPickup('goldpile', e.x, e.y, left ? 20 : 30);
+    const drop = lordDrop(Math.random());
+    // Gear and a chest lie side by side, so neither hides the other, and neither in a wall.
+    const [gearAt, chestAt] = drop.item && drop.chest ? this.dropSpots(e.x, e.y) : [e, e];
+    let it = null;
+    if (drop.item) {
+      it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1, luck: p.luck });
       this.itemsFound++;
-      this.addPickup('item', e.x, e.y, 0, { item: it });
-      this.addPickup('goldpile', e.x, e.y, 30);
-      const R = RARITIES[it.rarity];
-      this.banner(`${e.name} is slain!`, `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()} dropped`, R.color, 3.2);
-      if (this.world.lightWayOut) this.world.lightWayOut();
+      this.addPickup('item', gearAt.x, gearAt.y, 0, { item: it });
     }
+    if (drop.chest) this.addPickup('chest', chestAt.x, chestAt.y, 0, { kind: 'elite' });
+    const R = it && RARITIES[it.rarity];
+    const what = it ? `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()}${drop.chest ? ' and a chest' : ''}` : 'A chest';
+    const rest = left ? `. ${LORDS_WORD[left] || left} ${left === 1 ? 'lord remains' : 'lords remain'}` : '';
+    this.banner(`${e.name} is slain!`, `${what} dropped${rest}`, it ? R.color : '#feae34', 3.2);
+    if (!left && this.world.lightWayOut) this.world.lightWayOut();
     if (!next) playMusic('crypt');
   }
 
@@ -789,7 +816,7 @@ export class Game {
     if (!w || w.cd > 0 || p.dead) return false;
     const melee = w.def.kind === 'sword';
     const t = this.nearestEnemy(p.x, p.y, w.reach, melee && p.moving ? (e) => (e.x - p.x) * p.face >= 0 : null);
-    const ang = t ? Math.atan2(t.y - p.y, t.x - p.x) : !melee ? p.aim : p.face < 0 ? Math.PI : 0;
+    const ang = aimAt(p, t, !melee ? p.aim : p.face < 0 ? Math.PI : 0);
     p.strike(ang, this.clock);
     w.strike(ang, strikeClip(SPR[p.hero.sprite])?.delay ?? 0, t);
     return true;
@@ -991,6 +1018,19 @@ export class Game {
 
   // ----------------------------------------------------------- pickups --
 
+  // Two spots side by side for two things dropped at (x, y), both on open floor: DROP_GAP px to
+  // either side of it, else above and below it (against a wall), else the open floor nearest it
+  // and a spot a tile on from there (in a corner). Anywhere does in the forest, which has no walls.
+  dropSpots(x, y) {
+    const w = this.world, free = (a, b) => !w.free || w.free(a, b);
+    for (const [dx, dy] of DROP_SIDES) {
+      if (free(x + dx, y + dy) && free(x - dx, y - dy)) return [{ x: x + dx, y: y + dy }, { x: x - dx, y: y - dy }];
+    }
+    const a = (w.freeSpot && w.freeSpot(x, y)) || { x, y };
+    for (const [dx, dy] of DROP_ON) if (free(a.x + dx, a.y + dy)) return [a, { x: a.x + dx, y: a.y + dy }];
+    return [a, a];
+  }
+
   addPickup(kind, x, y, value = 1, opts = {}) {
     // Never inside a wall: whatever falls there starts from the nearest open floor.
     const w = this.world;
@@ -1021,11 +1061,12 @@ export class Game {
 
   // ------------------------------------------------------------ queries --
 
+  // Up to n foes within maxR of (x, y), nearest first. Like the two below, only targetable ones.
   nearestEnemies(x, y, n, maxR) {
     const cands = this.grid.query(x, y, maxR, tmp);
     const list = [];
     for (const e of cands) {
-      if (e.dead || e.prop || e.spawnT > 0.3) continue;
+      if (!targetable(e)) continue;
       const d = (e.x - x) ** 2 + (e.y - y) ** 2;
       if (d <= maxR * maxR) list.push([d, e]);
     }
@@ -1033,11 +1074,12 @@ export class Game {
     return list.slice(0, n).map((v) => v[1]);
   }
 
+  // The nearest foe within maxR of (x, y) that filter (if any) takes, or null.
   nearestEnemy(x, y, maxR, filter) {
     const cands = this.grid.query(x, y, maxR, tmp);
     let best = null, bd = maxR * maxR;
     for (const e of cands) {
-      if (e.dead || e.prop || (filter && !filter(e))) continue;
+      if (!targetable(e) || (filter && !filter(e))) continue;
       const d = (e.x - x) ** 2 + (e.y - y) ** 2;
       if (d < bd) {
         bd = d;
@@ -1047,10 +1089,11 @@ export class Game {
     return best;
   }
 
-  enemiesOnScreen(noProps = true) {
+  // Every foe on screen.
+  enemiesOnScreen() {
     const c = this.cam, out = [];
     for (const e of this.enemies) {
-      if (e.dead || (noProps && e.prop) || e.spawnT > 0.3) continue;
+      if (!targetable(e)) continue;
       if (e.x > c.x - 8 && e.x < c.x + c.W + 8 && e.y > c.y - 4 && e.y < c.y + c.H + 16) out.push(e);
     }
     return out;
@@ -1102,7 +1145,7 @@ export class Game {
     // Bosses, crypt lords and champions only take a heavy blow: a relic is no way past them. The
     // blow shrinks with their health (difficulty.js health), so it takes the same share of them on
     // Normal as on Veteran: a flat 200 would fell a Normal crypt lord (180) outright.
-    for (const e of this.enemiesOnScreen(true)) {
+    for (const e of this.enemiesOnScreen()) {
       if (e.boss || e.elite) this.hitEnemy(e, 200 * this.diff.health, { type: 'holy' });
       else this.killEnemy(e, { noSplit: true });
     }
@@ -1186,7 +1229,7 @@ export class Game {
     u.k -= dt;
     while (u.k <= 0 && u.t > 0.3) {
       u.k += 0.12;
-      const list = this.enemiesOnScreen(true);
+      const list = this.enemiesOnScreen();
       const e = list.length ? pick(list) : null;
       const p = this.player;
       const x = e ? e.x : p.x + rand(-150, 150), y = e ? e.y : p.y + rand(-90, 90);

@@ -140,24 +140,12 @@ export function sprite(name) {
   return s;
 }
 
-// Tint helpers used for status effects.
+// Tints: a frozen or winding-up foe (enemies.js), a shrine used up (Game.drawShrine).
 export const TINTS = {
   frozen: (b) => px.tint(b, px.hexPack('#9ee7ff'), 0.55),
   burn: (b) => px.tint(b, px.hexPack('#ff6a3d'), 0.35),
-  elite: (b) => px.tint(b, px.hexPack('#feae34'), 0.18),
-  shadow: (b) => px.silhouette(b, px.pack(10, 8, 18)),
   dim: (b) => px.tint(b, px.hexPack('#181425'), 0.55),
 };
-
-// Gold outline for champions: re-outline the sprite in a bright colour.
-export function eliteOutline(frame, color = '#feae34') {
-  return frame.variant(`ol${color}`, (b) => {
-    const c = px.hexPack(color);
-    const out = px.cloneBuf(b);
-    for (let i = 0; i < out.d.length; i++) if (out.d[i] === OUTLINE) out.d[i] = c;
-    return out;
-  });
-}
 
 // Build a canvas from a raw pixel buffer (procedural textures).
 export function canvasFromBuf(buf) {

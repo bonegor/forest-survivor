@@ -28,7 +28,9 @@ function glowSprite(ci) {
   }
   return c;
 }
-export { glowSprite };
+
+// burst()'s options when none are given: one shared empty set, not a new object a call.
+const NO_OPTS = Object.freeze({});
 
 export class Particles {
   constructor() {
@@ -67,7 +69,7 @@ export class Particles {
   }
 
   // Convenience: radial burst.
-  burst(x, y, z, n, cols, speed, life, size, flags, opts = {}) {
+  burst(x, y, z, n, cols, speed, life, size, flags, opts = NO_OPTS) {
     n = Math.ceil(n * this.budget);
     for (let i = 0; i < n; i++) {
       const a = opts.angle !== undefined ? opts.angle + rand(-opts.spread, opts.spread) : rand(TAU);

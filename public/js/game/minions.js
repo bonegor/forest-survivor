@@ -1,6 +1,6 @@
-// Allies: undead raised by the Necromancer. They seek out nearby foes, strike at them, and
-// crumble when their time runs out. Enemies ignore them, and nothing bumps
-// into them: they never stand in the hero's way or a monster's.
+// Allies: undead raised by the Necromancer. They seek out nearby foes, strike at them (breaking
+// any box in the swing, never going for one), and crumble when their time runs out. Enemies
+// ignore them, and nothing bumps into them: they never stand in the hero's way or a monster's.
 
 import { SPR, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx } from '../engine/audio.js';
@@ -31,6 +31,9 @@ const SPACE = 10; // px minions keep between them
 const PUSH = 50; // px/s a standing one edges away at most: slower than any of them walks
 const RING = 1; // px within reach a minion stands from its foe
 const STEER = 4; // how hard a walking one turns from the others: head on, it stops at 3/4 SPACE
+// A blow's swing: centred SWING_AHEAD px ahead of the minion, reaching SWING px about that point
+// and the body of what it strikes.
+const SWING_AHEAD = 8, SWING = 13;
 const near = []; // the grid query's list for picks (nothing in a pick queries again)
 let tick = 0; // stamps the tally: a foe's count is good only for this frame's tick
 
@@ -216,14 +219,16 @@ export class Minion {
     this.atk = this.look.atk;
     this.swing = 0.15;
     this.face = faceAttack(this.face, false, nx, ny);
-    if (this.knight) {
-      // Death knights cleave everything in front of them.
-      const cx = this.x + nx * 8, cy = this.y + ny * 8;
-      for (const e of g.grid.query(cx, cy, 24)) {
-        if (e.dead || Math.hypot(e.x - cx, e.y - cy) > 13 + e.r) continue;
-        g.hitEnemy(e, this.dmg, { w: this.w, kb: this.kb, kx: nx, ky: ny, ult: this.ult });
-      }
-    } else g.hitEnemy(tgt, this.dmg, { w: this.w, kb: this.kb, kx: nx, ky: ny, ult: this.ult });
+    // Death knights cleave everything in their swing; a skeleton strikes its own foe. Either breaks
+    // any box (barrel, crate, urn, lantern) in the swing as well, as the hero's blows do: only in
+    // passing, as it strikes a foe. It never goes for one (best passes them by), and none stops
+    // it, as nothing but a wall does (the user's call, 16 October 2026).
+    if (!this.knight) g.hitEnemy(tgt, this.dmg, { w: this.w, kb: this.kb, kx: nx, ky: ny, ult: this.ult });
+    const cx = this.x + nx * SWING_AHEAD, cy = this.y + ny * SWING_AHEAD;
+    for (const e of g.grid.query(cx, cy, 24)) {
+      if (e.dead || (!this.knight && !e.prop) || Math.hypot(e.x - cx, e.y - cy) > SWING + e.r) continue;
+      g.hitEnemy(e, this.dmg, { w: this.w, kb: this.kb, kx: nx, ky: ny, ult: this.ult });
+    }
     g.particles.burst(tgt.x, tgt.y - 4, 4, 3, [this.look.dust[2], PC.w], 40, 0.2, 1, P.GLOW | P.FADE, {});
   }
 

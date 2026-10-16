@@ -1,6 +1,6 @@
 // Weapons. `base` holds level-1 stats; `levels[i]` is what level i+2 adds.
-// Stats: dmg, cd (seconds), amount, area (x), speed (x), dur (s), pierce,
-// kb (knockback), plus a few kind-specific extras.
+// Stats: dmg, cd (seconds), amount, area (x), speed (x), dur (s; eternal: lasts for good),
+// pierce, kb (knockback), plus a few kind-specific extras.
 //
 // Each hero class has a signature weapon of its own (the Necromancer two), no other hero's to
 // find; every other weapon is shared by all (`unique`, SHARED_WEAPONS in data/heroes.js). Below,
@@ -8,6 +8,20 @@
 // than its weapon at level 8 on every stat it has (test/signature-weapons.test.js).
 
 export const MAX_WEAPON_LEVEL = 8;
+// How many weapons and how many relics a hero carries at most (Game.upgradePool, the HUD's slots).
+export const MAX_WEAPONS = 6, MAX_RELICS = 6;
+
+// A weapon's stats at a level: its base, and what each level up to it adds (an evolution has no
+// levels; its base is all there is). Stats it doesn't have start from `from` (Weapon.recompute's
+// defaults), or are left out.
+export function statsAt(def, level, from = {}) {
+  const s = { ...from, ...def.base };
+  if (def.evolved) return s;
+  for (const lv of def.levels.slice(0, level - 1)) {
+    for (const [k, v] of Object.entries(lv)) if (k !== 'text') s[k] = (s[k] || 0) + v;
+  }
+  return s;
+}
 
 // The sprites the newer weapons throw (art/items.js): each name here is the one place to swap.
 export const WEAPON_SPRITES = {
@@ -340,7 +354,7 @@ export const WEAPONS = {
     kind: 'blades',
     evolved: true,
     desc: 'Eternal guardian blades that shatter enemy missiles.',
-    base: { dmg: 24, cd: 0.1, amount: 6, area: 1.35, speed: 1.6, dur: 999, kb: 1.6, tick: 0.35, block: 1 },
+    base: { dmg: 24, cd: 0.1, amount: 6, area: 1.35, speed: 1.6, eternal: 1, kb: 1.6, tick: 0.35, block: 1 },
   },
   sanctuary: {
     name: 'Sanctuary',
@@ -371,7 +385,7 @@ export const WEAPONS = {
     icon: 'i_briarheart',
     kind: 'thorns',
     evolved: true,
-    desc: 'Iron thorns erupt in every direction and pin foes in place.',
+    desc: 'Iron thorns erupt in every direction and slow all they pierce.',
     base: { dmg: 36, cd: 1.6, amount: 6, area: 1.35, len: 14, slow: 0.75, kb: 0.4, ring: 1 },
   },
   faelights: {

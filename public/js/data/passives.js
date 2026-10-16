@@ -1,4 +1,4 @@
-// Passive relics. `stat` is added per rank.
+// Passive relics (`stat` is added per rank), and the level-up's filler cards.
 
 export const PASSIVES = {
   might: { name: 'Gauntlets of Might', icon: 'i_might', max: 5, desc: 'Damage {+10%}.', stat: { might: 0.1 } },
@@ -28,3 +28,15 @@ export const PASSIVES = {
 };
 
 export const PASSIVE_IDS = Object.keys(PASSIVES);
+
+// The cards a level-up falls back on once fewer upgrades are left than it offers
+// (Game.levelChoices), in the order they come: a stacking Blessing of Valor, a heal, and a purse
+// of gold that grows with the night. name: on the card, and as a bot reads it; short: as the
+// pause menu names the one every level-up takes once the player ticked ALWAYS on it
+// (Game.autoPick).
+export const FILLERS = {
+  bless: { name: 'Blessing of Valor', short: 'Blessing of Valor', icon: 'i_might' },
+  heal: { name: 'Roast Chicken', short: 'Roast Chicken', icon: 'i_vitality' },
+  gold: { name: 'Purse of Gold', short: 'Gold', icon: 'i_greed' },
+};
+export const FILLER_IDS = Object.keys(FILLERS);

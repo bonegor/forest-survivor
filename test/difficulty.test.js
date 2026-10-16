@@ -14,7 +14,7 @@ import { armored } from '../public/js/game/player.js';
 import { NORMAL, VETERAN } from '../public/js/data/difficulty.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { targetCount } from '../public/js/data/waves.js';
-import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
+import { defaultProfile, metaBonuses, runReward, DIFF_GOLD } from '../public/js/shared/profile.js';
 
 function game(o = {}, seed = 7) {
   const oldRandom = Math.random;
@@ -203,4 +203,13 @@ test('a Holy Relic leaves a crypt lord standing, the same share of it gone on No
   assert.ok(share.hard > 0.25, `a heavy blow on Veteran as before: ${share.hard}`);
   // (A blow lands as a whole number, so the shares differ by the rounding alone.)
   assert.ok(Math.abs(share.medium - share.hard) < 0.01, `the same share on Normal: ${share.medium} against ${share.hard}`);
+});
+
+test('the gold a difficulty pays is the profile\'s alone, and its card says so', () => {
+  for (const d of [NORMAL, VETERAN]) {
+    assert.equal(d.gold, undefined, `${d.name} keeps no gold of its own`);
+    assert.ok(d.desc.endsWith(`Gold x${DIFF_GOLD[d.id]}.`), d.desc);
+    const run = { mode: 's15', diff: d.id, victory: false, gold: 100 };
+    assert.equal(runReward(run).collected, Math.round(100 * DIFF_GOLD[d.id]));
+  }
 });

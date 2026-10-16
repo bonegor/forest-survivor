@@ -9,12 +9,16 @@ import { rand, TAU, lerp, clamp, ease, angleDiff, pick } from '../engine/util.js
 import { ringSprite, discSprite, slashFrame, glow, beamSprite, shadowSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
+import { danceBlade } from './projectiles.js';
 
 function blitCentered(ctx, img, sx, sy, scale) {
   const w = img.width * scale, h = img.height * scale;
   ctx.drawImage(img, Math.round(sx - w / 2), Math.round(sy - h / 2), Math.round(w), Math.round(h));
 }
 
+// World to screen pixels. A fresh pair on purpose: its callers read it as
+// `const [sx, sy] = toScreen(...)`, and read that way a reused pair makes more garbage, not less
+// (measured in Node 24). The hottest paths (Orbit, ArrowRain) work out sx and sy as plain numbers.
 const toScreen = (cam, x, y) => [(x - cam.x) * cam.S, (y - cam.y) * cam.S];
 
 // ------------------------------------------------------------------ slash --
@@ -97,10 +101,6 @@ export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
       g.hitEnemy(e, dmg, { w, type: st.num, kb: opts.kb ?? 1.4, kx: dx / (d || 1), ky: dy / (d || 1), ult: opts.ult });
     }
   }
-  if (opts.hurtsPlayer) {
-    const p = g.player;
-    if (Math.hypot(p.x - x, p.y - y) < R + p.r) p.hurt(opts.hurtsPlayer);
-  }
   g.effects.push(new Explosion(g, x, y, R, style));
   sfx('explode', { size: clamp(R / 28, 0.6, 1.8), pan: clamp((x - g.player.x) / 200, -1, 1), pitch: rand(0.85, 1.1) });
 }
@@ -168,11 +168,11 @@ const POOL_LOOK = {
   spikes: { disc: ['#3a4466', '#262b44', '#181425'], parts: [PC.G, PC.g], glow: null, light: null, num: 'normal', emit: 0.15, alpha: 0.35, marks: WEAPON_SPRITES.caltrop },
 };
 
-// A pool on the ground that hurts what stands in it every `tick`. opts: hostile (hurts the
-// hero instead), src (its hit channel; a weapon's own by default, so a weapon's pools never
-// hurt one foe twice in a tick), kb, slow + slowT, dot (poison a second after each touch, for
-// a poison look), critDmg (extra crit damage), decay (shrinks to nothing over its life, as if
-// seeping into the ground), sparse (a quarter of the sparks, for the many of a trail).
+// A pool on the ground that the weapon w left, hurting the foes that stand in it every `tick`. It
+// strikes on its weapon's hit channel, so a weapon's pools never hurt one foe twice in a tick.
+// opts: kb, slow + slowT, dot (poison a second after each touch, for a poison look), critDmg
+// (extra crit damage), decay (shrinks to nothing over its life, as if seeping into the ground),
+// sparse (a quarter of the sparks, for the many of a trail).
 export class Pool {
   constructor(g, w, x, y, R, dur, dmg, tick, style = 'fire', creep = false, opts = {}) {
     this.g = g;
@@ -188,8 +188,7 @@ export class Pool {
     this.t = 0;
     this.tickT = 0;
     this.emitT = 0;
-    this.hostile = opts.hostile || 0; // damages the player instead
-    this.src = w ? w.src : opts.src ?? 15;
+    this.src = w.src;
     this.kb = opts.kb ?? 0.1;
     this.slow = opts.slow || 0;
     this.slowT = opts.slowT || 0.6;
@@ -227,21 +226,16 @@ export class Pool {
     this.tickT -= dt;
     if (this.tickT <= 0) {
       this.tickT = this.tick;
-      if (this.hostile) {
-        const p = g.player;
-        if (Math.hypot(p.x - this.x, p.y - this.y) < R + p.r - 2) p.hurt(this.hostile);
-      } else {
-        const cands = g.grid.query(this.x, this.y, R + 12);
-        for (let i = 0; i < cands.length; i++) {
-          const e = cands[i];
-          // By the game's clock, which runs on in a crypt where the night's stands still.
-          if (e.dead || e.hitT[this.src] > g.clock) continue;
-          const d = Math.hypot(e.x - this.x, e.y - this.y);
-          if (d > R + e.r) continue;
-          e.hitT[this.src] = g.clock + this.tick * 0.9;
-          g.hitEnemy(e, this.dmg, { w: this.w, type: this.look.num, kb: this.kb, kx: 0, ky: 0, slow: this.slow, slowT: this.slowT, critDmg: this.critDmg });
-          if (this.dot && this.look.dot) e.addDot(this.look.dot, this.dot, 1.5, this.w);
-        }
+      const cands = g.grid.query(this.x, this.y, R + 12);
+      for (let i = 0; i < cands.length; i++) {
+        const e = cands[i];
+        // By the game's clock, which runs on in a crypt where the night's stands still.
+        if (e.dead || e.hitT[this.src] > g.clock) continue;
+        const d = Math.hypot(e.x - this.x, e.y - this.y);
+        if (d > R + e.r) continue;
+        e.hitT[this.src] = g.clock + this.tick * 0.9;
+        g.hitEnemy(e, this.dmg, { w: this.w, type: this.look.num, kb: this.kb, kx: 0, ky: 0, slow: this.slow, slowT: this.slowT, critDmg: this.critDmg });
+        if (this.dot && this.look.dot) e.addDot(this.look.dot, this.dot, 1.5, this.w);
       }
     }
     this.emitT -= dt;
@@ -291,6 +285,9 @@ export class Pool {
 
 // ------------------------------------------------------------------ orbit --
 
+// The sparks of an enemy missile a guardian blade shatters (Orbit.update).
+const BLOCK_SPARKS = [PC.y, PC.w];
+
 export class Orbit {
   constructor(g, w) {
     this.g = g;
@@ -310,7 +307,7 @@ export class Orbit {
     if (this.dead) return false;
     const g = this.g, s = this.w.s, p = g.player;
     this.t += dt;
-    if (s.dur < 100 && this.t >= s.dur) {
+    if (!s.eternal && this.t >= s.dur) {
       this.dead = true;
       return false;
     }
@@ -332,7 +329,7 @@ export class Orbit {
         for (const shot of g.eshots) {
           if (!shot.dead && (shot.x - bx) ** 2 + (shot.y - by) ** 2 < (br + shot.r + 2) ** 2) {
             shot.dead = true;
-            g.particles.burst(shot.x, shot.y, 8, 6, [PC.y, PC.w], 60, 0.3, 1, P.GLOW | P.FADE, {});
+            g.particles.burst(shot.x, shot.y, 8, 6, BLOCK_SPARKS, 60, 0.3, 1, P.GLOW | P.FADE);
           }
         }
       }
@@ -342,21 +339,21 @@ export class Orbit {
 
   get alpha() {
     const s = this.w.s;
-    if (s.dur > 100) return 1;
+    if (s.eternal) return 1;
     return Math.min(1, this.t / 0.2, (s.dur - this.t) / 0.25);
   }
 
   draw(ctx, cam) {
     const s = this.w.s, p = this.g.player;
-    const R = 34 * s.area;
+    const R = 34 * s.area, S = cam.S;
     const spr = SPR[s.block ? 'goldblade' : 'blade'].frames[0];
     ctx.globalAlpha = this.alpha;
     for (let i = 0; i < this.n; i++) {
       for (let ghost = 2; ghost >= 0; ghost--) {
         const a = this.ang + (i / this.n) * TAU - ghost * 0.16;
-        const [sx, sy] = toScreen(cam, p.x + Math.cos(a) * R, p.y - 6 + Math.sin(a) * R * 0.85);
+        const wx = p.x + Math.cos(a) * R, wy = p.y - 6 + Math.sin(a) * R * 0.85;
         ctx.globalAlpha = this.alpha * (ghost ? 0.22 : 1);
-        blitCentered(ctx, spr.rotated(a + Math.PI / 2, 32), sx, sy, cam.S * Math.min(1.3, s.area));
+        blitCentered(ctx, spr.rotated(a + Math.PI / 2, 32), (wx - cam.x) * S, (wy - cam.y) * S, S * Math.min(1.3, s.area));
       }
     }
     ctx.globalAlpha = 1;
@@ -370,7 +367,7 @@ export class Orbit {
     for (let i = 0; i < this.n; i++) {
       const a = this.ang + (i / this.n) * TAU;
       const wx = p.x + Math.cos(a) * R, wy = p.y - 6 + Math.sin(a) * R * 0.85;
-      const [sx, sy] = toScreen(cam, wx, wy);
+      const sx = (wx - cam.x) * cam.S, sy = (wy - cam.y) * cam.S;
       const sz = 22 * cam.S;
       ctx.drawImage(glow(col), sx - sz / 2, sy - sz / 2, sz, sz);
       if (i % 2 === 0) this.g.light(wx, wy, 30, s.block ? 'gold' : 'cyan', 0.6 * this.alpha);
@@ -878,6 +875,10 @@ export class Whirl {
   }
 }
 
+// What an arrow of the storm throws up where it lands (ArrowRain.update).
+const ARROW_SPLINTERS = [PC.B, PC.T, PC.G];
+const ARROW_FALL = { vz: 50, grav: 200 };
+
 // Archer: arrows fall from the sky on every visible foe.
 export class ArrowRain {
   constructor(g, dur) {
@@ -893,9 +894,12 @@ export class ArrowRain {
     this.t += dt;
     this.spawnT -= dt;
     if (this.t < this.dur) {
+      // Who is on screen, looked up once for all the arrows loosed this frame: nothing in between
+      // moves or fells a foe.
+      let list = null;
       while (this.spawnT <= 0) {
         this.spawnT += 0.035;
-        const list = g.enemiesOnScreen(true);
+        list ??= g.enemiesOnScreen();
         const e = list.length ? pick(list) : null;
         const p = g.player;
         const x = e ? e.x + rand(-4, 4) : p.x + rand(-g.cam.W / 2, g.cam.W / 2);
@@ -913,7 +917,7 @@ export class ArrowRain {
           if (e.dead || Math.hypot(e.x - d.x, e.y - d.y) > 9 + e.r) continue;
           g.hitEnemy(e, 26, { type: 'normal', kb: 0.6, kx: 0, ky: 1, crit: 0.15, ult: true });
         }
-        g.particles.burst(d.x, d.y, 1, 4, [PC.B, PC.T, PC.G], 40, 0.3, 1, P.FADE | P.GROUND, { vz: 50, grav: 200 });
+        g.particles.burst(d.x, d.y, 1, 4, ARROW_SPLINTERS, 40, 0.3, 1, P.FADE | P.GROUND, ARROW_FALL);
         if (Math.random() < 0.3) sfx('arrow', { pitch: rand(1.2, 1.6) });
       }
     }
@@ -921,15 +925,14 @@ export class ArrowRain {
   }
 
   draw(ctx, cam) {
-    const img = SPR.arrow.frames[0].rotated(Math.PI / 2, 32);
+    const img = SPR.arrow.frames[0].rotated(Math.PI / 2, 32), sh = shadowSprite(5), S = cam.S;
     for (const d of this.drops) {
       const u = d.t / 0.22;
-      const [sx, sy] = toScreen(cam, d.x, d.y - (1 - u) * 140);
-      blitCentered(ctx, img, sx, sy - 6 * cam.S, cam.S);
-      const sh = shadowSprite(5);
-      const [gx, gy] = toScreen(cam, d.x, d.y);
+      // The arrow on its way down, and its shadow on the ground where it will land.
+      const sx = (d.x - cam.x) * S, sy = (d.y - (1 - u) * 140 - cam.y) * S;
+      blitCentered(ctx, img, sx, sy - 6 * S, S);
       ctx.globalAlpha = 0.3 + u * 0.4;
-      blitCentered(ctx, sh, gx, gy, cam.S);
+      blitCentered(ctx, sh, sx, (d.y - cam.y) * S, S);
       ctx.globalAlpha = 1;
     }
   }
@@ -950,17 +953,9 @@ export class ShadowDance {
     this.k -= dt;
     while (this.k <= 0 && this.t < this.dur) {
       this.k += 0.05;
-      for (let i = 0; i < 2; i++) {
-        const a = rand(TAU);
-        spawnUltDagger(g, p.x, p.y, a);
-      }
+      for (let i = 0; i < 2; i++) danceBlade(g, p.x, p.y, rand(TAU));
     }
     if (Math.random() < 0.5) g.particles.emit(p.x + rand(-5, 5), p.y - rand(0, 14), 0, 0, 0, rand(10, 20), 0.5, 2, pick([PC.p, PC.q, PC.P]), P.FADE | P.GLOW, 0);
     return this.t < this.dur;
   }
-}
-
-let spawnUltDagger = () => {};
-export function setUltDaggerSpawner(fn) {
-  spawnUltDagger = fn;
 }

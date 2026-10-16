@@ -26,6 +26,15 @@ function gameCase(fn) {
   }
 }
 const step = (g, n) => { for (let i = 0; i < n; i++) g.update(1/60); };
+// Every lord drops what row says ({item, chest}) while fn runs: the drop table made certain.
+function dropsAlways(row, fn) {
+  const table = I.LORD_DROPS.splice(0, I.LORD_DROPS.length, {odds:1, ...row});
+  try {
+    return fn();
+  } finally {
+    I.LORD_DROPS.splice(0, I.LORD_DROPS.length, ...table);
+  }
+}
 // A whole frame, world and HUD, on the stub canvas: drawing must not throw either.
 const ctx = document.createElement('canvas').getContext('2d');
 const frame = g => { g.draw(ctx); g.hud.draw(ctx, 480, 270, g.clock); };
@@ -60,7 +69,7 @@ test('every walk from the start meets a crypt at the second crossroads', () => {
 // The user, 16 October 2026: "the crypt needs to be rethought, player can always exit, has 2-4
 // bosses, each drop something. Make crypt bigger, once the last champion is killed the hole in
 // wall opens".
-test('a crypt stops the night; each of its lords drops something, the last gear and a way out', () => gameCase((g, p) => {
+test('a crypt stops the night; each of its lords drops something, and the last opens a way out', () => gameCase((g, p) => {
   const door = enterFirstCrypt(g, p);
   const w = g.world;
   assert.ok(g.inCrypt, 'walking up the steps goes in');
@@ -77,14 +86,18 @@ test('a crypt stops the night; each of its lords drops something, the last gear 
   const lord = w.guardian, first = lords.find(l => l !== lord), at = {x:first.x, y:first.y};
   g.hitEnemy(first, 1e9, {});
   step(g, 5);
-  assert.ok(g.pickups.some(pk => pk.kind === 'chest' && Math.hypot(pk.x - at.x, pk.y - at.y) < 60), 'the first leaves a chest');
-  assert.ok(!g.pickups.some(pk => pk.kind === 'item'), 'and no gear');
+  const firstDrops = g.pickups.filter(pk => (pk.kind === 'chest' || pk.kind === 'item') && Math.hypot(pk.x - at.x, pk.y - at.y) < 60);
+  assert.ok(firstDrops.length, 'the first leaves a chest, gear or both');
+  const firstGear = firstDrops.filter(pk => pk.kind === 'item').length;
+  assert.equal(g.itemsFound, firstGear, 'every piece of gear counted');
   assert.ok(!w.way && w.exit === w.entrance && !g.cleared.has('2,0'), 'the wall holds while a lord stands');
   p.x = lord.x - 30; p.y = lord.y; // up to the last lord, in the farthest room
-  g.hitEnemy(lord, 1e9, {}); // wakes it with its intro, then fells it
+  const last = {x:lord.x, y:lord.y};
+  // Wakes it with its intro, then fells it; this one drops gear (the drop table aside).
+  dropsAlways({item:true, chest:false}, () => g.hitEnemy(lord, 1e9, {}));
   step(g, 5);
   frame(g);
-  const drop = g.pickups.find(pk => pk.kind === 'item');
+  const drop = g.pickups.find(pk => pk.kind === 'item' && Math.hypot(pk.x - last.x, pk.y - last.y) < 60);
   assert.ok(drop, 'gear drops');
   assert.equal(g.world.stairs, null, 'no stairs down');
   assert.ok(g.world.way && g.world.way.path.length > 2 && g.world.exit.hole, 'the way out is lit, to a hole broken in the wall');
@@ -111,7 +124,7 @@ test('a crypt stops the night; each of its lords drops something, the last gear 
   assert.ok(Math.abs(p.x - door.x) < 2 && p.y > door.y, 'out by its door');
   g.finish(false);
   assert.equal(g.result.crypts, 1);
-  assert.equal(g.result.found, 1);
+  assert.equal(g.result.found, firstGear + 1);
   assert.deepEqual(g.result.gear, {[it.slot]: it});
 }));
 
@@ -169,11 +182,14 @@ test('two lords at dusk, three from minute 5, four from minute 10; one more thre
   });
 });
 
-test('each lord drops something, and the wall opens only when the last one falls', () => gameCase((g, p) => {
+// The user, 16 October 2026: "50% both a gear item and a champion's chest, 25% item only, 25%
+// chest only", for every lord in the crypt.
+test('each lord drops gear, a chest or both, and the wall opens only when the last one falls', () => gameCase((g, p) => {
   enterFirstCrypt(g, p, 10);
   const w = g.world, lords = g.enemies.filter(e => e.lord);
   assert.equal(lords.length, 4);
   p.invuln = 999;
+  let items = 0;
   for (const [k, lord] of lords.entries()) {
     const left = lords.length - 1 - k, at = {x:lord.x, y:lord.y};
     for (const pk of g.pickups) pk.dead = true;
@@ -182,17 +198,135 @@ test('each lord drops something, and the wall opens only when the last one falls
     step(g, 5);
     const near = kind => g.pickups.some(pk => !pk.dead && pk.kind === kind && Math.hypot(pk.x - at.x, pk.y - at.y) < 60);
     assert.ok(near('coin') && near('goldpile'), `lord ${k + 1}: coins and gold`);
+    assert.ok(near('chest') || near('item'), `lord ${k + 1}: a chest, gear or both`);
+    if (near('item')) items++;
+    const told = g.banners.find(b => b.title === `${lord.name} is slain!`);
+    assert.ok(told && /^(A chest|\w+ \w+( and a chest)?) dropped/.test(told.sub), `he is told what dropped (${told?.sub})`);
     if (left) {
-      assert.ok(near('chest') && !near('item'), `lord ${k + 1}: a chest, not gear`);
-      assert.ok(!w.way && w.exit === w.entrance, `lord ${k + 1}: the wall holds, ${left} left`);
-      assert.ok(g.banners.some(b => b.sub.startsWith('A chest dropped.') && b.sub.includes(left === 1 ? 'One lord remains' : 'lords remain')), 'he is told how many remain');
+      assert.ok(!w.way && w.exit === w.entrance && !g.cleared.has('2,0'), `lord ${k + 1}: the wall holds, ${left} left`);
+      assert.ok(told.sub.endsWith(left === 1 ? '. One lord remains' : `. ${['', '', 'Two', 'Three'][left]} lords remain`), 'and how many remain');
     } else {
-      assert.ok(near('item') && !near('chest'), 'the last: gear');
-      assert.ok(w.way && w.exit.hole, 'and the wall breaks open');
+      assert.ok(w.way && w.exit.hole, 'the last: the wall breaks open');
       assert.ok(g.cleared.has('2,0'));
+      assert.ok(!/remain/.test(told.sub), 'none remain');
     }
   }
-  assert.equal(g.itemsFound, 1, 'one piece of gear a crypt');
+  assert.equal(g.itemsFound, items, 'every piece of gear counted, for the server');
+}));
+
+test('a lord drops gear and a chest half the time, gear alone a quarter, a chest alone a quarter', () => {
+  const rows = I.LORD_DROPS;
+  assert.ok(Math.abs(rows.reduce((s, d) => s + d.odds, 0) - 1) < 1e-9, 'the odds add up to 1');
+  const share = (counts, n) => counts.map(c => c / n);
+  // The table itself, over many seeded rolls.
+  const rng = mulberry32(77), n = 20000, counts = [0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    const d = I.lordDrop(rng());
+    counts[d.item && d.chest ? 0 : d.item ? 1 : 2]++;
+  }
+  share(counts, n).forEach((s, i) => assert.ok(Math.abs(s - [0.5, 0.25, 0.25][i]) < 0.015, `rolls: ${share(counts, n)}`));
+  // And lords felled in the game, each rolled afresh.
+  gameCase((g, p) => {
+    enterFirstCrypt(g, p, 10);
+    const lord = g.enemies.find(e => e.lord);
+    lord.dead = true; // as killEnemy leaves it; the other three stand, so the wall holds
+    const kills = 800, seen = [0, 0, 0];
+    for (let i = 0; i < kills; i++) {
+      g.pickups.length = 0;
+      g.effects.length = 0;
+      g.lordDefeated(lord);
+      const item = g.pickups.some(pk => pk.kind === 'item'), chest = g.pickups.some(pk => pk.kind === 'chest');
+      assert.ok(item || chest, 'never nothing');
+      seen[item && chest ? 0 : item ? 1 : 2]++;
+    }
+    share(seen, kills).forEach((s, i) => assert.ok(Math.abs(s - [0.5, 0.25, 0.25][i]) < 0.06, `kills: ${share(seen, kills)}`));
+    assert.equal(g.itemsFound, seen[0] + seen[1], 'each piece counted');
+    assert.ok(!g.world.way && !g.cleared.has('2,0'), 'and with lords standing, the wall held');
+  });
+});
+
+test('a crypt of four lords, every one dropping gear: the run report keeps all four, and no more', () => gameCase((g, p) => {
+  enterFirstCrypt(g, p, 10);
+  const lords = g.enemies.filter(e => e.lord);
+  assert.equal(lords.length, I.MAX_LORDS, 'as many lords as a crypt holds');
+  p.invuln = 999;
+  dropsAlways({item:true, chest:true}, () => {
+    for (const lord of lords) {
+      g.hitEnemy(lord, 1e9, {});
+      step(g, 2);
+    }
+  });
+  const found = g.pickups.filter(pk => pk.kind === 'item').map(pk => pk.opts.item);
+  assert.equal(found.length, 4);
+  assert.equal(g.itemsFound, 4);
+  assert.ok(found.every(it => I.sanitizeItem(it)), 'every drop is one the server takes');
+  g.finish(false);
+  const res = g.result;
+  assert.equal(res.found, 4);
+  // The report as the results screen sends it, wearing four new pieces: one of each find, and
+  // where two finds share a slot, another piece the rules could roll in a slot still bare.
+  const gear = {};
+  for (const it of found) gear[it.slot] = it;
+  const roll = mulberry32(9);
+  const bare = () => I.SLOTS.find(s => !gear[s]);
+  while (Object.keys(gear).length < 4) gear[bare()] = I.rollItem(roll, {slot:bare()});
+  const report = {mode:res.mode, diff:res.diff, hero:res.hero, victory:res.victory, time:res.time, gold:res.gold, kills:res.kills, level:res.level, floor:res.floor, gear, realTime:res.realTime, found:res.found};
+  const kept = P.applyRun(P.defaultProfile(), report);
+  assert.ok(kept.ok);
+  assert.deepEqual(kept.profile.gear.knight, gear, 'all four new pieces kept');
+  // One more new piece than the run found is one too many: the gear is refused, the run still paid.
+  const extra = bare();
+  const more = {...gear, [extra]: I.rollItem(roll, {slot:extra})};
+  const refused = P.applyRun(P.defaultProfile(), {...report, gear:more});
+  assert.ok(refused.ok);
+  assert.equal(refused.profile.gear.knight, undefined, 'five new pieces from four lords are refused');
+  // A run short enough for one crypt (the one by the start) finds four pieces at most, one from
+  // each of its lords: all four are kept, a fifth claimed is not believed.
+  const short = {...report, time:30, realTime:40};
+  assert.equal(P.sanitizeRun({...short, found:5}).found, I.MAX_LORDS, 'four lords, four finds at most');
+  assert.deepEqual(P.applyRun(P.defaultProfile(), short).profile.gear.knight, gear);
+  assert.equal(P.applyRun(P.defaultProfile(), {...short, gear:more, found:5}).profile.gear.knight, undefined);
+  // The next crypt's time, four more.
+  assert.equal(P.sanitizeRun({...short, realTime:45, found:99}).found, 2 * I.MAX_LORDS);
+}));
+
+// A lord felled against a wall, or in a corner, leaves its gear and its chest apart, both on
+// open floor: neither hides the other, and neither lies in the wall.
+test('gear and a chest from a lord by a wall or in a corner lie apart, on open floor', () => gameCase((g, p) => {
+  enterFirstCrypt(g, p, 10);
+  const w = g.world, T = 16, lords = g.enemies.filter(e => e.lord);
+  assert.equal(lords.length, 4);
+  p.invuln = 999;
+  // Where each lord is put, the nearest open tile to it with walls (1) beside it: to the east, to
+  // the west, then a corner each way; and how far into the tile, toward those walls.
+  const spots = [[1, 0], [-1, 0], [1, 1], [-1, -1]];
+  const wall = (tx, ty) => w.tile(tx, ty) === 1;
+  for (const [k, lord] of lords.entries()) {
+    const [sx, sy] = spots[k], tx0 = Math.floor(lord.x / T), ty0 = Math.floor(lord.y / T);
+    let at = null;
+    for (let r = 0; r < 30 && !at; r++) {
+      for (let dy = -r; dy <= r && !at; dy++) {
+        for (let dx = -r; dx <= r && !at; dx++) {
+          const tx = tx0 + dx, ty = ty0 + dy;
+          if (w.tile(tx, ty) !== 0) continue;
+          if ((sx && !wall(tx + sx, ty)) || (sy && !wall(tx, ty + sy))) continue;
+          at = {x:tx * T + T / 2 + sx * 6, y:ty * T + T / 2 + sy * 6};
+        }
+      }
+    }
+    assert.ok(at, `lord ${k + 1}: a spot by a wall`);
+    lord.x = at.x;
+    lord.y = at.y;
+    const before = new Set(g.pickups);
+    dropsAlways({item:true, chest:true}, () => g.hitEnemy(lord, 1e9, {}));
+    step(g, 3);
+    const fresh = g.pickups.filter(pk => !before.has(pk));
+    const gear = fresh.find(pk => pk.kind === 'item'), chest = fresh.find(pk => pk.kind === 'chest');
+    assert.ok(gear && chest, `lord ${k + 1}: gear and a chest`);
+    for (const pk of fresh) assert.ok(w.free(pk.x, pk.y), `lord ${k + 1}: the ${pk.kind} lies on open floor`);
+    assert.ok(Math.hypot(gear.x - chest.x, gear.y - chest.y) >= 8, `lord ${k + 1}: gear and chest apart (${Math.hypot(gear.x - chest.x, gear.y - chest.y).toFixed(1)} px)`);
+    for (const pk of [gear, chest]) assert.ok(Math.hypot(pk.x - at.x, pk.y - at.y) < 30, `lord ${k + 1}: the ${pk.kind} by where it fell`);
+  }
 }));
 
 // The minimap's canvas, keeping the box it paints in.

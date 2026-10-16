@@ -86,3 +86,19 @@ test('at the debug flag the Armory is set freely, at no cost', async () => {
   assert.equal(P.metaBonuses(store.profile).revival, 2, 'and the runs get them');
   assert.equal(jar.get('fs_lprofile'), own);
 });
+
+// The token is typed out in the pages that link to the debug game: the owner's link list, the
+// menu-music audition, the weapons reference and the forwarding folder. Each must carry today's.
+test('every page that links to the debug game links with the debug flag', async () => {
+  const { readFile, readdir } = await import('node:fs/promises');
+  const pub = new URL('../public/', import.meta.url);
+  const PAGES = ['nb5hzpva1bhd', 'j1mcxslbbgsw', 'bvbu8zapqun8', 'cm2mqvquqkf'];
+  const dirs = (await readdir(pub, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+  for (const dir of PAGES) assert.ok(dirs.includes(dir), `${dir}/ is there`);
+  for (const dir of dirs) {
+    const html = await readFile(new URL(`${dir}/index.html`, pub), 'utf8').catch(() => '');
+    const flags = [...html.matchAll(/\.\.\/\?([\w-]+)/g)].map((m) => m[1]);
+    if (PAGES.includes(dir)) assert.ok(flags.length, `${dir} links to the debug game`);
+    for (const flag of flags) assert.equal(flag, DEBUG_FLAG, `${dir}'s link to the debug game`);
+  }
+});

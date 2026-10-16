@@ -9,20 +9,28 @@ node tools/music/build-midi.mjs [id...]      # songs/<id>.mjs -> out/<id>.mid + 
 node tools/music/render.mjs [id...]          # out/<id>.mid -> public/audio/music/menu/<id>-<renderer>.ogg
      [--only=sf,sf-steel,ks] [--guitar=<id>,...] [--keep-wav] [--q=5] [--max-kb=2560]
      [--replace] [--no-nylon-comp]
-node tools/music/render.mjs --test           # the whole pipeline on a built-in test tune, into out/test/
+node tools/music/render.mjs --test           # the whole pipeline on the test tune (render/test-song.mjs), into out/test/
 node tools/music/render.mjs menu-v2 menu-v3 --excerpt=20 [--guitar=listen]
                                              # "Guitar sounds": menu/guitars/<id>-<guitar>.ogg + guitars.json
 ```
 
-- `songs/<id>.mjs`: one tune each (see `song.mjs` for the format and helpers). Its `render` block
-  steers the mix: `leadOverRhythmDb`, and `reverb` as text such as `"small hall, ~20% wet, 1.6 s"`.
-- `build-midi.mjs`, `midi.mjs`, `song.mjs`: validation and the MIDI writer.
+- `songs/<id>.mjs`: one tune each, the file named by the song's `id` (see `song.mjs` for the format
+  and helpers). Its `render` block steers the mix: `leadOverRhythmDb`, and `reverb` as text such as
+  `"small hall, ~20% wet, 1.6 s"` or as `{ wetPct: 20, t60: 1.6 }`. Section markers sit on whole bars
+  inside the loop. A song written to a commission can carry it as `brief: { bpm: [lo, hi], bars:
+  [lo, hi], seconds: [lo, hi] }`; validation warns outside those ranges (no brief, no such warnings).
+- `build-midi.mjs`, `song.mjs`: validation (the guitar's range from `song.mjs`'s `GM_GUITARS`: 19
+  frets on nylon, 20 on steel, 22 on an electric; the "comfortable range" check is skipped for a
+  single guitar playing bass and tune; velocities are checked against the range `finish()` clamped
+  to). `midi.mjs` writes every MIDI file (the songs and the renderer's edited copies);
+  `render/smf.mjs` reads them. `render/test-song.mjs` is the `--test` tune, written like a real song.
 - `render.mjs` and `render/`: the renderer.
   - `sf`: FluidSynth with the MuseScore General SoundFont, the song's own guitars. `sf-steel`: the
     same with every guitar on Steel (GM 25), skipped when they already are.
   - `ks`: `render/pluck.mjs`, a Karplus-Strong plucked-string synth (no samples): string loops
     tuned to a fraction of a cent, decay set per note, pick position, two polarisations, six
-    strings in standard tuning, body resonances.
+    strings in standard tuning, body resonances. Its filters, the FFT the checks use and the seeded
+    random numbers (the game's `mulberry32`, from `public/js/engine/util.js`) are in `render/dsp.mjs`.
   - `render/mix.mjs`: one dry stem per guitar, balanced by BS.1770 loudness to the song's
     `leadOverRhythmDb`, sent (by each track's CC91) to a stereo hall with the song's decay and wet
     level. `x% wet` means wet : dry = x : (100 - x) in level.
@@ -33,10 +41,14 @@ node tools/music/render.mjs menu-v2 menu-v3 --excerpt=20 [--guitar=listen]
     (true peak at most -1.5 dBTP, measured by ffmpeg after encoding). The limiter takes at most 3 dB
     off a peak. A sparse, peaky tune stays quieter instead, and its candidate's `gain` (used by
     the game, capped at 1 on the audition page) makes up the difference. Then Ogg Vorbis at q5
-    (`--q`), a step lower while the file is over `--max-kb`.
+    (`--q`), a step lower while the file is over `--max-kb`. At most 10 rounds: one that has not
+    settled by then keeps its last file and says so. The file is encoded in `out/render/` and moved
+    into `public/` when done, so a tracked file is never half written.
   - `candidates.json`: the files just made replace their namesakes, the rest stay while their files
     do; with `--replace` the songs rendered keep only this run's renderers (other files stay on
-    disk, unlisted). Ordered by songs.json, then renderer.
+    disk, unlisted). Ordered by songs.json, then renderer. It (and `guitars.json`) is re-read when
+    written and replaced through a temporary file (`render/manifest.mjs`), so two renders running at
+    once keep each other's entries.
   - Nylon compensation: MuseScore General's nylon (bank 0, program 24) gets quieter up the neck
     at equal velocity (about -4 dB from B3, -8 dB at D5, -10 dB from E5). Wherever it plays (`sf`
     on a nylon track, `ms-nylon`), notes above B3 (59) are sent 0.6 velocity a semitone harder,
@@ -111,6 +123,8 @@ moved to the attack (`render/sf2trim.mjs`; only the sample headers change), kept
 
 Override the paths with the environment variables `FLUIDSYNTH`, `SOUNDFONT` and `FFMPEG` (ffmpeg
 defaults to the winget install, else `ffmpeg` on the PATH). Node 18 or later; no npm packages.
+`render.mjs` checks for ffmpeg (and FluidSynth, when a SoundFont plays) before rendering and points
+here when one is missing. `test/music-tools.test.js` (in `npm test`) needs none of these tools.
 
 FluidSynth notes: `-F out.wav -O float -T wav` writes 32-bit float WAV, so nothing clips;
 `-o synth.dynamic-sample-loading=1` loads only the samples used (5 s instead of 13 s a render, the

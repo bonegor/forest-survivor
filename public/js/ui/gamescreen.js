@@ -6,10 +6,10 @@ import { sfx, playMusic } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
-import { Game, isFiller } from '../game/game.js';
+import { Game } from '../game/game.js';
 import { levelBonus } from '../game/player.js';
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
-import { PASSIVES } from '../data/passives.js';
+import { WEAPONS } from '../data/weapons.js';
+import { PASSIVES, FILLERS } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, GAME_SPEED } from '../data/difficulty.js';
 import { metaBonuses, rankTitle, unlocksNext } from '../shared/profile.js';
@@ -130,13 +130,11 @@ function choiceInfo(g, c) {
     for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id) hint = { text: 'Evolves', icon: w.def.icon, owned: true };
     return { name: def.name, icon: def.icon, desc: def.desc, tag: c.isNew ? 'NEW!' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint };
   }
-  if (c.type === 'bless') return { name: 'Blessing of Valor', icon: 'i_might', desc: 'Might {+5%}, health {+2%}. Stacks.', tag: `x${p.blessings + 1}`, color: '#fee761' };
-  if (c.type === 'gold') return { name: 'Purse of Gold', icon: 'i_greed', desc: `Gain {${c.value}} gold.`, tag: '', color: '#feae34' };
-  return { name: 'Roast Chicken', icon: 'i_vitality', desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44' };
+  const { name, icon } = FILLERS[c.type];
+  if (c.type === 'bless') return { name, icon, desc: 'Might {+5%}, health {+2%}. Stacks.', tag: `x${p.blessings + 1}`, color: '#fee761' };
+  if (c.type === 'gold') return { name, icon, desc: `Gain {${c.value}} gold.`, tag: '', color: '#feae34' };
+  return { name, icon, desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44' };
 }
-
-// What the pause menu calls each filler a run's level-ups always take (Game.autoPick).
-const AUTO_NAMES = { bless: 'Blessing of Valor', heal: 'Roast Chicken', gold: 'Gold' };
 
 export class LevelUpOverlay {
   constructor(gs) {
@@ -155,7 +153,7 @@ export class LevelUpOverlay {
     this.choices = this.g.levelChoices(this.g.choiceCount());
     // Nothing but the fillers (the whole build maxed, which lasts unless a Phoenix Heart is
     // spent): each card offers ALWAYS, and no reroll is spent on them.
-    this.fillersOnly = this.choices.every(isFiller);
+    this.fillersOnly = this.g.fillersOnly();
     this.always = -1; // the card whose ALWAYS is ticked
     this.t = 0;
     this.gs.app.ui.focusId = 'c0';
@@ -336,9 +334,7 @@ export class ChestOverlay {
     this.g = gs.game;
     this.kind = kind;
     this.t = 0;
-    this.roll = this.g.rollChest(kind);
-    this.g.gold += this.roll.gold;
-    this.g.stats.gold += this.roll.gold;
+    this.roll = this.g.rollChest(kind); // given at once, its gold too
     this.revealed = 0;
     this.coins = [];
     this.lockTime = 0.6;
@@ -561,6 +557,10 @@ class ItemOverlay {
       ty += 9;
     }
     const by = top + ph - 34, bw = cw - 16;
+    // Every lord of a crypt may drop a piece, so several can be picked up at once (climbing out
+    // with them, say): each is shown in turn, and the one shown says how many wait.
+    const more = g.itemQueue.length;
+    if (more && ty <= by - 11) drawText(ctx, fitText(`${more} more piece${more > 1 ? 's' : ''} to see after this`, cw - 16), x0 + 8, by - 11, { color: '#8b9bb4' });
     if (button(ctx, ui, 'wear', x0 + 8, by, bw, 13, worn ? `WEAR · OLD ONE +${itemPrice(worn)}` : 'WEAR')) {
       g.wearItem(it);
       sfx('pick');
@@ -645,7 +645,7 @@ export class PauseOverlay {
     const statY = Math.max(by, sy) + 2;
     const stats = `TIME ${fmtTime(g.time)} · LV ${p.level} · KILLS ${fmtNum(g.kills)} · GOLD ${fmtNum(g.gold)}`;
     const note = this.confirm ? 'Quitting ends the run. The gold you found is kept.' : stats;
-    const auto = AUTO_NAMES[g.autoPick];
+    const auto = FILLERS[g.autoPick]?.short;
     drawText(ctx, note, W / 2, Math.min(statY, y + ph - (auto ? 66 : 50)), { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
     ui.begin(dt);
     const bw = Math.min(90, (pw - 30) / 2);

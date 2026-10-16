@@ -7,7 +7,7 @@ const mod = file => import(pathToFileURL(root + '/' + file).href);
 // The game's browser/canvas substitutes; weapons, hits and monster movement stay real.
 await mod('tools/headless.mjs');
 const {Game} = await mod('public/js/game/game.js');
-const {HOLD, HOLD_EVERY, SRC} = await mod('public/js/game/enemies.js');
+const {HOLD, HOLD_EVERY} = await mod('public/js/game/enemies.js');
 const {mulberry32} = await mod('public/js/engine/util.js');
 const {defaultProfile, metaBonuses} = await mod('public/js/shared/profile.js');
 
@@ -64,7 +64,7 @@ test('a stream of blows cannot pin a champion', () => gameCase((g,p) => {
 test('burns, shoves and a charge under way leave a champion alone', () => gameCase((g,p) => {
   const c = champion(g, 'skeleton', p.x + 90, p.y);
   const m = plain(g, 'skeleton', p.x + 90, p.y + 12);
-  g.hitEnemy(c, 1, {type:'fire', kb:0, src:SRC.BURN});
+  g.hitEnemy(c, 1, {type:'fire', kb:0, noCrit:true}); // a burn's tick (Enemy.addDot)
   assert.equal(c.holdT, 0, 'damage over time does not stop it');
   g.grid.rebuild(g.enemies, p.x, p.y);
   g.pushback(p.x + 70, p.y, 50, 160); // The shove a level-up or a hit on the hero gives.

@@ -3,6 +3,27 @@
 // shared by the browser and the Node server, which checks every item it saves.
 // Every function here is pure and treats its input as untrusted.
 
+// What each of a crypt's lords leaves besides its coins and gold, rolled lord by lord, every
+// lord alike (Game.lordDefeated): the user's "50% both a gear item and a champion's chest, 25%
+// item only, 25% chest only" (16 October 2026). The odds add up to 1.
+export const LORD_DROPS = [
+  { odds: 0.5, item: true, chest: true },
+  { odds: 0.25, item: true, chest: false },
+  { odds: 0.25, item: false, chest: true },
+];
+// The most lords a crypt holds (dungeon.js cryptLords). Each drops one piece of gear at most, so
+// a run finds no more than this many for each crypt it could have reached (profile.js sanitizeRun).
+export const MAX_LORDS = 4;
+
+// What a lord drops (a row of LORD_DROPS), for a roll r in [0, 1).
+export function lordDrop(r) {
+  for (const d of LORD_DROPS) {
+    if (r < d.odds) return d;
+    r -= d.odds;
+  }
+  return LORD_DROPS[LORD_DROPS.length - 1];
+}
+
 export const SLOTS = ['helm', 'armor', 'gloves', 'boots', 'amulet', 'ring'];
 export const SLOT_NAMES = { helm: 'Helm', armor: 'Armor', gloves: 'Gloves', boots: 'Boots', amulet: 'Amulet', ring: 'Ring' };
 

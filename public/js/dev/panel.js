@@ -4,15 +4,16 @@
 // checks every edit, so shipping this file to players unlocks nothing.
 
 import * as P from '../shared/profile.js';
-import { HEROES, SHARED_WEAPONS } from '../data/heroes.js';
+import { HEROES } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { MODES } from '../data/difficulty.js';
+import { ENEMIES } from '../data/enemies.js';
 import { fmtTime } from '../engine/util.js';
 import { xpFor } from '../game/player.js';
 import { goalText } from '../ui/ladder.js';
 
-const BOSSES = ['boneking', 'butcher', 'lich', 'demonlord'];
+const BOSSES = Object.keys(ENEMIES).filter((id) => ENEMIES[id].boss);
 const FEATS = [['survivalHard', 'Night survived'], ['dungeon', 'Dungeon']];
 
 const CSS = `
@@ -256,7 +257,7 @@ export function createDevPanel(app) {
     });
     body.append(el('h3', { textContent: 'Heroes and achievements' }), el('table', {}, head, rows));
 
-    // Wins, kept per difficulty in the save (all new wins count as Hard).
+    // Wins per difficulty in the save: Normal's as medium, Veteran's as hard (easy: old saves).
     body.append(el('h3', { textContent: 'Victories' }), el('table', {},
       el('tr', {}, el('th', { textContent: 'Trial' }), P.DIFFICULTIES.map((x) => el('th', { textContent: x }))),
       P.WIN_MODES.map((m) => el('tr', {}, el('td', { textContent: `${MODES[m].name} ${MODES[m].sub}` }), [0, 1, 2].map((i) => el('td', {}, num(() => d.wins[m][i], (v) => { d.wins[m][i] = v; }, { width: '60px' }))))),
@@ -322,11 +323,10 @@ export function createDevPanel(app) {
   // fillers is left and the player ticked ALWAYS on one, the run's own auto-pick, all at once
   // as a burst of levels in play would be (Game.resolveAutoLevels).
   function levelUpAuto(g, p, n) {
-    const auto = () => g.autoPick && g.state !== 'levelup' && !g.upgradePool().length;
     for (let i = 0; i < n; i++) {
       p.level++;
       p.xpNext = xpFor(p.level);
-      if (auto()) {
+      if (g.autoReady()) {
         g.pendingLevels++;
         continue;
       }

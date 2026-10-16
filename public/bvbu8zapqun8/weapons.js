@@ -2,7 +2,7 @@
 // all, and every relic, read from the game's own data and drawn from its own art, as the game
 // builds its sprites (engine/sprites.js buildSprite). Read-only; works as plain static files.
 
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../js/data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, statsAt } from '../js/data/weapons.js';
 import { HEROES, HERO_ORDER, SHARED_WEAPONS, startWeapons } from '../js/data/heroes.js';
 import { PASSIVES, PASSIVE_IDS } from '../js/data/passives.js';
 import { ART } from '../js/art/defs.js';
@@ -63,7 +63,8 @@ const STATS = {
   amount: ['amount', num],
   area: ['area', (v) => '×' + num(v)],
   speed: ['speed', (v) => '×' + num(v)],
-  dur: ['lasts', (v) => (v >= 999 ? 'for good' : num(v) + 's')],
+  dur: ['lasts', (v) => num(v) + 's'],
+  eternal: ['lasts', () => 'for good'],
   tick: ['every', (v) => num(v) + 's'],
   pierce: ['pierce', (v) => (v >= 99 ? 'all' : num(v))],
   chains: ['arcs', num],
@@ -73,7 +74,6 @@ const STATS = {
   dot: ['poison', (v) => num(v) + '/s'],
   critBonus: ['crit', (v) => '+' + Math.round(v * 100) + '%'],
   critDmg: ['crit dmg', (v) => '+' + num(v) + '×'],
-  pin: ['pin', (v) => num(v) + 's'],
   kb: ['knockback', num],
 };
 function stats(base) {
@@ -83,12 +83,6 @@ function stats(base) {
   }));
 }
 
-// The weapon at level 8, every level's step added up.
-function atTop(def) {
-  const s = { ...def.base };
-  for (const lv of def.levels) for (const [k, v] of Object.entries(lv)) if (k !== 'text') s[k] = (s[k] || 0) + v;
-  return s;
-}
 
 const signatureOf = new Map();
 for (const hero of Object.values(HEROES)) for (const id of hero.unique) signatureOf.set(id, hero);
@@ -104,7 +98,7 @@ function card(id, hero = null) {
     rich('p', def.desc, { class: 'desc' }),
     h('div', {}, h('div', { class: 'tag', style: 'display:inline-block;margin-bottom:4px' }, 'level 1'), stats(def.base)),
     h('ol', { class: 'levels' }, def.levels.map((lv, i) => h('li', {}, h('span', { class: 'lv' }, `LV ${i + 2}`), rich('span', lv.text)))),
-    h('div', {}, h('div', { class: 'tag', style: 'display:inline-block;margin-bottom:4px' }, `level ${MAX_WEAPON_LEVEL}`), stats(atTop(def))),
+    h('div', {}, h('div', { class: 'tag', style: 'display:inline-block;margin-bottom:4px' }, `level ${MAX_WEAPON_LEVEL}`), stats(statsAt(def, MAX_WEAPON_LEVEL))),
     h('div', { class: 'evo' },
       h('div', { class: 'head' }, pixels(evo.icon, 2), h('div', {}, h('h4', {}, `Evolves into ${evo.name}`),
         h('div', { class: 'with' }, pixels(relic.icon, 2), h('span', {}, 'with ', h('b', {}, relic.name), `, at level ${MAX_WEAPON_LEVEL}, from a chest`)))),

@@ -105,5 +105,3 @@ export class Lighting {
     this.n = 0;
   }
 }
-
-export { lightSprite };

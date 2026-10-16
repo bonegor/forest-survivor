@@ -86,7 +86,7 @@ export const HEROES = {
     perk: 'Grave Pact: minions last 30% longer, +10% XP',
     ult: 'deadrise',
     ultName: 'Army of the Dead',
-    ultDesc: 'Raise a ring of empowered skeleton warriors around you.',
+    ultDesc: 'Raise a ring of empowered death knights around you.',
   },
 };
 
