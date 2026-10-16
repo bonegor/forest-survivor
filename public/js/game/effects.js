@@ -5,7 +5,7 @@
 
 import { SPR } from '../engine/sprites.js';
 import { sfx } from '../engine/audio.js';
-import { rand, TAU, lerp, clamp, ease, angleDiff, pick } from '../engine/util.js';
+import { rand, TAU, lerp, clamp, ease, angleDiff, pick, hash2, hexToRgb, makeCanvas } from '../engine/util.js';
 import { ringSprite, discSprite, slashFrame, glow, beamSprite, shadowSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
@@ -157,13 +157,214 @@ export class Explosion {
   }
 }
 
+// ------------------------------------------------------------------- mist --
+
+// Miasma's poison is a mist, not a disc: lumpy puffs, dense in the middle and thinning to nothing
+// at the rim, a darker body under lighter wisps that rise, drifting and swirling slowly. All of it
+// (the cloud round the hero and every pool of his trail) is drawn into one small canvas, a canvas
+// pixel to an art pixel, where the puffs run together into one cloud. That canvas is laid on the
+// ground partly see-through, its pixels as crisp as the art's, and the glow pass adds a faint copy
+// so the mist still shows in the night without lighting the woods like a lamp.
+
+// How much of the mist covers the ground where it is thickest (Pestilence's a little more), and
+// how bright its glow is.
+const MIST_ALPHA = 0.7, MIST_PLAGUE = 0.74, MIST_GLOW = 0.11;
+// A puff lies on the ground, so it is a little wider than tall.
+const MIST_SQUASH = 0.82;
+// The tones of a puff, its underside to its top: Miasma's body, darker than the lit grass and no
+// lighter on top (its wisps are the light), and its wisps; then Pestilence's, thicker and a touch
+// yellower.
+const MIST_TONES = [
+  ['#265c42', '#3e8948', '#3e8948'],
+  ['#63c74d', '#9ee562', '#c4f08e'],
+  ['#3e8948', '#6fc94c', '#6fc94c'],
+  ['#7fcf4c', '#b2df5a', '#d6e67c'],
+];
+// Pestilence's motes: a few yellow among the green.
+const PLAGUE_MOTES = [PC.l, PC.Y, PC.L];
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+// The pixels (RGBA, row by row) of a puff of radius r, and its size: v (0-3) picks its lumps, k
+// its tones (MIST_TONES). Three quarters thick over its inner half (never solid, so where puffs
+// overlap the mist grows thicker, in lumps), it thins over the outer half in three steps of alpha,
+// dithered between, to nothing at its lumpy rim; lit from above, its top is a tone lighter and its
+// underside a tone darker.
+export function mistPuff(r, v, k) {
+  const w = r * 2 + 2, h = Math.round(r * 2 * MIST_SQUASH) + 2;
+  const data = new Uint8ClampedArray(w * h * 4);
+  const tones = MIST_TONES[k].map(hexToRgb);
+  const p1 = v * 1.7 + 0.4, p2 = v * 2.9 + 1.3, p3 = v * 4.1 + 2.2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = x + 0.5 - w / 2, dy = (y + 0.5 - h / 2) / MIST_SQUASH;
+      const th = Math.atan2(dy, dx);
+      const edge = r * (0.84 + 0.08 * Math.sin(3 * th + p1) + 0.05 * Math.sin(5 * th + p2) + 0.03 * Math.sin(2 * th + p3));
+      const q = Math.hypot(dx, dy) / edge;
+      if (q >= 1) continue;
+      const dith = (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
+      const lvl = Math.min(3, Math.floor(Math.min(1, (1 - q) * 2) * 3 + dith));
+      if (lvl <= 0) continue;
+      const lit = (-dy / r) * 0.9 - (dx / r) * 0.2 + (dith - 0.5) * 0.5;
+      const c = tones[lit > 0.45 ? 2 : lit < -0.45 ? 0 : 1];
+      const i = (y * w + x) * 4;
+      data[i] = c[0];
+      data[i + 1] = c[1];
+      data[i + 2] = c[2];
+      data[i + 3] = Math.min(255, lvl * 64);
+    }
+  }
+  return { w, h, data };
+}
+
+// The puffs are cut from a few big sheets, each puff painted on when first wanted: a hundred
+// puffs a frame from one picture the graphics card already holds cost next to nothing, where a
+// hundred little pictures, or a mist canvas sent to the card afresh each frame, cost milliseconds.
+const SHEET = 512;
+const sheets = [];
+const puffs = new Map();
+function puffSprite(r, v, k) {
+  const key = (k * 4 + v) * 4096 + r;
+  let s = puffs.get(key);
+  if (!s) {
+    const { w, h, data } = mistPuff(r, v, k);
+    // Left to right along a shelf as tall as its tallest puff, then the next shelf, then a new sheet.
+    let sh = sheets[sheets.length - 1];
+    if (sh && sh.x + w > SHEET) {
+      sh.x = 0;
+      sh.y += sh.row + 1;
+      sh.row = 0;
+    }
+    if (!sh || sh.y + h > SHEET) {
+      const c = makeCanvas(SHEET, SHEET);
+      sh = { c, g: c.getContext('2d'), x: 0, y: 0, row: 0 };
+      sheets.push(sh);
+    }
+    const img = sh.g.createImageData(w, h);
+    img.data.set(data);
+    sh.g.putImageData(img, sh.x, sh.y);
+    s = { c: sh.c, x: sh.x, y: sh.y, w, h };
+    sh.x += w + 1;
+    sh.row = Math.max(sh.row, h);
+    puffs.set(key, s);
+  }
+  return s;
+}
+
+// One puff into the mist canvas m, centred on the world point (x, y); the canvas's corner is the
+// world point (ox, oy). k: its tones; a: how thick.
+function puff(m, ox, oy, x, y, r, v, k, a) {
+  r = Math.min(120, Math.round(r));
+  if (r < 2 || a <= 0.01) return;
+  const s = puffSprite(r, v, k);
+  m.globalAlpha = a;
+  m.drawImage(s.c, s.x, s.y, s.w, s.h, Math.round(x - ox - s.w / 2), Math.round(y - oy - s.h / 2), s.w, s.h);
+}
+
+// A trail pool's puffs, worked out from where it lies (so a replay draws it the same, and the
+// game's dice are left alone): two (three in a big pool) for its body and one (two) for its
+// wisps, each with its offset, its size (of the pool's R), how fast and from where it wobbles
+// and its lumps; and how the whole pool drifts, a few pixels a second, mostly upward.
+function mistLayout(pool) {
+  const hx = Math.round(pool.x * 8), hy = Math.round(pool.y * 8);
+  const h = (i) => hash2(hx, hy, i);
+  const big = pool.R > 16, a0 = h(1) * TAU;
+  const make = (n, top, salt) => {
+    const list = [];
+    for (let i = 0; i < n; i++) {
+      const k = salt + i * 8;
+      const a = a0 + (i / n) * TAU + (h(k) - 0.5) * 1.2 + (top ? 0.8 : 0);
+      const d = pool.R * (top ? 0.1 + h(k + 1) * 0.15 : 0.22 + h(k + 1) * 0.2);
+      list.push({
+        dx: Math.cos(a) * d,
+        dy: Math.sin(a) * d * MIST_SQUASH,
+        r: top ? 0.36 + h(k + 2) * 0.1 : 0.56 + h(k + 2) * 0.14,
+        w: 0.6 + h(k + 3) * 0.7,
+        ph: h(k + 4) * TAU,
+        v: Math.floor(h(k + 5) * 4),
+      });
+    }
+    return list;
+  };
+  pool.body = make(big ? 3 : 2, false, 10);
+  pool.wisps = make(big ? 2 : 1, true, 50);
+  const da = -Math.PI / 2 + (h(2) - 0.5) * 2.6, ds = 1 + h(3) * 1.5;
+  pool.vx = Math.cos(da) * ds;
+  pool.vy = Math.sin(da) * ds * 0.6;
+  pool.emitT = 0.2 + h(4) * 0.6;
+}
+
+// The mist canvas, and the box of the world (whole pixels) it held this frame.
+const MIST = { c: null, m: null, x: 0, y: 0, w: 0, h: 0 };
+// The box round all the mist, grown by each piece (mistBox).
+const BOX = { x0: 0, y0: 0, x1: 0, y1: 0 };
+function boxAround(x, y, r) {
+  if (x - r < BOX.x0) BOX.x0 = x - r;
+  if (y - r < BOX.y0) BOX.y0 = y - r;
+  if (x + r > BOX.x1) BOX.x1 = x + r;
+  if (y + r > BOX.y1) BOX.y1 = y + r;
+}
+
+// The first piece of mist in the list draws the whole of it, the rest nothing.
+function mistLead(list) {
+  for (let i = 0; i < list.length; i++) if (list[i].mist) return list[i];
+  return null;
+}
+
+// Every piece of mist into the mist canvas (all the bodies, then all the wisps over them), and
+// the canvas onto the ground.
+function layMist(g, ctx, cam) {
+  const list = g.effects;
+  BOX.x0 = BOX.y0 = Infinity;
+  BOX.x1 = BOX.y1 = -Infinity;
+  let plague = false;
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    if (!e.mist) continue;
+    e.mistBox();
+    if (e.w.s.plague) plague = true;
+  }
+  // Only what is on screen.
+  const x0 = Math.max(Math.floor(BOX.x0), Math.floor(cam.x) - 1), y0 = Math.max(Math.floor(BOX.y0), Math.floor(cam.y) - 1);
+  const x1 = Math.min(Math.ceil(BOX.x1), Math.ceil(cam.x + cam.W) + 1), y1 = Math.min(Math.ceil(BOX.y1), Math.ceil(cam.y + cam.H) + 1);
+  MIST.w = MIST.h = 0;
+  if (x1 <= x0 || y1 <= y0) return;
+  const w = x1 - x0, h = y1 - y0;
+  if (!MIST.c) MIST.c = makeCanvas(w, h);
+  if (!MIST.m || MIST.c.width < w || MIST.c.height < h) {
+    MIST.c.width = Math.max(MIST.c.width, w);
+    MIST.c.height = Math.max(MIST.c.height, h);
+    MIST.m = MIST.c.getContext('2d');
+  }
+  const m = MIST.m;
+  m.globalAlpha = 1;
+  m.clearRect(0, 0, w, h);
+  for (let i = 0; i < list.length; i++) if (list[i].mist) list[i].drawMist(m, x0, y0, false);
+  for (let i = 0; i < list.length; i++) if (list[i].mist) list[i].drawMist(m, x0, y0, true);
+  m.globalAlpha = 1;
+  MIST.x = x0;
+  MIST.y = y0;
+  MIST.w = w;
+  MIST.h = h;
+  blitMist(ctx, cam, plague ? MIST_PLAGUE : MIST_ALPHA);
+}
+
+// The mist canvas as drawn this frame onto the screen, a canvas pixel to an art pixel.
+function blitMist(ctx, cam, a) {
+  if (!MIST.w) return;
+  const S = cam.S;
+  ctx.globalAlpha = a;
+  ctx.drawImage(MIST.c, 0, 0, MIST.w, MIST.h, Math.round((MIST.x - cam.x) * S), Math.round((MIST.y - cam.y) * S), Math.round(MIST.w * S), Math.round(MIST.h * S));
+  ctx.globalAlpha = 1;
+}
+
 // ------------------------------------------------------------------- pool --
 
 const POOL_LOOK = {
   fire: { disc: ['#be4a2f', '#733e39', '#3e2731'], parts: [PC.y, PC.o, PC.O, PC.Y], glow: '#f77622', light: 'fire', num: 'fire' },
   hell: { disc: ['#0099db', '#124e89', '#262b44'], parts: [PC.c, PC.w, PC.U], glow: '#2ce8f5', light: 'cyan', num: 'frost' },
   holy: { disc: ['#feae34', '#be4a2f', '#3e2731'], parts: [PC.Y, PC.w, PC.y], glow: '#feae34', light: 'holy', num: 'holy' },
-  poison: { disc: ['#63c74d', '#3e8948', '#193c3e'], parts: [PC.l, PC.L, PC.e], glow: '#63c74d', light: 'green', num: 'poison', dot: 'poison' },
+  // Miasma's: a mist (drawn as one with its cloud, layMist), a mote rising now and then.
+  poison: { mist: true, parts: [PC.l, PC.L, PC.e], glow: '#63c74d', light: 'green', num: 'poison', dot: 'poison' },
   // Caltrops: dark ground strewn with caltrops (marks: the sprite drawn at each), no glow, hardly a spark.
   spikes: { disc: ['#3a4466', '#262b44', '#181425'], parts: [PC.G, PC.g], glow: null, light: null, num: 'normal', emit: 0.15, alpha: 0.35, marks: WEAPON_SPRITES.caltrop },
 };
@@ -196,6 +397,8 @@ export class Pool {
     this.critDmg = opts.critDmg || 0;
     this.decay = !!opts.decay;
     this.sparse = !!opts.sparse;
+    this.mist = !!this.look.mist;
+    if (this.mist) mistLayout(this);
     if (this.look.marks) {
       this.marks = [];
       for (let i = Math.round(4 + R * 0.35); i > 0; i--) {
@@ -239,6 +442,16 @@ export class Pool {
       }
     }
     this.emitT -= dt;
+    if (this.mist) {
+      // Now and then a mote rises slowly out of the mist.
+      if (this.emitT <= 0) {
+        this.emitT = (this.sparse ? 0.8 : 0.35) * rand(0.6, 1.4);
+        const a = rand(TAU), r = Math.sqrt(Math.random()) * R;
+        const cols = this.w.s.plague ? PLAGUE_MOTES : this.look.parts;
+        g.particles.emit(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r * MIST_SQUASH, 2, rand(-3, 3), rand(-4, 1), rand(6, 14), rand(0.8, 1.4), 1, pick(cols), P.GLOW | P.FADE, 0);
+      }
+      return true;
+    }
     const every = (0.6 / (R + 4)) / ((this.look.emit ?? 1) * (this.sparse ? 0.25 : 1));
     while (this.emitT <= 0) {
       this.emitT += every;
@@ -252,7 +465,39 @@ export class Pool {
     return Math.min(1, this.t / 0.15, (this.dur - this.t) / 0.4);
   }
 
+  // How thick a pool's mist is: in over a moment, then thinning away, slowly at first, to nothing
+  // at the end of its life, so the oldest of a trail is the faintest.
+  get mistA() {
+    return Math.min(1, this.t / 0.2) * (1 - Math.pow(Math.min(1, this.t / this.dur), 1.5));
+  }
+
+  mistBox() {
+    const t = this.t;
+    boxAround(this.x + this.vx * t, this.y + this.vy * t, this.R * 1.6 + 3 + 2 * t);
+  }
+
+  // Its puffs into the mist canvas (layMist): its body, or its wisps (top), which sit a little
+  // above it and rise. They billow out as it lands, then spread and swell a little as it thins.
+  drawMist(m, ox, oy, top) {
+    const a = this.mistA;
+    if (a <= 0.01) return;
+    const t = this.t, u = t / this.dur, R = this.R, plague = !!this.w.s.plague;
+    const k = (plague ? 2 : 0) + (top ? 1 : 0);
+    const size = (0.6 + 0.4 * ease.outCubic(Math.min(1, t / 0.4))) * (1 + 0.15 * u) * (plague ? 1.1 : 1), spread = 1 + 0.5 * u;
+    const cx = this.x + this.vx * t, cy = this.y + this.vy * t - (top ? R * 0.22 + t * 2 : 0);
+    const list = top ? this.wisps : this.body;
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      const x = cx + f.dx * spread + Math.cos(t * f.w + f.ph) * 1.6, y = cy + f.dy * spread + Math.sin(t * f.w * 0.8 + f.ph) * 1.2;
+      puff(m, ox, oy, x, y, R * f.r * size, f.v, k, top ? a * 0.75 : a);
+    }
+  }
+
   drawGround(ctx, cam) {
+    if (this.mist) {
+      if (mistLead(this.g.effects) === this) layMist(this.g, ctx, cam);
+      return;
+    }
     const R = this.r;
     const [sx, sy] = toScreen(cam, this.x, this.y);
     if (R >= 2) {
@@ -272,6 +517,12 @@ export class Pool {
   }
 
   drawGlow(ctx, cam) {
+    if (this.mist) {
+      if (mistLead(this.g.effects) === this) blitMist(ctx, cam, MIST_GLOW);
+      const t = this.t;
+      this.g.light(this.x + this.vx * t, this.y + this.vy * t, this.R * 2, this.look.light, 0.22 * this.mistA);
+      return;
+    }
     if (!this.look.glow) return;
     const R = this.r;
     const [sx, sy] = toScreen(cam, this.x, this.y);
@@ -384,9 +635,22 @@ const AURA_LOOK = {
   holy: { R: 27, num: 'holy', fill: '#feae34', rim: '#fee761', inner: '#feae34', glow: '#feae34', light: 'holy', parts: [PC.Y, PC.y] },
   // Sanctuary: the holy ground, healing.
   heal: { R: 27, num: 'holy', fill: '#63c74d', rim: '#9ee562', inner: '#feae34', glow: '#63c74d', light: 'holy', parts: [PC.Y, PC.y] },
-  // Miasma: a sickly cloud a tenth smaller than Consecration's ground.
-  poison: { R: 24.3, num: 'poison', fill: '#3e8948', rim: '#63c74d', inner: '#9ee562', glow: '#63c74d', light: 'green', parts: [PC.l, PC.L, PC.e], dot: 'poison' },
+  // Miasma: a sickly cloud a tenth smaller than Consecration's ground, a mist (layMist).
+  poison: { R: 24.3, num: 'poison', mist: true, glow: '#63c74d', light: 'green', parts: [PC.l, PC.L, PC.e], dot: 'poison' },
 };
+
+// The cloud's six lobes: each its angle round him, its distance and size (of his reach R) and the
+// phase it drifts and breathes at, fixed (from hash2) so the cloud is lumpy but never flickers.
+// Five of 0.40-0.56 R at 0.50-0.75 R, and a sixth, smaller.
+const CLOUD_LOBES = Array.from({ length: 6 }, (_, i) => {
+  const h = (k) => hash2(i, k, 977);
+  return {
+    a: ((i + (h(1) - 0.5) * 0.5) / 6) * TAU,
+    d: 0.5 + h(2) * 0.25,
+    r: i < 5 ? 0.4 + h(3) * 0.16 : 0.3,
+    ph: h(4) * TAU,
+  };
+});
 
 export class Aura {
   constructor(g, w, style = 'holy') {
@@ -398,6 +662,7 @@ export class Aura {
     this.dead = false;
     this.t = 0;
     this.persistent = true;
+    this.mist = !!AURA_LOOK[style]?.mist;
   }
 
   get look() {
@@ -436,14 +701,55 @@ export class Aura {
       }
       if (s.heal && hits) p.healPool = Math.min(20, p.healPool + Math.min(hits, 8) * 0.22);
     }
-    if (Math.random() < dt * (10 + R * 0.4)) {
+    if (this.mist) {
+      // A mist: now and then a mote rising slowly out of it.
+      if (Math.random() < dt * (3 + R * 0.1)) {
+        const a = rand(TAU), r = Math.sqrt(Math.random()) * R;
+        g.particles.emit(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r * MIST_SQUASH, 2, rand(-3, 3), rand(-4, 1), rand(6, 14), rand(0.9, 1.5), 1, pick(s.plague ? PLAGUE_MOTES : L.parts), P.GLOW | P.FADE, 0);
+      }
+    } else if (Math.random() < dt * (10 + R * 0.4)) {
       const a = rand(TAU), r = Math.sqrt(Math.random()) * R;
       g.particles.emit(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 0, 0, 0, rand(15, 35), rand(0.5, 0.9), 1, pick(L.parts), P.GLOW | P.FADE, 0);
     }
     return true;
   }
 
+  mistBox() {
+    const p = this.g.player;
+    boxAround(p.x, p.y, this.R * 1.5 + 3);
+  }
+
+  // The cloud's puffs into the mist canvas (layMist). Its body: a puff at his feet and six lobes
+  // round it (CLOUD_LOBES), each at a distance and of a size of its own, drifting on its own and
+  // breathing in its own time, the whole turning very slowly and swelling a touch as the poison
+  // strikes; its wisps (top): three turning the other way, slower still, a little above the ground.
+  drawMist(m, ox, oy, top) {
+    const p = this.g.player, R = this.R, t = this.t, plague = !!this.w.s.plague;
+    const k = (plague ? 2 : 0) + (top ? 1 : 0), thick = plague ? 1.08 : 1;
+    if (!top) {
+      const swell = (1 + this.pulse * 0.04) * thick, turn = t * 0.1;
+      puff(m, ox, oy, p.x, p.y + R * 0.04, R * 0.62 * swell, 0, k, 1);
+      for (let i = 0; i < CLOUD_LOBES.length; i++) {
+        const L = CLOUD_LOBES[i], a = L.a + turn;
+        const x = p.x + Math.cos(a) * L.d * R + Math.cos(t * 0.5 + L.ph) * R * 0.08;
+        const y = p.y + (Math.sin(a) * L.d * R + Math.sin(t * 0.37 + L.ph) * R * 0.06) * MIST_SQUASH;
+        const r = R * (L.r + 0.03 * Math.sin(t * 1.1 + L.ph)) * swell;
+        puff(m, ox, oy, x, y, r, i & 3, k, 1);
+      }
+    } else {
+      for (let i = 0; i < 3; i++) {
+        const a = -t * 0.225 + (i / 3) * TAU + 0.6, d = R * 0.4;
+        const r = R * (0.32 + 0.05 * Math.sin(t * 1.7 + i * 1.9)) * thick;
+        puff(m, ox, oy, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * MIST_SQUASH - R * 0.18, r, (i + 2) & 3, k, 0.75);
+      }
+    }
+  }
+
   drawGround(ctx, cam) {
+    if (this.mist) {
+      if (mistLead(this.g.effects) === this) layMist(this.g, ctx, cam);
+      return;
+    }
     const p = this.g.player, L = this.look;
     const R = this.R;
     const [sx, sy] = toScreen(cam, p.x, p.y);
@@ -460,6 +766,11 @@ export class Aura {
   drawGlow(ctx, cam) {
     const p = this.g.player, L = this.look;
     const R = this.R;
+    if (this.mist) {
+      if (mistLead(this.g.effects) === this) blitMist(ctx, cam, MIST_GLOW);
+      this.g.light(p.x, p.y, R * 2.2, L.light, 0.35 + this.pulse * 0.15);
+      return;
+    }
     const [sx, sy] = toScreen(cam, p.x, p.y);
     const sz = R * 2.6 * cam.S;
     ctx.globalAlpha = 0.12 + this.pulse * 0.18;
