@@ -80,7 +80,7 @@ fetch(DIR + 'candidates.json', { cache: 'no-cache' })
       const div = document.createElement('div');
       div.className = 'tune';
       div.innerHTML = `<h2>${esc(c0.title)} <span class="meta">${esc(tune)}</span></h2>
-        <div class="meta">${[c0.key, c0.timeSig, c0.bpm && `${c0.bpm} BPM`, c0.bars && `${c0.bars} bars`, fmt(c0.seconds)].filter(Boolean).map(esc).join(' · ')}</div>
+        <div class="meta">${[c0.genre, c0.key, c0.timeSig, c0.bpm && `${c0.bpm} BPM`, c0.bars && `${c0.bars} bars`, fmt(c0.seconds)].filter(Boolean).map(esc).join(' · ')}</div>
         <p>${esc(c0.description || '')}</p>
         <div class="cands">${cs.map((c) => `<div class="cand" data-i="${c.i}">
           <button class="play" aria-pressed="false">▶ ${esc(c.renderer)}</button>
