@@ -411,7 +411,7 @@ export class Game {
     }
     if (e.sleeping) this.bossIntro(e);
     if (e.dormant) this.wakePack(e);
-    // Hit, it knows where the hero is, in a dungeon too (Enemy.aware).
+    // Hit, it knows where the hero is, in a crypt too (Enemy.aware).
     e.aware = true;
     const p = this.player;
     let d = dmg * p.might;

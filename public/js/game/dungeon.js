@@ -144,8 +144,10 @@ export class Dungeon {
   // crypt: { name, theme } for a crypt off the forest road, else a Dungeon Run floor.
   constructor(g, floor, seed, crypt = null) {
     this.g = g;
-    // Monsters here chase the hero only once they have seen him (Enemy.aware, sees, wander).
-    this.vision = true;
+    // In a crypt monsters chase the hero only once they have seen him (Enemy.aware, sees,
+    // wander). A Dungeon Run floor's horde hunts him from anywhere, by the flow field (the user's
+    // choice, 16 October 2026).
+    this.vision = !!crypt;
     this.floor = floor;
     this.crypt = crypt;
     this.info = crypt ? { name: crypt.name, theme: crypt.theme, guardian: null } : FLOORS[floor - 1];
