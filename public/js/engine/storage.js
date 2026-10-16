@@ -5,7 +5,8 @@
 // API), it falls back to a plain client-side cookie with the same rules.
 // Either way, a save that exists but can't be read is flagged in
 // store.unreadable so the title screen can offer a fresh start.
-// Settings always live in a small client cookie.
+// Settings always live in a small client cookie. A run is never saved: progress
+// is kept only when it ends (death, Quit Run, or victory), through submitRun.
 //
 // The debug address (?DEBUG_FLAG, an unlisted token; an unlisted folder forwards there) opens every hero and mode, in a save of its
 // own (a client cookie even where the server is), so nothing played there touches the real one.
@@ -16,7 +17,9 @@ import { DEBUG_FLAG } from './debugflag.js';
 export { DEBUG_FLAG };
 export const DEBUG = !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
 const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
-const LOCAL_RUN = DEBUG ? 'fs_drun' : 'fs_lrun';
+// The game once kept a run to pick up again in these (the server's own, fs_run, it deletes
+// itself); one a player still has is deleted when the game loads, so nothing lingers.
+const STALE_RUNS = ['fs_lrun', 'fs_drun'];
 
 // Every hero in, and as if each had survived the night and beaten the Dungeon: every mode open
 // to every hero (shared/profile.js canPlay).
@@ -59,12 +62,12 @@ export const onThisMachine = (host = globalThis.location?.hostname || '') =>
 export const store = {
   mode: 'local',
   profile: P.defaultProfile(),
-  checkpoint: null,
   lastReward: null,
-  unreadable: null, // { profile, run } when a save exists but can't be read
+  unreadable: null, // { profile: true } when a save exists but can't be read
   offline: false, // the game's server can't be reached: nothing can be loaded or saved
 
   async init() {
+    for (const name of STALE_RUNS) if (readCookie(name) != null) writeCookie(name, null);
     for (let attempt = 0; !DEBUG; attempt++) {
       try {
         const data = await api('state');
@@ -72,8 +75,7 @@ export const store = {
         this.mode = 'server';
         this.offline = false;
         this.profile = P.sanitizeProfile(data.profile);
-        this.checkpoint = data.checkpoint ? P.sanitizeCheckpoint(data.checkpoint) : null;
-        this.unreadable = data.unreadable && (data.unreadable.profile || data.unreadable.run) ? { profile: !!data.unreadable.profile, run: !!data.unreadable.run } : null;
+        this.unreadable = data.unreadable?.profile ? { profile: true } : null;
         return this;
       } catch (e) {
         if (!serverDown(e)) break;
@@ -89,24 +91,19 @@ export const store = {
     // Static hosting: the save is a plain client cookie.
     this.mode = 'local';
     this.offline = false;
-    const rawProfile = readCookie(LOCAL_PROFILE), rawRun = readCookie(LOCAL_RUN);
+    const rawProfile = readCookie(LOCAL_PROFILE);
     const profile = rawProfile ? P.decodeState(rawProfile) : null;
-    const run = rawRun ? P.decodeState(rawRun) : null;
     this.profile = P.sanitizeProfile(profile);
     if (DEBUG) unlockEverything(this.profile);
-    this.checkpoint = P.sanitizeCheckpoint(run);
-    const bad = { profile: !!rawProfile && !profile, run: !!rawRun && !run };
-    this.unreadable = bad.profile || bad.run ? bad : null;
+    this.unreadable = rawProfile && !profile ? { profile: true } : null;
     return this;
   },
 
-  // Accept the loss of an unreadable save: wipe what can't be read and carry on.
+  // Accept the loss of an unreadable save: wipe it and carry on.
   async startFresh() {
     const bad = this.unreadable;
     this.unreadable = null;
-    if (!bad) return;
-    if (bad.profile) await this.reset();
-    else if (bad.run) await this.clearCheckpoint();
+    if (bad) await this.reset();
   },
 
   saveLocal() {
@@ -120,7 +117,6 @@ export const store = {
       try {
         const data = await api('run', run);
         this.profile = P.sanitizeProfile(data.profile);
-        this.checkpoint = null;
         this.lastReward = data.reward;
         return data.reward;
       } catch (e) {
@@ -131,42 +127,10 @@ export const store = {
     if (r.ok) {
       this.profile = r.profile;
       this.saveLocal();
-      this.checkpoint = null;
-      writeCookie(LOCAL_RUN, null);
       this.lastReward = r.reward;
       return r.reward;
     }
     return { collected: 0, bonus: 0, total: 0, multiplier: 1 };
-  },
-
-  // Saves the run; false when the server didn't take it (the copy in memory is kept).
-  async saveCheckpoint(cp) {
-    const clean = P.sanitizeCheckpoint(cp);
-    this.checkpoint = clean;
-    if (this.mode === 'server') {
-      try {
-        await api('checkpoint', { checkpoint: clean });
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    writeCookie(LOCAL_RUN, clean ? P.encodeState(clean) : null);
-    return true;
-  },
-
-  async clearCheckpoint() {
-    this.checkpoint = null;
-    if (this.mode === 'server') {
-      try {
-        await api('checkpoint', { checkpoint: null });
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    writeCookie(LOCAL_RUN, null);
-    return true;
   },
 
   async buy(id) {
@@ -250,14 +214,11 @@ export const store = {
     if (this.mode === 'server') {
       const data = await api('reset', {});
       this.profile = P.sanitizeProfile(data.profile);
-      this.checkpoint = null;
       return;
     }
     this.profile = P.defaultProfile();
     if (DEBUG) unlockEverything(this.profile);
-    this.checkpoint = null;
     writeCookie(LOCAL_PROFILE, null);
-    writeCookie(LOCAL_RUN, null);
   },
 };
 

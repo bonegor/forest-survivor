@@ -10,7 +10,7 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, metaBonuses, sanitizeCheckpoint } from '../public/js/shared/profile.js';
+import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 function gameCase(hero, fn, o = {}) {
   const oldRandom = Math.random, oldBot = input.bot;
@@ -102,24 +102,5 @@ test('a fall spends it first, the other revives kept; offered again five levels 
     p.invuln = 0;
     p.hurt(1e9);
     assert.ok(p.dead, 'and the one after is the end');
-  });
-});
-
-test('a saved run keeps the Phoenix Heart, and when one was spent', () => {
-  gameCase('knight', (g, p) => {
-    topLevel(p.weapons[0]).evolve();
-    g.applyChoice({ type: 'passive', id: 'phoenix' });
-    const cp = sanitizeCheckpoint(JSON.parse(JSON.stringify(g.checkpoint())));
-    assert.deepEqual(cp.passives, [['phoenix', 1, 0]]);
-    gameCase('knight', (g2, p2) => {
-      assert.ok(p2.passives.has('phoenix'));
-      assert.equal(p2.revives, p.revives);
-      assert.equal(g2.evolvable().length, 0);
-    }, { checkpoint: cp });
-    g.spendRelic('phoenix');
-    const spent = sanitizeCheckpoint(JSON.parse(JSON.stringify(g.checkpoint())));
-    assert.equal(spent.phoenixLostAt, p.level);
-    gameCase('knight', (g2) => assert.equal(g2.phoenixLostAt, p.level), { checkpoint: spent });
-    assert.equal(sanitizeCheckpoint({ ...spent, phoenixLostAt: 'x' }).phoenixLostAt, null);
   });
 });

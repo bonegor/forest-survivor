@@ -32,9 +32,10 @@ export const ENEMIES = {
   },
   ogre: { name: 'Cyclops Ogre', sprite: 'ogre', hp: 300, spd: 24, dmg: 20, r: 10, xp: 30, ai: 'walker', mass: 8, anim: 3, death: 'blood', kbRes: 0.9 },
   deathknight: { name: 'Death Knight', sprite: 'deathknight', hp: 190, spd: 40, dmg: 15, r: 6, xp: 22, ai: 'walker', mass: 4, anim: 4, death: 'dark', kbRes: 0.8 },
-  // The lord of every crypt (Spawner.spawnLord), boss-sized: it keeps its distance and shoots.
+  // Each of a crypt's lords (Spawner.spawnLord), boss-sized: it keeps its distance and shoots.
   // 600 health lasts about eight strikes of a fully grown sword (two of its slashes land on
-  // one foe, about 76 damage a strike).
+  // one foe, about 76 damage a strike). That is on Veteran: Normal takes it down to 180
+  // (difficulty.js health), about three.
   skeletonarcher: {
     name: 'Skeleton Archer', sprite: 'skeletonarcher', hp: 600, spd: 34, dmg: 8, r: 8, xp: 60, ai: 'caster', mass: 30, anim: 4, death: 'bones', kbRes: 0.95,
     shot: { range: 175, cd: 1.7, spd: 170, dmg: 8, kind: 'arrow', wind: 0.5 },

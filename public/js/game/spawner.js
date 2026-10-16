@@ -1,10 +1,10 @@
 // Decides what to spawn and when: the steady horde, timed events, champions,
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
-// crypt, where the night stands still; a crypt brings its own packs and lord.
+// crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { EVENTS, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY } from '../data/waves.js';
+import { EVENTS, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
-import { rand, pick, weighted, TAU, chance } from '../engine/util.js';
+import { rand, randi, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
 
 const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
@@ -12,6 +12,11 @@ const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
 // The monsters that shoot (Cultists) or lunge (Dire Wolves, Orc Brutes, Hellhounds), of which
 // Normal sends a third as many (difficulty.js few).
 export const isFew = (type) => !!(ENEMIES[type]?.shot || ENEMIES[type]?.charge);
+
+// How many times the night's monsters the rules send at a phase: Normal's late horde, 30% more
+// from minute 9 of the night on (difficulty.js late), in the steady horde and the timed swarms,
+// rings and packs alike. Veteran (and so Ranked) never.
+export const lateMore = (diff, phase) => (diff.late && minuteOf(phase) >= diff.late.from ? diff.late.more : 1);
 
 export class Spawner {
   constructor(g) {
@@ -54,13 +59,20 @@ export class Spawner {
     return { hpMul: monsterHp(phase, this.g.mode) * d.hp, dmgMul: 1 };
   }
 
+  // How many foes the steady horde keeps up at a phase: the rules' numbers, a tenth fewer on a
+  // dungeon floor, and Normal's late horde on top (lateMore).
+  target(phase) {
+    const g = this.g;
+    return targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * lateMore(g.diff, phase);
+  }
+
   update(dt) {
     const g = this.g;
     if (g.calm > 0 || g.inCrypt) return; // e.g. dawn, descending, a crypt
     const phase = g.phase;
 
     // Steady horde.
-    const target = targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1);
+    const target = this.target(phase);
     this.acc -= dt;
     if (this.acc <= 0) {
       const alive = g.hostileCount;
@@ -106,12 +118,12 @@ export class Spawner {
       if (chance(0.75)) this.spawnThief(phase);
     }
 
-    // Breakables, and shrines where the world doesn't place its own.
+    // Breakables (data/waves.js PROP_SITES), and shrines where the world doesn't place its own.
     if (g.mode !== 'dungeon') {
       this.propT -= dt;
       if (this.propT <= 0) {
-        this.propT = rand(16, 26);
-        if (g.propCount < 10) this.spawnProps();
+        this.propT = rand(...PROP_SITES.every);
+        if (g.propCount < PROP_SITES.most) this.spawnProps();
       }
       this.shrineT -= dt;
       if (this.shrineT <= 0 && !g.world.mapShrines) {
@@ -139,7 +151,7 @@ export class Spawner {
 
   fire(ev, phase) {
     const g = this.g, p = g.player;
-    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1))) };
+    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1) * lateMore(g.diff, phase))) };
     const st = this.stats(phase);
     const cam = g.cam;
     switch (ev.type) {
@@ -204,14 +216,16 @@ export class Spawner {
     }
   }
 
-  // A crypt's lord: a named Skeleton Archer, drawn boss-sized, asleep in the last room until the
-  // hero comes, at its own health whenever the crypt is entered (data/enemies.js), and never
-  // Stoneskin, which would take a third off every blow.
+  // A crypt's lord: a named Skeleton Archer, drawn boss-sized, asleep in a room of its own until the
+  // hero comes, at its own health whenever the crypt is entered (data/enemies.js; on Normal 70%
+  // less, as every monster: difficulty.js health), and never Stoneskin, which would take a third
+  // off every blow.
   spawnLord(x, y) {
     const g = this.g;
     const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone'));
     const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)} ${pick(CHAMPION_TITLE)}`;
     const e = g.spawnEnemy('skeletonarcher', x, y, {
+      hpMul: g.diff.health,
       dmgMul: 1.5,
       elite: true,
       lord: true,
@@ -237,20 +251,28 @@ export class Spawner {
     }
   }
 
+  // A site of 2-5 breakables (data/waves.js PROP_SITES): barrels and crates, urns, or a lantern
+  // among barrels and crates. Ahead of the hero on the move; anywhere around him while he stands
+  // still, never on him.
   spawnProps() {
     const g = this.g, p = g.player;
-    // Ahead of the hero on the move; anywhere around him while he stands still.
     const moving = Math.hypot(p.vx, p.vy) > 1;
     const a = moving ? Math.atan2(p.vy, p.vx) + rand(-1, 1) : rand(TAU);
     const r = rand(190, 260);
     const cx = p.x + Math.cos(a) * r, cy = p.y + Math.sin(a) * r;
     const roll = Math.random();
-    if (roll < 0.3) g.spawnProp('lantern', cx, cy);
-    else if (roll < 0.8) {
-      const n = Math.floor(rand(2, 5));
-      for (let i = 0; i < n; i++) g.spawnProp(chance(0.5) ? 'barrel' : 'crate', cx + rand(-14, 14), cy + rand(-10, 10));
-    } else {
-      for (let i = 0; i < 3; i++) g.spawnProp('urn', cx + rand(-12, 12), cy + rand(-8, 8));
+    const kind = roll < 0.3 ? 'lantern' : roll < 0.8 ? 'box' : 'urn';
+    const n = randi(...PROP_SITES.boxes), spots = [];
+    for (let i = 0; i < n; i++) {
+      // Side by side rather than on top of one another: a few tries for a spot clear of the rest.
+      let x = cx, y = cy;
+      for (let t = 0; t < 6; t++) {
+        x = cx + rand(-16, 16);
+        y = cy + rand(-11, 11);
+        if (spots.every(([sx, sy]) => (sx - x) ** 2 + (sy - y) ** 2 >= 81)) break;
+      }
+      spots.push([x, y]);
+      g.spawnProp(kind === 'urn' ? 'urn' : kind === 'lantern' && i === 0 ? 'lantern' : chance(0.5) ? 'barrel' : 'crate', x, y);
     }
   }
 }

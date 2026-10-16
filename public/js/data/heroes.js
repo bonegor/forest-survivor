@@ -82,7 +82,7 @@ export const HEROES = {
     unique: ['raise', 'miasma'],
     start: ['raise', 'miasma'],
     color: '#9ee562',
-    stats: { maxHp: 90, duration: 1.3, growth: 1.1 },
+    stats: { maxHp: 90, summonDur: 1.3, growth: 1.1 },
     perk: 'Grave Pact: minions last 30% longer, +10% XP',
     ult: 'deadrise',
     ultName: 'Army of the Dead',

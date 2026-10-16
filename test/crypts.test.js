@@ -10,6 +10,7 @@ const {Game} = await mod('public/js/game/game.js');
 const {input} = await mod('public/js/engine/input.js');
 const {mulberry32} = await mod('public/js/engine/util.js');
 const {isCrypt, roadExists, cryptsNear} = await mod('public/js/game/darkwood.js');
+const {Dungeon, cryptLords} = await mod('public/js/game/dungeon.js');
 const P = await mod('public/js/shared/profile.js');
 const I = await mod('public/js/shared/items.js');
 
@@ -29,14 +30,15 @@ const step = (g, n) => { for (let i = 0; i < n; i++) g.update(1/60); };
 const ctx = document.createElement('canvas').getContext('2d');
 const frame = g => { g.draw(ctx); g.hud.draw(ctx, 480, 270, g.clock); };
 
-// Walk the hero up the steps of the first crypt east of the start.
-function enterFirstCrypt(g, p) {
+// Walk the hero up the steps of the first crypt east of the start, at the night's minute given.
+function enterFirstCrypt(g, p, minute = 0) {
   step(g, 2);
   p.x = 2774; p.y = -200;
   g.world.syncShrines();
   const door = g.crypts.find(d => d.key === '2,0');
   for (const e of g.enemies) e.dead = true;
   frame(g);
+  g.time = minute * 60;
   p.x = door.x; p.y = door.y + 10;
   input.bot = {x:0, y:-1};
   for (let i = 0; i < 120 && !g.inCrypt; i++) step(g, 1);
@@ -55,17 +57,30 @@ test('every walk from the start meets a crypt at the second crossroads', () => {
   assert.ok(cryptsNear(0, 0, 4400).length >= 4, 'the first ring of crypts is near the start');
 });
 
-test('a crypt stops the night, and its lord drops gear and lights the way out', () => gameCase((g, p) => {
+// The user, 16 October 2026: "the crypt needs to be rethought, player can always exit, has 2-4
+// bosses, each drop something. Make crypt bigger, once the last champion is killed the hole in
+// wall opens".
+test('a crypt stops the night; each of its lords drops something, the last gear and a way out', () => gameCase((g, p) => {
   const door = enterFirstCrypt(g, p);
+  const w = g.world;
   assert.ok(g.inCrypt, 'walking up the steps goes in');
   assert.ok(g.enemies.some(e => e.dormant), 'packs sleep in the rooms');
-  const lord = g.enemies.find(e => e.lord);
-  assert.ok(lord && lord.sleeping && lord.elite && lord.name, 'a named lord waits');
+  const lords = g.enemies.filter(e => e.lord);
+  assert.equal(lords.length, 2, 'two lords at dusk');
+  assert.ok(lords.every(l => l.sleeping && l.elite && l.name), 'named lords wait');
+  assert.ok(g.banners.some(b => b.sub === 'Here the night stands still. Two lords sleep below'), 'and he is told how many');
   const t = g.time, c = g.clock;
   step(g, 120);
   assert.equal(g.time, t, 'the night clock stands still');
   assert.ok(g.clock > c + 1.9, 'animation keeps going');
-  p.x = lord.x - 30; p.y = lord.y; // up to the lord, in the last room
+  p.invuln = 999; // each lord's guard wakes with it
+  const lord = w.guardian, first = lords.find(l => l !== lord), at = {x:first.x, y:first.y};
+  g.hitEnemy(first, 1e9, {});
+  step(g, 5);
+  assert.ok(g.pickups.some(pk => pk.kind === 'chest' && Math.hypot(pk.x - at.x, pk.y - at.y) < 60), 'the first leaves a chest');
+  assert.ok(!g.pickups.some(pk => pk.kind === 'item'), 'and no gear');
+  assert.ok(!w.way && w.exit === w.entrance && !g.cleared.has('2,0'), 'the wall holds while a lord stands');
+  p.x = lord.x - 30; p.y = lord.y; // up to the last lord, in the farthest room
   g.hitEnemy(lord, 1e9, {}); // wakes it with its intro, then fells it
   step(g, 5);
   frame(g);
@@ -100,38 +115,140 @@ test('a crypt stops the night, and its lord drops gear and lights the way out', 
   assert.deepEqual(g.result.gear, {[it.slot]: it});
 }));
 
-test('a felled lord stays felled, even when the hero leaves by the stairs he came down', () => gameCase((g, p) => {
+test('the crypt is cleared the moment its last lord falls, however the hero leaves', () => gameCase((g, p) => {
   const door = enterFirstCrypt(g, p);
-  const lord = g.enemies.find(e => e.lord);
-  g.hitEnemy(lord, 1e9, {});
-  step(g, 5);
-  assert.ok(g.cleared.has('2,0'), 'cleared the moment the lord falls');
-  assert.ok(P.sanitizeCheckpoint(g.checkpoint()).cleared.includes('2,0'), 'and so in a save made down there');
-  g.leaveCrypt(false);
+  p.invuln = 999;
+  for (const lord of g.enemies.filter(e => e.lord)) {
+    assert.ok(!g.cleared.has('2,0'), 'not while a lord stands');
+    g.hitEnemy(lord, 1e9, {});
+    step(g, 5);
+  }
+  assert.ok(g.cleared.has('2,0'), 'cleared the moment the last lord falls');
+  g.leaveCrypt();
   step(g, 120);
   assert.equal(g.inCrypt, null, 'back in the forest');
-  assert.ok(door.sealed, 'its door is shut for good');
+  assert.ok(door.sealed && !g.lost.has('2,0'), 'its door is shut for good');
 }));
 
-test('once in, the stairs up are barred until the lord falls', () => gameCase((g, p) => {
-  enterFirstCrypt(g, p);
-  const w = g.world, exit = w.exit, lord = g.enemies.find(e => e.lord);
-  const offAndOn = () => {
-    p.x = exit.x; p.y = exit.y - 30; step(g, 2);
-    p.x = exit.x; p.y = exit.y + 4;
-  };
-  assert.equal(w.exitOpen, false, 'barred from the moment he comes down');
-  offAndOn();
-  step(g, 60);
-  assert.ok(g.inCrypt && g.state === 'play', 'back onto the stairs, he stays below');
-  assert.ok(g.banners.some(b => b.title === 'The way up is barred' && b.sub.includes(lord.name)), 'and is told why');
+test('the stairs lead back up whenever the hero likes, its lords alive, and the crypt shuts behind him', () => gameCase((g, p) => {
+  const door = enterFirstCrypt(g, p);
+  const w = g.world, stairs = w.entrance;
+  assert.ok(w.lordsLeft().length === 2 && w.lordsLeft().every(l => l.sleeping), 'its lords all asleep below');
+  // Off them, then back onto them without walking up them, as a fight might cross them: he stays.
+  p.x = stairs.x; p.y = stairs.y - 30; step(g, 2);
+  p.x = stairs.x; p.y = stairs.y + 4; step(g, 30);
+  assert.ok(g.inCrypt && g.state === 'play', 'standing on them, he stays below');
   frame(g);
-  g.hitEnemy(lord, 1e9, {});
-  step(g, 5);
-  assert.equal(w.exitOpen, true, 'the lord fallen, the bars are gone');
-  offAndOn();
+  // Walking up them, he leaves.
+  p.y = stairs.y + 12;
+  input.bot = {x:0, y:-1};
   for (let i = 0; i < 240 && g.inCrypt; i++) step(g, 1);
-  assert.equal(g.inCrypt, null, 'and the same steps lead out');
+  input.bot = {x:0, y:0};
+  assert.equal(g.inCrypt, null, 'up the stairs, back in the forest');
+  assert.ok(!g.banners.some(b => /barred/i.test(b.title)), 'never barred');
+  assert.ok(door.sealed && g.lost.has('2,0') && !g.cleared.has('2,0'), 'the crypt shuts behind him, not cleared');
+  assert.ok(g.banners.some(b => b.title === 'The crypt is sealed' && b.sub === 'Its lords sleep on below'), 'and he is told');
+  p.x = door.x; p.y = door.y + 10;
+  input.bot = {x:0, y:-1};
+  step(g, 120);
+  input.bot = {x:0, y:0};
+  assert.equal(g.inCrypt, null, 'up its steps again, it will not open');
+  g.finish(false);
+  assert.equal(g.result.crypts, 0, 'not counted as cleared');
+}));
+
+test('two lords at dusk, three from minute 5, four from minute 10; one more three rings out', () => {
+  assert.deepEqual([0, 4.9, 5, 9.9, 10, 15, 40].map(m => cryptLords(m, 1)), [2, 2, 3, 3, 4, 4, 4]);
+  assert.deepEqual([0, 5, 10].map(m => cryptLords(m, 2)), [2, 3, 4], 'the second ring as the first');
+  assert.deepEqual([0, 5, 10].map(m => cryptLords(m, 3)), [3, 4, 4], 'one more from the third, four at most');
+  for (const [minute, n] of [[5, 3], [10, 4]]) gameCase((g, p) => {
+    enterFirstCrypt(g, p, minute);
+    assert.equal(Math.floor(g.inCrypt.minute), minute);
+    assert.equal(g.enemies.filter(e => e.lord).length, n, `${n} lords at minute ${minute}`);
+    assert.equal(g.world.lordCount, n);
+  });
+});
+
+test('each lord drops something, and the wall opens only when the last one falls', () => gameCase((g, p) => {
+  enterFirstCrypt(g, p, 10);
+  const w = g.world, lords = g.enemies.filter(e => e.lord);
+  assert.equal(lords.length, 4);
+  p.invuln = 999;
+  for (const [k, lord] of lords.entries()) {
+    const left = lords.length - 1 - k, at = {x:lord.x, y:lord.y};
+    for (const pk of g.pickups) pk.dead = true;
+    p.x = lord.x - 30; p.y = lord.y;
+    g.hitEnemy(lord, 1e9, {});
+    step(g, 5);
+    const near = kind => g.pickups.some(pk => !pk.dead && pk.kind === kind && Math.hypot(pk.x - at.x, pk.y - at.y) < 60);
+    assert.ok(near('coin') && near('goldpile'), `lord ${k + 1}: coins and gold`);
+    if (left) {
+      assert.ok(near('chest') && !near('item'), `lord ${k + 1}: a chest, not gear`);
+      assert.ok(!w.way && w.exit === w.entrance, `lord ${k + 1}: the wall holds, ${left} left`);
+      assert.ok(g.banners.some(b => b.sub.startsWith('A chest dropped.') && b.sub.includes(left === 1 ? 'One lord remains' : 'lords remain')), 'he is told how many remain');
+    } else {
+      assert.ok(near('item') && !near('chest'), 'the last: gear');
+      assert.ok(w.way && w.exit.hole, 'and the wall breaks open');
+      assert.ok(g.cleared.has('2,0'));
+    }
+  }
+  assert.equal(g.itemsFound, 1, 'one piece of gear a crypt');
+}));
+
+// The minimap's canvas, keeping the box it paints in.
+function paintBox() {
+  const box = {x0:Infinity, y0:Infinity, x1:-Infinity, y1:-Infinity, n:0};
+  const rect = (x, y, w, h) => {
+    box.x0 = Math.min(box.x0, x); box.y0 = Math.min(box.y0, y);
+    box.x1 = Math.max(box.x1, x + w); box.y1 = Math.max(box.y1, y + h); box.n++;
+  };
+  return new Proxy({box}, {
+    get: (t, k) => (k === 'fillRect' ? rect : k in t ? t[k] : () => ({width:0})),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+}
+
+test('a crypt is bigger, ten rooms or so, every room and every lord a walk from the stairs, its maps on screen', () => gameCase((g, p) => {
+  step(g, 2);
+  const T = 16, rooms = [];
+  for (let seed = 1; seed <= 50; seed++) {
+    g.enemies = [];
+    const lords = 2 + (seed % 3), theme = ['crypt', 'catacombs', 'inferno'][seed % 3];
+    const w = new Dungeon(g, 1, seed * 7919, {name:'Crypt of Tests', theme, lords});
+    assert.deepEqual([w.W, w.H], [70, 56]);
+    rooms.push(w.rooms.length);
+    assert.ok(w.rooms.length >= lords + 2, `seed ${seed}: ${w.rooms.length} rooms for ${lords} lords`);
+    const dist = w.bfs(w.startRoom.cx, w.startRoom.cy);
+    const walk = (x, y) => dist[Math.floor(y / T) * w.W + Math.floor(x / T)];
+    const inRoom = (e, r) => Math.floor(e.x / T) >= r.x && Math.floor(e.x / T) < r.x + r.w && Math.floor(e.y / T) >= r.y && Math.floor(e.y / T) < r.y + r.h;
+    for (const r of w.rooms) {
+      let open = false;
+      for (let y = r.y; y < r.y + r.h && !open; y++) for (let x = r.x; x < r.x + r.w && !open; x++) open = dist[y * w.W + x] >= 0;
+      assert.ok(open, `seed ${seed}: every room a walk from the stairs`);
+    }
+    assert.ok(walk(w.entrance.x, w.entrance.y) >= 0, `seed ${seed}: the stairs on open floor`);
+    const L = g.enemies.filter(e => e.lord);
+    assert.equal(L.length, lords, `seed ${seed}: ${lords} lords`);
+    assert.equal(w.lordCount, lords);
+    const homes = L.map(l => w.rooms.find(r => inRoom(l, r)));
+    assert.equal(new Set(homes).size, lords, `seed ${seed}: each lord in a room of its own`);
+    assert.ok(homes.every(r => r && r !== w.startRoom && w.lordRooms.includes(r)), `seed ${seed}: none by the stairs`);
+    assert.ok(inRoom(w.guardian, w.guardRoom), `seed ${seed}: one in the farthest room`);
+    L.forEach((l, k) => {
+      assert.ok(walk(l.x, l.y) > 0, `seed ${seed}: every lord a walk from the stairs`);
+      assert.ok(g.enemies.some(e => e.dormant && e.pack === l.pack && inRoom(e, homes[k])), `seed ${seed}: each with its guard asleep about it`);
+    });
+    // Both maps, the corner one and the whole one (Tab), fit a 480 x 270 screen with every tile seen.
+    w.seen.fill(1);
+    for (const big of [false, true]) {
+      const c = paintBox();
+      w.drawMinimap(c, 480, 270, big);
+      const b = c.box;
+      assert.ok(b.n > 100 && b.x0 >= 0 && b.y0 >= 0 && b.x1 <= 480 && b.y1 <= 270, `seed ${seed}: the ${big ? 'whole' : 'corner'} map on screen (${b.x0},${b.y0} to ${b.x1},${b.y1})`);
+    }
+  }
+  const mean = rooms.reduce((a, b) => a + b) / rooms.length;
+  assert.ok(mean >= 9, `about ten rooms (${mean.toFixed(1)}), not the five of old`);
 }));
 
 // Blades, flasks and glaives strike the same foe again after a moment (hitT), as do the pools a
@@ -233,7 +350,7 @@ test('gear rolls only within its rarity, and nothing else passes the server', ()
 test('the save keeps the gear worn at the end, never more new pieces than the run found', () => {
   const ring = {slot:'ring', rarity:3, stats:{crit:4, luck:10, greed:15}, power:null, seed:9};
   const helm = {slot:'helm', rarity:0, stats:{armor:1}, power:null, seed:4};
-  const run = {mode:'s15', hero:'knight', victory:false, time:300, kills:100, level:10, floor:1};
+  const run = {mode:'s15', diff:'hard', hero:'knight', victory:false, time:300, kills:100, level:10, floor:1};
   let r = P.applyRun(P.defaultProfile(), {...run, gold:50, gear:{ring}, found:1, realTime:420});
   assert.deepEqual(r.profile.gear, {knight:{ring}});
   r = P.applyRun(r.profile, {...run, gold:50, found:0});
@@ -254,7 +371,4 @@ test('the save keeps the gear worn at the end, never more new pieces than the ru
   assert.equal(r.reward.collected, Math.round((cap + I.itemPrice(ring)) * 1.5));
   assert.deepEqual(I.sanitizeGear(I.packGear({ring, helm})), {ring, helm}, 'packed for the cookie, then read back');
   assert.deepEqual(I.sanitizeGear({ring:[3, 9, -1, 0, 4, 1, 99, 2, 15]}), {}, 'a packed item is checked like any other');
-  const cp = P.sanitizeCheckpoint({mode:'s15', diff:'hard', hero:'knight', gear:{ring}, cleared:['2,0', '-4,2', 'x']});
-  assert.deepEqual(cp.gear, {ring});
-  assert.deepEqual(cp.cleared, ['2,0', '-4,2']);
 });

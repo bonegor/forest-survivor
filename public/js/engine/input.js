@@ -28,6 +28,8 @@ const BIND = {
   fullscreen: { keys: ['F11', 'KeyF'], pad: [] },
 };
 const PREVENT = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'Backspace', 'F3']);
+// Fingers down that act as a click when they lift, by touch id (initInput).
+const taps = new Map();
 
 export const input = {
   held: new Set(),
@@ -41,6 +43,15 @@ export const input = {
   pad: { index: -1, buttons: [], prev: [], ax: 0, ay: 0, navPrev: 0 },
   anyKey: false,
   typed: [],
+
+  // Lets go of every finger on the screen, for a screen that changes what a touch does (the game
+  // screen as an overlay opens): the stick stops, and a finger already down neither steers nor
+  // clicks when it lifts.
+  releaseTouches() {
+    this.stick.active = false;
+    if (taps.size) this.mouse.down = false;
+    taps.clear();
+  },
 
   down(action) {
     const b = BIND[action];
@@ -186,7 +197,6 @@ export function initInput(canvas) {
   // Touch: buttons registered by the active screen fire instantly; any other
   // touch either drives the virtual joystick (in game) or acts as a click. A
   // second finger down while the first drives the joystick also strikes.
-  const taps = new Map();
   canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     input.device = 'touch';
@@ -232,6 +242,9 @@ export function initInput(canvas) {
       const tap = taps.get(t.identifier);
       if (tap) {
         taps.delete(t.identifier);
+        const p = toUI(t.clientX, t.clientY); // the click is where this finger lifts, not the last one down
+        input.mouse.x = p.x;
+        input.mouse.y = p.y;
         input.mouse.down = false;
         input.mouse.clicked = true;
       }

@@ -13,8 +13,8 @@
 //  5. Beating the Dungeon with the Necromancer opens Ranked: endless, any hero,
 //     personal bests.
 //
-// There is one difficulty for now (data/difficulty.js). Runs are recorded as
-// Hard, so saves keep their shape and old Easy/Medium wins stay on record.
+// Two difficulties (data/difficulty.js): Normal is recorded as the old Medium,
+// Veteran as the old Hard, so saves keep their shape and old Easy wins stay on record.
 
 import { RARITIES, LEGENDARY, sanitizeGear, packGear, sameItem, itemPrice } from './items.js';
 
@@ -237,8 +237,9 @@ export function nextHeroUnlock(profile) {
 export function sanitizeRun(raw) {
   if (!raw || typeof raw !== 'object') return null;
   if (!MODES.includes(raw.mode)) return null;
-  // Normal ('medium') or Veteran ('hard'); Ranked is always Veteran, and so is anything else.
-  const diff = raw.diff === 'medium' && raw.mode !== 'ranked' ? 'medium' : 'hard';
+  // Normal ('medium') or Veteran ('hard'); Ranked is always Veteran. Veteran pays half as much
+  // again, so only a run that says it was one is paid as one: anything else is Normal.
+  const diff = raw.mode === 'ranked' || raw.diff === 'hard' ? 'hard' : 'medium';
   const time = int(raw.time, 0, MAX_TIME[raw.mode]);
   // The night's clock stands still in a crypt, so a run can last longer than its time.
   const realTime = int(raw.realTime, time, MAX_REAL_TIME[raw.mode]);
@@ -350,70 +351,11 @@ export function metaBonuses(profile) {
   };
 }
 
-// Crypts and shrines by their crossroads ('i,j'), the latest n of them (the nearest by then).
-const crossroads = (a, n) => (Array.isArray(a) ? a.filter((k) => typeof k === 'string' && /^-?\d{1,5},-?\d{1,5}$/.test(k)).slice(-n) : []);
-const cryptKeys = (a) => crossroads(a, 64);
-
-// What a sealed cookie can hold: at most 4096 characters, so about 3 000 of JSON.
-const MAX_SAVE_JSON = 2900;
-
-// A run saved to pick up again if the game is closed mid-run: the Survival and Ranked
-// autosave every minute, and the Dungeon's at each floor.
-export function sanitizeCheckpoint(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  if (!MODES.includes(raw.mode) || !DIFFICULTIES.includes(raw.diff) || !isId(raw.hero)) return null;
-  const items = (arr) =>
-    Array.isArray(arr)
-      ? arr
-          .filter((e) => Array.isArray(e) && isId(e[0]))
-          .slice(0, 6)
-          .map((e) => [e[0], int(e[1], 1, 8), e[2] ? 1 : 0])
-      : [];
-  const cp = {
-    v: VERSION,
-    mode: raw.mode,
-    diff: raw.diff === 'medium' && raw.mode !== 'ranked' ? 'medium' : 'hard',
-    hero: raw.hero,
-    floor: int(raw.floor, 1, 3),
-    seed: int(raw.seed, 0, 2 ** 31 - 1),
-    time: int(raw.time, 0, MAX_TIME[raw.mode]),
-    level: int(raw.level, 1, 999),
-    xp: int(raw.xp, 0, 1e7),
-    hp: int(raw.hp, 1, 1e5),
-    gold: int(raw.gold, 0, 1e6),
-    kills: int(raw.kills, 0, 1e7),
-    fury: int(raw.fury, 0, 100),
-    rerolls: int(raw.rerolls, 0, 99),
-    weapons: items(raw.weapons),
-    passives: items(raw.passives),
-    bless: int(raw.bless, 0, 999),
-    // The filler the player chose for every level-up once nothing else is left (Game FILLERS).
-    auto: ['bless', 'heal', 'gold'].includes(raw.auto) ? raw.auto : null,
-    // The level a Phoenix Heart was spent at this run (null: none was).
-    phoenixLostAt: Number.isFinite(raw.phoenixLostAt) ? int(raw.phoenixLostAt, 1, 999) : null,
-    gear: sanitizeGear(raw.gear),
-    cleared: cryptKeys(raw.cleared),
-    lost: cryptKeys(raw.lost),
-    found: int(raw.found, 0, 64),
-    cryptTime: int(raw.cryptTime, 0, MAX_TIME.ranked),
-    // null: a save from before the boss schedule was kept.
-    bossIdx: Number.isFinite(raw.bossIdx) ? int(raw.bossIdx, 0, 999) : null,
-    bosses: Array.isArray(raw.bosses)
-      ? raw.bosses.filter((b) => Array.isArray(b) && isId(b[0]) && Number.isFinite(b[1])).slice(0, 4).map(([id, left]) => [id, Math.min(1, Math.max(0.001, left))])
-      : [],
-    shrines: crossroads(raw.shrines, 48),
-    ts: int(raw.ts, 0, 2 ** 52),
-  };
-  // Too big for its cookie (a very long run): the oldest shrines give way first, then the
-  // oldest crypts, all far behind the hero by then.
-  const fits = () => JSON.stringify(cp).length <= MAX_SAVE_JSON;
-  while (!fits() && cp.shrines.length) cp.shrines.shift();
-  while (!fits() && (cp.cleared.length || cp.lost.length)) {
-    cp.cleared.shift();
-    cp.lost.shift();
-  }
-  return cp;
-}
+// The longest state decodeState reads. It must fit the biggest cookie the game writes, the
+// profile with every hero in six legendaries (packProfile): about 2 500 characters encoded
+// (test/profile.test.js measures it and keeps a quarter spare). A browser keeps at most 4096
+// bytes a cookie, its name included, so nothing longer than this can be one of ours.
+export const MAX_STATE = 4000;
 
 // base64url(JSON). Our JSON is plain ASCII, so btoa/atob are safe here and
 // exist both in browsers and in Node >= 16.
@@ -422,7 +364,7 @@ export function encodeState(obj) {
 }
 
 export function decodeState(str) {
-  if (typeof str !== 'string' || str.length > 3500 || !/^[A-Za-z0-9_-]*$/.test(str)) return null;
+  if (typeof str !== 'string' || str.length > MAX_STATE || !/^[A-Za-z0-9_-]*$/.test(str)) return null;
   try {
     let s = str.replace(/-/g, '+').replace(/_/g, '/');
     while (s.length % 4) s += '=';

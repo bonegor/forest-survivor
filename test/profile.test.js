@@ -21,9 +21,10 @@ test('encode/decode round-trips and rejects junk', () => {
   p.gold = 1234;
   assert.deepEqual(P.decodeState(P.encodeState(p)), p);
   assert.equal(P.decodeState('!!!'), null);
-  assert.equal(P.decodeState('a'.repeat(5000)), null);
+  assert.equal(P.decodeState('a'.repeat(P.MAX_STATE + 1)), null, 'longer than any cookie of ours');
 });
 
+// With runs never saved, this is the biggest cookie the game writes.
 test('every hero in six legendaries, and every record at its most, still fits the cookie', () => {
   const p = P.defaultProfile();
   Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, heroes: [...P.HERO_ORDER] });
@@ -46,8 +47,12 @@ test('every hero in six legendaries, and every record at its most, still fits th
   const json = JSON.stringify(P.packProfile(clean));
   // The server seals at most about 3 000 characters of JSON into a 4 096-character cookie.
   assert.ok(json.length <= 2900, `${json.length} characters`);
-  assert.ok(P.encodeState(P.packProfile(clean)).length <= 4000, 'and the static game\'s plain cookie');
   assert.deepEqual(P.sanitizeProfile(JSON.parse(json)), clean, 'packed, then read back');
+  // The static game's plain cookie (and an old signed one the server upgrades) is read back by
+  // decodeState, whose cap keeps a quarter spare over this, the worst case.
+  const plain = P.encodeState(P.packProfile(clean));
+  assert.ok(plain.length * 1.25 <= P.MAX_STATE, `${plain.length} characters encoded, cap ${P.MAX_STATE}`);
+  assert.deepEqual(P.sanitizeProfile(P.decodeState(plain)), clean, 'encoded, decoded, the same profile');
 });
 
 test('applyRun pays gold, records wins and clamps impossible reports', () => {
@@ -72,8 +77,7 @@ test('a victory only counts when the run was long enough', () => {
   const early = P.applyRun(p, { mode: 's15', diff: 'medium', victory: true, time: 42, gold: 10 });
   assert.equal(early.reward.bonus, 0);
   assert.equal(early.profile.wins.s15[1], 0);
-  const real = P.applyRun(p, { mode: 's15', diff: 'easy', victory: true, time: 900, gold: 10 });
-  assert.equal(real.run.diff, 'hard', 'one difficulty, whatever the client says');
+  const real = P.applyRun(p, { mode: 's15', diff: 'hard', victory: true, time: 900, gold: 10 });
   assert.equal(real.profile.wins.s15[2], 1);
   assert.ok(P.hasFeat(real.profile, 'knight', P.FEAT.survivalHard), 'any night won counts');
 });
@@ -112,8 +116,18 @@ test('a Normal run pays gold as the old Medium, a Veteran one as the old Hard; R
   const ranked = P.applyRun(p, { mode: 'ranked', diff: 'medium', hero: 'knight', time: 300, gold: 10 });
   assert.equal(ranked.ok, true);
   assert.equal(ranked.run.diff, 'hard', 'Ranked keeps one best per hero, so it is always Veteran');
-  assert.equal(P.sanitizeCheckpoint({ mode: 'ranked', diff: 'medium', hero: 'knight' }).diff, 'hard');
-  assert.equal(P.sanitizeCheckpoint({ mode: 's15', diff: 'medium', hero: 'knight' }).diff, 'medium');
+  assert.equal(P.applyRun(p, { mode: 'ranked', hero: 'knight', time: 300 }).run.diff, 'hard');
+});
+
+// Veteran pays half as much again, so a report that doesn't say it was one is never paid as one.
+test('a run that names no difficulty, or one the game no longer has, is paid as Normal', () => {
+  const p = veteran();
+  for (const diff of [undefined, null, 'easy', 'HARD', 7]) {
+    const r = P.applyRun(p, { mode: 's15', diff, victory: true, time: 900, gold: 100 });
+    assert.equal(r.run.diff, 'medium', String(diff));
+    assert.deepEqual([r.reward.collected, r.reward.bonus, r.reward.multiplier], [100, 300, 1], String(diff));
+    assert.equal(r.profile.wins.s15[1], 1, 'a Normal win');
+  }
 });
 
 test('buying and refunding upgrades', () => {
@@ -248,18 +262,4 @@ test('metaBonuses reflect upgrade ranks', () => {
   assert.equal(m.armor, 1);
   assert.equal(m.revival, 1);
   assert.equal(m.cooldown, 1);
-});
-
-test('sanitizeCheckpoint keeps a compact, valid save', () => {
-  const cp = P.sanitizeCheckpoint({
-    mode: 'dungeon', diff: 'hard', hero: 'mage', floor: 2, seed: 77, time: 500, level: 12, xp: 30, hp: 50,
-    gold: 80, kills: 900, fury: 40, weapons: [['fireball', 5, 0], ['bad id!', 3], ['axe', 99]], passives: [['might', 2]],
-  });
-  assert.equal(cp.floor, 2);
-  assert.deepEqual(cp.weapons, [['fireball', 5, 0], ['axe', 8, 0]]);
-  assert.equal(cp.bless, 0, 'older saves have no blessings');
-  assert.equal(P.sanitizeCheckpoint({ ...cp, bless: 7 }).bless, 7);
-  assert.equal(P.sanitizeCheckpoint({ ...cp, bless: -3 }).bless, 0);
-  assert.equal(P.sanitizeCheckpoint({ mode: 'x' }), null);
-  assert.ok(P.encodeState(cp).length < 1500, 'fits comfortably in a cookie');
 });

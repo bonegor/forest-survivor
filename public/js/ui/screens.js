@@ -51,7 +51,6 @@ export class TitleScreen {
     this.app = app;
     this.t = 0;
     this.ready = app.audioUnlocked;
-    this.confirmNew = false;
     if (this.ready) playMusic('title');
     app.ui.lock(0.3);
   }
@@ -105,12 +104,9 @@ export class TitleScreen {
       return;
     }
 
+    // No Continue: a run is never saved to come back to, only its results when it ends.
     ui.begin(dt);
-    const items = [];
-    if (app.store.checkpoint) items.push(['continue', 'CONTINUE RUN']);
-    // With a run saved, New Game asks first: starting another one throws it away.
-    if (this.confirmNew && (!app.store.checkpoint || !ui.focused('play'))) this.confirmNew = false;
-    items.push(['play', this.confirmNew ? 'ABANDON RUN?' : 'NEW GAME'], ['armory', 'THE ARMORY'], ['records', 'RECORDS'], ['options', 'OPTIONS']);
+    const items = [['play', 'NEW GAME'], ['armory', 'THE ARMORY'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
     const bw = 104, bh = 15, gap = 4;
     let y = Math.round(Math.max(ly + lh + 18, H * 0.5 - (items.length * (bh + gap)) / 2 + 6));
     for (const [id, label] of items) {
@@ -118,12 +114,6 @@ export class TitleScreen {
       y += bh + gap;
     }
     ui.end();
-    if (app.store.checkpoint && ui.focused('continue')) {
-      const cp = app.store.checkpoint;
-      const where = cp.mode === 'dungeon' ? `Floor ${cp.floor}` : fmtTime(cp.time);
-      drawText(ctx, `${HEROES[cp.hero]?.name || cp.hero} · ${MODES[cp.mode].name} ${MODES[cp.mode].sub} · ${where}`, W / 2, y + 2, { align: 'center', color: '#8b9bb4' });
-    }
-    if (this.confirmNew) drawText(ctx, 'A new game ends the saved run, and its gold is lost', W / 2, y + 2, { align: 'center', color: '#e43b44' });
     // Footer.
     const p = app.store.profile;
     goldTag(ctx, app, 6, H - 13, 'left');
@@ -138,17 +128,14 @@ export class TitleScreen {
   // silently resetting. The old cookie is only replaced once the player agrees.
   drawUnreadable(ctx, W, H, dt, top) {
     const app = this.app, ui = app.ui;
-    const bad = app.store.unreadable;
     const pw = Math.min(236, W - 16);
-    const lines = bad.profile
-      ? ['Your saved progress could not be read.', 'The save may be damaged, or the game server\'s key has changed. It cannot be recovered.']
-      : ['Your saved run could not be read, so it cannot be continued.', 'Your gold, wins and Armory are safe.'];
+    const lines = ['Your saved progress could not be read.', 'The save may be damaged, or the game server\'s key has changed. It cannot be recovered.'];
     const wrapped = [];
     for (const l of lines) wrapped.push(...wrapText(l, pw - 16), '');
     wrapped.pop();
     const ph = 34 + wrapped.length * 9;
     const x = Math.round(W / 2 - pw / 2), y = Math.round(Math.min(Math.max(top + 8, H * 0.5 - ph / 2), H - ph - 18));
-    panel(ctx, x, y, pw, ph, { title: bad.profile ? 'SAVE UNREADABLE' : 'SAVED RUN UNREADABLE' });
+    panel(ctx, x, y, pw, ph, { title: 'SAVE UNREADABLE' });
     let ty = y + 11;
     for (const l of wrapped) {
       if (l) drawText(ctx, l, W / 2, ty, { align: 'center', color: ty === y + 11 ? '#fee761' : '#c0cbdc' });
@@ -159,9 +146,8 @@ export class TitleScreen {
       ui.focus('fresh');
       this.freshFocus = true;
     }
-    const label = bad.profile ? 'START A NEW ADVENTURE' : 'CONTINUE';
     const bw = 124;
-    if (button(ctx, ui, 'fresh', Math.round(W / 2 - bw / 2), y + ph - 20, bw, 13, label)) {
+    if (button(ctx, ui, 'fresh', Math.round(W / 2 - bw / 2), y + ph - 20, bw, 13, 'START A NEW ADVENTURE')) {
       sfx('select');
       app.store.startFresh().catch(() => {});
       ui.focus('play');
@@ -195,7 +181,7 @@ export class TitleScreen {
       this.retrying = true;
       app.store.init().finally(() => {
         this.retrying = false;
-        ui.focus(app.store.checkpoint ? 'continue' : 'play');
+        ui.focus('play');
         ui.lock(0.25);
       });
     }
@@ -204,9 +190,7 @@ export class TitleScreen {
 
   pick(id) {
     const app = this.app;
-    if (id === 'play' && app.store.checkpoint && !this.confirmNew) this.confirmNew = true;
-    else if (id === 'play') app.go('hero');
-    else if (id === 'continue') app.continueRun();
+    if (id === 'play') app.go('hero');
     else if (id === 'armory') app.go('armory');
     else if (id === 'records') app.go('records');
     else if (id === 'options') app.go('options', { back: 'title' });

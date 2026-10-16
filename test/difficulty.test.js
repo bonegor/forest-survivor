@@ -13,7 +13,8 @@ import { isFew } from '../public/js/game/spawner.js';
 import { armored } from '../public/js/game/player.js';
 import { NORMAL, VETERAN } from '../public/js/data/difficulty.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, metaBonuses, sanitizeCheckpoint } from '../public/js/shared/profile.js';
+import { targetCount } from '../public/js/data/waves.js';
+import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 function game(o = {}, seed = 7) {
   const oldRandom = Math.random;
@@ -27,12 +28,11 @@ function game(o = {}, seed = 7) {
   }
 }
 
-test('a run plays the rules chosen for it; a saved run its own; Ranked and the bots Veteran', () => {
+test('a run plays the rules chosen for it; Ranked and the bots Veteran', () => {
   assert.equal(game({ diff: 'medium' }).diff, NORMAL);
   assert.equal(game({ diff: 'hard' }).diff, VETERAN);
   assert.equal(game().diff, VETERAN, 'no choice: the game as it was tuned');
   assert.equal(game({ mode: 'ranked', diff: 'medium' }).diff, VETERAN);
-  assert.equal(game({ diff: 'hard', checkpoint: sanitizeCheckpoint({ mode: 's15', diff: 'medium', hero: 'archer', weapons: [['bow', 1]] }) }).diff, NORMAL);
   assert.equal(game({ diff: 'medium' }).diffId, 'medium', 'what the run reports');
 });
 
@@ -119,4 +119,88 @@ test('on Normal a third as many of the monsters that shoot or lunge come, and th
     assert.equal(n.hard, Math.round(ev.count * VETERAN.horde));
     assert.equal(n.medium, few ? Math.round(ev.count * VETERAN.horde / 3) : n.hard, `${ev.enemy}: ${n.medium} against ${n.hard}`);
   }
+});
+
+// What a spawn asks for, without spawning it.
+function asks(g, fn) {
+  const got = [];
+  g.spawnEnemy = (type, x, y, o = {}) => (got.push({ type, ...o }), null);
+  fn();
+  return got;
+}
+
+// The user (16 October 2026): "Normal: monster health -70%".
+test('on Normal every monster has 70% less health than on Veteran: the horde, champions, the thief, bosses and the crypts\' lords', () => {
+  const tenth = (n, v, what) => assert.ok(Math.abs(n / v - 0.3) < 1e-9, `${what}: ${n} on Normal, ${v} on Veteran`);
+  const hp = {};
+  for (const diff of ['hard', 'medium']) {
+    const g = game({ diff }), p = g.player, s = g.spawner;
+    const elite = asks(g, () => s.spawnElite(10))[0];
+    hp[diff] = {
+      horde: s.stats(10).hpMul,
+      late: s.stats(25).hpMul,
+      pack: asks(g, () => s.fire({ type: 'pack', enemy: 'goblin', count: 5 }, 10))[0].hpMul,
+      champion: elite.hpMul / (elite.mod.id === 'stone' ? 1.4 : 1),
+      thief: asks(g, () => s.spawnThief(10))[0].hpMul,
+      summoned: asks(g, () => g.summonRing('skeleton', 1, 40))[0].hpMul,
+    };
+    delete g.spawnEnemy; // back to the game's own
+    hp[diff].boss = g.spawnBoss('boneking', p.x + 80, p.y, { sleeping: true }).maxHp;
+    hp[diff].lord = s.spawnLord(p.x - 80, p.y).maxHp;
+    hp[diff].floor = game({ diff, mode: 'dungeon' }).world.guardian.maxHp;
+  }
+  for (const k of Object.keys(hp.hard)) tenth(hp.medium[k], hp.hard[k], k);
+  assert.equal(hp.hard.lord, 600, 'a lord on Veteran as it was');
+  assert.equal(NORMAL.health, 0.3);
+  assert.equal(VETERAN.health, 1);
+});
+
+// The user: "in the last 6 minutes 30% more of the same monsters, but they each have 70% less health".
+test('on Normal 30% more monsters come from minute 9 of the night on, not before, and never on Veteran', () => {
+  const phaseAt = (secs) => (secs / 60) * 1.4; // the 15-minute night's clock
+  const before = phaseAt(8 * 60 + 59), after = phaseAt(9 * 60 + 1);
+  const vet = game({ diff: 'hard' }), normal = game({ diff: 'medium' });
+  const ratio = (phase, a = normal, b = vet) => a.spawner.target(phase) / b.spawner.target(phase);
+  assert.ok(Math.abs(ratio(phaseAt(30)) - 1) < 1e-9 && Math.abs(ratio(before) - 1) < 1e-9, 'the same horde until 9:00');
+  for (const secs of [9 * 60 + 1, 11 * 60, 14 * 60 + 59]) {
+    assert.ok(Math.abs(ratio(phaseAt(secs)) - 1.3) < 1e-9, `30% more at ${secs} s: ${ratio(phaseAt(secs))}`);
+  }
+  for (const phase of [before, after, 20]) {
+    assert.ok(Math.abs(vet.spawner.target(phase) - targetCount(phase) * VETERAN.spawn) < 1e-9, 'Veteran as it was');
+  }
+  // The timed swarms, rings and packs too.
+  const pack = (g, phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
+  assert.equal(pack(normal, before), pack(vet, before));
+  assert.equal(pack(vet, after), Math.round(18 * VETERAN.horde));
+  assert.equal(pack(normal, after), Math.round(18 * VETERAN.horde * 1.3));
+  // A Dungeon Run floor's clock maps onto the night's: the Infernal Depths are all past minute 9.
+  const dn = game({ diff: 'medium', mode: 'dungeon' }), dv = game({ diff: 'hard', mode: 'dungeon' });
+  assert.ok(Math.abs(ratio(5, dn, dv) - 1) < 1e-9, 'the first floor as on Veteran');
+  assert.ok(Math.abs(ratio(17, dn, dv) - 1.3) < 1e-9, 'the third 30% more');
+  assert.equal(game({ diff: 'medium', mode: 'ranked' }).diff.late, null, 'Ranked is Veteran');
+});
+
+// A Holy Relic purges the horde on screen, but bosses, crypt lords and champions only take a
+// heavy blow. On Normal they have 70% less health, so the blow is 70% lighter too: a flat 200
+// would fell a crypt lord (180) outright, there and in every crypt with a relic among its boxes.
+test('a Holy Relic leaves a crypt lord standing, the same share of it gone on Normal as on Veteran', () => {
+  const share = {};
+  for (const diff of ['medium', 'hard']) {
+    const g = game({ diff }), p = g.player;
+    for (const e of g.enemies) e.dead = true;
+    const lord = g.spawner.spawnLord(p.x + 40, p.y);
+    lord.spawnT = 0;
+    const oldRandom = Math.random;
+    Math.random = mulberry32(11);
+    try {
+      g.holyNova();
+    } finally {
+      Math.random = oldRandom;
+    }
+    assert.ok(!lord.dead && lord.hp > 0, `${diff}: the lord stands (${lord.hp} of ${lord.maxHp})`);
+    share[diff] = 1 - lord.hp / lord.maxHp;
+  }
+  assert.ok(share.hard > 0.25, `a heavy blow on Veteran as before: ${share.hard}`);
+  // (A blow lands as a whole number, so the shares differ by the rounding alone.)
+  assert.ok(Math.abs(share.medium - share.hard) < 0.01, `the same share on Normal: ${share.medium} against ${share.hard}`);
 });

@@ -5,7 +5,7 @@ import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, monsterHp, minuteOf, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { FLOORS, monsterHp, minuteOf } from '../data/waves.js';
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
@@ -13,7 +13,7 @@ import { sfx, playMusic, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { input } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, shuffle, mulberry32, hash2 } from '../engine/util.js';
-import { Player, ULT_DURATION, xpFor } from './player.js';
+import { Player, ULT_DURATION } from './player.js';
 import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
 import { Weapon } from './weapons.js';
@@ -25,7 +25,7 @@ import { Lighting } from './lighting.js';
 import { SpatialGrid } from './grid.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
-import { Dungeon } from './dungeon.js';
+import { Dungeon, cryptLords } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile, spawnProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, setUltDaggerSpawner } from './effects.js';
@@ -46,20 +46,23 @@ export const KNOCKBACK = 25;
 export const FILLERS = ['bless', 'heal', 'gold'];
 export const isFiller = (c) => FILLERS.includes(c.type);
 
-// What a broken barrel, crate, urn or lantern leaves, by weight (null: nothing). Luck
-// multiplies the treasures' weights, so better luck only ever makes each of them likelier.
-// The horde drops no potions, so nearly half of all props hold one: about as many reach
-// the hero early in the night as when monsters dropped them too.
+// What each broken barrel, crate, urn or lantern leaves, by weight: at plain luck the weights
+// are the odds, and every one holds something. The user's (16 October 2026): "one third of boxes
+// have potions, one third has rage powerup, one tenth has a magnet, and the rest have gold" or
+// the rarer finds. So a third a potion, a third a fury orb, a tenth a Scroll of Gathering, and
+// of the 23% left gold the most (a fifth of all), now and then an elixir or a Frost Rune, and
+// a Holy Relic half as often. The horde leaves none of these but the odd coin and fury orb
+// (Game.killEnemy). Luck multiplies the rare treasures' weights, so better luck only ever makes
+// each of them likelier.
 export const PROP_LOOT = [
-  { kind: 'coins', w: 0.2 },
-  { kind: 'potion', w: 0.45 },
-  { kind: 'magnet', w: 0.08, lucky: true },
-  { kind: 'fury', w: 0.04, lucky: true },
-  { kind: 'relic', w: 0.01, lucky: true },
-  { kind: 'frostrune', w: 0.02, lucky: true },
-  { kind: 'elixir', w: 0.02, lucky: true },
-  { kind: 'goldpile', w: 0.13 },
-  { kind: null, w: 0.05 },
+  { kind: 'potion', w: 1 / 3 },
+  { kind: 'fury', w: 1 / 3 },
+  { kind: 'magnet', w: 1 / 10, lucky: true },
+  { kind: 'coins', w: 0.12 },
+  { kind: 'goldpile', w: 0.08 },
+  { kind: 'elixir', w: 1 / 75, lucky: true },
+  { kind: 'frostrune', w: 1 / 75, lucky: true },
+  { kind: 'relic', w: 1 / 150, lucky: true },
 ];
 
 // A blow struck by hand on the hero's sprite: its attack from two frames before the blow frame,
@@ -77,21 +80,23 @@ const STRIKE_VERB = { bow: 'shoot', fireball: 'cast', meteor: 'cast', daggers: '
 // Crypt names, picked by the crossroads; the night's minute picks the stone.
 const CRYPT_KIND = ['Crypt', 'Barrow', 'Tomb', 'Ossuary', 'Sepulchre', 'Vault'];
 const CRYPT_OF = ['the Hollow King', 'Saint Aldwyn', 'the Nameless', 'Mourn', 'the Weeping Widow', 'Old Bones', 'the Last Knight', 'the Ashen Monk', 'the Drowned', 'Vesper', 'the Pale Hunt', 'Black Ondra'];
+// How many of a crypt's lords, in its banners.
+const LORDS_WORD = ['No', 'One', 'Two', 'Three', 'Four'];
 
 export class Game {
   constructor(o) {
     this.mode = o.mode;
-    // Normal or Veteran (data/difficulty.js), as chosen or as the saved run was; Veteran without.
-    this.diff = diffFor(o.mode, o.checkpoint?.diff ?? o.diff);
+    // Normal or Veteran (data/difficulty.js), as chosen; Veteran without.
+    this.diff = diffFor(o.mode, o.diff);
     this.diffId = this.diff.id;
     this.settings = o.settings || {};
-    this.seed = o.checkpoint?.seed ?? Math.floor(Math.random() * 2 ** 31);
+    this.seed = Math.floor(Math.random() * 2 ** 31);
     this.duration = this.mode === 's15' ? 15 * 60 : Infinity;
     this.rankedBest = o.rankedBest || 0; // personal best to beat in Ranked
     this.rankIdx = 0;
     this.pace = o.pace || 1; // how much faster than real time the run goes (GAME_SPEED; the bots keep 1)
     // The hero five minutes on the clock bring in, announced as the clock passes them.
-    this.unlocks = (o.checkpoint?.time ?? 0) < HERO_UNLOCK_TIME ? o.unlocks || null : null;
+    this.unlocks = o.unlocks || null;
     this.time = 0;
     this.floorTime = 0;
     this.frame = 0;
@@ -122,7 +127,7 @@ export class Game {
     this.phoenixLostAt = null; // the level a Phoenix Heart was spent at this run (Game.relicOffered)
     this.chestQueue = [];
     this.showMap = false;
-    this.floor = o.checkpoint?.floor ?? 1;
+    this.floor = 1;
     this.objective = '';
     this.floorName = '';
     this.relocT = 0;
@@ -131,15 +136,15 @@ export class Game {
     this.hostileCount = 0;
     this.propCount = 0;
     // Gear worn into the run (kept between runs), and the crypts off the forest roads.
-    this.gear = sanitizeGear(o.checkpoint?.gear ?? o.gear);
+    this.gear = sanitizeGear(o.gear);
     this.itemQueue = [];
-    this.itemsFound = o.checkpoint?.found ?? 0; // pieces of gear dropped this run; the server keeps no more new ones than this
+    this.itemsFound = 0; // pieces of gear dropped this run; the server keeps no more new ones than this
     this.crypts = [];
-    this.cleared = new Set(o.checkpoint?.cleared || []);
-    this.lost = new Set(o.checkpoint?.lost || []); // crypts the hero fainted in, shut to him
+    this.cleared = new Set();
+    this.lost = new Set(); // crypts the hero left before their last lord fell, or fainted in: shut to him
     this.inCrypt = null; // the crypt the hero is in; the night's clock stands still meanwhile
     this.cryptsOpen = o.crypts !== false; // the balance bots keep to the forest unless asked
-    this.cryptTime = o.checkpoint?.cryptTime ?? 0; // play time spent in crypts, where the night's clock stands still
+    this.cryptTime = 0; // play time spent in crypts, where the night's clock stands still
 
     this.enemies = [];
     this.minions = [];
@@ -166,15 +171,14 @@ export class Game {
       spawnProjectile(g, { kind: 'dagger', sprite: WEAPON_SPRITES.shadowblade, x, y: y - 1, z: 7, ang: a, speed: 300, life: 0.6, r: 3, dmg: 18, pierce: 2, kb: 0.4, crit: 0.35, spin: 22, trail: PC.P }),
     );
 
-    if (this.mode === 'dungeon') this.enterFloor(this.floor, true);
+    if (this.mode === 'dungeon') this.enterFloor(this.floor);
     else {
       this.world = new Forest(this, this.seed);
       this.player.x = this.world.start.x;
       this.player.y = this.world.start.y;
       playMusic('forest');
     }
-    if (o.checkpoint) this.restore(o.checkpoint);
-    else for (const id of startWeapons(HEROES[o.hero])) this.addWeapon(id);
+    for (const id of startWeapons(HEROES[o.hero])) this.addWeapon(id);
     this.syncCam();
     this.cam.x = this.player.x - this.cam.W / 2;
     this.cam.y = this.player.y - this.cam.H / 2;
@@ -212,7 +216,7 @@ export class Game {
 
   // ------------------------------------------------------------ floors --
 
-  enterFloor(n, first = false) {
+  enterFloor(n) {
     const f = FLOORS[n - 1];
     this.floor = n;
     this.floorName = f.name;
@@ -239,7 +243,6 @@ export class Game {
     this.objective = `Slay ${ENEMIES[f.guardian].name}`;
     this.banner(`Floor ${n}`, f.name, n === 3 ? '#f77622' : '#c0cbdc', 3.2);
     playMusic('dungeon-' + f.theme);
-    if (!first && this.onCheckpoint) this.onCheckpoint();
   }
 
   // ------------------------------------------------------------- items --
@@ -446,9 +449,10 @@ export class Game {
 
   // ----------------------------------------------------------- enemies --
 
-  // Past 900 foes nothing more spawns, except a boss (o.always).
+  // Past 900 foes nothing more spawns, except a boss (o.always). Props standing don't count:
+  // a dungeon floor's stand all floor long.
   spawnEnemy(type, x, y, o = {}) {
-    if (this.enemies.length > 900 && !o.always) return null;
+    if (this.enemies.length - this.propCount > 900 && !o.always) return null;
     const e = this.enemyPool.get().init(this, type, x, y, o);
     this.enemies.push(e);
     return e;
@@ -716,30 +720,41 @@ export class Game {
     if (this.mode !== 'dungeon' || this.floor < 3) playMusic(this.mode === 'dungeon' ? 'dungeon-' + FLOORS[this.floor - 1].theme : 'forest');
   }
 
-  // A crypt's lord drops a piece of gear, and the way back up opens where it fell.
+  // A crypt's lord has fallen, and leaves its coins and something more: each but the last a
+  // champion's chest and a little gold; the last a piece of gear and more gold, and the wall
+  // breaks open on a way out (Dungeon.lightWayOut).
   lordDefeated(e) {
     const p = this.player, c = this.inCrypt;
-    // Cleared now, however the hero leaves: no second lord (and no second piece of gear) from
-    // going back in by the stairs he came down, or from a run picked up from its save.
-    if (c) this.cleared.add(c.key);
+    const left = this.world.lordsLeft ? this.world.lordsLeft().length : 0;
+    // The last one down: cleared now, however the hero leaves, so no more lords (and no more gear)
+    // from going back in.
+    if (c && !left) this.cleared.add(c.key);
     this.stats.bosses++;
     const log = this.stats.bossLog.find((b) => b.id === 'lord ' + e.type && b.kill === undefined);
     if (log) log.kill = Math.round(this.clock - log.rt);
-    if (this.boss === e) this.boss = null;
+    // Another lord still fighting: the bar and the music go to it.
+    const next = this.enemies.find((o) => o !== e && o.lord && !o.dead && !o.sleeping);
+    if (this.boss === e) this.boss = next || null;
     this.timeScale = 0.4;
     this.slowT = 0.8;
     this.whiteFlash = 0.4;
     sfx('bigexplode');
     explode(this, e.x, e.y - 8, 40, 0, null, 'fire');
-    const it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1, luck: p.luck });
-    this.itemsFound++;
-    this.addPickup('item', e.x, e.y, 0, { item: it });
     for (let i = 0; i < 10; i++) this.addPickup('coin', e.x, e.y, 2);
-    this.addPickup('goldpile', e.x, e.y, 30);
-    const R = RARITIES[it.rarity];
-    this.banner(`${e.name} is slain!`, `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()} dropped`, R.color, 3.2);
-    if (this.world.lightWayOut) this.world.lightWayOut();
-    playMusic('crypt');
+    if (left) {
+      this.addPickup('chest', e.x, e.y, 0, { kind: 'elite' });
+      this.addPickup('goldpile', e.x, e.y, 20);
+      this.banner(`${e.name} is slain!`, `A chest dropped. ${LORDS_WORD[left] || left} ${left === 1 ? 'lord remains' : 'lords remain'}`, '#feae34', 3.2);
+    } else {
+      const it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1, luck: p.luck });
+      this.itemsFound++;
+      this.addPickup('item', e.x, e.y, 0, { item: it });
+      this.addPickup('goldpile', e.x, e.y, 30);
+      const R = RARITIES[it.rarity];
+      this.banner(`${e.name} is slain!`, `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()} dropped`, R.color, 3.2);
+      if (this.world.lightWayOut) this.world.lightWayOut();
+    }
+    if (!next) playMusic('crypt');
   }
 
   descend() {
@@ -801,13 +816,13 @@ export class Game {
       const name = `${CRYPT_KIND[Math.floor(hash2(a, b, 41) * CRYPT_KIND.length)]} of ${CRYPT_OF[Math.floor(hash2(a, b, 42) * CRYPT_OF.length)]}`;
       this.inCrypt = { key: d.key, depth: d.depth, minute, name, hp: p.hp };
       const theme = minute < 6 ? 'crypt' : minute < 11 ? 'catacombs' : 'inferno';
-      new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme });
+      new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, lords: cryptLords(minute, d.depth) });
       p.x = this.world.start.x;
       p.y = this.world.start.y;
       this.gatherMinions();
       this.snapCam();
       this.objective = '';
-      this.banner(name, 'Here the night stands still. Slay its lord to leave', '#b55088', 3.2);
+      this.banner(name, `Here the night stands still. ${LORDS_WORD[this.world.lordCount] || this.world.lordCount} lords sleep below`, '#b55088', 3.2);
       // The other weapons wait outside: their blades and auras go out until he is back.
       const main = this.mainWeapon();
       for (const w of p.weapons) {
@@ -822,17 +837,17 @@ export class Game {
     });
   }
 
-  // Back up to the forest, by the crypt's door; a cleared crypt is sealed for good.
-  leaveCrypt(cleared) {
+  // Back up to the forest, by the stairs he came down (whenever he likes) or the hole the last
+  // lord's fall broke, out by the crypt's door. It is sealed behind him for the rest of the run:
+  // cleared once its last lord has fallen, else shut with its lords below (lost).
+  leaveCrypt() {
     if (!this.inCrypt || this.state !== 'play') return;
     this.sweepCrypt();
     this.travel(() => {
-      const c = this.inCrypt, door = this.backToForest();
-      if (cleared || this.cleared.has(c.key)) {
-        this.cleared.add(c.key);
-        door.sealed = true;
-        this.banner('The crypt is sealed', 'The night goes on', '#63c74d', 2.4);
-      }
+      const c = this.inCrypt, door = this.backToForest(), done = this.cleared.has(c.key);
+      if (!done) this.lost.add(c.key);
+      door.sealed = true;
+      this.banner('The crypt is sealed', done ? 'The night goes on' : 'Its lords sleep on below', done ? '#63c74d' : '#8b9bb4', 2.4);
     });
   }
 
@@ -921,6 +936,7 @@ export class Game {
     for (const m of this.minions) {
       m.x = p.x + rand(-12, 12);
       m.y = p.y + rand(-10, 10);
+      m.forget(); // the foes it was on are in the world he left
     }
   }
 
@@ -1083,9 +1099,11 @@ export class Game {
     this.banner('Holy Relic', 'The wicked are purged', '#fee761', 2);
     const p = this.player;
     this.effects.push(new Ring(this, p.x, p.y, 6, 260, 0.8, '#fee761', false, 3));
-    // Bosses, crypt lords and champions only take a heavy blow: a relic is no way past them.
+    // Bosses, crypt lords and champions only take a heavy blow: a relic is no way past them. The
+    // blow shrinks with their health (difficulty.js health), so it takes the same share of them on
+    // Normal as on Veteran: a flat 200 would fell a Normal crypt lord (180) outright.
     for (const e of this.enemiesOnScreen(true)) {
-      if (e.boss || e.elite) this.hitEnemy(e, 200, { type: 'holy' });
+      if (e.boss || e.elite) this.hitEnemy(e, 200 * this.diff.health, { type: 'holy' });
       else this.killEnemy(e, { noSplit: true });
     }
   }
@@ -1156,7 +1174,7 @@ export class Game {
       for (let i = 0; i < 10; i++) {
         const a = (i / 10) * TAU;
         const spot = this.world.freeSpot(p.x + Math.cos(a) * 34, p.y + Math.sin(a) * 26);
-        if (spot) this.minions.push(new Minion(this, spot.x, spot.y, { dmg: 24, dur: 11 * p.duration, speed: 1.3, knight: true, burst: true, ult: true }));
+        if (spot) this.minions.push(new Minion(this, spot.x, spot.y, { dmg: 24, dur: 11 * p.duration * p.summonDur, speed: 1.3, knight: true, burst: true, ult: true }));
       }
       this.effects.push(new Ring(this, p.x, p.y, 6, 110, 0.7, '#9ee562', false, 3));
       this.pushback(p.x, p.y, 70, 260);
@@ -1202,10 +1220,7 @@ export class Game {
 
   // -------------------------------------------------------- end states --
 
-  // The run is lost the moment the hero falls: its save goes now, not after the death scene,
-  // so closing the game mid-fall can't bring the run back.
   onPlayerDeath() {
-    if (this.onRunLost) this.onRunLost();
     this.state = 'dying';
     this.deathT = 0;
     this.timeScale = 0.3;
@@ -1248,110 +1263,6 @@ export class Game {
       crypts: this.cleared.size,
       found: this.itemsFound,
     };
-  }
-
-  // ----------------------------------------------------------- persist --
-
-  checkpoint() {
-    const p = this.player;
-    return {
-      mode: this.mode,
-      diff: this.diffId,
-      hero: p.id,
-      floor: this.floor,
-      seed: this.seed,
-      time: Math.floor(this.time),
-      level: p.level,
-      xp: Math.floor(p.xp),
-      hp: Math.max(1, Math.ceil(p.hp)),
-      gold: this.gold,
-      kills: this.kills,
-      fury: Math.floor(p.fury),
-      rerolls: p.rerolls,
-      weapons: p.weapons.map((w) => [w.id, w.level, w.evolved ? 1 : 0]),
-      passives: [...p.passives.entries()].map(([id, r]) => [id, r, 0]),
-      bless: p.blessings,
-      auto: this.autoPick, // the filler every level-up takes once nothing else is left, or null
-      phoenixLostAt: this.phoenixLostAt, // the level a Phoenix Heart was spent at, or null
-      gear: this.gear,
-      cleared: [...this.cleared],
-      lost: [...this.lost],
-      found: this.itemsFound,
-      cryptTime: Math.floor(this.cryptTime),
-      // The night's bosses: the next one due, and those still fighting (how hurt each is).
-      bossIdx: this.spawner.bossIdx,
-      bosses: this.livingBosses().map((e) => [e.type, Math.round((e.hp / e.maxHp) * 1000) / 1000]),
-      shrines: this.usedShrineKeys(),
-      ts: Date.now(),
-    };
-  }
-
-  // Awake bosses in the forest (the forest as it was left, while the hero is in a crypt).
-  livingBosses() {
-    if (this.mode === 'dungeon') return [];
-    const list = this.forestState ? this.forestState.enemies : this.enemies;
-    return list.filter((e) => e.boss && !e.dead && !e.sleeping);
-  }
-
-  // The forest's shrines already used this run, by crossroads.
-  usedShrineKeys() {
-    const f = this.forestState || this;
-    if (!f.world.usedShrines) return [];
-    const keys = new Set(f.world.usedShrines);
-    for (const s of f.shrines) if (s.used && s.key) keys.add(s.key);
-    return [...keys];
-  }
-
-  restore(cp) {
-    const p = this.player;
-    this.time = cp.time;
-    this.gold = cp.gold;
-    this.kills = cp.kills;
-    p.level = cp.level;
-    p.xpNext = xpFor(cp.level);
-    p.fury = cp.fury;
-    p.rerolls = cp.rerolls;
-    // Shared weapons, and his own signature, come back as they were. Another class's signature
-    // (a run saved before the signatures), or a weapon since taken out of the game, becomes his
-    // own signature if he lacks it, else a shared weapon he doesn't hold, at the same level (an
-    // evolved one at the top): his build stays as strong, with nothing of another class's.
-    const allowed = weaponsFor(p.hero);
-    const his = (id) => !!WEAPONS[id] && allowed.some((a) => a === id || WEAPONS[a].evo?.into === id);
-    for (const [id, lvl] of cp.weapons) if (his(id)) this.addWeapon(id, lvl);
-    for (const [id, lvl] of cp.weapons) {
-      if (his(id)) continue;
-      const sub = allowed.find((a) => !this.ownsWeapon(a));
-      if (sub) this.addWeapon(sub, WEAPONS[id]?.evolved ? MAX_WEAPON_LEVEL : lvl);
-    }
-    if (!p.weapons.length) for (const id of startWeapons(p.hero)) this.addWeapon(id);
-    for (const [id, r] of cp.passives) if (PASSIVES[id]) p.passives.set(id, Math.min(r, PASSIVES[id].max));
-    p.blessings = cp.bless || 0;
-    this.autoPick = FILLERS.includes(cp.auto) ? cp.auto : null;
-    this.phoenixLostAt = cp.phoenixLostAt ?? null;
-    p.recompute();
-    p.hp = Math.min(p.maxHp, cp.hp);
-    p.xp = cp.xp;
-    this.spawner.bossIdx = 0;
-    if (this.mode !== 'dungeon') {
-      if (cp.bossIdx != null) this.spawner.bossIdx = cp.bossIdx;
-      // (A save from before the schedule was kept: every boss whose time has passed is done.)
-      else if (this.mode === 'ranked') this.spawner.bossIdx = Math.floor(this.time / RANKED_BOSS_EVERY);
-      else {
-        const b = SURVIVAL_BOSSES[this.mode].map((x) => x.at);
-        while (this.spawner.bossIdx < b.length && b[this.spawner.bossIdx] <= this.time) this.spawner.bossIdx++;
-      }
-      this.spawner.resetForFloor(this.phase);
-      for (const k of cp.shrines || []) this.world.usedShrines.add(k);
-      for (const s of this.shrines) if (s.key && this.world.usedShrines.has(s.key)) s.used = true;
-    }
-    this.banner('Run restored', 'Your saved progress continues', '#63c74d', 2.5);
-    // Bosses still fighting when the run was saved come back, as hurt as they were.
-    for (const [id, left] of cp.bosses || []) {
-      if (!ENEMIES[id]?.boss) continue;
-      const a = rand(TAU);
-      const e = this.spawnBoss(id, p.x + Math.cos(a) * 200, p.y + Math.sin(a) * 200);
-      if (e) e.hp = Math.max(1, Math.round(e.maxHp * left));
-    }
   }
 
   // ------------------------------------------------------------ update --
@@ -1558,7 +1469,9 @@ export class Game {
       if (e.dead || e.boss || e.type === 'thief' || e.sleeping || e.dormant) continue;
       if (!w.tooFar(e, this.cam)) continue;
       if (e.prop) {
-        e.dead = true;
+        // The forest's are put down about the hero as he goes, and fade behind him; a dungeon's
+        // stand in the rooms they furnish until they are broken.
+        if (w instanceof Forest) e.dead = true;
         continue;
       }
       const pt = w.spawnPoint(this);

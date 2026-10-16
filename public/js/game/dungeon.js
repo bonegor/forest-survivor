@@ -2,17 +2,17 @@
 // collision, a BFS flow field so the horde can path around walls, fog of war,
 // a minimap, and the guardian whose death opens the stairs down.
 //
-// The same builds the crypts off the forest roads: short, a handful of rooms, with no
-// horde and no seal. Packs of the night's foes sleep in the rooms, a named Skeleton
-// Archer, the lord, waits in the last, and the stairs you came down are shut while the
-// lord lives. Once it falls, the wall nearest the hero (at least HOLE_AWAY tiles' walk
-// away) breaks open on a way up, and moonlight runs along the shortest walk there (A*);
-// the stairs he came down open too.
+// The same builds the crypts off the forest roads: ten rooms or so, with no horde and no
+// seal. Packs of the night's foes sleep in the rooms, and two to four lords (named Skeleton
+// Archers, cryptLords) each in a room of its own, a pack about it as its guard. The stairs
+// you came down lead back up whenever you like. Once the last lord falls, the wall nearest
+// the hero (at least HOLE_AWAY tiles' walk away) breaks open on a way up, and moonlight runs
+// along the shortest walk there (A*).
 
 import { SPR } from '../engine/sprites.js';
 import { drawText } from '../engine/font.js';
 import { makeCanvas, mulberry32, hexToRgb, clamp, rand, TAU, pick, shuffle } from '../engine/util.js';
-import { FLOORS } from '../data/waves.js';
+import { FLOORS, PROP_SITES } from '../data/waves.js';
 import { PC, P } from './particles.js';
 import { glow } from './fxsprites.js';
 import { sfx } from '../engine/audio.js';
@@ -25,8 +25,15 @@ const FLOOR = 0, WALL = 1, LAVA = 2, PROP = 3;
 const WAY_SPEED = 90, WAY_GAP = 72;
 // How far from the hero (tiles' walk) the wall breaks open on a crypt's way out.
 export const HOLE_AWAY = 5;
-// A crypt's size in tiles, and how many rooms it has at most.
-const CRYPT_W = 52, CRYPT_H = 42, CRYPT_ROOMS = 6;
+// A crypt's size in tiles, and how many rooms it has at most: about ten as a rule, room for its
+// lords and the packs between them (a Dungeon Run floor is 76 x 64, so the maps fit as theirs do).
+const CRYPT_W = 70, CRYPT_H = 56, CRYPT_ROOMS = 12;
+// How many lords sleep in a crypt: two in the night's first five minutes, three from minute 5,
+// four from minute 10, and one more (still four at most) in a crypt three rings or more from
+// the start.
+export const cryptLords = (minute, depth = 1) => Math.min(4, 2 + Math.floor(minute / 5) + (depth >= 3 ? 1 : 0));
+// A lord's guard: the pack in its room, this much of what a room that size holds.
+const GUARD = 0.6;
 
 const THEMES = {
   crypt: {
@@ -164,7 +171,7 @@ export class Dungeon {
     this.sealStart = g.kills;
     this.sealed = !crypt;
     this.exit = null;
-    this.way = null; // a crypt's lit way out, once its lord has fallen: { path: [{ x, y, d }], at, t }
+    this.way = null; // a crypt's lit way out, once its last lord has fallen: { path: [{ x, y, d }], at, t }
     this.huntT = 0;
     this.flowT = 0;
     this.seenT = 0;
@@ -259,10 +266,12 @@ export class Dungeon {
     let far = start;
     for (const r of rooms) if (dist[r.cy * W + r.cx] > dist[far.cy * W + far.cx]) far = r;
     this.guardRoom = far;
+    this.lordRooms = small ? this.pickLordRooms(start, dist) : [];
     this.start = { x: start.cx * T + T / 2, y: start.cy * T + T / 2 };
-    // Pillars in big rooms, lava pools on the last floor.
+    // Pillars in big rooms, lava pools on the last floor (and in the late crypts); none where a
+    // guardian or a lord sleeps.
     for (const r of rooms) {
-      if (r === start || r === far) continue;
+      if (r === start || r === far || this.lordRooms.includes(r)) continue;
       if (r.w >= 13 && r.h >= 10 && !r.round && rng() < 0.55) {
         for (const [px, py] of [[r.x + 3, r.y + 3], [r.x + r.w - 4, r.y + 3], [r.x + 3, r.y + r.h - 3], [r.x + r.w - 4, r.y + r.h - 3]]) {
           grid[py * W + px] = PROP;
@@ -274,6 +283,26 @@ export class Dungeon {
         for (let y = ly - 1; y <= ly + 1; y++) for (let x = lx - 2; x <= lx + 2; x++) if (rng() < 0.85) grid[y * W + x] = LAVA;
       }
     }
+  }
+
+  // A crypt's lords each sleep in a room of their own, as many as its `lords` (or as there are
+  // rooms besides the first): the farthest walk from the stairs first (guardRoom), then each next
+  // the room farthest from the stairs and from every lord's room picked so far, so they lie apart.
+  pickLordRooms(start, dist) {
+    const { W, rooms } = this, n = Math.min(this.crypt.lords || 2, rooms.length - 1);
+    const picked = [], from = [dist];
+    while (picked.length < n) {
+      let best = null, bd = -1;
+      for (const r of rooms) {
+        if (r === start || picked.includes(r)) continue;
+        const d = Math.min(...from.map((a) => a[r.cy * W + r.cx]));
+        if (d > bd) [best, bd] = [r, d];
+      }
+      if (!best) break;
+      picked.push(best);
+      from.push(this.bfs(best.cx, best.cy));
+    }
+    return picked;
   }
 
   bfs(sx, sy, out) {
@@ -481,16 +510,25 @@ export class Dungeon {
   populate() {
     const g = this.g, rng = this.rng;
     const rooms = this.rooms.filter((r) => r !== this.startRoom && r !== this.guardRoom);
-    // Breakables hugging the walls.
+    // Breakables hugging the walls: in each room its sites (data/waves.js PROP_SITES), each a row
+    // of 2-5 along one wall, never two on a tile. The rooms' middles, where the hero starts and
+    // the guardians sleep, stay clear.
+    const boxed = new Set();
     for (const r of this.rooms) {
-      const n = rng.int(1, 4);
-      for (let i = 0; i < n; i++) {
-        const side = rng.int(0, 3);
-        const x = side === 0 ? r.x + 1 : side === 1 ? r.x + r.w - 2 : rng.int(r.x + 1, r.x + r.w - 2);
-        const y = side === 2 ? r.y + 1 : side === 3 ? r.y + r.h - 2 : rng.int(r.y + 1, r.y + r.h - 2);
-        if (this.tile(x, y) !== FLOOR) continue;
-        const type = this.info.theme === 'catacombs' ? rng.pick(['urn', 'urn', 'barrel']) : rng.pick(['barrel', 'crate', 'urn']);
-        g.spawnEnemy(type, x * T + T / 2, y * T + T - 2, { instant: true });
+      const sites = rng.int(...PROP_SITES.room);
+      for (let i = 0; i < sites; i++) {
+        const side = rng.int(0, 3), n = rng.int(...PROP_SITES.boxes);
+        // The west and east walls run north-south, the north and south ones east-west.
+        const along = side < 2, lo = along ? r.y + 1 : r.x + 1, hi = (along ? r.y + r.h : r.x + r.w) - 2;
+        const at = clamp(rng.int(lo, hi) - (n >> 1), lo, hi - n + 1);
+        for (let k = 0; k < n; k++) {
+          const x = along ? (side === 0 ? r.x + 1 : r.x + r.w - 2) : at + k;
+          const y = along ? at + k : side === 2 ? r.y + 1 : r.y + r.h - 2;
+          if (boxed.has(y * this.W + x) || this.tile(x, y) !== FLOOR) continue;
+          boxed.add(y * this.W + x);
+          const type = this.info.theme === 'catacombs' ? rng.pick(['urn', 'urn', 'barrel']) : rng.pick(['barrel', 'crate', 'urn']);
+          g.spawnEnemy(type, x * T + T / 2, y * T + T - 2, { instant: true });
+        }
       }
       // Decorative furniture.
       if (r !== this.startRoom && rng() < 0.5) {
@@ -506,7 +544,7 @@ export class Dungeon {
         }
       }
     }
-    if (this.crypt) return this.populateCrypt(rooms);
+    if (this.crypt) return this.populateCrypt();
     // Shrines and a treasure chest in side rooms.
     const shuffled = shuffle(rooms.slice(), rng);
     for (let i = 0; i < Math.min(2, shuffled.length); i++) {
@@ -525,23 +563,34 @@ export class Dungeon {
     this.updateFlow(true);
   }
 
-  // A crypt: a sleeping pack in every side room, the lord in the last, the stairs up where you came in.
-  populateCrypt(rooms) {
+  // A crypt: a sleeping pack in every room but the first, and in each lord's room (lordRooms) its
+  // lord, asleep in the middle of a smaller pack, its guard (they wake together: wakeLords). The
+  // stairs up are where you came in. guardian is the lord of the farthest room, lordCount how
+  // many lords there are.
+  populateCrypt() {
     const g = this.g, rng = this.rng, phase = g.phase;
     const st = g.spawner.stats(phase);
     let pack = 0;
-    for (const r of rooms) {
+    this.guardian = null;
+    this.lordCount = 0;
+    for (const r of this.rooms) {
+      if (r === this.startRoom) continue;
       pack++;
-      const n = Math.min(9, Math.max(3, Math.round((r.w * r.h) / 24)) + Math.floor(phase / 8));
+      const lordly = this.lordRooms.includes(r);
+      const full = Math.min(9, Math.max(3, Math.round((r.w * r.h) / 24)) + Math.floor(phase / 8));
+      const n = lordly ? Math.round(full * GUARD) : full;
       for (let k = 0; k < n; k++) {
         const x = rng.int(r.x + 1, r.x + r.w - 2), y = rng.int(r.y + 1, r.y + r.h - 2);
         if (this.tile(x, y) !== FLOOR) continue;
         g.spawnEnemy(g.spawner.pickType(phase), x * T + T / 2, y * T + T / 2, { ...st, instant: true, dormant: true, pack });
       }
+      const lord = lordly && g.spawner.spawnLord(r.cx * T + T / 2, r.cy * T + T / 2);
+      if (!lord) continue;
+      lord.pack = pack;
+      this.lordCount++;
+      if (r === this.guardRoom) this.guardian = lord;
     }
-    const gr = this.guardRoom;
-    this.guardian = g.spawner.spawnLord(gr.cx * T + T / 2, gr.cy * T + T / 2);
-    // The stairs he came down (entrance), and the way out (exit): the same until the lord falls.
+    // The stairs he came down (entrance), and the way out (exit): the same until the last lord falls.
     this.entrance = this.exit = { x: this.start.x, y: this.start.y + 2, armed: false };
     this.updateFlow(true);
   }
@@ -571,11 +620,13 @@ export class Dungeon {
         g.shake(0.4);
       }
     }
-    // Wake the guardian when the hero comes close, or let it hunt them. A crypt's lord keeps to its room.
-    if (gd && !gd.dead && gd.sleeping && !this.sealed) {
+    // Wake the guardian when the hero comes close, or let it hunt them. A crypt's lords keep to
+    // their rooms until he comes (wakeLords).
+    if (this.crypt) this.wakeLords();
+    else if (gd && !gd.dead && gd.sleeping && !this.sealed) {
       this.huntT += dt;
       const d = Math.hypot(gd.x - p.x, gd.y - p.y);
-      if ((d < 150 && this.lineOfSight(p.x, p.y, gd.x, gd.y)) || (!this.crypt && this.huntT > 75)) {
+      if ((d < 150 && this.lineOfSight(p.x, p.y, gd.x, gd.y)) || this.huntT > 75) {
         g.bossIntro(gd);
         g.objective = `Slay ${gd.name || gd.def.name}`;
       }
@@ -588,18 +639,16 @@ export class Dungeon {
       if (Math.random() < 0.3) g.particles.emit(s.x + rand(-10, 10), s.y + rand(-4, 8), 0, 0, 0, rand(10, 30), 1, 1, PC.L, P.GLOW | P.FADE, 0);
       if (onStairs(s)) g.descend();
     }
-    // A crypt's stairs back up, by the door: barred while its lord lives, live once the hero has
-    // stepped off them. Then the hole the lord's fall broke in the wall leads up too.
+    // A crypt's stairs back up, by the door: open whenever the hero likes (the user's call, 16
+    // October 2026: "player can always exit"), once he has stepped off them, walking up them as he
+    // walked up to the door outside: a fight that only crosses them keeps him below. Once the last
+    // lord has fallen, the hole its fall broke in the wall leads up too.
     if (this.entrance && g.state === 'play') {
       const e = this.entrance;
       if (!onStairs(e)) e.armed = true;
-      else if (e.armed && this.exitOpen) g.leaveCrypt(false);
-      else if (e.armed) {
-        e.armed = false;
-        g.banner('The way up is barred', `Slay ${this.guardian.name} first`, '#b55088', 2.4);
-      }
+      else if (e.armed && p.moving && Math.sin(p.aim) < -0.5) g.leaveCrypt();
     }
-    if (this.exit && this.exit.hole && g.state === 'play' && onStairs(this.exit)) g.leaveCrypt(false);
+    if (this.exit && this.exit.hole && g.state === 'play' && onStairs(this.exit)) g.leaveCrypt();
     if (this.way) this.updateWay(dt);
     // Torch embers.
     if (Math.random() < 0.3 && this.torches.length) {
@@ -674,16 +723,34 @@ export class Dungeon {
     this.g.banner('The way down is open', 'Find the stairs', '#63c74d', 2.5);
   }
 
-  // A crypt's stairs up open once its lord has fallen (lightWayOut), or if none ever rose.
-  get exitOpen() {
-    return !!this.way || !this.guardian;
+  // A crypt's lords still standing: looked for among the foes, as a fallen one goes back to the
+  // pool and may come again as another foe.
+  lordsLeft() {
+    return this.g.enemies.filter((e) => e.lord && !e.dead);
   }
 
-  // A crypt's lord has fallen: no stairs down. The wall breaks open on a way up near the hero
-  // (holeSpot), the stairs he came down are unbarred, and the moonlight runs to the hole along the
-  // shortest walk there from wherever he stands (updateWay). With no wall to break, to the stairs.
+  // Each of a crypt's lords sleeps until the hero comes near enough to see it, it is struck, or
+  // its guard wakes; and as it wakes, so does its guard.
+  wakeLords() {
+    const g = this.g, p = g.player;
+    for (const e of g.enemies) {
+      if (!e.lord || e.dead) continue;
+      if (e.sleeping) {
+        const near = (e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 150 * 150 && this.lineOfSight(p.x, p.y, e.x, e.y);
+        if (near || (e.pack && g.enemies.some((o) => o.pack === e.pack && !o.lord && !o.dead && !o.dormant))) g.bossIntro(e);
+      }
+      if (!e.sleeping && !e.data.roused) {
+        e.data.roused = true;
+        if (e.pack) g.wakePack(e);
+      }
+    }
+  }
+
+  // A crypt's last lord has fallen: no stairs down. The wall breaks open, once, on a way up near
+  // the hero (holeSpot), and the moonlight runs to the hole along the shortest walk there from
+  // wherever he stands (updateWay). With no wall to break, to the stairs he came down.
   lightWayOut() {
-    if (!this.crypt || !this.exit) return;
+    if (!this.crypt || !this.exit || this.way) return;
     const hole = this.holeSpot();
     if (hole) this.openHole(hole);
     this.way = { path: [], at: -1, t: 0 };
@@ -823,9 +890,13 @@ export class Dungeon {
   marker() {
     if (this.stairs) return [this.stairs.x, this.stairs.y, '#63c74d'];
     if (this.way && this.exit) return [this.exit.x, this.exit.y, '#2ce8f5'];
-    const gd = this.guardian;
-    if (gd && !gd.dead && gd.sleeping) return [gd.x, gd.y, '#e43b44'];
-    return null;
+    // A floor's guardian asleep, or the nearest of a crypt's lords still asleep.
+    const p = this.g.player, far = (e) => (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+    let best = null;
+    for (const e of this.crypt ? this.lordsLeft() : [this.guardian]) {
+      if (e && !e.dead && e.sleeping && (!best || far(e) < far(best))) best = e;
+    }
+    return best ? [best.x, best.y, '#e43b44'] : null;
   }
 
   // ------------------------------------------------------------ queries --
@@ -991,24 +1062,6 @@ export class Dungeon {
     for (const s of [this.stairs, this.entrance]) {
       if (s) ctx.drawImage(img, Math.round((s.x - cam.x) * S - w / 2), Math.round((s.y - cam.y) * S - 2 * S), w, h);
     }
-    if (this.entrance && !this.exitOpen) this.drawBars(ctx, cam, this.entrance);
-  }
-
-  // Iron bars across a crypt's stairs up while its lord lives, each with its shadow.
-  drawBars(ctx, cam, s) {
-    const S = cam.S, x0 = Math.round((s.x - cam.x) * S), y0 = Math.round((s.y - cam.y) * S);
-    const bar = (dx, dy, w, h, color) => {
-      ctx.fillStyle = color;
-      ctx.fillRect(x0 + dx * S, y0 + dy * S, w * S, h * S);
-    };
-    for (let dx = -11; dx <= 10; dx += 4) {
-      bar(dx + 1, -1, 1, 16, '#181425');
-      bar(dx, -1, 1, 16, '#8b9bb4');
-    }
-    for (const dy of [3, 10]) {
-      bar(-12, dy + 1, 25, 1, '#181425');
-      bar(-12, dy, 25, 1, '#5a6988');
-    }
   }
 
   collectProps(cam, list) {
@@ -1092,15 +1145,6 @@ export class Dungeon {
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
-    // A barred way up glows with its lord's seal.
-    if (this.entrance && !this.exitOpen) {
-      const e = this.entrance, sz = (40 + 6 * Math.sin(time * 2.4)) * S;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.3 + 0.12 * Math.sin(time * 2.4);
-      ctx.drawImage(glow('#b55088'), (e.x - cam.x) * S - sz / 2, (e.y + 7 - cam.y) * S - sz / 2, sz, sz);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
-    }
     // The lit way out: a glowing trail on the floor, pulses running along it to the stairs,
     // where the moonlight gathers.
     if (this.way) {
@@ -1172,10 +1216,12 @@ export class Dungeon {
       }
       ctx.globalAlpha = big ? 1 : 0.85;
     }
-    if (this.entrance) dot(this.entrance.x, this.entrance.y, this.exitOpen ? '#2ce8f5' : '#b55088', big ? 5 : 3);
+    if (this.entrance) dot(this.entrance.x, this.entrance.y, '#2ce8f5', big ? 5 : 3);
     if (this.exit && this.exit.hole) dot(this.exit.x, this.exit.y - T, '#2ce8f5', big ? 5 : 3);
-    const gd = this.guardian;
-    if (gd && !gd.dead && this.seen[Math.floor(gd.y / T) * this.W + Math.floor(gd.x / T)]) dot(gd.x, gd.y, '#e43b44', big ? 5 : 3);
+    // The guardian, or each of a crypt's lords still standing, once seen.
+    for (const gd of this.crypt ? this.lordsLeft() : [this.guardian]) {
+      if (gd && !gd.dead && this.seen[Math.floor(gd.y / T) * this.W + Math.floor(gd.x / T)]) dot(gd.x, gd.y, '#e43b44', big ? 5 : 3);
+    }
     for (const s of this.g.shrines) if (!s.used && this.seen[Math.floor(s.y / T) * this.W + Math.floor(s.x / T)]) dot(s.x, s.y, '#feae34', big ? 4 : 2);
     dot(p.x, p.y, Math.floor(this.g.clock * 4) % 2 ? '#ffffff' : '#2ce8f5', big ? 4 : 2);
     ctx.globalAlpha = 1;

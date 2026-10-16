@@ -39,6 +39,13 @@ function enterCrypt(g) {
   for (const e of g.enemies) if (!e.lord && !e.prop) e.dead = true;
   return door;
 }
+// Fells every lord of the crypt but the one in its farthest room, and returns that one: the last.
+function lastLord(g) {
+  const last = g.world.guardian;
+  for (const e of g.enemies.filter(e => e.lord && e !== last)) g.hitEnemy(e, 1e9, {});
+  step(g, 2);
+  return last;
+}
 
 // The cost of the shortest walk by Dijkstra over every tile, as a check on A*.
 function dijkstra(W, H, blocked, from, to) {
@@ -117,6 +124,9 @@ test('a crypt lord felled against a wall drops nothing into it', () => gameCase(
   p.x = w.exit.x; p.y = w.exit.y - 20;
   const spots = byTheWall(w, room);
   assert.ok(spots.length > 8, 'a room has walls');
+  // Its own lords first: each one set by the wall then falls as the last, and drops gear.
+  for (const e of g.enemies.filter(e => e.lord)) g.hitEnemy(e, 1e9, {});
+  step(g, 2);
   for (const s of spots.filter((_, i) => i % 3 === 0)) {
     for (const pk of g.pickups) pk.dead = true;
     const [dx, dy] = s.dirs[0];
@@ -150,9 +160,9 @@ const walk = (w, x, y, x2, y2) => w.bfs(Math.floor(x / T), Math.floor(y / T), ne
 // The user's call, 15 October 2026: "once they are finished, the boss is killed, the exit should not
 // be back at the entrance ... make a hole in the wall someplace at least 5 tiles away from the hero
 // and that is the exit ... still keep the path indicator to it".
-test('the lord falls, and the wall breaks open on a way out a short walk from the hero', () => gameCase((g) => {
+test('the last lord falls, and the wall breaks open on a way out a short walk from the hero', () => gameCase((g) => {
   enterCrypt(g);
-  const w = g.world, p = g.player, lord = g.enemies.find(e => e.lord);
+  const w = g.world, p = g.player, lord = lastLord(g);
   p.x = lord.x - 30; p.y = lord.y;
   assert.equal(w.exit, w.entrance, 'until then the way out is the stairs he came down');
   g.hitEnemy(lord, 1e9, {});
@@ -165,7 +175,7 @@ test('the lord falls, and the wall breaks open on a way out a short walk from th
   assert.ok(near >= HOLE_AWAY, `at least ${HOLE_AWAY} tiles' walk away: ${near}`);
   assert.ok(near < back / 2, `far shorter than the walk back to the stairs: ${near} against ${back}`);
   assert.ok(g.banners.some(b => b.title === 'The wall breaks open'), 'and he is told');
-  assert.ok(w.exitOpen, 'the stairs he came down are open too');
+  assert.ok(w.entrance && !w.entrance.hole, 'the stairs he came down are still there too');
   // Walking up to the hole leaves the crypt, sealed for good.
   p.x = hole.x; p.y = hole.y + 8;
   for (let i = 0; i < 240 && g.inCrypt; i++) step(g, 1);
@@ -173,10 +183,10 @@ test('the lord falls, and the wall breaks open on a way out a short walk from th
   assert.ok(g.cleared.has('2,0'));
 }));
 
-test('wherever the lord falls in a crypt, the wall breaks at least HOLE_AWAY tiles from the hero', () => {
+test('wherever the last lord falls in a crypt, the wall breaks at least HOLE_AWAY tiles from the hero', () => {
   for (const seed of [1, 2, 3, 4, 5, 6]) gameCase((g) => {
     enterCrypt(g);
-    const w = g.world, p = g.player, lord = g.enemies.find(e => e.lord);
+    const w = g.world, p = g.player, lord = lastLord(g);
     // The hero somewhere in each room in turn when the lord falls.
     const room = w.rooms[seed % w.rooms.length];
     p.x = room.cx * T + T / 2; p.y = room.cy * T + T / 2;
@@ -193,7 +203,7 @@ test('wherever the lord falls in a crypt, the wall breaks at least HOLE_AWAY til
 
 test('the lit way out follows the hero to the hole', () => gameCase((g) => {
   enterCrypt(g);
-  const w = g.world, p = g.player, lord = g.enemies.find(e => e.lord);
+  const w = g.world, p = g.player, lord = lastLord(g);
   p.x = lord.x - 30; p.y = lord.y;
   g.hitEnemy(lord, 1e9, {});
   step(g, 5);

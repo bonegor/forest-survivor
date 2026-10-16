@@ -277,13 +277,6 @@ export function createDevPanel(app) {
       el('span', { textContent: 'Deepest floor (4 = conquered)' }), num(() => d.best.dungeon, (v) => { d.best.dungeon = v; }, { max: 4 }),
     ));
 
-    // Saved run.
-    const cp = store.checkpoint;
-    body.append(el('h3', { textContent: 'Saved run' }), el('div', { class: 'row' },
-      el('span', { class: 'note', textContent: cp ? `${HEROES[cp.hero]?.title || cp.hero} · ${MODES[cp.mode]?.name || cp.mode} · ${cp.mode === 'dungeon' ? 'floor ' + cp.floor : fmtTime(cp.time)} · L${cp.level}` : 'None' }),
-      cp && el('button', { textContent: 'Delete saved run', on: { click: async () => { await store.clearCheckpoint(); render(); say('Saved run deleted'); } } }),
-    ));
-
     // Raw JSON for anything the form doesn't cover.
     const raw = el('textarea', { spellcheck: false, value: JSON.stringify(d, null, 1) });
     body.append(

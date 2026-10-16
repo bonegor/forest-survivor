@@ -10,8 +10,10 @@ const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS;
 // Veteran: the old Hard, made harder as above. Multipliers on the base monster
 // stats, the size of the steady horde (spawn) and of the timed swarms, rings and
 // packs (horde). hurt scales every blow the hero takes, after his armor, and few
-// how many of the monsters that shoot or lunge come (spawner.js isFew). The id stays 'hard' so
-// saves and checkpoints keep their shape.
+// how many of the monsters that shoot or lunge come (spawner.js isFew). health is
+// what this difficulty takes every monster's health down to, the crypts' lords too
+// (hp has it in already), and late sends more of the night's monsters from a minute
+// of it on (spawner.js lateMore). The id stays 'hard' so saves and run reports keep their shape.
 export const VETERAN = {
   id: 'hard',
   name: 'Veteran',
@@ -24,24 +26,37 @@ export const VETERAN = {
   gold: 1.5,
   hurt: 1,
   few: 1,
+  health: 1,
+  late: null,
   desc: 'The night at full strength. Gold x1.5.',
 };
+
+// Normal's monsters, the user's (16 October 2026): "monster health -70%", and "in the last 6
+// minutes 30% more of the same monsters, but they each have 70% less health". From minute 9 of
+// the night (a Dungeon Run floor's own clock maps onto it: waves.js minuteOf) the steady horde
+// and the timed swarms, rings and packs are 30% bigger.
+const NORMAL_HEALTH = 0.3;
+const NORMAL_LATE = { from: 9, more: 1.3 };
 
 // Normal (the user's: "all the monsters have their damage cause reduced by 50% and the number
 // of ranged monsters spawn + wolver + any other monsters that lunges is reduced to 1/3"): Veteran
 // with every blow the hero takes halved, and a third as many monsters that shoot or lunge. It
 // pays gold as the old Medium did. The id is the old Medium's, which the saves already know.
+// Every monster has 70% less health, and late in the night 30% more come (above).
 export const NORMAL = {
   ...VETERAN,
   id: 'medium',
   name: 'Normal',
+  hp: VETERAN.hp * NORMAL_HEALTH,
   gold: 1,
   hurt: 0.5,
   few: 1 / 3,
-  desc: 'Monsters hit half as hard, and a third as many shoot or charge. Gold x1.',
+  health: NORMAL_HEALTH,
+  late: NORMAL_LATE,
+  desc: 'Monsters have 70% less health and hit half as hard; fewer shoot or charge, more come late. Gold x1.',
 };
 
-// By id, as a run, a checkpoint and the profile's wins keep it.
+// By id, as a run report and the profile's wins keep it.
 export const DIFFS = { medium: NORMAL, hard: VETERAN };
 
 // What a run without a choice plays (bots, tests, older saves): the game as it was tuned.

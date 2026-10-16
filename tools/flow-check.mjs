@@ -1,5 +1,5 @@
-// Checks: save & quit -> continue (cookie checkpoint), audio context state,
-// and layouts on phone-sized screens.
+// Checks: Quit Run ends a run and nothing of it is kept to pick up again (no run cookie, no
+// Continue on the title screen), audio context state, and layouts on phone-sized screens.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
@@ -14,36 +14,53 @@ const page = async (opts) => {
   await p.waitForFunction(() => window.__fs && window.__fs.app.screen);
   return { p, ctx };
 };
-// 1. Save & continue.
+// Clicks a button the UI drew last frame, by its id, where it stands on the page.
+const clickUI = async (p, id) => {
+  const at = await p.evaluate((id) => {
+    const { app, view } = window.__fs, it = app.ui.items.find((i) => i.id === id);
+    if (!it) return null;
+    const r = view.canvas.getBoundingClientRect(), k = view.S / view.pxW * r.width, l = view.S / view.pxH * r.height;
+    return { x: r.left + (it.x + it.w / 2) * k, y: r.top + (it.y + it.h / 2) * l };
+  }, id);
+  if (!at) throw new Error(`no "${id}" on screen`);
+  await p.mouse.click(at.x, at.y);
+};
+// The cookies a run was once kept in to pick up again (the game server's, the static game's, the debug address's).
+const RUN_COOKIES = ['fs_run', 'fs_lrun', 'fs_drun'];
+// 1. Quit Run, then reload: no run cookie, and no Continue.
 {
   const { p, ctx } = await page({ viewport: { width: 1280, height: 720 } });
   await p.keyboard.press('Enter');
   await p.waitForTimeout(300);
   const audio = await p.evaluate(() => (window.__fs.app.audioUnlocked ? 'unlocked' : 'locked'));
-  await p.evaluate(() => { const a = window.__fs.app; a.choice = { hero: 'archer', mode: 'dungeon', diff: 'hard' }; a.startRun(); });
+  await p.evaluate(() => { const a = window.__fs.app; a.choice = { hero: 'knight', mode: 's15', diff: 'medium' }; a.startRun(); });
   await p.waitForTimeout(500);
   await p.evaluate(() => window.__fs.sim(45));
-  const before = await p.evaluate(() => { const g = window.__fs.app.screen.game; return { lvl: g.player.level, kills: g.kills, w: g.player.weapons.map((w) => w.id + w.level).join(',') }; });
+  await p.waitForTimeout(300);
   await p.keyboard.press('Escape');
-  await p.waitForTimeout(500);
-  await p.evaluate(() => { const ov = window.__fs.app.screen.overlay; ov.gs.app.store.saveCheckpoint(ov.g.checkpoint()).then(() => ov.gs.app.go('title')); });
-  await p.waitForTimeout(500);
-  const cookies = (await ctx.cookies()).map((c) => `${c.name}(${c.value.length}b,httpOnly=${c.httpOnly})`);
+  await p.waitForTimeout(600); // the pause screen, past its lock
+  await clickUI(p, 'quit'); // QUIT RUN
+  await p.waitForTimeout(200);
+  await clickUI(p, 'quit'); // SURE?
+  await p.waitForTimeout(2000); // the results, and the run reported
+  const results = await p.evaluate(() => { const s = window.__fs.app.screen; return { state: s.game?.state, reward: s.overlay?.reward || null }; });
+  await p.screenshot({ path: 'tools/out/flow-quit-results.png' });
+  const during = (await ctx.cookies()).map((c) => `${c.name}(${c.value.length}b,httpOnly=${c.httpOnly})`);
   await p.reload();
   await p.waitForFunction(() => window.__fs && window.__fs.app.screen);
-  await p.waitForTimeout(300);
-  const cp = await p.evaluate(() => window.__fs.app.store.checkpoint);
   await p.keyboard.press('Enter');
-  await p.waitForTimeout(300);
-  await p.screenshot({ path: 'tools/out/flow-continue-title.png' });
-  await p.keyboard.press('Enter'); // CONTINUE RUN is first
-  await p.waitForTimeout(800);
-  const after = await p.evaluate(() => { const g = window.__fs.app.screen.game; return g && { lvl: g.player.level, kills: g.kills, w: g.player.weapons.map((w) => w.id + w.level).join(','), floor: g.floor, mode: g.mode }; });
-  await p.screenshot({ path: 'tools/out/flow-continued.png' });
+  await p.waitForTimeout(500);
+  await p.screenshot({ path: 'tools/out/flow-title-after-quit.png' });
+  const title = await p.evaluate(() => window.__fs.app.ui.items.map((i) => i.id));
+  const after = (await ctx.cookies()).map((c) => c.name);
   console.log('audio', audio);
-  console.log('cookies', cookies.join(' '));
-  console.log('checkpoint after reload', cp && { hero: cp.hero, mode: cp.mode, floor: cp.floor, level: cp.level });
-  console.log('before', JSON.stringify(before), '\nafter ', JSON.stringify(after));
+  console.log('results', JSON.stringify(results));
+  console.log('cookies after the run', during.join(' '));
+  console.log('title buttons after reload', title.join(' '));
+  if (results.state !== 'over' || !results.reward) errors.push('Quit Run did not end the run with its results');
+  if (results.reward?.unsaved) errors.push(`the quit run was not saved: ${results.reward.error || 'no reason given'}`);
+  for (const name of RUN_COOKIES) if (after.includes(name)) errors.push(`a run cookie (${name}) is there after the run`);
+  if (title.includes('continue')) errors.push('the title screen offers Continue');
   await ctx.close();
 }
 // 2. Phone layouts.
@@ -52,7 +69,7 @@ for (const [name, w, h] of [['portrait', 390, 844], ['landscape', 844, 390]]) {
   await p.touchscreen.tap(w / 2, h / 2);
   await p.waitForTimeout(400);
   await p.screenshot({ path: `tools/out/phone-${name}-title.png` });
-  await p.evaluate(() => { const a = window.__fs.app; a.choice = { hero: 'knight', mode: 's15', diff: 'easy' }; a.startRun(); });
+  await p.evaluate(() => { const a = window.__fs.app; a.choice = { hero: 'knight', mode: 's15', diff: 'medium' }; a.startRun(); });
   await p.waitForTimeout(400);
   await p.evaluate(() => window.__fs.sim(20));
   await p.waitForTimeout(300);

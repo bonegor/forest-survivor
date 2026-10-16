@@ -5,7 +5,7 @@ import { Game } from '../public/js/game/game.js';
 import { SPR } from '../public/js/engine/sprites.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, metaBonuses, sanitizeCheckpoint } from '../public/js/shared/profile.js';
+import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const step = (g, n = 1) => { for (let i = 0; i < n; i++) g.update(1 / 60); };
 
@@ -21,8 +21,9 @@ function gameCase(fn) {
   }
 }
 
-// Walk the hero up the steps of the crypt by the start; its packs stay asleep.
-function enterStartCrypt(g, p) {
+// Walk the hero up the steps of the crypt by the start; its packs stay asleep, and unless kept
+// are taken away, its lords left alone.
+function enterStartCrypt(g, p, keep = false) {
   step(g, 2);
   g.world.syncShrines();
   const door = g.crypts.find((d) => d.key === '0,0');
@@ -34,21 +35,39 @@ function enterStartCrypt(g, p) {
   for (let i = 0; i < 120 && !g.inCrypt; i++) step(g);
   input.bot = { x: 0, y: 0 };
   step(g, 60);
-  for (const e of g.enemies) if (!e.lord) e.dead = true;
+  if (!keep) for (const e of g.enemies) if (!e.lord) e.dead = true;
   return door;
 }
 
-test('a crypt is short, and its lord is a boss-sized Skeleton Archer', () => gameCase((g, p) => {
-  enterStartCrypt(g, p);
-  assert.deepEqual([g.world.W, g.world.H], [52, 42]);
-  assert.ok(g.world.rooms.length >= 3 && g.world.rooms.length <= 6, `${g.world.rooms.length} rooms`);
-  const lord = g.world.guardian;
-  assert.equal(lord.type, 'skeletonarcher');
-  assert.ok(lord.lord && lord.elite && lord.sleeping && lord.name);
-  assert.equal(lord.maxHp, 600);
-  assert.notEqual(lord.mod.id, 'stone', 'never Stoneskin');
-  assert.equal(lord.scale, 1, 'drawn at its own size');
+test('a crypt is ten rooms or so, its lords boss-sized Skeleton Archers, each in a room of its own with its guard', () => gameCase((g, p) => {
+  enterStartCrypt(g, p, true);
+  const w = g.world, T = 16;
+  assert.deepEqual([w.W, w.H], [70, 56]);
+  assert.ok(w.rooms.length >= 7 && w.rooms.length <= 12, `${w.rooms.length} rooms`);
+  const roomOf = (e) => w.rooms.find((r) => Math.floor(e.x / T) >= r.x && Math.floor(e.x / T) < r.x + r.w && Math.floor(e.y / T) >= r.y && Math.floor(e.y / T) < r.y + r.h);
+  const lords = g.enemies.filter((e) => e.lord);
+  assert.equal(lords.length, 2, 'two at dusk');
+  assert.ok(lords.includes(w.guardian) && roomOf(w.guardian) === w.guardRoom, 'one in the farthest room');
+  assert.equal(new Set(lords.map(roomOf)).size, 2, 'each in a room of its own');
+  for (const lord of lords) {
+    assert.equal(lord.type, 'skeletonarcher');
+    assert.ok(lord.lord && lord.elite && lord.sleeping && lord.name);
+    assert.equal(lord.maxHp, 600);
+    assert.notEqual(lord.mod.id, 'stone', 'never Stoneskin');
+    assert.equal(lord.scale, 1, 'drawn at its own size');
+    const guard = g.enemies.filter((e) => e.dormant && e.pack === lord.pack);
+    assert.ok(guard.length && guard.every((e) => roomOf(e) === roomOf(lord)), 'its guard asleep about it');
+  }
   assert.ok(SPR.skeletonarcher.h >= SPR.lich.h, 'as big as a boss');
+  // Struck, a lord wakes, and its guard with it; the other sleeps on until its own guard wakes.
+  const lord = w.guardian, other = lords.find((l) => l !== lord);
+  g.hitEnemy(lord, 1, {});
+  step(g);
+  assert.ok(!lord.sleeping && g.enemies.every((e) => e.pack !== lord.pack || e.dead || (!e.dormant && e.aware)), 'struck, it wakes its guard');
+  assert.ok(other.sleeping && g.enemies.some((e) => e.dormant && e.pack === other.pack), 'the other sleeps on');
+  g.wakePack(g.enemies.find((e) => e.dormant && e.pack === other.pack));
+  step(g);
+  assert.ok(!other.sleeping, 'and wakes with its guard');
 }));
 
 test('it lasts about eight strikes of a fully grown sword', () => gameCase((g, p) => {
@@ -116,13 +135,6 @@ test('felled in a crypt the hero faints, wakes outside, and cannot go back in', 
   step(g, 120);
   input.bot = { x: 0, y: 0 };
   assert.equal(g.inCrypt, null, 'it will not open');
-  // A saved run remembers it.
-  const cp = sanitizeCheckpoint(JSON.parse(JSON.stringify(g.checkpoint())));
-  assert.deepEqual(cp.lost, ['0,0']);
-  const again = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(defaultProfile()), settings: {}, checkpoint: cp });
-  step(again, 2);
-  again.world.syncShrines();
-  assert.ok(again.crypts.find((d) => d.key === '0,0').sealed, 'still shut after a reload');
   g.finish(false);
   assert.equal(g.result.crypts, 0, 'not counted as cleared');
 }));

@@ -6,6 +6,8 @@ const root = fileURLToPath(new URL('../',import.meta.url));
 const mod = file => import(pathToFileURL(root + '/' + file).href);
 await mod('tools/headless.mjs');
 const {Game, PROP_LOOT} = await mod('public/js/game/game.js');
+const {PROP_SITES} = await mod('public/js/data/waves.js');
+const {ENEMIES} = await mod('public/js/data/enemies.js');
 const {mulberry32} = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
 
@@ -37,14 +39,23 @@ test('more luck makes every treasure from props likelier, never rarer', () => {
   }
 });
 
-test('at plain luck props drop what they always did', () => {
-  const n = 20000, c = breakProps(1, n);
+// The user: "one third of boxes have potions, one third has rage powerup, one tenth has a magnet,
+// and the rest have gold" (or the rarer finds), box by box.
+test('at plain luck a third of boxes hold a potion, a third a fury orb, a tenth a Scroll of Gathering, the rest gold or a rare find', () => {
+  const n = 30000, c = breakProps(1, n);
   const share = kind => PROP_LOOT.find(d => d.kind === kind).w;
-  for (const kind of ['potion', 'magnet', 'relic', 'elixir', 'goldpile']) {
-    assert.ok(Math.abs(c[kind] / n - share(kind)) < 0.01, `${kind}: ${(c[kind] / n).toFixed(3)} vs ${share(kind)}`);
-  }
+  const near = (got, want, what) => assert.ok(Math.abs(got / n - want) < 0.01, `${what}: ${(got / n).toFixed(4)} vs ${want.toFixed(4)}`);
+  near(c.potion, 1 / 3, 'potions');
+  near(c.fury, 1 / 3, 'fury orbs');
+  near(c.magnet, 1 / 10, 'Scrolls of Gathering');
+  near((c.coin || 0) + (c.goldpile || 0), 0.2, 'gold, the most of what is left');
+  near((c.elixir || 0) + (c.frostrune || 0) + (c.relic || 0), 1 / 30, 'elixirs, Frost Runes and Holy Relics');
+  for (const kind of ['elixir', 'frostrune', 'relic']) near(c[kind], share(kind), kind);
+  assert.ok(c.relic < c.elixir && c.relic < c.frostrune, 'the Holy Relic the rarest');
+  const held = Object.values(c).reduce((s, v) => s + v, 0);
+  assert.equal(held, n, 'every box holds one thing, never nothing');
   assert.ok(Math.abs(PROP_LOOT.reduce((s, d) => s + d.w, 0) - 1) < 1e-9, 'the weights are the odds at luck 1');
-  assert.ok(share('potion') >= 0.4, 'the horde drops no potions, so nearly half of all props hold one');
+  assert.deepEqual(PROP_LOOT.filter(d => !d.lucky).map(d => d.kind).sort(), ['coins', 'fury', 'goldpile', 'potion'], 'luck favours the rare treasures, not the staples');
 });
 
 test('the horde leaves soul gems and now and then a coin or a fury orb; champions a chest and gold, no potion', () => {
@@ -105,6 +116,78 @@ test('a level-up always offers a full choice, filled with the Blessing, a heal a
   assert.deepEqual(cards.map(c => c.type), ['weapon', 'bless', 'heal'], 'one upgrade left, and two to fill');
   p.weapons[0].level = MAX_WEAPON_LEVEL;
   assert.deepEqual(g.levelChoices(3).map(c => c.type), ['bless', 'heal', 'gold'], 'the whole build maxed');
+});
+
+// The user: "Triple the current spawn" of pickup spots, and "the box sites have 2-5 boxes".
+test('the forest puts down three times the breakable sites it did, each of 2 to 5 boxes', () => {
+  const oldRandom = Math.random;
+  Math.random = mulberry32(21);
+  try {
+    const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+    const sizes = [], kinds = [];
+    let site = null;
+    // Nothing really spawns (the horde neither): each site's boxes are only counted.
+    g.spawnEnemy = (type) => {
+      if (site && ENEMIES[type].prop) site.push(type);
+      return null;
+    };
+    const spawnProps = g.spawner.spawnProps.bind(g.spawner);
+    g.spawner.spawnProps = () => {
+      site = [];
+      spawnProps();
+      sizes.push(site.length);
+      kinds.push(site);
+      site = null;
+    };
+    const minutes = 20;
+    for (let i = 0; i < minutes * 600; i++) g.spawner.update(0.1);
+    const old = (minutes * 60) / 21; // a site every 16-26 seconds, as it was
+    assert.ok(Math.abs(sizes.length / (3 * old) - 1) < 0.1, `${sizes.length} sites in ${minutes} minutes, against ${old.toFixed(0)} before`);
+    assert.ok(sizes.every(n => n >= 2 && n <= 5), `sizes ${[...new Set(sizes)].sort()}`);
+    assert.deepEqual([...new Set(sizes)].sort(), [2, 3, 4, 5], 'every size turns up');
+    const mean = sizes.reduce((s, n) => s + n, 0) / sizes.length;
+    assert.ok(Math.abs(mean - 3.5) < 0.2, `${mean.toFixed(2)} boxes a site`);
+    assert.ok(kinds.every(k => k.filter(t => t === 'lantern').length <= 1), 'at most one lantern a site');
+    assert.ok(kinds.some(k => k.includes('lantern') && k.length > 1), 'a lantern stands among boxes');
+    assert.equal(PROP_SITES.most, 45, 'and up to 45 stand about the hero (it was 10)');
+  } finally {
+    Math.random = oldRandom;
+  }
+});
+
+test('a dungeon room has three times the sites it did, rows of boxes along its walls that stay put', () => {
+  const oldRandom = Math.random;
+  Math.random = mulberry32(4);
+  try {
+    let rooms = 0, boxes = 0, lonely = 0;
+    for (let k = 0; k < 4; k++) {
+      const g = new Game({hero:'knight', mode:'dungeon', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+      const w = g.world, T = 16, props = g.enemies.filter(e => e.prop);
+      const tiles = new Set(props.map(e => Math.floor(e.y / T) * w.W + Math.floor(e.x / T)));
+      assert.equal(tiles.size, props.length, 'never two on one tile');
+      for (const e of props) {
+        const tx = Math.floor(e.x / T), ty = Math.floor(e.y / T);
+        const r = w.rooms.find(r => tx > r.x && tx < r.x + r.w - 1 && ty > r.y && ty < r.y + r.h - 1);
+        assert.ok(r && (tx === r.x + 1 || tx === r.x + r.w - 2 || ty === r.y + 1 || ty === r.y + r.h - 2), 'hugging a wall of a room');
+        if (![1, -1, w.W, -w.W].some(d => tiles.has(ty * w.W + tx + d))) lonely++;
+      }
+      rooms += w.rooms.length;
+      boxes += props.length;
+      // The hero walks off to the far end: what the rooms hold stays for him to find.
+      const far = w.rooms.reduce((a, r) => (Math.hypot(r.cx * T - g.player.x, r.cy * T - g.player.y) > Math.hypot(a.cx * T - g.player.x, a.cy * T - g.player.y) ? r : a));
+      g.player.x = far.cx * T + T / 2;
+      g.player.y = far.cy * T + T / 2;
+      w.updateFlow(true);
+      assert.ok(props.some(e => w.tooFar(e, g.cam)), 'some are far behind him');
+      g.relocate();
+      assert.equal(g.enemies.filter(e => e.prop && !e.dead).length, props.length, 'none fade while he is away');
+    }
+    // It was 1-4 single props a room; now 3-12 sites of 2-5, less where a wall or another box is.
+    assert.ok(boxes / rooms > 3 * 2.5 * 1.5, `${(boxes / rooms).toFixed(1)} boxes a room`);
+    assert.ok(lonely < boxes * 0.1, `${lonely} of ${boxes} boxes stand alone`);
+  } finally {
+    Math.random = oldRandom;
+  }
 });
 
 test('props turn up all around a hero who stands still, not only to the east', () => {

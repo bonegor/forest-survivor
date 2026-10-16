@@ -45,10 +45,6 @@ const app = {
     this.go('game', {});
   },
 
-  continueRun() {
-    if (this.store.checkpoint) this.go('game', { checkpoint: this.store.checkpoint });
-  },
-
   applySettings() {
     setVolumes(this.settings.music, this.settings.sfx);
     if (this.screen && this.screen.game) {

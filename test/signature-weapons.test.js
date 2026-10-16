@@ -13,7 +13,7 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, metaBonuses, sanitizeCheckpoint } from '../public/js/shared/profile.js';
+import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const step = (g, n = 1) => { for (let i = 0; i < n; i++) g.update(1 / 60); };
 
@@ -34,7 +34,6 @@ function gameCase(hero, fn, o = {}) {
 }
 
 const foe = (g, dx, dy, o = {}) => g.spawnEnemy('zombie', g.player.x + dx, g.player.y + dy, { instant: true, hpMul: 1e5, ...o });
-const saved = (hero, weapons) => sanitizeCheckpoint({ mode: 's15', diff: 'hard', hero, level: 10, hp: 50, weapons });
 const held = (p) => p.weapons.map((w) => [w.id, w.level]);
 
 const SIGNATURES = { knight: ['sword'], archer: ['bow'], mage: ['fireball'], rogue: ['daggers'], necromancer: ['raise', 'miasma'] };
@@ -69,30 +68,6 @@ test("every class's signature is offered to it alone, and the shared weapons rea
       assert.deepEqual([...offered].sort(), [...weaponsFor(p.hero)].sort(), id);
     });
   }
-});
-
-test("a run saved with another class's signature gets his own back, else a shared weapon, at the same level", () => {
-  // A Knight saved with the Ranger's bow at 3 and her Stormstring beside his sword and the shared
-  // Guardian Blades: the blades stay; he holds his sword, so the bow and the Stormstring become
-  // the first shared weapons he doesn't hold, at 3 and at the top level.
-  gameCase('knight', (g, p) => {
-    const [a, b] = SHARED_WEAPONS.filter((w) => w !== 'blades');
-    assert.deepEqual(held(p), [['sword', 2], ['blades', 4], [a, 3], [b, MAX_WEAPON_LEVEL]]);
-    for (let i = 0; i < 300; i++) for (const c of g.levelChoices(4)) if (c.type === 'weapon') assert.ok(weaponsFor(p.hero).includes(c.id), c.id);
-  }, { checkpoint: saved('knight', [['sword', 2], ['bow', 3], ['stormstring', 8], ['blades', 4]]) });
-  // A Necromancer saved with a bow alone gets Raise Dead at its level.
-  gameCase('necromancer', (g, p) => {
-    assert.deepEqual(held(p), [['raise', 5]]);
-  }, { checkpoint: saved('necromancer', [['bow', 5]]) });
-  // With Raise Dead, the bow becomes Miasma, the Shadow Blade a shared weapon.
-  gameCase('necromancer', (g, p) => {
-    assert.deepEqual(held(p), [['raise', 2], ['miasma', 5], [SHARED_WEAPONS[0], 3]]);
-  }, { checkpoint: saved('necromancer', [['raise', 2], ['bow', 5], ['daggers', 3]]) });
-  // A weapon since taken out of the game (Spine Lance, the Bone Spear's evolution) becomes a
-  // shared weapon at its level.
-  gameCase('necromancer', (g, p) => {
-    assert.deepEqual(held(p), [['raise', 3], ['miasma', 2], [SHARED_WEAPONS[0], MAX_WEAPON_LEVEL]]);
-  }, { checkpoint: saved('necromancer', [['raise', 3], ['miasma', 2], ['spinelance', 8]]) });
 });
 
 test('the bow looses its arrows straight the way the hero faces, whatever foes are about', () => {

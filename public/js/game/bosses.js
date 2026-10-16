@@ -12,6 +12,10 @@ const distP = (e) => Math.hypot(e.g.player.x - e.x, e.g.player.y - e.y);
 const angP = (e) => Math.atan2(e.g.player.y - e.y, e.g.player.x - e.x);
 const toward = (e) => e.g.world.steer(e, e.g.player);
 
+// A boss's telegraphed blow lands only while that same boss stands. Once it falls, its body
+// goes back to the pool and may come out again as another monster, with a new id.
+const still = (e, id) => !e.dead && e.id === id;
+
 function say(e, text, dur = 2.2) {
   e.speech = { text, t: dur };
 }
@@ -67,11 +71,11 @@ export const BOSS_AI = {
     if (e.cdT <= 0 && distP(e) < 160) {
       e.cdT = e.phase ? 4.6 : 6.4;
       cast(e, 1.15);
-      const R = 64;
+      const R = 64, id = e.id;
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: R, dur: 1, follow: e,
         onDone: () => {
-          if (e.dead) return;
+          if (!still(e, id)) return;
           blast(g, e.x, e.y, R, 24, 'dark');
           ring(g, e, e.phase ? 15 : 11, 'bone', 85, 11, rand(TAU));
         },
@@ -151,10 +155,11 @@ export const BOSS_AI = {
     if (e.cd2 <= 0 && d < 70) {
       e.cd2 = 5;
       cast(e, 0.95);
+      const id = e.id;
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: 54, dur: 0.85, follow: e,
         onDone: () => {
-          if (!e.dead) blast(g, e.x, e.y, 54, 30, 'blood');
+          if (still(e, id)) blast(g, e.x, e.y, 54, 30, 'blood');
         },
       }));
       return [0, 0, 0];
@@ -245,10 +250,11 @@ export const BOSS_AI = {
     if (e.data.cd4 <= 0 && d < 85) {
       e.data.cd4 = 5;
       cast(e, 1);
+      const id = e.id;
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: 84, dur: 0.9, follow: e,
         onDone: () => {
-          if (e.dead) return;
+          if (!still(e, id)) return;
           blast(g, e.x, e.y, 84, 32, 'fire');
           ring(g, e, 16, 'firebolt', 90, 12, rand(TAU));
         },

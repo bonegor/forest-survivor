@@ -449,7 +449,7 @@ export const KINDS = {
       for (let i = 0; i < n; i++) {
         const spot = g.world.freeSpot(p.x + rand(-30, 30), p.y + rand(-22, 22));
         if (!spot) continue;
-        g.minions.push(new Minion(g, spot.x, spot.y, { w, dmg: w.s.dmg, dur: w.s.dur, speed: w.s.speed, knight: !!w.s.knights, burst: !!w.s.burst }));
+        g.minions.push(new Minion(g, spot.x, spot.y, { w, dmg: w.s.dmg, dur: w.s.dur * p.summonDur, speed: w.s.speed, knight: !!w.s.knights, burst: !!w.s.burst }));
       }
       g.effects.push(new Ring(g, p.x, p.y, 4, 34, 0.45, '#9ee562', true));
       sfx('bones', { pitch: 0.7 });

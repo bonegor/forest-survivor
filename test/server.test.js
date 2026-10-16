@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { createHmac } from 'node:crypto';
 import { createServer } from '../server.js';
 import { encodeState, UPGRADES } from '../public/js/shared/profile.js';
@@ -63,6 +64,60 @@ test('serves the game shell and blocks path traversal', async () => {
   });
 });
 
+// A GET sent exactly as written: fetch would tidy the path (drop the "/." that makes the server
+// read "//evil.com" as a path) before it left.
+const rawGet = (base, path) => new Promise((resolve, reject) => {
+  const { hostname, port } = new URL(base);
+  http.get({ hostname, port, path }, (res) => {
+    res.resume();
+    resolve(res);
+  }).on('error', reject);
+});
+
+test('a folder asked for without its slash goes on to its index on this site, query and all', async () => {
+  await withServer(async (base) => {
+    // "//evil.com/..": a path that names a folder (js) on the way, and would send the browser off-site.
+    for (const path of ['/.//evil.com/..%2Fjs', '/.///evil.com/..%2Fjs', '//evil.com/..%2Fjs']) {
+      const res = await rawGet(base, path);
+      if (res.statusCode !== 301) continue;
+      const to = res.headers.location;
+      assert.match(to, /^\/[^/\\]/, `${path} -> ${to}: a path on this site`);
+      assert.equal(new URL(to, base).origin, base, path);
+    }
+    const res = await rawGet(base, '/.//evil.com/..%2Fjs');
+    assert.equal(res.statusCode, 301, 'the folder is found');
+    assert.equal(res.headers.location, '/evil.com/..%2Fjs/');
+    const bare = await fetch(base + '/cm2mqvquqkf?x=1', { redirect: 'manual' });
+    assert.equal(bare.status, 301);
+    assert.equal(bare.headers.get('location'), '/cm2mqvquqkf/?x=1', 'the query string comes along');
+  });
+});
+
+test('a JSON body that is not an object is the client\'s mistake: 400, nothing logged', async () => {
+  const logged = [];
+  const error = console.error;
+  console.error = (...a) => logged.push(a);
+  try {
+    await withServer(async (base) => {
+      const c = client(base);
+      for (const route of ['/api/run', '/api/buy', '/api/refund', '/api/reset']) {
+        for (const body of [null, 42, [], ['might'], 'might', true]) {
+          const res = await c.post(route, body);
+          assert.equal(res.status, 400, `${route} ${JSON.stringify(body)}`);
+          assert.equal((await res.json()).error, 'Expected a JSON object');
+        }
+      }
+      assert.equal((await c.post('/api/buy', {})).status, 400, 'an empty object is still checked as one');
+    });
+    await withServer(async (base) => {
+      assert.equal((await client(base).post('/api/dev/login', null)).status, 400);
+    }, { devKey: 'open-sesame' });
+  } finally {
+    console.error = error;
+  }
+  assert.deepEqual(logged, [], 'no stack trace in the log');
+});
+
 test('the page carries the server\'s content security policy for static hosts', async () => {
   // GitHub Pages sends no headers of ours, so index.html repeats the policy in a meta tag:
   // all of it but frame-ancestors, which browsers ignore there.
@@ -106,12 +161,13 @@ test('profile lives in an encrypted cookie and survives round trips', async () =
     let res = await c.get('/api/state');
     let data = await res.json();
     assert.equal(data.profile.gold, 0);
-    assert.equal(data.checkpoint, null);
+    assert.deepEqual(Object.keys(data).sort(), ['profile', 'server'], 'the profile, and no run');
 
-    res = await c.post('/api/run', { mode: 's15', victory: true, time: 900, gold: 300, kills: 2000, level: 35 });
+    res = await c.post('/api/run', { mode: 's15', diff: 'hard', victory: true, time: 900, gold: 300, kills: 2000, level: 35 });
     data = await res.json();
     assert.equal(res.status, 200);
-    assert.equal(data.profile.gold, 300 * 1.5 + 200 * 2.5); // Hard's gold rate and victory bonus
+    assert.equal(data.profile.gold, 300 * 1.5 + 200 * 2.5); // Veteran's gold rate and victory bonus
+    assert.deepEqual(Object.keys(c.jar), ['fs_profile'], 'the profile is the one cookie');
     assert.ok(c.jar.fs_profile, 'profile cookie set');
     assert.match(c.jar.fs_profile, /^e1\.[A-Za-z0-9_-]+$/);
     const raw = Buffer.from(c.jar.fs_profile.slice(3), 'base64url').toString('latin1');
@@ -142,7 +198,7 @@ test('a tampered save is reported as unreadable, kept until the player starts fr
     c.jar.fs_profile = tampered;
     data = await (await c.get('/api/state')).json();
     assert.equal(data.profile.gold, 0, 'nothing is read from it');
-    assert.deepEqual(data.unreadable, { profile: true, run: false });
+    assert.deepEqual(data.unreadable, { profile: true });
     assert.equal(c.jar.fs_profile, tampered, 'the cookie is left alone until the player decides');
     data = await (await c.post('/api/reset', {})).json();
     assert.equal(data.profile.gold, 0);
@@ -162,19 +218,18 @@ test('saves from a server with a different key are unreadable, not silently wipe
     const c = client(base);
     c.jar.fs_profile = cookie;
     const data = await (await c.get('/api/state')).json();
-    assert.deepEqual(data.unreadable, { profile: true, run: false });
+    assert.deepEqual(data.unreadable, { profile: true });
   }, { secret: 'another-secret-'.padEnd(40, 'y') });
 });
 
-test('a profile cookie cannot pose as a saved run', async () => {
+test('a profile cookie cannot pose as a developer session', async () => {
   await withServer(async (base) => {
     const c = client(base);
     await c.post('/api/run', { mode: 's15', diff: 'easy', victory: false, time: 300, gold: 100, kills: 10 });
-    c.jar.fs_run = c.jar.fs_profile;
-    const data = await (await c.get('/api/state')).json();
-    assert.equal(data.checkpoint, null);
-    assert.deepEqual(data.unreadable, { profile: false, run: true });
-  });
+    c.jar.fs_dev = c.jar.fs_profile;
+    assert.equal((await (await c.get('/api/dev')).json()).authed, false);
+    assert.equal((await c.post('/api/dev/profile', { profile: { gold: 1e6 } })).status, 403);
+  }, { devKey: 'open-sesame' });
 });
 
 test('old signed cookies are accepted once and re-issued encrypted', async () => {
@@ -192,29 +247,26 @@ test('old signed cookies are accepted once and re-issued encrypted', async () =>
     c.jar.fs_profile = `${encodeState({ gold: 999999 })}.${'A'.repeat(43)}`;
     data = await (await c.get('/api/state')).json();
     assert.equal(data.profile.gold, 0);
-    assert.deepEqual(data.unreadable, { profile: true, run: false });
+    assert.deepEqual(data.unreadable, { profile: true });
   });
 });
 
-test('checkpoints are saved, cleared by a finished run, and validated', async () => {
+test('a run report is paid at its difficulty\'s rate, Normal when it names none', async () => {
   await withServer(async (base) => {
     const c = client(base);
-    const cp = { mode: 'dungeon', diff: 'hard', hero: 'knight', floor: 2, seed: 5, time: 400, level: 10, xp: 3, hp: 90, weapons: [['sword', 4]] };
-    let data = await (await c.post('/api/checkpoint', { checkpoint: cp })).json();
-    assert.equal(data.checkpoint.floor, 2);
-    data = await (await c.get('/api/state')).json();
-    assert.equal(data.checkpoint.hero, 'knight');
-
-    const bad = await c.post('/api/checkpoint', { checkpoint: { mode: 'lol' } });
-    assert.equal(bad.status, 400);
-
     // A Dungeon run is refused while the Dungeon is locked, and leaves the save alone.
     assert.equal((await c.post('/api/run', { mode: 'dungeon', diff: 'hard', victory: false, time: 500, floor: 2 })).status, 400);
-    data = await (await c.get('/api/state')).json();
-    assert.equal(data.checkpoint.hero, 'knight');
-    await c.post('/api/run', { mode: 's15', diff: 'hard', victory: false, time: 500 });
-    data = await (await c.get('/api/state')).json();
-    assert.equal(data.checkpoint, null);
+    assert.equal(c.jar.fs_profile, undefined);
+    // No diff: Normal, gold as found and Normal's victory bonus (Veteran pays ×1.5 and ×2.5).
+    let data = await (await c.post('/api/run', { mode: 's15', victory: true, time: 900, gold: 300, kills: 2000, level: 35 })).json();
+    assert.deepEqual([data.reward.collected, data.reward.bonus, data.reward.multiplier], [300, 200 * 1.5, 1]);
+    assert.equal(data.profile.gold, 600);
+    assert.equal(data.profile.wins.s15[1], 1, 'a Normal win');
+    data = await (await c.post('/api/run', { mode: 's15', diff: 'medium', victory: false, time: 500, gold: 100 })).json();
+    assert.equal(data.reward.total, 100);
+    data = await (await c.post('/api/run', { mode: 's15', diff: 'hard', victory: false, time: 500, gold: 100 })).json();
+    assert.equal(data.reward.total, 150);
+    assert.equal(data.profile.gold, 600 + 100 + 150);
   });
 });
 

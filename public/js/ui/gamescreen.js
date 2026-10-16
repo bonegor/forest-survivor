@@ -19,36 +19,31 @@ import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas
 import { OptionsScreen } from './screens.js';
 
 export class GameScreen {
-  enter(app, params) {
+  enter(app) {
     this.app = app;
-    const c = params.checkpoint;
-    const hero = c ? c.hero : app.choice.hero;
-    const mode = c ? c.mode : app.choice.mode;
+    const { hero, mode } = app.choice;
     this.game = new Game({
       hero,
       mode,
-      diff: app.choice.diff, // Normal or Veteran; a saved run keeps its own (checkpoint)
+      diff: app.choice.diff || 'medium', // Normal or Veteran: Normal unless chosen, as the trial screen shows
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       meta: metaBonuses(app.store.profile),
       gear: app.store.profile.gear[hero], // this hero's own
       unlocks: unlocksNext(app.store.profile, hero),
       pace: GAME_SPEED,
       settings: app.settings,
-      checkpoint: c || null,
     });
-    const g = this.game;
-    g.onCheckpoint = () => app.store.saveCheckpoint(g.checkpoint());
-    g.onRunLost = () => app.store.clearCheckpoint();
-    if (g.mode === 'dungeon' && !c) app.store.saveCheckpoint(g.checkpoint());
+    // Nothing of the run is saved while it lasts: its results reach the save when it ends
+    // (ResultsOverlay), by death, Quit Run or victory.
     this.overlay = null;
-    this.autosaveT = 60;
-    input.joystickEnabled = true;
-    input.touchRegions = (x, y) => {
+    // The touch buttons in play: the pause button and the fury orb (touchFor).
+    this.regions = (x, y) => {
       const W = view.W, H = view.H;
       if (x > W / 2 - 14 && x < W / 2 + 14 && y > H - 22) return 'pause';
       if (x > W - 56 && y > H - 56) return 'ult';
       return null;
     };
+    this.touchFor(null);
   }
 
   leave() {
@@ -62,10 +57,22 @@ export class GameScreen {
     this.overlay = overlay;
     this.app.ui.lock(overlay.lockTime ?? 0.35);
     this.app.ui.noSpace = !!overlay.noSpace;
+    this.touchFor(overlay);
+  }
+
+  // What a touch does. In play a finger steers, a second one strikes, and the pause button and the
+  // fury orb are buttons; with an overlay up a touch is only a tap on it: no stick, no strike, and
+  // no pause or ultimate under its buttons (REROLL, COLLECT, TRY AGAIN). Fingers already down as
+  // it opens let go, so a steering finger's lift is no click on it.
+  touchFor(overlay) {
+    if (overlay && input.joystickEnabled) input.releaseTouches();
+    input.joystickEnabled = !overlay;
+    input.touchRegions = overlay ? null : this.regions || null;
   }
 
   frame(dt) {
     const app = this.app, g = this.game;
+    this.touchFor(this.overlay); // however the overlay came or went
     if (!this.overlay) {
       if (input.pressed('pause') && g.state === 'play') {
         g.state = 'paused';
@@ -88,13 +95,6 @@ export class GameScreen {
         this.open(new ItemOverlay(this, g.itemQueue.shift()));
       }
       if (g.state === 'over') this.open(new ResultsOverlay(this));
-      if (g.mode !== 'dungeon' && g.state === 'play') {
-        this.autosaveT -= dt;
-        if (this.autosaveT <= 0) {
-          this.autosaveT = 60;
-          app.store.saveCheckpoint(g.checkpoint());
-        }
-      }
     }
     // World.
     g.draw(view.ctx);
@@ -107,6 +107,7 @@ export class GameScreen {
       if (r === 'close') {
         this.overlay = null;
         app.ui.noSpace = false;
+        this.touchFor(null);
       }
     }
   }
@@ -145,6 +146,9 @@ export class LevelUpOverlay {
     this.roll();
     this.lockTime = 0.45;
     this.noSpace = true; // it pops up mid-fight: Space mashed for the ultimate mustn't pick a card
+    // Shift is the crypts' strike too: held as the screen opens, it isn't ALWAYS until it has been
+    // let go and pressed again.
+    this.heldAlways = input.down('always');
   }
 
   roll() {
@@ -163,7 +167,7 @@ export class LevelUpOverlay {
     const g = this.g, c = this.choices[i];
     if (always && this.fillersOnly) g.autoPick = c.type;
     g.applyChoice(c);
-    g.pendingLevels--;
+    g.pendingLevels = Math.max(0, g.pendingLevels - 1); // never below none (draw: levels taken elsewhere)
     sfx('pick');
     g.state = 'play';
     if (g.resolveAutoLevels()) return 'close';
@@ -175,6 +179,12 @@ export class LevelUpOverlay {
 
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, g = this.g;
+    // Its levels were taken while it was up (a bot's __fs.sim settles the cards itself), or the run
+    // ended: nothing is left to choose, and the game screen goes on from there.
+    if (g.state !== 'levelup' || g.pendingLevels <= 0) {
+      if (g.state === 'levelup') g.state = 'play';
+      return 'close';
+    }
     this.t += dt;
     dim(ctx, W, H, 0.6);
     // Rotating light rays behind the title.
@@ -311,8 +321,9 @@ export class LevelUpOverlay {
       }
     }
     ui.end();
-    const keys = ['one', 'two', 'three', 'four'];
-    for (let i = 0; i < n; i++) if (!result && input.pressed(keys[i]) && ui.lockT <= 0 && this.t > 0.3) result = this.choose(i, this.always === i || input.down('always'));
+    if (!input.down('always')) this.heldAlways = false;
+    const keys = ['one', 'two', 'three', 'four'], shift = input.down('always') && !this.heldAlways;
+    for (let i = 0; i < n; i++) if (!result && input.pressed(keys[i]) && ui.lockT <= 0 && this.t > 0.3) result = this.choose(i, this.always === i || shift);
     return result;
   }
 }
@@ -658,11 +669,10 @@ export class PauseOverlay {
       this.options = new OptionsScreen();
       this.options.enter(app, { back: null });
     }
-    // One way out of a run: it ends, with its results and gold. (A run is only picked up
-    // again after the game was closed mid-run, from its last autosave.)
+    // One way out of a run: it ends, with its results and gold. (A run is never saved to pick
+    // up again.)
     if (button(ctx, ui, 'quit', Math.round(W / 2 - bw / 2), row2, bw, 13, this.confirm ? 'SURE?' : 'QUIT RUN', { color: '#e43b44' })) {
       if (this.confirm) {
-        app.store.clearCheckpoint();
         g.finish(false);
         this.gs.open(new ResultsOverlay(this.gs));
         return null;
@@ -695,10 +705,12 @@ class ResultsOverlay {
     const res = this.res;
     this.reward = null;
     this.gs.app.store.submitRun({
-      mode: res.mode, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, floor: res.floor,
+      mode: res.mode, diff: res.diff, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
     }).then((r) => {
-      this.reward = r;
+      // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
+      // reason (on static hosting a refused run comes back as a bare zero), and the screen says so.
+      this.reward = !r.unsaved && !r.total && (res.gold > 0 || res.victory) ? { ...r, unsaved: true } : r;
     });
   }
 
@@ -767,7 +779,7 @@ class ResultsOverlay {
     const unsaved = this.reward?.unsaved;
     if (unsaved) {
       const why = this.reward.down ? 'the game server can\'t be reached' : this.reward.error;
-      drawText(ctx, `This run's gold isn't saved: ${why}`, W / 2, gy, { align: 'center', color: '#e43b44' });
+      drawText(ctx, `This run's gold isn't saved${why ? `: ${why}` : ''}`, W / 2, gy, { align: 'center', color: '#e43b44' });
     } else if (this.reward) {
       this.shown = Math.min(this.reward.total, this.shown + Math.max(1, this.reward.total * dt * 1.5));
       if (Math.floor(this.shown) % 5 === 0 && this.shown < this.reward.total) sfx('coin');
@@ -780,7 +792,7 @@ class ResultsOverlay {
     if (unsaved && this.reward.down && button(ctx, ui, 'resubmit', Math.round(W / 2 - 50), gy + 10, 100, 13, 'SAVE AGAIN')) this.submit();
     const by = Math.min(H - 20, y + ph + 6);
     if (button(ctx, ui, 'again', Math.round(W / 2 - 104), by, 100, 14, 'TRY AGAIN')) {
-      app.choice = { hero: res.hero, mode: res.mode };
+      app.choice = { ...app.choice, hero: res.hero, mode: res.mode }; // the difficulty as chosen
       app.startRun();
     }
     if (button(ctx, ui, 'camp', Math.round(W / 2 + 4), by, 100, 14, 'RETURN TO CAMP')) app.go('title');

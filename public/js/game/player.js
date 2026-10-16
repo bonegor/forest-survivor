@@ -18,12 +18,13 @@ export const ARMOR_CUT = 0.1;
 export const ARMOR_MOST = 0.95;
 
 // What the levels themselves give, the user's: "level up make hero slightly stronger", then "do
-// not cap, let it go wild. Also, let it be exponential for health". From level 2 on, each level
-// adds LEVEL_MIGHT damage, multiplies health by LEVEL_HP (compounding), and every LEVEL_ARMOR
-// levels bring a point of armor. No cap.
-export const LEVEL_MIGHT = 0.005;
-export const LEVEL_HP = 1.005;
-export const LEVEL_ARMOR = 20;
+// not cap, let it go wild. Also, let it be exponential for health", and on 16 October 2026
+// "double the effect of levelling" (it was +0.5%, ×1.005 and a point every 20 levels). From
+// level 2 on, each level adds LEVEL_MIGHT damage, multiplies health by LEVEL_HP (compounding),
+// and every LEVEL_ARMOR levels bring a point of armor. No cap.
+export const LEVEL_MIGHT = 0.01;
+export const LEVEL_HP = 1.01;
+export const LEVEL_ARMOR = 10;
 export const levelBonus = (level) => ({
   might: 1 + LEVEL_MIGHT * (level - 1),
   hp: LEVEL_HP ** (level - 1),
@@ -107,6 +108,7 @@ export class Player {
     this.cooldown = Math.max(0.35, (h.cooldown || 1) * m.cooldown * (1 + bonus('cooldown')));
     this.amount = bonus('amount') + (m.amount || 0);
     this.duration = (m.duration || 1) * (1 + bonus('duration'));
+    this.summonDur = h.summonDur || 1; // the Necromancer's Grave Pact: his minions alone last longer
     this.projSpeed = (h.projSpeed || 1) * (m.projSpeed || 1) * (1 + bonus('projSpeed'));
     this.magnet = BASE_MAGNET * m.magnet * (1 + bonus('magnet'));
     this.luck = (h.luck || 1) * m.luck * (1 + bonus('luck'));

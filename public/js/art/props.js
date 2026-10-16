@@ -243,7 +243,8 @@ export const PROP_ART = {
       'nNNNNNNNNNNn',
     ]],
   },
-  // A crypt by the road: open, its stairs glowing below; then sealed once cleared.
+  // A crypt by the road: open, its stairs glowing below; then sealed once the hero has been in
+  // and come out, its lords slain or not.
   crypt: {
     emissive: 'j',
     frames: [

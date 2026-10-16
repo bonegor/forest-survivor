@@ -2,9 +2,9 @@
 // Forest Survivor — a tiny, zero-dependency game server.
 //
 // It serves the static game from ./public and exposes a small JSON API for
-// the player profile. The server keeps no database: the profile and any saved
-// run live in encrypted (AES-256-GCM) cookies on the player's browser. The only
-// thing the server persists is its key (.data/cookie-secret, or COOKIE_SECRET).
+// the player profile. The server keeps no database: the profile lives in an
+// encrypted (AES-256-GCM) cookie on the player's browser. The only thing the
+// server persists is its key (.data/cookie-secret, or COOKIE_SECRET).
 
 import http from 'node:http';
 import { createHash, createHmac, createCipheriv, createDecipheriv, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -18,7 +18,9 @@ import * as P from './public/js/shared/profile.js';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
 const PROFILE_COOKIE = 'fs_profile';
-const RUN_COOKIE = 'fs_run';
+// Runs are never saved (progress is kept only when a run ends), but the game once kept one
+// here to pick up again; one a player still has is deleted when the game loads.
+const STALE_RUN_COOKIE = 'fs_run';
 const DEV_COOKIE = 'fs_dev';
 const DEV_SESSION = 12 * 60 * 60 * 1000; // a developer login lasts 12 hours
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 400; // browsers cap cookie lifetime at ~400 days
@@ -73,7 +75,8 @@ function loadSecret(root) {
 // ---------------------------------------------------------------- cookies --
 
 // Cookies are sealed with AES-256-GCM: unreadable and tamper-proof. The cookie
-// name is bound in as associated data, so a profile can't pose as a saved run.
+// name is bound in as associated data, so one can't pose as another (a profile
+// as a developer session).
 // Cookies from before encryption (base64 JSON + HMAC signature) are still
 // accepted once and re-issued encrypted.
 const SEALED = 'e1.';
@@ -171,11 +174,15 @@ function readJson(req) {
     });
     req.on('end', () => {
       if (!chunks.length) return resolve({});
+      let body;
       try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       } catch {
-        reject(Object.assign(new Error('Invalid JSON'), { status: 400 }));
+        return reject(Object.assign(new Error('Invalid JSON'), { status: 400 }));
       }
+      // Every endpoint takes an object: null, a number or a list is the client's mistake, not ours.
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return reject(Object.assign(new Error('Expected a JSON object'), { status: 400 }));
+      resolve(body);
     });
     req.on('error', reject);
   });
@@ -186,7 +193,7 @@ function readJson(req) {
 function createStatic(publicDir) {
   const gzCache = new Map(); // path -> { mtime, buf }
 
-  return async function serveStatic(req, res, pathname) {
+  return async function serveStatic(req, res, pathname, search = '') {
     let rel;
     try {
       rel = decodeURIComponent(pathname);
@@ -200,8 +207,12 @@ function createStatic(publicDir) {
     let info;
     try {
       info = await stat(file);
-      // A folder asked for without its slash (/debug): on to its index, as GitHub Pages does.
-      if (info.isDirectory() && !rel.endsWith('/')) return send(res, 301, null, { Location: pathname + '/' });
+      // A folder asked for without its slash (/cm2mqvquqkf): on to its index, as GitHub Pages
+      // does, query and all. Always this site's own path: one slash first, never two (//evil.com
+      // would send the browser to another site).
+      if (info.isDirectory() && !rel.endsWith('/')) {
+        return send(res, 301, null, { Location: '/' + pathname.replace(/^\/+/, '') + '/' + search });
+      }
       if (!info.isFile()) throw new Error('not a file');
     } catch {
       return send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -274,24 +285,19 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
   const openCookie = (req, name) => box.open(name, parseCookies(req.headers.cookie)[name]);
   const readProfile = (req) => P.sanitizeProfile(openCookie(req, PROFILE_COOKIE).data);
   const profileCookie = (req, p) => cookieHeader(req, PROFILE_COOKIE, box.seal(PROFILE_COOKIE, P.packProfile(p)));
-  const runCookie = (req, cp) => cookieHeader(req, RUN_COOKIE, cp ? box.seal(RUN_COOKIE, cp) : null);
 
   async function api(req, res, route) {
     if (req.method === 'GET' && route === 'state') {
       const prof = openCookie(req, PROFILE_COOKIE);
-      const run = openCookie(req, RUN_COOKIE);
       const profile = P.sanitizeProfile(prof.data);
-      const checkpoint = P.sanitizeCheckpoint(run.data);
-      const out = { profile, checkpoint, server: true };
+      const out = { profile, server: true };
       // A save that can't be decrypted (wrong key, corruption, tampering) is
       // reported, not silently replaced: the player is offered a fresh start,
       // and the cookie stays untouched until they accept it.
-      if (prof.status === 'bad' || run.status === 'bad') {
-        out.unreadable = { profile: prof.status === 'bad', run: run.status === 'bad' };
-      }
+      if (prof.status === 'bad') out.unreadable = { profile: true };
       const cookies = [];
       if (prof.status === 'legacy') cookies.push(profileCookie(req, profile));
-      if (run.status === 'legacy') cookies.push(runCookie(req, checkpoint));
+      if (parseCookies(req.headers.cookie)[STALE_RUN_COOKIE] !== undefined) cookies.push(cookieHeader(req, STALE_RUN_COOKIE, null));
       return sendJson(res, 200, out, cookies);
     }
     if (req.method === 'GET' && route === 'dev') {
@@ -329,16 +335,7 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
       case 'run': {
         const r = P.applyRun(profile, body);
         if (!r.ok) return sendJson(res, 400, { error: r.error });
-        // A finished run always consumes its checkpoint.
-        return sendJson(res, 200, { profile: r.profile, reward: r.reward }, [
-          profileCookie(req, r.profile),
-          runCookie(req, null),
-        ]);
-      }
-      case 'checkpoint': {
-        const cp = body && body.checkpoint ? P.sanitizeCheckpoint(body.checkpoint) : null;
-        if (body && body.checkpoint && !cp) return sendJson(res, 400, { error: 'Invalid checkpoint' });
-        return sendJson(res, 200, { checkpoint: cp }, [runCookie(req, cp)]);
+        return sendJson(res, 200, { profile: r.profile, reward: r.reward }, [profileCookie(req, r.profile)]);
       }
       case 'buy': {
         const r = P.buyUpgrade(profile, body.id);
@@ -351,7 +348,7 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
       }
       case 'reset': {
         const p = P.defaultProfile();
-        return sendJson(res, 200, { profile: p, checkpoint: null }, [profileCookie(req, p), runCookie(req, null)]);
+        return sendJson(res, 200, { profile: p }, [profileCookie(req, p)]);
       }
       default:
         return sendJson(res, 404, { error: 'Unknown endpoint' });
@@ -360,10 +357,10 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
 
   return http.createServer(async (req, res) => {
     try {
-      const { pathname } = new URL(req.url, 'http://localhost');
+      const { pathname, search } = new URL(req.url, 'http://localhost');
       if (pathname.startsWith('/api/')) return await api(req, res, pathname.slice(5));
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
-      return await serveStatic(req, res, pathname);
+      return await serveStatic(req, res, pathname, search);
     } catch (err) {
       const status = err.status || 500;
       if (status === 500) console.error(err);

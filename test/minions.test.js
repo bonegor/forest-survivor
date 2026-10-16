@@ -8,18 +8,18 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const mod = (file) => import(pathToFileURL(root + file).href);
 await mod('tools/headless.mjs');
 const { Game } = await mod('public/js/game/game.js');
-const { Minion } = await mod('public/js/game/minions.js');
+const { Minion, claims } = await mod('public/js/game/minions.js');
 const { input } = await mod('public/js/engine/input.js');
 const { mulberry32, TAU } = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
 
 // A hero who can't die, standing still, unarmed, with no spawner: only what a test puts there.
-function game(fn, seed = 5) {
+function game(fn, seed = 5, o = {}) {
   const oldRandom = Math.random, oldBot = input.bot;
   Math.random = mulberry32(seed);
   try {
     input.bot = { x: 0, y: 0 };
-    const g = new Game({ hero: 'necromancer', mode: 's15', meta: P.metaBonuses(P.defaultProfile()), settings: { numbers: false }, crypts: false });
+    const g = new Game({ hero: 'necromancer', mode: 's15', meta: P.metaBonuses(P.defaultProfile()), settings: { numbers: false }, crypts: false, ...o });
     g.spawner.update = () => {};
     g.player.devGod = true;
     g.player.weapons.length = 0;
@@ -103,3 +103,33 @@ test("the Army of the Dead's knights fan out over the horde too", () =>
     assert.ok(horde.length >= 10 && Math.max(...on.values()) <= 2, `at most two on a foe (${[...on.values()]})`);
     assert.ok(closest(knights) >= 6, `none within 6 px of another (${closest(knights).toFixed(1)})`);
   }));
+
+// Taken through a crypt's door (or back out), they let go of the foes they were on: those
+// stay in the world he left, and nobody walks off toward them or keeps them claimed.
+test('gathered to the hero, skeletons drop their foes and pick afresh at once', () =>
+  game((g, p) => {
+    const [e] = foes(g, [[p.x + 120, p.y]]);
+    const ms = skeletons(g, p, 4);
+    run(g, 1);
+    assert.ok(ms.every((m) => m.target === e), 'all four are on the far foe');
+    assert.equal(claims(e), 4, 'and claim it');
+    g.gatherMinions();
+    for (const m of ms) {
+      assert.ok(m.target === null, 'no foe kept');
+      assert.ok(m.retarget <= 0, 'a new pick due on the next step');
+    }
+    assert.equal(claims(e), 0, 'the far foe is claimed by none');
+  }));
+
+test('skeletons taken into a crypt chase nothing left in the forest', () =>
+  game((g, p) => {
+    const [e] = foes(g, [[p.x + 30, p.y]]);
+    const ms = skeletons(g, p, 3);
+    for (const m of ms) m.rise = 0;
+    run(g, 0.1);
+    assert.ok(ms.some((m) => m.target === e), 'on the forest foe');
+    g.enterCrypt({ key: '3,4', depth: 1, x: p.x, y: p.y });
+    run(g, 0.7);
+    assert.ok(g.inCrypt, 'in the crypt');
+    assert.ok(ms.every((m) => !m.target || g.enemies.includes(m.target)), 'every target is a crypt monster');
+  }, 5, { crypts: true }));

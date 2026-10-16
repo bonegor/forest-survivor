@@ -35,7 +35,7 @@ const near = []; // the grid query's list for picks (nothing in a pick queries a
 let tick = 0; // stamps the tally: a foe's count is good only for this frame's tick
 
 // How many minions are on foe e, and counting one more (n = 1) or one fewer (n = -1).
-const claims = (e) => (e._mTick === tick ? e._mOn : 0);
+export const claims = (e) => (e._mTick === tick ? e._mOn : 0);
 function claim(e, n) {
   if (e._mTick !== tick) {
     e._mTick = tick;
@@ -160,6 +160,14 @@ export class Minion {
     // Fight close to the master rather than wandering off.
     this.target = this.best(this.x, this.y, 130, 230) || this.best(p.x, p.y, 170, Infinity);
     if (this.target) claim(this.target, 1);
+  }
+
+  // Lets go of its foe, as the hero takes it to another world (Game.gatherMinions): that foe
+  // stays behind, so it picks one here on its next step.
+  forget() {
+    if (this.target && claims(this.target) > 0) claim(this.target, -1);
+    this.target = null;
+    this.retarget = 0;
   }
 
   // The foe within r of (cx, cy), and within leash of the master, that is nearest this minion

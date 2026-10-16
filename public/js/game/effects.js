@@ -737,13 +737,19 @@ export class Telegraph {
     this.g = g;
     this.o = o;
     this.t = 0;
+    // Whom it follows, by the id of that spawn: a dead foe's body goes back to the pool and
+    // comes out again as another monster, with a new id.
+    this.followId = o.follow ? o.follow.id : null;
   }
 
   update(dt) {
     this.t += dt;
-    if (this.o.follow) {
-      this.o.x = this.o.follow.x;
-      this.o.y = this.o.follow.y;
+    const f = this.o.follow;
+    if (f) {
+      // Its caster fell: the warning goes with it, and nothing lands.
+      if (f.dead || f.id !== this.followId) return false;
+      this.o.x = f.x;
+      this.o.y = f.y;
     }
     if (this.t >= this.o.dur) {
       if (this.o.onDone) this.o.onDone();

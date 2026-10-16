@@ -96,7 +96,7 @@ export class Enemy {
     this.alpha = def.alpha || 1;
     this.squash = 0;
     this.sleeping = !!o.sleeping; // dungeon guardians wait for you
-    this.lord = !!o.lord; // the named boss at the end of a crypt
+    this.lord = !!o.lord; // one of a crypt's named bosses, each asleep in a room of its own
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
     // Whether it knows where the hero is. In a crypt one doesn't until it has seen him or been
     // hit (update); what is sent at him (o.aware: a ring, a swarm, a pack), a boss, one that

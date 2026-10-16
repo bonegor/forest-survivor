@@ -14,7 +14,8 @@ import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
 import { xpFor } from '../public/js/game/player.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, metaBonuses, sanitizeCheckpoint } from '../public/js/shared/profile.js';
+import { Driver } from '../public/js/bots/driver.js';
+import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
@@ -28,10 +29,9 @@ function screen(fn, o = {}) {
     const g = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, ...o });
     g.player.devGod = true;
     const gs = new GameScreen();
-    gs.app = { ui: new UI(), settings: {}, devHold: false, store: { saveCheckpoint() {} } };
+    gs.app = { ui: new UI(), settings: {}, devHold: false, store: {} };
     gs.game = g;
     gs.overlay = null;
-    gs.autosaveT = 60;
     gs.frame(1 / 60);
     return fn(g, gs, g.player);
   } finally {
@@ -62,6 +62,17 @@ const levelUp = (p, n) => {
 };
 
 const ids = (gs) => gs.app.ui.items.map((it) => it.id);
+const isToggle = (id) => /^a\d$/.test(id); // a card's ALWAYS ('a0'…), not 'ask'
+
+// What the run says over the hero, as it says it (Numbers.text, its one way of putting words there).
+function sayings(g) {
+  const said = [], text = g.numbers.text;
+  g.numbers.text = function (...a) {
+    said.push(a[2]);
+    return text.apply(this, a);
+  };
+  return said;
+}
 
 test('a maxed build is offered the three fillers, even on a four-card level-up, and no reroll', () => {
   screen((g, gs, p) => {
@@ -80,7 +91,7 @@ test('a maxed build is offered the three fillers, even on a four-card level-up, 
     lv.draw(ctx, 480, 270, 0.1);
     input.endFrame();
     assert.ok(!ids(gs).includes('reroll'), 'no reroll button');
-    assert.deepEqual(ids(gs).filter((id) => id.startsWith('a')), ['a0', 'a1', 'a2'], 'an ALWAYS under each card');
+    assert.deepEqual(ids(gs).filter(isToggle), ['a0', 'a1', 'a2'], 'an ALWAYS under each card');
     assert.equal(p.rerolls, rerolls, 'R spends nothing on fillers');
   });
   // With upgrades left there is no ALWAYS, and the reroll is there.
@@ -91,7 +102,7 @@ test('a maxed build is offered the three fillers, even on a four-card level-up, 
     lv.draw(ctx, 480, 270, 0.5);
     assert.ok(!lv.fillersOnly);
     assert.ok(ids(gs).includes('reroll'));
-    assert.ok(!ids(gs).some((id) => id.startsWith('a')));
+    assert.ok(!ids(gs).some(isToggle));
   });
 });
 
@@ -116,13 +127,12 @@ test('ALWAYS on a filler sets the auto-pick, and the levels after it come with n
       gs.frame(1 / 60);
       input.endFrame();
       assert.equal(g.autoPick, type);
-      assert.equal(gs.overlay, null);
+      assert.ok(gs.overlay === null);
       assert.equal(g.state, 'play');
       // Then, playing on: a burst of levels, and one more later. No screen, no pause.
       const before = { bless: p.blessings, gold: g.gold, stats: g.stats.gold, level: p.level };
       p.hp = 1;
-      const states = new Set(), seen = [];
-      const lines = () => g.numbers.list.filter((n) => n.font === 'normal' && !seen.includes(n)).map((n) => (seen.push(n), n.str));
+      const states = new Set(), said = sayings(g);
       // One line over the hero for the burst of three, one for the level after (shown with
       // damage numbers off too).
       const want = {
@@ -136,13 +146,13 @@ test('ALWAYS on a filler sets the auto-pick, and the levels after it come with n
         gs.frame(1 / 60);
         states.add(g.state);
         assert.ok(!(gs.overlay instanceof LevelUpOverlay), 'no level-up screen');
-        const said = lines();
-        if (f !== 0 && f !== 60) assert.equal(said.length, 0, `frame ${f}: ${said}`);
+        const now = said.splice(0);
+        if (f !== 0 && f !== 60) assert.equal(now.length, 0, `frame ${f}: ${now}`);
         else {
-          assert.equal(said.length, 1, `frame ${f}: ${said}`);
+          assert.equal(now.length, 1, `frame ${f}: ${now}`);
           const w = want[f ? 1 : 0];
-          if (typeof w === 'string') assert.equal(said[0], w);
-          else assert.match(said[0], w);
+          if (typeof w === 'string') assert.equal(now[0], w);
+          else assert.match(now[0], w);
         }
       }
       assert.ok(!states.has('levelup'), [...states].join());
@@ -168,14 +178,15 @@ test('Shift and the card\'s number take it for good; the pause menu asks again',
     gs.app.ui.lockT = 0;
     input.held.add('ShiftLeft');
     input.justDown.add('Digit3');
+    const said = sayings(g);
     gs.frame(1 / 60);
     input.endFrame();
     input.held.clear();
     assert.equal(g.autoPick, 'gold');
-    assert.equal(gs.overlay, null, 'the second level waiting went the same way');
+    assert.ok(gs.overlay === null, 'the second level waiting went the same way');
     assert.equal(g.pendingLevels, 0);
-    const text = g.numbers.list.find((n) => n.font === 'normal');
-    assert.match(text?.str || '', /^\+\d+ gold$/, 'one line over the hero says what it gave');
+    assert.equal(said.length, 1, 'one line over the hero');
+    assert.match(said[0], /^\+\d+ gold$/, 'it says what it gave');
     // Pause: "Level-ups: always Gold", and ASK AGAIN clears it.
     g.state = 'paused';
     const pause = new PauseOverlay(gs);
@@ -198,15 +209,60 @@ test('Shift and the card\'s number take it for good; the pause menu asks again',
   });
 });
 
-test('the auto-pick lasts the run: it survives a save and nothing else is kept', () => {
+test('Shift held for a crypt strike as a level-up opens is no ALWAYS until it is let go and pressed again', () => {
+  screen((g, gs, p) => {
+    maxOut(g);
+    levelUp(p, 2);
+    input.held.add('ShiftLeft'); // striking as the levels come
+    gs.frame(1 / 60);
+    assert.ok(gs.overlay instanceof LevelUpOverlay);
+    gs.overlay.draw(ctx, 480, 270, 0.5);
+    gs.app.ui.lockT = 0;
+    input.justDown.add('Digit3');
+    gs.frame(1 / 60);
+    input.endFrame();
+    assert.equal(g.autoPick, null, 'the Shift from before the screen ticks nothing');
+    assert.equal(g.pendingLevels, 1);
+    assert.ok(gs.overlay instanceof LevelUpOverlay, 'so the next level is asked');
+    // Let go, then Shift and a number: that is ALWAYS.
+    input.held.delete('ShiftLeft');
+    gs.overlay.draw(ctx, 480, 270, 0.5);
+    gs.app.ui.lockT = 0;
+    input.held.add('ShiftLeft');
+    input.justDown.add('Digit1');
+    gs.frame(1 / 60);
+    input.endFrame();
+    assert.equal(g.autoPick, 'bless');
+    assert.ok(gs.overlay === null);
+    assert.equal(g.pendingLevels, 0);
+  });
+});
+
+test('a bot run over an open level-up screen (__fs.sim) takes its level, and the next level-up is still asked', () => {
+  screen((g, gs, p) => {
+    levelUp(p, 1);
+    gs.frame(1 / 60);
+    const lv = gs.overlay;
+    assert.ok(lv instanceof LevelUpOverlay);
+    const d = new Driver(g, { bot: 'idle:ult=0' });
+    d.run(0.5);
+    d.detach();
+    assert.equal(g.pendingLevels, 0, 'the bot took the card');
+    gs.frame(1 / 60);
+    assert.ok(gs.overlay === null, 'the screen of a level already taken steps aside');
+    assert.equal(g.state, 'play');
+    lv.choose(0); // a pick from it all the same owes no level
+    assert.equal(g.pendingLevels, 0);
+    levelUp(p, 1);
+    gs.frame(1 / 60);
+    assert.ok(gs.overlay instanceof LevelUpOverlay, 'the next level-up has its screen, not swallowed');
+    assert.equal(g.pendingLevels, 1);
+  });
+});
+
+test('the auto-pick lasts the run, and a new run asks again', () => {
   screen((g) => {
     g.autoPick = 'heal';
-    const cp = sanitizeCheckpoint(JSON.parse(JSON.stringify(g.checkpoint())));
-    assert.equal(cp.auto, 'heal');
-    const again = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, checkpoint: cp });
-    assert.equal(again.autoPick, 'heal');
-    assert.equal(sanitizeCheckpoint({ ...cp, auto: 'evolve' }).auto, null);
-    assert.equal(sanitizeCheckpoint({ ...cp, auto: undefined }).auto, null, 'a save from before has none');
     const fresh = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(defaultProfile()), settings: { numbers: false } });
     assert.equal(fresh.autoPick, null, 'a new run asks again');
   });
