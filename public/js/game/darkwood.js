@@ -215,6 +215,7 @@ function wedges(i, j, x, y) {
 // A crossroads: the start, or a wayside shrine with a lantern either side, and at every
 // second one a crypt. The shrine and the crypt are the game's to draw and use; the props
 // here are the dressing round them.
+const START_CRYPT_TURN = 0.26; // radians west of the wedge's middle, about 15 degrees
 export function place(i, j) {
   const key = `${i},${j}`;
   let P = placeCache.get(key);
@@ -232,7 +233,9 @@ export function place(i, j) {
     // The crypt stands in the open ground to the north, its door facing the crossroads,
     // with a gravel walk up to its steps.
     door = northmost();
-    const [cx, cy] = at(door, 78);
+    // By the start it stands a little off the north, so that no direction held from where the
+    // hero starts (north, north-east, north-west) walks onto its steps: going in is meant.
+    const [cx, cy] = at(start ? { dir: door.dir - START_CRYPT_TURN } : door, 78);
     P.crypt = { key, x: Math.round(cx), y: Math.round(cy), depth: start ? 1 : cryptDepth(i, j) };
     const xs = [x], ys = [y], hw = [start ? 40 : 32];
     const len = Math.hypot(cx - x, cy - y);

@@ -179,7 +179,7 @@ const LIMITS = {
   explode: [0.06, 4], zap: [0.06, 3], axe: [0.08, 3], shard: [0.1, 2], gem: [0.025, 5], coin: [0.04, 4],
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
-  furyready: [1, 1],
+  furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1],
 };
 
 const SFX = {
@@ -244,9 +244,21 @@ const SFX = {
     tone(t, { type: 'square', f0: 1046 * o.p, dur: 0.05, vol: 0.05 });
     tone(t + 0.035, { type: 'square', f0: 1568 * o.p, dur: 0.07, vol: 0.045 });
   },
-  coin: (t) => {
-    tone(t, { type: 'square', f0: 988, dur: 0.06, vol: 0.06 });
-    tone(t + 0.06, { type: 'square', f0: 1319, dur: 0.16, vol: 0.06 });
+  coin: (t, o) => {
+    tone(t, { type: 'square', f0: 988 * o.p, dur: 0.06, vol: 0.06 });
+    tone(t + 0.06, { type: 'square', f0: 1319 * o.p, dur: 0.16, vol: 0.06 });
+  },
+  // A results row ticking in: a soft wooden click.
+  tally: (t, o) => {
+    tone(t, { type: 'triangle', f0: 880 * o.p, f1: 660 * o.p, dur: 0.05, vol: 0.06 });
+    noise(t, { filter: 'bandpass', f0: 2500, q: 3, dur: 0.03, vol: 0.05 });
+  },
+  // The gold count landing: a low, full thunk.
+  thunk: (t) => {
+    tone(t, { type: 'sine', f0: 140, f1: 55, dur: 0.3, vol: 0.32 });
+    tone(t, { type: 'triangle', f0: 523, dur: 0.25, vol: 0.06 });
+    tone(t + 0.02, { type: 'triangle', f0: 784, dur: 0.35, vol: 0.05 });
+    noise(t, { f0: 900, f1: 120, dur: 0.18, vol: 0.18 });
   },
   die: (t, o) => {
     noise(t, { f0: 1800 * o.p, f1: 200, dur: 0.12, vol: 0.12, pan: o.pan });

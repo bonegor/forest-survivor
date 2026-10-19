@@ -12,6 +12,7 @@ import { PC, P } from './particles.js';
 import { EnemyShot } from './projectiles.js';
 import { BOSS_AI } from './bosses.js';
 import { faceAlong, faceAttack } from './facing.js';
+import { shotName } from './names.js';
 
 // Hit cooldown channels a foe keeps (hitT): one for each weapon the hero holds (Game.freeSrc).
 const N_SRC = 24;
@@ -410,7 +411,7 @@ export class Enemy {
         this.state = 'move';
         this.cdT = s.cd * rand(0.8, 1.2);
         const ang = Math.atan2(dy, dx);
-        g.eshots.push(new EnemyShot(g, this.x, this.y - 2, ang, s.spd, s.dmg * g.dmgScale, s.kind));
+        g.eshots.push(new EnemyShot(g, this.x, this.y - 2, ang, s.spd, s.dmg * g.dmgScale, s.kind, { by: shotName(this, s.kind) }));
         sfx('enemyshot', { pan: clamp((this.x - p.x) / 200, -1, 1) });
       }
       return aim(0, 0, 0);

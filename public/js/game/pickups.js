@@ -115,6 +115,7 @@ export class Pickup {
         this.vy *= 0.4;
       }
     }
+    if (p.dead) return true; // the fallen pick nothing up (no XP or gold after the fall)
     const dx = p.x - this.x, dy = p.y - 3 - this.y;
     const d = Math.hypot(dx, dy);
     if (!this.pulled && MAGNETIC.has(this.kind)) {

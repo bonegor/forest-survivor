@@ -36,7 +36,7 @@ function readCookie(name) {
 }
 
 function writeCookie(name, value) {
-  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  const secure = globalThis.location?.protocol === 'https:' ? '; Secure' : '';
   if (value == null) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
   else document.cookie = `${name}=${value}; Path=/; Max-Age=${MAX_AGE}; SameSite=Lax${secure}`;
 }

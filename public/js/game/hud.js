@@ -10,6 +10,7 @@ import { RANKS } from '../shared/profile.js';
 import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
+import { DEATH } from './game.js';
 
 // Beside the clock on a Nightmare (twice the monsters; never Ranked).
 const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
@@ -235,6 +236,10 @@ function placeMarker(sx, sy) {
   bandPoint(u);
 }
 
+// Whether a foe stands where the hero has seen: in a crypt or on a Dungeon Run floor, a tile of the
+// fog he has lit (Dungeon.seenAt); anywhere in the forest.
+const seenBy = (g, e) => !g.world.seenAt || g.world.seenAt(e.x, e.y);
+
 // The elites named this frame (the nearest the hero), and how far each is (squared).
 const NAMED = 3;
 const NEAR = new Array(NAMED).fill(null), NEAR_D = new Float64Array(NAMED);
@@ -300,10 +305,12 @@ export class Hud {
     this.drawOrbs(ctx, W, H, p, t);
     this.drawBoss(ctx, W, dt);
     this.drawNames(ctx, W, H);
+    this.drawCryptDoor(ctx, W);
     this.drawIndicators(ctx, W, H, t);
     this.drawSpeech(ctx, W, H);
     this.drawCombo(ctx, W, H, t);
     this.drawBanners(ctx, W, H);
+    this.drawSlain(ctx, W, H);
     if (g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, g.showMap);
     if (input.device === 'touch') this.drawTouch(ctx, W, H, p);
   }
@@ -591,7 +598,7 @@ export class Hud {
     NEAR.fill(null);
     let named = 0;
     for (const e of g.enemies) {
-      if (e.dead || !e.elite || e.speech || !this.overHead(e, W, H)) continue;
+      if (e.dead || !e.elite || e.speech || !this.overHead(e, W, H) || !seenBy(g, e)) continue;
       const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
       if (named === NAMED && d >= NEAR_D[NAMED - 1]) continue;
       let i = named < NAMED ? named++ : NAMED - 1;
@@ -603,10 +610,14 @@ export class Hud {
       NEAR_D[i] = d;
     }
     for (const e of g.enemies) {
-      if (e.dead || e.speech || (!e.elite && e.type !== 'thief') || !this.overHead(e, W, H)) continue;
+      if (e.dead || e.speech || (!e.elite && e.type !== 'thief') || !this.overHead(e, W, H) || !seenBy(g, e)) continue;
       const x = AT.x, y = AT.y;
       if (e.elite) {
-        if (NEAR.includes(e)) drawText(ctx, e.name, Math.round(x), Math.round(y - 9), { align: 'center', color: e.mod ? e.mod.color : '#feae34' });
+        // A name kept whole on the screen, never cut at its edge.
+        if (NEAR.includes(e)) {
+          const hw = textWidth(e.name) / 2 + 2;
+          drawText(ctx, e.name, Math.round(clamp(x, hw, W - hw)), Math.round(clamp(y - 9, 2, H - 12)), { align: 'center', color: e.mod ? e.mod.color : '#feae34' });
+        }
         const w = 26, f = clamp(e.hp / e.maxHp, 0, 1);
         ctx.fillStyle = '#181425';
         ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 4);
@@ -633,17 +644,39 @@ export class Hud {
     }
   }
 
+  // On a crypt's steps: over its door its name, what lies below, and a bar that fills while the
+  // hero pushes up its steps (Game.cryptDoor, Game.doorInfo); full, he goes in.
+  drawCryptDoor(ctx, W) {
+    const g = this.g, d = g.cryptDoor;
+    if (!d) return;
+    const cam = g.cam, z = cam.S / view.S, info = g.doorInfo(d);
+    const sub = `Time stands still · ${info.lords} lord${info.lords === 1 ? '' : 's'} below`;
+    const key = input.device === 'pad' ? 'HOLD UP TO ENTER' : input.device === 'touch' ? 'PUSH UP TO ENTER' : 'HOLD UP TO ENTER';
+    const w = Math.max(textWidth(info.name), textWidth(sub), textWidth(key)) + 12, h = 40;
+    const x = Math.round(clamp((d.x - cam.x) * z - w / 2, 2, W - w - 2)), y = Math.round((d.y - 36 - cam.y) * z - h);
+    ctx.globalAlpha = 0.88;
+    ctx.fillStyle = '#181425';
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#b55088';
+    ctx.fillRect(x, y, w, 1);
+    ctx.fillRect(x, y + h - 1, w, 1);
+    drawText(ctx, info.name, x + w / 2, y + 3, { align: 'center', color: ['#ffffff', '#f4c4e4', '#b55088'] });
+    drawText(ctx, sub, x + w / 2, y + 13, { align: 'center', color: '#c0cbdc' });
+    const bw = w - 16, bx = x + 8, by = y + 24;
+    ctx.fillStyle = '#3a4466';
+    ctx.fillRect(bx, by, bw, 3);
+    ctx.fillStyle = info.k >= 1 ? '#ffffff' : '#b55088';
+    ctx.fillRect(bx, by, Math.round(bw * info.k), 3);
+    drawText(ctx, key, x + w / 2, y + 29, { align: 'center', color: info.k > 0 ? '#fee761' : '#8b9bb4' });
+  }
+
   // What a boss says: after the names and the edge markers, over them; on the screen, and below
   // its own name at the top, not on it.
   drawSpeech(ctx, W, H) {
     const top = this.topLines() + 1;
     for (const e of this.g.enemies) {
       if (e.dead || !e.speech || !this.overHead(e, W, H)) continue;
-      e.speech.t -= 1 / 60;
-      if (e.speech.t <= 0) {
-        e.speech = null;
-        continue;
-      }
       const tw = textWidth(e.speech.text);
       const x = Math.round(clamp(AT.x, tw / 2 + 5, W - tw / 2 - 5)), y = Math.round(Math.max(AT.y, top + 14));
       ctx.fillStyle = '#181425';
@@ -758,8 +791,22 @@ export class Hud {
     ctx.globalAlpha = 1;
   }
 
+  // Fallen: "Slain by …" fades in over the drained world (Game DEATH.name), before the results.
+  drawSlain(ctx, W, H) {
+    const g = this.g;
+    if (g.state !== 'dying' || !g.player.dead || g.deathT < DEATH.name) return;
+    const who = g.stats.killedBy;
+    const c = textCanvas(who ? `SLAIN BY ${who.toUpperCase()}` : 'YOU HAVE FALLEN', ['#ffffff', '#f6757a', '#a22633'], '#181425');
+    const s = c.width * 2 <= W - 16 ? 2 : 1;
+    ctx.globalAlpha = clamp((g.deathT - DEATH.name) / 0.5, 0, 1);
+    ctx.drawImage(c, Math.round(W / 2 - (c.width * s) / 2), Math.round(H * 0.3), c.width * s, c.height * s);
+    ctx.globalAlpha = 1;
+  }
+
   drawBanners(ctx, W, H) {
     const g = this.g;
+    // Under a card, chest, gear or pause screen they stay hidden (they still run out: fadeReal).
+    if (g.state === 'levelup' || g.state === 'chest' || g.state === 'item' || g.state === 'paused') return;
     // Below the lines at the top: a boss's own banner came down on its name.
     let y = Math.max(Math.round(H * 0.22), this.topLines() + 4);
     for (const b of g.banners) {

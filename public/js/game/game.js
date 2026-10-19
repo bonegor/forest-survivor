@@ -9,10 +9,10 @@ import { FLOORS, monsterHp, minuteOf, HORDE_CAP, EVENTS, SURVIVAL_BOSSES, RANKED
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
-import { sfx, playMusic, playJingle } from '../engine/audio.js';
+import { sfx, playMusic, playJingle, stopMusic } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { input } from '../engine/input.js';
-import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2 } from '../engine/util.js';
+import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
 import { Player, ULT_DURATION, FURY } from './player.js';
 import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
@@ -32,6 +32,7 @@ import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor } from './ef
 import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
 import { outline, pad, hexPack } from '../engine/pixels.js';
 import { Minion } from './minions.js';
+import { Hints } from './hints.js';
 
 const tmp = [];
 // How far behind the hero coins and potions in the forest last (a few screens).
@@ -42,6 +43,23 @@ export const KNOCKBACK = 25;
 // How long each big beat holds every screen back, in real seconds (Game.moment): a boss's fall
 // (its 1.1 s slow motion and flash), a crypt lord's (0.8 s), a revive's.
 export const MOMENT = { boss: 1.3, lord: 1, revive: 1.1 };
+// The most banners on screen at once.
+export const BANNERS_MOST = 2;
+// The hero's fall, in real seconds from the killing blow (onPlayerDeath): the music stops; the
+// world slows and drains to grey and dark over `drain`; he flashes white for `flash` and tips
+// over in `fall`, still in colour; "Slain by …" fades in from `name` (Hud); the results at `end`.
+export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
+// Going into a crypt is meant: the hero stands on its steps (CRYPT_STEPS: half as wide, how far
+// below the door) pushing up for CRYPT_PUSH game seconds (0.5 s of real time at GAME_SPEED),
+// while a prompt fills over the door (Hud.drawCryptDoor); stepping off or letting go starts over.
+export const CRYPT_STEPS = { w: 9, below: 9 };
+export const CRYPT_PUSH = 0.66;
+
+// A crypt's name, by its crossroads (key 'i,j').
+export function cryptName(key) {
+  const [a, b] = key.split(',').map(Number);
+  return `${CRYPT_KIND[Math.floor(hash2(a, b, 41) * CRYPT_KIND.length)]} of ${CRYPT_OF[Math.floor(hash2(a, b, 42) * CRYPT_OF.length)]}`;
+}
 
 // Whether a card is one of the fillers a level-up falls back on once fewer upgrades are left than
 // it offers (data/passives.js FILLERS). With nothing else left a level-up shows just these three,
@@ -135,7 +153,7 @@ export class Game {
     this.bossPower = 1;
     this.kills = 0;
     this.gold = 0;
-    this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0, minHp: 1, fromBoss: 0, fromMobs: 0, fromShots: 0, bossLog: [] };
+    this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0, minHp: 1, fromBoss: 0, fromMobs: 0, fromShots: 0, bossLog: [], killedBy: null };
     this.cam = { x: 0, y: 0, S: 4, W: 480, H: 270, pxW: 1920, pxH: 1080 };
     this.trauma = 0;
     this.hurtFlash = 0;
@@ -177,6 +195,10 @@ export class Game {
     this.lost = new Set(); // crypts the hero left before their last lord fell, or fainted in: shut to him
     this.inCrypt = null; // the crypt the hero is in; the night's clock stands still meanwhile
     this.cryptsOpen = o.crypts !== false; // the balance bots keep to the forest unless asked
+    this.cryptDoor = null; // the crypt door whose steps the hero stands on (update)
+    // The first run's hints (hints.js), where the game screen asks for them (o.hints), with the
+    // way to keep the settings that remember them (o.saveSettings).
+    this.hints = o.hints ? new Hints(this, this.settings, o.saveSettings || (() => {})) : null;
     this.cryptTime = 0; // play time spent in crypts, where the night's clock stands still
 
     this.enemies = [];
@@ -620,7 +642,8 @@ export class Game {
   }
 
   hitEnemy(e, dmg, o = {}) {
-    if (e.dead) return 0;
+    // Once the hero has fallen nothing he left behind (a pool, a blade, a minion) fells anything more.
+    if (e.dead || this.player.dead) return 0;
     if (e.sealed) {
       if (Math.random() < 0.1) this.particles.burst(e.x, e.y - e.h * 0.5, 4, 4, [PC.P, PC.i, PC.w], 50, 0.4, 1, P.GLOW | P.FADE, {});
       return 0;
@@ -669,8 +692,10 @@ export class Game {
       e.shatterOnDeath = o.shatter;
     }
     if (this.numbers.enabled && !o.noNum) this.numbers.add(e.x, e.y - e.h * 0.85, d, crit ? 'crit' : o.type || 'normal', e);
-    if (o.w) o.w.dmgDealt += d;
-    this.stats.damage += d;
+    // Dealt: the health it took, not the overkill.
+    const took = Math.min(d, Math.max(0, e.hp + d));
+    if (o.w) o.w.dmgDealt += took;
+    this.stats.damage += took;
     const pan = clamp((e.x - p.x) / 200, -1, 1);
     if (crit) sfx('crit', { pitch: rand(0.9, 1.1), pan });
     else sfx('hit', { pitch: rand(0.8, 1.2), pan });
@@ -680,7 +705,7 @@ export class Game {
   }
 
   killEnemy(e, o = {}) {
-    if (e.dead) return;
+    if (e.dead || this.player.dead) return; // no kill counts once the hero has fallen
     e.dead = true;
     const fr = e.spr.frames[e.frameIndex()];
     if (e.prop) {
@@ -898,6 +923,12 @@ export class Game {
 
   // ------------------------------------------------------------ crypts --
 
+  // What the prompt over a crypt's door says (Hud.drawCryptDoor): its name, how many lords sleep
+  // below were he to go in now, and how far his push up its steps has come (0 to 1).
+  doorInfo(d) {
+    return { name: cryptName(d.key), lords: cryptLords(minuteOf(this.phase), d.depth), k: clamp((d.push || 0) / CRYPT_PUSH, 0, 1) };
+  }
+
   // Every hero fights by hand below: in a crypt only his own weapon (the knight's sword, the
   // ranger's bow, ...) fights, and only when the player strikes (X or either Shift; a pad's
   // shoulder buttons; a second finger on a touch screen).
@@ -945,7 +976,7 @@ export class Game {
       this.clearTransient();
       const [a, b] = d.key.split(',').map(Number);
       const minute = minuteOf(this.phase);
-      const name = `${CRYPT_KIND[Math.floor(hash2(a, b, 41) * CRYPT_KIND.length)]} of ${CRYPT_OF[Math.floor(hash2(a, b, 42) * CRYPT_OF.length)]}`;
+      const name = cryptName(d.key);
       this.inCrypt = { key: d.key, depth: d.depth, minute, name, hp: p.hp };
       const theme = minute < 6 ? 'crypt' : minute < 11 ? 'catacombs' : 'inferno';
       new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, lords: cryptLords(minute, d.depth) });
@@ -1222,9 +1253,13 @@ export class Game {
     this.trauma = Math.min(1, this.trauma + a);
   }
 
+  // A banner: at most BANNERS_MOST at once (the oldest gives way), and one with the same title
+  // takes its twin's place rather than stacking under it.
   banner(title, sub = '', color = '#ffffff', dur = 2.4) {
+    const twin = this.banners.findIndex((b) => b.title === title);
+    if (twin >= 0) this.banners.splice(twin, 1);
     this.banners.push({ title, sub, color, dur, t: 0 });
-    if (this.banners.length > 3) this.banners.shift();
+    if (this.banners.length > BANNERS_MOST) this.banners.shift();
   }
 
   addDecal(kind, x, y, r) {
@@ -1384,7 +1419,8 @@ export class Game {
     this.particles.burst(p.x, p.y - 8, 6, 60, [PC.r, PC.R, PC.x, PC.w], 120, 1.4, 1, P.GROUND | P.FADE, { vz: 120, grav: 250 });
     this.particles.burst(p.x, p.y - 8, 6, 20, [PC.w, PC.G], 40, 2, 2, P.GLOW | P.FADE, { vz: 50, drag: 1 });
     this.shake(1);
-    playJingle('gameover');
+    // Silence at the blow; the lament plays with the results (ResultsOverlay).
+    stopMusic();
   }
 
   victory(kind) {
@@ -1401,6 +1437,7 @@ export class Game {
 
   finish(victory) {
     this.state = 'over';
+    if (this.hints) this.hints.done();
     const p = this.player;
     this.result = {
       victory,
@@ -1443,6 +1480,12 @@ export class Game {
     this.hurtFlash = Math.max(0, this.hurtFlash - rdt * 2);
     this.whiteFlash = Math.max(0, this.whiteFlash - rdt * 1.5);
     this.momentT = Math.max(0, this.momentT - rdt);
+    // Banners too: one that came before the cards has had its say when they close.
+    for (let i = this.banners.length - 1; i >= 0; i--) {
+      const b = this.banners[i];
+      b.t += rdt;
+      if (b.t >= b.dur) this.banners.splice(i, 1);
+    }
     if (this.slowT > 0) {
       this.slowT -= rdt;
       if (this.slowT <= 0 && this.state !== 'dying' && this.state !== 'faint') this.timeScale = 1;
@@ -1468,18 +1511,12 @@ export class Game {
       this.comboT -= dt;
       if (this.comboT <= 0) this.combo = 0;
     }
-    for (let i = this.banners.length - 1; i >= 0; i--) {
-      const b = this.banners[i];
-      b.t += rdt;
-      if (b.t >= b.dur) this.banners.splice(i, 1);
-    }
-
     if (this.state === 'play') {
       p.update(dt);
       this.spawner.update(dt);
     } else if (this.state === 'dying') {
       this.deathT += rdt;
-      if (this.deathT > 2.4) this.finish(false);
+      if (this.deathT > DEATH.end) this.finish(false);
     } else if (this.state === 'faint') {
       // The world slows and goes dark; then the fade back in, outside (as a journey's).
       this.faintT += rdt;
@@ -1562,6 +1599,7 @@ export class Game {
     for (const e of this.enemies) {
       if (e.dead) continue;
       if (this.state === 'play' || this.state === 'dying') e.update(dt);
+      if (e.speech && (e.speech.t -= rdt) <= 0) e.speech = null; // a boss's words, by real time
       if (e.prop) props++;
       else hostile++;
     }
@@ -1587,10 +1625,16 @@ export class Game {
       s.t += dt;
       if (!s.used && this.state === 'play' && Math.hypot(p.x - s.x, p.y - s.y) < 13) this.useShrine(s);
     }
-    // Crypt doors: walk up the steps to go in.
+    // Crypt doors: on the steps, pushing up for CRYPT_PUSH goes in (cryptDoor: the one he is on,
+    // for the HUD's prompt).
+    this.cryptDoor = null;
     for (const d of this.crypts) {
       d.t += dt;
-      if (!d.sealed && this.cryptsOpen && this.state === 'play' && p.vy < 0 && Math.abs(p.x - d.x) < 7 && p.y < d.y + 1 && p.y > d.y - 6) this.enterCrypt(d);
+      const on = !d.sealed && this.cryptsOpen && this.state === 'play' && Math.abs(p.x - d.x) < CRYPT_STEPS.w && p.y > d.y - 6 && p.y < d.y + CRYPT_STEPS.below;
+      d.push = on && p.vy < -10 ? (d.push || 0) + dt : 0;
+      if (!on) continue;
+      this.cryptDoor = d;
+      if (d.push >= CRYPT_PUSH) this.enterCrypt(d);
     }
     this.particles.budget = this.particles.n > 3500 ? 0.4 : this.particles.n > 2000 ? 0.7 : 1;
     this.particles.update(dt);
@@ -1607,6 +1651,7 @@ export class Game {
     if (this.state === 'play' && this.mode !== 'dungeon' && this.time >= this.duration) this.victory('survival');
     if (this.state === 'play' && this.mode === 'ranked') this.rankedMilestones();
     if (this.state === 'play') this.heroMilestone();
+    if (this.hints) this.hints.update();
   }
 
   // Foes pass through one another and through props (barrels, crates...), and in the forest
@@ -1631,8 +1676,11 @@ export class Game {
 
   relocate() {
     const w = this.world;
+    // In a crypt nothing is moved: its packs and lords come to the hero on their own feet, or not at
+    // all (a woken lord far behind him used to appear at his side).
+    if (this.inCrypt) return;
     for (const e of this.enemies) {
-      if (e.dead || e.boss || e.type === 'thief' || e.sleeping || e.dormant) continue;
+      if (e.dead || e.boss || e.lord || e.type === 'thief' || e.sleeping || e.dormant) continue;
       if (!w.tooFar(e, this.cam)) continue;
       if (e.prop) {
         // The forest's are put down about the hero as he goes, and fade behind him; a dungeon's
@@ -1834,6 +1882,7 @@ export class Game {
 
     // Screen-space post effects.
     ctx.drawImage(vignette(256, 144, '8,6,16', 0.7), 0, 0, c.pxW, c.pxH);
+    if (p.dead && this.deathT !== undefined) this.drawFallen(ctx, c);
     const low = p.hp / p.maxHp;
     if (this.hurtFlash > 0 || (low < 0.3 && !p.dead)) {
       const a = Math.max(this.hurtFlash * 0.7, low < 0.3 ? (0.25 + 0.15 * Math.sin(this.clock * 6)) * (1 - low / 0.3) : 0);
@@ -1859,7 +1908,7 @@ export class Game {
 
   drawPlayer(ctx, c) {
     const p = this.player;
-    if (p.dead) return;
+    if (p.dead) return; // fallen: drawn after the world has drained (drawFallen)
     const S = c.S;
     const spr = SPR[p.hero.sprite];
     const moving = p.moving;
@@ -1890,6 +1939,30 @@ export class Game {
     ctx.drawImage(img, X, Y, w, h);
     ctx.globalAlpha = 1;
     p._rect = [X, Y, w, h, fr, flip];
+  }
+
+  // The hero fallen (DEATH): the world drains to grey and darkens round him, and he, still in
+  // colour, flashes white and tips over where he stood.
+  drawFallen(ctx, c) {
+    const p = this.player, D = DEATH, t = this.deathT, S = c.S;
+    const k = clamp(t / D.drain, 0, 1);
+    ctx.globalCompositeOperation = 'saturation';
+    ctx.globalAlpha = k;
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, c.pxW, c.pxH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 0.45 * k;
+    ctx.fillStyle = '#05040a';
+    ctx.fillRect(0, 0, c.pxW, c.pxH);
+    ctx.globalAlpha = 1;
+    const spr = SPR[p.hero.sprite], fr = idleFrame(spr, 0), flip = p.face < 0;
+    const img = t < D.flash ? fr.white(flip) : fr.get(flip);
+    const a = ease.outBack(clamp(t / D.fall, 0, 1)) * (Math.PI / 2) * (flip ? -1 : 1);
+    ctx.save();
+    ctx.translate(Math.round((p.x - c.x) * S), Math.round((p.y - c.y) * S));
+    ctx.rotate(a);
+    ctx.drawImage(img, Math.round((-img.width * S) / 2), Math.round(-spr.anchorY * S), img.width * S, img.height * S);
+    ctx.restore();
   }
 
   drawPlayerEmissive(ctx) {

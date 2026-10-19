@@ -10,6 +10,7 @@ import { WEAPONS } from './weapons.js';
 export const HEROES = {
   knight: {
     id: 'knight',
+    short: 'Knight', // on a hero card too narrow for the title (a phone held upright)
     name: 'Sir Aldric',
     title: 'Knight',
     sprite: 'knight',
@@ -29,6 +30,7 @@ export const HEROES = {
   },
   archer: {
     id: 'archer',
+    short: 'Ranger',
     name: 'Lyra',
     title: 'Ranger',
     sprite: 'archer',
@@ -44,6 +46,7 @@ export const HEROES = {
   },
   mage: {
     id: 'mage',
+    short: 'Sorc',
     name: 'Eldrin',
     title: 'Sorcerer',
     sprite: 'mage',
@@ -59,6 +62,7 @@ export const HEROES = {
   },
   rogue: {
     id: 'rogue',
+    short: 'Shadow',
     name: 'Kael',
     title: 'Shadow',
     sprite: 'rogue',
@@ -74,6 +78,7 @@ export const HEROES = {
   },
   necromancer: {
     id: 'necromancer',
+    short: 'Necro',
     name: 'Morvath',
     title: 'Necromancer',
     sprite: 'necromancer',

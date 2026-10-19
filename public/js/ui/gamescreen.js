@@ -2,7 +2,7 @@
 // (level up, treasure chests, gear found, pause, results) on top.
 
 import { input } from '../engine/input.js';
-import { sfx, playAfterJingle } from '../engine/audio.js';
+import { sfx, playAfterJingle, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
@@ -13,11 +13,12 @@ import { WEAPONS } from '../data/weapons.js';
 import { PASSIVES, FILLERS } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, GAME_SPEED, NIGHTMARE } from '../data/difficulty.js';
-import { metaBonuses, rankTitle, unlocksNext } from '../shared/profile.js';
+import { metaBonuses, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
-import { unlockText } from './ladder.js';
+import { unlockText, goalText } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
 import { OptionsScreen } from './screens.js';
+import { saveSettings } from '../engine/storage.js';
 
 export class GameScreen {
   enter(app) {
@@ -34,6 +35,8 @@ export class GameScreen {
       unlocks: unlocksNext(app.store.profile, hero),
       pace: GAME_SPEED,
       settings: app.settings,
+      hints: true,
+      saveSettings: () => saveSettings(app.settings),
     });
     // Nothing of the run is saved while it lasts: its results reach the save when it ends
     // (ResultsOverlay), by death, Quit Run or victory.
@@ -175,6 +178,7 @@ export class LevelUpOverlay {
     g.pendingLevels = Math.max(0, g.pendingLevels - 1); // never below none (draw: levels taken elsewhere)
     sfx('pick');
     g.state = 'play';
+    if (g.hints) g.hints.levelClosed = true; // the first-run hint on weapons and gems comes next
     if (g.resolveAutoLevels()) return 'close';
     g.state = 'levelup';
     this.roll();
@@ -711,6 +715,28 @@ export class PauseOverlay {
 
 // ---------------------------------------------------------------- results --
 
+// How the results tell the run (ResultsOverlay): the title first; then the rows tick in `row`
+// seconds apart from `rows` on, a soft tick each, a record broken stamped NEW BEST; the gold
+// counts up over goldMin to goldMax seconds (the more, the longer) with coins climbing in pitch,
+// and lands with a thunk. Any key, click or tap shows it all at once; only then does RETURN TO
+// CAMP take a press.
+export const TALLY = { rows: 0.6, row: 0.16, weapon: 0.08, gap: 0.3, goldMin: 1.5, goldMax: 2.5 };
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+// What gold buys at the Armory now: how many ranks are affordable, or how far the cheapest is.
+export function armoryLine(p) {
+  let n = 0, near = null;
+  for (const u of UPGRADES) {
+    const rank = p.up[u.id] || 0;
+    if (rank >= u.max) continue;
+    const cost = upgradeCost(u.id, rank);
+    if (cost <= p.gold) n++;
+    else if (!near || cost - p.gold < near.need) near = { need: cost - p.gold, name: `${u.name} ${ROMAN[rank] || rank + 1}` };
+  }
+  if (n) return `${n} Armory rank${n > 1 ? 's' : ''} affordable`;
+  return near ? `+${fmtNum(near.need)} gold to ${near.name}` : 'The Armory is complete';
+}
+
 class ResultsOverlay {
   constructor(gs) {
     this.gs = gs;
@@ -721,10 +747,33 @@ class ResultsOverlay {
     this.lockTime = 1;
     const res = this.g.result || (this.g.finish(false), this.g.result);
     this.res = res;
+    // The records as they stood before this run: a row beating one is stamped NEW BEST.
+    this.before = { ...gs.app.store.profile.best };
+    this.rows = this.tally();
+    this.ticked = 0; // rows that have ticked in
+    this.goldAt = null; // when the gold began to count (this.t)
+    this.landed = false; // the count is done (or skipped): RETURN TO CAMP takes a press
     this.submit();
-    // The victory's jingle is heard in full; the title piece comes after it.
+    // A win's jingle is heard in full, the title piece after it; a fall's lament plays now.
     if (res.victory) playAfterJingle('title');
+    else if (this.g.player.dead) playJingle('gameover');
     gs.app.ui.focusId = 'camp';
+  }
+
+  // The rows: [label, value, record broken].
+  tally() {
+    const res = this.res, st = res.stats, b = this.before, ranked = res.mode === 'ranked';
+    const rows = [[ranked ? 'Survived' : 'Time', fmtTime(res.time), res.mode === 's15' && res.time > (b.s15 || 0)]];
+    if (ranked) rows.push(['Rank', rankTitle(res.time), false]);
+    if (res.mode === 'dungeon') rows.push(['Floor reached', String(res.floor), false]);
+    rows.push(
+      ['Level', String(res.level), res.level > (b.level || 0)],
+      ['Kills', fmtNum(res.kills), res.kills > (b.kills || 0)],
+      ['Best combo', String(st.maxCombo), false],
+      ['Bosses slain', String(st.bosses), false],
+      ['Damage dealt', fmtNum(st.damage), false],
+    );
+    return rows;
   }
 
   submit() {
@@ -740,25 +789,90 @@ class ResultsOverlay {
     });
   }
 
+  // When the rows and the weapons have all ticked in.
+  get rowsEnd() {
+    return TALLY.rows + this.rows.length * TALLY.row + Math.min(6, this.res.weapons.length) * TALLY.weapon;
+  }
+
+  // How long the gold counts: the more, the longer.
+  goldFor(total) {
+    return TALLY.goldMin + (TALLY.goldMax - TALLY.goldMin) * clamp(Math.log10(total + 1) / 4, 0, 1);
+  }
+
+  // Everything shown at once.
+  skip() {
+    this.t = Math.max(this.t, this.rowsEnd + TALLY.gap);
+    this.ticked = this.rows.length;
+    if (this.reward && !this.reward.unsaved) {
+      this.shown = this.reward.total;
+      this.land();
+    }
+  }
+
+  land() {
+    if (this.landed) return;
+    this.landed = true;
+    if (this.reward && this.reward.total > 0) sfx('thunk');
+  }
+
+  // A win's backdrop: a sunrise (a warm sky, slow rays from the sun under the panel). A fall's
+  // stays cold: the dark over the drained world.
+  backdrop(ctx, W, H) {
+    if (!this.res.victory) {
+      dim(ctx, W, H, Math.min(0.85, this.t * 1.5));
+      return;
+    }
+    const k = clamp(this.t * 1.2, 0, 1);
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, 'rgba(26,16,48,0.92)');
+    sky.addColorStop(0.55, 'rgba(116,44,52,0.86)');
+    sky.addColorStop(0.85, 'rgba(247,118,34,0.8)');
+    sky.addColorStop(1, 'rgba(254,231,97,0.85)');
+    ctx.globalAlpha = k;
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(W / 2, H + 10);
+    ctx.rotate(this.t * 0.05);
+    ctx.globalAlpha = 0.12 * k;
+    ctx.fillStyle = '#fff3a8';
+    for (let i = 0; i < 16; i++) {
+      ctx.rotate(TAU / 16);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(W + H, -12);
+      ctx.lineTo(W + H, 12);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, app = this.gs.app, res = this.res;
     this.t += dt;
-    dim(ctx, W, H, Math.min(0.85, this.t * 1.5));
+    // Any key, click or tap before the end shows it all.
+    if (!this.landed && this.t > 0.3 && (input.anyKey || input.mouse.clicked)) {
+      this.skip();
+      input.mouse.clicked = false;
+      ui.lock(0.25);
+    }
+    this.backdrop(ctx, W, H);
     const title = res.victory ? (res.mode === 'dungeon' ? 'VICTORY' : 'DAWN BREAKS') : 'YOU HAVE FALLEN';
     const cols = res.victory ? ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f'] : ['#f6757a', '#e43b44', '#a22633', '#5c0f1c', '#3e2731'];
     const L = logo(title, cols);
     const s = Math.min(1, (W - 20) / L.width);
-    const a = clamp(this.t * 2, 0, 1);
-    ctx.globalAlpha = a;
+    ctx.globalAlpha = clamp(this.t * 2, 0, 1);
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), 8, Math.round(L.width * s), Math.round(L.height * s));
     ctx.globalAlpha = 1;
     const ranked = res.mode === 'ranked';
-    const sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}`;
-    drawText(ctx, sub, W / 2, 12 + L.height * s, { align: 'center', color: '#8b9bb4' });
-    if (this.t < 0.6) return null;
-    // Personal bests and anything this run unlocked, shown above the gold.
+    let sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}`;
+    if (!res.victory && res.stats.killedBy) sub += ` · slain by ${res.stats.killedBy}`;
+    drawText(ctx, fitText(sub, W - 8), W / 2, 12 + L.height * s, { align: 'center', color: res.victory ? '#feae34' : '#8b9bb4' });
+    if (this.t < TALLY.rows - 0.2) return null;
+    // Personal bests and anything this run unlocked, shown above the gold once it has landed.
     const notes = [];
-    if (this.reward) {
+    if (this.reward && this.landed) {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
       for (const k of this.reward.unlocks || []) notes.push([unlockText(k), '#fee761']);
@@ -767,58 +881,86 @@ class ResultsOverlay {
         sfx('chest');
       }
     }
-    const pw = Math.min(W - 16, 340), ph = Math.min(H - 70 - L.height * s, 160 + notes.length * 10);
-    const x = Math.round(W / 2 - pw / 2), y = Math.round(26 + L.height * s);
-    panel(ctx, x, y, pw, ph);
-    // Stats column.
-    const st = res.stats;
-    const rows = [
-      [ranked ? 'Survived' : 'Time', fmtTime(res.time)],
-      ['Level', String(res.level)],
-      ['Kills', fmtNum(res.kills)],
-      ['Best combo', String(st.maxCombo)],
-      ['Bosses slain', String(st.bosses)],
-      ['Damage dealt', fmtNum(st.damage)],
-    ];
-    if (res.mode === 'dungeon') rows.splice(1, 0, ['Floor reached', String(res.floor)]);
-    if (ranked) rows.splice(1, 0, ['Rank', rankTitle(res.time)]);
-    let ty = y + 8;
-    for (const [k, v] of rows) {
-      drawText(ctx, k, x + 8, ty, { color: '#8b9bb4' });
-      drawText(ctx, v, x + 108, ty, { align: 'right', color: '#c0cbdc' });
-      ty += 10;
+    // The weapons beside the rows, or under them on a narrow screen.
+    const pw = Math.min(W - 16, 340), side = pw >= 330, nw = Math.min(6, res.weapons.length);
+    const ph = Math.min(H - 52 - L.height * s, 178 + notes.length * 10 + (side ? 0 : nw * 15 - 10));
+    const x = Math.round(W / 2 - pw / 2), y = Math.round(24 + L.height * s);
+    panel(ctx, x, y, pw, ph, res.victory ? { trim: ['#fee761', '#be4a2f'], rivets: true } : {});
+    // The rows, one by one, each with a tick; a record broken stamped NEW BEST.
+    const due = Math.min(this.rows.length, Math.floor((this.t - TALLY.rows) / TALLY.row) + 1);
+    while (this.ticked < due) {
+      const [, , best] = this.rows[this.ticked++];
+      sfx(best ? 'pick' : 'tally', { pitch: 1 + this.ticked * 0.04 });
     }
-    // Weapons.
-    let wy = y + 8;
-    const wx = x + 120;
-    for (const w of res.weapons.slice(0, 6)) {
+    let ty = y + 8;
+    this.rows.slice(0, this.ticked).forEach(([k, v, best], i) => {
+      drawText(ctx, k, x + 8, ty, { color: '#8b9bb4' });
+      drawText(ctx, v, x + 108, ty, { align: 'right', color: best ? '#fee761' : '#c0cbdc' });
+      if (best) {
+        // Stamped: twice the size for a moment, then set (whole pixels, the font stays crisp).
+        const pop = this.t - (TALLY.rows + i * TALLY.row) < 0.12 ? 2 : 1;
+        const c = textCanvas('NEW BEST', ['#ffffff', '#9ee562', '#63c74d'], '#181425');
+        ctx.drawImage(c, x + 112, Math.round(ty - 1 - (c.height * (pop - 1)) / 2), c.width * pop, c.height * pop);
+      }
+      ty += 10;
+    });
+    // The weapons, after the rows.
+    const wFrom = TALLY.rows + this.rows.length * TALLY.row;
+    let wy = side ? y + 8 : y + 14 + this.rows.length * 10;
+    const wx = side ? x + 166 : x + 8;
+    res.weapons.slice(0, 6).forEach((w, j) => {
+      if (this.t < wFrom + j * TALLY.weapon) return;
       const def = WEAPONS[w.id];
       ctx.drawImage(SPR[def.icon].frames[0].c, wx, wy - 3);
-      drawText(ctx, def.name, wx + 18, wy + 1, { color: def.evolved ? '#f77622' : '#c0cbdc' });
+      drawText(ctx, fitText(def.name, x + pw - 74 - wx - 18), wx + 18, wy + 1, { color: def.evolved ? '#f77622' : '#c0cbdc' });
       const secs = Math.max(1, res.time - (w.since || 0));
       drawText(ctx, `${fmtNum(w.dmg)}  ${fmtNum(w.dmg / secs)}/s`, x + pw - 8, wy + 1, { align: 'right', color: '#feae34' });
       wy += 15;
-    }
-    // Gold reward.
-    const gy = y + ph - 33;
+    });
+    // The gold, counting up once the rows are in and the store has answered; then what next.
+    const gy = y + ph - 51;
     notes.forEach(([text, color], i) => drawText(ctx, text, W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
     const unsaved = this.reward?.unsaved;
+    const counting = this.reward && !unsaved && this.t >= this.rowsEnd + TALLY.gap;
     if (unsaved) {
       const why = this.reward.down ? 'the game server can\'t be reached' : this.reward.error;
-      drawText(ctx, `This run's gold isn't saved${why ? `: ${why}` : ''}`, W / 2, gy, { align: 'center', color: '#e43b44' });
-    } else if (this.reward) {
-      this.shown = Math.min(this.reward.total, this.shown + Math.max(1, this.reward.total * dt * 1.5));
-      if (Math.floor(this.shown) % 5 === 0 && this.shown < this.reward.total) sfx('coin');
+      drawText(ctx, fitText(`This run's gold isn't saved${why ? `: ${why}` : ''}`, pw - 12), W / 2, gy, { align: 'center', color: '#e43b44' });
+      this.landed = true;
+    } else if (counting) {
+      const total = this.reward.total;
+      this.goldAt ??= this.t;
+      if (!total) this.land(); // nothing to count
+      if (!this.landed) {
+        const k = clamp((this.t - this.goldAt) / this.goldFor(total), 0, 1);
+        const before = this.shown;
+        this.shown = total * ease.outCubic(k);
+        // A coin a twentieth of the way, climbing in pitch.
+        const step = Math.max(1, total / 20);
+        if (Math.floor(this.shown / step) > Math.floor(before / step)) sfx('coin', { pitch: 1 + 0.6 * (this.shown / Math.max(1, total)) });
+        if (k >= 1) this.land();
+      }
       const parts = `Collected ${res.gold} × ${this.reward.multiplier}` + (this.reward.bonus ? ` + ${this.reward.bonus} victory bonus` : '');
-      drawText(ctx, parts, W / 2, gy, { align: 'center', color: '#8b9bb4' });
-      const c = textCanvas(`+${Math.floor(this.shown)} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
+      drawText(ctx, fitText(parts, pw - 12), W / 2, gy, { align: 'center', color: '#8b9bb4' });
+      const c = textCanvas(`+${fmtNum(Math.floor(this.shown))} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(W / 2 - c.width), gy + 9, c.width * 2, c.height * 2);
-    } else drawText(ctx, 'Counting your spoils…', W / 2, gy + 6, { align: 'center', color: '#8b9bb4' });
+    } else if (!this.reward) drawText(ctx, 'Counting your spoils…', W / 2, gy + 6, { align: 'center', color: '#8b9bb4' });
+    if (this.landed && this.reward) {
+      // What next: the next goal, and what the gold buys.
+      const prof = app.store.profile;
+      drawText(ctx, fitText('NEXT: ' + goalText(nextGoal(prof)), pw - 12), W / 2, y + ph - 20, { align: 'center', color: '#feae34' });
+      drawText(ctx, fitText(armoryLine(prof), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
+    }
     ui.begin(dt);
     if (unsaved && this.reward.down && button(ctx, ui, 'resubmit', Math.round(W / 2 - 50), gy + 10, 100, 13, 'SAVE AGAIN')) this.submit();
     const by = Math.min(H - 20, y + ph + 6);
-    // One way on: back to camp (the owner dropped TRY AGAIN, so every run begins from the hero screen).
-    if (button(ctx, ui, 'camp', Math.round(W / 2 - 50), by, 100, 14, 'RETURN TO CAMP')) app.go('title');
+    // One way on: back to camp, the hero screen with this run's hero ready (the owner dropped TRY
+    // AGAIN). Before the count has landed a press only shows it all.
+    if (button(ctx, ui, 'camp', Math.round(W / 2 - 50), by, 100, 14, 'RETURN TO CAMP', { color: this.landed ? '#fee761' : '#8b9bb4' })) {
+      if (this.landed) {
+        app.choice.hero = res.hero;
+        app.go('hero');
+      } else this.skip();
+    }
     ui.end();
     return null;
   }

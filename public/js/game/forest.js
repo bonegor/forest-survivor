@@ -27,6 +27,10 @@ export const NIGHT = [
 // What steer() returns: the one pair, filled again by the next call.
 const HEADING = [0, 0];
 
+// A crypt building's footprint round its door (x, y): w wide, up deep, its front steps px above
+// the door's line.
+export const CRYPT_BOX = { w: 24, up: 18, steps: 3 };
+
 export class Forest {
   constructor(g, seed) {
     this.g = g;
@@ -251,6 +255,14 @@ export class Forest {
   // angle.
   collide(e) {
     if (e !== this.g.player) return;
+    // A crypt's walls: only its steps, below its door, can be stood on (Game's door check).
+    for (const d of this.g.crypts) {
+      const dx = e.x - d.x, dy = e.y - (d.y - CRYPT_BOX.up / 2 - CRYPT_BOX.steps);
+      const px = CRYPT_BOX.w / 2 + 3 - Math.abs(dx), py = CRYPT_BOX.up / 2 - Math.abs(dy);
+      if (px <= 0 || py <= 0) continue;
+      if (px < py) e.x += Math.sign(dx || 1) * px;
+      else e.y += Math.sign(dy || 1) * py;
+    }
     const x0 = Math.floor((e.x - 12) / CH), x1 = Math.floor((e.x + 12) / CH);
     const y0 = Math.floor((e.y - 12) / CH), y1 = Math.floor((e.y + 12) / CH);
     for (let cy = y0; cy <= y1; cy++) {

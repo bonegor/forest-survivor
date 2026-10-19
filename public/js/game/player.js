@@ -8,6 +8,7 @@ import { sfx } from '../engine/audio.js';
 import { clamp, damp, rand } from '../engine/util.js';
 import { PC, P } from './particles.js';
 import { faceAlong, faceAttack } from './facing.js';
+import { foeName } from './names.js';
 
 export const BASE_SPEED = 70;
 export const BASE_MAGNET = 42;
@@ -99,6 +100,7 @@ export class Player {
     this.strikeBuf = 0; // a strike pressed before the weapon was ready, kept a moment
     this.fury = 0;
     this.furyFullAt = null; // when the orb last filled (addFury)
+    this.lastBlow = null; // who struck the last blow, as the results name it (hurt)
     this.recentKills = 0; // the horde's kills, each fading over FURY.window seconds (killShare)
     this.ult = null; // active ultimate state
     this.invuln = 0;
@@ -277,7 +279,9 @@ export class Player {
     return this.invuln > 0 || (this.ult && this.ult.type === 'shadowdance') || this.g.state !== 'play';
   }
 
-  hurt(amount, src) {
+  // A blow of amount from src (a foe, by contact) or by (who struck it from afar, as the results
+  // name it: names.js); the one that fells him is the run's stats.killedBy.
+  hurt(amount, src, by = null) {
     const g = this.g;
     if (this.dead || this.untouchable || this.devGod || g.state === 'faint') return 0;
     let dmg = armored(amount * g.diff.dmg, this.armor);
@@ -286,6 +290,7 @@ export class Player {
     // Normal halves what he takes, after all of that (difficulty.js hurt). A blow always lands.
     dmg = Math.max(1, Math.round(dmg * g.diff.hurt));
     this.hp -= dmg;
+    this.lastBlow = by || (src ? foeName(src) : null);
     this.invuln = 0.6;
     this.flash = 0.12;
     this.addFury((FURY.hurt * dmg) / this.maxHp);
@@ -320,6 +325,7 @@ export class Player {
       } else {
         this.hp = 0;
         this.dead = true;
+        g.stats.killedBy = this.lastBlow;
         g.onPlayerDeath();
       }
     }

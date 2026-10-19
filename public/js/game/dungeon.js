@@ -1027,6 +1027,12 @@ export class Dungeon {
     return heading(bx / bl, by / bl);
   }
 
+  // Whether the hero has seen the tile at world point (x, y) (the fog: reveal).
+  seenAt(x, y) {
+    const tx = Math.floor(x / T), ty = Math.floor(y / T);
+    return tx >= 0 && ty >= 0 && tx < this.W && ty < this.H && this.seen[ty * this.W + tx] > 0;
+  }
+
   freeSpot(x, y) {
     const tx = Math.floor(x / T), ty = Math.floor(y / T);
     if (this.tile(tx, ty) === FLOOR) return { x, y };

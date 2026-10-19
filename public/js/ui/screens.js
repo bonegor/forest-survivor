@@ -249,7 +249,9 @@ export class HeroScreen {
         // The next one shows what it takes; the rest wait their turn.
         drawText(ctx, id === next ? `${HERO_UNLOCK_TIME / 60} MIN` : 'LOCKED', x + cw / 2, y + ch - 12, { align: 'center', color: id === next ? '#feae34' : '#5a6988' });
       } else {
-        drawText(ctx, h.title.toUpperCase(), x + cw / 2, y + ch - 12, { align: 'center', color: f ? '#fee761' : '#c0cbdc' });
+        // The title, or its short form where the card is too narrow for it (labels never run together).
+        const label = textWidth(h.title.toUpperCase()) <= cw - 2 ? h.title.toUpperCase() : h.short.toUpperCase();
+        drawText(ctx, label, x + cw / 2, y + ch - 12, { align: 'center', color: f ? '#fee761' : '#c0cbdc' });
         // Achievement stars: night survived, Dungeon beaten.
         let sx = x + cw - 8;
         for (const [, col, got] of featStars(prof, id).reverse()) {

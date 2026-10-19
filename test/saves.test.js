@@ -83,13 +83,15 @@ async function hosting(kind, fn) {
 // gear are waved through. The game once saved the run as it began, at each Dungeon floor and every
 // minute; that code is gone, so a few seconds and a floor down are enough to show nothing is
 // written until the run ends.
+// The settings live as long as the page, from run to run, as the game's own (app.settings).
+const settings = { numbers: false };
 async function playRun(mode, seconds) {
   const oldRandom = Math.random, oldBot = input.bot;
   Math.random = mulberry32(5);
   input.bot = { x: 0, y: 0 };
   const gs = new GameScreen();
   try {
-    gs.enter({ ui: new UI(), settings: { numbers: false }, devHold: false, store, choice: { hero: 'knight', mode, diff: 'medium' } });
+    gs.enter({ ui: new UI(), settings, devHold: false, store, choice: { hero: 'knight', mode, diff: 'medium' } });
     const g = gs.game, p = g.player;
     g.spawner.update = () => {};
     p.devGod = true;
@@ -139,7 +141,10 @@ test('no run cookie is written while a run lasts, on the game server or on stati
         assert.equal(store.profile.runs, runs + 1, `${kind}, ${mode}: and counted`);
       }
       for (const name of RUN_COOKIES) assert.ok(!written.includes(name), `${kind}: ${name} was never written`);
-      assert.deepEqual([...new Set(written)], [kind === 'server' ? 'fs_profile' : 'fs_lprofile'], `${kind}: only the profile, as each run ended`);
+      // Besides the profile, the first run's end notes once in the settings cookie that its
+      // first-run hints have been shown (hints.js); nothing else.
+      assert.ok(written.filter((n) => n === 'fs_settings').length <= 1, `${kind}: the settings at most once`);
+      assert.deepEqual([...new Set(written)].filter((n) => n !== 'fs_settings'), [kind === 'server' ? 'fs_profile' : 'fs_lprofile'], `${kind}: only the profile, as each run ended`);
     });
   }
 });

@@ -7,6 +7,7 @@ import { EnemyShot } from './projectiles.js';
 import { Telegraph, Explosion, Ring } from './effects.js';
 import { PC, P } from './particles.js';
 import { faceAttack } from './facing.js';
+import { foeName, shotName } from './names.js';
 
 const distP = (e) => Math.hypot(e.g.player.x - e.x, e.g.player.y - e.y);
 const angP = (e) => Math.atan2(e.g.player.y - e.y, e.g.player.x - e.x);
@@ -20,11 +21,12 @@ function say(e, text, dur = 2.2) {
   e.speech = { text, t: dur };
 }
 
-function blast(g, x, y, r, dmg, style = 'dark') {
+// by: who struck it, as the results name the blow that slew the hero (names.js).
+function blast(g, x, y, r, dmg, style, by) {
   g.effects.push(new Explosion(g, x, y, r, style));
   g.effects.push(new Ring(g, x, y, 4, r * 1.1, 0.4, style === 'fire' ? '#fee761' : '#f6757a'));
   const p = g.player;
-  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * g.bossPower);
+  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * g.bossPower, null, by);
   g.shake(0.45);
   sfx('slam');
 }
@@ -32,7 +34,7 @@ function blast(g, x, y, r, dmg, style = 'dark') {
 // A shot leaves the boss's chest, or opts.out px out from it along its own line.
 function shoot(g, e, ang, kind, speed, dmg, opts) {
   const out = (opts && opts.out) || 0;
-  g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, opts));
+  g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, { ...opts, by: shotName(e, kind) }));
 }
 
 function ring(g, e, n, kind, speed, dmg, off = 0, opts) {
@@ -46,8 +48,9 @@ function fan(g, e, n, spread, kind, speed, dmg, opts) {
   sfx('enemyshot');
 }
 
-function strike(g, x, y, r, dmg, delay, style = 'fire') {
-  g.effects.push(new Telegraph(g, { shape: 'circle', x, y, r, dur: delay, onDone: () => blast(g, x, y, r, dmg, style) }));
+function strike(g, e, x, y, r, dmg, delay, style = 'fire') {
+  const by = foeName(e);
+  g.effects.push(new Telegraph(g, { shape: 'circle', x, y, r, dur: delay, onDone: () => blast(g, x, y, r, dmg, style, by) }));
 }
 
 function cast(e, t) {
@@ -78,7 +81,7 @@ export const BOSS_AI = {
         shape: 'circle', x: e.x, y: e.y, r: R, dur: 1, follow: e,
         onDone: () => {
           if (!still(e, id)) return;
-          blast(g, e.x, e.y, R, 24, 'dark');
+          blast(g, e.x, e.y, R, 24, 'dark', foeName(e));
           // Each bone sets off out along its own line, about 10 px from the next (19 px round
           // him, 25 for the ring of 15), so the ring never stacks on one point.
           ring(g, e, e.phase ? 15 : 11, 'bone', 85, 11, rand(TAU), { out: e.phase ? 25 : 19 });
@@ -163,7 +166,7 @@ export const BOSS_AI = {
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: 54, dur: 0.85, follow: e,
         onDone: () => {
-          if (still(e, id)) blast(g, e.x, e.y, 54, 30, 'blood');
+          if (still(e, id)) blast(g, e.x, e.y, 54, 30, 'blood', foeName(e));
         },
       }));
       return [0, 0, 0];
@@ -245,7 +248,7 @@ export const BOSS_AI = {
       const n = [6, 9, 12][e.phase];
       for (let i = 0; i < n; i++) {
         const a = rand(TAU), r = i === 0 ? 0 : rand(16, 110);
-        strike(g, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 24, 22, 1.05 + i * 0.07, 'fire');
+        strike(g, e, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 24, 22, 1.05 + i * 0.07, 'fire');
       }
       if (Math.random() < 0.5) say(e, pick(['BURN!', 'THE SKY FALLS!', 'KNEEL IN ASH!']), 1.6);
       cast(e, 0.6);
@@ -259,7 +262,7 @@ export const BOSS_AI = {
         shape: 'circle', x: e.x, y: e.y, r: 84, dur: 0.9, follow: e,
         onDone: () => {
           if (!still(e, id)) return;
-          blast(g, e.x, e.y, 84, 32, 'fire');
+          blast(g, e.x, e.y, 84, 32, 'fire', foeName(e));
           ring(g, e, 16, 'firebolt', 90, 12, rand(TAU));
         },
       }));

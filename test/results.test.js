@@ -101,14 +101,22 @@ test('a Normal run is reported as Normal, and paid ×1', async () => {
   assert.equal(vet.store.profile.gold, 180);
 });
 
-test('the results screen leads only back to camp', async () => {
+test("the results screen leads only back to camp: the hero screen, the run's hero ready, once the count has landed", async () => {
   const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
   const gs = await playToResults(app);
+  app.choice.hero = 'archer'; // whatever was chosen since, the run's hero comes back
   for (let f = 0; f < 150; f++) frame(gs);
   assert.ok(!gs.app.ui.items.some((i) => i.id === 'again'), 'no TRY AGAIN');
   assert.ok(gs.app.ui.items.some((i) => i.id === 'camp'), 'RETURN TO CAMP is there');
+  assert.ok(!gs.overlay.landed, 'the gold still counting');
   click(gs, 'camp');
-  assert.equal(app.went, 'title', 'back to camp');
+  assert.equal(app.went, undefined, 'a press before the count has landed only shows it all');
+  assert.ok(gs.overlay.landed && gs.overlay.shown === gs.overlay.reward.total, 'all shown');
+  for (let f = 0; f < 20; f++) frame(gs);
+  click(gs, 'camp');
+  assert.equal(app.went, 'hero', 'back to camp: the hero screen');
+  assert.equal(app.choice.hero, 'knight', "with the run's hero focused");
+  assert.equal(app.sent.length, 1, 'the run reported once');
 });
 
 test('a run the store pays nothing for says it was not saved, and a run with nothing to pay does not', async () => {
