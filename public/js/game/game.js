@@ -10,7 +10,7 @@ import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx, playMusic, playJingle, stopMusic, cutToMusic } from '../engine/audio.js';
-import { ARRIVAL, LOW_HP } from './arrival.js';
+import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
 import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE } from './events.js';
 import { view } from '../engine/view.js';
@@ -927,6 +927,8 @@ export class Game {
     const next = this.enemies.find((o) => o !== e && o.boss && !o.dead && !o.sleeping);
     if (this.boss === e) this.boss = next || null;
     this.moment('boss', MOMENT.boss);
+    // His name card, if it is still up, goes first (CARD_END); his banner waits for it.
+    if (this.card && this.card.end == null) this.card.end = this.card.t;
     this.timeScale = 0.35;
     this.slowT = 1.1;
     this.whiteFlash = 0.6;
@@ -1342,8 +1344,16 @@ export class Game {
   banner(title, sub = '', color = '#ffffff', dur = 2.4) {
     const twin = this.banners.findIndex((b) => b.title === title);
     if (twin >= 0) this.banners.splice(twin, 1);
-    this.banners.push({ title, sub, color, dur, t: 0 });
+    const b = { title, sub, color, dur, t: 0 };
+    this.banners.push(b);
     if (this.banners.length > BANNERS_MOST) this.banners.shift();
+    return b;
+  }
+
+  // Whether a first-run hint must wait (hints.js): while an event's warning, the ultimate's cut-in, a
+  // boss's name card or the stir before him has the screen.
+  get hintsHeld() {
+    return this.warnings.length > 0 || !!this.ultLaunch || !!this.card || !!(this.stir && !this.stir.done);
   }
 
   addDecal(kind, x, y, r) {
@@ -1614,7 +1624,7 @@ export class Game {
       this.stir.t += rdt;
       if (this.stir.done && (this.stir.after += rdt) >= ARRIVAL.stirOut) this.stir = null;
     }
-    if (this.card && (this.card.t += rdt) >= ARRIVAL.card) this.card = null;
+    if (this.card && ((this.card.t += rdt) >= ARRIVAL.card || (this.card.end != null && this.card.t - this.card.end >= CARD_END))) this.card = null;
     const bb = this.boss;
     if (bb && bb.introT !== undefined) {
       bb.introT += rdt;
@@ -1631,7 +1641,7 @@ export class Game {
     // card holds them back (they wait, unseen, and go on after it).
     for (let i = this.banners.length - 1; i >= 0; i--) {
       const b = this.banners[i];
-      if (!this.card) b.t += rdt;
+      if (!this.card && !(b.hint && this.hintsHeld)) b.t += rdt;
       if (b.t >= b.dur) this.banners.splice(i, 1);
     }
     if (this.slowT > 0) {

@@ -20,4 +20,7 @@ export const ARRIVAL = {
   beat: 0.7,
   easeBack: 3,
 };
+// A boss slain while his name card is up: the card fades out in CARD_END s, and the banners (his
+// "…is slain!" with them) wait for it, so the two never share the screen.
+export const CARD_END = 0.2;
 export const LOW_HP = 0.1;

@@ -468,7 +468,7 @@ export class ChestOverlay {
     this.t += dt;
     const t = this.t;
     dim(ctx, W, H, 0.7);
-    const cx = W / 2, cy = H * 0.36;
+    const lay = chestLayout(W, H, this.items.length, T.scale), cx = W / 2, cy = lay.cy;
     const opened = t >= tl.open;
     const k = opened ? clamp((t - tl.open) / 0.4, 0, 1) : 0;
     // The room lit in the tier's colour once it is open, its rays turning slowly.
@@ -497,7 +497,7 @@ export class ChestOverlay {
     // Shut, it shakes in sets (a champion's one, a lord's two, a boss's three), each stronger and a
     // step higher, light leaking from the crack: a beam for each thing inside, one orange for an
     // evolution (chestTease: always true).
-    const fr = chestFrame(this.kind, opened), s = 3 * T.scale;
+    const fr = chestFrame(this.kind, opened), s = CHEST_SCALE * T.scale;
     const per = CHEST_TIME.set + CHEST_TIME.setGap, set = Math.floor(t / per), inSet = t - set * per;
     let shake = 0;
     if (!opened) {
@@ -545,7 +545,7 @@ export class ChestOverlay {
     }
     // The things, least first, the gaps growing toward the last; each a note a step up.
     const items = this.items;
-    const iy = Math.round(cy + 18 + 15 * T.scale);
+    const iy = lay.iy;
     while (this.revealed < items.length && t >= tl.at[this.revealed]) {
       const it = items[this.revealed++];
       if (g.hud.held) revealOn(g.hud.held, it, g);
@@ -555,17 +555,20 @@ export class ChestOverlay {
     const ceremony = this.evo && t >= this.evoAt && t < this.evoAt + CEREMONY.dur;
     if (ceremony) this.drawCeremony(ctx, W, H, t - this.evoAt);
     else if (opened) {
-      const slot = Math.min(84, Math.floor((W - 16) / Math.max(1, items.length)));
+      // At twice the size where they fit (chestLayout), today's where they don't (phones).
+      const k = lay.k;
+      const slot = Math.min(84 * k, Math.floor((W - 16) / Math.max(1, items.length)));
       const rowW = slot * items.length;
       items.slice(0, this.revealed).forEach((it, i) => {
         const x = Math.round(W / 2 - rowW / 2 + (i + 0.5) * slot);
         const { icon, name, sub, color } = chestItemInfo(g, it);
         const pop = t - tl.at[i] < 0.12 ? 1.3 : 1;
-        const big = smoothScaled(SPR[icon].frames[0], 1);
-        ctx.drawImage(big, Math.round(x - (big.width * pop) / 2), Math.round(iy - (big.height * (pop - 1)) / 2), Math.round(big.width * pop), Math.round(big.height * pop));
-        const lines = wrapText(name, slot - 6);
-        lines.forEach((ln, j) => drawText(ctx, ln, x, iy + 34 + j * 9, { align: 'center', color }));
-        drawText(ctx, sub, x, iy + 34 + lines.length * 9, { align: 'center', color: it.type === 'evolve' || it.isNew ? '#fee761' : '#8b9bb4' });
+        const big = smoothScaled(SPR[icon].frames[0], 1), bw = big.width * k * pop, bh = big.height * k * pop;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(big, Math.round(x - bw / 2), Math.round(iy - (bh - big.height * k) / 2), Math.round(bw), Math.round(bh));
+        const lines = wrapText(name, Math.floor((slot - 6) / k));
+        lines.forEach((ln, j) => drawScaled(ctx, ln, x, iy + 34 * k + j * 9 * k, k, color));
+        drawScaled(ctx, sub, x, iy + 34 * k + lines.length * 9 * k, k, it.type === 'evolve' || it.isNew ? '#fee761' : '#8b9bb4');
       });
       if (items.some((it) => it.type === 'evolve') && this.revealed === items.length) {
         const L = logo('EVOLUTION!', ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f']);
@@ -585,10 +588,10 @@ export class ChestOverlay {
         this.goldShown = true;
         g.hud.held = null; // all of it shown: the HUD rolls up to the build and gold as they are
         sfx('thunk');
-        for (let i = 0; i < 10; i++) this.flyers.push({ x: cx + rand(-12, 12), y: iy + 66, t: -i * 0.04 });
+        for (let i = 0; i < 10; i++) this.flyers.push({ x: cx + rand(-12, 12), y: lay.goldY + 2, t: -i * 0.04 });
       }
       const c = textCanvas(`+${this.goldCount} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
-      ctx.drawImage(c, Math.round(W / 2 - c.width), iy + 60, c.width * 2, c.height * 2);
+      ctx.drawImage(c, Math.round(W / 2 - c.width), lay.goldY, c.width * 2, c.height * 2);
     }
     this.drawFlyers(ctx, W, dt);
     ui.begin(dt);
@@ -713,6 +716,33 @@ export class ChestOverlay {
 const SCALE = [1, 1.122, 1.26, 1.498, 1.682, 2, 2.245];
 
 // How a chest's screen shows one thing it gave.
+// The chest's things at twice today's size when each gets CHEST_ITEMS.big of the width, else today's.
+export const CHEST_ITEMS = { big: 116 };
+export const chestItemScale = (W, n) => ((W - 16) / Math.max(1, n) >= CHEST_ITEMS.big ? 2 : 1);
+// The chest is drawn CHEST_SCALE times its tier's scale. Under it its things stand in a row,
+// CHEST_ROW px a scale (the icon and up to three lines); under them the gold line and COLLECT take
+// CHEST_FOOT px to the screen's foot; the chest's lid stays below CHEST_TOP (clear of EVOLUTION!).
+const CHEST_SCALE = 3, CHEST_ROW = 34 + 3 * 9, CHEST_FOOT = 4 + 22 + 4 + 22, CHEST_TOP = 44;
+
+// Where a chest's n things go on a W x H screen, the chest drawn at its tier's scale: at twice
+// today's size where the width allows (chestItemScale) and the row, its gold line and COLLECT fit
+// under the chest (standing higher on a short screen, its lid below CHEST_TOP), else at today's.
+// The things' scale k, the chest's middle cy, the row's top iy and the gold line's goldY.
+export function chestLayout(W, H, n, scale) {
+  const half = (SPR.chest.frames[0].h * CHEST_SCALE * scale) / 2, below = 18 + 15 * scale;
+  for (let k = chestItemScale(W, n); ; k--) {
+    const cy = Math.min(H * 0.36, H - CHEST_FOOT - CHEST_ROW * k - below), iy = Math.round(cy + below);
+    if (k === 1 || cy - half >= CHEST_TOP) return { k, cy, iy, goldY: iy + CHEST_ROW * k + 4 };
+  }
+}
+
+// A line of text at a whole-number scale, centred on x (crisp: a text canvas drawn k times its size).
+function drawScaled(ctx, s, x, y, k, color) {
+  if (k === 1) return drawText(ctx, s, x, y, { align: 'center', color });
+  const c = textCanvas(s, color, '#181425');
+  ctx.drawImage(c, Math.round(x - (c.width * k) / 2), Math.round(y), c.width * k, c.height * k);
+}
+
 function chestItemInfo(g, it) {
   if (it.type === 'evolve') {
     const d = WEAPONS[it.id];

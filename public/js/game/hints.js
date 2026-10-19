@@ -46,14 +46,16 @@ export class Hints {
   say(id) {
     if (this.said(id)) return;
     const [title, sub] = words(id, this.g);
-    this.g.banner(title, sub, COLOR, DUR);
+    const b = this.g.banner(title, sub, COLOR, DUR);
+    if (b) b.hint = true; // held back, not drawn or run down, while the screen is another's (Game.hintsHeld)
     this.mark(id);
   }
 
   // Each frame of play: whatever has come up.
   update() {
     const g = this.g;
-    if (g.state !== 'play' || g.inCrypt) return;
+    // Not while a warning, the ultimate's cut-in or a boss's card has the screen: they wait.
+    if (g.state !== 'play' || g.inCrypt || g.hintsHeld) return;
     if (g.clock > 2) this.say('move');
     if (this.levelClosed) this.say('weapons');
     if (g.player.fury >= 100) this.say('fury');

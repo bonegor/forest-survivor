@@ -12,7 +12,7 @@ import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
 import { DEATH } from './game.js';
-import { ARRIVAL, LOW_HP } from './arrival.js';
+import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { WARN } from './events.js';
 import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
@@ -790,15 +790,15 @@ export class Hud {
       }
     }
     if (!c) return;
-    const t = c.t;
+    const t = c.t, gone = c.end != null ? clamp(1 - (t - c.end) / CARD_END, 0, 1) : 1;
     if (c.letterbox) {
-      const L = ARRIVAL.letterbox, k = t < 0.15 ? t / 0.15 : t < L ? 1 : clamp(1 - (t - L) / 0.25, 0, 1);
+      const L = ARRIVAL.letterbox, k = gone * (t < 0.15 ? t / 0.15 : t < L ? 1 : clamp(1 - (t - L) / 0.25, 0, 1));
       const bh = Math.round(H * 0.12 * ease.outCubic(k));
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, W, bh);
       ctx.fillRect(0, H - bh, W, bh);
     }
-    const a = t < 0.12 ? t / 0.12 : clamp((ARRIVAL.card - t) / 0.6, 0, 1);
+    const a = gone * (t < 0.12 ? t / 0.12 : clamp((ARRIVAL.card - t) / 0.6, 0, 1));
     const name = textCanvas(c.name.toUpperCase(), ['#ffffff', c.color, c.color], '#181425', null, 'bold');
     const big = c.letterbox ? 3 : 2, pop = t < 0.2 ? 1 + 0.6 * (1 - ease.outCubic(t / 0.2)) : 1, s2 = Math.min(big * pop, (W - 20) / name.width);
     const y = Math.round(H * 0.34);
@@ -1109,7 +1109,9 @@ export class Hud {
     if (g.card) return; // a boss's name card has the screen; they wait (Game.fadeReal)
     // Below the lines at the top: a boss's own banner came down on its name.
     let y = Math.max(Math.round(H * 0.22), this.topLines() + 4);
+    const held = g.hintsHeld;
     for (const b of g.banners) {
+      if (b.hint && held) continue; // a first-run hint waits its turn (Game.hintsHeld)
       const u = b.t / b.dur;
       const a = u < 0.12 ? u / 0.12 : u > 0.8 ? (1 - u) / 0.2 : 1;
       const pop = u < 0.12 ? 1.6 - ease.outCubic(u / 0.12) * 0.6 : 1;

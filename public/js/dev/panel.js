@@ -55,8 +55,8 @@ const CSS = `
 #fs-dev .live { background: #0d0b14; border: 1px solid #3a4466; padding: 6px; border-radius: 3px; white-space: pre-wrap; }
 #fs-dev footer { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #3a4466; background: #241b2c; }
 #fs-dev footer .msg { flex: 1; align-self: center; font-size: 11px; }
-#fs-dev-btn { position: fixed; top: 6px; right: 6px; z-index: 9; font: bold 11px ui-monospace, monospace; color: #3e2731;
-  background: #feae34; border: 0; border-radius: 3px; padding: 4px 7px; opacity: .85; cursor: pointer; touch-action: manipulation; }
+#fs-dev-btn { position: fixed; top: 50%; left: 0; transform: translateY(-50%); z-index: 9; font: bold 9px ui-monospace, monospace; color: #3e2731;
+  background: #feae34; border: 0; border-radius: 3px; padding: 3px 3px; opacity: .55; cursor: pointer; touch-action: manipulation; }
 `;
 
 function el(tag, props = {}, ...kids) {
