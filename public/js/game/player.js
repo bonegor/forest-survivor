@@ -98,6 +98,7 @@ export class Player {
     this.strikeAng = 0; // and which way it was struck
     this.strikeBuf = 0; // a strike pressed before the weapon was ready, kept a moment
     this.fury = 0;
+    this.furyFullAt = null; // when the orb last filled (addFury)
     this.recentKills = 0; // the horde's kills, each fading over FURY.window seconds (killShare)
     this.ult = null; // active ultimate state
     this.invuln = 0;
@@ -354,8 +355,15 @@ export class Player {
     if (this.level !== was) this.recompute();
   }
 
+  // The orb fills; the moment it is full a chime rings, once until it has been emptied, and the HUD
+  // bursts a ring out of it (furyFullAt, on the game's clock).
   addFury(v) {
+    const was = this.fury;
     this.fury = Math.min(100, this.fury + v);
+    if (was < 100 && this.fury >= 100) {
+      this.furyFullAt = this.g.clock;
+      sfx('furyready');
+    }
   }
 
   // What a kill of the horde is worth to the orb now, as a share of a lone kill's (FURY): the

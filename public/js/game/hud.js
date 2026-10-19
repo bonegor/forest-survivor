@@ -4,16 +4,21 @@ import { drawText, textCanvas, textWidth, GLYPH_H } from '../engine/font.js';
 import { SPR, buildSprite } from '../engine/sprites.js';
 import { input } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
-import { MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { RANKS } from '../shared/profile.js';
 import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
+import { ringSprite } from './fxsprites.js';
 
 // Beside the clock on a Nightmare (twice the monsters; never Ranked).
 const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
 
 const ORB_R = 21, ORB_S = ORB_R * 2 + 6;
+// The fury orb's three states: filling; ALMOST from `almost`% (its rim glows and pulses, the
+// liquid shines `glow` of a full orb's); FULL (a chime and a ring bursting out of it for `burst` s
+// when it fills: Player.addFury, then the key to press).
+export const FURY_ORB = { almost: 85, glow: 0.45, burst: 0.55 };
 
 // An orb's shape, the same for every orb and every frame: what each pixel of its square is. The
 // glass's rims never change, so only the liquid inside is painted again each frame.
@@ -81,12 +86,13 @@ class Orb {
     }
   }
 
+  // glow: how much the liquid shines, pulsing (0 none; the fury orb's ALMOST and FULL, FURY_GLOW).
   render(frac, t, glow) {
     this.shown += (frac - this.shown) * 0.15;
     const s = ORB_S, R = ORB_R, cy = s / 2;
     const d = this.img.data, tones = this.tones, lit = this.lit;
     const level = cy + R - 2 * R * clamp(this.shown, 0, 1);
-    const shine = 40 * (0.5 + 0.5 * Math.sin(t * 8));
+    const shine = 40 * glow * (0.5 + 0.5 * Math.sin(t * 8));
     for (let k = 0; k < tones.length; k++) lit[k] = glow ? Math.min(255, tones[k] + shine) : tones[k];
     for (let x = 0; x < s; x++) {
       WAVE[x] = Math.sin(x * 0.45 + t * 3) * 1.1 + Math.sin(x * 0.2 - t * 2) * 0.8;
@@ -112,10 +118,31 @@ class Orb {
   }
 }
 
+// A crisp ring of radius r round (cx, cy) on the HUD.
+function orbRing(ctx, cx, cy, r, color) {
+  const img = ringSprite(r, color);
+  ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(cy - img.height / 2));
+}
+
 // Where a line of text drawn at y ends, its outline and all.
 const lineBottom = (y) => y + GLYPH_H + 1;
 // A boss's bar: lower in a dungeon or a crypt, under their own lines.
 const bossBarY = (g) => (g.mode === 'dungeon' || g.inCrypt ? 48 : 40);
+// The bar's width, its name's colours, and how a fallen boss's bar ends (Hud.barFall).
+const BAR_W = (W) => Math.min(220, W - 120);
+const BAR_NAME = ['#fee761', '#feae34', '#be4a2f'];
+export const BAR_FALL = { hold: 0.8, flash: 0.15, drop: 0.7, pieces: 22 };
+function barFrame(ctx, x, y, w) {
+  ctx.fillStyle = '#181425';
+  ctx.fillRect(x - 2, y - 2, w + 4, 10);
+  ctx.fillStyle = '#3e2731';
+  ctx.fillRect(x, y, w, 6);
+}
+// The phase notches at a quarter, a half and three quarters.
+function barNotches(ctx, x, y, w) {
+  ctx.fillStyle = '#181425';
+  for (let q = 1; q < 4; q++) ctx.fillRect(x + Math.round((w * q) / 4), y, 1, 6);
+}
 
 // The clock the HUD shows, and the pause screen with it: a timed run's time left; Ranked's and a
 // Dungeon Run's time so far.
@@ -214,6 +241,35 @@ const NEAR = new Array(NAMED).fill(null), NEAR_D = new Float64Array(NAMED);
 // Over a foe's head, in HUD pixels (overHead).
 const AT = { x: 0, y: 0 };
 
+// The build as the HUD shows it, copied so it stays as it is (Hud.held): each weapon (w, the weapon
+// itself, for the crypt's dimming; its icon, level and whether it had evolved), each relic's
+// [id, rank], the gold.
+export function heldBuild(g) {
+  return {
+    weapons: g.player.weapons.map((w) => ({ w, icon: w.def.icon, level: w.level, evolved: w.evolved })),
+    relics: [...g.player.passives.entries()],
+    gold: g.gold,
+  };
+}
+
+// One thing a chest gave (an item of Game.rollChest), now shown on a held build: an evolution, a
+// weapon or relic a level up or new, a filler's gold. (A Blessing or a heal shows in no slot.)
+export function revealOn(held, it, g) {
+  if (it.type === 'evolve') {
+    const h = held.weapons.find((x) => x.w === it.w);
+    if (h) Object.assign(h, { icon: WEAPONS[it.id].icon, level: MAX_WEAPON_LEVEL, evolved: true });
+  } else if (it.type === 'weapon') {
+    const h = held.weapons.find((x) => x.w.id === it.id);
+    const w = h ? h.w : g.player.weapons.find((x) => x.id === it.id);
+    if (h) h.level = it.level;
+    else if (w) held.weapons.push({ w, icon: w.def.icon, level: it.level, evolved: false });
+  } else if (it.type === 'passive') {
+    const r = held.relics.find(([id]) => id === it.id);
+    if (r) r[1] = it.level;
+    else held.relics.push([it.id, it.level]);
+  } else if (it.type === 'gold') held.gold += it.value;
+}
+
 export class Hud {
   constructor(g) {
     this.g = g;
@@ -223,15 +279,26 @@ export class Hud {
     this.xpShown = 0;
     this.comboScale = 1;
     this.lastCombo = 0;
+    // While a chest shows what it gave (ChestOverlay), the build as it was before it, which the
+    // slots and the gold counter show until each thing is revealed (heldBuild); null: as it is.
+    this.held = null;
+    // The boss or lord whose bar was drawn last frame (its id, name line and drained bar then), and
+    // the bar of one that fell, breaking up (barFall).
+    this.barE = null;
+    this.barId = 0;
+    this.barLabel = '';
+    this.barShown = 0;
+    this.fall = null;
   }
 
-  draw(ctx, W, H, t) {
+  // dt: real seconds since the last frame (the falling bar runs by it).
+  draw(ctx, W, H, t, dt = 1 / 60) {
     const g = this.g, p = g.player;
     this.drawXp(ctx, W, p);
     this.drawSlots(ctx, p);
     this.drawTop(ctx, W, t);
     this.drawOrbs(ctx, W, H, p, t);
-    this.drawBoss(ctx, W, t);
+    this.drawBoss(ctx, W, dt);
     this.drawNames(ctx, W, H);
     this.drawIndicators(ctx, W, H, t);
     this.drawSpeech(ctx, W, H);
@@ -268,15 +335,17 @@ export class Hud {
     const y = 9;
     // In a crypt, where he fights by hand with his own weapon alone, the others are dimmed.
     const main = this.g.caveStrike ? this.g.mainWeapon() : null;
+    const held = this.held;
     for (let i = 0; i < MAX_WEAPONS; i++) {
-      const w = p.weapons[i];
+      const h = held && held.weapons[i], w = held ? h && h.w : p.weapons[i];
       if (main && w && w !== main) ctx.globalAlpha = 0.3;
-      this.slot(ctx, x, y, w ? SPR[w.def.icon] : null, w ? (w.evolved ? -1 : w.level) : 0, MAX_WEAPON_LEVEL, w && w.evolved);
+      if (h) this.slot(ctx, x, y, SPR[h.icon], h.evolved ? -1 : h.level, MAX_WEAPON_LEVEL, h.evolved);
+      else this.slot(ctx, x, y, w ? SPR[w.def.icon] : null, w ? (w.evolved ? -1 : w.level) : 0, MAX_WEAPON_LEVEL, w && w.evolved);
       ctx.globalAlpha = 1;
       x += 18;
     }
     x = 3;
-    const ps = [...p.passives.entries()];
+    const ps = held ? held.relics : [...p.passives.entries()];
     for (let i = 0; i < MAX_RELICS; i++) {
       const e = ps[i];
       this.slot(ctx, x, y + 21, e ? SPR[PASSIVES[e[0]].icon] : null, e ? e[1] : 0, e ? PASSIVES[e[0]].max : 5, false, true);
@@ -358,7 +427,7 @@ export class Hud {
     const k = fmtNum(g.kills);
     drawText(ctx, k, right, y + 10, { align: 'right', color: '#c0cbdc' });
     ctx.drawImage(SPR.h_skull.frames[0].c, right - textWidth(k) - 11, y + 9);
-    const gd = fmtNum(g.gold);
+    const gd = fmtNum(this.held ? this.held.gold : g.gold);
     drawText(ctx, gd, right, y + 21, { align: 'right', color: '#fee761' });
     ctx.drawImage(SPR.h_coin.frames[0].c, right - textWidth(gd) - 10, y + 21);
   }
@@ -369,10 +438,28 @@ export class Hud {
     const ox = 4, oy = H - hpImg.height - 4;
     ctx.drawImage(hpImg, ox, oy);
     drawText(ctx, `${Math.ceil(p.hp)}`, ox + hpImg.width / 2, oy + hpImg.height / 2 - 4, { align: 'center', color: '#ffffff' });
-    const full = p.fury >= 100;
-    const fImg = (full ? this.furyFull : this.fury).render(p.fury / 100, t, full);
+    const full = p.fury >= 100, almost = !full && p.fury >= FURY_ORB.almost;
+    const fImg = (full ? this.furyFull : this.fury).render(p.fury / 100, t, full ? 1 : almost ? FURY_ORB.glow : 0);
     const fx = W - fImg.width - 4, fy = H - fImg.height - 4;
     ctx.drawImage(fImg, fx, fy);
+    const ocx = fx + fImg.width / 2, ocy = fy + fImg.height / 2;
+    if (almost) {
+      // ALMOST: the rim glows, pulsing.
+      ctx.globalAlpha = 0.45 + 0.4 * Math.sin(t * 7);
+      orbRing(ctx, ocx, ocy, ORB_R + 3, '#fee761');
+      ctx.globalAlpha = 0.25 + 0.2 * Math.sin(t * 7);
+      orbRing(ctx, ocx, ocy, ORB_R + 4, '#f6757a');
+      ctx.globalAlpha = 1;
+    }
+    // FULL: a ring bursts out of it as it fills (on the clock the run's moments keep).
+    const since = p.furyFullAt == null ? Infinity : g.clock - p.furyFullAt;
+    if (full && since >= 0 && since < FURY_ORB.burst) {
+      const k = since / FURY_ORB.burst;
+      ctx.globalAlpha = 1 - k;
+      orbRing(ctx, ocx, ocy, ORB_R + 3 + k * 16, '#ffffff');
+      orbRing(ctx, ocx, ocy, ORB_R + 1 + k * 10, '#fee761');
+      ctx.globalAlpha = 1;
+    }
     // The ultimate's name above the orb, flush with its right edge (centred, a long one ran off).
     if (p.ult) {
       drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: '#f6757a' });
@@ -393,24 +480,36 @@ export class Hud {
   }
 
   // How far down the HUD's lines at the top reach: the clock and its bar; a dungeon's floor, seal
-  // and clock lines; a crypt's line; a boss's bar and name under them.
+  // and clock lines; a crypt's line; a boss's bar and name under them (a fallen one's too, while it
+  // breaks up).
   topLines() {
     const g = this.g;
-    if (g.boss && !g.boss.dead) return lineBottom(bossBarY(g) + 9);
+    if ((g.boss && !g.boss.dead) || this.fall) return lineBottom(bossBarY(g) + 9);
     return lineBottom(g.inCrypt ? 38 : g.mode === 'dungeon' ? 32 : 29);
   }
 
-  drawBoss(ctx, W, t) {
-    const b = this.g.boss;
-    if (!b || b.dead) return;
-    const w = Math.min(220, W - 120);
-    const x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g);
+  // The boss's (or lord's) bar. When the one it showed falls, its bar stays on, empty, then flashes
+  // white and breaks apart (barFall) before another boss still fighting takes it.
+  drawBoss(ctx, W, dt) {
+    const g = this.g, b = g.boss && !g.boss.dead ? g.boss : null;
+    // Fallen: dead, or back in the pool as another monster already (its id changed).
+    const was = this.barE;
+    if (was && (was.dead || was.id !== this.barId) && !this.fall) this.fall = { t: 0, label: this.barLabel, shown: this.barShown, pieces: null };
+    this.barE = null;
+    if (this.fall) {
+      this.barFall(ctx, W, dt);
+      return;
+    }
+    if (!b) return;
+    const w = BAR_W(W), x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g);
     const f = clamp(b.hp / b.maxHp, 0, 1);
     b._shown = b._shown === undefined ? f : b._shown + (f - b._shown) * 0.06;
-    ctx.fillStyle = '#181425';
-    ctx.fillRect(x - 2, y - 2, w + 4, 10);
-    ctx.fillStyle = '#3e2731';
-    ctx.fillRect(x, y, w, 6);
+    const label = b.lord ? `${b.name.toUpperCase()}, LORD OF THE CRYPT` : `${b.def.name.toUpperCase()}, ${b.def.title.toUpperCase()}`;
+    this.barE = b;
+    this.barId = b.id;
+    this.barLabel = label;
+    this.barShown = b._shown;
+    barFrame(ctx, x, y, w);
     ctx.fillStyle = '#feae34';
     ctx.fillRect(x, y, Math.round(w * b._shown), 6);
     ctx.fillStyle = '#a22633';
@@ -419,11 +518,58 @@ export class Hud {
     ctx.fillRect(x, y, Math.round(w * f), 3);
     ctx.fillStyle = '#f6757a';
     ctx.fillRect(x, y, Math.round(w * f), 1);
-    // Phase notches.
-    ctx.fillStyle = '#181425';
-    for (const q of [0.25, 0.5, 0.75]) ctx.fillRect(x + Math.round(w * q), y, 1, 6);
-    const label = b.lord ? `${b.name.toUpperCase()}, LORD OF THE CRYPT` : `${b.def.name.toUpperCase()}, ${b.def.title.toUpperCase()}`;
-    drawText(ctx, label, W / 2, y + 9, { align: 'center', color: ['#fee761', '#feae34', '#be4a2f'] });
+    barNotches(ctx, x, y, w);
+    drawText(ctx, label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+  }
+
+  // A fallen boss's bar (drawBoss): empty for BAR_FALL.hold s while what it had shown drains away,
+  // white for BAR_FALL.flash s, then in BAR_FALL.pieces pieces that tumble and fade for
+  // BAR_FALL.drop s, its name fading with them. Real time, so it plays out under the cards too.
+  barFall(ctx, W, dt) {
+    const F = this.fall, H = BAR_FALL, w = BAR_W(W), x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g);
+    F.t += dt;
+    const t = F.t;
+    if (t >= H.hold + H.flash + H.drop) {
+      this.fall = null;
+      return;
+    }
+    if (t < H.hold + H.flash) {
+      barFrame(ctx, x, y, w);
+      if (t < H.hold) {
+        F.shown *= Math.exp(-dt * 6);
+        ctx.fillStyle = '#feae34';
+        ctx.fillRect(x, y, Math.round(w * F.shown), 6);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, w, 6);
+      }
+      barNotches(ctx, x, y, w);
+      drawText(ctx, F.label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+      return;
+    }
+    // The pieces, set off once, each its own way (no dice: the run's random numbers stay the run's).
+    const n = H.pieces, pw = w / n;
+    if (!F.pieces) {
+      F.pieces = [];
+      for (let i = 0; i < n; i++) {
+        const u = i / (n - 1) - 0.5;
+        F.pieces.push({ x: x + i * pw, y, vx: u * 90 + ((i * 37) % 7) - 3, vy: -40 - ((i * 53) % 5) * 12, spin: 0 });
+      }
+    }
+    const k = (t - H.hold - H.flash) / H.drop;
+    ctx.globalAlpha = clamp(1 - k, 0, 1);
+    for (let i = 0; i < n; i++) {
+      const p = F.pieces[i];
+      p.vy += 260 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      ctx.fillStyle = '#181425';
+      ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y) - 1, Math.ceil(pw) + 2, 8);
+      ctx.fillStyle = i % 3 ? '#e43b44' : '#ffffff';
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.ceil(pw), 6);
+    }
+    drawText(ctx, F.label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+    ctx.globalAlpha = 1;
   }
 
   // Where over a foe's head its name or its speech goes, in HUD pixels, into AT; false if that is

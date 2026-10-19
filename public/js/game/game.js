@@ -29,7 +29,8 @@ import { Dungeon, cryptLords } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor } from './effects.js';
-import { shadowSprite, glow, splatSprite, vignette } from './fxsprites.js';
+import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
+import { outline, pad, hexPack } from '../engine/pixels.js';
 import { Minion } from './minions.js';
 
 const tmp = [];
@@ -38,11 +39,27 @@ const PICKUP_FAR = 1400;
 // How hard the hero's blows throw a foe back: px/s per point of a blow's kb, before the foe's
 // own weight and resistance. A third of the old 75 since 15 October 2026 (the user's call).
 export const KNOCKBACK = 25;
+// How long each big beat holds every screen back, in real seconds (Game.moment): a boss's fall
+// (its 1.1 s slow motion and flash), a crypt lord's (0.8 s), a revive's.
+export const MOMENT = { boss: 1.3, lord: 1, revive: 1.1 };
 
 // Whether a card is one of the fillers a level-up falls back on once fewer upgrades are left than
 // it offers (data/passives.js FILLERS). With nothing else left a level-up shows just these three,
 // and the player may tick ALWAYS on one: the run's level-ups then take it unseen (Game.autoPick).
 export const isFiller = (c) => FILLER_IDS.includes(c.type);
+
+// The hero is always found: a ring on the ground in his own colour (HEROES color), softly
+// pulsing, turning red under a third of his health; a 1 px light line round his sprite, drawn
+// unlit; and when something stands in front of him (a foe, a minion, a boss, a big number), his
+// ring, a ghost of him (ghost) and a white line over the whole scene (Game.drawHeroOver).
+export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44', line: '#d8e2f0', overLine: '#ffffff', ghost: 0.5 };
+// Just the 1 px ring outside a frame's own pixels, in a colour (one pixel larger each side).
+function rimOnly(b, color) {
+  const out = outline(b, hexPack(color)), inner = pad(b, 1);
+  for (let i = 0; i < out.d.length; i++) if (inner.d[i] >>> 24) out.d[i] = 0;
+  return out;
+}
+
 
 // A foe the hero's weapons may pick out, to aim, cast or chain at (nearestEnemy, nearestEnemies,
 // enemiesOnScreen): alive, no prop (a barrel or a crate breaks only to what happens to hit it),
@@ -146,6 +163,9 @@ export class Game {
     this.relocT = 0;
     this.fade = 0;
     this.slowT = 0;
+    // The big beat playing now (Game.moment): its kind and the real seconds it still holds.
+    this.momentKind = null;
+    this.momentT = 0;
     this.hostileCount = 0;
     this.propCount = 0;
     // Gear worn into the run (kept between runs), and the crypts off the forest roads.
@@ -178,6 +198,10 @@ export class Game {
     this.hud = new Hud(this);
 
     this.player = new Player(this, o.hero, o.meta);
+    // The numbers keep clear of the hero and of the bosses' bodies (numbers.js).
+    this.numbers.hero = this.player;
+    this.numbers.bodies = this.topList;
+    this.heroCovered = false; // something stands in front of him this frame (drawHeroOver)
     this.freeSrc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
     this.spawner = new Spawner(this);
 
@@ -524,6 +548,20 @@ export class Game {
     this.stats.chests++;
   }
 
+  // The director of the big beats. A boss or a crypt lord slain, a revive: for `secs` of real
+  // time no level-up, chest or gear screen opens (GameScreen.frame asks momentRunning), so the
+  // slow motion, the flash and the fall play out in full; then what waited opens in its usual
+  // order, level-ups, then chests, then gear. A longer beat over a shorter one extends it.
+  moment(kind, secs) {
+    if (secs <= this.momentT) return;
+    this.momentT = secs;
+    this.momentKind = kind;
+  }
+
+  get momentRunning() {
+    return this.momentT > 0;
+  }
+
   // ----------------------------------------------------------- enemies --
 
   // Past 900 foes (HORDE_CAP.most) a new one comes only in the place of one far off-screen
@@ -781,6 +819,7 @@ export class Game {
     // A boss whose time came before the last one fell is still fighting: the bar and music go to it.
     const next = this.enemies.find((o) => o !== e && o.boss && !o.dead && !o.sleeping);
     if (this.boss === e) this.boss = next || null;
+    this.moment('boss', MOMENT.boss);
     this.timeScale = 0.35;
     this.slowT = 1.1;
     this.whiteFlash = 0.6;
@@ -824,6 +863,7 @@ export class Game {
     // Another lord still fighting: the bar and the music go to it.
     const next = this.enemies.find((o) => o !== e && o.lord && !o.dead && !o.sleeping);
     if (this.boss === e) this.boss = next || null;
+    this.moment('lord', MOMENT.lord);
     this.timeScale = 0.4;
     this.slowT = 0.8;
     this.whiteFlash = 0.4;
@@ -1240,6 +1280,7 @@ export class Game {
   // The hero rises (Player.hurt): by a relic spent for it (the Phoenix Heart), or a Second Wind.
   revive(relic = null) {
     const p = this.player;
+    this.moment('revive', MOMENT.revive);
     this.whiteFlash = 1;
     sfx('relic');
     if (relic) {
@@ -1393,13 +1434,25 @@ export class Game {
     c.pxH = view.pxH;
   }
 
-  update(rdt) {
-    this.syncCam();
-    if (this.state === 'paused' || this.state === 'levelup' || this.state === 'chest' || this.state === 'item' || this.state === 'over') return;
+  // What runs by real time, under the cards as well (an open screen freezes the rest of the run):
+  // the flashes and the shake fade, a slow motion runs out (so it can't resume when the screen
+  // closes), and a big beat (moment) counts down. The shake fades as fast as it did by the game's
+  // clock at its own pace.
+  fadeReal(rdt) {
+    this.trauma = Math.max(0, this.trauma - rdt * 1.6 * this.pace);
+    this.hurtFlash = Math.max(0, this.hurtFlash - rdt * 2);
+    this.whiteFlash = Math.max(0, this.whiteFlash - rdt * 1.5);
+    this.momentT = Math.max(0, this.momentT - rdt);
     if (this.slowT > 0) {
       this.slowT -= rdt;
       if (this.slowT <= 0 && this.state !== 'dying' && this.state !== 'faint') this.timeScale = 1;
     }
+  }
+
+  update(rdt) {
+    this.syncCam();
+    this.fadeReal(rdt);
+    if (this.state === 'paused' || this.state === 'levelup' || this.state === 'chest' || this.state === 'item' || this.state === 'over') return;
     const dt = Math.min(rdt, 1 / 30) * this.timeScale * this.pace;
     this.frame++;
     const p = this.player;
@@ -1409,9 +1462,6 @@ export class Game {
       else this.time += dt;
       this.floorTime += dt;
     }
-    this.trauma = Math.max(0, this.trauma - dt * 1.6);
-    this.hurtFlash = Math.max(0, this.hurtFlash - rdt * 2);
-    this.whiteFlash = Math.max(0, this.whiteFlash - rdt * 1.5);
     this.magnetAll = Math.max(0, this.magnetAll - dt);
     this.gemComboT -= dt;
     if (this.comboT > 0) {
@@ -1701,6 +1751,7 @@ export class Game {
       ctx.globalAlpha = 0.55;
       ctx.drawImage(shd, Math.round((p.x - c.x) * S - (shd.width * S) / 2), Math.round((p.y - c.y) * S - (shd.height * S) / 2), shd.width * S, shd.height * S);
       ctx.globalAlpha = 1;
+      this.drawHeroRing(ctx, c);
     }
 
     // Y-sorted actors and props. Bosses and crypt lords aren't among them: they stand over it all.
@@ -1714,24 +1765,33 @@ export class Game {
     for (const m of this.minions) if (onScreen(c, m.x, m.y, 60)) list.push(m);
     list.push(p);
     list.sort((a, b) => a.y - b.y);
+    // Whether a foe, a minion or a boss stands in front of the hero (drawn after him, over him).
+    let covered = false, after = false;
     for (const o of list) {
-      if (o === p) this.drawPlayer(ctx, c);
-      else if (o.shrine) this.drawShrine(ctx, c, o);
+      if (o === p) {
+        this.drawPlayer(ctx, c);
+        after = true;
+        continue;
+      }
+      if (o.shrine) this.drawShrine(ctx, c, o);
       else if (o.crypt) this.drawCrypt(ctx, c, o);
-      else if (o.def || o.minion) o.draw(ctx, c);
-      else this.world.drawProp(ctx, c, o, this.clock);
+      else if (o.def || o.minion) {
+        o.draw(ctx, c);
+        if (after && !covered && !o.prop && standsOver(o, p)) covered = true;
+      } else this.world.drawProp(ctx, c, o, this.clock);
     }
-    // Bosses and crypt lords over the trees, the horde and the hero, each in a light of its own
-    // so the night can't hide it either.
+    for (const pr of this.projectiles) pr.draw(ctx, c);
+    for (const e of this.effects) if (e.draw) e.draw(ctx, c);
+    this.particles.draw(ctx, c, false);
+    // Bosses and crypt lords over everything of the world (the trees, the horde, the hero, the
+    // weapons' shots and blasts), each in a light of its own so the night can't hide it either:
+    // only the HUD and its own telegraphs, on the ground, go over one.
     tops.sort((a, b) => a.y - b.y);
     for (const e of tops) {
       e.draw(ctx, c);
       this.light(e.x, e.y - e.h * 0.5, Math.max(56, e.h * 1.6), 'white', 0.85);
+      if (!covered && standsOver(e, p)) covered = true;
     }
-
-    for (const pr of this.projectiles) pr.draw(ctx, c);
-    for (const e of this.effects) if (e.draw) e.draw(ctx, c);
-    this.particles.draw(ctx, c, false);
 
     // Lighting.
     this.world.addLights(this);
@@ -1769,6 +1829,8 @@ export class Game {
     // in the dark.
     for (const s of this.eshots) s.draw(ctx, c);
     this.numbers.draw(ctx, c);
+    this.heroCovered = covered || this.numbers.over(p);
+    if (this.heroCovered) this.drawHeroOver(ctx, c);
 
     // Screen-space post effects.
     ctx.drawImage(vignette(256, 144, '8,6,16', 0.7), 0, 0, c.pxW, c.pxH);
@@ -1835,6 +1897,41 @@ export class Game {
     if (p.dead || !p._rect) return;
     const [X, Y, w, h, fr, flip] = p._rect;
     if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, X, Y, w, h);
+    // His light outline, unlit: the night never sinks him into the ground.
+    this.drawHeroLine(ctx, 1);
+  }
+
+  // The hero's 1 px outline round his sprite as last drawn, in a colour, at alpha a.
+  drawHeroLine(ctx, a, color = HERO_MARK.line) {
+    const p = this.player, [X, Y, w, h, fr, flip] = p._rect, S = this.cam.S;
+    if (p.ult && p.ult.type === 'shadowdance') return; // vanished
+    ctx.globalAlpha = a;
+    ctx.drawImage(fr.variant('heroline' + color, (b) => rimOnly(b, color), flip), X - S, Y - S, w + 2 * S, h + 2 * S);
+    ctx.globalAlpha = 1;
+  }
+
+  // The ring on the ground under the hero (HERO_MARK): his colour, pulsing; red when he is low.
+  // k: how strongly (drawHeroOver draws it again over the crowd).
+  drawHeroRing(ctx, c, k = 1) {
+    const p = this.player, M = HERO_MARK, S = c.S;
+    const low = p.hp / p.maxHp < M.low;
+    const img = groundRing(M.rx, M.ry, low ? M.hurt : p.hero.color);
+    ctx.globalAlpha = k * ((low ? 0.7 : 0.55) + (low ? 0.3 : 0.25) * Math.sin(this.clock * (low ? 9 : 3)));
+    ctx.drawImage(img, Math.round((p.x - c.x) * S - (img.width * S) / 2), Math.round((p.y + 1 - c.y) * S - (img.height * S) / 2), img.width * S, img.height * S);
+    ctx.globalAlpha = 1;
+  }
+
+  // Something stands in front of the hero: his ring, a ghost of him and a white outline go over
+  // the whole scene (under the HUD), so he is never lost in the crowd.
+  drawHeroOver(ctx) {
+    const p = this.player;
+    if (p.dead || !p._rect || (p.ult && p.ult.type === 'shadowdance')) return;
+    const [X, Y, w, h, fr, flip] = p._rect;
+    this.drawHeroRing(ctx, this.cam, 0.8);
+    ctx.globalAlpha = HERO_MARK.ghost;
+    ctx.drawImage(fr.get(flip), X, Y, w, h);
+    ctx.globalAlpha = 1;
+    this.drawHeroLine(ctx, 1, HERO_MARK.overLine);
   }
 
   drawShrine(ctx, c, s) {
@@ -1882,6 +1979,13 @@ export class Game {
     this.light(s.x, s.y - 12, 70, s.type === 'fury' ? 'red' : s.type === 'haste' ? 'cyan' : s.type === 'fortune' ? 'gold' : s.type === 'wisdom' ? 'purple' : 'green', 0.9);
     if (Math.random() < 0.2) this.particles.emit(s.x + rand(-4, 4), s.y - 14, 0, 0, 0, rand(10, 25), 0.8, 1, PC.w, P.GLOW | P.FADE, 0);
   }
+}
+
+// Whether a figure drawn after the hero stands over him: its body overlaps his on the screen.
+function standsOver(o, p) {
+  const r = o._rect, q = p._rect;
+  if (!r || !q) return Math.abs(o.x - p.x) < 9 && o.y > p.y && o.y - p.y < 14;
+  return r[0] < q[0] + q[2] && r[0] + r[2] > q[0] && r[1] < q[1] + q[3] && r[1] + r[3] > q[1];
 }
 
 function onScreen(c, x, y, m) {

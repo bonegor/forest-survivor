@@ -2,12 +2,12 @@
 // (level up, treasure chests, gear found, pause, results) on top.
 
 import { input } from '../engine/input.js';
-import { sfx, playMusic } from '../engine/audio.js';
+import { sfx, playAfterJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
 import { Game } from '../game/game.js';
-import { clockCountsDown, clockTime } from '../game/hud.js';
+import { clockCountsDown, clockTime, heldBuild, revealOn } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PASSIVES, FILLERS } from '../data/passives.js';
@@ -84,26 +84,31 @@ export class GameScreen {
       if (input.pressed('map') && (g.mode === 'dungeon' || g.inCrypt)) g.showMap = !g.showMap;
       if (input.pressed('fps')) app.settings.fps = !app.settings.fps;
       if (!app.devHold) g.update(dt); // the developer panel can freeze the action
-      // Levels the run's auto-pick takes need no screen (Game.resolveAutoLevels).
-      if (g.state === 'play' && g.pendingLevels > 0) g.resolveAutoLevels();
-      if (g.state === 'play' && g.pendingLevels > 0) {
+      // Nothing opens while a big beat plays out (Game.moment); then level-ups, chests and gear,
+      // in that order. Levels the run's auto-pick takes need no screen (Game.resolveAutoLevels).
+      const ready = g.state === 'play' && !g.momentRunning;
+      if (ready && g.pendingLevels > 0) g.resolveAutoLevels();
+      if (ready && g.pendingLevels > 0) {
         g.state = 'levelup';
         this.open(new LevelUpOverlay(this));
-      } else if (g.state === 'play' && g.chestQueue.length) {
+      } else if (ready && g.chestQueue.length) {
         g.state = 'chest';
         this.open(new ChestOverlay(this, g.chestQueue.shift()));
-      } else if (g.state === 'play' && g.itemQueue.length) {
+      } else if (ready && g.itemQueue.length) {
         g.state = 'item';
         this.open(new ItemOverlay(this, g.itemQueue.shift()));
       }
       if (g.state === 'over') this.open(new ResultsOverlay(this));
+    } else if (!app.devHold) {
+      // Under the cards the run stands still, but its flashes, shake and slow motion run out.
+      g.fadeReal(dt);
     }
     // World.
     g.draw(view.ctx);
     // HUD + overlay on the UI canvas.
     const ctx = view.uctx, W = view.W, H = view.H;
     ctx.clearRect(0, 0, W, H);
-    if (g.state !== 'over' || !this.overlay) g.hud.draw(ctx, W, H, g.clock); // the clock that keeps going in crypts
+    if (g.state !== 'over' || !this.overlay) g.hud.draw(ctx, W, H, g.clock, dt); // the clock that keeps going in crypts
     if (this.overlay) {
       const r = this.overlay.draw(ctx, W, H, dt);
       if (r === 'close') {
@@ -336,8 +341,12 @@ export class ChestOverlay {
     this.g = gs.game;
     this.kind = kind;
     this.t = 0;
-    this.roll = this.g.rollChest(kind); // given at once, its gold too
+    // The HUD keeps showing the build as it was until each thing is revealed (no spoilers): the
+    // chest gives everything at once, its gold too, and only shows it here.
+    this.g.hud.held = heldBuild(this.g);
+    this.roll = this.g.rollChest(kind);
     this.revealed = 0;
+    this.goldShown = false;
     this.coins = [];
     this.lockTime = 0.6;
     sfx('chest');
@@ -400,13 +409,20 @@ export class ChestOverlay {
     const iy = Math.round(cy + 30);
     if (opened) {
       const due = Math.min(items.length, Math.floor((this.t - 1.2) / 0.45) + 1);
-      // Everything was given as the chest was rolled (Game.rollChest): here it is only shown.
+      // Everything was given as the chest was rolled (Game.rollChest): here it is only shown, the
+      // HUD's slots with it (Hud.held), and the gold last, a step after the last thing.
       while (this.revealed < due) {
         const it = items[this.revealed++];
+        if (g.hud.held) revealOn(g.hud.held, it, g);
         if (it.type === 'evolve') {
           sfx('levelup');
           g.whiteFlash = 0.5;
         } else sfx('pick');
+      }
+      if (!this.goldShown && this.revealed >= items.length && this.t >= this.goldAt()) {
+        this.goldShown = true;
+        g.hud.held = null; // all of it shown: the HUD shows the build as it is
+        sfx('coin');
       }
       const slot = Math.min(84, Math.floor((W - 16) / Math.max(1, items.length)));
       const rowW = slot * items.length;
@@ -441,22 +457,28 @@ export class ChestOverlay {
         const k = Math.min(1, W / 2 / L.width);
         ctx.drawImage(L, Math.round(W / 2 - (L.width * k) / 2), 10, Math.round(L.width * k), Math.round(L.height * k));
       }
-      drawText(ctx, `+${this.roll.gold} GOLD`, W / 2, iy + 66, { align: 'center', color: '#fee761' });
+      if (this.goldShown) drawText(ctx, `+${this.roll.gold} GOLD`, W / 2, iy + 66, { align: 'center', color: '#fee761' });
     }
     ui.begin(dt);
     let res = null;
-    const done = opened && this.revealed >= items.length && this.t > 1.6;
+    const done = opened && this.goldShown && this.t > 1.6;
     if (done) {
       if (button(ctx, ui, 'take', Math.round(W / 2 - 40), H - 22, 80, 14, 'COLLECT') || input.pressed('back')) {
         this.g.state = 'play';
+        g.hud.held = null;
         res = 'close';
       }
     } else if (this.t > 0.4 && (input.pressed('confirm') || input.mouse.clicked)) {
-      // Skip ahead.
-      this.t = Math.max(this.t, 1 + items.length * 0.45 + 0.8);
+      // Skip ahead: everything shown next frame.
+      this.t = Math.max(this.t, this.goldAt() + 0.6);
     }
     ui.end();
     return res;
+  }
+
+  // When the gold is shown: a reveal's step after the last thing the chest held.
+  goldAt() {
+    return 1.2 + this.roll.items.length * 0.45;
   }
 }
 
@@ -700,7 +722,8 @@ class ResultsOverlay {
     const res = this.g.result || (this.g.finish(false), this.g.result);
     this.res = res;
     this.submit();
-    if (res.victory) playMusic('title');
+    // The victory's jingle is heard in full; the title piece comes after it.
+    if (res.victory) playAfterJingle('title');
     gs.app.ui.focusId = 'camp';
   }
 

@@ -3,7 +3,7 @@
   "forest": "forest.mp3",
   "crypt": "crypt.mp3",
   "boss": "boss.mp3",
-  "victory": "victory.mp3",
+  "victory": { "file": "victory.mp3", "gain": 3.1 },
   "gameover": { "file": "gameover.mp3", "gain": 4.5 },
   "dungeon-crypt": "dungeon-crypt.mp3",
   "dungeon-catacombs": "dungeon-catacombs.ogg",

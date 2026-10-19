@@ -187,3 +187,26 @@ test("the horde still drops the odd fury orb however fast it falls, rarer than a
     assert.ok(!orbAt(fast, 0.014 + FURY.hordeOrb * FURY.orbFloor * 1.1), 'and no likelier than the floor');
   });
 });
+
+test('the orb tells it is coming: ALMOST from 85%, and the moment it fills it rings once until it is emptied', async () => {
+  const { FURY_ORB } = await mod('public/js/game/hud.js');
+  assert.equal(FURY_ORB.almost, 85);
+  game((g, p) => {
+    p.addFury(84);
+    assert.equal(p.furyFullAt, null, 'filling');
+    p.addFury(10);
+    assert.equal(p.furyFullAt, null, 'almost: no chime yet');
+    g.time = 12;
+    p.addFury(10);
+    assert.equal(p.fury, 100);
+    const at = p.furyFullAt;
+    assert.equal(at, g.clock, 'full: it rang now');
+    g.time = 13;
+    p.addFury(40);
+    assert.equal(p.furyFullAt, at, 'full again is no new chime');
+    p.fury = 0; // the ultimate spent it
+    g.time = 20;
+    p.addFury(100);
+    assert.equal(p.furyFullAt, g.clock, 'filled again: it rings again');
+  });
+});

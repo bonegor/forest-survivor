@@ -34,6 +34,9 @@ const GEAR_LIGHT = [null, null, 'cyan', 'purple', 'gold'];
 
 // Items that fly to you inside the magnet radius.
 const MAGNETIC = new Set(['gem', 'coin', 'goldpile', 'potion', 'fury']);
+// A dropped chest lies on the ground this long (game seconds) before it can be opened, even under
+// the hero, so it is seen before its screen comes up: 0.83 s of real time at GAME_SPEED 1.32.
+export const CHEST_SETTLE = 1.1;
 
 // The shadows pickups cast: a chest's, a soul gem's and the rest's, made on first use.
 let shadows = null;
@@ -50,6 +53,7 @@ export class Pickup {
     this.vx = opts.pop === false ? 0 : rand(-30, 30);
     this.vy = opts.pop === false ? 0 : rand(-20, 20);
     this.t = rand(3);
+    this.age = 0; // seconds since it dropped (CHEST_SETTLE)
     this.pulled = false;
     this.speed = 0;
     this.dead = false;
@@ -90,6 +94,7 @@ export class Pickup {
     if (this.dead) return false; // swept up already, e.g. on the way out of a crypt
     const g = this.g, p = g.player;
     this.t += dt;
+    this.age += dt;
     if (this.z > 0 || this.vz > 0) {
       this.vz -= 320 * dt;
       this.z += this.vz * dt;
@@ -129,7 +134,7 @@ export class Pickup {
         this.y += dy * k;
       }
       if (d < 7) this.collect();
-    } else if (d < 9 + p.r) {
+    } else if (d < 9 + p.r && (this.kind !== 'chest' || this.age >= CHEST_SETTLE)) {
       this.collect();
     }
     return !this.dead;

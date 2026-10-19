@@ -30,6 +30,7 @@ const A = {
   songName: null,
   files: null, // piece -> file name, from tracks.json
   tracks: new Map(), // piece -> { el, gain } once a file has played
+  after: null, // the piece that starts once the jingle playing now has ended (playAfterJingle)
 };
 
 // The list of music files; a piece asked for before it arrives starts once it does.
@@ -178,6 +179,7 @@ const LIMITS = {
   explode: [0.06, 4], zap: [0.06, 3], axe: [0.08, 3], shard: [0.1, 2], gem: [0.025, 5], coin: [0.04, 4],
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
+  furyready: [1, 1],
 };
 
 const SFX = {
@@ -298,6 +300,14 @@ const SFX = {
       tone(t, { type: 'sine', f0: f, dur: 2.5, vol: v, attack: 0.005 });
     }
   },
+  // The fury orb full: a bright two-note chime over a soft low swell and a shimmer, rising.
+  furyready: (t) => {
+    tone(t, { type: 'sine', f0: 220, f1: 440, dur: 0.5, vol: 0.12, attack: 0.04 });
+    tone(t, { type: 'triangle', f0: 1046, dur: 0.35, vol: 0.09, attack: 0.004 });
+    tone(t + 0.09, { type: 'triangle', f0: 1568, dur: 0.6, vol: 0.09, attack: 0.004 });
+    tone(t + 0.09, { type: 'sine', f0: 3136, dur: 0.4, vol: 0.025, attack: 0.004 });
+    noise(t + 0.05, { filter: 'highpass', f0: 5000, f1: 9000, dur: 0.5, vol: 0.05, attack: 0.08 });
+  },
   ult: (t) => {
     noise(t, { f0: 300, f1: 5000, dur: 0.6, vol: 0.3, attack: 0.15 });
     arp(t, [262, 392, 523, 784], 0.06, { type: 'sawtooth', dur: 0.5, vol: 0.06, lp: 2500 });
@@ -392,7 +402,14 @@ function track(name) {
       }, 1000 * tries);
     });
     el.addEventListener('ended', () => {
-      if (t.once) t.playing = false;
+      if (!t.once) return;
+      t.playing = false;
+      // A piece waiting for this jingle to end starts now (playAfterJingle).
+      if (A.after) {
+        const next = A.after;
+        A.after = null;
+        playMusic(next);
+      }
     });
     t.voices.push({ el, g });
   }
@@ -466,6 +483,7 @@ function startPiece(name) {
 const piecePlaying = (name) => A.songName === name && A.tracks.get(name) && A.tracks.get(name).playing;
 
 export function playMusic(name) {
+  A.after = null;
   if (piecePlaying(name)) return;
   A.songName = name;
   startPiece(name);
@@ -479,12 +497,21 @@ export function stopMusic() {
 export function playJingle(name) {
   if (!A.ctx || !(A.files && A.files[name])) return;
   A.songName = null;
+  A.after = null;
   startPiece(name);
+}
+
+// A piece that waits for the jingle playing now (the victory's, say) to end, so the jingle is
+// heard in full; at once if none is playing.
+export function playAfterJingle(name) {
+  const playing = [...A.tracks.values()].some((t) => t.once && t.playing && !t.voices[0].el.ended);
+  if (!A.ctx || !playing) return playMusic(name);
+  A.after = name;
 }
 
 // What the music is doing, for the developer panel and tests: the piece, and each file's players.
 export function musicState() {
-  return { piece: A.songName, files: A.files, tracks: A.tracks };
+  return { piece: A.songName, after: A.after, files: A.files, tracks: A.tracks };
 }
 
 export function audioReady() {

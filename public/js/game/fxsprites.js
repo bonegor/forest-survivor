@@ -52,6 +52,20 @@ export function ringSprite(r, color, thick = 1, fill = null) {
   });
 }
 
+// A crisp ring lying on the ground: an ellipse rx × ry, 1 px wide.
+export function groundRing(rx, ry, color) {
+  return cached(`gring|${rx}|${ry}|${color}`, () => {
+    const w = rx * 2 + 3, h = ry * 2 + 3, c = hexToRgb(color);
+    const at = (x, y) => Math.hypot((x + 0.5 - w / 2) / rx, (y + 0.5 - h / 2) / ry);
+    return pixelCanvas(w, h, (x, y) => {
+      const d = at(x, y);
+      if (d > 1.04) return null;
+      // On the ring where a pixel next to it (across or down) lies outside.
+      return at(x + 1, y) > 1.04 || at(x - 1, y) > 1.04 || at(x, y + 1) > 1.04 || at(x, y - 1) > 1.04 ? c : null;
+    });
+  });
+}
+
 // Dithered soft disc, used for ground pools and auras.
 export function discSprite(r, colors, edge = 0.35) {
   r = Math.max(2, Math.round(r));
