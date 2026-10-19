@@ -58,12 +58,12 @@ function run(fn) {
 }
 
 // Plays until the level-up screen is up (after the beam's lead-in, Game MOMENT.levelup) and past
-// its lock and its cards' flips.
+// its first second (LEVELUP_DELAY), when no card can be taken.
 function openLevelUp(gs, p) {
   levelUp(p);
   for (let f = 0; f < 30 && !gs.overlay; f++) frame(gs);
   assert.ok(gs.overlay instanceof LevelUpOverlay);
-  for (let f = 0; f < 40; f++) frame(gs);
+  for (let f = 0; f < 70; f++) frame(gs);
   return gs.overlay;
 }
 

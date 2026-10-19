@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, MILESTONES } from '../public/js/game/game.js';
-import { GameScreen, LevelUpOverlay, cardsReadyAt } from '../public/js/ui/gamescreen.js';
+import { GameScreen, LevelUpOverlay, cardsReadyAt, LEVELUP_DELAY } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
@@ -78,7 +78,8 @@ test('a card that completes an evolution has the gold back; a NEW weapon the blu
     const lv = new LevelUpOverlay(gs);
     assert.deepEqual(lv.backs, ['gold', 'weapon', 'relic', 'plain']);
     assert.deepEqual(lv.completes, ['excalibur', null, null, null]);
-    assert.ok(Math.abs(lv.readyAt - 0.45) < 1e-9, 'four cards are up by 0.45 s');
+    assert.ok(Math.abs(cardsReadyAt(4) - 0.45) < 1e-9, 'four cards are up by 0.45 s');
+    assert.equal(lv.readyAt, LEVELUP_DELAY, 'but none can be taken in its first second');
     lv.draw(ctx, 480, 270, 0.6); // draws face up with its callout and LUCKY! (no throw)
   });
 });
@@ -91,44 +92,60 @@ function openScreen(gs) {
 }
 const gainLevel = (p) => p.addXp((p.xpNext - p.xp) / p.growth / 1.1 + 0.01);
 
-test('no card can be taken before the flips end; a key pressed during them is taken when they do', () => {
+// One frame with these keys pressed (and the mouse clicked, if given).
+function press(gs, codes, mouse) {
+  for (const c of codes) input.justDown.add(c);
+  if (mouse) Object.assign(input.mouse, mouse, { clicked: true });
+  gs.frame(1 / 60);
+  input.endFrame();
+}
+
+test('for its first second no key picks a card, and a press then is dropped, not kept for later', () => {
   screen((g, gs, p) => {
     gainLevel(p);
     const lv = openScreen(gs);
     assert.ok(lv.t < 0.1, 'just opened');
-    input.justDown.add('Digit1');
-    gs.frame(1 / 60);
-    input.endFrame();
-    assert.equal(g.pendingLevels, 1, 'not taken during the flips');
-    assert.equal(lv.pending, 0, 'but kept');
-    const ready = cardsReadyAt(lv.choices.length);
-    while (lv.t < ready - 1 / 60 - 1e-9) {
+    assert.equal(LEVELUP_DELAY, 1);
+    press(gs, ['Digit1']);
+    assert.equal(g.pendingLevels, 1, 'not taken in the first second');
+    while (lv.t < LEVELUP_DELAY + 0.1) {
       gs.frame(1 / 60);
-      assert.equal(g.pendingLevels, 1, `still waiting at ${lv.t.toFixed(3)} s`);
+      assert.equal(g.pendingLevels, 1, `the early press stays dropped at ${lv.t.toFixed(3)} s`);
     }
-    for (let f = 0; f < 3 && g.pendingLevels; f++) gs.frame(1 / 60);
-    assert.equal(g.pendingLevels, 0, 'taken once the last card is up');
-    assert.ok(lv.t >= ready && lv.t < ready + 0.05, `taken at ${lv.t.toFixed(3)} s, the flips over at ${ready.toFixed(3)} s`);
+    press(gs, ['Digit1']);
+    assert.equal(g.pendingLevels, 0, 'a press after the first second takes the card');
   });
 });
 
-test('a click on a card during the flips is kept, not lost and not early', () => {
+test('Space (the ultimate) never picks a card, before or after the first second; Enter does once it is up', () => {
   screen((g, gs, p) => {
     gainLevel(p);
     const lv = openScreen(gs);
-    // Where the second card stands once up (drawn on a spare screen past the flips, then reset).
+    press(gs, ['Space']);
+    while (lv.t < LEVELUP_DELAY + 0.1) press(gs, ['Space']);
+    assert.equal(g.pendingLevels, 1, 'Space mashed all through picks nothing');
+    press(gs, ['Enter']);
+    assert.equal(g.pendingLevels, 0, 'Enter takes the focused card');
+  });
+});
+
+test('a click on a card in the first second is dropped; one after it takes the card', () => {
+  screen((g, gs, p) => {
+    gainLevel(p);
+    const lv = openScreen(gs);
+    // Where the second card stands once up (drawn on a spare screen past the delay).
     const spare = new LevelUpOverlay(gs);
     spare.choices = lv.choices;
-    spare.draw(ctx, 480, 270, 1);
+    spare.draw(ctx, 480, 270, LEVELUP_DELAY + 0.1);
     const card = gs.app.ui.items.find((it) => it.id === 'c1');
     assert.ok(card);
-    Object.assign(input.mouse, { x: card.x + card.w / 2, y: card.y + card.h / 2, clicked: true });
-    gs.frame(1 / 60);
-    input.endFrame();
-    assert.equal(g.pendingLevels, 1);
-    assert.equal(lv.pending, 1);
-    for (let f = 0; f < 40 && g.pendingLevels; f++) gs.frame(1 / 60);
-    assert.equal(g.pendingLevels, 0);
+    const at = { x: card.x + card.w / 2, y: card.y + card.h / 2 };
+    press(gs, [], at);
+    assert.equal(g.pendingLevels, 1, 'not taken in the first second');
+    while (lv.t < LEVELUP_DELAY + 0.1) gs.frame(1 / 60);
+    assert.equal(g.pendingLevels, 1, 'and not kept for later');
+    press(gs, [], at);
+    assert.equal(g.pendingLevels, 0, 'a click after the first second takes it');
   });
 });
 

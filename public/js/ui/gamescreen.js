@@ -150,10 +150,13 @@ function choiceInfo(g, c) {
 }
 
 // The cards come face down and flip up FLIP.gap apart, each in FLIP.dur; they can be taken once the
-// last is up (a press before is kept and taken then, never early).
+// last is up. A press before that is dropped, not kept.
 export const FLIP = { first: 0.05, gap: 0.1, dur: 0.1 };
 const flipAt = (i) => FLIP.first + i * FLIP.gap;
 export const cardsReadyAt = (n) => flipAt(n - 1) + FLIP.dur;
+// The screen pops up mid-fight, where Space, E or Q is the ultimate and a number key may be under a
+// finger: for its first second no card can be taken, so a press meant for the fight picks nothing.
+export const LEVELUP_DELAY = 1;
 // A card's back tells its kind: an upgrade's plain, a NEW weapon's blue, a NEW relic's green, and
 // gold for one that completes an evolution (Game.completesEvolution). [fill, trim, pattern]
 const BACKS = {
@@ -169,6 +172,9 @@ export class LevelUpOverlay {
     this.g = gs.game;
     this.t = 0;
     this.roll();
+    // The second screen of a chain (more levels waiting) or a reroll comes when the player is already
+    // choosing, so only the flips hold it; the first waits the full LEVELUP_DELAY.
+    this.readyAt = Math.max(this.readyAt, LEVELUP_DELAY);
     this.lockTime = this.readyAt;
     this.noSpace = true; // it pops up mid-fight: Space mashed for the ultimate mustn't pick a card
     // Shift is the crypts' strike too: held as the screen opens, it isn't ALWAYS until it has been
@@ -182,7 +188,6 @@ export class LevelUpOverlay {
     this.completes = this.choices.map((c) => this.g.completesEvolution(c));
     this.backs = this.choices.map((c, i) => (this.completes[i] ? 'gold' : c.isNew ? (c.type === 'weapon' ? 'weapon' : 'relic') : 'plain'));
     this.readyAt = cardsReadyAt(this.choices.length);
-    this.pending = null; // a card pressed during the flips, taken when they end
     // Nothing but the fillers (the whole build maxed, which lasts unless a Phoenix Heart is
     // spent): each card offers ALWAYS, and no reroll is spent on them.
     this.fillersOnly = this.g.fillersOnly();
@@ -289,10 +294,7 @@ export class LevelUpOverlay {
       // Face down, then flipping up (half its width gone, back to the front).
       const fk = clamp((this.t - flipAt(i)) / FLIP.dur, 0, 1), face = fk >= 0.5;
       const id = 'c' + i;
-      if (!ready) {
-        // A press on a card before the flips end is kept, never taken early.
-        if (input.mouse.clicked && input.mouse.x >= x && input.mouse.x < x + w && input.mouse.y >= y && input.mouse.y < y + h) this.pending = i;
-      } else if (ui.item(id, x, y, w, h) && !result) result = this.choose(i);
+      if (ready && ui.item(id, x, y, w, h) && !result) result = this.choose(i);
       if (always && ready && !result) {
         const on = this.always === i;
         const tx = vertical ? x + w + 6 : x + 8, ty = vertical ? y + Math.floor(h / 2) - 6 : y + h + 3;
@@ -394,17 +396,9 @@ export class LevelUpOverlay {
     ui.end();
     if (!input.down('always')) this.heldAlways = false;
     const keys = ['one', 'two', 'three', 'four'], shift = input.down('always') && !this.heldAlways;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n && ready; i++) {
       if (result || !input.pressed(keys[i])) continue;
-      if (ready) result = this.choose(i, this.always === i || shift);
-      else this.pending = i; // kept for when the cards are up
-    }
-    if (!ready && input.pressed('confirm')) this.pending = Math.max(0, this.choices.findIndex((c, i) => ui.focusId === 'c' + i));
-    // A card pressed during the flips, taken now that they are up.
-    if (!result && ready && this.pending !== null) {
-      const i = this.pending;
-      this.pending = null;
-      if (i < n) result = this.choose(i, this.always === i);
+      result = this.choose(i, this.always === i || shift);
     }
     return result;
   }
