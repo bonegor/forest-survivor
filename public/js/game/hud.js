@@ -6,11 +6,14 @@ import { input } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
-import { RANKS } from '../shared/profile.js';
+import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
 import { DEATH } from './game.js';
+import { ARRIVAL, LOW_HP } from './arrival.js';
+import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { HEROES } from '../data/heroes.js';
 
 // Beside the clock on a Nightmare (twice the monsters; never Ranked).
 const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
@@ -128,7 +131,52 @@ function orbRing(ctx, cx, cy, r, color) {
 // Where a line of text drawn at y ends, its outline and all.
 const lineBottom = (y) => y + GLYPH_H + 1;
 // A boss's bar: lower in a dungeon or a crypt, under their own lines.
-const bossBarY = (g) => (g.mode === 'dungeon' || g.inCrypt ? 48 : 40);
+const bossBarY = (g) => (g.mode === 'dungeon' || g.inCrypt ? 48 : 43);
+// The night's bar under the clock: its half width, and the marks on it (drawTop).
+// On a narrow screen it keeps clear of the relic slots (drawSlots: 18 px apart from x 3), never
+// narrower than its old 60 px.
+const NIGHT_BAR = 60, SLOTS_RIGHT = 3 + Math.max(MAX_WEAPONS, MAX_RELICS) * 18;
+export const nightBarHalf = (cx) => Math.max(30, Math.min(NIGHT_BAR, Math.floor(cx) - SLOTS_RIGHT - 4));
+// A small skull, 5 x 5: a mark for a boss on the night's bar.
+const SKULL = ['.###.', '#####', '#.#.#', '#####', '.#.#.'];
+function drawSkull(ctx, x, y, color) {
+  ctx.fillStyle = '#181425';
+  ctx.fillRect(x - 3, y - 1, 7, 7);
+  ctx.fillStyle = color;
+  SKULL.forEach((row, j) => {
+    for (let i = 0; i < 5; i++) if (row[i] === '#') ctx.fillRect(x - 2 + i, y + j, 1, 1);
+  });
+}
+// A hero's head, cut from the top of their standing sprite to 6 x 6 (cached): the face of the hero
+// a run is about to unlock, on the night's bar.
+const heads = new Map();
+function heroHead(id) {
+  if (heads.has(id)) return heads.get(id);
+  const spr = SPR[HEROES[id].sprite], src = spr && spr.frames[0] && spr.frames[0].c;
+  if (!src) return null;
+  let d = null;
+  try {
+    d = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
+  } catch {
+    // no pixels to read (a headless run): no face
+  }
+  if (!d) {
+    heads.set(id, null);
+    return null;
+  }
+  let x0 = src.width, x1 = -1, y0 = src.height, y1 = -1;
+  for (let y = 0; y < src.height; y++) for (let x = 0; x < src.width; x++) {
+    if (d[(y * src.width + x) * 4 + 3] < 20) continue;
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  if (x1 < 0) return null;
+  const side = Math.max(6, Math.round((y1 - y0 + 1) * 0.42)), cx = Math.round((x0 + x1) / 2);
+  const c = makeCanvas(6, 6), cc = c.getContext('2d');
+  cc.imageSmoothingEnabled = false;
+  cc.drawImage(src, cx - side / 2, y0, side, side, 0, 0, 6, 6);
+  heads.set(id, c);
+  return c;
+}
 // The bar's width, its name's colours, and how a fallen boss's bar ends (Hud.barFall).
 const BAR_W = (W) => Math.min(220, W - 120);
 const BAR_NAME = ['#fee761', '#feae34', '#be4a2f'];
@@ -321,6 +369,7 @@ export class Hud {
     this.drawSpeech(ctx, W, H);
     this.drawCombo(ctx, W, H, t);
     this.drawBanners(ctx, W, H);
+    this.drawArrival(ctx, W, H);
     this.drawSlain(ctx, W, H);
     if (g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, g.showMap);
     if (input.device === 'touch') this.drawTouch(ctx, W, H, p);
@@ -445,22 +494,42 @@ export class Hud {
       ctx.fillRect(cx - 30, 30, 60, 4);
       ctx.fillStyle = '#feae34';
       ctx.fillRect(cx - 29, 31, Math.round(58 * u), 2);
+      // The next boss's skull, where on the way to the next rank it comes.
+      if (next) {
+        const nb = (g.spawner.bossIdx + 1) * RANKED_BOSS_EVERY, k = (nb - cur[0] * 60) / ((next[0] - cur[0]) * 60);
+        if (k >= 0 && k <= 1) drawSkull(ctx, cx - 29 + Math.round(58 * k), 29, '#8b9bb4');
+      }
       drawText(ctx, cur[1].toUpperCase(), cx - 34, 29, { align: 'right', color: '#fee761' });
       if (g.rankedBest) drawText(ctx, `BEST ${fmtTime(Math.max(g.rankedBest, g.bestBeaten ? g.time : 0))}`, cx + 34, 29, { color: g.bestBeaten ? '#63c74d' : '#8b9bb4' });
     } else {
       const remain = clockTime(g);
       const c = textCanvas(fmtTime(remain), remain < 60 ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
       ctx.drawImage(c, cx - c.width, 9, c.width * 2, c.height * 2);
-      const u = g.time / g.duration;
+      const u = g.time / g.duration, B = nightBarHalf(cx), at = (s) => cx - B + 1 + Math.round((2 * B - 2) * Math.min(1, s / g.duration));
       ctx.fillStyle = '#181425';
-      ctx.fillRect(cx - 30, 30, 60, 4);
+      ctx.fillRect(cx - B, 30, 2 * B, 4);
       ctx.fillStyle = u > 0.9 ? '#f6757a' : '#5a6988';
-      ctx.fillRect(cx - 29, 31, Math.round(58 * u), 2);
+      ctx.fillRect(cx - B + 1, 31, Math.round((2 * B - 2) * u), 2);
       // A tiny moon/sun showing the night's progress.
       ctx.fillStyle = u > 0.93 ? '#feae34' : '#c0cbdc';
-      ctx.fillRect(cx - 30 + Math.round(58 * u), 29, 2, 6);
+      ctx.fillRect(at(g.time) - 1, 29, 2, 6);
+      // The night's shape: a skull where each boss comes (gold once slain), and the face of the hero
+      // this run unlocks at 5:00, under the bar, until then.
+      for (const m of SURVIVAL_BOSSES[g.mode] || []) {
+        const slain = g.stats.bossLog.some((l) => l.id === m.id && l.kill !== undefined);
+        drawSkull(ctx, at(m.at), 29, slain ? '#fee761' : g.time >= m.at ? '#e43b44' : '#8b9bb4');
+      }
+      const head = g.unlocks && g.time < HERO_UNLOCK_TIME ? heroHead(g.unlocks) : null;
+      if (head) {
+        const hx = at(HERO_UNLOCK_TIME);
+        ctx.fillStyle = HEROES[g.unlocks].color || '#c0cbdc';
+        ctx.fillRect(hx - 4, 34, 8, 8);
+        ctx.fillStyle = '#181425';
+        ctx.fillRect(hx - 3, 35, 6, 6);
+        ctx.drawImage(head, hx - 3, 35);
+      }
       // Where Ranked shows its best time.
-      if (g.nightmare) drawText(ctx, NIGHTMARE_TAG, cx + 34, 29, { color: '#e43b44' });
+      if (g.nightmare) drawText(ctx, NIGHTMARE_TAG, cx + B + 4, 29, { color: '#e43b44' });
     }
     // In a crypt the clock above stands still.
     if (g.inCrypt) drawText(ctx, `${g.inCrypt.name.toUpperCase()} · TIME STANDS STILL`, cx, 38, { align: 'center', color: '#b55088' });
@@ -554,7 +623,7 @@ export class Hud {
   topLines() {
     const g = this.g;
     if ((g.boss && !g.boss.dead) || this.fall) return lineBottom(bossBarY(g) + 9);
-    return lineBottom(g.inCrypt ? 38 : g.mode === 'dungeon' ? 32 : 29);
+    return lineBottom(g.inCrypt ? 38 : g.mode === 'dungeon' ? 32 : 33);
   }
 
   // The boss's (or lord's) bar. When the one it showed falls, its bar stays on, empty, then flashes
@@ -570,7 +639,12 @@ export class Hud {
       return;
     }
     if (!b) return;
-    const w = BAR_W(W), x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g);
+    // It slams in at its time (Game.bossIntro: after a night boss's name card), dropping from
+    // above with a white flash.
+    const since = b.introT === undefined ? 9 : b.introT - (b.slamAt || 0);
+    if (since < 0) return;
+    const drop = Math.round((1 - ease.outBack(clamp(since / ARRIVAL.slam, 0, 1))) * 26);
+    const w = BAR_W(W), x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g) - drop;
     const f = clamp(b.hp / b.maxHp, 0, 1);
     b._shown = b._shown === undefined ? f : b._shown + (f - b._shown) * 0.06;
     const label = b.lord ? `${b.name.toUpperCase()}, LORD OF THE CRYPT` : `${b.def.name.toUpperCase()}, ${b.def.title.toUpperCase()}`;
@@ -588,7 +662,53 @@ export class Hud {
     ctx.fillStyle = '#f6757a';
     ctx.fillRect(x, y, Math.round(w * f), 1);
     barNotches(ctx, x, y, w);
+    // Landed: a white flash. Nearly done (under LOW_HP): the bar pulses white with its heartbeat.
+    this.pulseT = (this.pulseT || 0) + dt;
+    const flash = since >= ARRIVAL.slam && since < ARRIVAL.slam + 0.12 ? 0.8 : f < LOW_HP ? 0.15 + 0.4 * (0.5 + 0.5 * Math.cos((this.pulseT * TAU) / ARRIVAL.beat)) : 0;
+    if (flash > 0) {
+      ctx.globalAlpha = flash;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x - 1, y - 1, w + 2, 8);
+      ctx.globalAlpha = 1;
+    }
     drawText(ctx, label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+  }
+
+  // A boss's arrival (arrival.js): before it, the screen's edges darken with "Something stirs in the
+  // dark…"; as it comes, its name card (its name big in its colour, its title under it) and, for a
+  // night's boss, the letterbox bars.
+  drawArrival(ctx, W, H) {
+    const g = this.g, s = g.stir, c = g.card;
+    if (s) {
+      const a = clamp(s.t / ARRIVAL.stir, 0, 1) * (s.done ? clamp(1 - s.after / ARRIVAL.stirOut, 0, 1) : 1);
+      const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.hypot(W, H) * 0.55);
+      grad.addColorStop(0, 'rgba(8,4,12,0)');
+      grad.addColorStop(1, `rgba(8,4,12,${(0.9 * a).toFixed(3)})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      if (!s.done) {
+        ctx.globalAlpha = clamp(s.t / 0.5, 0, 1);
+        drawText(ctx, 'Something stirs in the dark…', W / 2, Math.round(H * 0.3), { align: 'center', color: '#c0cbdc' });
+        ctx.globalAlpha = 1;
+      }
+    }
+    if (!c) return;
+    const t = c.t;
+    if (c.letterbox) {
+      const L = ARRIVAL.letterbox, k = t < 0.15 ? t / 0.15 : t < L ? 1 : clamp(1 - (t - L) / 0.25, 0, 1);
+      const bh = Math.round(H * 0.12 * ease.outCubic(k));
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, bh);
+      ctx.fillRect(0, H - bh, W, bh);
+    }
+    const a = t < 0.12 ? t / 0.12 : clamp((ARRIVAL.card - t) / 0.6, 0, 1);
+    const name = textCanvas(c.name.toUpperCase(), ['#ffffff', c.color, c.color], '#181425', null, 'bold');
+    const big = c.letterbox ? 3 : 2, pop = t < 0.2 ? 1 + 0.6 * (1 - ease.outCubic(t / 0.2)) : 1, s2 = Math.min(big * pop, (W - 20) / name.width);
+    const y = Math.round(H * 0.34);
+    ctx.globalAlpha = a;
+    ctx.drawImage(name, Math.round(W / 2 - (name.width * s2) / 2), Math.round(y - (name.height * s2) / 2), Math.round(name.width * s2), Math.round(name.height * s2));
+    drawText(ctx, c.title, W / 2, Math.round(y + (name.height * s2) / 2 + 3), { align: 'center', color: c.color });
+    ctx.globalAlpha = 1;
   }
 
   // A fallen boss's bar (drawBoss): empty for BAR_FALL.hold s while what it had shown drains away,
@@ -869,6 +989,7 @@ export class Hud {
     const g = this.g;
     // Under a card, chest, gear or pause screen they stay hidden (they still run out: fadeReal).
     if (g.state === 'levelup' || g.state === 'chest' || g.state === 'item' || g.state === 'paused') return;
+    if (g.card) return; // a boss's name card has the screen; they wait (Game.fadeReal)
     // Below the lines at the top: a boss's own banner came down on its name.
     let y = Math.max(Math.round(H * 0.22), this.topLines() + 4);
     for (const b of g.banners) {

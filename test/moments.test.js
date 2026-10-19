@@ -174,7 +174,8 @@ test("a fallen boss's bar holds, flashes and breaks up before the next boss stil
     const first = g.spawnBoss('boneking', p.x + 30, p.y);
     const second = g.spawnBoss('butcher', p.x - 60, p.y);
     g.boss = first;
-    frame(gs, 3);
+    // Its bar slams in after its name card (order 2 item 8, ARRIVAL.slamAt + slam): then it falls.
+    frame(gs, 75);
     g.hitEnemy(first, 1e9);
     assert.equal(g.boss, second, 'the next boss is the one fighting');
     frame(gs);

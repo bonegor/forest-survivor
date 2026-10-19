@@ -3,6 +3,7 @@
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
 import { EVENTS, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { ARRIVAL } from './arrival.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
 import { rand, randi, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
@@ -147,6 +148,11 @@ export class Spawner {
         }
       }
       const bosses = SURVIVAL_BOSSES[g.mode];
+      // Something stirs in the dark ARRIVAL.stir real seconds before a night's boss comes.
+      if (bosses && this.bossIdx < bosses.length && g.stirFor !== this.bossIdx && g.time >= bosses[this.bossIdx].at - ARRIVAL.stir * g.pace) {
+        g.stirFor = this.bossIdx;
+        g.bossStir(bosses[this.bossIdx].id);
+      }
       if (bosses && this.bossIdx < bosses.length && g.time >= bosses[this.bossIdx].at) {
         const pt = g.world.spawnPoint(g, 30);
         if (pt && g.spawnBoss(bosses[this.bossIdx].id, pt.x, pt.y)) this.bossIdx++;

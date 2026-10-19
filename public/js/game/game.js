@@ -9,7 +9,8 @@ import { FLOORS, monsterHp, minuteOf, HORDE_CAP, EVENTS, SURVIVAL_BOSSES, RANKED
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
-import { sfx, playMusic, playJingle, stopMusic } from '../engine/audio.js';
+import { sfx, playMusic, playJingle, stopMusic, cutToMusic } from '../engine/audio.js';
+import { ARRIVAL, LOW_HP } from './arrival.js';
 import { view } from '../engine/view.js';
 import { input } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
@@ -165,6 +166,12 @@ export class Game {
     this.magnetAll = 0;
     this.combo = 0;
     this.comboT = 0;
+    // A boss's arrival (arrival.js): the stir before it, its name card, the heartbeat while it is
+    // nearly done.
+    this.stir = null; // { id, t, after }
+    this.stirFor = -1; // the night's boss the stir was for (Spawner)
+    this.card = null; // { name, title, color, t, letterbox }
+    this.bossBeatT = 0;
     this.gemCombo = 0;
     this.gemComboT = 0;
     this.banners = [];
@@ -651,18 +658,42 @@ export class Game {
     return e;
   }
 
+  // Something stirs in the dark: the edges darken and a rumble rises before a night's boss.
+  bossStir(id) {
+    this.stir = { id, t: 0, after: 0 };
+    sfx('rumble');
+  }
+
+  // A boss comes (arrival.js). A night's boss or a Dungeon Run's guardian: the horde near it
+  // recoils (never the hero), the music cuts and the boss piece slams in, its name card with the
+  // letterbox, then its bar slams in (Hud.drawBoss, at e.slamAt). Ranked's returns the same,
+  // lighter: no letterbox, no cut, the bar sooner. A crypt's lord waking: its banner as before, a
+  // short sting and the bar slamming in at once.
   bossIntro(e) {
     e.sleeping = false;
     this.boss = e;
+    e.introT = 0;
+    e.slammed = false;
     this.stats.bossLog.push({ id: e.lord ? 'lord ' + e.type : e.type, t: Math.round(this.time), rt: this.clock, lvl: this.player.level, hp: Math.round(e.maxHp) });
     // A crypt's lord is a champion: its colour is its affix's.
     const color = e.lord ? (e.mod ? e.mod.color : '#b55088') : e.def.color;
-    if (e.lord) this.banner(e.name, `Lord of the ${this.inCrypt ? this.inCrypt.name : 'crypt'}`, color, 3);
-    else this.banner(e.def.name, e.def.title, color, 3);
-    sfx('boss');
+    if (this.stir) this.stir.done = true;
+    if (e.lord) {
+      this.banner(e.name, `Lord of the ${this.inCrypt ? this.inCrypt.name : 'crypt'}`, color, 3);
+      e.slamAt = 0;
+      sfx('lordsting');
+      playMusic('boss');
+    } else {
+      const full = this.mode !== 'ranked';
+      this.card = { name: e.def.name, title: e.def.title, color, t: 0, letterbox: full };
+      e.slamAt = full ? ARRIVAL.slamAt : ARRIVAL.lightSlamAt;
+      this.pushback(e.x, e.y, ARRIVAL.recoilR, ARRIVAL.recoilF);
+      sfx('boss');
+      if (full) cutToMusic('boss', ARRIVAL.gap);
+      else playMusic('boss');
+    }
     this.shake(0.5);
-    playMusic('boss');
-    this.effects.push(new Ring(this, e.x, e.y, 6, 140, 0.9, color, false, 3));
+    this.effects.push(new Ring(this, e.x, e.y, 6, e.lord ? 140 : ARRIVAL.recoilR + 20, 0.9, color, false, 3));
   }
 
   summonRing(type, n, R, o = {}) {
@@ -904,7 +935,8 @@ export class Game {
       }
     }
     if (next) return;
-    if (this.mode !== 'dungeon' || this.floor < 3) playMusic(this.mode === 'dungeon' ? 'dungeon-' + FLOORS[this.floor - 1].theme : 'forest');
+    // The music eases back to the night's over a few seconds.
+    if (this.mode !== 'dungeon' || this.floor < 3) playMusic(this.mode === 'dungeon' ? 'dungeon-' + FLOORS[this.floor - 1].theme : 'forest', { fade: ARRIVAL.easeBack });
   }
 
   // A crypt's lord has fallen, and leaves its coins, its gold and, rolled lord by lord (LORD_DROPS
@@ -997,6 +1029,7 @@ export class Game {
   // The hero walks into a crypt: the forest is set aside exactly as it was, and the night's clock stops.
   enterCrypt(d) {
     if (this.inCrypt || this.state !== 'play') return;
+    this.stir = null;
     this.travel(() => {
       const p = this.player;
       this.forestState = {
@@ -1516,10 +1549,25 @@ export class Game {
     this.hurtFlash = Math.max(0, this.hurtFlash - rdt * 2);
     this.whiteFlash = Math.max(0, this.whiteFlash - rdt * 1.5);
     this.momentT = Math.max(0, this.momentT - rdt);
-    // Banners too: one that came before the cards has had its say when they close.
+    if (this.stir) {
+      this.stir.t += rdt;
+      if (this.stir.done && (this.stir.after += rdt) >= ARRIVAL.stirOut) this.stir = null;
+    }
+    if (this.card && (this.card.t += rdt) >= ARRIVAL.card) this.card = null;
+    const bb = this.boss;
+    if (bb && bb.introT !== undefined) {
+      bb.introT += rdt;
+      if (!bb.slammed && bb.introT >= bb.slamAt + ARRIVAL.slam) {
+        bb.slammed = true;
+        sfx('thunk');
+        this.shake(0.25);
+      }
+    }
+    // Banners too: one that came before the cards has had its say when they close. A boss's name
+    // card holds them back (they wait, unseen, and go on after it).
     for (let i = this.banners.length - 1; i >= 0; i--) {
       const b = this.banners[i];
-      b.t += rdt;
+      if (!this.card) b.t += rdt;
       if (b.t >= b.dur) this.banners.splice(i, 1);
     }
     if (this.slowT > 0) {
@@ -1550,6 +1598,15 @@ export class Game {
       if (this.comboT <= 0) this.combo = 0;
     }
     if (this.state === 'play') {
+      // A boss nearly done: its heart beats (and its bar pulses, Hud.drawBoss).
+      const b = this.boss;
+      if (b && !b.dead && b.hp < b.maxHp * LOW_HP) {
+        this.bossBeatT -= rdt;
+        if (this.bossBeatT <= 0) {
+          this.bossBeatT = ARRIVAL.beat;
+          sfx('heartbeat');
+        }
+      } else this.bossBeatT = 0;
       p.update(dt);
       this.spawner.update(dt);
     } else if (this.state === 'dying') {

@@ -6,7 +6,7 @@ export class SpatialGrid {
     this.cell = cell;
     this.cols = cols;
     this.rows = rows;
-    this.head = new Int32Array(cols * rows);
+    this.head = new Int32Array(cols * rows).fill(-1); // empty until the first rebuild
     this.next = new Int32Array(2048);
     this.items = [];
     this.ox = 0;
