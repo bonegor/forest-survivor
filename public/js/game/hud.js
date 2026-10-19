@@ -14,6 +14,7 @@ import { ringSprite } from './fxsprites.js';
 import { DEATH } from './game.js';
 import { ARRIVAL, LOW_HP } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
+import { WARN } from './events.js';
 import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { HEROES } from '../data/heroes.js';
 
@@ -375,6 +376,7 @@ export class Hud {
   draw(ctx, W, H, t, dt = 1 / 60) {
     const g = this.g, p = g.player;
     this.lastDt = dt;
+    this.drawRingWarnings(ctx, W, H, t);
     this.drawUltLaunch(ctx, W, H);
     this.drawXp(ctx, W, p);
     this.drawSlots(ctx, p);
@@ -978,6 +980,26 @@ export class Hud {
     if (g.world.marker) {
       const w = g.world.marker();
       if (w) this.pointer(ctx, W, H, t, w[0], w[1], w[2], m[w[3] || WORLD_MARKS[w[2]]]);
+    }
+    // An event about to come: an arrow from its side (events.js).
+    const p = g.player;
+    for (const w of g.warnings) if (w.from) this.pointer(ctx, W, H, t, p.x + w.from[0], p.y + w.from[1], '#e43b44', m.boss);
+  }
+
+  // A ring about to close: for its last WARN.ring s, a faint ring on the ground round the hero.
+  drawRingWarnings(ctx, W, H, t) {
+    const g = this.g, cam = g.cam, z = cam.S / view.S;
+    for (const w of g.warnings) {
+      if (w.ev.type !== 'ring' || w.t < WARN.lead - WARN.ring) continue;
+      const k = clamp((w.t - (WARN.lead - WARN.ring)) / WARN.ring, 0, 1);
+      const x = (g.player.x - cam.x) * z, y = (g.player.y - 4 - cam.y) * z, r = Math.min(W, H) * (0.46 - 0.12 * k);
+      ctx.globalAlpha = (0.18 + 0.22 * k) * (0.75 + 0.25 * Math.sin(t * 12));
+      ctx.strokeStyle = '#e43b44';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.8, 0, 0, TAU);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 

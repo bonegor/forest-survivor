@@ -4,6 +4,7 @@
 
 import { EVENTS, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
+import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
 import { rand, randi, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
@@ -35,6 +36,40 @@ export class Spawner {
     this.shrineT = 45;
     this.bossIdx = 0;
     this.loopAt = 0; // Ranked: next looping event, in phase minutes
+    this.loopEv = null; // Ranked: that event, rolled and announced (warn)
+    this.warnIdx = 0; // the next of EVENTS to announce (warn)
+    this.warned = new Map(); // EVENTS index -> the announced copy, its side rolled
+  }
+
+  // The phase `s` game seconds from now (the clock and a Dungeon floor's clock alike).
+  phaseAfter(s) {
+    const g = this.g, t = g.time, f = g.floorTime;
+    g.time += s;
+    g.floorTime += s;
+    const ph = g.phase;
+    g.time = t;
+    g.floorTime = f;
+    return ph;
+  }
+
+  // An event about to come (events.js): its side rolled now and kept for its coming, and told.
+  warn(ev) {
+    const g = this.g, p = g.player;
+    if (ev.type === 'swarm') ev.dir = rand(TAU);
+    else if (ev.type === 'pack') {
+      const pt = g.world.spawnPoint(g, 30);
+      if (pt) ev.off = [pt.x - p.x, pt.y - p.y];
+    }
+    g.eventWarning(ev);
+    return ev;
+  }
+
+  // Back to a phase (setTime, a new floor): what comes next is announced afresh.
+  rewarn() {
+    this.warnIdx = this.eventIdx;
+    this.warned.clear();
+    this.loopEv = null;
+    this.g.warnings = [];
   }
 
   resetForFloor(phase0) {
@@ -44,6 +79,7 @@ export class Spawner {
     this.eliteT = 60;
     this.thiefT = rand(90, 170);
     this.acc = 1.5;
+    this.rewarn();
   }
 
   // One of the monsters the current pocket of the night allows, by weight. Where the rules send
@@ -97,16 +133,28 @@ export class Spawner {
       }
     }
 
-    // Timed events.
+    // Timed events, each announced WARN.lead real seconds before (warn).
+    const soon = this.phaseAfter(WARN.lead * g.pace);
+    if (this.warnIdx < this.eventIdx) this.warnIdx = this.eventIdx;
+    while (this.warnIdx < EVENTS.length && EVENTS[this.warnIdx].at <= soon) {
+      const i = this.warnIdx++;
+      this.warned.set(i, this.warn({ ...EVENTS[i] }));
+    }
     while (this.eventIdx < EVENTS.length && EVENTS[this.eventIdx].at <= phase) {
-      this.fire(EVENTS[this.eventIdx++], phase);
+      const i = this.eventIdx++;
+      this.fire(this.warned.get(i) || EVENTS[i], phase);
+      this.warned.delete(i);
     }
     if (g.mode === 'ranked' && this.eventIdx >= EVENTS.length) {
       if (!this.loopAt) this.loopAt = phase + RANKED_EVENT_EVERY;
+      if (!this.loopEv && soon >= this.loopAt) {
+        const ev = pick(EVENTS.filter((e) => e.at >= 18));
+        this.loopEv = this.warn({ ...ev, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) });
+      }
       if (phase >= this.loopAt) {
         this.loopAt = phase + RANKED_EVENT_EVERY;
-        const ev = pick(EVENTS.filter((e) => e.at >= 18));
-        this.fire({ ...ev, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) }, phase);
+        this.fire(this.loopEv || pick(EVENTS.filter((e) => e.at >= 18)), phase);
+        this.loopEv = null;
       }
     }
 
@@ -164,6 +212,7 @@ export class Spawner {
   // Game.recycleFar), each of them in the place of one off the screen.
   fire(ev, phase) {
     const g = this.g, p = g.player;
+    g.warnings = g.warnings.filter((w) => w.ev !== ev);
     ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1) * hordeMore(g, phase))) };
     const st = this.stats(phase);
     const cam = g.cam;
@@ -178,12 +227,12 @@ export class Spawner {
           g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true });
           placed++;
         }
-        if (placed) g.banner('You are surrounded!', '', '#e43b44', 1.6);
+        // (Its banner came with its warning.)
         break;
       }
       case 'swarm': {
-        // A dense stream crossing the screen.
-        const a = rand(TAU);
+        // A dense stream crossing the screen, from the side its warning showed.
+        const a = ev.dir ?? rand(TAU);
         const dx = Math.cos(a), dy = Math.sin(a);
         const R = Math.hypot(cam.W, cam.H) * 0.55;
         const sx = p.x - dx * R, sy = p.y - dy * R;
@@ -197,7 +246,8 @@ export class Spawner {
         break;
       }
       case 'pack': {
-        const pt = g.world.spawnPoint(g, 30);
+        // Where its warning pointed (as far from the hero as then), or a spawn point.
+        const pt = ev.off ? g.world.freeSpot(p.x + ev.off[0], p.y + ev.off[1]) || g.world.spawnPoint(g, 30) : g.world.spawnPoint(g, 30);
         if (!pt) break;
         for (let i = 0; i < ev.count; i++) g.spawnEnemy(ev.enemy, pt.x + rand(-20, 20), pt.y + rand(-20, 20), { ...st, aware: true, sent: true });
         break;

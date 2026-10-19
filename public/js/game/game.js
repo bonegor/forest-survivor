@@ -12,6 +12,7 @@ import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx, playMusic, playJingle, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP } from './arrival.js';
 import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
+import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE } from './events.js';
 import { view } from '../engine/view.js';
 import { input } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
@@ -177,6 +178,11 @@ export class Game {
     this.ultLaunch = null; // { type, t, started }
     this.ultStop = 0;
     this.ultRun = null; // { type, name, kills, dmg }
+    // Events announced (events.js): { ev, from: [dx, dy] of its side, t }.
+    this.warnings = [];
+    // The profile's records as they stood when the run began, and those this run has broken.
+    this.records = o.records || {};
+    this.recordsBroken = new Set();
     this.stats.bestUlt = null; // { kills, dmg } the run's best ultimate
     this.gemCombo = 0;
     this.gemComboT = 0;
@@ -368,6 +374,7 @@ export class Game {
     sp.eventIdx = EVENTS.findIndex((e) => e.at > ph && e.at >= from);
     if (sp.eventIdx < 0) sp.eventIdx = EVENTS.length;
     sp.loopAt = 0;
+    sp.rewarn();
     if (this.mode === 'ranked') {
       sp.bossIdx = Math.floor(t / RANKED_BOSS_EVERY);
       this.rankIdx = RANKS.findLastIndex(([min]) => t >= min * 60);
@@ -1521,6 +1528,31 @@ export class Game {
     stopMusic();
   }
 
+  // An event about to come (Spawner.warn): its banner in its own words, its family's sting, and its
+  // side for the edge arrow (a swarm comes from opposite the way it heads; a pack from its point).
+  eventWarning(ev) {
+    const R = Math.hypot(this.cam.W, this.cam.H) * 0.55;
+    const from = ev.type === 'swarm' ? [-Math.cos(ev.dir) * R, -Math.sin(ev.dir) * R] : ev.type === 'pack' && ev.off ? ev.off : null;
+    const [title, sub] = eventWords(ev, from ? sideWord(from) : '');
+    this.banner(title, sub, '#e43b44', WARN.lead + 0.4);
+    sfx('warn' + ev.type);
+    this.warnings.push({ ev, from, t: 0 });
+  }
+
+  // A record of the profile's passed (kills, level, the night's time) for the first time this run:
+  // one line and the record's sting, once each; never in the first minute.
+  checkRecords() {
+    if (this.time < RECORD_GRACE) return;
+    const now = { kills: this.kills, level: this.player.level, time: this.mode === 's15' ? this.time : 0 };
+    for (const k of Object.keys(RECORDS)) {
+      const rec = this.records[k] || 0;
+      if (rec <= 0 || now[k] <= rec || this.recordsBroken.has(k)) continue;
+      this.recordsBroken.add(k);
+      this.banner(`NEW RECORD · ${RECORDS[k]}`, '', '#63c74d', 2.4);
+      sfx('record');
+    }
+  }
+
   victory(kind) {
     if (this.state === 'dawn' || this.state === 'over') return;
     this.state = 'dawn';
@@ -1593,6 +1625,7 @@ export class Game {
       }
     }
     this.ultStop = Math.max(0, this.ultStop - rdt);
+    for (const w of this.warnings) w.t += rdt;
     if (this.ultLaunch && this.ultLaunch.started && (this.ultLaunch.t += rdt) >= ULT_LAUNCH.dur) this.ultLaunch = null;
     // Banners too: one that came before the cards has had its say when they close. A boss's name
     // card holds them back (they wait, unseen, and go on after it).
@@ -1646,6 +1679,7 @@ export class Game {
       } else this.bossBeatT = 0;
       p.update(pdt);
       this.spawner.update(dt);
+      this.checkRecords();
     } else if (this.state === 'dying') {
       this.deathT += rdt;
       if (this.deathT > DEATH.end) this.finish(false);

@@ -31,6 +31,8 @@ export class GameScreen {
       diff: app.choice.diff || 'medium', // Normal or Veteran: Normal unless chosen, as the trial screen shows
       nightmare: app.choice.nightmare === true, // twice the monsters, if ticked there (never on Ranked)
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
+      // The records a run can break as it goes (Game.checkRecords), as they stand now.
+      records: { kills: app.store.profile.best.kills, level: app.store.profile.best.level, time: mode === 's15' ? app.store.profile.best.s15 : 0 },
       meta: metaBonuses(app.store.profile),
       gear: app.store.profile.gear[hero], // this hero's own
       unlocks: unlocksNext(app.store.profile, hero),
