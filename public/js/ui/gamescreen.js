@@ -453,7 +453,7 @@ export class ChestOverlay {
     this.coins = []; // the burst as the lid opens
     this.flyers = []; // coins on their way to the HUD's gold counter
     this.lockTime = 0.6;
-    sfx('chest');
+    sfx('chest', { size: this.kind === 'boss' ? 3 : this.kind === 'lord' ? 2 : 1 });
   }
 
   // Everything shown at once (a first press): every thing revealed, the gold landed.
@@ -1148,7 +1148,7 @@ class ResultsOverlay {
       for (const k of this.reward.unlocks || []) notes.push([unlockText(k), '#fee761']);
       if (!this.announced && (this.reward.unlocks?.length || rk?.personalBest)) {
         this.announced = true;
-        sfx('chest');
+        sfx(rk?.personalBest ? 'record' : 'unlock');
       }
     }
     // The weapons beside the rows, or under them on a narrow screen.

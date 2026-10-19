@@ -16,11 +16,18 @@ const FILE_LEVEL = 0.55;
 // near-silent lead-in and the two overlap for XF seconds, so the seam never gaps.
 const XF = 0.06, LEAD_IN = 0.03;
 
+// The music ducks under the biggest beats (the reward ladder's T4 and T5: an evolution, an Epic or
+// Legendary piece, a boss slain, a revive, a record, an unlock): DUCK.db for DUCK.secs, back
+// smoothly. The stingers that do it:
+export const DUCK = { db: -8, secs: 1.2, down: 0.08, up: 0.4 };
+export const DUCKED = new Set(['evolve', 'epic', 'legendary', 'bossslain', 'revive', 'record', 'unlock']);
+
 const A = {
   ctx: null,
   master: null,
   sfxBus: null,
   musicBus: null,
+  duck: null, // between the music and the mix: what duckMusic lowers
   comp: null,
   noiseBuf: null,
   vol: { music: 0.55, sfx: 0.75 },
@@ -79,7 +86,9 @@ export function initAudio() {
   A.sfxBus = ctx.createGain();
   A.musicBus = ctx.createGain();
   A.sfxBus.connect(A.comp);
-  A.musicBus.connect(A.comp);
+  A.duck = ctx.createGain();
+  A.musicBus.connect(A.duck);
+  A.duck.connect(A.comp);
   A.comp.connect(A.master);
   A.master.connect(ctx.destination);
   applyVolumes();
@@ -180,7 +189,15 @@ const LIMITS = {
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
   furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
+  rumble: [1, 1], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1],
+  levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
 };
+
+// Level factors that keep the reward ladder in order as measured through the real chain (RMS over
+// a sound's first 1.5 s): the evolution 2 dB over the boss chest's opening, a record 3 dB over a
+// level-up, the boss's stir 3 dB under its fall; the swarm's and the pack's warnings within 3 dB
+// of the ring's.
+const LEVEL = { evolve: 1.6, chest3: 0.72, record: 1.8, rumble: 0.55, warnswarm: 5.5, warnpack: 4 };
 
 const SFX = {
   hit: (t, o) => {
@@ -251,10 +268,11 @@ const SFX = {
   // An evolution: the longest and brightest - a low swell, a rising major arpeggio over two octaves
   // and a shimmering high chord ringing out.
   evolve: (t) => {
-    tone(t, { type: 'sine', f0: 65, f1: 130, dur: 0.9, vol: 0.32, attack: 0.05 });
-    arp(t, [262, 330, 392, 523, 659, 784, 1046, 1318], 0.055, { type: 'square', dur: 0.3, vol: 0.06 });
-    for (const [f, v] of [[1046, 0.07], [1318, 0.05], [1568, 0.05], [2093, 0.03]]) tone(t + 0.45, { type: 'triangle', f0: f, dur: 1.4, vol: v, attack: 0.01 });
-    noise(t + 0.4, { filter: 'highpass', f0: 6000, f1: 11000, dur: 1.2, vol: 0.08, attack: 0.05 });
+    const k = LEVEL.evolve;
+    tone(t, { type: 'sine', f0: 65, f1: 130, dur: 0.9, vol: 0.32 * k, attack: 0.05 });
+    arp(t, [262, 330, 392, 523, 659, 784, 1046, 1318], 0.055, { type: 'square', dur: 0.3, vol: 0.06 * k });
+    for (const [f, v] of [[1046, 0.07], [1318, 0.05], [1568, 0.05], [2093, 0.03]]) tone(t + 0.45, { type: 'triangle', f0: f, dur: 1.4, vol: v * k, attack: 0.01 });
+    noise(t + 0.4, { filter: 'highpass', f0: 6000, f1: 11000, dur: 1.2, vol: 0.08 * k, attack: 0.05 });
   },
   // A piece of gear landing, by rarity (o.size): Common and Uncommon a soft clink; Rare a bright
   // ping; Epic a ringing chord; Legendary a deep thud under a struck bell chord.
@@ -346,9 +364,80 @@ const SFX = {
     tone(t, { type: 'square', f0: 784, dur: 0.06, vol: 0.06 });
     tone(t + 0.07, { type: 'square', f0: 1175, dur: 0.15, vol: 0.06 });
   },
-  chest: (t) => {
-    arp(t, [392, 494, 587, 784, 988, 1175, 1568], 0.06, { type: 'square', dur: 0.22, vol: 0.06 });
-    noise(t, { filter: 'highpass', f0: 5000, f1: 10000, dur: 1, vol: 0.06, attack: 0.3, curve: 'lin' });
+  // A chest coming up, by tier (o.size 1 champion's, 2 lord's, 3 boss's): one family rising in size,
+  // a wooden knock and a glitter of struck bells falling then climbing; the lord's adds a low horn
+  // under it, the boss's a deep boom, a gong and a longer glitter. Not the level-up's square arpeggio.
+  chest: (t, o) => {
+    const n = Math.max(1, Math.min(3, o.size || 1));
+    noise(t, { filter: 'lowpass', f0: 700, f1: 200, dur: 0.12, vol: 0.25 });
+    tone(t, { type: 'sine', f0: 160, f1: 90, dur: 0.15, vol: 0.2 });
+    const bells = [2093, 1760, 1568, 1319, 1568, 1760, 2093, 2637, 3136, 3520].slice(0, 5 + n * 2);
+    bells.forEach((f, i) => tone(t + 0.08 + i * 0.055, { type: 'sine', f0: f, dur: 0.5 + n * 0.15, vol: 0.05, attack: 0.003 }));
+    if (n >= 2) for (const f of [131, 196, 262]) tone(t + 0.05, { type: 'sawtooth', f0: f, dur: 0.6 + n * 0.3, vol: 0.05, attack: 0.12, lp: 900 });
+    if (n >= 3) {
+      tone(t, { type: 'sine', f0: 55, f1: 32, dur: 1.2, vol: 0.4 * LEVEL.chest3 });
+      for (const [f, v] of [[110, 0.12], [163, 0.06], [231, 0.05], [349, 0.03]]) tone(t + 0.02, { type: 'sine', f0: f, dur: 2.2, vol: v * LEVEL.chest3, attack: 0.005 });
+    }
+    noise(t + 0.1, { filter: 'highpass', f0: 6000, f1: 11000, dur: 0.6 + n * 0.3, vol: 0.03 + n * 0.015, attack: 0.15, curve: 'lin' });
+  },
+  // A swarm coming: wings, a fluttering hiss rising.
+  warnswarm: (t) => {
+    const k = LEVEL.warnswarm;
+    for (let i = 0; i < 8; i++) noise(t + i * 0.07, { filter: 'bandpass', f0: 1800 + i * 250, q: 3, dur: 0.06, vol: 0.09 * k });
+    tone(t, { type: 'triangle', f0: 880, f1: 1320, dur: 0.6, vol: 0.04 * k });
+  },
+  // A ring closing: a bone rattle over two low drum beats.
+  warnring: (t) => {
+    for (const d of [0, 0.32]) tone(t + d, { type: 'sine', f0: 90, f1: 50, dur: 0.25, vol: 0.28 });
+    for (let i = 0; i < 6; i++) noise(t + 0.05 + i * 0.05, { filter: 'highpass', f0: 2500, dur: 0.03, vol: 0.08 });
+  },
+  // A pack on the hunt: a howl, rising and falling.
+  warnpack: (t) => {
+    const k = LEVEL.warnpack;
+    tone(t, { type: 'sawtooth', f0: 330, f1: 620, dur: 0.45, vol: 0.05 * k, lp: 1400, attack: 0.08 });
+    tone(t + 0.45, { type: 'sawtooth', f0: 620, f1: 400, dur: 0.5, vol: 0.05 * k, lp: 1400 });
+  },
+  // Something stirs before a boss: a low rumble rising for 1.5 s.
+  rumble: (t) => {
+    noise(t, { filter: 'lowpass', f0: 120, f1: 420, dur: 1.6, vol: 0.32 * LEVEL.rumble, attack: 1.3, curve: 'lin' });
+    tone(t, { type: 'sine', f0: 38, f1: 52, dur: 1.6, vol: 0.3 * LEVEL.rumble, attack: 1.2 });
+  },
+  // A crypt's lord waking: a short sting, two low stabs.
+  lordsting: (t) => {
+    tone(t, { type: 'sawtooth', f0: 147, dur: 0.18, vol: 0.12, lp: 1200 });
+    tone(t, { type: 'sawtooth', f0: 156, dur: 0.18, vol: 0.1, lp: 1200 });
+    tone(t + 0.2, { type: 'sawtooth', f0: 110, f1: 98, dur: 0.45, vol: 0.14, lp: 900 });
+    noise(t, { filter: 'lowpass', f0: 500, f1: 100, dur: 0.3, vol: 0.15 });
+  },
+  // A boss slain: low and heavy - a falling boom, a long rumble - and a great bell struck over it.
+  bossslain: (t) => {
+    tone(t, { type: 'sine', f0: 70, f1: 28, dur: 1.4, vol: 0.5 });
+    noise(t, { filter: 'lowpass', f0: 600, f1: 60, dur: 1.8, vol: 0.4, attack: 0.01 });
+    for (const [f, v] of [[147, 0.2], [294, 0.1], [352, 0.07], [441, 0.06], [587, 0.04], [880, 0.025]]) tone(t + 0.18, { type: 'sine', f0: f, dur: 3.2, vol: v, attack: 0.004 });
+  },
+  // A crypt's lord slain: the same, smaller - a shorter boom and a smaller, higher bell.
+  lordslain: (t) => {
+    tone(t, { type: 'sine', f0: 95, f1: 45, dur: 0.7, vol: 0.38 });
+    noise(t, { filter: 'lowpass', f0: 900, f1: 120, dur: 0.8, vol: 0.28 });
+    for (const [f, v] of [[294, 0.12], [588, 0.06], [704, 0.04], [880, 0.03]]) tone(t + 0.12, { type: 'sine', f0: f, dur: 1.8, vol: v, attack: 0.004 });
+  },
+  // The hero rising again: a swell climbing from below into a bright held chord.
+  revive: (t) => {
+    tone(t, { type: 'sine', f0: 110, f1: 440, dur: 0.8, vol: 0.2, attack: 0.3 });
+    noise(t, { filter: 'bandpass', f0: 400, f1: 6000, q: 1.5, dur: 0.9, vol: 0.12, attack: 0.6 });
+    for (const [f, v] of [[440, 0.06], [554, 0.05], [659, 0.05], [880, 0.04]]) tone(t + 0.7, { type: 'sawtooth', f0: f, dur: 1.3, vol: v * 0.7, attack: 0.05, lp: 3000 });
+  },
+  // A new record, a personal best: a fanfare - three quick notes and a held chord, a bell on top.
+  record: (t) => {
+    const k = LEVEL.record;
+    [[523, 0], [659, 0.11], [784, 0.22]].forEach(([f, d]) => tone(t + d, { type: 'square', f0: f, dur: 0.1, vol: 0.06 * k }));
+    for (const f of [523, 659, 784, 1046]) tone(t + 0.36, { type: 'square', f0: f, dur: 0.9, vol: 0.035 * k, attack: 0.01 });
+    tone(t + 0.36, { type: 'sine', f0: 2093, dur: 1.4, vol: 0.05 * k, attack: 0.003 });
+  },
+  // A hero unlocked: the bell, then a rising call answered.
+  unlock: (t) => {
+    for (const [f, v] of [[220, 0.18], [440, 0.09], [556, 0.06], [660, 0.05]]) tone(t, { type: 'sine', f0: f, dur: 2.4, vol: v, attack: 0.005 });
+    arp(t + 0.3, [440, 554, 659, 880, 1109], 0.09, { type: 'triangle', dur: 0.5, vol: 0.07 });
   },
   chestopen: (t) => {
     tone(t, { type: 'sawtooth', f0: 90, f1: 60, dur: 0.25, vol: 0.12, lp: 600 });
@@ -376,10 +465,13 @@ const SFX = {
     tone(t + 0.09, { type: 'sine', f0: 3136, dur: 0.4, vol: 0.025, attack: 0.004 });
     noise(t + 0.05, { filter: 'highpass', f0: 5000, f1: 9000, dur: 0.5, vol: 0.05, attack: 0.08 });
   },
+  // The ultimate's launch: a rising rush and a chord, a low hit under it.
   ult: (t) => {
+    tone(t, { type: 'sine', f0: 75, f1: 38, dur: 0.35, vol: 0.4 });
+    noise(t, { filter: 'lowpass', f0: 900, f1: 120, dur: 0.18, vol: 0.3 });
     noise(t, { f0: 300, f1: 5000, dur: 0.6, vol: 0.3, attack: 0.15 });
-    arp(t, [262, 392, 523, 784], 0.06, { type: 'sawtooth', dur: 0.5, vol: 0.06, lp: 2500 });
-    tone(t, { type: 'sine', f0: 60, f1: 120, dur: 0.6, vol: 0.3 });
+    arp(t + 0.05, [262, 392, 523, 784], 0.06, { type: 'sawtooth', dur: 0.5, vol: 0.06, lp: 2500 });
+    tone(t + 0.15, { type: 'sine', f0: 60, f1: 120, dur: 0.6, vol: 0.25 });
   },
   enemyshot: (t, o) => tone(t, { type: 'sawtooth', f0: 300, f1: 900, dur: 0.15, vol: 0.05, lp: 1800, pan: o.pan }),
   charge: (t, o) => tone(t, { type: 'sawtooth', f0: 90, f1: 240, dur: 0.35, vol: 0.08, lp: 900, pan: o.pan }),
@@ -434,10 +526,27 @@ export function sfx(name, opts = {}) {
   if (!fn) return;
   try {
     fn(t + 0.005, { p: opts.pitch ?? 1, pan: opts.pan ?? 0, size: opts.size ?? 1 });
+    if (DUCKED.has(name)) duckMusic();
   } catch {
     /* audio graph errors should never break the game */
   }
 }
+
+// The music lowered by `db` for `secs` (down in DUCK.down, back up over DUCK.up), from wherever
+// it stands now, so a beat over a beat holds it down without a jump.
+export function duckMusic(secs = DUCK.secs, db = DUCK.db) {
+  if (!A.ctx || !A.duck) return;
+  const g = A.duck.gain, now = A.ctx.currentTime, low = Math.pow(10, db / 20);
+  g.cancelScheduledValues(now);
+  g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(low, now + DUCK.down);
+  g.setValueAtTime(low, now + Math.max(DUCK.down, secs - DUCK.up));
+  g.linearRampToValueAtTime(1, now + secs);
+}
+
+// The sounds' names, and those with a limit, for the tests.
+export const soundNames = () => Object.keys(SFX);
+export const limited = (name) => !!LIMITS[name];
 
 // ---------------------------------------------------------------- music --
 
@@ -524,19 +633,20 @@ function fadeFiles(except, secs) {
   }
 }
 
-// Start a piece from its file; whatever played before fades out. A piece with no file is silence.
-function startPiece(name) {
+// Start a piece from its file; whatever played before fades out (over `fade` s; the new one comes
+// in over the same, or at once when `slam`). A piece with no file is silence.
+function startPiece(name, fade = 0.9, slam = false) {
   if (!A.ctx) return;
   if (!(A.files && A.files[name])) {
     fadeFiles(null, 0.6);
     return;
   }
   const t = track(name), now = A.ctx.currentTime;
-  fadeFiles(name, 0.9);
+  fadeFiles(name, fade);
   clearTimeout(t.fadeTimer);
   t.gain.gain.cancelScheduledValues(now);
-  t.gain.gain.setValueAtTime(0, now);
-  t.gain.gain.linearRampToValueAtTime(1, now + 0.9);
+  t.gain.gain.setValueAtTime(slam ? 1 : 0, now);
+  if (!slam) t.gain.gain.linearRampToValueAtTime(1, now + fade);
   t.cur = 0;
   t.voices.forEach((v, i) => {
     v.g.gain.cancelScheduledValues(now);
@@ -550,11 +660,25 @@ function startPiece(name) {
 
 const piecePlaying = (name) => A.songName === name && A.tracks.get(name) && A.tracks.get(name).playing;
 
-export function playMusic(name) {
+// o.fade: seconds to cross over (0.9 by default; a boss's fall eases back over longer).
+export function playMusic(name, o = {}) {
   A.after = null;
+  clearTimeout(A.cutTimer);
   if (piecePlaying(name)) return;
   A.songName = name;
-  startPiece(name);
+  startPiece(name, o.fade || 0.9);
+}
+
+// A boss's arrival: the music cut to silence for `gap` s, then the piece slams in at full.
+export function cutToMusic(name, gap = 0.4) {
+  A.after = null;
+  A.songName = name;
+  clearTimeout(A.cutTimer);
+  if (!A.ctx) return;
+  fadeFiles(null, 0.05);
+  A.cutTimer = setTimeout(() => {
+    if (A.songName === name) startPiece(name, 0.05, true);
+  }, gap * 1000);
 }
 
 export function stopMusic() {
@@ -579,7 +703,7 @@ export function playAfterJingle(name) {
 
 // What the music is doing, for the developer panel and tests: the piece, and each file's players.
 export function musicState() {
-  return { piece: A.songName, after: A.after, files: A.files, tracks: A.tracks };
+  return { piece: A.songName, after: A.after, files: A.files, tracks: A.tracks, duck: A.duck ? A.duck.gain.value : 1 };
 }
 
 export function audioReady() {

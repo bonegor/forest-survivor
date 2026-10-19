@@ -884,7 +884,7 @@ export class Game {
     this.timeScale = 0.35;
     this.slowT = 1.1;
     this.whiteFlash = 0.6;
-    sfx('bigexplode');
+    sfx('bossslain');
     explode(this, e.x, e.y - 8, 60, 0, null, 'fire');
     for (let i = 0; i < 6; i++) {
       this.effects.push(new Meteor(this, null, e.x + rand(-30, 30), e.y + rand(-24, 24), 20, 0, 0.1 + i * 0.12, { fall: 0.01 }));
@@ -928,7 +928,7 @@ export class Game {
     this.timeScale = 0.4;
     this.slowT = 0.8;
     this.whiteFlash = 0.4;
-    sfx('bigexplode');
+    sfx('lordslain');
     explode(this, e.x, e.y - 8, 40, 0, null, 'fire');
     for (let i = 0; i < 10; i++) this.addPickup('coin', e.x, e.y, 2);
     this.addPickup('goldpile', e.x, e.y, left ? 20 : 30);
@@ -1353,7 +1353,7 @@ export class Game {
     const p = this.player;
     this.moment('revive', MOMENT.revive);
     this.whiteFlash = 1;
-    sfx('relic');
+    sfx('revive');
     if (relic) {
       this.banner(`${PASSIVES[relic].name}!`, 'You rise from the ashes', '#f77622', 2.5);
       this.numbers.text(p.x, p.y - 22, `${PASSIVES[relic].name} spent`, 'fire');
@@ -1432,7 +1432,7 @@ export class Game {
     if (!this.bestBeaten && this.rankedBest > 0 && this.time > this.rankedBest) {
       this.bestBeaten = true;
       this.banner('New personal best!', 'Every second now is a record', '#63c74d', 3);
-      sfx('bell');
+      sfx('record');
     }
   }
 
@@ -1442,7 +1442,7 @@ export class Game {
     const h = HEROES[this.unlocks];
     this.unlocks = null;
     this.banner(`${h.title} unlocked!`, `${h.name} can join your next run`, h.color, 3.5);
-    sfx('bell');
+    sfx('unlock');
   }
 
   // -------------------------------------------------------- end states --
