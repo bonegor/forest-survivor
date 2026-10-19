@@ -14,7 +14,9 @@ test('a seeded bot game replays exactly and reports its stats', () => {
   assert.deepEqual(play(7), a);
   assert.equal(a.outcome, 'alive');
   assert.equal(a.time, 45);
-  assert.ok(Math.abs(a.ticks - 45 * 60) <= 1, 'fixed 60 Hz steps');
+  // Fixed 60 Hz steps; an ultimate's launch stops the world 0.2 s (ULT_LAUNCH.stop), 12 more steps each.
+  const stops = (a.ticks - 45 * 60) / 12;
+  assert.ok(a.ticks >= 45 * 60 - 1 && Math.abs(stops - Math.round(stops)) <= 0.1 && stops <= 4, `fixed 60 Hz steps (${a.ticks})`);
   assert.ok(a.kills > 0 && a.level > 1, 'it fought and levelled');
   assert.ok(a.damageTaken >= 0 && a.hits >= 0 && a.weapons[0].startsWith('sword:'));
   assert.notDeepEqual(play(8), a, 'another seed plays another game');

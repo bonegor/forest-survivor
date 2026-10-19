@@ -1,6 +1,7 @@
 // In-game HUD, drawn into the low-res UI canvas (1 unit = 1 art pixel).
 
 import { drawText, textCanvas, textWidth, GLYPH_H } from '../engine/font.js';
+import { logo } from '../ui/ui.js';
 import { SPR, buildSprite } from '../engine/sprites.js';
 import { input } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
@@ -12,6 +13,7 @@ import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
 import { DEATH } from './game.js';
 import { ARRIVAL, LOW_HP } from './arrival.js';
+import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { HEROES } from '../data/heroes.js';
 
@@ -355,9 +357,25 @@ export class Hud {
     if (this.flung.length < 12) this.flung.push({ x: (x - cam.x) * z, y: (y - 8 - cam.y) * z, t: 0 });
   }
 
+  // A fury orb picked up: a comet from world point (x, y) to the HUD's orb, carrying `amount` of the
+  // fury (already the hero's: the orb's fill waits for it, drawOrbs).
+  comet(x, y, amount) {
+    const cam = this.g.cam, z = cam.S / view.S;
+    (this.comets ??= []).push({ x: (x - cam.x) * z, y: (y - 8 - cam.y) * z, amount, t: 0 });
+  }
+
+  // The fury the orb shows: the hero's, less what is still flying to it.
+  shownFury() {
+    let f = this.g.player.fury;
+    for (const c of this.comets || []) f -= c.amount;
+    return Math.max(0, f);
+  }
+
   // dt: real seconds since the last frame (the falling bar runs by it).
   draw(ctx, W, H, t, dt = 1 / 60) {
     const g = this.g, p = g.player;
+    this.lastDt = dt;
+    this.drawUltLaunch(ctx, W, H);
     this.drawXp(ctx, W, p);
     this.drawSlots(ctx, p);
     this.drawTop(ctx, W, t, dt);
@@ -576,8 +594,9 @@ export class Hud {
     const ox = 4, oy = H - hpImg.height - 4;
     ctx.drawImage(hpImg, ox, oy);
     drawText(ctx, `${Math.ceil(p.hp)}`, ox + hpImg.width / 2, oy + hpImg.height / 2 - 4, { align: 'center', color: '#ffffff' });
-    const full = p.fury >= 100, almost = !full && p.fury >= FURY_ORB.almost;
-    const fImg = (full ? this.furyFull : this.fury).render(p.fury / 100, t, full ? 1 : almost ? FURY_ORB.glow : 0);
+    const shown = this.shownFury();
+    const full = p.fury >= 100 && shown >= 100, almost = !full && shown >= FURY_ORB.almost;
+    const fImg = (full ? this.furyFull : this.fury).render(shown / 100, t, full ? 1 : almost ? FURY_ORB.glow : 0);
     const fx = W - fImg.width - 4, fy = H - fImg.height - 4;
     ctx.drawImage(fImg, fx, fy);
     const ocx = fx + fImg.width / 2, ocy = fy + fImg.height / 2;
@@ -607,7 +626,45 @@ export class Hud {
       drawText(ctx, key, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: blink ? '#ffffff' : '#fee761' });
       drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: blink ? '#fee761' : '#f6757a' });
     } else {
-      drawText(ctx, `${Math.floor(p.fury)}%`, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: '#e8b796' });
+      drawText(ctx, `${Math.floor(shown)}%`, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: '#e8b796' });
+    }
+    // The ultimate's own kills, counting beside the orb while it lasts.
+    const run = g.ultRun;
+    if (run && run.kills > 0) {
+      const c = textCanvas(`×${run.kills}`, ['#ffffff', '#f6757a', '#be4a2f'], '#181425', null, 'bold');
+      ctx.drawImage(c, Math.round(fx - c.width * 2 - 4), Math.round(ocy - c.height), c.width * 2, c.height * 2);
+    }
+    // Fury comets on their way: a bright head and a tail, landing in the orb.
+    for (let i = (this.comets || []).length - 1; i >= 0; i--) {
+      const c = this.comets[i];
+      c.t += this.lastDt || 1 / 60;
+      const k = c.t / COMET;
+      if (k >= 1) {
+        this.comets.splice(i, 1);
+        this.cometHit = 0.15;
+        continue;
+      }
+      const e = ease.inQuad(k), at = (kk) => [c.x + (ocx - c.x) * kk, c.y + (ocy - c.y) * kk - Math.sin(kk * Math.PI) * 30];
+      // The tail, fading back along its arc; then a glow and the bright head.
+      for (let j = 10; j >= 1; j--) {
+        const [x, y] = at(Math.max(0, e - j * 0.03)), r = Math.max(1, 4 - j * 0.35);
+        ctx.globalAlpha = 0.75 - j * 0.065;
+        ctx.fillStyle = j > 5 ? '#be4a2f' : '#f6757a';
+        ctx.fillRect(Math.round(x - r / 2), Math.round(y - r / 2), Math.round(r), Math.round(r));
+      }
+      const [hx, hy] = at(e);
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = '#feae34';
+      ctx.fillRect(Math.round(hx - 4), Math.round(hy - 4), 8, 8);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(Math.round(hx - 2), Math.round(hy - 2), 5, 5);
+    }
+    if (this.cometHit > 0) {
+      this.cometHit -= this.lastDt || 1 / 60;
+      ctx.globalAlpha = clamp(this.cometHit / 0.15, 0, 1);
+      orbRing(ctx, ocx, ocy, ORB_R + 2, '#ffffff');
+      ctx.globalAlpha = 1;
     }
     if (g.player.revives > 0) ctx.drawImage(SPR.i_revival.frames[0].c, ox + hpImg.width - 6, oy - 8, 12, 12);
   }
@@ -672,6 +729,44 @@ export class Hud {
       ctx.globalAlpha = 1;
     }
     drawText(ctx, label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+  }
+
+  // The ultimate's launch (Game.launchUlt, ULT_LAUNCH): the screen dims round a light on the hero and
+  // a cut-in slides across, his menu pose and the ultimate's name in the logo font.
+  drawUltLaunch(ctx, W, H) {
+    const g = this.g, L = g.ultLaunch;
+    if (!L) return;
+    const T = ULT_LAUNCH, t = L.started ? T.stop + L.t : T.stop - g.ultStop;
+    const fade = t < 0.08 ? t / 0.08 : t > T.dur - 0.15 ? clamp((T.dur - t) / 0.15, 0, 1) : 1;
+    const cam = g.cam, z = cam.S / view.S, hx = (g.player.x - cam.x) * z, hy = (g.player.y - 10 - cam.y) * z;
+    const grad = ctx.createRadialGradient(hx, hy, 18, hx, hy, Math.hypot(W, H) * 0.5);
+    grad.addColorStop(0, 'rgba(10,6,16,0)');
+    grad.addColorStop(0.25, `rgba(10,6,16,${(0.55 * fade).toFixed(3)})`);
+    grad.addColorStop(1, `rgba(10,6,16,${(0.8 * fade).toFixed(3)})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    // The cut-in: a band sliding in from the left, holding, then away to the right.
+    const k = t < T.slideIn ? ease.outCubic(t / T.slideIn) : t < T.slideOut ? 1 : 1 + ease.inCubic(clamp((t - T.slideOut) / (T.dur - T.slideOut), 0, 1));
+    const bh = Math.round(H * 0.26), by = Math.round(H * 0.62 - bh / 2), off = Math.round((k - 1) * W);
+    ctx.save();
+    ctx.translate(off, 0);
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = '#181425';
+    ctx.beginPath();
+    ctx.moveTo(0, by + 10);
+    ctx.lineTo(W, by);
+    ctx.lineTo(W, by + bh - 10);
+    ctx.lineTo(0, by + bh);
+    ctx.fill();
+    ctx.fillStyle = '#f6757a';
+    ctx.fillRect(0, by + bh - 3, W, 2);
+    ctx.fillRect(0, by + 4, W, 1);
+    ctx.globalAlpha = 1;
+    const hero = g.player.hero, pose = SPR[hero.pose] || SPR[hero.sprite], pf = pose.frames[0].c, ps = (bh - 6) / pf.height;
+    ctx.drawImage(pf, Math.round(W * 0.18 - (pf.width * ps) / 2), by + 3, Math.round(pf.width * ps), Math.round(pf.height * ps));
+    const name = logo(hero.ultName.toUpperCase(), ['#ffffff', '#fee761', '#f6757a', '#be4a2f', '#73172d']), ns = Math.min(1, (W * 0.62) / name.width);
+    ctx.drawImage(name, Math.round(W * 0.34), Math.round(by + bh / 2 - (name.height * ns) / 2), Math.round(name.width * ns), Math.round(name.height * ns));
+    ctx.restore();
   }
 
   // A boss's arrival (arrival.js): before it, the screen's edges darken with "Something stirs in the

@@ -11,6 +11,7 @@ import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } fro
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx, playMusic, playJingle, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP } from './arrival.js';
+import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
 import { view } from '../engine/view.js';
 import { input } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
@@ -172,6 +173,11 @@ export class Game {
     this.stirFor = -1; // the night's boss the stir was for (Spawner)
     this.card = null; // { name, title, color, t, letterbox }
     this.bossBeatT = 0;
+    // The ultimate as a moment (ultimate.js): its launch, the world's stop, and its run (kills, damage).
+    this.ultLaunch = null; // { type, t, started }
+    this.ultStop = 0;
+    this.ultRun = null; // { type, name, kills, dmg }
+    this.stats.bestUlt = null; // { kills, dmg } the run's best ultimate
     this.gemCombo = 0;
     this.gemComboT = 0;
     this.banners = [];
@@ -762,6 +768,7 @@ export class Game {
     // Dealt: the health it took, not the overkill.
     const took = Math.min(d, Math.max(0, e.hp + d));
     if (o.w) o.w.dmgDealt += took;
+    if (this.ultRun && ultBlow(o)) this.ultRun.dmg += took;
     this.stats.damage += took;
     const pan = clamp((e.x - p.x) / 200, -1, 1);
     if (crit) sfx('crit', { pitch: rand(0.9, 1.1), pan });
@@ -781,6 +788,7 @@ export class Game {
     }
     const p = this.player;
     this.kills++;
+    if (this.ultRun && ultBlow(o)) this.ultRun.kills++;
     this.combo++;
     this.comboT = 2;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
@@ -1415,15 +1423,24 @@ export class Game {
 
   // ---------------------------------------------------------- ultimate --
 
+  // The press: the world stops for ULT_LAUNCH.stop (the hero and the HUD go on) under the cut-in,
+  // with the sound and a low hit; then the ultimate itself (startUlt, from update once the stop ends).
+  launchUlt(type) {
+    const p = this.player;
+    this.ultLaunch = { type, t: 0, started: false };
+    this.ultStop = ULT_LAUNCH.stop;
+    p.invuln = Math.max(p.invuln, ULT_LAUNCH.stop + 0.1);
+    sfx('ult');
+  }
+
   startUlt(type) {
     const p = this.player;
     const dur = ULT_DURATION[type];
     p.ult = { type, t: dur, max: dur, k: 0 };
-    sfx('ult');
-    this.whiteFlash = 0.25;
+    // Its own kills and damage, for the live count and the receipt (T3: a shake, no white flash).
+    this.ultRun = { type, name: p.hero.ultName, kills: 0, dmg: 0 };
     this.shake(0.4);
     this.effects.push(new Ring(this, p.x, p.y, 4, 90, 0.5, '#f6757a', true, 2));
-    this.banner(p.hero.ultName + '!', '', '#f6757a', 1.4);
     if (type === 'whirlwind') this.effects.push(new Whirl(this, dur));
     else if (type === 'arrowstorm') this.effects.push(new ArrowRain(this, dur));
     else if (type === 'shadowdance') {
@@ -1439,6 +1456,18 @@ export class Game {
       this.effects.push(new Ring(this, p.x, p.y, 6, 110, 0.7, '#9ee562', false, 3));
       this.pushback(p.x, p.y, 70, 260);
     }
+  }
+
+  // The ultimate over (and, for the Army of the Dead, its last knight gone): its receipt, once.
+  ultReceipt() {
+    const r = this.ultRun;
+    if (!r || this.player.ult || this.minions.some((m) => m.ult)) return;
+    this.ultRun = null;
+    const best = this.stats.bestUlt, beats = !best || r.kills > best.kills || (r.kills === best.kills && r.dmg > best.dmg);
+    if (beats) this.stats.bestUlt = { kills: r.kills, dmg: Math.round(r.dmg) };
+    this.receipts = (this.receipts || 0) + 1;
+    this.banner(`${r.name.toUpperCase()} · ${r.kills} slain · ${compact(r.dmg)} damage`, beats && best ? 'BEST' : '', '#f6757a', RECEIPT);
+    sfx('tally', { pitch: 1.5 });
   }
 
   updateUlt(u, dt) {
@@ -1563,6 +1592,8 @@ export class Game {
         this.shake(0.25);
       }
     }
+    this.ultStop = Math.max(0, this.ultStop - rdt);
+    if (this.ultLaunch && this.ultLaunch.started && (this.ultLaunch.t += rdt) >= ULT_LAUNCH.dur) this.ultLaunch = null;
     // Banners too: one that came before the cards has had its say when they close. A boss's name
     // card holds them back (they wait, unseen, and go on after it).
     for (let i = this.banners.length - 1; i >= 0; i--) {
@@ -1582,8 +1613,14 @@ export class Game {
     // The weapons the next chest will evolve (EVOLVE READY on their slots and on the chests lying about).
     this.evoReady = this.evolvable();
     if (this.state === 'paused' || this.state === 'levelup' || this.state === 'chest' || this.state === 'item' || this.state === 'over') return;
-    const dt = Math.min(rdt, 1 / 30) * this.timeScale * this.pace;
+    // The ultimate's launch stops the world for a moment: the hero (and the HUD) go on.
+    const pdt = Math.min(rdt, 1 / 30) * this.timeScale * this.pace, dt = this.ultStop > 0 ? 0 : pdt;
     this.frame++;
+    if (this.ultLaunch && !this.ultLaunch.started && this.ultStop <= 0 && this.state === 'play') {
+      this.ultLaunch.started = true;
+      this.startUlt(this.ultLaunch.type);
+    }
+    this.ultReceipt();
     const p = this.player;
 
     if (this.state === 'play') {
@@ -1607,7 +1644,7 @@ export class Game {
           sfx('heartbeat');
         }
       } else this.bossBeatT = 0;
-      p.update(dt);
+      p.update(pdt);
       this.spawner.update(dt);
     } else if (this.state === 'dying') {
       this.deathT += rdt;

@@ -202,11 +202,15 @@ export class Pickup {
       case 'frostrune':
         g.freezeAll(6);
         break;
-      case 'fury':
+      case 'fury': {
+        // The fury is his at once; the look follows: a comet to the HUD orb (Hud.comet).
+        const was = p.fury;
         p.addFury(40);
+        g.hud.comet(this.x, this.y, p.fury - was);
         sfx('pick');
         g.particles.burst(p.x, p.y - 8, 2, 16, [PC.P, PC.i, PC.w], 70, 0.6, 1, P.GLOW | P.FADE, { vz: 60 });
         break;
+      }
       case 'chest':
         g.openChest(this.opts);
         break;

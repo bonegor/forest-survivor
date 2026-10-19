@@ -269,9 +269,10 @@ export class Player {
       this.ult.t -= dt;
       g.updateUlt(this.ult, dt);
       if (this.ult.t <= 0) this.ult = null;
-    } else if (this.fury >= 100 && input.pressed('ult')) {
+    } else if (this.fury >= 100 && input.pressed('ult') && !g.ultLaunch) {
+      // Spent at once, so the press can't be doubled; the launch plays first (Game.launchUlt).
       this.fury = 0;
-      g.startUlt(this.hero.ult);
+      g.launchUlt(this.hero.ult);
     }
   }
 
