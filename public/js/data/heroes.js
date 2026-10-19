@@ -14,9 +14,7 @@ export const HEROES = {
     name: 'Sir Aldric',
     title: 'Knight',
     sprite: 'knight',
-    pose: 'knight_pose', // shown on the menus instead of the in-game sprite
-    picture: 'img/knight-portrait-v2.png',
-    portrait: true,
+    pose: 'knight_pose', // his painted pose on the in-run panels; the hero screen frames the in-game sprite, as for all five
     weapon: 'sword', // in the crypts each hero has his own weapon alone, struck by the player (Game.caveStrike)
     unique: ['sword'],
     color: '#0099db',
@@ -70,6 +68,9 @@ export const HEROES = {
     weapon: 'daggers',
     unique: ['daggers'],
     color: '#8f5bb0',
+    // His light line 2 px wide in play and on the menus: his dark tones (the owner's pick) lose him
+    // at night otherwise. Drawn round him, his colours untouched.
+    line: 2,
     stats: { maxHp: 95, speed: 1.2, crit: 0.18, luck: 1.2 },
     perk: 'Shadowstep: +18% crit, +20% speed & luck',
     ult: 'shadowdance',
@@ -94,6 +95,9 @@ export const HEROES = {
     ultDesc: 'Raise a ring of empowered death knights around you.',
   },
 };
+
+// The light line drawn round the hero, in play (game.js HERO_MARK) and on the menus.
+export const HERO_LINE = '#d8e2f0';
 
 // The weapons a hero starts a run with, each at level 1.
 export const startWeapons = (hero) => hero.start || [hero.weapon];

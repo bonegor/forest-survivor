@@ -179,6 +179,16 @@ export function opaqueList(buf, step = 1) {
   return out;
 }
 
+// The ring just outside a buffer's opaque pixels in a colour ('#rrggbb'), `width` pixels thick
+// (the buffer grows by `width` each side): the first pixel solid, the ones outside it fainter.
+export function rimRing(buf, color, width = 1) {
+  let out = buf;
+  for (let i = 0; i < width; i++) out = outline(out, hexPack(color, Math.round(255 * Math.max(0.3, 1 - 0.55 * i))));
+  const inner = pad(buf, width);
+  for (let i = 0; i < out.d.length; i++) if (inner.d[i] >>> 24) out.d[i] = 0;
+  return out;
+}
+
 // Average opaque colour, handy for tinting debris.
 export function bounds(buf) {
   let x0 = buf.w, y0 = buf.h, x1 = -1, y1 = -1;

@@ -1,7 +1,7 @@
 // A single run: owns every system and runs the update/draw loop.
 
 import { diffFor, nightmareFor } from '../data/difficulty.js';
-import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
+import { HEROES, HERO_LINE, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
@@ -33,7 +33,7 @@ import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor } from './effects.js';
 import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
-import { outline, pad, hexPack } from '../engine/pixels.js';
+import { rimRing } from '../engine/pixels.js';
 import { Minion } from './minions.js';
 import { Hints } from './hints.js';
 
@@ -75,13 +75,7 @@ export const isFiller = (c) => FILLER_IDS.includes(c.type);
 // pulsing, turning red under a third of his health; a 1 px light line round his sprite, drawn
 // unlit; and when something stands in front of him (a foe, a minion, a boss, a big number), his
 // ring, a ghost of him (ghost) and a white line over the whole scene (Game.drawHeroOver).
-export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44', line: '#d8e2f0', overLine: '#ffffff', ghost: 0.5 };
-// Just the 1 px ring outside a frame's own pixels, in a colour (one pixel larger each side).
-function rimOnly(b, color) {
-  const out = outline(b, hexPack(color)), inner = pad(b, 1);
-  for (let i = 0; i < out.d.length; i++) if (inner.d[i] >>> 24) out.d[i] = 0;
-  return out;
-}
+export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44', line: HERO_LINE, overLine: '#ffffff', ghost: 0.5 };
 
 
 // A foe the hero's weapons may pick out, to aim, cast or chain at (nearestEnemy, nearestEnemies,
@@ -2150,12 +2144,13 @@ export class Game {
     this.drawHeroLine(ctx, 1);
   }
 
-  // The hero's 1 px outline round his sprite as last drawn, in a colour, at alpha a.
+  // The hero's outline round his sprite as last drawn, in a colour, at alpha a: 1 px, or as wide as
+  // his `line` (the Shadow's 2, his dark tones lost at night otherwise; the outer pixel fainter).
   drawHeroLine(ctx, a, color = HERO_MARK.line) {
-    const p = this.player, [X, Y, w, h, fr, flip] = p._rect, S = this.cam.S;
+    const p = this.player, [X, Y, w, h, fr, flip] = p._rect, S = this.cam.S, n = p.hero.line || 1;
     if (p.ult && p.ult.type === 'shadowdance') return; // vanished
     ctx.globalAlpha = a;
-    ctx.drawImage(fr.variant('heroline' + color, (b) => rimOnly(b, color), flip), X - S, Y - S, w + 2 * S, h + 2 * S);
+    ctx.drawImage(fr.variant(`heroline${color}:${n}`, (b) => rimRing(b, color, n), flip), X - n * S, Y - n * S, w + 2 * n * S, h + 2 * n * S);
     ctx.globalAlpha = 1;
   }
 

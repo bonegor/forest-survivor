@@ -2,11 +2,13 @@
 
 import { input } from '../engine/input.js';
 import { sfx, playMusic, setVolumes, initAudio } from '../engine/audio.js';
-import { SPR, smoothScaled, walkFrame, loopFrame } from '../engine/sprites.js';
+import { SPR, walkFrame } from '../engine/sprites.js';
 import { saveSettings, DEBUG } from '../engine/storage.js';
-import { overlay, picture, presentBackdrop } from '../engine/view.js';
+import { presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp } from '../engine/util.js';
-import { HEROES, HERO_ORDER, startWeapons } from '../data/heroes.js';
+import { HEROES, HERO_ORDER, HERO_LINE, startWeapons } from '../data/heroes.js';
+import { rimRing, silhouette, hexPack } from '../engine/pixels.js';
+import { trialScene, SCENE, heroCrop, portraitBackdrop, pixelEllipse, mix, PORTRAIT } from './scenes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { MODES, NORMAL, VETERAN, NIGHTMARE } from '../data/difficulty.js';
 import { UPGRADES, upgradeCost, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
@@ -25,18 +27,6 @@ function goldTag(ctx, app, x, y, align = 'right') {
   const left = align === 'right' ? x - w : x;
   ctx.drawImage(SPR.h_coin.frames[0].c, left, y);
   drawText(ctx, g, left + 10, y + 1, { color: ['#fff3a8', '#fee761', '#feae34'] });
-}
-
-// Pixel moon: a crescent for the 15-minute night, a full blood moon for Ranked.
-function moon(ctx, cx, cy, r, crescent, cols = ['#fff8e0', '#e4d8b4']) {
-  for (let y = -r; y <= r; y++) {
-    for (let x = -r; x <= r; x++) {
-      if (x * x + y * y > r * r + 1) continue;
-      if (crescent && (x - 2) * (x - 2) + (y + 1) * (y + 1) <= r * r) continue;
-      ctx.fillStyle = x + y < 0 ? cols[0] : cols[1];
-      ctx.fillRect(cx + x, cy + y, 1, 1);
-    }
-  }
 }
 
 function header(ctx, W, title, y = 8) {
@@ -199,6 +189,36 @@ export class TitleScreen {
 
 // ------------------------------------------------------------------- hero --
 
+// A hero's light line round a frame drawn at (dx, dy) at scale s, for a hero with a wide one in play
+// (the Shadow, game.js drawHeroLine): on the menus' lighter ground one faint pixel is enough.
+function heroLine(ctx, h, fr, dx, dy, s, a) {
+  if (!h.line) return;
+  ctx.globalAlpha = a;
+  ctx.drawImage(fr.variant(`heroline${HERO_LINE}:1`, (b) => rimRing(b, HERO_LINE, 1)), dx - s, dy - s, (fr.w + 2) * s, (fr.h + 2) * s);
+  ctx.globalAlpha = 1;
+}
+
+// The hero screen's cards and portrait draw every hero at one whole-number scale, from the largest
+// crop of any hero's idle frames (heroCrop), so the five stand alike.
+function heroesCrop() {
+  const crops = HERO_ORDER.map((id) => heroCrop(SPR[HEROES[id].sprite]));
+  return { w: Math.max(...crops.map((c) => c.w)), h: Math.max(...crops.map((c) => c.h)) };
+}
+
+// The cards' one scale for a card cw x ch: the hero with room at the sides and his name under him.
+export const cardScale = (cw, ch) => {
+  const c = heroesCrop();
+  return Math.max(1, Math.min(3, Math.floor((cw - 8) / c.w), Math.floor((ch - 18) / c.h)));
+};
+
+// The portrait frame's scale for a frame fh tall and at most maxW wide, and where his feet stand
+// in it (foot, from its top): over the floor, under the glow.
+export function portraitFit(fh, maxW) {
+  const c = heroesCrop();
+  const floorH = Math.max(4, Math.round(fh * PORTRAIT.floor)), foot = fh - Math.round(floorH * 0.55);
+  return { s: Math.max(1, Math.min(6, Math.floor((foot - 6) / c.h), Math.floor((maxW - 12) / c.w))), foot };
+}
+
 export class HeroScreen {
   enter(app) {
     this.app = app;
@@ -219,6 +239,7 @@ export class HeroScreen {
     const next = nextHeroUnlock(prof);
     const n = HERO_ORDER.length;
     const cw = Math.min(64, Math.floor((W - 30) / n) - 6), ch = 66;
+    const cs = cardScale(cw, ch); // the five heroes at one scale
     const total = n * cw + (n - 1) * 6;
     let x = Math.round(W / 2 - total / 2);
     const y = 32;
@@ -239,11 +260,12 @@ export class HeroScreen {
       const fr = spr && (f && !locked ? walkFrame(spr, Math.floor(this.t * 6 * spr.motionRate)) : spr.frames[0]);
       if (fr) {
         const img = locked ? fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff1b141d : 0)) })) : fr.c;
-        const s = h.portrait || spr.fitW < spr.w || spr.fitH < spr.h
-          ? Math.min(2, (cw - 8) / spr.fitW, (ch - 18) / spr.fitH)
-          : img.width * 2 <= cw - 4 ? 2 : 1;
-        // Stand every hero on the same line just above the name.
-        ctx.drawImage(img, Math.round(x + cw / 2 - (img.width * s) / 2), y + ch - 14 - (spr.anchorY + 1) * s, img.width * s, img.height * s);
+        // At the cards' one scale, every hero standing on the same line just above the name, centred
+        // on what he covers.
+        const crop = heroCrop(spr);
+        const dx = Math.round(x + cw / 2 - (crop.x + crop.w / 2) * cs), dy = y + ch - 14 - (spr.anchorY + 1) * cs;
+        ctx.drawImage(img, dx, dy, img.width * cs, img.height * cs);
+        if (!locked) heroLine(ctx, h, fr, dx, dy, cs, f ? 0.7 : 0.45);
       }
       if (locked) {
         // The next one shows what it takes; the rest wait their turn.
@@ -274,28 +296,39 @@ export class HeroScreen {
     if (input.pressed('back') && ui.lockT <= 0) app.go('title');
   }
 
+  // The portrait frame: every hero's own sprite (the Knight's painted portrait gave way to it, so
+  // the five match) at one whole-number scale for all five, in a box: a glow in his colour, a
+  // floor, his shadow, a rim light from the top left and his light line where he has one (the
+  // Shadow). Returns the frame's width.
+  portrait(ctx, h, fx, fy, fh, maxW, locked) {
+    const { s, foot } = portraitFit(fh, maxW), footY = fy + foot;
+    const fw = Math.max(90, heroesCrop().w * s + 2 * Math.max(8, 3 * s));
+    const spr = SPR[h.sprite], crop = heroCrop(spr);
+    const fr = crop.list[Math.floor(this.t * (SPR[h.pose]?.fps || 6)) % crop.list.length];
+    ctx.fillStyle = '#0d0b14';
+    ctx.fillRect(fx - 2, fy - 2, fw + 4, fh + 4);
+    ctx.fillStyle = locked ? '#3a4466' : mix(h.color, '#c0cbdc', 0.25);
+    ctx.fillRect(fx - 1, fy - 1, fw + 2, fh + 2);
+    ctx.drawImage(portraitBackdrop(fw, fh, h.color, locked), fx, fy);
+    pixelEllipse(ctx, fx + fw / 2, footY, Math.round(crop.w * s * 0.4), Math.max(2, Math.round(s * 1.5)), 'rgba(5,4,10,0.5)');
+    const dx = Math.round(fx + fw / 2 - (crop.x + crop.w / 2) * s), dy = footY - (crop.y + crop.h - 1) * s;
+    const W1 = fr.w * s, H1 = fr.h * s, rim = mix(h.color, '#ffffff', 0.7);
+    ctx.globalAlpha = locked ? 0.35 : 0.9;
+    ctx.drawImage(fr.variant('rim' + rim, (b) => silhouette(b, hexPack(rim))), dx - s, dy - s, W1, H1);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(locked ? fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff1b141d : 0)) })) : fr.c, dx, dy, W1, H1);
+    if (!locked) heroLine(ctx, h, fr, dx, dy, s, 0.55);
+    return fw;
+  }
+
   detail(ctx, W, H, id, y, locked) {
     const h = HEROES[id];
     const pw = Math.min(W - 16, 330), ph = Math.min(H - y - 26, 120);
     const x = Math.round(W / 2 - pw / 2);
     panel(ctx, x, y, pw, ph, { title: `${h.name.toUpperCase()} — ${h.title.toUpperCase()}` });
-    // A hero's menu pose is shown crisp at 3x (a painted, hires pose 1:1, or its
-    // smaller cut if it would run into the footer line); others are smoothed up
-    // from their sprite.
-    let pose = h.pose && SPR[h.pose];
-    if (!h.portrait && pose && pose.hires > 1 && pose.small && pose.h > ph - 22) pose = SPR[pose.small];
-    const fr = pose ? loopFrame(pose, this.t) : walkFrame(SPR[h.sprite], Math.floor(this.t * 5));
-    const big = pose ? fr.c : smoothScaled(fr, 1);
-    const s = h.portrait ? Math.min(1, (ph - 24) / big.height)
-      : pose ? Math.max(1, Math.round((ph > 90 ? 3 : 2) / pose.hires)) : ph > 90 ? 2 : 1;
-    const artW = Math.round(big.width * s), artH = Math.round(big.height * s);
-    ctx.drawImage(locked ? fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff1b141d : 0)) })) : big, x + 8, y + 10, artW, artH);
-    // A hero's full picture covers its low-res copy (inside the 1px outline) at
-    // the screen's own resolution. Pixel portraits stay on the same pixel grid as
-    // the rest of the menu.
-    const pic = !h.portrait && h.picture && pose === SPR[h.pose] && !locked && picture(h.picture);
-    if (pic) overlay(pic, x + 9, y + 11, artW - 2, artH - 2);
-    const tx = x + 8 + artW + 8;
+    // The portrait frame, as tall as the panel allows over the line of stars under it.
+    const artW = this.portrait(ctx, h, x + 10, y + 12, ph - 27, Math.round(pw * 0.42), locked);
+    const tx = x + 10 + artW + 10;
     const tw = pw - (tx - x) - 8;
     let ty = y + 9;
     const stat = (label, v, max, col) => {
@@ -389,12 +422,14 @@ export class ModeScreen {
       if (f) focusMode = m;
       const sel = app.choice.mode === m;
       panel(ctx, x, y, cw, ch, { trim: f ? ['#ffffff', '#feae34'] : sel ? ['#feae34', '#733e39'] : ['#5a6988', '#3a4466'], rivets: sel, fill: sel ? '#241b2c' : open ? null : '#120e18' });
-      // Each trial its own picture: the night's oak, the Dungeon's stairs, Ranked's grave.
-      const fr = (m === 'dungeon' ? SPR.stairs : m === 'ranked' ? SPR.ranked_grave : SPR.oak1).frames[0];
-      const icon = open ? fr.c : fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff2a2238 : 0)) }));
-      ctx.drawImage(icon, Math.round(x + cw / 2 - icon.width / 2), y + 6);
-      if (m === 's15') moon(ctx, x + cw - 15, y + 12, 4, true);
-      if (m === 'ranked') moon(ctx, x + cw - 15, y + 12, 4, false, open ? ['#f6757a', '#a22633'] : ['#3a4466', '#262b44']);
+      // Each trial its own scene (scenes.js): Survival's dusk, the Dungeon's stairs, Ranked's blood
+      // moon; in shadow while locked. As large as the card's picture area allows, a whole-number scale.
+      const scene = trialScene(m, open);
+      const k = Math.max(1, Math.floor(Math.min((cw - 8) / SCENE.w, (ch - 40) / SCENE.h)));
+      const sx0 = Math.round(x + cw / 2 - (SCENE.w * k) / 2), sy0 = Math.round(y + 4 + (ch - 38 - SCENE.h * k) / 2);
+      ctx.fillStyle = '#0d0b14';
+      ctx.fillRect(sx0 - 1, sy0 - 1, SCENE.w * k + 2, SCENE.h * k + 2);
+      ctx.drawImage(scene, sx0, sy0, SCENE.w * k, SCENE.h * k);
       if (sel) {
         ctx.fillStyle = '#feae34';
         ctx.fillRect(x + 3, y + ch - 12, cw - 6, 9);
