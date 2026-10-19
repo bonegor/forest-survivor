@@ -179,7 +179,7 @@ const LIMITS = {
   explode: [0.06, 4], zap: [0.06, 3], axe: [0.08, 3], shard: [0.1, 2], gem: [0.025, 5], coin: [0.04, 4],
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
-  furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1],
+  furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
 };
 
 const SFX = {
@@ -247,6 +247,62 @@ const SFX = {
   coin: (t, o) => {
     tone(t, { type: 'square', f0: 988 * o.p, dur: 0.06, vol: 0.06 });
     tone(t + 0.06, { type: 'square', f0: 1319 * o.p, dur: 0.16, vol: 0.06 });
+  },
+  // An evolution: the longest and brightest - a low swell, a rising major arpeggio over two octaves
+  // and a shimmering high chord ringing out.
+  evolve: (t) => {
+    tone(t, { type: 'sine', f0: 65, f1: 130, dur: 0.9, vol: 0.32, attack: 0.05 });
+    arp(t, [262, 330, 392, 523, 659, 784, 1046, 1318], 0.055, { type: 'square', dur: 0.3, vol: 0.06 });
+    for (const [f, v] of [[1046, 0.07], [1318, 0.05], [1568, 0.05], [2093, 0.03]]) tone(t + 0.45, { type: 'triangle', f0: f, dur: 1.4, vol: v, attack: 0.01 });
+    noise(t + 0.4, { filter: 'highpass', f0: 6000, f1: 11000, dur: 1.2, vol: 0.08, attack: 0.05 });
+  },
+  // A piece of gear landing, by rarity (o.size): Common and Uncommon a soft clink; Rare a bright
+  // ping; Epic a ringing chord; Legendary a deep thud under a struck bell chord.
+  gear: (t, o) => {
+    const r = o.size;
+    if (r <= 1) {
+      tone(t, { type: 'triangle', f0: 1200 + r * 200, dur: 0.08, vol: 0.06, pan: o.pan });
+      return;
+    }
+    if (r === 2) {
+      arp(t, [988, 1480], 0.06, { type: 'triangle', dur: 0.35, vol: 0.08, pan: o.pan });
+      return;
+    }
+    if (r === 3) {
+      for (const f of [523, 659, 988, 1319]) tone(t, { type: 'triangle', f0: f, dur: 0.9, vol: 0.06, attack: 0.005, pan: o.pan });
+      noise(t, { filter: 'highpass', f0: 5000, dur: 0.5, vol: 0.06 });
+      return;
+    }
+    tone(t, { type: 'sine', f0: 80, f1: 45, dur: 0.6, vol: 0.4 });
+    for (const [f, v] of [[220, 0.14], [440, 0.08], [554, 0.06], [659, 0.06], [880, 0.04], [1319, 0.03]]) tone(t + 0.02, { type: 'sine', f0: f, dur: 2.2, vol: v, attack: 0.004 });
+  },
+  // The gear screen's Epic slam: a ringing chord over a thump.
+  epic: (t) => {
+    tone(t, { type: 'sine', f0: 110, f1: 55, dur: 0.4, vol: 0.3 });
+    arp(t + 0.03, [392, 494, 587, 784], 0.03, { type: 'triangle', dur: 0.9, vol: 0.07 });
+    noise(t, { filter: 'highpass', f0: 4000, dur: 0.6, vol: 0.07, attack: 0.02 });
+  },
+  // The gear screen's Legendary slam: a heavy hit, a choir-like chord swelling, a bell on top.
+  legendary: (t) => {
+    tone(t, { type: 'sine', f0: 70, f1: 35, dur: 0.7, vol: 0.45 });
+    noise(t, { f0: 900, f1: 80, dur: 0.5, vol: 0.3 });
+    for (const [f, v] of [[262, 0.08], [330, 0.06], [392, 0.06], [523, 0.05]]) tone(t + 0.05, { type: 'sawtooth', f0: f, dur: 1.6, vol: v * 0.6, attack: 0.25, lp: 1800 });
+    for (const [f, v] of [[1046, 0.08], [2093, 0.04], [2637, 0.03]]) tone(t + 0.1, { type: 'sine', f0: f, dur: 2, vol: v, attack: 0.004 });
+  },
+  // A milestone level: a fanfare of three rising chords, a bell under the last.
+  milestone: (t) => {
+    [[392, 494, 587], [440, 554, 659], [523, 659, 784]].forEach((ch, i) => ch.forEach((f) => tone(t + i * 0.14, { type: 'square', f0: f, dur: 0.22 + i * 0.15, vol: 0.045 })));
+    tone(t + 0.28, { type: 'sine', f0: 262, dur: 1.4, vol: 0.12, attack: 0.005 });
+  },
+  // A shut chest shaking: a wooden rattle, pitched up a step each set.
+  chestshake: (t, o) => {
+    for (let i = 0; i < 4; i++) noise(t + i * 0.05, { filter: 'bandpass', f0: 700 * o.p, f1: 450 * o.p, q: 3, dur: 0.05, vol: 0.18 });
+    tone(t, { type: 'square', f0: 120 * o.p, f1: 90 * o.p, dur: 0.18, vol: 0.05, lp: 600 });
+  },
+  // One thing a chest shows: a bright note, its pitch the step on the chest's scale.
+  reveal: (t, o) => {
+    tone(t, { type: 'triangle', f0: 784 * o.p, dur: 0.22, vol: 0.09 });
+    tone(t + 0.02, { type: 'square', f0: 1568 * o.p, dur: 0.12, vol: 0.03 });
   },
   // A results row ticking in: a soft wooden click.
   tally: (t, o) => {

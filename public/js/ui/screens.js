@@ -389,7 +389,8 @@ export class ModeScreen {
       if (f) focusMode = m;
       const sel = app.choice.mode === m;
       panel(ctx, x, y, cw, ch, { trim: f ? ['#ffffff', '#feae34'] : sel ? ['#feae34', '#733e39'] : ['#5a6988', '#3a4466'], rivets: sel, fill: sel ? '#241b2c' : open ? null : '#120e18' });
-      const fr = (m === 'dungeon' ? SPR.stairs : SPR.oak1).frames[0];
+      // Each trial its own picture: the night's oak, the Dungeon's stairs, Ranked's grave.
+      const fr = (m === 'dungeon' ? SPR.stairs : m === 'ranked' ? SPR.ranked_grave : SPR.oak1).frames[0];
       const icon = open ? fr.c : fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff2a2238 : 0)) }));
       ctx.drawImage(icon, Math.round(x + cw / 2 - icon.width / 2), y + 6);
       if (m === 's15') moon(ctx, x + cw - 15, y + 12, 4, true);

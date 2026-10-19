@@ -6,7 +6,8 @@ import { sfx, playAfterJingle, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
-import { Game } from '../game/game.js';
+import { Game, MILESTONES } from '../game/game.js';
+import { tierOf, chestFrame, chestTease, revealOrder, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
 import { clockCountsDown, clockTime, heldBuild, revealOn } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
 import { WEAPONS } from '../data/weapons.js';
@@ -146,13 +147,27 @@ function choiceInfo(g, c) {
   return { name, icon, desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44' };
 }
 
+// The cards come face down and flip up FLIP.gap apart, each in FLIP.dur; they can be taken once the
+// last is up (a press before is kept and taken then, never early).
+export const FLIP = { first: 0.05, gap: 0.1, dur: 0.1 };
+const flipAt = (i) => FLIP.first + i * FLIP.gap;
+export const cardsReadyAt = (n) => flipAt(n - 1) + FLIP.dur;
+// A card's back tells its kind: an upgrade's plain, a NEW weapon's blue, a NEW relic's green, and
+// gold for one that completes an evolution (Game.completesEvolution). [fill, trim, pattern]
+const BACKS = {
+  plain: ['#262b44', '#5a6988', '#3a4466'],
+  weapon: ['#124e89', '#0099db', '#2ce8f5'],
+  relic: ['#265c42', '#63c74d', '#9ee562'],
+  gold: ['#be4a2f', '#fee761', '#feae34'],
+};
+
 export class LevelUpOverlay {
   constructor(gs) {
     this.gs = gs;
     this.g = gs.game;
     this.t = 0;
     this.roll();
-    this.lockTime = 0.45;
+    this.lockTime = this.readyAt;
     this.noSpace = true; // it pops up mid-fight: Space mashed for the ultimate mustn't pick a card
     // Shift is the crypts' strike too: held as the screen opens, it isn't ALWAYS until it has been
     // let go and pressed again.
@@ -161,6 +176,11 @@ export class LevelUpOverlay {
 
   roll() {
     this.choices = this.g.levelChoices(this.g.choiceCount());
+    // What each card completes (an evolution's name), and its back.
+    this.completes = this.choices.map((c) => this.g.completesEvolution(c));
+    this.backs = this.choices.map((c, i) => (this.completes[i] ? 'gold' : c.isNew ? (c.type === 'weapon' ? 'weapon' : 'relic') : 'plain'));
+    this.readyAt = cardsReadyAt(this.choices.length);
+    this.pending = null; // a card pressed during the flips, taken when they end
     // Nothing but the fillers (the whole build maxed, which lasts unless a Phoenix Heart is
     // spent): each card offers ALWAYS, and no reroll is spent on them.
     this.fillersOnly = this.g.fillersOnly();
@@ -195,12 +215,16 @@ export class LevelUpOverlay {
       return 'close';
     }
     this.t += dt;
+    const ready = this.t >= this.readyAt;
+    // The level this screen is for; a milestone (10, 25, 50, 100) is told in gold, its stinger once.
+    const lvl = g.player.level - g.pendingLevels + 1, mile = MILESTONES.includes(lvl);
+    if (mile) g.milestoneDue(lvl);
     dim(ctx, W, H, 0.6);
     // Rotating light rays behind the title.
     ctx.save();
     ctx.translate(W / 2, 28);
-    ctx.globalAlpha = 0.12;
-    ctx.fillStyle = '#2ce8f5';
+    ctx.globalAlpha = mile ? 0.18 : 0.12;
+    ctx.fillStyle = mile ? '#feae34' : '#2ce8f5';
     for (let i = 0; i < 12; i++) {
       ctx.rotate(TAU / 12);
       ctx.beginPath();
@@ -211,19 +235,31 @@ export class LevelUpOverlay {
     }
     ctx.restore();
     ctx.globalAlpha = 1;
-    const L = logo('LEVEL UP!', ['#ffffff', '#c0f8ff', '#2ce8f5', '#0099db', '#124e89']);
+    const L = mile ? logo(`LEVEL ${lvl}!`) : logo('LEVEL UP!', ['#ffffff', '#c0f8ff', '#2ce8f5', '#0099db', '#124e89']);
     const pop = this.t < 0.25 ? 1.6 - 0.6 * ease.outBack(this.t / 0.25) : 1;
     const s = Math.min(1, (W - 40) / L.width) * pop;
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), Math.round(18 - (L.height * (s - 1)) / 2), Math.round(L.width * s), Math.round(L.height * s));
     // The level, and what the levels themselves have given the hero by now (Player levelBonus).
-    const lvl = g.player.level - g.pendingLevels + 1, lb = levelBonus(lvl);
+    const lb = levelBonus(lvl);
     const pct = (v) => `+${Math.round((v - 1) * 100)}%`;
-    let line = `LEVEL ${lvl}`;
+    let line = mile ? 'MILESTONE' : `LEVEL ${lvl}`;
     if (lvl > 1) {
       const long = `${line} · ${pct(lb.might)} damage · ${pct(lb.hp)} health${lb.armor ? ` · +${lb.armor} armor` : ''}`;
       line = textWidth(long) <= W - 8 ? long : `${line} · ${pct(lb.might)} dmg · ${pct(lb.hp)} hp${lb.armor ? ` · +${lb.armor} arm` : ''}`;
     }
-    drawText(ctx, line, W / 2, 18 + L.height + 2, { align: 'center', color: '#8b9bb4' });
+    drawText(ctx, line, W / 2, 18 + L.height + 2, { align: 'center', color: mile ? '#feae34' : '#8b9bb4' });
+    // Four cards: LUCKY!, stamped beside the title (under it where the screen is narrow).
+    if (this.choices.length === 4 && !this.fillersOnly) {
+      const c = textCanvas('LUCKY!', ['#ffffff', '#9ee562', '#63c74d'], '#181425');
+      const k = this.t < 0.25 ? 2.2 - 1.2 * ease.outBack(this.t / 0.25) : 1, cw = c.width * 2 * k, ch = c.height * 2 * k;
+      const right = W / 2 + (L.width * s) / 2 + 6, fits = right + c.width * 2 <= W - 2;
+      const cx = fits ? right + cw / 2 : W - 4 - cw / 2, cy = fits ? 18 + L.height / 2 : 18 + L.height + 8;
+      ctx.save();
+      ctx.translate(Math.round(cx), Math.round(cy));
+      ctx.rotate(-0.12);
+      ctx.drawImage(c, Math.round(-cw / 2), Math.round(-ch / 2), Math.round(cw), Math.round(ch));
+      ctx.restore();
+    }
 
     ui.begin(dt);
     const n = this.choices.length;
@@ -248,13 +284,14 @@ export class LevelUpOverlay {
         x = Math.round(W / 2 - (n * w + (n - 1) * 6) / 2) + i * (w + 6);
         y = top;
       }
-      // Slide-in animation.
-      const k = clamp((this.t - i * 0.06) / 0.25, 0, 1);
-      y += Math.round((1 - ease.outCubic(k)) * 40);
-      if (k <= 0) continue;
+      // Face down, then flipping up (half its width gone, back to the front).
+      const fk = clamp((this.t - flipAt(i)) / FLIP.dur, 0, 1), face = fk >= 0.5;
       const id = 'c' + i;
-      if (ui.item(id, x, y, w, h) && !result) result = this.choose(i);
-      if (always && !result) {
+      if (!ready) {
+        // A press on a card before the flips end is kept, never taken early.
+        if (input.mouse.clicked && input.mouse.x >= x && input.mouse.x < x + w && input.mouse.y >= y && input.mouse.y < y + h) this.pending = i;
+      } else if (ui.item(id, x, y, w, h) && !result) result = this.choose(i);
+      if (always && ready && !result) {
         const on = this.always === i;
         const tx = vertical ? x + w + 6 : x + 8, ty = vertical ? y + Math.floor(h / 2) - 6 : y + h + 3;
         const tw = vertical ? 48 : w - 16;
@@ -273,9 +310,26 @@ export class LevelUpOverlay {
           ctx.fillRect(bx + 2, by + 2, 2, 2);
         }
       }
-      const f = ui.focused(id);
+      const f = ready && ui.focused(id);
       const lift = f ? -2 : 0;
-      panel(ctx, x, y + lift, w, h, { trim: f ? ['#ffffff', info.color] : [info.color, '#262b44'], rivets: f });
+      ctx.save();
+      ctx.translate(x + w / 2, 0);
+      ctx.scale(Math.max(0.05, face ? fk * 2 - 1 : 1 - fk * 2), 1);
+      ctx.translate(-(x + w / 2), 0);
+      if (!face) {
+        this.drawBack(ctx, x, y, w, h, this.backs[i]);
+        ctx.restore();
+        continue;
+      }
+      const gold = this.backs[i] === 'gold';
+      if (gold) {
+        // A card that completes an evolution glows gold round its edge.
+        ctx.globalAlpha = 0.45 + 0.3 * Math.sin(this.t * 6);
+        ctx.fillStyle = '#feae34';
+        ctx.fillRect(x - 3, y + lift - 3, w + 6, h + 6);
+        ctx.globalAlpha = 1;
+      }
+      panel(ctx, x, y + lift, w, h, { trim: gold ? (f ? ['#ffffff', '#fee761'] : ['#fee761', '#feae34']) : f ? ['#ffffff', info.color] : [info.color, '#262b44'], rivets: f || gold, fill: gold ? '#2e2218' : undefined });
       if (f) {
         ctx.globalAlpha = 0.12 + 0.06 * Math.sin(this.t * 6);
         ctx.fillStyle = info.color;
@@ -307,13 +361,19 @@ export class LevelUpOverlay {
           drawRich(ctx, ln, x + w / 2, ty, { align: 'center', color: '#c0cbdc' });
           ty += 9;
         }
-        if (info.hint && h > 120) {
+        if (gold && h > 120) {
+          // It completes an evolution: said in gold where the hint was.
+          const lines = wrapText(`COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, w - 10);
+          lines.forEach((ln, j) => drawText(ctx, ln, x + w / 2, y + lift + h - 14 - (lines.length - 1 - j) * 9, { align: 'center', color: Math.floor(this.t * 4) % 2 ? '#fee761' : '#feae34' }));
+        } else if (info.hint && h > 120) {
           const hy = y + lift + h - 22;
           drawText(ctx, info.hint.text, x + w / 2 - 6, hy + 4, { align: 'center', color: info.hint.owned ? '#feae34' : '#5a6988' });
           ctx.drawImage(SPR[info.hint.icon].frames[0].c, Math.round(x + w / 2 + textWidth(info.hint.text) / 2 - 3), hy);
         }
       }
+      if (vertical && gold) drawText(ctx, `COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, x + w - 6, y + lift + h - 11, { align: 'right', color: '#fee761' });
       drawText(ctx, String(i + 1), x + 5, y + lift + 4, { color: '#3a4466', outline: null });
+      ctx.restore();
     }
     const p = g.player;
     if (always) {
@@ -322,7 +382,7 @@ export class LevelUpOverlay {
       const lines = [`ALWAYS takes that card at every level-up from now on${keys} · undo it in the pause menu`, `ALWAYS: every level-up from now on${keys} · undo in pause`, 'ALWAYS: every level-up · undo in pause'];
       const hint = lines.find((s) => textWidth(s) <= W - 8) || lines[lines.length - 1];
       drawText(ctx, hint, W / 2, H - 12, { align: 'center', color: this.always >= 0 ? '#fee761' : '#8b9bb4' });
-    } else if (p.rerolls > 0 && this.t > 0.3 && !result) {
+    } else if (p.rerolls > 0 && ready && !result) {
       if (button(ctx, ui, 'reroll', Math.round(W / 2 - 45), H - 20, 90, 13, `REROLL ×${p.rerolls}`, { color: '#2ce8f5' }) || input.pressed('reroll')) {
         p.rerolls--;
         sfx('teleport');
@@ -332,8 +392,31 @@ export class LevelUpOverlay {
     ui.end();
     if (!input.down('always')) this.heldAlways = false;
     const keys = ['one', 'two', 'three', 'four'], shift = input.down('always') && !this.heldAlways;
-    for (let i = 0; i < n; i++) if (!result && input.pressed(keys[i]) && ui.lockT <= 0 && this.t > 0.3) result = this.choose(i, this.always === i || shift);
+    for (let i = 0; i < n; i++) {
+      if (result || !input.pressed(keys[i])) continue;
+      if (ready) result = this.choose(i, this.always === i || shift);
+      else this.pending = i; // kept for when the cards are up
+    }
+    if (!ready && input.pressed('confirm')) this.pending = Math.max(0, this.choices.findIndex((c, i) => ui.focusId === 'c' + i));
+    // A card pressed during the flips, taken now that they are up.
+    if (!result && ready && this.pending !== null) {
+      const i = this.pending;
+      this.pending = null;
+      if (i < n) result = this.choose(i, this.always === i);
+    }
     return result;
+  }
+
+  // A card face down: its kind's colours (BACKS) in a lattice, a mark in the middle.
+  drawBack(ctx, x, y, w, h, kind) {
+    const [fill, trim, mark] = BACKS[kind];
+    panel(ctx, x, y, w, h, { trim: [trim, '#181425'], fill, rivets: kind === 'gold' });
+    ctx.fillStyle = mark;
+    ctx.globalAlpha = 0.35;
+    for (let yy = y + 6; yy < y + h - 6; yy += 8) for (let xx = x + 6 + ((yy - y) % 16 ? 4 : 0); xx < x + w - 6; xx += 8) ctx.fillRect(xx, yy, 2, 2);
+    ctx.globalAlpha = 1;
+    const c = textCanvas(kind === 'gold' ? '★' : '?', ['#ffffff', trim, mark], '#181425');
+    ctx.drawImage(c, Math.round(x + w / 2 - c.width), Math.round(y + h / 2 - c.height), c.width * 2, c.height * 2);
   }
 }
 
@@ -344,57 +427,107 @@ export class ChestOverlay {
     this.gs = gs;
     this.g = gs.game;
     this.kind = kind;
+    this.tier = tierOf(kind);
     this.t = 0;
     // The HUD keeps showing the build as it was until each thing is revealed (no spoilers): the
     // chest gives everything at once, its gold too, and only shows it here.
     this.g.hud.held = heldBuild(this.g);
     this.roll = this.g.rollChest(kind);
+    this.items = revealOrder(this.roll.items); // least first, an evolution last
+    this.tease = chestTease(this.roll.items);
+    this.tl = chestTimeline(kind, this.items.length);
+    // An evolution, shown last, has its ceremony (drawCeremony): the gold waits for it.
+    this.evo = this.items.find((it) => it.type === 'evolve') || null;
+    if (this.evo) {
+      this.evoFrom = evolvedFrom(this.evo.id);
+      this.evoAt = this.tl.at[this.items.length - 1];
+      this.evoLines = evolveLines(this.evoFrom, this.evo.id);
+      this.signature = this.g.player.hero.unique.includes(this.evoFrom);
+      this.tl.gold += CEREMONY.dur;
+      this.tl.end += CEREMONY.dur;
+    }
     this.revealed = 0;
-    this.goldShown = false;
-    this.coins = [];
+    this.sets = 0; // shake sets begun
+    this.goldShown = false; // the gold has landed (counted, its coins sent to the HUD)
+    this.goldCount = 0;
+    this.coins = []; // the burst as the lid opens
+    this.flyers = []; // coins on their way to the HUD's gold counter
     this.lockTime = 0.6;
     sfx('chest');
   }
 
+  // Everything shown at once (a first press): every thing revealed, the gold landed.
+  skip() {
+    this.t = Math.max(this.t, this.tl.end);
+  }
+
   draw(ctx, W, H, dt) {
-    const ui = this.gs.app.ui, g = this.g;
+    const ui = this.gs.app.ui, g = this.g, T = this.tier, tl = this.tl;
     this.t += dt;
+    const t = this.t;
     dim(ctx, W, H, 0.7);
     const cx = W / 2, cy = H * 0.36;
-    const opened = this.t > 1;
-    // Light rays once open.
+    const opened = t >= tl.open;
+    const k = opened ? clamp((t - tl.open) / 0.4, 0, 1) : 0;
+    // The room lit in the tier's colour once it is open, its rays turning slowly.
     if (opened) {
-      const k = clamp((this.t - 1) / 0.4, 0, 1);
+      const gl = ctx.createRadialGradient(cx, cy, 2, cx, cy, (70 + 30 * T.scale) * k + 10);
+      gl.addColorStop(0, `rgba(${T.room},0.6)`);
+      gl.addColorStop(1, `rgba(${T.room},0)`);
+      ctx.fillStyle = gl;
+      ctx.fillRect(0, 0, W, H);
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(this.t * 0.4);
-      ctx.globalAlpha = 0.18 * k;
-      ctx.fillStyle = '#fee761';
-      for (let i = 0; i < 14; i++) {
-        ctx.rotate(TAU / 14);
+      ctx.rotate(t * 0.4);
+      ctx.globalAlpha = 0.16 * k * (0.7 + 0.3 * T.scale);
+      ctx.fillStyle = T.ray;
+      for (let i = 0; i < T.rays; i++) {
+        ctx.rotate(TAU / T.rays);
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(W, -10);
-        ctx.lineTo(W, 10);
+        ctx.lineTo(W, -T.rayW);
+        ctx.lineTo(W, T.rayW);
         ctx.fill();
       }
       ctx.restore();
       ctx.globalAlpha = 1;
-      const gl = ctx.createRadialGradient(cx, cy, 2, cx, cy, 70 * k + 10);
-      gl.addColorStop(0, 'rgba(255,230,140,0.6)');
-      gl.addColorStop(1, 'rgba(255,230,140,0)');
-      ctx.fillStyle = gl;
-      ctx.fillRect(cx - 90, cy - 90, 180, 180);
     }
-    // Shaking chest.
-    const shake = !opened ? Math.sin(this.t * 50) * (this.t * 2) : 0;
-    const spr = SPR.chest.frames[opened ? 1 : 0];
-    const s = 3;
-    ctx.drawImage(spr.c, Math.round(cx - (spr.w * s) / 2 + shake), Math.round(cy - (spr.h * s) / 2), spr.w * s, spr.h * s);
+    // Shut, it shakes in sets (a champion's one, a lord's two, a boss's three), each stronger and a
+    // step higher, light leaking from the crack: a beam for each thing inside, one orange for an
+    // evolution (chestTease: always true).
+    const fr = chestFrame(this.kind, opened), s = 3 * T.scale;
+    const per = CHEST_TIME.set + CHEST_TIME.setGap, set = Math.floor(t / per), inSet = t - set * per;
+    let shake = 0;
+    if (!opened) {
+      if (set >= this.sets) {
+        this.sets = set + 1;
+        sfx('chestshake', { pitch: 1 + set * 0.15 });
+      }
+      if (inSet < CHEST_TIME.set) shake = Math.sin(t * 60) * (1 + set) * 1.4;
+    }
+    ctx.drawImage(fr, Math.round(cx - (fr.width * s) / 2 + shake), Math.round(cy - (fr.height * s) / 2), fr.width * s, fr.height * s);
+    // The light from the crack, over the shut chest.
+    if (!opened) {
+      const n = this.tease.beams, crackY = cy - (fr.height * s) / 2 + 3 * s;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + (n > 1 ? (i / (n - 1) - 0.5) * 1.6 : 0);
+        const len = (26 + 14 * set) * (0.8 + 0.2 * Math.sin(t * 20 + i));
+        ctx.globalAlpha = 0.55 + 0.35 * Math.sin(t * 13 + i * 2);
+        ctx.strokeStyle = this.tease.orange && i === Math.floor(n / 2) ? '#f77622' : T.ray;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + shake, crackY);
+        ctx.lineTo(cx + shake + Math.cos(a) * len, crackY + Math.sin(a) * len);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     if (opened && !this.burst) {
       this.burst = true;
       sfx('chestopen');
-      for (let i = 0; i < 40; i++) this.coins.push({ x: cx, y: cy - 6, vx: rand(-90, 90), vy: rand(-160, -60), life: rand(0.8, 1.6) });
+      for (let i = 0; i < 24 + 16 * T.shakes; i++) this.coins.push({ x: cx, y: cy - 6, vx: rand(-90, 90), vy: rand(-160, -60), life: rand(0.8, 1.6) });
     }
     for (let i = this.coins.length - 1; i >= 0; i--) {
       const c = this.coins[i];
@@ -408,85 +541,196 @@ export class ChestOverlay {
       c.y += c.vy * dt;
       ctx.drawImage(SPR.coin.frames[Math.floor((c.life * 12) % 4)].c, Math.round(c.x), Math.round(c.y));
     }
-    // Items, one at a time.
-    const items = this.roll.items;
-    const iy = Math.round(cy + 30);
-    if (opened) {
-      const due = Math.min(items.length, Math.floor((this.t - 1.2) / 0.45) + 1);
-      // Everything was given as the chest was rolled (Game.rollChest): here it is only shown, the
-      // HUD's slots with it (Hud.held), and the gold last, a step after the last thing.
-      while (this.revealed < due) {
-        const it = items[this.revealed++];
-        if (g.hud.held) revealOn(g.hud.held, it, g);
-        if (it.type === 'evolve') {
-          sfx('levelup');
-          g.whiteFlash = 0.5;
-        } else sfx('pick');
-      }
-      if (!this.goldShown && this.revealed >= items.length && this.t >= this.goldAt()) {
-        this.goldShown = true;
-        g.hud.held = null; // all of it shown: the HUD shows the build as it is
-        sfx('coin');
-      }
+    // The things, least first, the gaps growing toward the last; each a note a step up.
+    const items = this.items;
+    const iy = Math.round(cy + 18 + 15 * T.scale);
+    while (this.revealed < items.length && t >= tl.at[this.revealed]) {
+      const it = items[this.revealed++];
+      if (g.hud.held) revealOn(g.hud.held, it, g);
+      // An evolution's sound and flash are its ceremony's.
+      if (it.type !== 'evolve') sfx('reveal', { pitch: SCALE[Math.min(SCALE.length - 1, this.revealed - 1)] });
+    }
+    const ceremony = this.evo && t >= this.evoAt && t < this.evoAt + CEREMONY.dur;
+    if (ceremony) this.drawCeremony(ctx, W, H, t - this.evoAt);
+    else if (opened) {
       const slot = Math.min(84, Math.floor((W - 16) / Math.max(1, items.length)));
       const rowW = slot * items.length;
       items.slice(0, this.revealed).forEach((it, i) => {
         const x = Math.round(W / 2 - rowW / 2 + (i + 0.5) * slot);
-        let icon, name, sub, color;
-        if (it.type === 'evolve') {
-          const d = WEAPONS[it.id];
-          icon = d.icon;
-          name = d.name;
-          sub = 'EVOLVED!';
-          color = '#f77622';
-        } else if (it.type === 'weapon' || it.type === 'passive') {
-          const d = (it.type === 'weapon' ? WEAPONS : PASSIVES)[it.id];
-          icon = d.icon;
-          name = d.name;
-          sub = it.isNew ? 'NEW!' : `LV ${it.level}`;
-          color = it.type === 'weapon' ? (it.isNew ? '#0099db' : '#c0cbdc') : it.isNew ? '#63c74d' : '#9ee562';
-        } else {
-          // A filler, once the whole build is maxed: the run's auto-pick, else a Blessing.
-          ({ icon, name, color } = choiceInfo(g, it));
-          sub = it.type === 'bless' ? `x${it.level}` : it.type === 'gold' ? `+${it.value}` : `+${Math.round(it.value * 100)}%`;
-        }
+        const { icon, name, sub, color } = chestItemInfo(g, it);
+        const pop = t - tl.at[i] < 0.12 ? 1.3 : 1;
         const big = smoothScaled(SPR[icon].frames[0], 1);
-        ctx.drawImage(big, x - big.width / 2, iy);
+        ctx.drawImage(big, Math.round(x - (big.width * pop) / 2), Math.round(iy - (big.height * (pop - 1)) / 2), Math.round(big.width * pop), Math.round(big.height * pop));
         const lines = wrapText(name, slot - 6);
         lines.forEach((ln, j) => drawText(ctx, ln, x, iy + 34 + j * 9, { align: 'center', color }));
         drawText(ctx, sub, x, iy + 34 + lines.length * 9, { align: 'center', color: it.type === 'evolve' || it.isNew ? '#fee761' : '#8b9bb4' });
       });
-      if (items.some((it) => it.type === 'evolve') && this.revealed > 0) {
+      if (items.some((it) => it.type === 'evolve') && this.revealed === items.length) {
         const L = logo('EVOLUTION!', ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f']);
-        const k = Math.min(1, W / 2 / L.width);
-        ctx.drawImage(L, Math.round(W / 2 - (L.width * k) / 2), 10, Math.round(L.width * k), Math.round(L.height * k));
+        const kk = Math.min(1, W / 2 / L.width);
+        ctx.drawImage(L, Math.round(W / 2 - (L.width * kk) / 2), 10, Math.round(L.width * kk), Math.round(L.height * kk));
       }
-      if (this.goldShown) drawText(ctx, `+${this.roll.gold} GOLD`, W / 2, iy + 66, { align: 'center', color: '#fee761' });
     }
+    // The gold last: counted up, coins ticking up the scale, a thunk as it lands, and a stream of
+    // coins flies to the HUD's gold counter, which rolls up as they arrive.
+    const gold = this.roll.gold;
+    if (t >= tl.gold && !ceremony) {
+      const kg = clamp((t - tl.gold) / CHEST_TIME.gold, 0, 1), before = this.goldCount;
+      this.goldCount = Math.round(gold * ease.outCubic(kg));
+      const step = Math.max(1, gold / 8);
+      if (!this.goldShown && Math.floor(this.goldCount / step) > Math.floor(before / step)) sfx('coin', { pitch: 1 + 0.5 * kg });
+      if (kg >= 1 && !this.goldShown) {
+        this.goldShown = true;
+        g.hud.held = null; // all of it shown: the HUD rolls up to the build and gold as they are
+        sfx('thunk');
+        for (let i = 0; i < 10; i++) this.flyers.push({ x: cx + rand(-12, 12), y: iy + 66, t: -i * 0.04 });
+      }
+      const c = textCanvas(`+${this.goldCount} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
+      ctx.drawImage(c, Math.round(W / 2 - c.width), iy + 60, c.width * 2, c.height * 2);
+    }
+    this.drawFlyers(ctx, W, dt);
     ui.begin(dt);
     let res = null;
-    const done = opened && this.goldShown && this.t > 1.6;
+    const done = this.goldShown && t >= tl.end;
     if (done) {
       if (button(ctx, ui, 'take', Math.round(W / 2 - 40), H - 22, 80, 14, 'COLLECT') || input.pressed('back')) {
         this.g.state = 'play';
         g.hud.held = null;
         res = 'close';
       }
-    } else if (this.t > 0.4 && (input.pressed('confirm') || input.mouse.clicked)) {
-      // Skip ahead: everything shown next frame.
-      this.t = Math.max(this.t, this.goldAt() + 0.6);
+    } else if (t > 0.3 && (input.pressed('confirm') || input.pressed('back') || input.mouse.clicked)) {
+      // A first press shows it all; the next collects.
+      this.skip();
+      ui.lock(0.2);
     }
     ui.end();
     return res;
   }
 
-  // When the gold is shown: a reveal's step after the last thing the chest held.
-  goldAt() {
-    return 1.2 + this.roll.items.length * 0.45;
+  // The evolution's ceremony, u seconds in (CEREMONY): the room darker still; the old icon at 3x
+  // trembling as cracks run through it; one flash; the new icon at 4x with rays in its colour, its
+  // name in the logo's letters and what changed; for the hero's own weapon, him beside it and the
+  // word SIGNATURE. Its own stinger as it breaks.
+  drawCeremony(ctx, W, H, u) {
+    const C = CEREMONY, from = WEAPONS[this.evoFrom], to = WEAPONS[this.evo.id];
+    dim(ctx, W, H, 0.55);
+    const cx = Math.round(W / 2), cy = Math.round(H * 0.4);
+    if (u < C.crack) {
+      const k = u / C.crack, img = SPR[from.icon].frames[0].c, s = 3;
+      const jx = Math.round(Math.sin(u * 91) * 2 * k), jy = Math.round(Math.cos(u * 77) * 1.5 * k); // trembling, without dice
+      const w = img.width * s, h = img.height * s;
+      ctx.drawImage(img, cx - w / 2 + jx, cy - h / 2 + jy, w, h);
+      // Cracks running out from its middle, longer as it goes.
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.5 + 0.5 * k;
+      for (let i = 0; i < 5; i++) {
+        const a = i * 1.3 + 0.4;
+        let x = cx + jx, y = cy + jy;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let j = 1; j <= 3; j++) {
+          x += Math.cos(a + (j % 2 ? 0.5 : -0.5)) * 7 * k;
+          y += Math.sin(a + (j % 2 ? 0.5 : -0.5)) * 7 * k;
+          ctx.lineTo(Math.round(x), Math.round(y));
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const v = u - C.crack;
+    if (!this.stung) {
+      this.stung = true;
+      sfx('evolve');
+    }
+    // The new weapon, rays in its colour turning behind it.
+    const color = iconColor(to.icon);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(v * 0.6);
+    ctx.globalAlpha = 0.28 * Math.min(1, v / 0.3);
+    ctx.fillStyle = color;
+    for (let i = 0; i < 16; i++) {
+      ctx.rotate(TAU / 16);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(W, -12);
+      ctx.lineTo(W, 12);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    const img = SPR[to.icon].frames[0].c, pop = v < 0.3 ? 1 + 0.5 * (1 - ease.outBack(v / 0.3)) : 1, s = 4 * pop;
+    ctx.drawImage(img, Math.round(cx - (img.width * s) / 2), Math.round(cy - (img.height * s) / 2), Math.round(img.width * s), Math.round(img.height * s));
+    const L = logo(to.name.toUpperCase(), ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f']);
+    const ls = Math.min(1, (W - 20) / L.width);
+    const ly = cy + 40;
+    ctx.drawImage(L, Math.round(cx - (L.width * ls) / 2), ly, Math.round(L.width * ls), Math.round(L.height * ls));
+    let ty = ly + Math.round(L.height * ls) + 4;
+    drawText(ctx, fitText(to.desc, W - 16), cx, ty, { align: 'center', color: '#c0cbdc' });
+    ty += 11;
+    if (this.evoLines.length) drawText(ctx, fitText(this.evoLines.join(' · '), W - 16), cx, ty, { align: 'center', color: '#9ee562' });
+    if (this.signature) {
+      // The hero beside his own weapon, and the word.
+      const pose = SPR[this.g.player.hero.pose] || SPR[this.g.player.hero.sprite];
+      const pf = pose.frames[0].c, ps = Math.min(2, 64 / pf.height);
+      ctx.drawImage(pf, Math.round(cx - 64 - pf.width * ps), Math.round(cy - (pf.height * ps) / 2), Math.round(pf.width * ps), Math.round(pf.height * ps));
+      const c = textCanvas('SIGNATURE', ['#ffffff', '#fee761', '#feae34'], '#181425');
+      ctx.drawImage(c, Math.round(cx - c.width), cy - 52, c.width * 2, c.height * 2);
+    }
+    // One flash as it breaks (≤0.6), fading.
+    if (v < C.flash) {
+      ctx.globalAlpha = 0.6 * (1 - v / C.flash);
+      ctx.fillStyle = '#fff8e8';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Coins flying from the chest to the HUD's gold counter (top right), arcing up.
+  drawFlyers(ctx, W, dt) {
+    const tx = W - 12, ty = 32;
+    for (let i = this.flyers.length - 1; i >= 0; i--) {
+      const f = this.flyers[i];
+      f.t += dt;
+      if (f.t < 0) continue;
+      const k = f.t / 0.5;
+      if (k >= 1) {
+        this.flyers.splice(i, 1);
+        continue;
+      }
+      const e = ease.inOutSine(k);
+      const x = f.x + (tx - f.x) * e, y = f.y + (ty - f.y) * e - Math.sin(k * Math.PI) * 30;
+      ctx.drawImage(SPR.coin.frames[Math.floor((f.t * 14) % 4)].c, Math.round(x - 3), Math.round(y - 3));
+    }
   }
 }
 
+// A note a step up for each thing a chest shows (a major pentatonic run).
+const SCALE = [1, 1.122, 1.26, 1.498, 1.682, 2, 2.245];
+
+// How a chest's screen shows one thing it gave.
+function chestItemInfo(g, it) {
+  if (it.type === 'evolve') {
+    const d = WEAPONS[it.id];
+    return { icon: d.icon, name: d.name, sub: 'EVOLVED!', color: '#f77622' };
+  }
+  if (it.type === 'weapon' || it.type === 'passive') {
+    const d = (it.type === 'weapon' ? WEAPONS : PASSIVES)[it.id];
+    const color = it.type === 'weapon' ? (it.isNew ? '#0099db' : '#c0cbdc') : it.isNew ? '#63c74d' : '#9ee562';
+    return { icon: d.icon, name: d.name, sub: it.isNew ? 'NEW!' : `LV ${it.level}`, color };
+  }
+  // A filler, once the whole build is maxed: the run's auto-pick, else a Blessing.
+  const { icon, name, color } = choiceInfo(g, it);
+  return { icon, name, color, sub: it.type === 'bless' ? `x${it.level}` : it.type === 'gold' ? `+${it.value}` : `+${Math.round(it.value * 100)}%` };
+}
+
 // ------------------------------------------------------------------- gear --
+
+// How a Rare or better is told on the gear screen: the frame and title climb a rarity every `step`
+// seconds; an Epic and a Legendary hold on near-black at least `hold` seconds, then slam in.
+export const GEAR_CLIMB = { step: 0.12, hold: [0, 0, 0, 0.36, 0.5] };
 
 // Each rarity's title colours, light to dark.
 const RARITY_LOGO = [
@@ -536,18 +780,44 @@ class ItemOverlay {
     this.lockTime = 0.5;
     this.noSpace = true; // as with level-ups: no wearing or selling by a mashed Space
     gs.app.ui.focusId = 'wear';
-    sfx(item.rarity >= 3 ? 'levelup' : 'pick');
+    // A Rare or better climbs the rarities first (GEAR_CLIMB) and is told at slamAt; the rest at once.
+    this.slamAt = item.rarity >= 2 ? Math.max(item.rarity * GEAR_CLIMB.step, GEAR_CLIMB.hold[item.rarity]) : 0;
+    this.lockTime = Math.max(0.5, this.slamAt + 0.2);
+    if (item.rarity <= 1) sfx('pick');
+  }
+
+  // The rarity the frame and title show now: climbing a step every GEAR_CLIMB.step seconds from
+  // Common, stopping on the true one (never past it).
+  shownRarity() {
+    return Math.min(this.item.rarity, Math.floor(this.t / GEAR_CLIMB.step));
   }
 
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, g = this.g, it = this.item, R = RARITIES[it.rarity];
     this.t += dt;
-    dim(ctx, W, H, 0.72);
-    const L = logo(R.name.toUpperCase() + (it.rarity >= 3 ? '!' : ''), RARITY_LOGO[it.rarity]);
-    const pop = this.t < 0.25 ? 1.5 - 0.5 * ease.outBack(this.t / 0.25) : 1;
+    const told = this.t >= this.slamAt, shown = told ? it.rarity : this.shownRarity(), RS = RARITIES[shown];
+    // An Epic or a Legendary is drawn out on near-black until it is told.
+    dim(ctx, W, H, told || it.rarity < 3 ? 0.72 : 0.94);
+    if (told && !this.slammed && it.rarity >= 2) {
+      this.slammed = true;
+      sfx(it.rarity === 4 ? 'legendary' : it.rarity === 3 ? 'epic' : 'reveal', { pitch: 1.5 });
+      if (it.rarity === 4) this.g.shake(0.3);
+    }
+    const L = logo(RS.name.toUpperCase() + (shown >= 3 ? '!' : ''), RARITY_LOGO[shown]);
+    // Told: the title pops in, a Legendary's slamming down from twice its size, an Epic's less.
+    const since = this.t - this.slamAt, big = it.rarity === 4 ? 1.2 : it.rarity === 3 ? 0.7 : 0.5;
+    const pop = since >= 0 && since < 0.25 ? 1 + big * (1 - ease.outBack(since / 0.25)) : 1;
     const s = Math.min(1, (W - 40) / L.width) * pop;
+    ctx.globalAlpha = told ? 1 : 0.55;
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), Math.round(8 - (L.height * (s - 1)) / 2), Math.round(L.width * s), Math.round(L.height * s));
+    ctx.globalAlpha = 1;
     const top = Math.round(12 + L.height);
+    if (!told) {
+      // The frame alone, climbing.
+      const cw = Math.min(180, Math.floor((W - 22) / 2)), x0 = Math.round(W / 2 - cw - 3);
+      panel(ctx, x0, top, cw, H - top - 6, { trim: [RS.color, '#262b44'] });
+      return null;
+    }
     const gap = 6, cw = Math.min(180, Math.floor((W - 16 - gap) / 2));
     const x0 = Math.round(W / 2 - cw - gap / 2), x1 = x0 + cw + gap;
     const ph = H - top - 6;

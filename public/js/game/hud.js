@@ -294,6 +294,17 @@ export class Hud {
     this.barLabel = '';
     this.barShown = 0;
     this.fall = null;
+    // The gold counter as shown: it rolls up to the gold (Game.gold, or a chest's held gold) over
+    // about half a second, pulsing as it gains; coins flung to it from gold piles (fling).
+    this.goldRoll = 0;
+    this.goldPulse = 0;
+    this.flung = [];
+  }
+
+  // A coin flying from world point (x, y) to the gold counter (a gold pile picked up).
+  fling(x, y) {
+    const cam = this.g.cam, z = cam.S / view.S;
+    if (this.flung.length < 12) this.flung.push({ x: (x - cam.x) * z, y: (y - 8 - cam.y) * z, t: 0 });
   }
 
   // dt: real seconds since the last frame (the falling bar runs by it).
@@ -301,7 +312,7 @@ export class Hud {
     const g = this.g, p = g.player;
     this.drawXp(ctx, W, p);
     this.drawSlots(ctx, p);
-    this.drawTop(ctx, W, t);
+    this.drawTop(ctx, W, t, dt);
     this.drawOrbs(ctx, W, H, p, t);
     this.drawBoss(ctx, W, dt);
     this.drawNames(ctx, W, H);
@@ -334,6 +345,17 @@ export class Hud {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(w - 1, 1, 2, 5);
     }
+    // Nearly there (85%): a shine runs along the bar and it breathes brighter.
+    if (f >= 0.85) {
+      const t = this.g.clock, at = ((t * 1.6) % 1) * w;
+      ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 9);
+      ctx.fillStyle = '#c0f8ff';
+      ctx.fillRect(1, 1, w, 2);
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(Math.round(at), 1, 6, 5);
+      ctx.globalAlpha = 1;
+    }
     drawText(ctx, `LV ${p.level}`, W - 3, 9, { align: 'right', color: ['#ffffff', '#fee761', '#feae34'] });
   }
 
@@ -348,6 +370,8 @@ export class Hud {
       if (main && w && w !== main) ctx.globalAlpha = 0.3;
       if (h) this.slot(ctx, x, y, SPR[h.icon], h.evolved ? -1 : h.level, MAX_WEAPON_LEVEL, h.evolved);
       else this.slot(ctx, x, y, w ? SPR[w.def.icon] : null, w ? (w.evolved ? -1 : w.level) : 0, MAX_WEAPON_LEVEL, w && w.evolved);
+      // EVOLVE READY: the next chest opened evolves it (Game.evolvable, kept as evoReady).
+      if (w && !held && this.g.evoReady.includes(w)) this.evoMark(ctx, x, y, this.g.clock);
       ctx.globalAlpha = 1;
       x += 18;
     }
@@ -371,6 +395,18 @@ export class Hud {
     }
   }
 
+  // A slot whose weapon the next chest evolves: an orange frame pulsing, and EVO under it.
+  evoMark(ctx, x, y, t) {
+    ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t * 8);
+    ctx.fillStyle = '#f77622';
+    ctx.fillRect(x - 1, y - 1, 19, 1);
+    ctx.fillRect(x - 1, y + 17, 19, 1);
+    ctx.fillRect(x - 1, y, 1, 17);
+    ctx.fillRect(x + 17, y, 1, 17);
+    ctx.globalAlpha = 1;
+    drawText(ctx, 'EVO', x + 9, y + 19, { align: 'center', color: '#f77622' });
+  }
+
   slot(ctx, x, y, spr, level, max, evolved, small) {
     ctx.fillStyle = '#181425';
     ctx.fillRect(x, y, 17, 17);
@@ -390,7 +426,7 @@ export class Hud {
     }
   }
 
-  drawTop(ctx, W, t) {
+  drawTop(ctx, W, t, dt = 1 / 60) {
     const g = this.g;
     const cx = Math.floor(W / 2);
     if (g.mode === 'dungeon') {
@@ -434,9 +470,35 @@ export class Hud {
     const k = fmtNum(g.kills);
     drawText(ctx, k, right, y + 10, { align: 'right', color: '#c0cbdc' });
     ctx.drawImage(SPR.h_skull.frames[0].c, right - textWidth(k) - 11, y + 9);
-    const gd = fmtNum(this.held ? this.held.gold : g.gold);
-    drawText(ctx, gd, right, y + 21, { align: 'right', color: '#fee761' });
-    ctx.drawImage(SPR.h_coin.frames[0].c, right - textWidth(gd) - 10, y + 21);
+    // Gold, rolling up to what it is (never down: a fresh run, or a shown chest's held gold, snaps).
+    const want = this.held ? this.held.gold : g.gold;
+    if (want < this.goldRoll) this.goldRoll = want;
+    else if (want > this.goldRoll) {
+      const before = Math.floor(this.goldRoll);
+      this.goldRoll = Math.min(want, this.goldRoll + Math.max(dt * 8, (want - this.goldRoll) * Math.min(1, dt * 7)));
+      if (Math.floor(this.goldRoll) > before) this.goldPulse = 0.18;
+    }
+    this.goldPulse = Math.max(0, this.goldPulse - dt);
+    const gd = fmtNum(Math.floor(this.goldRoll));
+    drawText(ctx, gd, right, y + 21, { align: 'right', color: this.goldPulse > 0.09 ? '#ffffff' : '#fee761' });
+    ctx.drawImage(SPR.h_coin.frames[0].c, right - textWidth(gd) - 10, y + 21 - (this.goldPulse > 0 ? 1 : 0));
+    this.drawFlung(ctx, right - 6, y + 24, dt);
+  }
+
+  // Coins flung from gold piles, arcing to the gold counter at (tx, ty).
+  drawFlung(ctx, tx, ty, dt) {
+    for (let i = this.flung.length - 1; i >= 0; i--) {
+      const f = this.flung[i];
+      f.t += dt;
+      const k = f.t / 0.45;
+      if (k >= 1) {
+        this.flung.splice(i, 1);
+        continue;
+      }
+      const e = ease.inOutSine(k);
+      const x = f.x + (tx - f.x) * e, y = f.y + (ty - f.y) * e - Math.sin(k * Math.PI) * 18;
+      ctx.drawImage(SPR.coin.frames[Math.floor((f.t * 14) % 4)].c, Math.round(x - 3), Math.round(y - 3));
+    }
   }
 
   drawOrbs(ctx, W, H, p, t) {

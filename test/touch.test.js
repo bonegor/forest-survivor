@@ -57,10 +57,11 @@ function run(fn) {
   }
 }
 
-// Plays until the level-up screen is up and past its lock and slide-in.
+// Plays until the level-up screen is up (after the beam's lead-in, Game MOMENT.levelup) and past
+// its lock and its cards' flips.
 function openLevelUp(gs, p) {
   levelUp(p);
-  frame(gs);
+  for (let f = 0; f < 30 && !gs.overlay; f++) frame(gs);
   assert.ok(gs.overlay instanceof LevelUpOverlay);
   for (let f = 0; f < 40; f++) frame(gs);
   return gs.overlay;

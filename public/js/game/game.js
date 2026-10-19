@@ -42,7 +42,9 @@ const PICKUP_FAR = 1400;
 export const KNOCKBACK = 25;
 // How long each big beat holds every screen back, in real seconds (Game.moment): a boss's fall
 // (its 1.1 s slow motion and flash), a crypt lord's (0.8 s), a revive's.
-export const MOMENT = { boss: 1.3, lord: 1, revive: 1.1 };
+export const MOMENT = { boss: 1.3, lord: 1, revive: 1.1, levelup: 0.25 };
+// The levels whose level-up is a milestone, with a stamp and a stinger of its own (LevelUpOverlay).
+export const MILESTONES = [10, 25, 50, 100];
 // The most banners on screen at once.
 export const BANNERS_MOST = 2;
 // The hero's fall, in real seconds from the killing blow (onPlayerDeath): the music stops; the
@@ -196,6 +198,8 @@ export class Game {
     this.inCrypt = null; // the crypt the hero is in; the night's clock stands still meanwhile
     this.cryptsOpen = o.crypts !== false; // the balance bots keep to the forest unless asked
     this.cryptDoor = null; // the crypt door whose steps the hero stands on (update)
+    this.evoReady = []; // the weapons the next chest opened will evolve (update: evolvable)
+    this.milestones = new Set(); // the milestone levels (MILESTONES) whose stinger has played
     // The first run's hints (hints.js), where the game screen asks for them (o.hints), with the
     // way to keep the settings that remember them (o.saveSettings).
     this.hints = o.hints ? new Hints(this, this.settings, o.saveSettings || (() => {})) : null;
@@ -496,6 +500,16 @@ export class Game {
       : [`Blessing ×${p.blessings}`, 'holy', 'pick'];
     this.numbers.text(p.x, p.y - 22, text, style);
     sfx(sound);
+    // A milestone among the levels taken unseen: its banner and stinger (else the screen has them).
+    for (let lvl = p.level - n + 1; lvl <= p.level; lvl++) if (this.milestoneDue(lvl)) this.banner('MILESTONE', `LEVEL ${lvl}`, '#fee761');
+    return true;
+  }
+
+  // Whether a level is a milestone whose stinger has not played yet this run; plays it if so.
+  milestoneDue(lvl) {
+    if (!MILESTONES.includes(lvl) || this.milestones.has(lvl)) return false;
+    this.milestones.add(lvl);
+    sfx('milestone');
     return true;
   }
 
@@ -515,12 +529,34 @@ export class Game {
 
   queueLevelUp() {
     this.pendingLevels++;
+    // The beam plays out before the cards: a short lead-in (MOMENT.levelup).
+    // (A level the auto-pick takes unseen needs none.)
+    if (!this.autoReady()) this.moment('levelup', MOMENT.levelup);
     sfx('levelup');
     const p = this.player;
     this.effects.push(new Beam(this, p.x, p.y, '#2ce8f5', 0.8, 120));
     this.effects.push(new Ring(this, p.x, p.y, 4, 60, 0.5, '#2ce8f5', true, 2));
     this.particles.burst(p.x, p.y - 8, 4, 30, [PC.c, PC.w, PC.U], 100, 0.8, 1, P.GLOW | P.FADE, { vz: 80 });
     this.pushback(p.x, p.y, 50, 160);
+  }
+
+  // The weapon a card completes an evolution of (its id, or null): a level that brings a weapon to
+  // the top while its relic is held (or the Phoenix Heart), or a new relic that pairs with a weapon
+  // already at the top (the Phoenix Heart with any). The next chest then evolves it (evolvable).
+  completesEvolution(c) {
+    const p = this.player;
+    const anyRelic = [...p.passives.keys()].some((id) => PASSIVES[id].evolvesAny);
+    if (c.type === 'weapon' && !c.isNew && c.level >= MAX_WEAPON_LEVEL) {
+      const w = p.weapons.find((x) => x.id === c.id);
+      if (w && !w.evolved && w.def.evo && (anyRelic || p.passives.has(w.def.evo.with))) return w.def.evo.into;
+    }
+    if (c.type === 'passive' && c.isNew) {
+      for (const w of p.weapons) {
+        if (w.evolved || !w.def.evo || w.level < MAX_WEAPON_LEVEL) continue;
+        if (w.def.evo.with === c.id || PASSIVES[c.id].evolvesAny) return w.def.evo.into;
+      }
+    }
+    return null;
   }
 
   // Weapons a chest may evolve: at their top level, with their relic held, or with any relic that
@@ -1495,6 +1531,8 @@ export class Game {
   update(rdt) {
     this.syncCam();
     this.fadeReal(rdt);
+    // The weapons the next chest will evolve (EVOLVE READY on their slots and on the chests lying about).
+    this.evoReady = this.evolvable();
     if (this.state === 'paused' || this.state === 'levelup' || this.state === 'chest' || this.state === 'item' || this.state === 'over') return;
     const dt = Math.min(rdt, 1 / 30) * this.timeScale * this.pace;
     this.frame++;

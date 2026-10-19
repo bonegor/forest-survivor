@@ -57,6 +57,11 @@ function maxOut(g) {
   assert.equal(p.passives.size, 6);
 }
 
+// Plays on until the level-up screen opens, after the beam's lead-in (Game MOMENT.levelup).
+function openScreen(gs) {
+  for (let f = 0; f < 30 && !gs.overlay; f++) gs.frame(1 / 60);
+}
+
 // Levels gained as gems would bring them.
 const levelUp = (p, n) => {
   for (let i = 0; i < n; i++) p.addXp((p.xpNext - p.xp) / p.growth / 1.1 + 0.01);
@@ -112,7 +117,7 @@ test('ALWAYS on a filler sets the auto-pick, and the levels after it come with n
     screen((g, gs, p) => {
       maxOut(g);
       levelUp(p, 1);
-      gs.frame(1 / 60);
+      openScreen(gs);
       assert.equal(g.state, 'levelup');
       assert.ok(gs.overlay instanceof LevelUpOverlay);
       // Tick the card's ALWAYS (a click on the toggle), then take the card.
@@ -173,7 +178,7 @@ test('Shift and the card\'s number take it for good; the pause menu asks again',
   screen((g, gs, p) => {
     maxOut(g);
     levelUp(p, 2);
-    gs.frame(1 / 60);
+    openScreen(gs);
     assert.ok(gs.overlay instanceof LevelUpOverlay);
     gs.overlay.draw(ctx, 480, 270, 0.5);
     gs.app.ui.lockT = 0;
@@ -205,7 +210,7 @@ test('Shift and the card\'s number take it for good; the pause menu asks again',
     g.state = 'play';
     gs.overlay = null;
     levelUp(p, 1);
-    gs.frame(1 / 60);
+    openScreen(gs);
     assert.equal(g.state, 'levelup');
   });
 });
@@ -215,7 +220,7 @@ test('Shift held for a crypt strike as a level-up opens is no ALWAYS until it is
     maxOut(g);
     levelUp(p, 2);
     input.held.add('ShiftLeft'); // striking as the levels come
-    gs.frame(1 / 60);
+    openScreen(gs);
     assert.ok(gs.overlay instanceof LevelUpOverlay);
     gs.overlay.draw(ctx, 480, 270, 0.5);
     gs.app.ui.lockT = 0;
@@ -242,7 +247,7 @@ test('Shift held for a crypt strike as a level-up opens is no ALWAYS until it is
 test('a bot run over an open level-up screen (__fs.sim) takes its level, and the next level-up is still asked', () => {
   screen((g, gs, p) => {
     levelUp(p, 1);
-    gs.frame(1 / 60);
+    openScreen(gs);
     const lv = gs.overlay;
     assert.ok(lv instanceof LevelUpOverlay);
     const d = new Driver(g, { bot: 'idle:ult=0' });
@@ -255,7 +260,7 @@ test('a bot run over an open level-up screen (__fs.sim) takes its level, and the
     lv.choose(0); // a pick from it all the same owes no level
     assert.equal(g.pendingLevels, 0);
     levelUp(p, 1);
-    gs.frame(1 / 60);
+    openScreen(gs);
     assert.ok(gs.overlay instanceof LevelUpOverlay, 'the next level-up has its screen, not swallowed');
     assert.equal(g.pendingLevels, 1);
   });
@@ -340,7 +345,7 @@ test('a Phoenix Heart spent frees its slot: the auto-pick hands the level-ups ba
     g.spendRelic('phoenix');
     assert.ok(!g.fillersOnly() && !g.autoReady());
     levelUp(p, 1);
-    gs.frame(1 / 60);
+    openScreen(gs);
     assert.equal(g.state, 'levelup');
     assert.ok(gs.overlay instanceof LevelUpOverlay && !gs.overlay.fillersOnly, 'its screen is back, upgrades on it');
     assert.ok(gs.overlay.choices.some((c) => c.type === 'passive' && c.isNew), 'a relic for the free slot');

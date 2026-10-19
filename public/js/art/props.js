@@ -42,6 +42,36 @@ export const PROP_ART = {
       '.eEeEEeEe.',
     ]],
   },
+  // The Ranked trial card's own picture: a gravestone with a skull carved in it, its eyes burning
+  // red, on blood-red grass (the card's blood moon is drawn beside it, screens.js moon).
+  ranked_grave: {
+    outline: false,
+    emissive: 'x',
+    frames: [[
+      '........kkkkkkkk........',
+      '......kknNNNNNNnkk......',
+      '.....knNgggggggggNk.....',
+      '....knNgGGGGGGGGggNk....',
+      '...knNgGGwwwwwwGGgNnk...',
+      '...kNggGwwwwwwwwGggNk...',
+      '...kNgGwwkkwwkkwwGgNk...',
+      '...kNgGwkxxwwxxkwGgNk...',
+      '...kNgGwwkkwwkkwwGgNk...',
+      '...kNggGwwwkkwwwGggNk...',
+      '...kNggGGwwwwwwGGggNk...',
+      '...kNgggGwkwkwkGgggNk...',
+      '...kNggggGGGGGGggggNk...',
+      '...kNgKgggggggggggKNk...',
+      '...kNggKggggggggggNNk...',
+      '...kNgggKgggggggggNNk...',
+      '...kNggggKggggggggNNk...',
+      '...kNnggggKgggggggNnk...',
+      '...kNnnggggggggggNnnk...',
+      '..mkRkkkkkkkkkkkkkkRkm..',
+      '.mRrRRmRrRRmRRrRmRRrRRm.',
+      '..mmRmmmRmmmRmmmRmmmRm..',
+    ]],
+  },
   gravecross: {
     frames: [[
       '...gg...',

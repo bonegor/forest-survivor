@@ -4,7 +4,8 @@ import { SPR } from '../engine/sprites.js';
 import { RARITIES } from '../shared/items.js';
 import { sfx } from '../engine/audio.js';
 import { rand } from '../engine/util.js';
-import { shadowSprite, glow, glint } from './fxsprites.js';
+import { shadowSprite, glow, glint, beamSprite } from './fxsprites.js';
+import { tierOf, chestFrame } from './chests.js';
 import { PC, P } from './particles.js';
 
 // From the richest: [least XP, sprite, glow, light, palette key of its twinkles].
@@ -31,6 +32,9 @@ const LOOK = {
 
 // The light a piece of gear casts, by rarity.
 const GEAR_LIGHT = [null, null, 'cyan', 'purple', 'gold'];
+// A Rare, an Epic or a Legendary piece stands in a pillar of its colour, this tall (world px; a
+// Legendary's to the top of the screen, a glint running up it).
+export const GEAR_PILLAR = [0, 0, 70, 120, Infinity];
 
 // Items that fly to you inside the magnet radius.
 const MAGNETIC = new Set(['gem', 'coin', 'goldpile', 'potion', 'fury']);
@@ -82,6 +86,13 @@ export class Pickup {
       this.sprite = SPR['g_' + it.slot];
       this.glowColor = RARITIES[it.rarity].color;
       this.lightKey = GEAR_LIGHT[it.rarity];
+    } else if (this.kind === 'chest') {
+      // Its tier's colours (chests.js): a champion's bronze, a lord's silver, a boss's gold.
+      const T = tierOf(this.opts.kind);
+      this.sprite = SPR.chest;
+      this.glowColor = T.glow;
+      this.lightKey = T.light;
+      this.scale = T.scale;
     } else {
       const L = LOOK[this.kind];
       this.sprite = SPR[L.sprite];
@@ -109,6 +120,11 @@ export class Pickup {
       }
       if (this.z <= 0) {
         this.z = 0;
+        // A piece of gear landing rings out by its rarity (sfx 'gear').
+        if (this.kind === 'item' && !this.landed) {
+          this.landed = true;
+          sfx('gear', { size: this.opts.item.rarity, pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
+        }
         if (this.vz < -40) this.vz = -this.vz * 0.35;
         else this.vz = 0;
         this.vx *= 0.4;
@@ -160,7 +176,10 @@ export class Pickup {
         g.gold += v;
         g.stats.gold += v;
         sfx('coin');
-        if (this.kind === 'goldpile') g.numbers.add(p.x, p.y - 20, v, 'gold');
+        if (this.kind === 'goldpile') {
+          g.numbers.add(p.x, p.y - 20, v, 'gold');
+          g.hud.fling(this.x, this.y); // a coin off the pile to the gold counter
+        }
         g.particles.burst(p.x, p.y - 8, 2, 5, [PC.Y, PC.y], 40, 0.35, 1, P.GLOW | P.FADE, { vz: 40 });
         break;
       }
@@ -205,7 +224,7 @@ export class Pickup {
     const sx = (this.x - cam.x) * S, sy = (this.y - cam.y) * S;
     this._rect = null;
     if (sx < -40 || sy < -40 || sx > cam.pxW + 40 || sy > cam.pxH + 40) return;
-    const big = this.kind === 'chest', k = this.kind === 'gem' ? GEM_SIZE : 1;
+    const big = this.kind === 'chest', k = this.kind === 'gem' ? GEM_SIZE : big ? this.scale : 1;
     shadows ||= [shadowSprite(14), shadowSprite(5 * GEM_SIZE), shadowSprite(6)];
     const sh = shadows[big ? 0 : this.kind === 'gem' ? 1 : 2];
     ctx.globalAlpha = 0.45;
@@ -217,7 +236,7 @@ export class Pickup {
     if (this.kind === 'gem') fi = Math.floor(this.t * 2.5) % 5 === 0 ? 1 : 0;
     else if (look && look.anim) fi = Math.floor(this.t * look.anim) % frames.length;
     fi = Math.min(fi, frames.length - 1);
-    const img = frames[fi].c;
+    const img = big ? chestFrame(this.opts.kind) : frames[fi].c;
     const bob = big || this.pulled ? 0 : Math.sin(this.t * 4) * 1.2;
     const w = img.width * S * k, h = img.height * S * k;
     const X = Math.round(sx - w / 2), Y = Math.round(sy - h - (this.z + bob + 1) * S);
@@ -247,11 +266,32 @@ export class Pickup {
     if (sx < -60 || sy < -60 || sx > cam.pxW + 60 || sy > cam.pxH + 60) return;
     if (this.kind === 'gem') return this.drawBling(ctx, S, sx, sy);
     const big = this.kind === 'chest' || this.kind === 'relic' || this.kind === 'elixir' || this.kind === 'item';
-    const s = (big ? 40 : this.kind === 'gem' ? 12 : 14) * S;
-    ctx.globalAlpha = big ? 0.55 + 0.15 * Math.sin(this.t * 5) : 0.45;
-    ctx.drawImage(this.glowSprite(), sx - s / 2, sy - s / 2, s, s);
+    const s = (big ? 40 * (this.scale || 1) : this.kind === 'gem' ? 12 : 14) * S;
+    if (this.kind === 'item') this.drawPillar(ctx, cam, sx, sy);
+    // EVOLVE READY: while a weapon waits on a chest to evolve, every chest lying about glows orange.
+    const ready = this.kind === 'chest' && this.g.evoReady.length > 0;
+    ctx.globalAlpha = big ? (ready ? 0.7 + 0.3 * Math.sin(this.t * 8) : 0.55 + 0.15 * Math.sin(this.t * 5)) : 0.45;
+    ctx.drawImage(ready ? glow('#f77622') : this.glowSprite(), sx - s / 2, sy - s / 2, s, s);
     ctx.globalAlpha = 1;
-    if (this.lightKey) this.g.light(this.x, this.y, big ? 70 : 26, this.lightKey, 0.8);
+    if (this.lightKey) this.g.light(this.x, this.y, big ? 70 : 26, ready ? 'fire' : this.lightKey, 0.8);
+  }
+
+  // A Rare, Epic or Legendary piece's pillar of light, in its colour (GEAR_PILLAR), breathing; a
+  // Legendary's reaches the top of the screen with a glint running up it.
+  drawPillar(ctx, cam, sx, sy) {
+    const it = this.opts.item, tall = GEAR_PILLAR[it.rarity];
+    if (!tall) return;
+    const S = cam.S, top = tall === Infinity ? 0 : sy - tall * S, h = Math.max(1, sy - top);
+    const w = (it.rarity === 4 ? 14 : it.rarity === 3 ? 11 : 9) * S;
+    const color = RARITIES[it.rarity].color;
+    ctx.globalAlpha = 0.5 + 0.2 * Math.sin(this.t * 4);
+    ctx.drawImage(beamSprite(color), Math.round(sx - w / 2), Math.round(top), Math.round(w), Math.round(h));
+    if (it.rarity === 4) {
+      const gy = sy - ((this.t * 0.6) % 1) * h;
+      ctx.globalAlpha = 0.9;
+      glint(ctx, sx, gy, 3 * S, Math.max(1, Math.round(S)), '#fff3a8');
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Soul gems, casino style: a glow that beats like marquee lights, a glint that twinkles across
