@@ -11,6 +11,11 @@ import { DIFF_GOLD, NIGHTMARE_GOLD } from '../shared/profile.js';
 const BUMPS = 2;
 export const HARDER = 1.2;
 const MORE = 1.1 * 1.1 * 1.2;
+// The owner's, the same day after another test (20 October 2026): "the thing is even a bit too easy.
+// Double the amount of monsters". The steady horde and the timed swarms, rings and packs, on both
+// difficulties and a Dungeon Run's floors; a Nightmare doubles that again (hordeMore). The crypts'
+// sleeping packs, champions, thieves, bosses and their summons come as they did.
+export const CROWD = 2;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
@@ -28,8 +33,8 @@ export const VETERAN = {
   name: 'Veteran',
   hp: 1.9 * TOUGHER,
   dmg: 1.65 * DEADLIER,
-  spawn: 1.15 * MORE,
-  horde: MORE,
+  spawn: 1.15 * MORE * CROWD,
+  horde: MORE * CROWD,
   speed: 1.12,
   elite: 1.35,
   hurt: 1,
@@ -85,9 +90,10 @@ export const NIGHTMARE = {
 export const nightmareFor = (mode, on) => mode !== 'ranked' && on === true;
 
 // The whole game runs this much faster than real time: the night's clock, the hero, the monsters,
-// everything in a run (not the menus), so the 15-minute night passes in about 11 minutes 22
-// seconds, and every warning (a boss's telegraphed blow) is about a quarter shorter in real time.
-export const GAME_SPEED = 1.32;
+// everything in a run (not the menus), so the 15-minute night passes in about 9 minutes 53
+// seconds, and every warning (a boss's telegraphed blow) is about a third shorter in real time.
+// 1.1, then 20% up (16 October 2026), then the owner's "let the game be 15% faster" (20 October).
+export const GAME_SPEED = 1.1 * 1.2 * 1.15;
 
 export const MODES = {
   s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn in the Darkwood.' },

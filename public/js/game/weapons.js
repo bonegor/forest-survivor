@@ -99,9 +99,11 @@ export class Weapon {
     if (!K.fire) return;
     const haste = this.g.player.buff('haste') ? HASTE : 1;
     this.cd -= dt * haste;
-    // A blow struck by hand waits for the sprite's blow frame, by the clock it is drawn by.
+    // A blow struck by hand waits for the sprite's blow frame, by the clock it is drawn by, with the
+    // same hair of slack the frame count has (Game.drawPlayer's 1e-6), so a clock a rounding short
+    // never shows the blow a frame before it lands.
     if (this.handAt !== null) {
-      if (this.g.clock < this.handAt) return;
+      if (this.g.clock < this.handAt - 1e-6) return;
       this.handAt = null;
       if (!K.shoot) {
         const r = K.fire(this);

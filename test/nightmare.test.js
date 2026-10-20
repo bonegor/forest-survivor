@@ -132,8 +132,8 @@ test('a Nightmare report says so; its gold is paid x1.5 on top, its win and vict
   for (const nightmare of [undefined, 'true', 1, null]) assert.equal(sanitizeRun({ mode: 's15', nightmare }).nightmare, false, String(nightmare));
   assert.equal(sanitizeRun({ mode: 'ranked', nightmare: true }).nightmare, false);
   // Twice the monsters, so up to twice the kills a run of its length could make.
-  assert.equal(sanitizeRun({ mode: 's15', time: 900, kills: 1e9 }).kills, 50 + 900 * 60);
-  assert.equal(sanitizeRun({ mode: 's15', time: 900, kills: 1e9, nightmare: true }).kills, 50 + 900 * 120);
+  assert.equal(sanitizeRun({ mode: 's15', time: 900, kills: 1e9 }).kills, 50 + 900 * 120);
+  assert.equal(sanitizeRun({ mode: 's15', time: 900, kills: 1e9, nightmare: true }).kills, 50 + 900 * 240);
 });
 
 const frame = (s) => {

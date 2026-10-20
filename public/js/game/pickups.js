@@ -39,8 +39,8 @@ export const GEAR_PILLAR = [0, 0, 70, 120, Infinity];
 // Items that fly to you inside the magnet radius.
 const MAGNETIC = new Set(['gem', 'coin', 'goldpile', 'potion', 'fury']);
 // A dropped chest lies on the ground this long (game seconds) before it can be opened, even under
-// the hero, so it is seen before its screen comes up: 0.83 s of real time at GAME_SPEED 1.32.
-export const CHEST_SETTLE = 1.1;
+// the hero, so it is seen before its screen comes up: 0.82 s of real time at GAME_SPEED 1.518.
+export const CHEST_SETTLE = 1.25;
 
 // The shadows pickups cast: a chest's, a soul gem's and the rest's, made on first use.
 let shadows = null;

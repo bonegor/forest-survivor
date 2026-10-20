@@ -11,7 +11,7 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { isFew } from '../public/js/game/spawner.js';
 import { armored } from '../public/js/game/player.js';
-import { NORMAL, VETERAN, GAME_SPEED, HARDER } from '../public/js/data/difficulty.js';
+import { NORMAL, VETERAN, GAME_SPEED, HARDER, CROWD } from '../public/js/data/difficulty.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { targetCount } from '../public/js/data/waves.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
@@ -250,16 +250,27 @@ test('the gold a difficulty pays is the profile\'s alone, and its card says so',
   }
 });
 
-// The user (16 October 2026): the general game speed 20% up, on the 10% faster than real time it was.
-test('a run goes 32% faster than real time: the night in about 11:22, the next hero at about 3:47', () => {
-  assert.equal(GAME_SPEED, 1.32);
-  assert.ok(Math.abs(GAME_SPEED / 1.1 - 1.2) < 1e-9, '20% faster than the 1.1 it was');
-  assert.equal(fmtTime(15 * 60 / GAME_SPEED + 0.5), '11:22', 'the 15-minute night in real time');
-  assert.equal(fmtTime(HERO_UNLOCK_TIME / GAME_SPEED + 0.5), '03:47', 'the 5:00 that brings in the next hero');
+// The user (16 October 2026): the general game speed 20% up, on the 10% faster than real time it was;
+// then (20 October 2026) "let the game be 15% faster".
+test('a run goes about 52% faster than real time: the night in about 9:53, the next hero at about 3:18', () => {
+  assert.ok(Math.abs(GAME_SPEED - 1.518) < 1e-9);
+  assert.ok(Math.abs(GAME_SPEED / (1.1 * 1.2) - 1.15) < 1e-9, '15% faster than the 1.32 it was');
+  assert.equal(fmtTime(15 * 60 / GAME_SPEED + 0.5), '09:53', 'the 15-minute night in real time');
+  assert.equal(fmtTime(HERO_UNLOCK_TIME / GAME_SPEED + 0.5), '03:18', 'the 5:00 that brings in the next hero');
   // A real second of frames moves a run's clock on GAME_SPEED seconds; the bots keep the game's own pace.
   for (const pace of [GAME_SPEED, undefined]) {
     const g = game({ pace }), t0 = g.time;
     for (let i = 0; i < 60; i++) g.update(1 / 60);
     assert.ok(Math.abs(g.time - t0 - (pace || 1)) < 1e-9, `pace ${pace}: ${g.time - t0} s on the clock`);
+  }
+});
+
+// The owner (20 October 2026): "the thing is even a bit too easy. Double the amount of monsters".
+test('the horde is twice what it was on both difficulties: the steady horde and the swarms, rings and packs', () => {
+  assert.equal(CROWD, 2);
+  const MORE = 1.1 * 1.1 * 1.2;
+  for (const d of [VETERAN, NORMAL]) {
+    assert.ok(Math.abs(d.spawn - 1.15 * MORE * 2) < 1e-9, `${d.name}'s steady horde`);
+    assert.ok(Math.abs(d.horde - MORE * 2) < 1e-9, `${d.name}'s swarms, rings and packs`);
   }
 });

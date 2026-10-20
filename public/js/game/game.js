@@ -57,7 +57,7 @@ export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
 // below the door) pushing up for CRYPT_PUSH game seconds (0.5 s of real time at GAME_SPEED),
 // while a prompt fills over the door (Hud.drawCryptDoor); stepping off or letting go starts over.
 export const CRYPT_STEPS = { w: 9, below: 9 };
-export const CRYPT_PUSH = 0.66;
+export const CRYPT_PUSH = 0.76;
 
 // A crypt's name, by its crossroads (key 'i,j').
 export function cryptName(key) {
