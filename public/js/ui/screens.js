@@ -31,11 +31,12 @@ function goldTag(ctx, app, x, y, align = 'right') {
   drawText(ctx, g, left + 10, y + 1, { color: ['#fff3a8', '#fee761', '#feae34'] });
 }
 
-// A screen's title: the gothic font at twice its size between Kenney's dividers. Mixed case.
+// A screen's title: Jacquard 12 between Kenney's dividers. Mixed case.
 function header(ctx, W, title, y = 4) {
-  const c = textCanvas(title, ['#fff6c2', '#fee761', '#feae34', '#d77643'], '#181425', null, 'gothic');
-  ctx.drawImage(c, Math.round(W / 2 - c.width), y, c.width * 2, c.height * 2);
-  flank(ctx, W / 2 - c.width - 4, W / 2 + c.width + 4, y + 11, Math.min(48, W / 2 - c.width - 10));
+  const c = textCanvas(title, ['#fff6c2', '#fee761', '#feae34', '#f77622'], '#181425', '#0d0b14', 'heading');
+  const hw = c.width / 2;
+  ctx.drawImage(c, Math.round(W / 2 - hw), y + 3);
+  flank(ctx, W / 2 - hw - 4, W / 2 + hw + 4, y + 12, Math.min(48, W / 2 - hw - 10));
 }
 
 // ------------------------------------------------------------------ title --
@@ -56,25 +57,30 @@ export class TitleScreen {
     // The campfire scene goes out first, so the knight's full picture sits
     // behind the logo and menu rather than over them.
     presentBackdrop();
-    // On narrow (portrait) screens the title stacks onto two lines.
-    const narrow = logo('Forest Survivor', undefined, undefined, 'gothic').width * 1.5 > W - 10;
-    const L = narrow ? logo('Survivor', undefined, undefined, 'gothic') : logo('Forest Survivor', undefined, undefined, 'gothic');
-    const scale = Math.max(1, Math.min(3, Math.floor(((W - 20) / L.width) * 2) / 2));
+    // The title in Jacquard 24, at twice its size only on a screen with room to spare; on narrow
+    // (portrait) screens it stacks onto two lines.
+    const narrow = logo('Forest Survivor', undefined, undefined, 'title').width > W - 12;
+    const L = narrow ? logo('Survivor', undefined, undefined, 'title') : logo('Forest Survivor', undefined, undefined, 'title');
+    const scale = L.width * 2 < W * 0.7 ? 2 : 1;
     const lw = L.width * scale, lh = L.height * scale;
-    let ly = Math.round(H * 0.1 + Math.sin(this.t * 1.5) * 2);
+    let ly = Math.round(H * 0.07 + Math.sin(this.t * 1.5) * 1.5);
     if (narrow) {
-      const top = logo('Forest', undefined, undefined, 'gothic');
+      const top = logo('Forest', undefined, undefined, 'title');
       ctx.drawImage(top, Math.round(W / 2 - (top.width * scale) / 2), ly, top.width * scale, top.height * scale);
-      ly += top.height * scale + 2;
+      ly += top.height * scale - 8 * scale;
     }
     // Ember glow behind the logo.
     const gl = ctx.createRadialGradient(W / 2, ly + lh / 2, 4, W / 2, ly + lh / 2, lw * 0.6);
-    gl.addColorStop(0, 'rgba(247,118,34,0.28)');
+    gl.addColorStop(0, 'rgba(247,118,34,0.22)');
     gl.addColorStop(1, 'rgba(247,118,34,0)');
     ctx.fillStyle = gl;
     ctx.fillRect(0, 0, W, H);
     ctx.drawImage(L, Math.round(W / 2 - lw / 2), ly, Math.round(lw), Math.round(lh));
-    drawText(ctx, 'SURVIVE THE NIGHT · DELVE THE DEPTHS', W / 2, ly + lh + 4, { align: 'center', color: '#c0cbdc' });
+    // The motto in the small gothic, between dividers. Jacquard's descenders leave room below
+    // the logo's ink, so it tucks up into it.
+    const motto = 'Survive the Night · Delve the Depths', my = ly + lh - 5 * scale, mw = textWidth(motto, 'gothic');
+    drawText(ctx, motto, W / 2, my, { align: 'center', color: ['#ead4aa', '#ead4aa', '#c28569'], font: 'gothic' });
+    flank(ctx, W / 2 - mw / 2 - 5, W / 2 + mw / 2 + 5, my + 6, Math.min(40, W / 2 - mw / 2 - 12), '#b86f50');
 
     if (!this.ready) {
       if (Math.floor(this.t * 2) % 2 === 0) drawText(ctx, input.device === 'touch' ? 'TAP TO BEGIN' : 'PRESS ANY KEY', W / 2, Math.round(H * 0.62), { align: 'center', color: ['#ffffff', '#fee761', '#feae34'] });
@@ -102,7 +108,14 @@ export class TitleScreen {
     ui.begin(dt);
     const items = [['play', 'NEW GAME'], ['armory', 'THE ARMORY'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
     const bw = 104, bh = 15, gap = 4;
-    let y = Math.round(Math.max(ly + lh + 18, H * 0.5 - (items.length * (bh + gap)) / 2 + 6));
+    let y = Math.round(Math.max(my + 20, H * 0.5 - (items.length * (bh + gap)) / 2 + 6));
+    // A pool of shadow under the buttons, so the trees behind don't fight them.
+    const mh = items.length * (bh + gap), cy = y + mh / 2;
+    const well = ctx.createRadialGradient(W / 2, cy, 8, W / 2, cy, bw);
+    well.addColorStop(0, 'rgba(13,11,20,0.55)');
+    well.addColorStop(1, 'rgba(13,11,20,0)');
+    ctx.fillStyle = well;
+    ctx.fillRect(W / 2 - bw, cy - bw, bw * 2, bw * 2);
     for (const [id, label] of items) {
       if (button(ctx, ui, id, Math.round(W / 2 - bw / 2), y, bw, bh, label)) this.pick(id);
       y += bh + gap;
@@ -115,7 +128,7 @@ export class TitleScreen {
     ctx.drawImage(SPR.h_trophy.frames[0].c, W - 14 - textWidth(String(wins)), H - 13);
     drawText(ctx, String(wins), W - 5, H - 12, { align: 'right', color: '#fee761' });
     if (DEBUG) drawText(ctx, 'Debug: everything unlocked, saved apart from your own progress', W / 2, H - 12, { align: 'center', color: '#feae34' });
-    else drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress kept in cookies (offline)', W / 2, H - 12, { align: 'center', color: '#3a4466' });
+    else drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress kept in cookies (offline)', W / 2, H - 12, { align: 'center', color: '#5d4a52', outline: null });
   }
 
   // A save exists but can't be read: say so and offer a clean start instead of

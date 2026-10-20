@@ -214,7 +214,7 @@ export function button(ctx, ui, id, x, y, w, h, label, o = {}) {
   y = Math.round(y);
   const lit = f && !o.disabled;
   buttonFace(ctx, x, y, w, h, o.disabled ? 'off' : lit ? (Math.sin(ui.t * 6) > 0 ? 'pulse' : 'focus') : o.on ? 'on' : 'idle');
-  const color = o.disabled ? '#5a6988' : f ? ['#ffffff', '#fee761', '#feae34'] : o.color || '#c0cbdc';
+  const color = o.disabled ? '#5d4a52' : f ? ['#ffffff', '#fee761', '#feae34'] : o.color || '#ead4aa';
   drawText(ctx, label, x + w / 2, y + Math.floor((h - 8) / 2), { align: 'center', color });
   if (lit && o.pointer !== false) pointer(ctx, x - 2 + Math.round(Math.sin(ui.t * 8)), y + Math.floor((h - 1) / 2));
   return hit;
@@ -224,8 +224,8 @@ export function button(ctx, ui, id, x, y, w, h, label, o = {}) {
 export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
   const hit = button(ctx, ui, id, x, y, w, 13, '', { pointer: true });
   const f = ui.focused(id);
-  drawText(ctx, label, x + 14, y + 2, { color: f ? '#fee761' : '#c0cbdc' });
-  drawText(ctx, `< ${value} >`, x + w - 14, y + 2, { align: 'right', color: f ? '#ffffff' : '#8b9bb4' });
+  drawText(ctx, label, x + 14, y + 2, { color: f ? '#fee761' : '#ead4aa' });
+  drawText(ctx, `< ${value} >`, x + w - 14, y + 2, { align: 'right', color: f ? '#ffffff' : '#c28569' });
   if (!f || ui.lockT > 0) return hit ? 1 : 0;
   if (input.pressed('left')) return -1;
   if (input.pressed('right')) return 1;
@@ -245,7 +245,7 @@ export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
   const hit = button(ctx, ui, id, x, y, checkboxWidth(label), 13, '', { pointer: true });
   const f = ui.focused(id), color = o.color || '#fee761';
   const bx = Math.round(x) + 9, by = Math.round(y) + 2;
-  ctx.fillStyle = on ? color : '#5a6988';
+  ctx.fillStyle = on ? color : '#9e5b47';
   ctx.fillRect(bx, by, 9, 9);
   ctx.fillStyle = '#0d0b14';
   ctx.fillRect(bx + 1, by + 1, 7, 7);
@@ -253,12 +253,13 @@ export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
     ctx.fillStyle = color;
     for (const [tx, ty] of TICK) ctx.fillRect(bx + 1 + tx, by + 1 + ty, 1, 2);
   }
-  drawText(ctx, label, bx + 13, y + 2, { color: f ? '#fee761' : on ? color : '#8b9bb4' });
+  drawText(ctx, label, bx + 13, y + 2, { color: f ? '#fee761' : on ? color : '#c28569' });
   return hit;
 }
 
 // Big gradient title text built from a bitmap font, smoothed with Scale2x: four times the 5x7
 // font's capitals, or twice the gothic's (font: 'gothic'), whose gradient runs down its capitals.
+// Jacquard 24 (font: 'title') is drawn big enough already and is used as it is.
 const logoCache = new Map();
 export function logo(text, colors = ['#fff6c2', '#fee761', '#feae34', '#f77622', '#be4a2f', '#a22633'], outline = '#181425', font = 'normal') {
   const key = font + text + colors.join();
@@ -269,7 +270,7 @@ export function logo(text, colors = ['#fff6c2', '#fee761', '#feae34', '#f77622',
   let m = px.makeBuf(w, h);
   const ON = px.pack(255, 255, 255);
   for (let i = 0; i < w * h; i++) if (tm.mask[i]) m.d[i] = ON;
-  const times = font === 'normal' ? 2 : 1;
+  const times = font === 'normal' ? 2 : font === 'title' ? 0 : 1;
   for (let i = 0; i < times; i++) m = px.scale2x(m);
   const capH = font === 'normal' ? m.h : capHeight(font) << times;
   const out = px.makeBuf(m.w + 4, m.h + 6);

@@ -78,11 +78,11 @@ export function panelFrame(ctx, x, y, w, h, trim, rivets) {
 // Lucifer's pointed button, in rows 1-13 of its sheet: the rim, the face, the face's shade, the
 // drop shadow below and its black outline.
 const BUTTON = {
-  idle: { '#8d8d8d': '#5a6988', '#757575': '#2d3352', '#393a3b': '#262b44', '#28221f': '#0d0b14', '#000000': INK },
-  focus: { '#8d8d8d': '#e4a672', '#757575': '#733e39', '#393a3b': '#3e2731', '#28221f': '#0d0b14', '#000000': '#feae34' },
-  pulse: { '#8d8d8d': '#fee761', '#757575': '#733e39', '#393a3b': '#3e2731', '#28221f': '#0d0b14', '#000000': '#fee761' },
-  on: { '#8d8d8d': '#feae34', '#757575': '#733e39', '#393a3b': '#3e2731', '#28221f': '#0d0b14', '#000000': INK },
-  off: { '#8d8d8d': '#3a4466', '#757575': '#1d1928', '#393a3b': '#181425', '#28221f': '#0d0b14', '#000000': INK },
+  idle: { '#8d8d8d': '#9e5b47', '#757575': '#3e2731', '#393a3b': '#2b1b26', '#28221f': '#0d0b14', '#000000': INK },
+  focus: { '#8d8d8d': '#fee761', '#757575': '#733e39', '#393a3b': '#4f2a2e', '#28221f': '#0d0b14', '#000000': '#be4a2f' },
+  pulse: { '#8d8d8d': '#fff6c2', '#757575': '#7f4540', '#393a3b': '#4f2a2e', '#28221f': '#0d0b14', '#000000': '#f77622' },
+  on: { '#8d8d8d': '#feae34', '#757575': '#733e39', '#393a3b': '#4f2a2e', '#28221f': '#0d0b14', '#000000': INK },
+  off: { '#8d8d8d': '#4a3540', '#757575': '#221820', '#393a3b': '#1a1219', '#28221f': '#0d0b14', '#000000': INK },
 };
 export function buttonFace(ctx, x, y, w, h, state = 'idle') {
   // The points take 9 pixels a side; a narrow button keeps them shorter.
@@ -94,9 +94,10 @@ export function buttonFace(ctx, x, y, w, h, state = 'idle') {
 // How far in from a button's ends its points reach at mid-height.
 export const BUTTON_TIP = 2;
 
-// Lucifer's gold arrow, pointing right at (x, y)'s row, its tip at x.
+// Lucifer's arrow, brightened to the focused button's gold, pointing right at (x, y)'s row, its
+// tip at x.
 export function pointer(ctx, x, y) {
-  const img = skin('arrow');
+  const img = skin('arrow', { '#d1ca80': '#fee761', '#a29d6b': '#feae34', '#836b3f': '#be4a2f', '#000000': INK });
   ctx.drawImage(img, Math.round(x - img.width), Math.round(y - 6));
 }
 

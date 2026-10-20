@@ -3,6 +3,8 @@
 
 import { GLYPHS, BOLD } from './fontdata.js';
 import PIXTURA from '../../assets/ui/pixtura12.js';
+import JACQUARD24 from '../../assets/ui/jacquard24.js';
+import JACQUARD12 from '../../assets/ui/jacquard12.js';
 import * as px from './pixels.js';
 import { bufToCanvas } from './sprites.js';
 
@@ -29,17 +31,20 @@ function parsePixtura(src) {
   return f;
 }
 // h: the glyph box's height; cap: the rows a gradient spreads over; lead: room on the left for
-// ink that reaches back past the pen (Pixtura's capitals). 'gothic' is Pixtura12, a blackletter
-// for titles: write it in mixed case, its capitals alone don't read.
+// ink that reaches back past the pen (Pixtura's capitals). The blackletters are for titles, in
+// mixed case, as their capitals alone don't read: 'gothic' is Pixtura12, 'title' Jacquard 24
+// (the logo) and 'heading' Jacquard 12 (screen titles).
 const FONTS = {
   normal: { g: parseFont(GLYPHS), h: GLYPH_H_, cap: 7, lead: 0 },
   bold: { g: parseFont(BOLD), h: GLYPH_H_, cap: 7, lead: 0 },
   gothic: { g: parsePixtura(PIXTURA), h: PIXTURA.h, cap: PIXTURA.ascent, lead: 1 },
+  title: { g: parsePixtura(JACQUARD24), h: JACQUARD24.h, cap: JACQUARD24.ascent, lead: 0 },
+  heading: { g: parsePixtura(JACQUARD12), h: JACQUARD12.h, cap: JACQUARD12.ascent, lead: 0 },
 };
 const GOTHIC_SWAP = { '—': '-', '–': '-' };
 
 function glyph(ch, font) {
-  if (font === 'gothic') return FONTS.gothic.g[GOTHIC_SWAP[ch] || ch] || FONTS.gothic.g['?'];
+  if (font !== 'normal' && font !== 'bold') return FONTS[font].g[GOTHIC_SWAP[ch] || ch] || FONTS[font].g['?'];
   return FONTS[font].g[ch] || FONTS.normal.g[ch] || FONTS.normal.g['?'];
 }
 
