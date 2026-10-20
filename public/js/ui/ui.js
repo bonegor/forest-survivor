@@ -40,7 +40,9 @@ export class UI {
     this.lockT = t;
   }
 
-  // Registers a focusable rect. Returns true when activated this frame.
+  // Registers a focusable rect. Returns true when activated this frame. opts.held: it takes the
+  // focus (hover, the keys, a click or a tap) but can't be activated yet, and a press on it is
+  // dropped, never kept for later (the level-up's cards in their first moments).
   item(id, x, y, w, h, opts = {}) {
     const it = { id, x, y, w, h, disabled: !!opts.disabled };
     this.items.push(it);
@@ -56,6 +58,12 @@ export class UI {
     const activated = (inside && m.clicked) || (this.focusId === id && input.pressed(this.noSpace ? 'select' : 'confirm'));
     if (activated) {
       this.fired = true;
+      if (opts.held) {
+        if (this.focusId !== id) sfx('ui', { pitch: 1.2 });
+        this.focusId = id;
+        input.mouse.clicked = false;
+        return false;
+      }
       this.focusId = id;
       if (it.disabled) {
         sfx('deny');

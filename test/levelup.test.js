@@ -1,6 +1,7 @@
 // The level-up screen as a reward (order 2 item 5): a card that completes an evolution is told
-// (Game.completesEvolution, both ways it can), and the cards flip up before any can be taken; a
-// press during the flips is kept and taken when they end, never early.
+// (Game.completesEvolution, both ways it can), and the cards flip up before any can be taken. The
+// owner (2026-10-20): in its first moments (LEVELUP_DELAY) the focus moves but nothing is taken; a
+// press then is dropped, never kept for later.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -79,7 +80,7 @@ test('a card that completes an evolution has the gold back; a NEW weapon the blu
     assert.deepEqual(lv.backs, ['gold', 'weapon', 'relic', 'plain']);
     assert.deepEqual(lv.completes, ['excalibur', null, null, null]);
     assert.ok(Math.abs(cardsReadyAt(4) - 0.45) < 1e-9, 'four cards are up by 0.45 s');
-    assert.equal(lv.readyAt, LEVELUP_DELAY, 'but none can be taken in its first second');
+    assert.equal(lv.readyAt, LEVELUP_DELAY, 'but none can be taken in its first moments');
     lv.draw(ctx, 480, 270, 0.6); // draws face up with its callout and LUCKY! (no throw)
   });
 });
@@ -100,24 +101,51 @@ function press(gs, codes, mouse) {
   input.endFrame();
 }
 
-test('for its first second no key picks a card, and a press then is dropped, not kept for later', () => {
+// The cards taken, by index, as the screen takes them.
+function picks(lv) {
+  const picked = [], choose = lv.choose;
+  lv.choose = function (i, a) {
+    picked.push(i);
+    return choose.call(this, i, a);
+  };
+  return picked;
+}
+
+test('in its first moments the focus moves (arrows, a number) but no card is taken, and a press then is dropped', () => {
   screen((g, gs, p) => {
     gainLevel(p);
-    const lv = openScreen(gs);
+    const lv = openScreen(gs), ui = gs.app.ui, picked = picks(lv);
     assert.ok(lv.t < 0.1, 'just opened');
-    assert.equal(LEVELUP_DELAY, 1);
-    press(gs, ['Digit1']);
-    assert.equal(g.pendingLevels, 1, 'not taken in the first second');
-    while (lv.t < LEVELUP_DELAY + 0.1) {
+    assert.equal(LEVELUP_DELAY, 0.75);
+    const choices = lv.choices, rerolls = p.rerolls, banishes = p.banishes;
+    press(gs, ['ArrowRight']);
+    assert.equal(ui.focusId, 'c1', 'right moves the focus at once, the cards still flipping');
+    press(gs, ['ArrowLeft']);
+    assert.equal(ui.focusId, 'c0', 'and left back');
+    press(gs, ['Digit3']);
+    assert.equal(ui.focusId, 'c2', "a card's number only moves the focus there");
+    press(gs, ['Enter']);
+    press(gs, ['KeyR']);
+    press(gs, ['KeyB']);
+    assert.ok(lv.heldCard(2) && lv.busy());
+    assert.equal(g.pendingLevels, 1, 'nothing taken');
+    assert.equal(lv.choices, choices, 'no reroll');
+    assert.equal(p.rerolls, rerolls);
+    assert.equal(p.banishes, banishes, 'no banish');
+    assert.equal(g.banished.size, 0);
+    while (lv.t < LEVELUP_DELAY + 0.05) {
       gs.frame(1 / 60);
-      assert.equal(g.pendingLevels, 1, `the early press stays dropped at ${lv.t.toFixed(3)} s`);
+      assert.equal(g.pendingLevels, 1, `the early presses stay dropped at ${lv.t.toFixed(3)} s`);
     }
-    press(gs, ['Digit1']);
-    assert.equal(g.pendingLevels, 0, 'a press after the first second takes the card');
+    assert.ok(!lv.heldCard(2) && !lv.busy());
+    assert.equal(ui.focusId, 'c2', 'the focus kept');
+    press(gs, ['Enter']);
+    assert.deepEqual(picked, [2], 'Enter takes the card in focus once the moment is past');
+    assert.equal(g.pendingLevels, 0);
   });
 });
 
-test('Space (the ultimate) never picks a card, before or after the first second; Enter does once it is up', () => {
+test('Space (the ultimate) never picks a card, in its first moments or after; Enter does once it is up', () => {
   screen((g, gs, p) => {
     gainLevel(p);
     const lv = openScreen(gs);
@@ -129,23 +157,80 @@ test('Space (the ultimate) never picks a card, before or after the first second;
   });
 });
 
-test('a click on a card in the first second is dropped; one after it takes the card', () => {
+test('in its first moments the mouse over a card, or a click or tap on it, focuses it and takes nothing', () => {
   screen((g, gs, p) => {
     gainLevel(p);
-    const lv = openScreen(gs);
-    // Where the second card stands once up (drawn on a spare screen past the delay).
-    const spare = new LevelUpOverlay(gs);
-    spare.choices = lv.choices;
-    spare.draw(ctx, 480, 270, LEVELUP_DELAY + 0.1);
-    const card = gs.app.ui.items.find((it) => it.id === 'c1');
-    assert.ok(card);
-    const at = { x: card.x + card.w / 2, y: card.y + card.h / 2 };
-    press(gs, [], at);
-    assert.equal(g.pendingLevels, 1, 'not taken in the first second');
+    const lv = openScreen(gs), ui = gs.app.ui, picked = picks(lv);
+    gs.frame(1 / 60);
+    const rect = (id) => ui.items.find((it) => it.id === id);
+    assert.ok(rect('c1') && rect('c2'), 'the cards are there to focus, held as they are');
+    const centre = (id) => ({ x: rect(id).x + rect(id).w / 2, y: rect(id).y + rect(id).h / 2 });
+    Object.assign(input.mouse, centre('c2'), { moved: true });
+    gs.frame(1 / 60);
+    input.endFrame();
+    assert.equal(ui.focusId, 'c2', 'the mouse over a card focuses it');
+    press(gs, [], centre('c1'));
+    assert.equal(ui.focusId, 'c1', 'a click focuses the card');
+    assert.equal(g.pendingLevels, 1, 'and takes nothing');
     while (lv.t < LEVELUP_DELAY + 0.1) gs.frame(1 / 60);
-    assert.equal(g.pendingLevels, 1, 'and not kept for later');
-    press(gs, [], at);
-    assert.equal(g.pendingLevels, 0, 'a click after the first second takes it');
+    assert.equal(g.pendingLevels, 1, 'nor is it kept for later');
+    press(gs, [], centre('c1'));
+    assert.deepEqual(picked, [1], 'a click after it takes the card');
+  });
+});
+
+test("the next screen of a chain, and a reroll, wait only for their flips: browsing on, presses dropped", () => {
+  screen((g, gs, p) => {
+    gainLevel(p);
+    gainLevel(p);
+    const lv = openScreen(gs), ui = gs.app.ui;
+    assert.equal(g.pendingLevels, 2);
+    while (lv.t < LEVELUP_DELAY + 0.05) gs.frame(1 / 60);
+    press(gs, ['Digit1']);
+    assert.equal(g.pendingLevels, 1, 'the first level taken');
+    assert.ok(gs.overlay === lv, 'the next level on the same screen');
+    assert.ok(Math.abs(lv.readyAt - cardsReadyAt(lv.choices.length)) < 1e-9, 'held for its flips alone');
+    assert.ok(lv.heldCard(0));
+    press(gs, ['ArrowRight']);
+    assert.equal(ui.focusId, 'c1', 'the focus moves while they flip');
+    press(gs, ['Enter']);
+    assert.equal(g.pendingLevels, 1, 'a press during them is dropped');
+    while (lv.t < lv.readyAt + 0.02) gs.frame(1 / 60);
+    const rerolls = p.rerolls;
+    press(gs, ['KeyR']);
+    assert.equal(p.rerolls, rerolls - 1, 'R rerolls once it is up');
+    assert.ok(Math.abs(lv.readyAt - cardsReadyAt(lv.choices.length)) < 1e-9 && lv.t < lv.readyAt, 'the new cards held for their flips');
+    press(gs, ['KeyR']);
+    assert.equal(p.rerolls, rerolls - 1, 'R again during them is dropped');
+    while (lv.t < lv.readyAt + 0.02) gs.frame(1 / 60);
+    press(gs, ['Enter']);
+    assert.equal(g.pendingLevels, 0);
+  });
+});
+
+test('while held the screen draws its cards greyed, the focus framed in grey, and no BANISH or REROLL to press', () => {
+  screen((g, gs, p) => {
+    gainLevel(p);
+    const lv = openScreen(gs), ui = gs.app.ui;
+    while (lv.t < 0.5) gs.frame(1 / 60);
+    // (The world drains to grey the same way when the hero falls, so only the screen is watched.)
+    let ops = [];
+    const comp = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ctx), 'globalCompositeOperation');
+    const spy = { set(v) { ops.push(v); }, get() { return 'source-over'; }, configurable: true };
+    Object.defineProperty(ctx, 'globalCompositeOperation', spy);
+    try {
+      lv.draw(ctx, 480, 270, 1 / 60);
+      assert.equal(ops.filter((o) => o === 'saturation').length, lv.choices.length, 'each card drained of its colours');
+      assert.ok(!ui.items.some((it) => it.id === 'banish' || it.id === 'reroll'), 'the buttons only drawn, greyed');
+      while (lv.t < LEVELUP_DELAY + 0.05) gs.frame(1 / 60);
+      ops = [];
+      lv.draw(ctx, 480, 270, 1 / 60);
+      assert.ok(!ops.includes('saturation'), 'past it, in their colours');
+      assert.ok(ui.items.some((it) => it.id === 'banish') && ui.items.some((it) => it.id === 'reroll'), 'and the buttons are buttons');
+    } finally {
+      delete ctx.globalCompositeOperation;
+      if (comp) Object.defineProperty(Object.getPrototypeOf(ctx), 'globalCompositeOperation', comp);
+    }
   });
 });
 

@@ -220,10 +220,10 @@ export const TINTS = {
   dim: (b) => px.tint(b, px.hexPack('#181425'), 0.55),
 };
 
-// The night look of a frame (enemies.js NIGHT_EDGE): its own pixels and, with `ring` (packed,
-// its alpha kept), a 1 px ring round its outline, none of the ring where the frame is; without
-// one, just the frame. Either way (w+2)×(h+2), the frame a pixel in from each side, so a foe's
-// night layer is one drawImage whatever it is ringed with.
+// The night look of a frame (enemies.js NIGHT_EDGE, which lifts its colours first: nightLift):
+// its pixels and, with `ring` (packed, its alpha kept), a 1 px ring round its outline, none of
+// the ring where the frame is; without one, just the frame. Either way (w+2)×(h+2), the frame a
+// pixel in from each side, so a foe's night layer is one drawImage whatever it is ringed with.
 export function nightBuf(b, ring) {
   return ring ? px.outline(b, ring) : px.pad(b, 1);
 }

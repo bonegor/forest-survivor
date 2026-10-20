@@ -104,3 +104,90 @@ test('a fall spends it first, the other revives kept; offered again five levels 
     assert.ok(p.dead, 'and the one after is the end');
   });
 });
+
+// The owner (2026-10-20): the Phoenix Heart "should be available as soon as it is legal on the very
+// next level up. Then on the one after that, and then only if randomly selected." A screen is told
+// by its level (Game.sureRelic): here each p.level++ is the next level-up's screen.
+const heartOn = (cards) => cards.some((c) => c.type === 'passive' && c.id === 'phoenix');
+const nextScreen = (g, p, n = 3) => {
+  p.level++;
+  return g.levelChoices(n);
+};
+
+test('once it can be offered, the Phoenix Heart is on the next two level-ups for certain, then only by its weight', () => {
+  gameCase('knight', (g, p) => {
+    assert.equal(PASSIVES.phoenix.sure, 2);
+    for (let i = 0; i < 5; i++) assert.ok(!heartOn(nextScreen(g, p)), 'not before it can be offered');
+    topLevel(p.weapons[0]).evolve();
+    const first = nextScreen(g, p), second = nextScreen(g, p);
+    assert.ok(heartOn(first), 'on the very next level-up');
+    assert.ok(heartOn(second), 'and on the one after');
+    assert.equal(first.length, 3, 'one of the three, not a fourth');
+    let seen = 0;
+    for (let i = 0; i < 300; i++) if (heartOn(nextScreen(g, p))) seen++;
+    assert.ok(seen > 0 && seen < 60, `after that by its weight alone (${seen} of 300)`);
+  });
+});
+
+test('a reroll of a sure screen keeps the Phoenix Heart among the new cards and spends no showing', () => {
+  gameCase('knight', (g, p) => {
+    topLevel(p.weapons[0]).evolve();
+    p.level++;
+    for (let i = 0; i < 6; i++) assert.ok(heartOn(g.levelChoices(3)), `the first screen, rolled ${i + 1} times`);
+    p.level++;
+    for (let i = 0; i < 6; i++) assert.ok(heartOn(g.levelChoices(4)), `the second, rolled ${i + 1} times`);
+    assert.equal(g.sureShown.get('phoenix').n, 2, 'two showings spent, however often rolled');
+    p.level++;
+    let seen = 0;
+    for (let i = 0; i < 100; i++) if (heartOn(g.levelChoices(3))) seen++;
+    assert.ok(seen < 50, `the third screen's rerolls draw it by weight (${seen} of 100)`);
+    // Banished, it is not on them at all, sure or not.
+    g.sureShown.clear();
+    g.banish({ type: 'passive', id: 'phoenix' });
+    assert.ok(!heartOn(nextScreen(g, p)), 'banished: never again');
+  });
+});
+
+test('spent by a fall, it is sure again on the first two level-ups once it may be offered again', () => {
+  gameCase('knight', (g, p) => {
+    topLevel(p.weapons[0]).evolve();
+    assert.ok(heartOn(nextScreen(g, p)));
+    g.applyChoice({ type: 'passive', id: 'phoenix', level: 1, isNew: true });
+    for (let i = 0; i < 4; i++) assert.ok(!heartOn(nextScreen(g, p)), 'held: not offered');
+    g.spendRelic('phoenix');
+    for (let i = 1; i < PASSIVES.phoenix.again; i++) assert.ok(!heartOn(nextScreen(g, p)), `spent: not ${i} levels on`);
+    assert.ok(heartOn(nextScreen(g, p)), `${PASSIVES.phoenix.again} levels on, on the screen for certain`);
+    assert.ok(heartOn(nextScreen(g, p)), 'and on the next');
+    assert.equal(g.sureShown.get('phoenix').n, 2);
+  });
+});
+
+test('a chest draws it only by its weight, spending none of its sure showings', () => {
+  gameCase('knight', (g, p) => {
+    topLevel(p.weapons[0]).evolve();
+    // A chest's draws are drawUpgrades' from the plain pool (Game.rollChest).
+    let seen = 0;
+    for (let i = 0; i < 200; i++) if (g.drawUpgrades(1)[0].id === 'phoenix') seen++;
+    assert.ok(seen < 40, `drawn ${seen} times in 200`);
+    for (let i = 0; i < 5; i++) g.rollChest('elite');
+    assert.equal(g.sureShown.size, 0, 'no showing spent by chests');
+    if (!p.passives.has('phoenix')) assert.ok(heartOn(nextScreen(g, p)), 'the next level-up still has it for certain');
+  });
+});
+
+test("a sure Phoenix screen isn't swallowed by ALWAYS: with it on offer the level-up asks", () => {
+  gameCase('knight', (g, p) => {
+    topLevel(p.weapons[0]).evolve();
+    // Everything else out of the run: the heart is all that is left to offer.
+    for (const c of g.upgradePool()) if (c.id !== 'phoenix') g.banish(c);
+    assert.deepEqual(g.upgradePool().map((c) => c.id), ['phoenix']);
+    g.autoPick = 'gold';
+    g.pendingLevels = 1;
+    assert.ok(!g.fillersOnly() && !g.autoReady(), 'not fillers alone');
+    assert.equal(g.resolveAutoLevels(), false, 'the level waits for its screen');
+    assert.equal(g.pendingLevels, 1);
+    const cards = g.levelChoices(3);
+    assert.ok(heartOn(cards), 'and the heart is on it');
+    assert.deepEqual(cards.filter((c) => c.id !== 'phoenix').map((c) => c.type), ['bless', 'heal'], 'the fillers after it');
+  });
+});

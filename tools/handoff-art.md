@@ -6,7 +6,7 @@ All art is palette strings, as in `public/js/art/items.js`: one character per pi
 
 Check a piece with `node tools/preview.mjs <name> --scale=8` (writes `tools/out/sheet.png`), and in the game with the developer panel's **Give weapon** (any class's weapon, any hero) and **Evolve all**.
 
-## Icons: 8, in `ICON_ART` (`public/js/art/items.js`)
+## Icons: 9, in `ICON_ART` (`public/js/art/items.js`)
 
 Each icon is **14 rows of 14 characters**, outlined by the build to **16×16**, like `i_aura` or `i_daggers`. Name them exactly as below, then swap the `icon:` of the weapon in `public/js/data/weapons.js`, or of the relic in `public/js/data/passives.js` (each placeholder is marked `// placeholder (tools/handoff-art.md)`).
 
@@ -20,6 +20,7 @@ Each icon is **14 rows of 14 characters**, outlined by the build to **16×16**, 
 | `i_pestilence` | Pestilence (its evolution) | the cloud with a skull in it | `i_sanctuary` |
 | `i_shadowblade` *(optional)* | Shadow Blade (renamed from Throwing Daggers) | a spinning dark blade | `i_daggers` (it may keep it) |
 | `i_phoenix` | Phoenix Heart (a relic: +1 revive, evolves any weapon) | a burning heart, or a phoenix feather in flame, `o` `O` `y` `w`, glowing; swap the `icon:` of `phoenix` in `public/js/data/passives.js` | `i_revival` |
+| `i_banish` | Exile (an Armory upgrade: +1 level-up BANISH) | a card cast out: torn in two or crossed out in red, falling into a dark rift, `r` `R` `G` `w`, `q` `p` for the rift; no weapon in it (the Shadow Blade is Kael's own); swap `banish` in `UP_ICONS`, `public/js/ui/screens.js` | `i_reroll` (Insight's) |
 
 ## Sprites
 

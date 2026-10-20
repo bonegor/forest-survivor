@@ -5,6 +5,7 @@ import { ENEMIES } from '../data/enemies.js';
 import { SPR, TINTS, nightBuf, canvasFromBuf } from '../engine/sprites.js';
 import { hexPack, makeBuf, pack } from '../engine/pixels.js';
 import { OUTLINE } from '../art/palette.js';
+import { shade, hexOfPacked } from '../art/tune.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, clamp, pick, makeCanvas } from '../engine/util.js';
 import { shadowSprite, glow } from './fxsprites.js';
@@ -52,7 +53,14 @@ let nextId = 1;
 // whose own light shows it, it fades out to nothing at him. Bosses and crypt lords have a light
 // and rim of their own and get none, nor do boxes; champions keep their gold outline with no
 // ring round it; the Necromancer's allies are ringed in `allyRing`.
-export const NIGHT_EDGE = { floor: 0.75, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.6, near: 60 };
+// The owner's (20 October 2026) "Make the monsters brighter because they are not visible": the
+// layer is drawn in their own colours lifted (nightLift: `lift` and `gamma` as the sprite tuner's
+// sliders, art/tune.js shade), the darkest the most, their hues kept and their ink outline left
+// dark, and the floor is higher (0.75 before, so a dark monster sank to three quarters of colours
+// already dark); 0.95 still leaves dawn's light alone. The ring stays as faint as it was: not a
+// brighter edge, a brighter monster. With the layer drawn stronger it is a smaller share of it
+// (`ringA` 0.3, 0.6 before), so no more of it shows than did, at dusk a hair more.
+export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 30, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.3, near: 60 };
 
 export class Enemy {
   constructor() {
@@ -704,19 +712,39 @@ const NIGHT_RISE = 0.3;
 // A ring colour, at its share of the layer's alpha.
 const ringOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.ringA));
 const RING = ringOf(NIGHT_EDGE.ring);
+// A frame in its night colours (NIGHT_EDGE lift and gamma), each colour worked out once; its ink
+// outline (a tuned sprite's own: b.ink) and a rim of its own (b.rim) stay as they are.
+const NIGHT_TUNE = { lift: NIGHT_EDGE.lift, gamma: NIGHT_EDGE.gamma };
+const nightColours = new Map();
+export function nightLift(b) {
+  const ink = b.ink ?? OUTLINE, out = { w: b.w, h: b.h, d: b.d.slice() };
+  if (b.ink !== undefined) out.ink = b.ink;
+  if (b.rim !== undefined) out.rim = b.rim;
+  for (let i = 0; i < out.d.length; i++) {
+    const c = out.d[i];
+    if (!(c >>> 24) || c === ink || c === b.rim) continue;
+    const rgb = c & 0xffffff;
+    let to = nightColours.get(rgb);
+    if (to === undefined) nightColours.set(rgb, (to = hexPack(shade(hexOfPacked(c), NIGHT_TUNE)) & 0xffffff));
+    out.d[i] = ((c & 0xff000000) | to) >>> 0;
+  }
+  return out;
+}
 // A foe's night looks, by Enemy._look: as drawn plain, frozen, winding up; then a champion's,
-// unringed round its gold outline. [variant key, how it is built from the frame]
+// unringed round its gold outline. Each is lifted first (nightLift), then tinted or outlined in
+// gold as drawn. [variant key, how it is built from the frame]
 export const NIGHT_LOOKS = [
-  ['night', (b) => nightBuf(b, RING)],
-  ['night-frozen', (b) => nightBuf(TINTS.frozen(b), RING)],
-  ['night-burn', (b) => nightBuf(TINTS.burn(b), RING)],
-  ['night-eliteo', (b) => nightBuf(eliteOutlineBuf(b), 0)],
-  ['night-frozen-e', (b) => nightBuf(TINTS.frozen(b), 0)],
-  ['night-burn-e', (b) => nightBuf(TINTS.burn(b), 0)],
+  ['night', (b) => nightBuf(nightLift(b), RING)],
+  ['night-frozen', (b) => nightBuf(TINTS.frozen(nightLift(b)), RING)],
+  ['night-burn', (b) => nightBuf(TINTS.burn(nightLift(b)), RING)],
+  ['night-eliteo', (b) => nightBuf(eliteOutlineBuf(nightLift(b)), 0)],
+  ['night-frozen-e', (b) => nightBuf(TINTS.frozen(nightLift(b)), 0)],
+  ['night-burn-e', (b) => nightBuf(TINTS.burn(nightLift(b)), 0)],
 ];
-// An ally's, ringed in green so that a skeleton of the hero's reads apart from the horde's.
+// An ally's, lifted as the horde's and ringed in green so that a skeleton of the hero's reads
+// apart from the horde's.
 const ALLY_RING = ringOf(NIGHT_EDGE.allyRing);
-export const ALLY_LOOK = ['night-ally', (b) => nightBuf(b, ALLY_RING)];
+export const ALLY_LOOK = ['night-ally', (b) => nightBuf(nightLift(b), ALLY_RING)];
 
 // Just a boss's outline, in its colour: drawn unlit over the boss.
 function rimBuf(b, color) {

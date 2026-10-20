@@ -11,7 +11,7 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { isFew } from '../public/js/game/spawner.js';
 import { armored } from '../public/js/game/player.js';
-import { NORMAL, VETERAN, GAME_SPEED } from '../public/js/data/difficulty.js';
+import { NORMAL, VETERAN, GAME_SPEED, HARDER } from '../public/js/data/difficulty.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { targetCount } from '../public/js/data/waves.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
@@ -129,30 +129,66 @@ function asks(g, fn) {
   return got;
 }
 
+// Every monster's health as a run on diff gives it, by the way it comes: the horde early and late,
+// a pack, a champion (Stoneskin aside), the thief, a boss's summons, a boss, a crypt's lord and a
+// Dungeon Run floor's guardian. less: the difficulty's health (hp and health) that many times
+// smaller, as a round of tuning found it.
+function healths(diff, less = 1) {
+  const weaker = (g) => {
+    if (less !== 1) g.diff = { ...g.diff, hp: g.diff.hp / less, health: g.diff.health / less };
+    return g;
+  };
+  const g = weaker(game({ diff })), p = g.player, s = g.spawner;
+  const elite = asks(g, () => s.spawnElite(10))[0];
+  const hp = {
+    horde: s.stats(10).hpMul,
+    late: s.stats(25).hpMul,
+    pack: asks(g, () => s.fire({ type: 'pack', enemy: 'goblin', count: 5 }, 10))[0].hpMul,
+    champion: elite.hpMul / (elite.mod.id === 'stone' ? 1.4 : 1),
+    thief: asks(g, () => s.spawnThief(10))[0].hpMul,
+    summoned: asks(g, () => g.summonRing('skeleton', 1, 40))[0].hpMul,
+  };
+  delete g.spawnEnemy; // back to the game's own
+  hp.boss = g.spawnBoss('boneking', p.x + 80, p.y, { sleeping: true }).maxHp;
+  hp.lord = s.spawnLord(p.x - 80, p.y).maxHp;
+  const d = weaker(game({ diff, mode: 'dungeon' }));
+  hp.floor = d.spawnBoss(d.world.info.guardian, d.player.x + 80, d.player.y, { sleeping: true }).maxHp;
+  return hp;
+}
+
 // The user (16 October 2026): "Normal: monster health -70%".
 test('on Normal every monster has 70% less health than on Veteran: the horde, champions, the thief, bosses and the crypts\' lords', () => {
   const tenth = (n, v, what) => assert.ok(Math.abs(n / v - 0.3) < 1e-9, `${what}: ${n} on Normal, ${v} on Veteran`);
-  const hp = {};
-  for (const diff of ['hard', 'medium']) {
-    const g = game({ diff }), p = g.player, s = g.spawner;
-    const elite = asks(g, () => s.spawnElite(10))[0];
-    hp[diff] = {
-      horde: s.stats(10).hpMul,
-      late: s.stats(25).hpMul,
-      pack: asks(g, () => s.fire({ type: 'pack', enemy: 'goblin', count: 5 }, 10))[0].hpMul,
-      champion: elite.hpMul / (elite.mod.id === 'stone' ? 1.4 : 1),
-      thief: asks(g, () => s.spawnThief(10))[0].hpMul,
-      summoned: asks(g, () => g.summonRing('skeleton', 1, 40))[0].hpMul,
-    };
-    delete g.spawnEnemy; // back to the game's own
-    hp[diff].boss = g.spawnBoss('boneking', p.x + 80, p.y, { sleeping: true }).maxHp;
-    hp[diff].lord = s.spawnLord(p.x - 80, p.y).maxHp;
-    hp[diff].floor = game({ diff, mode: 'dungeon' }).world.guardian.maxHp;
-  }
+  const hp = { hard: healths('hard'), medium: healths('medium') };
   for (const k of Object.keys(hp.hard)) tenth(hp.medium[k], hp.hard[k], k);
-  assert.equal(hp.hard.lord, 600, 'a lord on Veteran as it was');
-  assert.equal(NORMAL.health, 0.3);
-  assert.equal(VETERAN.health, 1);
+  assert.equal(hp.hard.floor, game({ mode: 'dungeon' }).world.guardian.maxHp, 'a floor\'s own guardian as counted');
+  assert.equal(hp.hard.lord, 600 * HARDER, 'a lord on Veteran: its own 600, and the last round\'s +20%');
+  assert.ok(Math.abs(NORMAL.health / VETERAN.health - 0.3) < 1e-12);
+});
+
+// The owner (20 October 2026): "difficulty is too easy. Increase monster health and damage by 20%."
+test('the round of 20 October 2026: every monster on both difficulties has 20% more health and hits 20% harder', () => {
+  const near = (a, b, what) => assert.ok(Math.abs(a / b - 1) < 1e-9, `${what}: ${a} against ${b}`);
+  assert.equal(HARDER, 1.2);
+  // On top of the rounds before it (difficulty.js TOUGHER, DEADLIER).
+  near(VETERAN.hp, 1.9 * 1.1 ** 3 * 1.2 * 1.1 ** 2 * 1.2, 'Veteran\'s health');
+  near(VETERAN.dmg, 1.65 * 1.1 ** 2 * 1.2 * 1.1 * 1.2 * 1.1 ** 2 * 1.2, 'Veteran\'s damage');
+  near(NORMAL.hp, VETERAN.hp * 0.3, 'Normal\'s health: Veteran\'s, 70% less');
+  assert.equal(NORMAL.dmg, VETERAN.dmg, 'Normal\'s damage: Veteran\'s (halved after armor: hurt)');
+  // However a monster comes, its health takes it.
+  for (const diff of ['hard', 'medium']) {
+    const now = healths(diff), before = healths(diff, HARDER);
+    for (const k of Object.keys(now)) near(now[k] / before[k], HARDER, `${diff}, ${k}`);
+  }
+  // Every blow the hero takes (a monster's, its shots', a boss's) goes through Player.hurt.
+  for (const diff of ['hard', 'medium']) {
+    const blow = (less) => {
+      const g = game({ diff });
+      if (less) g.diff = { ...g.diff, dmg: g.diff.dmg / HARDER };
+      return g.player.hurt(1000);
+    };
+    assert.ok(Math.abs(blow(false) / blow(true) - HARDER) < 0.001, `${diff}: a blow 20% harder`);
+  }
 });
 
 // The user: "in the last 6 minutes 30% more of the same monsters, but they each have 70% less health".
@@ -182,7 +218,7 @@ test('on Normal 30% more monsters come from minute 9 of the night on, not before
 
 // A Holy Relic purges the horde on screen, but bosses, crypt lords and champions only take a
 // heavy blow. On Normal they have 70% less health, so the blow is 70% lighter too: a flat 200
-// would fell a crypt lord (180) outright, there and in every crypt with a relic among its boxes.
+// would all but fell a crypt lord (216), there and in every crypt with a relic among its boxes.
 test('a Holy Relic leaves a crypt lord standing, the same share of it gone on Normal as on Veteran', () => {
   const share = {};
   for (const diff of ['medium', 'hard']) {

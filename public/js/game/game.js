@@ -1,7 +1,7 @@
 // A single run: owns every system and runs the update/draw loop.
 
 import { diffFor, nightmareFor } from '../data/difficulty.js';
-import { HEROES, HERO_LINE, startWeapons, weaponsFor } from '../data/heroes.js';
+import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
@@ -33,7 +33,6 @@ import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor } from './effects.js';
 import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
-import { rimRing } from '../engine/pixels.js';
 import { Minion } from './minions.js';
 import { Hints } from './hints.js';
 
@@ -72,10 +71,12 @@ export function cryptName(key) {
 export const isFiller = (c) => FILLER_IDS.includes(c.type);
 
 // The hero is always found: a ring on the ground in his own colour (HEROES color), softly
-// pulsing, turning red under a third of his health; a 1 px light line round his sprite, drawn
-// unlit; and when something stands in front of him (a foe, a minion, a boss, a big number), his
-// ring, a ghost of him (ghost) and a white line over the whole scene (Game.drawHeroOver).
-export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44', line: HERO_LINE, overLine: '#ffffff', ghost: 0.5 };
+// pulsing, turning red under a third of his health; and when something stands in front of him (a
+// foe, a minion, a boss, a big number), his ring and a ghost of him (ghost) over the whole scene
+// (Game.drawHeroOver). No line round him: the owner's (20 October 2026) "hero has an outline
+// that is too bright. Undo that bright outline, we dont need it because the hero is visible since
+// its always in center".
+export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44', ghost: 0.5 };
 
 
 // A foe the hero's weapons may pick out, to aim, cast or chain at (nearestEnemy, nearestEnemies,
@@ -188,6 +189,10 @@ export class Game {
     // FILLER_IDS, or null: ask). For this run only; the pause menu clears it.
     this.autoPick = null;
     this.phoenixLostAt = null; // the level a Phoenix Heart was spent at this run (Game.relicOffered)
+    // A relic's showings for certain (PASSIVES' `sure`) since it last became one to offer:
+    // id -> { n: given, lvl: the level whose screen had the last } (Game.sureRelic).
+    this.sureShown = new Map();
+    this.banished = new Set(); // 'weapon:axe', 'passive:might': out of the run (the level-up's BANISH)
     this.chestQueue = [];
     this.showMap = false;
     this.floor = 1;
@@ -395,22 +400,24 @@ export class Game {
   // shared by all, never another class's, weaponsFor); a relic he holds grows (twice its
   // weight); a new relic while a slot is free (about half its weight; the Phoenix Heart only
   // when relicOffered says so). Empty once the whole build is maxed, and it stays so: an
-  // evolution adds nothing to choose. (Only a Phoenix Heart spent frees a slot again.)
+  // evolution adds nothing to choose. (Only a Phoenix Heart spent frees a slot again.) Nothing
+  // banished comes back (the level-up's BANISH), at a level-up or in a chest.
   upgradePool() {
     const p = this.player;
     const pool = [];
+    const out = (type, id) => this.banished.has(type + ':' + id);
     for (const w of p.weapons) {
-      if (!w.maxed) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: 3 });
+      if (!w.maxed && !out('weapon', w.id)) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: 3 });
     }
     if (p.weapons.length < MAX_WEAPONS) {
-      for (const id of weaponsFor(p.hero)) if (!this.ownsWeapon(id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
+      for (const id of weaponsFor(p.hero)) if (!this.ownsWeapon(id) && !out('weapon', id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
     }
     for (const [id, rank] of p.passives) {
-      if (rank < PASSIVES[id].max) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
+      if (rank < PASSIVES[id].max && !out('passive', id)) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
     }
     if (p.passives.size < MAX_RELICS) {
       for (const id of PASSIVE_IDS) {
-        if (!p.passives.has(id) && this.relicOffered(id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
+        if (!p.passives.has(id) && this.relicOffered(id) && !out('passive', id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
       }
     }
     return pool;
@@ -427,17 +434,20 @@ export class Game {
   }
 
   // A relic used up (the Phoenix Heart, by the revive it gave): gone, its slot free again, and
-  // remembered so it is not offered again too soon (relicOffered).
+  // remembered so it is not offered again too soon (relicOffered). Once it may be offered again,
+  // its showings for certain start over (sureRelic).
   spendRelic(id) {
     const p = this.player;
     p.passives.delete(id);
     p.recompute();
     this.phoenixLostAt = p.level;
+    this.sureShown.delete(id);
   }
 
-  // Up to n different upgrades, drawn from the pool by weight.
-  drawUpgrades(n) {
-    const pool = this.upgradePool(), out = [];
+  // Up to n different upgrades, drawn by weight from the pool (upgradePool, or one given).
+  drawUpgrades(n, pool = this.upgradePool()) {
+    const out = [];
+    pool = [...pool];
     while (out.length < n && pool.length) {
       const c = weighted(pool, (x) => x.weight);
       out.push(c);
@@ -448,10 +458,52 @@ export class Game {
 
   // A level-up's cards: n drawn from the pool, the fillers after them while there is room. With
   // nothing left to draw, the three fillers alone (a four-card level-up shows three, no copy).
+  // A relic due for certain (sureRelic: the Phoenix Heart) is one of the n, in a place of chance.
+  // (A chest draws from the plain pool by weight: the showings for certain are the cards'.)
   levelChoices(n) {
-    const out = this.drawUpgrades(n);
+    const pool = this.upgradePool(), sure = this.sureRelic(pool);
+    const out = this.drawUpgrades(sure ? n - 1 : n, sure ? pool.filter((c) => c !== sure) : pool);
+    if (sure) out.splice(Math.floor(Math.random() * (out.length + 1)), 0, sure);
     for (const type of FILLER_IDS) if (out.length < n) out.push(this.filler(type));
     return out;
+  }
+
+  // The owner's (2026-10-20): the Phoenix Heart "should be available as soon as it is legal on the
+  // very next level up. Then on the one after that, and then only if randomly selected." A relic
+  // with `sure` (PASSIVES) is on the first `sure` level-up screens at which it can be offered (in
+  // the pool: legal, a slot free, not banished), then only by its weight; spent, it starts over
+  // (spendRelic). The screen is told by its level, so a reroll of the same level
+  // keeps it among the new cards and spends no showing. Its card from `pool`, or null.
+  sureRelic(pool) {
+    const lvl = this.player.level - this.pendingLevels + 1;
+    for (const c of pool) {
+      const sure = c.type === 'passive' && c.isNew && PASSIVES[c.id].sure;
+      if (!sure) continue;
+      const s = this.sureShown.get(c.id) || { n: 0, lvl: null };
+      if (s.lvl === lvl) return c;
+      if (s.n >= sure) continue;
+      this.sureShown.set(c.id, { n: s.n + 1, lvl });
+      return c;
+    }
+    return null;
+  }
+
+  // BANISH: a weapon or relic out of the run for good, never offered again, at a level-up or in a
+  // chest (upgradePool). A filler can't be banished. False when it wasn't.
+  banish(c) {
+    if (!c || (c.type !== 'weapon' && c.type !== 'passive')) return false;
+    this.banished.add(c.type + ':' + c.id);
+    return true;
+  }
+
+  // A card in the place of one banished: drawn by weight from the pool, less the cards still on
+  // the screen (shown); else a filler not there yet; else none.
+  redrawCard(shown) {
+    const on = (c) => shown.some((s) => s.type === c.type && s.id === c.id);
+    const pool = this.upgradePool().filter((c) => !on(c));
+    if (pool.length) return weighted(pool, (x) => x.weight);
+    for (const type of FILLER_IDS) if (!shown.some((s) => s.type === type)) return this.filler(type);
+    return null;
   }
 
   // A filler card: the Blessing; a heal of 35%; gold that grows with the night and with the
@@ -601,6 +653,8 @@ export class Game {
     else n = r < 0.04 ? 5 : r < 0.2 ? 3 : 1;
     if (items.length) n = Math.max(0, n - 2);
     for (let i = 0; i < n; i++) {
+      // The plain pool by weight: a Phoenix Heart due for certain is due on a level-up's cards
+      // (levelChoices), not in a chest; nothing banished.
       const u = this.drawUpgrades(1)[0] || this.filler(this.autoPick || 'bless');
       items.push(u);
       // Apply as we go so later draws see the new levels.
@@ -1378,8 +1432,8 @@ export class Game {
     const p = this.player;
     this.effects.push(new Ring(this, p.x, p.y, 6, 260, 0.8, '#fee761', false, 3));
     // Bosses, crypt lords and champions only take a heavy blow: a relic is no way past them. The
-    // blow shrinks with their health (difficulty.js health), so it takes the same share of them on
-    // Normal as on Veteran: a flat 200 would fell a Normal crypt lord (180) outright.
+    // blow grows and shrinks with their health (difficulty.js health), so it takes the same share of
+    // them on Normal as on Veteran: a flat 200 would all but fell a Normal crypt lord (216).
     for (const e of this.enemiesOnScreen()) {
       if (e.boss || e.elite) this.hitEnemy(e, 200 * this.diff.health, { type: 'holy' });
       else this.killEnemy(e, { noSplit: true });
@@ -2140,18 +2194,6 @@ export class Game {
     if (p.dead || !p._rect) return;
     const [X, Y, w, h, fr, flip] = p._rect;
     if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, X, Y, w, h);
-    // His light outline, unlit: the night never sinks him into the ground.
-    this.drawHeroLine(ctx, 1);
-  }
-
-  // The hero's outline round his sprite as last drawn, in a colour, at alpha a: 1 px, or as wide as
-  // his `line` (the Shadow's 2, his dark tones lost at night otherwise; the outer pixel fainter).
-  drawHeroLine(ctx, a, color = HERO_MARK.line) {
-    const p = this.player, [X, Y, w, h, fr, flip] = p._rect, S = this.cam.S, n = p.hero.line || 1;
-    if (p.ult && p.ult.type === 'shadowdance') return; // vanished
-    ctx.globalAlpha = a;
-    ctx.drawImage(fr.variant(`heroline${color}:${n}`, (b) => rimRing(b, color, n), flip), X - n * S, Y - n * S, w + 2 * n * S, h + 2 * n * S);
-    ctx.globalAlpha = 1;
   }
 
   // The ring on the ground under the hero (HERO_MARK): his colour, pulsing; red when he is low.
@@ -2165,8 +2207,8 @@ export class Game {
     ctx.globalAlpha = 1;
   }
 
-  // Something stands in front of the hero: his ring, a ghost of him and a white outline go over
-  // the whole scene (under the HUD), so he is never lost in the crowd.
+  // Something stands in front of the hero: his ring and a ghost of him go over the whole scene
+  // (under the HUD), so he is never lost in the crowd.
   drawHeroOver(ctx) {
     const p = this.player;
     if (p.dead || !p._rect || (p.ult && p.ult.type === 'shadowdance')) return;
@@ -2175,7 +2217,6 @@ export class Game {
     ctx.globalAlpha = HERO_MARK.ghost;
     ctx.drawImage(fr.get(flip), X, Y, w, h);
     ctx.globalAlpha = 1;
-    this.drawHeroLine(ctx, 1, HERO_MARK.overLine);
   }
 
   drawShrine(ctx, c, s) {

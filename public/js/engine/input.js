@@ -18,6 +18,11 @@ const BIND = {
   strike: { keys: ['KeyX', 'ShiftLeft', 'ShiftRight'], pad: [5, 4] },
   map: { keys: ['Tab', 'KeyM'], pad: [8] },
   reroll: { keys: ['KeyR'], pad: [3] },
+  // The level-up's BANISH (a card out of the run): B banishes the card in focus at once; a pad's
+  // left-stick press only arms it, as the BANISH button does (a stick flicked through the cards is
+  // easily pressed by mistake). Neither is bound to anything else.
+  banish: { keys: ['KeyB'], pad: [] },
+  banishArm: { keys: [], pad: [10] },
   // Held with a card's number: take it at every level-up from now on (the level-up's ALWAYS).
   always: { keys: ['ShiftLeft', 'ShiftRight'], pad: [] },
   one: { keys: ['Digit1', 'Numpad1'], pad: [] },

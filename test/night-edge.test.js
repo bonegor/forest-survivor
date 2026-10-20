@@ -1,7 +1,8 @@
 // The night edge (enemies.js NIGHT_EDGE): the owner's "monsters more visible against the night".
-// After the lighting each monster is drawn again unlit, at the floor's alpha, with a light ring
-// outside its ink outline, all in one canvas cut by whatever stands in front, a hole round the
-// hero; bosses and crypt lords get none, the Necromancer's allies a green ring.
+// After the lighting each monster is drawn again unlit, in its colours lifted (since 20 October
+// 2026: "Make the monsters brighter"), at the floor's alpha, with a faint ring outside its ink
+// outline, all in one canvas cut by whatever stands in front, a hole round the hero; bosses and
+// crypt lords get none, the Necromancer's allies a green ring.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -10,7 +11,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const mod = (file) => import(pathToFileURL(root + file).href);
 await mod('tools/headless.mjs');
 const { Game } = await mod('public/js/game/game.js');
-const { NIGHT_EDGE, NIGHT_LOOKS, ALLY_LOOK, nightFloor, nightHoleBuf, drawNightEdge } = await mod('public/js/game/enemies.js');
+const { NIGHT_EDGE, NIGHT_LOOKS, ALLY_LOOK, nightFloor, nightHoleBuf, drawNightEdge, nightLift } = await mod('public/js/game/enemies.js');
 const { Minion } = await mod('public/js/game/minions.js');
 const { SPR, nightBuf } = await mod('public/js/engine/sprites.js');
 const { hexPack } = await mod('public/js/engine/pixels.js');
@@ -63,18 +64,18 @@ function nightPass(g) {
 // The night variant canvases a frame has built.
 const nightCanvases = (fr, key) => fr.variants.get(key) || [];
 
-test('the night look is the frame with a 1 px ring outside its outline: (w+2)×(h+2), the ring clear of the sprite', () => {
+test('the night look is the frame, lifted, with a 1 px ring outside its outline: (w+2)×(h+2), the ring clear of the sprite', () => {
   for (const name of ['spider', 'bat', 'cultist', 'zombie']) {
-    const b = SPR[name].frames[0].buf, look = NIGHT_LOOKS[0][1](b);
+    const b = SPR[name].frames[0].buf, look = NIGHT_LOOKS[0][1](b), lifted = nightLift(b);
     assert.equal(look.w, b.w + 2, `${name}: a pixel wider each side`);
     assert.equal(look.h, b.h + 2, `${name}: a pixel taller each side`);
     const ring = hexPack(NIGHT_EDGE.ring, RING_A);
     let rings = 0;
     for (let y = 0; y < look.h; y++) {
       for (let x = 0; x < look.w; x++) {
-        const c = look.d[y * look.w + x], inside = x > 0 && y > 0 && x <= b.w && y <= b.h ? b.d[(y - 1) * b.w + x - 1] : 0;
+        const c = look.d[y * look.w + x], inside = x > 0 && y > 0 && x <= b.w && y <= b.h ? lifted.d[(y - 1) * b.w + x - 1] : 0;
         if (inside >>> 24) {
-          assert.equal(c, inside, `${name}: the sprite as it is at ${x},${y}, no ring over it`);
+          assert.equal(c, inside, `${name}: the sprite in its night colours at ${x},${y}, no ring over it`);
           continue;
         }
         if (!c) continue;
@@ -96,17 +97,60 @@ test('the night look is the frame with a 1 px ring outside its outline: (w+2)×(
   assert.equal(plain.d.filter((c) => c >>> 24).length, b.d.filter((c) => c >>> 24).length, 'no ring');
 });
 
-test('the floor: lit plus the layer comes to 0.75 of a monster\'s colours, under any night; nothing at dawn', () => {
+// The owner (20 October 2026): "Make the monsters brighter because they are not visible". The
+// floor went from 0.75 to 0.95, and the layer is in their colours lifted (below).
+test('the floor: lit plus the layer comes to 0.95 of a monster\'s night colours, under any night; nothing at dawn', () => {
   const luma = (a) => (0.299 * a[0] + 0.587 * a[1] + 0.114 * a[2]) / 255;
-  assert.equal(NIGHT_EDGE.floor, 0.75);
-  for (const [where, amb, want] of [['forest at dusk', [150, 136, 186], 0.416], ['forest at midnight', [102, 110, 164], 0.549], ['crypt', [70, 70, 104], 0.648]]) {
+  assert.equal(NIGHT_EDGE.floor, 0.95);
+  for (const [where, amb, want] of [['forest at dusk', [150, 136, 186], 0.883], ['forest at midnight', [102, 110, 164], 0.910], ['crypt', [70, 70, 104], 0.930], ['the last of the night', [240, 214, 190], 0.645]]) {
     const f = nightFloor(amb), m = luma(amb);
     assert.ok(Math.abs(f - want) < 0.002, `${where}: ${f.toFixed(3)}`);
     assert.ok(Math.abs(m + f * (1 - m) - NIGHT_EDGE.floor) < 1e-9, `${where}: M + f(1 − M) = floor`);
   }
   assert.equal(nightFloor([255, 244, 228]), 0, 'dawn');
-  assert.equal(nightFloor([240, 214, 190]), 0, 'the last of the night');
   assert.equal(nightFloor([255, 255, 255]), 0, 'full light');
+});
+
+test('at night a monster is in its own colours lifted: every one as light or lighter, the dark ones much, hues kept, the ink and the ring as they were', () => {
+  const lum = (c) => 0.299 * (c & 255) + 0.587 * ((c >>> 8) & 255) + 0.114 * ((c >>> 16) & 255);
+  const hue = (c) => {
+    const r = c & 255, g = (c >>> 8) & 255, b = (c >>> 16) & 255, max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max - min < 24) return null; // too grey to have a hue worth keeping
+    const d = max - min, h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return h * 60;
+  };
+  for (const name of ['bat', 'spider', 'rat', 'hellhound', 'deathknight', 'imp', 'cultist', 'skeleton', 'goblin']) {
+    const b = SPR[name].frames[0].buf, out = nightLift(b), ink = b.ink ?? OUTLINE;
+    let dark = 0, lifted = 0;
+    for (let i = 0; i < b.d.length; i++) {
+      const c = b.d[i], o = out.d[i];
+      assert.equal(o >>> 24, c >>> 24, `${name}: the same pixels, as opaque`);
+      if (!(c >>> 24)) continue;
+      if (c === ink) {
+        assert.equal(o, c, `${name}: its ink outline as dark as it was`);
+        continue;
+      }
+      assert.ok(lum(o) >= lum(c) - 0.5, `${name}: no colour darker`);
+      if (lum(c) < 70) {
+        dark++;
+        if (lum(o) - lum(c) >= 25) lifted++;
+      }
+      const h0 = hue(c), h1 = hue(o);
+      if (h0 !== null && h1 !== null) {
+        const dh = Math.abs(((h1 - h0 + 540) % 360) - 180);
+        assert.ok(dh < 20, `${name}: its hue kept (${h0.toFixed(0)}° to ${h1.toFixed(0)}°)`);
+      }
+    }
+    assert.ok(!dark || lifted === dark, `${name}: every dark colour lifted (${lifted} of ${dark} pixels)`);
+  }
+  // Not a brighter edge: the ring round them, in its colour, shows no more than it did before (0.6
+  // of a layer drawn at a floor of 0.75), under any night.
+  assert.equal(NIGHT_EDGE.ring, '#8b9bb4');
+  const luma = (a) => (0.299 * a[0] + 0.587 * a[1] + 0.114 * a[2]) / 255;
+  for (const [where, amb] of [['forest at dusk', [150, 136, 186]], ['forest at midnight', [102, 110, 164]], ['crypt', [70, 70, 104]], ['catacombs', [74, 62, 70]]]) {
+    const m = luma(amb), was = (0.6 * (0.75 - m)) / (1 - m), now = NIGHT_EDGE.ringA * nightFloor(amb);
+    assert.ok(now <= was + 0.02, `${where}: the ring at ${now.toFixed(3)}, ${was.toFixed(3)} before`);
+  }
 });
 
 test('a monster out in the dark is lifted, once, at the floor\'s alpha; at dawn nothing is drawn', () =>

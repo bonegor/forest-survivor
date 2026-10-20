@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { GameScreen, LevelUpOverlay } from '../public/js/ui/gamescreen.js';
+import { GameScreen, LevelUpOverlay, LEVELUP_DELAY } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input, initInput } from '../public/js/engine/input.js';
@@ -57,13 +57,13 @@ function run(fn) {
   }
 }
 
-// Plays until the level-up screen is up (after the beam's lead-in, Game MOMENT.levelup) and past
-// its first second (LEVELUP_DELAY), when no card can be taken.
-function openLevelUp(gs, p) {
+// Plays until the level-up screen is up (after the beam's lead-in, Game MOMENT.levelup) and, unless
+// told not to, past its first moments (LEVELUP_DELAY), when no card can be taken.
+function openLevelUp(gs, p, past = true) {
   levelUp(p);
   for (let f = 0; f < 30 && !gs.overlay; f++) frame(gs);
   assert.ok(gs.overlay instanceof LevelUpOverlay);
-  for (let f = 0; f < 70; f++) frame(gs);
+  while (past && gs.overlay.t < LEVELUP_DELAY + 0.05) frame(gs);
   return gs.overlay;
 }
 
@@ -110,6 +110,26 @@ test('with the level-up screen up, a tap takes the card tapped, and play has the
     touch('touchstart', 3, x, y);
     assert.ok(input.stick.active, 'the same touch now steers');
     touch('touchend', 3, x, y);
+  });
+});
+
+test("a tap on a card in the screen's first moments focuses it and takes nothing, now or later", () => {
+  run((gs, g, p) => {
+    const lv = openLevelUp(gs, p, false);
+    frame(gs);
+    assert.ok(lv.t < LEVELUP_DELAY);
+    const [x, y] = centre(gs, 'c2');
+    touch('touchstart', 1, x, y);
+    touch('touchend', 1, x, y);
+    frame(gs);
+    assert.equal(gs.app.ui.focusId, 'c2', 'the card tapped is in focus');
+    assert.equal(g.pendingLevels, 1, 'not taken');
+    while (lv.t < LEVELUP_DELAY + 0.05) frame(gs);
+    assert.equal(g.pendingLevels, 1, 'nor kept for later');
+    touch('touchstart', 2, x, y);
+    touch('touchend', 2, x, y);
+    frame(gs);
+    assert.equal(g.pendingLevels, 0, 'a tap after them takes it');
   });
 });
 

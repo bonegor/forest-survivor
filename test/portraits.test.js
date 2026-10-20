@@ -49,8 +49,9 @@ test('the portrait backdrop is the hero colour in flat tones, cached per size', 
   assert.notEqual(portraitBackdrop(120, 140, HEROES.knight.color, true), a, 'a locked hero has a slate one');
 });
 
-test('the Shadow carries a 2 px light line, his colours untouched; the ring is solid inside and fainter out', () => {
-  assert.equal(HEROES.rogue.line, 2);
+// On the menus only: none in play since the owner's 20 October 2026 (test/hero-mark.test.js).
+test('the Shadow carries a light line on the menus, his colours untouched; the ring is solid inside and fainter out', () => {
+  assert.equal(HEROES.rogue.line, 1);
   assert.ok(!ART.rogue.palette, 'no recolour of the owner-picked sprite');
   const b = makeBuf(3, 3);
   b.d[4] = hexPack('#262b44');

@@ -36,8 +36,12 @@ export const HEROES = {
     weapon: 'bow',
     unique: ['bow'],
     color: '#63c74d',
-    stats: { maxHp: 100, speed: 1.15, crit: 0.12, projSpeed: 1.1 },
-    perk: 'Eagle Eye: +12% crit, +15% move speed',
+    // The owner's (20 October 2026): "make ranger attack faster and stronger (both by 20%) and
+    // increase ranger health by 50%". Faster is how often her weapons strike (every cooldown
+    // divided by 1.2), not her pace, which the thief is measured against; stronger is her damage
+    // (might), the bow's and all else she fires; 150 health where she had 100.
+    stats: { maxHp: 150, might: 1.2, cooldown: 1 / 1.2, speed: 1.15, crit: 0.12, projSpeed: 1.1 },
+    perk: 'Eagle Eye: +20% damage & attack speed, +50% health, +12% crit',
     ult: 'arrowstorm',
     ultName: 'Arrow Storm',
     ultDesc: 'Arrows rain on every foe in sight for 3 seconds.',
@@ -68,9 +72,10 @@ export const HEROES = {
     weapon: 'daggers',
     unique: ['daggers'],
     color: '#8f5bb0',
-    // His light line 2 px wide in play and on the menus: his dark tones (the owner's pick) lose him
-    // at night otherwise. Drawn round him, his colours untouched.
-    line: 2,
+    // A faint 1 px light line round him on the menus (ui/screens.js heroLine): his dark tones (the
+    // owner's pick) are lost on their dark panels otherwise. Drawn round him, his colours untouched.
+    // None in play, where he is always in the middle of the screen (game.js HERO_MARK).
+    line: 1,
     stats: { maxHp: 95, speed: 1.2, crit: 0.18, luck: 1.2 },
     perk: 'Shadowstep: +18% crit, +20% speed & luck',
     ult: 'shadowdance',
@@ -96,7 +101,7 @@ export const HEROES = {
   },
 };
 
-// The light line drawn round the hero, in play (game.js HERO_MARK) and on the menus.
+// The light line drawn round a hero that has one (line: the Shadow) on the menus; none in play.
 export const HERO_LINE = '#d8e2f0';
 
 // The weapons a hero starts a run with, each at level 1.

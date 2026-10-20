@@ -108,6 +108,7 @@ export class Player {
     this.buffs = new Map(); // id -> { t, max }
     this.revivals = meta.revival || 0;
     this.rerolls = 2 + (meta.reroll || 0);
+    this.banishes = 2 + (meta.banish || 0); // a card out of the run for good (the level-up's BANISH)
     this.dead = false;
     this.stepT = 0;
     this.heartT = 0;

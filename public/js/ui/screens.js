@@ -18,6 +18,7 @@ import { goalText, lockReason, featStars } from './ladder.js';
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
   swiftness: 'i_movespeed', magnet: 'i_magnet', fortune: 'i_luck', wisdom: 'i_growth', greed: 'i_greed', reroll: 'i_reroll', revival: 'i_revival',
+  banish: 'i_reroll', // placeholder (tools/handoff-art.md): Insight's, the other level-up card tool
   endurance: 'i_duration', velocity: 'i_projspeed', echo: 'i_amount',
 };
 
@@ -189,8 +190,8 @@ export class TitleScreen {
 
 // ------------------------------------------------------------------- hero --
 
-// A hero's light line round a frame drawn at (dx, dy) at scale s, for a hero with a wide one in play
-// (the Shadow, game.js drawHeroLine): on the menus' lighter ground one faint pixel is enough.
+// A hero's light line round a frame drawn at (dx, dy) at scale s, for a hero with one (the Shadow,
+// heroes.js line): one faint pixel. None in play (game.js HERO_MARK).
 function heroLine(ctx, h, fr, dx, dy, s, a) {
   if (!h.line) return;
   ctx.globalAlpha = a;

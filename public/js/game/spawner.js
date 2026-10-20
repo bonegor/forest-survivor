@@ -281,9 +281,9 @@ export class Spawner {
   }
 
   // A crypt's lord: a named Skeleton Archer, drawn boss-sized, asleep in a room of its own until the
-  // hero comes, at its own health whenever the crypt is entered (data/enemies.js; on Normal 70%
-  // less, as every monster: difficulty.js health), and never Stoneskin, which would take a third
-  // off every blow.
+  // hero comes, at its own health whenever the crypt is entered (data/enemies.js) as the difficulty
+  // weighs it (difficulty.js health: 20% more, as every monster since 20 October 2026, and on
+  // Normal 70% less on top), and never Stoneskin, which would take a third off every blow.
   spawnLord(x, y) {
     const g = this.g;
     const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone'));

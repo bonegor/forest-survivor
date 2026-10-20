@@ -3,19 +3,25 @@ import { DIFF_GOLD, NIGHTMARE_GOLD } from '../shared/profile.js';
 // How much tougher than the old Hard monsters are, round on round of tuning:
 // their numbers (+10%, +10%, +20%), health (+10%, +10%, +10%, +20%) and
 // damage (+10%, +10%, +20%, +10%, +20%), then BUMPS more rounds of +10% to
-// both health and damage.
+// both health and damage, then HARDER: the owner's (20 October 2026) "difficulty is too easy.
+// Increase monster health and damage by 20%", every monster on both difficulties (Normal is
+// Veteran's with its cuts on top): the horde, champions, the thief, bosses and Dungeon Run floors
+// through hp and every blow through dmg, and the crypts' lords, whose health is their own, through
+// health (below).
 const BUMPS = 2;
+export const HARDER = 1.2;
 const MORE = 1.1 * 1.1 * 1.2;
-const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS;
-const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS;
+const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
+const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
 // Veteran: the old Hard, made harder as above. Multipliers on the base monster
 // stats, the size of the steady horde (spawn) and of the timed swarms, rings and
 // packs (horde). hurt scales every blow the hero takes, after his armor, and few
 // how many of the monsters that shoot or lunge come (spawner.js isFew). health is
-// what this difficulty takes every monster's health down to, the crypts' lords too
-// (hp has it in already), and late sends more of the night's monsters from a minute
-// of it on (spawner.js lateMore). The id stays 'hard' so saves and run reports keep their shape.
+// what this difficulty does to a monster whose health is its own, a crypt's lord (hp has
+// it in already): the last round's +20% (HARDER), and on Normal 70% less on top. late
+// sends more of the night's monsters from a minute of it on (spawner.js lateMore). The id
+// stays 'hard' so saves and run reports keep their shape.
 // The gold a run brings home is the profile's to weigh (shared/profile.js DIFF_GOLD).
 export const VETERAN = {
   id: 'hard',
@@ -28,7 +34,7 @@ export const VETERAN = {
   elite: 1.35,
   hurt: 1,
   few: 1,
-  health: 1,
+  health: HARDER,
   late: null,
   desc: `The night at full strength. Gold x${DIFF_GOLD.hard}.`,
 };
@@ -52,7 +58,7 @@ export const NORMAL = {
   hp: VETERAN.hp * NORMAL_HEALTH,
   hurt: 0.5,
   few: 1 / 3,
-  health: NORMAL_HEALTH,
+  health: VETERAN.health * NORMAL_HEALTH,
   late: NORMAL_LATE,
   desc: `Monsters have 70% less health and hit half as hard; fewer shoot or charge, more come late. Gold x${DIFF_GOLD.medium}.`,
 };

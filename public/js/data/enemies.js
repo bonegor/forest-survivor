@@ -33,9 +33,9 @@ export const ENEMIES = {
   ogre: { name: 'Cyclops Ogre', sprite: 'ogre', hp: 300, spd: 24, dmg: 20, r: 10, xp: 30, ai: 'walker', mass: 8, anim: 3, death: 'blood', kbRes: 0.9 },
   deathknight: { name: 'Death Knight', sprite: 'deathknight', hp: 190, spd: 40, dmg: 15, r: 6, xp: 22, ai: 'walker', mass: 4, anim: 4, death: 'dark', kbRes: 0.8 },
   // Each of a crypt's lords (Spawner.spawnLord), boss-sized: it keeps its distance and shoots.
-  // 600 health lasts about eight strikes of a fully grown sword (two of its slashes land on
-  // one foe, about 76 damage a strike). That is on Veteran: Normal takes it down to 180
-  // (difficulty.js health), about three.
+  // 600 health lasted about eight strikes of a fully grown sword (two of its slashes land on
+  // one foe, about 76 damage a strike). Veteran makes it 720 (difficulty.js health, the owner's
+  // +20% of 20 October 2026), about ten; Normal takes it down to 216, about three.
   skeletonarcher: {
     name: 'Skeleton Archer', sprite: 'skeletonarcher', hp: 600, spd: 34, dmg: 8, r: 8, xp: 60, ai: 'caster', mass: 30, anim: 4, death: 'bones', kbRes: 0.95,
     shot: { range: 175, cd: 1.7, spd: 170, dmg: 8, kind: 'arrow', wind: 0.5 },
@@ -59,8 +59,10 @@ export const ENEMIES = {
     name: 'Grimgut', title: 'The Butcher', sprite: 'butcher', hp: 6500, spd: 36, dmg: 20, r: 12, xp: 160, ai: 'boss',
     mass: 40, anim: 3.5, death: 'blood', kbRes: 0.97, boss: true, color: '#e43b44',
   },
+  // The owner's (20 October 2026): "Make the lich king bigger by 50%". Drawn at 1.5 times his
+  // sprite, and struck over as much more of him (r at that size, as the Cultist's).
   lich: {
-    name: 'Malgrath', title: 'The Lich', sprite: 'lich', hp: 4200, spd: 26, dmg: 14, r: 10, xp: 220, ai: 'boss',
+    name: 'Malgrath', title: 'The Lich', sprite: 'lich', hp: 4200, spd: 26, dmg: 14, r: 15, scale: 1.5, xp: 220, ai: 'boss',
     mass: 40, anim: 2, death: 'ecto', kbRes: 0.98, boss: true, color: '#9ee562', fly: true,
   },
   demonlord: {

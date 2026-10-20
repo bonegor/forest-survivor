@@ -6,11 +6,11 @@ import { sfx, playAfterJingle, playJingle } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
-import { Game, MILESTONES } from '../game/game.js';
+import { Game, MILESTONES, isFiller } from '../game/game.js';
 import { tierOf, chestFrame, chestTease, revealOrder, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
 import { clockCountsDown, clockTime, heldBuild, revealOn } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
-import { WEAPONS } from '../data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, FILLERS } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, GAME_SPEED, NIGHTMARE } from '../data/difficulty.js';
@@ -128,6 +128,9 @@ export class GameScreen {
 
 // --------------------------------------------------------------- level up --
 
+// What a card shows: its name, icon and text; its tag (a NEW weapon or relic, or the level it
+// brings) and colour; what it evolves with; and how many levels it has, for its pips (max: 0 for
+// a filler).
 function choiceInfo(g, c) {
   const p = g.player;
   if (c.type === 'weapon') {
@@ -135,18 +138,59 @@ function choiceInfo(g, c) {
     const desc = c.isNew ? def.desc : def.levels[c.level - 2]?.text || def.desc;
     let hint = null;
     if (def.evo) hint = { text: 'Evolves with', icon: PASSIVES[def.evo.with].icon, owned: p.passives.has(def.evo.with) };
-    return { name: def.name, icon: def.icon, desc, tag: c.isNew ? 'NEW!' : `LV ${c.level}`, color: c.isNew ? '#0099db' : '#c0cbdc', hint };
+    return { name: def.name, icon: def.icon, desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW WEAPON' : `LV ${c.level}`, color: c.isNew ? '#0099db' : '#c0cbdc', hint, max: MAX_WEAPON_LEVEL };
   }
   if (c.type === 'passive') {
     const def = PASSIVES[c.id];
     let hint = null;
     for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id) hint = { text: 'Evolves', icon: w.def.icon, owned: true };
-    return { name: def.name, icon: def.icon, desc: def.desc, tag: c.isNew ? 'NEW!' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint };
+    return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, max: def.max };
   }
   const { name, icon } = FILLERS[c.type];
-  if (c.type === 'bless') return { name, icon, desc: 'Might {+5%}, health {+2%}. Stacks.', tag: `x${p.blessings + 1}`, color: '#fee761' };
-  if (c.type === 'gold') return { name, icon, desc: `Gain {${c.value}} gold.`, tag: '', color: '#feae34' };
-  return { name, icon, desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44' };
+  if (c.type === 'bless') return { name, icon, desc: 'Might {+5%}, health {+2%}. Stacks.', tag: `x${p.blessings + 1}`, color: '#fee761', max: 0 };
+  if (c.type === 'gold') return { name, icon, desc: `Gain {${c.value}} gold.`, tag: '', color: '#feae34', max: 0 };
+  return { name, icon, desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44', max: 0 };
+}
+
+// A card's levels as pips under its tag: those it has in gold, the one it brings blinking, those
+// still to come dark. Nothing for a filler or a relic of one rank.
+function drawPips(ctx, cx, y, level, max, t) {
+  if (max <= 1) return;
+  const pw = max > 5 ? 3 : 4, total = max * pw + (max - 1);
+  const x0 = Math.round(cx - total / 2);
+  ctx.fillStyle = '#0d0b14';
+  ctx.fillRect(x0 - 1, y - 1, total + 2, 5);
+  for (let k = 0; k < max; k++) {
+    ctx.fillStyle = k < level - 1 ? '#feae34' : k === level - 1 ? (Math.floor(t * 4) % 2 ? '#ffffff' : '#fee761') : '#3a4466';
+    ctx.fillRect(x0 + k * (pw + 1), y, pw, 3);
+  }
+}
+
+// The key that does what a button of the level-up's foot does, on a small cap at its left.
+function keycap(ctx, x, y, k, off) {
+  const w = textWidth(k) + 4;
+  ctx.fillStyle = off ? '#3a4466' : '#8b9bb4';
+  ctx.fillRect(x, y, w, 9);
+  ctx.fillStyle = '#181425';
+  ctx.fillRect(x + 1, y + 1, w - 2, 7);
+  drawText(ctx, k, x + 2, y + 1, { color: off ? '#5a6988' : '#c0cbdc', outline: null });
+}
+
+// A button of the level-up's foot (BANISH, REROLL). Held (the screen's first moments, or cards
+// flipping) it is only drawn, greyed: the focus can't land on it and nothing presses it.
+function footButton(ctx, ui, id, x, y, w, label, o) {
+  let hit = false;
+  if (o.held) {
+    ctx.fillStyle = '#0d0b14';
+    ctx.fillRect(x - 1, y - 1, w + 2, 15);
+    ctx.fillStyle = '#3a4466';
+    ctx.fillRect(x, y, w, 13);
+    ctx.fillStyle = '#262b44';
+    ctx.fillRect(x + 1, y + 1, w - 2, 11);
+    drawText(ctx, label, x + w / 2, y + 3, { align: 'center', color: '#5a6988' });
+  } else hit = button(ctx, ui, id, x, y, w, 13, label, { color: o.color, disabled: o.disabled });
+  if (o.key) keycap(ctx, x + 3, y + 2, o.key, o.held || o.disabled);
+  return hit;
 }
 
 // The cards come face down and flip up FLIP.gap apart, each in FLIP.dur; they can be taken once the
@@ -155,8 +199,17 @@ export const FLIP = { first: 0.05, gap: 0.1, dur: 0.1 };
 const flipAt = (i) => FLIP.first + i * FLIP.gap;
 export const cardsReadyAt = (n) => flipAt(n - 1) + FLIP.dur;
 // The screen pops up mid-fight, where Space, E or Q is the ultimate and a number key may be under a
-// finger: for its first second no card can be taken, so a press meant for the fight picks nothing.
-export const LEVELUP_DELAY = 1;
+// finger, so for its first LEVELUP_DELAY no card can be taken. The owner (2026-10-20): "we can
+// still flip left and right in menu items, but only the select has like a 0.5 to maybe 1 second
+// delay, have it meaningfully greyed out". So the focus moves from the first frame (the arrows,
+// a pad, the mouse, a click or tap, a card's number), but a press that would take a card, reroll
+// or banish is dropped, never kept for later; the cards stand greyed, the focused one framed in
+// grey over a bar that fills to the moment, and then the ready highlight snaps in.
+export const LEVELUP_DELAY = 0.75;
+// A banished card takes BANISH_GO s to go before its place flips up anew; on touch a finger held
+// BANISH_HOLD s on a card banishes it.
+export const BANISH_GO = 0.3;
+export const BANISH_HOLD = 0.5;
 // A card's back tells its kind: an upgrade's plain, a NEW weapon's blue, a NEW relic's green, and
 // gold for one that completes an evolution (Game.completesEvolution). [fill, trim, pattern]
 const BACKS = {
@@ -165,6 +218,7 @@ const BACKS = {
   relic: ['#265c42', '#63c74d', '#9ee562'],
   gold: ['#be4a2f', '#fee761', '#feae34'],
 };
+const backOf = (c, completes) => (completes ? 'gold' : c.isNew ? (c.type === 'weapon' ? 'weapon' : 'relic') : 'plain');
 
 export class LevelUpOverlay {
   constructor(gs) {
@@ -175,7 +229,9 @@ export class LevelUpOverlay {
     // The second screen of a chain (more levels waiting) or a reroll comes when the player is already
     // choosing, so only the flips hold it; the first waits the full LEVELUP_DELAY.
     this.readyAt = Math.max(this.readyAt, LEVELUP_DELAY);
-    this.lockTime = this.readyAt;
+    // No lock on the keys: the focus moves from the first frame, and the cards hold themselves
+    // (heldCard) until they can be taken.
+    this.lockTime = 0;
     this.noSpace = true; // it pops up mid-fight: Space mashed for the ultimate mustn't pick a card
     // Shift is the crypts' strike too: held as the screen opens, it isn't ALWAYS until it has been
     // let go and pressed again.
@@ -184,16 +240,38 @@ export class LevelUpOverlay {
 
   roll() {
     this.choices = this.g.levelChoices(this.g.choiceCount());
-    // What each card completes (an evolution's name), and its back.
+    // What each card completes (an evolution's name), its back, and when it flips up.
     this.completes = this.choices.map((c) => this.g.completesEvolution(c));
-    this.backs = this.choices.map((c, i) => (this.completes[i] ? 'gold' : c.isNew ? (c.type === 'weapon' ? 'weapon' : 'relic') : 'plain'));
+    this.backs = this.choices.map((c, i) => backOf(c, this.completes[i]));
+    this.flips = this.choices.map((c, i) => flipAt(i));
     this.readyAt = cardsReadyAt(this.choices.length);
     // Nothing but the fillers (the whole build maxed, which lasts unless a Phoenix Heart is
-    // spent): each card offers ALWAYS, and no reroll is spent on them.
+    // spent): each card offers ALWAYS, and no reroll or banish is spent on them.
     this.fillersOnly = this.g.fillersOnly();
     this.always = -1; // the card whose ALWAYS is ticked
+    this.banishing = false; // BANISH pressed: the next card clicked, tapped or confirmed is banished
+    this.gone = null; // a banished card on its way out: { info, rect, t }
+    this.press = null; // a finger on a card (touch): { i, t, done }; held BANISH_HOLD s, it banishes
     this.t = 0;
     this.gs.app.ui.focusId = 'c0';
+    this.lastCard = 'c0';
+  }
+
+  // Whether card i can't be taken yet: the screen's first moments (LEVELUP_DELAY, or a chain's or
+  // a reroll's flips), or the card itself still flipping up (one drawn in place of one banished).
+  heldCard(i) {
+    return this.t < this.readyAt || this.t < this.flips[i] + FLIP.dur;
+  }
+
+  // Whether BANISH and REROLL wait: the screen's first moments, or a card still flipping.
+  busy() {
+    return this.t < this.readyAt || this.flips.some((f) => this.t < f + FLIP.dur);
+  }
+
+  // Whether a card can be banished: one left this run, a weapon or relic (no filler), and not on
+  // a maxed build's screen of fillers (it has ALWAYS).
+  canBanish(c) {
+    return this.g.player.banishes > 0 && !this.fillersOnly && !!c && !isFiller(c);
   }
 
   // Takes card i; with its ALWAYS ticked (or Shift held), every level-up from now on takes it
@@ -208,9 +286,45 @@ export class LevelUpOverlay {
     if (g.hints) g.hints.levelClosed = true; // the first-run hint on weapons and gems comes next
     if (g.resolveAutoLevels()) return 'close';
     g.state = 'levelup';
-    this.roll();
-    this.gs.app.ui.lock(0.3);
+    this.roll(); // the next level's cards, held until they are up (no lock on the keys: browsing goes on)
     return null;
+  }
+
+  // BANISH card i: out of the run for good (Game.banish), and its place drawn anew (Game.redrawCard),
+  // flipping up once the old one has gone; with nothing left to draw, its place closes.
+  banishCard(i) {
+    const g = this.g, c = this.choices[i];
+    if (this.busy() || !this.canBanish(c) || !g.banish(c)) {
+      sfx('deny');
+      return false;
+    }
+    g.player.banishes--;
+    this.banishing = false;
+    sfx('shard');
+    this.gone = { info: choiceInfo(g, c), rect: this.rects?.[i], t: this.t };
+    const next = g.redrawCard(this.choices.filter((x, j) => j !== i));
+    if (next) {
+      this.choices[i] = next;
+      this.completes[i] = g.completesEvolution(next);
+      this.backs[i] = backOf(next, this.completes[i]);
+      this.flips[i] = this.t + BANISH_GO;
+    } else {
+      for (const a of [this.choices, this.completes, this.backs, this.flips]) a.splice(i, 1);
+      this.fillersOnly = g.fillersOnly();
+    }
+    return true;
+  }
+
+  // The BANISH button: arms the screen (the next card taken is banished instead), or disarms it.
+  toggleBanishing() {
+    if (this.banishing) {
+      this.banishing = false;
+      sfx('back');
+    } else if (this.choices.some((c) => this.canBanish(c))) {
+      this.banishing = true;
+      sfx('ui');
+      this.gs.app.ui.focus(this.lastCard); // back on the cards, to choose one
+    } else sfx('deny');
   }
 
   draw(ctx, W, H, dt) {
@@ -222,11 +336,22 @@ export class LevelUpOverlay {
       return 'close';
     }
     this.t += dt;
-    const ready = this.t >= this.readyAt;
     // The level this screen is for; a milestone (10, 25, 50, 100) is told in gold, its stinger once.
     const lvl = g.player.level - g.pendingLevels + 1, mile = MILESTONES.includes(lvl);
     if (mile) g.milestoneDue(lvl);
     dim(ctx, W, H, 0.6);
+    const L = mile ? logo(`LEVEL ${lvl}!`) : logo('LEVEL UP!', ['#ffffff', '#c0f8ff', '#2ce8f5', '#0099db', '#124e89']);
+    // A shade behind the title, so the HUD's clock under it doesn't show through its letters.
+    ctx.save();
+    ctx.translate(W / 2, 18 + L.height / 2);
+    ctx.scale(1, 0.32);
+    const shade = ctx.createRadialGradient(0, 0, 0, 0, 0, L.width * 0.62);
+    shade.addColorStop(0, 'rgba(8,6,16,0.85)');
+    shade.addColorStop(0.65, 'rgba(8,6,16,0.75)');
+    shade.addColorStop(1, 'rgba(8,6,16,0)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(-L.width, -L.width, L.width * 2, L.width * 2);
+    ctx.restore();
     // Rotating light rays behind the title.
     ctx.save();
     ctx.translate(W / 2, 28);
@@ -242,7 +367,6 @@ export class LevelUpOverlay {
     }
     ctx.restore();
     ctx.globalAlpha = 1;
-    const L = mile ? logo(`LEVEL ${lvl}!`) : logo('LEVEL UP!', ['#ffffff', '#c0f8ff', '#2ce8f5', '#0099db', '#124e89']);
     const pop = this.t < 0.25 ? 1.6 - 0.6 * ease.outBack(this.t / 0.25) : 1;
     const s = Math.min(1, (W - 40) / L.width) * pop;
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), Math.round(18 - (L.height * (s - 1)) / 2), Math.round(L.width * s), Math.round(L.height * s));
@@ -255,12 +379,13 @@ export class LevelUpOverlay {
       line = textWidth(long) <= W - 8 ? long : `${line} · ${pct(lb.might)} dmg · ${pct(lb.hp)} hp${lb.armor ? ` · +${lb.armor} arm` : ''}`;
     }
     drawText(ctx, line, W / 2, 18 + L.height + 2, { align: 'center', color: mile ? '#feae34' : '#8b9bb4' });
-    // Four cards: LUCKY!, stamped beside the title (under it where the screen is narrow).
+    // Four cards: LUCKY!, stamped beside the title (where the screen is narrow, over its right end,
+    // clear of the line under it).
     if (this.choices.length === 4 && !this.fillersOnly) {
       const c = textCanvas('LUCKY!', ['#ffffff', '#9ee562', '#63c74d'], '#181425');
       const k = this.t < 0.25 ? 2.2 - 1.2 * ease.outBack(this.t / 0.25) : 1, cw = c.width * 2 * k, ch = c.height * 2 * k;
       const right = W / 2 + (L.width * s) / 2 + 6, fits = right + c.width * 2 <= W - 2;
-      const cx = fits ? right + cw / 2 : W - 4 - cw / 2, cy = fits ? 18 + L.height / 2 : 18 + L.height + 8;
+      const cx = fits ? right + cw / 2 : W - 4 - cw / 2, cy = fits ? 18 + L.height / 2 : 14;
       ctx.save();
       ctx.translate(Math.round(cx), Math.round(cy));
       ctx.rotate(-0.12);
@@ -272,30 +397,54 @@ export class LevelUpOverlay {
     const n = this.choices.length;
     const vertical = W < 300;
     const always = this.fillersOnly; // each card has its ALWAYS toggle: under it, or beside it when stacked
-    let result = null;
-    const top = 18 + L.height + 14;
-    const avail = H - top - 26;
+    const touch = input.device === 'touch';
+    let result = null, act = null; // act: a card to banish, once all are drawn
+    const top = 18 + L.height + 16; // clear of the line above, the focus ring and all
+    // Under the cards their foot: a line of help, and the row of BANISH and REROLL (a maxed
+    // build's screen: the line on ALWAYS alone).
+    const foot = always ? 14 : 36;
+    let w, h;
+    if (vertical) {
+      w = W - 16 - (always ? 56 : 0);
+      h = Math.min(72, Math.floor((H - top - foot) / n) - 4);
+    } else {
+      w = Math.min(118, Math.floor((W - 20 - (n - 1) * 6) / n));
+      h = Math.min(156, H - top - foot - (always ? 15 : 0));
+    }
+    const at = (i) => (vertical ? [8, top + i * (h + 4)] : [Math.round(W / 2 - (n * w + (n - 1) * 6) / 2) + i * (w + 6), top]);
+    // The foot stands right under the cards (a tall phone's), else at the bottom of the screen.
+    const bottom = vertical ? top + n * (h + 4) - 4 : top + h + (always ? 15 : 0);
+    const rowY = Math.min(H - 18, bottom + 18), tipY = always ? Math.min(H - 12, bottom + 6) : rowY - 11;
+    // A finger lifted after a long press (it banished a card) takes nothing.
+    if (this.press && !input.mouse.down) {
+      if (this.press.done) input.mouse.clicked = false;
+      this.press = null;
+    }
+    this.rects = [];
     const shown = this.choices;
     for (let i = 0; i < n; i++) {
       if (result || this.choices !== shown) break; // a card was taken: the next level's cards come next frame
-      const info = choiceInfo(g, this.choices[i]);
-      let x, y, w, h;
-      if (vertical) {
-        w = W - 16 - (always ? 56 : 0);
-        h = Math.min(56, Math.floor(avail / n) - 4);
-        x = 8;
-        y = top + i * (h + 4);
-      } else {
-        w = Math.min(118, Math.floor((W - 20 - (n - 1) * 6) / n));
-        h = Math.min(156, avail - (always ? 15 : 0));
-        x = Math.round(W / 2 - (n * w + (n - 1) * 6) / 2) + i * (w + 6);
-        y = top;
+      const c = this.choices[i], info = choiceInfo(g, c);
+      const [x, y] = at(i);
+      this.rects[i] = { x, y, w, h };
+      const id = 'c' + i, held = this.heldCard(i);
+      // Touch: a finger held on a card banishes it (BANISH_HOLD), its fill told on the card.
+      const m = input.mouse, under = m.x >= x && m.x < x + w && m.y >= y && m.y < y + h;
+      if (touch && m.down && under && !held && this.canBanish(c)) {
+        // One banish a touch: a finger that has banished, slid onto another card, neither banishes
+        // it nor takes it as it lifts.
+        if (!this.press || (this.press.i !== i && !this.press.done)) this.press = { i, t: 0, done: false };
+        if (this.press.i === i && !this.press.done && (this.press.t += dt) >= BANISH_HOLD) {
+          this.press.done = true;
+          act = i;
+        }
+      } else if (this.press && this.press.i === i && !this.press.done) this.press = null; // slid off, or not yet
+      if (ui.item(id, x, y, w, h, { held }) && !result && act === null) {
+        if (this.banishing) act = i;
+        else result = this.choose(i);
       }
-      // Face down, then flipping up (half its width gone, back to the front).
-      const fk = clamp((this.t - flipAt(i)) / FLIP.dur, 0, 1), face = fk >= 0.5;
-      const id = 'c' + i;
-      if (ready && ui.item(id, x, y, w, h) && !result) result = this.choose(i);
-      if (always && ready && !result) {
+      if (result) break;
+      if (always) {
         const on = this.always === i;
         const tx = vertical ? x + w + 6 : x + 8, ty = vertical ? y + Math.floor(h / 2) - 6 : y + h + 3;
         const tw = vertical ? 48 : w - 16;
@@ -314,8 +463,16 @@ export class LevelUpOverlay {
           ctx.fillRect(bx + 2, by + 2, 2, 2);
         }
       }
-      const f = ready && ui.focused(id);
-      const lift = f ? -2 : 0;
+      const f = ui.focused(id);
+      if (f) this.lastCard = id;
+      // The ready highlight: lifted, framed white in its colour, pulsing, a ring round it; armed
+      // to banish, the ring and frame are red (a filler, which can't be, keeps its own).
+      const lit = f && !held, red = lit && this.banishing && this.canBanish(c);
+      const lift = lit ? -2 : 0;
+      // A banished card's place stays empty while it goes.
+      if (this.gone && this.t < this.flips[i]) continue;
+      // Face down, then flipping up (half its width gone, back to the front).
+      const fk = clamp((this.t - this.flips[i]) / FLIP.dur, 0, 1), face = fk >= 0.5;
       ctx.save();
       ctx.translate(x + w / 2, 0);
       ctx.scale(Math.max(0.05, face ? fk * 2 - 1 : 1 - fk * 2), 1);
@@ -326,41 +483,69 @@ export class LevelUpOverlay {
         continue;
       }
       const gold = this.backs[i] === 'gold';
-      if (gold) {
+      if (gold && !held) {
         // A card that completes an evolution glows gold round its edge.
         ctx.globalAlpha = 0.45 + 0.3 * Math.sin(this.t * 6);
         ctx.fillStyle = '#feae34';
         ctx.fillRect(x - 3, y + lift - 3, w + 6, h + 6);
         ctx.globalAlpha = 1;
       }
-      panel(ctx, x, y + lift, w, h, { trim: gold ? (f ? ['#ffffff', '#fee761'] : ['#fee761', '#feae34']) : f ? ['#ffffff', info.color] : [info.color, '#262b44'], rivets: f || gold, fill: gold ? '#2e2218' : undefined });
-      if (f) {
+      if (lit) {
+        // Just past the hold the ring flashes white, then pulses in the card's colour.
+        const snap = this.t - Math.max(this.readyAt, this.flips[i] + FLIP.dur) < 0.12;
+        ctx.fillStyle = red ? '#e43b44' : snap || Math.sin(this.t * 6) > 0 ? '#ffffff' : gold ? '#fee761' : info.color;
+        ctx.fillRect(x - 3, y + lift - 3, w + 6, 2);
+        ctx.fillRect(x - 3, y + lift + h + 1, w + 6, 2);
+        ctx.fillRect(x - 3, y + lift - 1, 2, h + 2);
+        ctx.fillRect(x + w + 1, y + lift - 1, 2, h + 2);
+      }
+      const trim = red ? ['#ffffff', '#e43b44']
+        : held ? (f ? ['#c0cbdc', '#5a6988'] : [info.color, '#262b44'])
+        : gold ? (lit ? ['#ffffff', '#fee761'] : ['#fee761', '#feae34'])
+        : lit ? ['#ffffff', info.color] : [info.color, '#262b44'];
+      panel(ctx, x, y + lift, w, h, { trim, rivets: lit || gold, fill: red ? '#2a1420' : gold ? '#2e2218' : undefined });
+      if (lit) {
         ctx.globalAlpha = 0.12 + 0.06 * Math.sin(this.t * 6);
-        ctx.fillStyle = info.color;
+        ctx.fillStyle = red ? '#e43b44' : info.color;
         ctx.fillRect(x + 3, y + lift + 3, w - 6, h - 6);
         ctx.globalAlpha = 1;
       }
       const icon = SPR[info.icon].frames[0];
+      const blink = Math.floor(this.t * 4) % 2;
+      const tagColor = info.isNew ? (blink ? '#fee761' : '#feae34') : '#8b9bb4';
       if (vertical) {
-        ctx.drawImage(smoothScaled(icon, 1), x + 6, y + lift + Math.floor(h / 2) - 16);
+        // The icon at the left over its pips; name and tag on top, the text under them.
+        ctx.drawImage(smoothScaled(icon, 1), x + 6, y + lift + 5);
+        drawPips(ctx, x + 22, y + lift + 41, c.level, info.max, this.t);
         drawText(ctx, info.name, x + 44, y + lift + 6, { color: info.color });
-        if (info.tag) drawText(ctx, info.tag, x + w - 6, y + lift + 6, { align: 'right', color: info.tag === 'NEW!' ? '#fee761' : '#8b9bb4' });
-        const lines = wrapText(info.desc, w - 52);
-        lines.slice(0, 3).forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + j * 9, { color: '#c0cbdc' }));
+        const tag = textWidth(info.name) + textWidth(info.tag) + 58 <= w ? info.tag : info.isNew ? 'NEW!' : info.tag;
+        if (tag) drawText(ctx, tag, x + w - 6, y + lift + 6, { align: 'right', color: tagColor });
+        const lines = wrapText(info.desc, w - 52), room = gold || info.hint ? 3 : 4;
+        lines.slice(0, Math.min(room, Math.floor((h - 26) / 9))).forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + j * 9, { color: '#c0cbdc' }));
+        if (gold) drawText(ctx, `COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, x + w - 6, y + lift + h - 14, { align: 'right', color: blink ? '#fee761' : '#feae34' });
+        else if (info.hint && h >= 64) {
+          const hx = x + w - 6 - 16, hy = y + lift + h - 20;
+          drawText(ctx, info.hint.text, hx - 3, hy + 4, { align: 'right', color: info.hint.owned ? '#feae34' : '#5a6988' });
+          ctx.drawImage(SPR[info.hint.icon].frames[0].c, hx, hy);
+        }
       } else {
         const big = smoothScaled(icon, 1);
         ctx.drawImage(big, Math.round(x + w / 2 - big.width / 2), y + lift + 8);
-        const nameLines = wrapText(info.name, w - 10);
         let ty = y + lift + 44;
-        for (const ln of nameLines) {
+        for (const ln of wrapText(info.name, w - 10)) {
           drawText(ctx, ln, x + w / 2, ty, { align: 'center', color: info.color });
           ty += 9;
         }
         if (info.tag) {
-          drawText(ctx, info.tag, x + w / 2, ty + 1, { align: 'center', color: info.tag === 'NEW!' ? (Math.floor(this.t * 4) % 2 ? '#fee761' : '#feae34') : '#8b9bb4' });
-          ty += 12;
+          const tag = textWidth(info.tag) <= w - 8 ? info.tag : 'NEW!';
+          drawText(ctx, tag, x + w / 2, ty + 1, { align: 'center', color: tagColor });
+          ty += 11;
         }
-        ty += 2;
+        if (info.max > 1) {
+          drawPips(ctx, x + w / 2, ty + 1, c.level, info.max, this.t);
+          ty += 6;
+        }
+        ty += 3;
         for (const ln of wrapText(info.desc, w - 12)) {
           drawRich(ctx, ln, x + w / 2, ty, { align: 'center', color: '#c0cbdc' });
           ty += 9;
@@ -368,39 +553,150 @@ export class LevelUpOverlay {
         if (gold && h > 120) {
           // It completes an evolution: said in gold where the hint was.
           const lines = wrapText(`COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, w - 10);
-          lines.forEach((ln, j) => drawText(ctx, ln, x + w / 2, y + lift + h - 14 - (lines.length - 1 - j) * 9, { align: 'center', color: Math.floor(this.t * 4) % 2 ? '#fee761' : '#feae34' }));
+          lines.forEach((ln, j) => drawText(ctx, ln, x + w / 2, y + lift + h - 17 - (lines.length - 1 - j) * 9, { align: 'center', color: blink ? '#fee761' : '#feae34' }));
         } else if (info.hint && h > 120) {
-          const hy = y + lift + h - 22;
+          const hy = y + lift + h - 25;
           drawText(ctx, info.hint.text, x + w / 2 - 6, hy + 4, { align: 'center', color: info.hint.owned ? '#feae34' : '#5a6988' });
           ctx.drawImage(SPR[info.hint.icon].frames[0].c, Math.round(x + w / 2 + textWidth(info.hint.text) / 2 - 3), hy);
         }
       }
-      if (vertical && gold) drawText(ctx, `COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, x + w - 6, y + lift + h - 11, { align: 'right', color: '#fee761' });
-      drawText(ctx, String(i + 1), x + 5, y + lift + 4, { color: '#3a4466', outline: null });
+      if (!touch) drawText(ctx, String(i + 1), x + 5, y + lift + 4, { color: lit ? '#8b9bb4' : '#5a6988', outline: null });
+      if (held) {
+        // Not yet: the card drained of its colours and darkened; the focused one is framed in grey
+        // (above) over a bar that fills to the moment it can be taken.
+        ctx.globalCompositeOperation = 'saturation';
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#808080';
+        ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = '#0d0b14';
+        ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        ctx.globalAlpha = 1;
+        if (f) {
+          // Its ring in grey, still: the "not yet" of the ready one's.
+          ctx.fillStyle = '#8b9bb4';
+          ctx.fillRect(x - 3, y - 3, w + 6, 2);
+          ctx.fillRect(x - 3, y + h + 1, w + 6, 2);
+          ctx.fillRect(x - 3, y - 1, 2, h + 2);
+          ctx.fillRect(x + w + 1, y - 1, 2, h + 2);
+          const from = this.gone ? this.gone.t : 0, to = Math.max(this.readyAt, this.flips[i] + FLIP.dur);
+          const k = clamp((this.t - from) / Math.max(0.01, to - from), 0, 1), bw = w - 10;
+          ctx.fillStyle = '#0d0b14';
+          ctx.fillRect(x + 4, y + h - 8, bw + 2, 5);
+          ctx.fillStyle = '#3a4466';
+          ctx.fillRect(x + 5, y + h - 7, bw, 3);
+          ctx.fillStyle = '#c0cbdc';
+          ctx.fillRect(x + 5, y + h - 7, Math.round(bw * k), 3);
+        }
+      } else if ((!lit && !touch) || (this.banishing && !this.canBanish(c))) {
+        // The cards not in focus a shade darker, so the one that is stands out (armed to banish,
+        // a filler too: it can't be).
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = '#0d0b14';
+        ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        ctx.globalAlpha = 1;
+      }
+      if (this.press && this.press.i === i && !this.press.done && this.press.t > 0.12) {
+        // A finger held to banish it: the card reddens as a bar fills.
+        const k = clamp((this.press.t - 0.12) / (BANISH_HOLD - 0.12), 0, 1);
+        ctx.globalAlpha = 0.35 * k;
+        ctx.fillStyle = '#e43b44';
+        ctx.fillRect(x, y + lift, w, h);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#0d0b14';
+        ctx.fillRect(x + 4, y + lift + h - 8, w - 8, 5);
+        ctx.fillStyle = '#e43b44';
+        ctx.fillRect(x + 5, y + lift + h - 7, Math.round((w - 10) * k), 3);
+        drawText(ctx, 'BANISH', x + w / 2, y + lift + h - 18, { align: 'center', color: '#ffffff' });
+      }
       ctx.restore();
     }
+    // A banished card going: it drops and fades, crossed out, before its place flips up anew.
+    if (this.gone) this.drawGone(ctx);
     const p = g.player;
+    // A line of the foot fits between the HUD's orbs in the bottom corners (a phone's are far below).
+    const room = vertical ? W - 8 : W - 120;
+    const fit = (lines) => lines.find((s) => textWidth(s) <= room) || lines[lines.length - 1];
     if (always) {
       // What ALWAYS does, and where it is undone. (No reroll: fillers are all there is.)
       const keys = input.device === 'kb' ? ` · Shift+1-${n}` : '';
-      const lines = [`ALWAYS takes that card at every level-up from now on${keys} · undo it in the pause menu`, `ALWAYS: every level-up from now on${keys} · undo in pause`, 'ALWAYS: every level-up · undo in pause'];
-      const hint = lines.find((s) => textWidth(s) <= W - 8) || lines[lines.length - 1];
-      drawText(ctx, hint, W / 2, H - 12, { align: 'center', color: this.always >= 0 ? '#fee761' : '#8b9bb4' });
-    } else if (p.rerolls > 0 && ready && !result) {
-      if (button(ctx, ui, 'reroll', Math.round(W / 2 - 45), H - 20, 90, 13, `REROLL ×${p.rerolls}`, { color: '#2ce8f5' }) || input.pressed('reroll')) {
+      const hint = fit([`ALWAYS takes that card at every level-up from now on${keys} · undo it in the pause menu`, `ALWAYS: every level-up from now on${keys} · undo in pause`, 'ALWAYS: every level-up · undo in pause']);
+      drawText(ctx, hint, W / 2, tipY, { align: 'center', color: this.always >= 0 ? '#fee761' : '#8b9bb4' });
+    } else if (!result) {
+      // BANISH (B, or a pad's left-stick press to arm it) and REROLL (R, a pad's Y), side by side;
+      // held while the cards are, greyed with none left.
+      const busy = this.busy(), pad = input.device === 'pad', kb = input.device === 'kb';
+      const bw = Math.min(96, Math.floor((W - 22) / 2)), bx = Math.round(W / 2 - bw - 3);
+      const canB = this.choices.some((c) => this.canBanish(c));
+      const bl = this.banishing ? 'CANCEL' : `BANISH ×${p.banishes}`;
+      if (footButton(ctx, ui, 'banish', bx, rowY, bw, bl, { color: '#e43b44', held: busy, disabled: !canB && !this.banishing, key: kb ? 'B' : pad ? 'LS' : null })) this.toggleBanishing();
+      const rerolled = footButton(ctx, ui, 'reroll', bx + bw + 6, rowY, bw, `REROLL ×${p.rerolls}`, { color: '#2ce8f5', held: busy, disabled: p.rerolls <= 0, key: kb ? 'R' : pad ? 'Y' : null });
+      if ((rerolled || input.pressed('reroll')) && !busy && p.rerolls > 0) {
         p.rerolls--;
         sfx('teleport');
         this.roll();
       }
+      // The line of help over them: what the focused button does, the armed BANISH, else the keys.
+      let tip, color = '#5a6988';
+      if (this.banishing) {
+        tip = fit(['Choose a card to banish: it is gone for the rest of the run', 'Choose a card to banish', 'Banish which?']);
+        color = '#e43b44';
+      } else if (ui.focusId === 'banish') tip = fit(['BANISH: the card in focus is gone for the rest of the run', 'BANISH: gone for the run']);
+      else if (ui.focusId === 'reroll') tip = fit(['REROLL: all new cards', 'REROLL']);
+      else if (touch) tip = fit([canB ? 'Tap a card to take it · hold a card to banish it' : 'Tap a card to take it', 'Tap: take · hold: banish']);
+      else if (pad) tip = fit(['A takes the card in focus', 'A: take']);
+      else tip = fit([`Enter or 1-${n} takes a card`, `Enter/1-${n}: take`]);
+      drawText(ctx, tip, W / 2, tipY, { align: 'center', color });
     }
     ui.end();
+    if (this.banishing && input.pressed('back')) this.toggleBanishing();
+    if (!result && act === null && !this.fillersOnly && !this.busy()) {
+      // B: the card in focus, at once; with a button in focus, arms the screen as BANISH does. A
+      // pad's left-stick press only arms it, or disarms it, as the button does: the next A on a
+      // card banishes that card.
+      const i = this.choices.findIndex((c, j) => ui.focusId === 'c' + j);
+      if (input.pressed('banishArm')) this.toggleBanishing();
+      else if (input.pressed('banish')) {
+        if (i >= 0) act = i;
+        else this.toggleBanishing();
+      }
+    }
     if (!input.down('always')) this.heldAlways = false;
     const keys = ['one', 'two', 'three', 'four'], shift = input.down('always') && !this.heldAlways;
-    for (let i = 0; i < n && ready; i++) {
-      if (result || !input.pressed(keys[i])) continue;
-      result = this.choose(i, this.always === i || shift);
+    for (let i = 0; i < n && !result && act === null && this.choices === shown; i++) {
+      if (!input.pressed(keys[i]) || i >= this.choices.length) continue;
+      if (this.heldCard(i)) {
+        // Held: the number moves the focus there, and takes nothing, now or later.
+        if (ui.focusId !== 'c' + i) sfx('ui');
+        ui.focusId = 'c' + i;
+      } else if (this.banishing) act = i;
+      else result = this.choose(i, this.always === i || shift);
     }
+    if (act !== null && !result) this.banishCard(act);
     return result;
+  }
+
+  // The banished card going (BANISH_GO s): dropping, tilting and fading under a red cross.
+  drawGone(ctx) {
+    const { info, rect, t } = this.gone, k = clamp((this.t - t) / BANISH_GO, 0, 1);
+    if (k >= 1 || !rect) return;
+    const { w, h } = rect;
+    ctx.save();
+    ctx.globalAlpha = 1 - k;
+    ctx.translate(Math.round(rect.x + w / 2), Math.round(rect.y + h / 2 + k * k * 40));
+    ctx.rotate(k * 0.25);
+    panel(ctx, -w / 2, -h / 2, w, h, { trim: ['#e43b44', '#5c0f1c'], rivets: false });
+    ctx.drawImage(SPR[info.icon].frames[0].c, -8, Math.min(-h / 2 + 10, -16));
+    ctx.strokeStyle = '#e43b44';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 + 6, -h / 2 + 6);
+    ctx.lineTo(w / 2 - 6, h / 2 - 6);
+    ctx.moveTo(w / 2 - 6, -h / 2 + 6);
+    ctx.lineTo(-w / 2 + 6, h / 2 - 6);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // A card face down: its kind's colours (BACKS) in a lattice, a mark in the middle.

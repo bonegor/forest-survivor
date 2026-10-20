@@ -31,10 +31,11 @@ function blast(g, x, y, r, dmg, style, by) {
   sfx('slam');
 }
 
-// A shot leaves the boss's chest, or opts.out px out from it along its own line.
+// A shot leaves the boss's chest (10 px up, as much higher as he is drawn bigger: the Lich), or
+// opts.out px out from it along its own line.
 function shoot(g, e, ang, kind, speed, dmg, opts) {
   const out = (opts && opts.out) || 0;
-  g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, { ...opts, by: shotName(e, kind) }));
+  g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 * e.scale + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, { ...opts, by: shotName(e, kind) }));
 }
 
 function ring(g, e, n, kind, speed, dmg, off = 0, opts) {
@@ -194,12 +195,12 @@ export const BOSS_AI = {
     if (e.cd2 <= 0 || (distP(e) < 45 && e.cd2 < 3.5)) {
       e.cd2 = rand(8, 11);
       // Blink away in a puff of grave-light.
-      g.particles.burst(e.x, e.y - 12, 0, 24, [PC.l, PC.L, PC.e], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
+      g.particles.burst(e.x, e.y - 12 * e.scale, 0, 24, [PC.l, PC.L, PC.e], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
       const a = rand(TAU), r = rand(85, 120);
       const spot = g.world.freeSpot(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r) || { x: e.x, y: e.y };
       e.x = spot.x;
       e.y = spot.y;
-      g.particles.burst(e.x, e.y - 12, 0, 24, [PC.l, PC.L, PC.w], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
+      g.particles.burst(e.x, e.y - 12 * e.scale, 0, 24, [PC.l, PC.L, PC.w], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
       sfx('teleport');
       cast(e, 0.5);
       return [0, 0, 0];

@@ -9,7 +9,8 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, isFiller } from '../public/js/game/game.js';
 import { FILLER_IDS, PASSIVES } from '../public/js/data/passives.js';
-import { GameScreen, LevelUpOverlay, ChestOverlay, PauseOverlay } from '../public/js/ui/gamescreen.js';
+import { GameScreen, LevelUpOverlay, ChestOverlay, PauseOverlay, LEVELUP_DELAY } from '../public/js/ui/gamescreen.js';
+const PAST = LEVELUP_DELAY + 0.05; // a level-up screen past its first moments, when a card can be taken
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
@@ -92,7 +93,7 @@ test('a maxed build is offered the three fillers, even on a four-card level-up, 
     assert.ok(lv.fillersOnly && lv.choices.every(isFiller));
     const rerolls = p.rerolls;
     assert.ok(rerolls > 0);
-    lv.draw(ctx, 480, 270, 1.05);
+    lv.draw(ctx, 480, 270, PAST);
     input.justDown.add('KeyR');
     lv.draw(ctx, 480, 270, 0.1);
     input.endFrame();
@@ -105,7 +106,7 @@ test('a maxed build is offered the three fillers, even on a four-card level-up, 
     g.state = 'levelup';
     g.pendingLevels = 1;
     const lv = new LevelUpOverlay(gs);
-    lv.draw(ctx, 480, 270, 1.05);
+    lv.draw(ctx, 480, 270, PAST);
     assert.ok(!lv.fillersOnly);
     assert.ok(ids(gs).includes('reroll'));
     assert.ok(!ids(gs).some(isToggle));
@@ -122,7 +123,7 @@ test('ALWAYS on a filler sets the auto-pick, and the levels after it come with n
       assert.ok(gs.overlay instanceof LevelUpOverlay);
       // Tick the card's ALWAYS (a click on the toggle), then take the card.
       const lv = gs.overlay;
-      lv.draw(ctx, 480, 270, 1.05);
+      lv.draw(ctx, 480, 270, PAST);
       const box = gs.app.ui.items.find((it) => it.id === 'a' + i);
       Object.assign(input.mouse, { x: box.x + 2, y: box.y + 2, clicked: true });
       gs.app.ui.lockT = 0;
@@ -180,7 +181,7 @@ test('Shift and the card\'s number take it for good; the pause menu asks again',
     levelUp(p, 2);
     openScreen(gs);
     assert.ok(gs.overlay instanceof LevelUpOverlay);
-    gs.overlay.draw(ctx, 480, 270, 1.05);
+    gs.overlay.draw(ctx, 480, 270, PAST);
     gs.app.ui.lockT = 0;
     input.held.add('ShiftLeft');
     input.justDown.add('Digit3');
@@ -222,7 +223,7 @@ test('Shift held for a crypt strike as a level-up opens is no ALWAYS until it is
     input.held.add('ShiftLeft'); // striking as the levels come
     openScreen(gs);
     assert.ok(gs.overlay instanceof LevelUpOverlay);
-    gs.overlay.draw(ctx, 480, 270, 1.05);
+    gs.overlay.draw(ctx, 480, 270, PAST);
     gs.app.ui.lockT = 0;
     input.justDown.add('Digit3');
     gs.frame(1 / 60);
@@ -232,7 +233,7 @@ test('Shift held for a crypt strike as a level-up opens is no ALWAYS until it is
     assert.ok(gs.overlay instanceof LevelUpOverlay, 'so the next level is asked');
     // Let go, then Shift and a number: that is ALWAYS.
     input.held.delete('ShiftLeft');
-    gs.overlay.draw(ctx, 480, 270, 1.05);
+    gs.overlay.draw(ctx, 480, 270, PAST);
     gs.app.ui.lockT = 0;
     input.held.add('ShiftLeft');
     input.justDown.add('Digit1');

@@ -95,5 +95,5 @@ test('the results tell what the gold buys at the Armory', () => {
   p.gold = 0;
   assert.equal(armoryLine(p), '+100 gold to Magnetism I', 'the cheapest rank, and how far it is');
   p.gold = 260;
-  assert.equal(armoryLine(p), '13 Armory ranks affordable');
+  assert.equal(armoryLine(p), '14 Armory ranks affordable'); // Exile (250) among them
 });
