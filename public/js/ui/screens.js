@@ -14,6 +14,7 @@ import { MODES, NORMAL, VETERAN, NIGHTMARE } from '../data/difficulty.js';
 import { UPGRADES, upgradeCost, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars } from './ladder.js';
+import { flank } from './skin.js';
 
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
@@ -30,9 +31,11 @@ function goldTag(ctx, app, x, y, align = 'right') {
   drawText(ctx, g, left + 10, y + 1, { color: ['#fff3a8', '#fee761', '#feae34'] });
 }
 
-function header(ctx, W, title, y = 8) {
-  const c = textCanvas(title, ['#fff6c2', '#fee761', '#feae34', '#d77643'], '#181425');
+// A screen's title: the gothic font at twice its size between Kenney's dividers. Mixed case.
+function header(ctx, W, title, y = 4) {
+  const c = textCanvas(title, ['#fff6c2', '#fee761', '#feae34', '#d77643'], '#181425', null, 'gothic');
   ctx.drawImage(c, Math.round(W / 2 - c.width), y, c.width * 2, c.height * 2);
+  flank(ctx, W / 2 - c.width - 4, W / 2 + c.width + 4, y + 11, Math.min(48, W / 2 - c.width - 10));
 }
 
 // ------------------------------------------------------------------ title --
@@ -54,13 +57,13 @@ export class TitleScreen {
     // behind the logo and menu rather than over them.
     presentBackdrop();
     // On narrow (portrait) screens the title stacks onto two lines.
-    const narrow = logo('FOREST SURVIVOR').width > W - 10;
-    const L = narrow ? logo('SURVIVOR') : logo('FOREST SURVIVOR');
-    const scale = Math.max(1, Math.min(2, Math.floor(((W - 20) / L.width) * 2) / 2));
+    const narrow = logo('Forest Survivor', undefined, undefined, 'gothic').width * 1.5 > W - 10;
+    const L = narrow ? logo('Survivor', undefined, undefined, 'gothic') : logo('Forest Survivor', undefined, undefined, 'gothic');
+    const scale = Math.max(1, Math.min(3, Math.floor(((W - 20) / L.width) * 2) / 2));
     const lw = L.width * scale, lh = L.height * scale;
     let ly = Math.round(H * 0.1 + Math.sin(this.t * 1.5) * 2);
     if (narrow) {
-      const top = logo('FOREST');
+      const top = logo('Forest', undefined, undefined, 'gothic');
       ctx.drawImage(top, Math.round(W / 2 - (top.width * scale) / 2), ly, top.width * scale, top.height * scale);
       ly += top.height * scale + 2;
     }
@@ -233,7 +236,7 @@ export class HeroScreen {
     this.t += dt;
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.45);
-    header(ctx, W, 'CHOOSE YOUR HERO');
+    header(ctx, W, 'Choose your Hero');
     goldTag(ctx, app, W - 6, 9);
     ui.begin(dt);
     const prof = app.store.profile;
@@ -401,7 +404,7 @@ export class ModeScreen {
     this.t += dt;
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.45);
-    header(ctx, W, 'CHOOSE YOUR TRIAL');
+    header(ctx, W, 'Choose your Trial');
     ui.begin(dt);
     const prof = app.store.profile;
     const hero = app.choice.hero;
@@ -475,11 +478,7 @@ export class ModeScreen {
       const bw = 64, gap = 8, bx = Math.round(W / 2 - (2 * (bw + gap) + checkboxWidth(label)) / 2);
       [NORMAL, VETERAN].forEach((d, i) => {
         const dx = bx + i * (bw + gap), on = app.choice.diff === d.id;
-        if (on) {
-          ctx.fillStyle = '#feae34';
-          ctx.fillRect(dx - 2, ty - 2, bw + 4, 17);
-        }
-        if (button(ctx, ui, 'd_' + d.id, dx, ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4' })) {
+        if (button(ctx, ui, 'd_' + d.id, dx, ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4', on })) {
           app.choice.diff = app.settings.diff = d.id;
           saveSettings(app.settings);
           sfx('select');
@@ -538,7 +537,7 @@ export class ArmoryScreen {
     this.t += dt;
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.55);
-    header(ctx, W, 'THE ARMORY');
+    header(ctx, W, 'The Armory');
     goldTag(ctx, app, W - 6, 9);
     ui.begin(dt);
     const prof = app.store.profile;
@@ -620,12 +619,12 @@ export class RecordsScreen {
     const app = this.app, ui = app.ui;
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.55);
-    header(ctx, W, 'RECORDS');
+    header(ctx, W, 'Records');
     const p = app.store.profile;
     // Ranked personal bests, one row per hero that has a run.
     const ranked = HERO_ORDER.filter((h) => p.ranked[h]).map((h) => [`${HEROES[h].name}, ${HEROES[h].title}`, `${fmtTime(p.ranked[h])} · ${rankTitle(p.ranked[h])}`]);
-    const pw = Math.min(W - 16, 300), ph = Math.min(H - 54, 170 + Math.max(1, ranked.length) * 10 + 14);
-    const x = Math.round(W / 2 - pw / 2), y = 32;
+    const pw = Math.min(W - 16, 300), ph = Math.min(H - 62, 170 + Math.max(1, ranked.length) * 10 + 14);
+    const x = Math.round(W / 2 - pw / 2), y = 40;
     panel(ctx, x, y, pw, ph, { title: 'VICTORIES' });
     const cx = [x + 10, x + pw - 50];
     let ty = y + 10;
@@ -684,7 +683,7 @@ export class OptionsScreen {
       app.scene.draw(ctx, W, H, dt, { campfire: false });
       dim(ctx, W, H, 0.55);
     } else dim(ctx, W, H, 0.7);
-    header(ctx, W, 'OPTIONS');
+    header(ctx, W, 'Options');
     ui.begin(dt);
     const w = Math.min(220, W - 30), x = Math.round(W / 2 - w / 2);
     let y = 36;

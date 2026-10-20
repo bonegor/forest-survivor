@@ -3,11 +3,11 @@
 
 import { input } from '../engine/input.js';
 import { sfx } from '../engine/audio.js';
-import { drawText, textCanvas, textWidth, drawRich, wrapText } from '../engine/font.js';
+import { drawText, textCanvas, textWidth, drawRich, wrapText, textMask, capHeight } from '../engine/font.js';
 import { makeCanvas, clamp, hexToRgb } from '../engine/util.js';
 import * as px from '../engine/pixels.js';
-import { GLYPHS } from '../engine/fontdata.js';
 import { bufToCanvas } from '../engine/sprites.js';
+import { panelFrame, PANEL_MIN, buttonFace, pointer } from './skin.js';
 
 export class UI {
   constructor() {
@@ -150,13 +150,25 @@ export function fillStone(ctx, x, y, w, h) {
   ctx.fillRect(x, y, w, h);
 }
 
-// Framed stone panel with bronze trim and gold rivets.
+// Framed stone panel with bronze trim and gold rivets: Lucifer's bracketed frame (skin.js), or
+// the old one-pixel trim on a panel too small for it.
 export function panel(ctx, x, y, w, h, o = {}) {
   x = Math.round(x);
   y = Math.round(y);
   w = Math.round(w);
   h = Math.round(h);
   const trim = o.trim || ['#b86f50', '#733e39'];
+  if (w >= PANEL_MIN && h >= PANEL_MIN) {
+    if (o.fill) {
+      ctx.fillStyle = o.fill;
+      ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+    } else fillStone(ctx, x + 2, y + 2, w - 4, h - 4);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(x + 3, y + 3, w - 6, 1);
+    panelFrame(ctx, x, y, w, h, trim[0], o.rivets !== false);
+    if (o.title) panelTitle(ctx, x, y, w, o.title);
+    return;
+  }
   ctx.fillStyle = '#0d0b14';
   ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
   ctx.fillStyle = trim[1];
@@ -180,56 +192,31 @@ export function panel(ctx, x, y, w, h, o = {}) {
       ctx.fillRect(rx, ry, 1, 1);
     }
   }
-  if (o.title) {
-    const tw = textWidth(o.title) + 12;
-    const tx = Math.round(x + w / 2 - tw / 2);
-    ctx.fillStyle = '#0d0b14';
-    ctx.fillRect(tx - 1, y - 6, tw + 2, 13);
-    ctx.fillStyle = trim[1];
-    ctx.fillRect(tx, y - 5, tw, 11);
-    ctx.fillStyle = '#1d1928';
-    ctx.fillRect(tx + 1, y - 4, tw - 2, 9);
-    drawText(ctx, o.title, x + w / 2, y - 4, { align: 'center', color: ['#fee761', '#feae34', '#d77643'] });
-  }
+  if (o.title) panelTitle(ctx, x, y, w, o.title);
 }
 
+// A panel's name on a bronze plate across its top edge, in the gothic font: written in capitals
+// by the callers, so set in title case here ("SIR ALDRIC — KNIGHT" reads "Sir Aldric - Knight").
+const titleCase = (s) => s.toLowerCase().replace(/(^|[\s(—-])(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
+function panelTitle(ctx, x, y, w, title) {
+  const text = titleCase(title), tw = textWidth(text, 'gothic') + 26;
+  const tx = Math.round(x + w / 2 - tw / 2);
+  buttonFace(ctx, tx, y - 8, tw, 16, 'on');
+  drawText(ctx, text, x + w / 2, y - 7, { align: 'center', color: ['#fff6c2', '#fee761', '#feae34', '#d77643'], font: 'gothic' });
+}
+
+// Lucifer's pointed button (skin.js): iron at rest, bronze when it is the one chosen (o.on), rimmed
+// in pulsing gold with focus, with Lucifer's gold arrow pointing at it.
 export function button(ctx, ui, id, x, y, w, h, label, o = {}) {
   const hit = ui.item(id, x, y, w, h, o);
   const f = ui.focused(id);
   x = Math.round(x);
   y = Math.round(y);
-  ctx.fillStyle = '#0d0b14';
-  ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-  if (f && !o.disabled) {
-    const pulse = 0.5 + 0.5 * Math.sin(ui.t * 6);
-    ctx.fillStyle = pulse > 0.5 ? '#fee761' : '#feae34';
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = '#3e2731';
-    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-    ctx.fillStyle = '#5a2e2b';
-    ctx.fillRect(x + 1, y + 1, w - 2, Math.floor(h / 2));
-  } else {
-    ctx.fillStyle = '#3a4466';
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = '#262b44';
-    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-    ctx.fillStyle = '#2d3352';
-    ctx.fillRect(x + 1, y + 1, w - 2, Math.floor(h / 2));
-  }
+  const lit = f && !o.disabled;
+  buttonFace(ctx, x, y, w, h, o.disabled ? 'off' : lit ? (Math.sin(ui.t * 6) > 0 ? 'pulse' : 'focus') : o.on ? 'on' : 'idle');
   const color = o.disabled ? '#5a6988' : f ? ['#ffffff', '#fee761', '#feae34'] : o.color || '#c0cbdc';
-  drawText(ctx, label, x + w / 2, y + Math.floor((h - 7) / 2), { align: 'center', color });
-  if (f && !o.disabled && o.pointer !== false) {
-    // A little sword cursor.
-    const bx = x - 9 + Math.round(Math.sin(ui.t * 8)), by = y + Math.floor(h / 2) - 2;
-    ctx.fillStyle = '#0d0b14';
-    ctx.fillRect(bx - 1, by - 1, 8, 5);
-    ctx.fillStyle = '#c0cbdc';
-    ctx.fillRect(bx + 2, by + 1, 5, 1);
-    ctx.fillStyle = '#feae34';
-    ctx.fillRect(bx + 1, by, 1, 3);
-    ctx.fillStyle = '#733e39';
-    ctx.fillRect(bx - 1, by + 1, 2, 1);
-  }
+  drawText(ctx, label, x + w / 2, y + Math.floor((h - 8) / 2), { align: 'center', color });
+  if (lit && o.pointer !== false) pointer(ctx, x - 2 + Math.round(Math.sin(ui.t * 8)), y + Math.floor((h - 1) / 2));
   return hit;
 }
 
@@ -237,8 +224,8 @@ export function button(ctx, ui, id, x, y, w, h, label, o = {}) {
 export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
   const hit = button(ctx, ui, id, x, y, w, 13, '', { pointer: true });
   const f = ui.focused(id);
-  drawText(ctx, label, x + 6, y + 3, { color: f ? '#fee761' : '#c0cbdc' });
-  drawText(ctx, `< ${value} >`, x + w - 6, y + 3, { align: 'right', color: f ? '#ffffff' : '#8b9bb4' });
+  drawText(ctx, label, x + 14, y + 2, { color: f ? '#fee761' : '#c0cbdc' });
+  drawText(ctx, `< ${value} >`, x + w - 14, y + 2, { align: 'right', color: f ? '#ffffff' : '#8b9bb4' });
   if (!f || ui.lockT > 0) return hit ? 1 : 0;
   if (input.pressed('left')) return -1;
   if (input.pressed('right')) return 1;
@@ -253,11 +240,11 @@ export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
 // clicked, tapped or confirmed (Enter, Space, the pad's A): the caller flips what it shows.
 // color: the tick's and the label's while ticked.
 const TICK = [[0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [5, 1], [6, 0]];
-export const checkboxWidth = (label) => textWidth(label) + 22;
+export const checkboxWidth = (label) => textWidth(label) + 30;
 export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
   const hit = button(ctx, ui, id, x, y, checkboxWidth(label), 13, '', { pointer: true });
   const f = ui.focused(id), color = o.color || '#fee761';
-  const bx = Math.round(x) + 5, by = Math.round(y) + 2;
+  const bx = Math.round(x) + 9, by = Math.round(y) + 2;
   ctx.fillStyle = on ? color : '#5a6988';
   ctx.fillRect(bx, by, 9, 9);
   ctx.fillStyle = '#0d0b14';
@@ -266,32 +253,25 @@ export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
     ctx.fillStyle = color;
     for (const [tx, ty] of TICK) ctx.fillRect(bx + 1 + tx, by + 1 + ty, 1, 2);
   }
-  drawText(ctx, label, bx + 13, y + 3, { color: f ? '#fee761' : on ? color : '#8b9bb4' });
+  drawText(ctx, label, bx + 13, y + 2, { color: f ? '#fee761' : on ? color : '#8b9bb4' });
   return hit;
 }
 
-// Big gradient title text built from the bitmap font, smoothed with Scale2x.
+// Big gradient title text built from a bitmap font, smoothed with Scale2x: four times the 5x7
+// font's capitals, or twice the gothic's (font: 'gothic'), whose gradient runs down its capitals.
 const logoCache = new Map();
-export function logo(text, colors = ['#fff6c2', '#fee761', '#feae34', '#f77622', '#be4a2f', '#a22633'], outline = '#181425') {
-  const key = text + colors.join();
+export function logo(text, colors = ['#fff6c2', '#fee761', '#feae34', '#f77622', '#be4a2f', '#a22633'], outline = '#181425', font = 'normal') {
+  const key = font + text + colors.join();
   if (logoCache.has(key)) return logoCache.get(key);
-  // Build a 1-bit mask from the glyphs.
-  const glyphs = [...text].map((ch) => (GLYPHS[ch] || GLYPHS['?']).split('/'));
-  const w = glyphs.reduce((s, g) => s + g[0].length + 1, 0) - 1;
-  const h = 7;
+  // Build a 1-bit mask from the glyphs: the 5x7 font's capitals only, the gothic's descenders too.
+  const tm = textMask(text, font);
+  const h = font === 'normal' ? 7 : tm.h, w = tm.w;
   let m = px.makeBuf(w, h);
   const ON = px.pack(255, 255, 255);
-  let x = 0;
-  for (const g of glyphs) {
-    g.forEach((row, yy) => {
-      if (yy >= h) return;
-      [...row].forEach((c, i) => {
-        if (c === '#') m.d[yy * w + x + i] = ON;
-      });
-    });
-    x += g[0].length + 1;
-  }
-  m = px.scale2x(px.scale2x(m));
+  for (let i = 0; i < w * h; i++) if (tm.mask[i]) m.d[i] = ON;
+  const times = font === 'normal' ? 2 : 1;
+  for (let i = 0; i < times; i++) m = px.scale2x(m);
+  const capH = font === 'normal' ? m.h : capHeight(font) << times;
   const out = px.makeBuf(m.w + 4, m.h + 6);
   const cols = colors.map((c) => px.hexPack(c));
   const ol = px.hexPack(outline);
@@ -301,7 +281,7 @@ export function logo(text, colors = ['#fff6c2', '#fee761', '#feae34', '#f77622',
     for (let xx = 0; xx < out.w; xx++) {
       const sx = xx - 2, sy = yy - 2;
       if (at(sx, sy)) {
-        const t = sy / m.h;
+        const t = Math.min(1, sy / capH);
         const band = clamp(Math.floor(t * cols.length + ((xx + yy) % 2) * 0.15), 0, cols.length - 1);
         // Bevel: bright rim on top edges.
         out.d[yy * out.w + xx] = !at(sx, sy - 1) ? cols[0] : cols[band];

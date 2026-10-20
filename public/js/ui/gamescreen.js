@@ -18,6 +18,7 @@ import { metaBonuses, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost } 
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText, goalText } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
+import { buttonFace } from './skin.js';
 import { OptionsScreen } from './screens.js';
 import { saveSettings } from '../engine/storage.js';
 
@@ -181,15 +182,11 @@ function keycap(ctx, x, y, k, off) {
 function footButton(ctx, ui, id, x, y, w, label, o) {
   let hit = false;
   if (o.held) {
-    ctx.fillStyle = '#0d0b14';
-    ctx.fillRect(x - 1, y - 1, w + 2, 15);
-    ctx.fillStyle = '#3a4466';
-    ctx.fillRect(x, y, w, 13);
-    ctx.fillStyle = '#262b44';
-    ctx.fillRect(x + 1, y + 1, w - 2, 11);
-    drawText(ctx, label, x + w / 2, y + 3, { align: 'center', color: '#5a6988' });
+    buttonFace(ctx, x, y, w, 13, 'off');
+    drawText(ctx, label, x + w / 2, y + 2, { align: 'center', color: '#5a6988' });
   } else hit = button(ctx, ui, id, x, y, w, 13, label, { color: o.color, disabled: o.disabled });
-  if (o.key) keycap(ctx, x + 3, y + 2, o.key, o.held || o.disabled);
+  // Past the button's pointed end.
+  if (o.key) keycap(ctx, x + 9, y + 1, o.key, o.held || o.disabled);
   return hit;
 }
 
@@ -560,7 +557,7 @@ export class LevelUpOverlay {
           ctx.drawImage(SPR[info.hint.icon].frames[0].c, Math.round(x + w / 2 + textWidth(info.hint.text) / 2 - 3), hy);
         }
       }
-      if (!touch) drawText(ctx, String(i + 1), x + 5, y + lift + 4, { color: lit ? '#8b9bb4' : '#5a6988', outline: null });
+      if (!touch) drawText(ctx, String(i + 1), x + 7, y + lift + 6, { color: lit ? '#8b9bb4' : '#5a6988', outline: null });
       if (held) {
         // Not yet: the card drained of its colours and darkened; the focused one is framed in grey
         // (above) over a bar that fills to the moment it can be taken.

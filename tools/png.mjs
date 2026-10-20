@@ -54,24 +54,28 @@ export function writePng(file, buf, bg = null) {
   writeFileSync(file, png);
 }
 
-// Minimal PNG decoder: 8-bit RGB or RGBA, not interlaced. Returns the same
-// { w, h, d } packed buffer the encoder takes.
+// Minimal PNG decoder: 8-bit RGB or RGBA, or palette images of 1, 2, 4 or 8 bits (with tRNS),
+// not interlaced. Returns the same { w, h, d } packed buffer the encoder takes.
 export function readPng(file) {
   const b = readFileSync(file);
-  let p = 8, w = 0, h = 0, type = 0;
+  let p = 8, w = 0, h = 0, type = 0, depth = 8, plte = null, trns = null;
   const idat = [];
   while (p < b.length) {
     const len = b.readUInt32BE(p), name = b.toString('ascii', p + 4, p + 8), d = b.subarray(p + 8, p + 8 + len);
     if (name === 'IHDR') {
       w = d.readUInt32BE(0);
       h = d.readUInt32BE(4);
+      depth = d[8];
       type = d[9];
-      if (d[8] !== 8 || (type !== 2 && type !== 6) || d[12]) throw new Error(`${file}: only 8-bit RGB/RGBA, non-interlaced PNGs are supported`);
+      const ok = type === 3 ? [1, 2, 4, 8].includes(depth) : depth === 8 && (type === 2 || type === 6);
+      if (!ok || d[12]) throw new Error(`${file}: only 8-bit RGB/RGBA or palette, non-interlaced PNGs are supported`);
     }
+    if (name === 'PLTE') plte = d;
+    if (name === 'tRNS') trns = d;
     if (name === 'IDAT') idat.push(d);
     p += 12 + len;
   }
-  const bpp = type === 6 ? 4 : 3, stride = w * bpp;
+  const bpp = type === 6 ? 4 : type === 2 ? 3 : 1, stride = type === 3 ? Math.ceil((w * depth) / 8) : w * bpp;
   const raw = zlib.inflateSync(Buffer.concat(idat));
   const prev = new Uint8Array(stride), cur = new Uint8Array(stride);
   const out = { w, h, d: new Uint32Array(w * h) };
@@ -90,6 +94,12 @@ export function readPng(file) {
       cur[x] = r & 255;
     }
     for (let x = 0; x < w; x++) {
+      if (type === 3) {
+        const bit = x * depth, k = (cur[bit >> 3] >> (8 - depth - (bit & 7))) & ((1 << depth) - 1);
+        const al = trns && k < trns.length ? trns[k] : 255;
+        out.d[y * w + x] = ((al << 24) | (plte[k * 3 + 2] << 16) | (plte[k * 3 + 1] << 8) | plte[k * 3]) >>> 0;
+        continue;
+      }
       const i = x * bpp;
       out.d[y * w + x] = ((bpp === 4 ? cur[i + 3] : 255) << 24 | cur[i + 2] << 16 | cur[i + 1] << 8 | cur[i]) >>> 0;
     }
