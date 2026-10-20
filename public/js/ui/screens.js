@@ -54,8 +54,7 @@ export class TitleScreen {
     const app = this.app, ui = app.ui;
     this.t += dt;
     app.scene.draw(ctx, W, H, dt);
-    // The campfire scene goes out first, so the knight's full picture sits
-    // behind the logo and menu rather than over them.
+    // The campfire scene goes out first, behind the logo and menu.
     presentBackdrop();
     // The title in Jacquard 24, at twice its size only on a screen with room to spare; on narrow
     // (portrait) screens it stacks onto two lines.

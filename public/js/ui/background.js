@@ -1,11 +1,22 @@
 // Animated menu backdrop: moonlit sky, parallax pine silhouettes, drifting
 // mist, and the heroes resting around a campfire.
 
-import { SPR, loopFrame } from '../engine/sprites.js';
-import { overlay, picture } from '../engine/view.js';
+import { SPR, idleFrame } from '../engine/sprites.js';
 import { makeCanvas, mulberry32, clamp, rand, TAU, hexToRgb } from '../engine/util.js';
 
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5);
+// The campfire's heroes in a ring round it: their sheet, how far across from the fire (left of
+// it facing right, right of it facing left) and how far down from its base (up is beyond it),
+// back to front: the Shadow straight behind the flames, the Sorcerer and Necromancer beyond
+// it either side, the Knight and Ranger on this side.
+const CAMP = [
+  ['rogue', 0, -24],
+  ['mage', -48, -16],
+  ['necromancer', 48, -16],
+  ['knight', -70, 6],
+  ['archer', 70, 6],
+];
+
+const BAYER =[0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5);
 
 function gradientCanvas(W, H, stops) {
   const c = makeCanvas(W, H);
@@ -173,33 +184,25 @@ export class MenuScene {
     ctx.fillStyle = lg;
     ctx.fillRect(fx - r, fy - r, r * 2, r * 2);
     ctx.globalCompositeOperation = 'source-over';
+    // The heroes round the fire as they look in a run, from their own sheets at one scale,
+    // idling and facing it: those beyond it first, then the fire over their feet, then those
+    // on this side of it. One with no room on a narrow screen stays out.
+    const hero = ([name, dx, dy]) => {
+      const spr = SPR[name], fr = idleFrame(spr, Math.floor((t + Math.abs(dx)) * 1.6 * spr.idleRate)), flip = dx > 0;
+      const img = fr.get(flip);
+      const x = fx + dx, y = fy + dy;
+      if (x - img.width / 2 < 2 || x + img.width / 2 > W - 2) return;
+      ctx.fillStyle = 'rgba(5,4,10,0.5)';
+      ctx.fillRect(Math.round(x - 8), y - 1, 16, 2);
+      const ix = Math.round(x - img.width / 2), iy = y - spr.anchorY;
+      ctx.drawImage(img, ix, iy);
+      if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, ix, iy);
+    };
+    for (const h of CAMP) if (h[2] < 0) hero(h);
     const fire = SPR.campfire.frames[Math.floor(t * 8) % 3].c;
     const fs = 2;
     ctx.drawImage(fire, fx - (fire.width * fs) / 2, fy - fire.height * fs, fire.width * fs, fire.height * fs);
-    // Heroes around the fire in their menu poses: the knight and the ranger
-    // stand guard and the sorcerer hurls fire the other way.
-    const heroes = [
-      ['knight_camp', -48, 1, false],
-      ['archer_camp', 50, 1, false],
-      ['mage_pose', -106, 1, true],
-    ];
-    for (const [name, dx, face, flip] of heroes) {
-      const fr = loopFrame(SPR[name], t);
-      const img = flip ? fr.cf : fr.c;
-      const s = Math.max(1, Math.round(2 / SPR[name].hires));
-      const bob = Math.sin(t * 2 + dx) > 0.7 ? 1 : 0;
-      const sw = Math.max(16, Math.round(img.width * s * 0.45));
-      ctx.fillStyle = 'rgba(5,4,10,0.5)';
-      ctx.fillRect(Math.round(fx + dx - sw / 2), fy - 2, sw, 3);
-      const ix = Math.round(fx + dx - (img.width * s) / 2), iy = fy - img.height * s + 2 - bob;
-      // A hero with a full picture stands in it at the screen's own resolution
-      // (the screen presents this backdrop before drawing its menu on top).
-      const pic = !flip && SPR[name].picture && picture(SPR[name].picture);
-      if (pic) overlay(pic, ix, iy, img.width * s, img.height * s, { fill: null, stretch: true });
-      else ctx.drawImage(img, ix, iy, img.width * s, img.height * s);
-      if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, ix, iy, img.width * s, img.height * s);
-      void face;
-    }
+    for (const h of CAMP) if (h[2] >= 0) hero(h);
     // Embers.
     if (Math.random() < dt * 14) this.embers.push({ x: fx + rand(-6, 6), y: fy - 14, vx: rand(-6, 6), vy: rand(-22, -12), life: rand(1.2, 2.4) });
     for (let i = this.embers.length - 1; i >= 0; i--) {
