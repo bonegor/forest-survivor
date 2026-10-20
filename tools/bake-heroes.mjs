@@ -77,6 +77,11 @@ for (const [name, pick] of Object.entries(BAKE)) {
     }
     frames.push(px);
   }
+  // What glows unlit at night, as the colours themselves (packed as the palette is). A sheet
+  // built in the lab says what glows as palette keys (emissive): their colours in palette.js,
+  // then, and each must be one the sheet has (else its own palette gave that key another).
+  const glow = e.glow && e.glow.length ? e.glow.map(packHex) : e.emissive ? [...e.emissive].map((k) => PAL[k] && packHex(PAL[k])) : [];
+  if (glow.some((c) => !index.has(c))) throw new Error(`${pick}: a glow colour (${e.glow || e.emissive}) is not in its sheet`);
   const indexBytes = palette.length > 256 ? 2 : 1;
   const encoded = frames.map((px) => Buffer.from(indexBytes === 2 ? px.flatMap((i) => [i & 255, i >> 8]) : px).toString('base64'));
   const data = {
@@ -85,9 +90,7 @@ for (const [name, pick] of Object.entries(BAKE)) {
     motionRate: e.motionRate || 1, idleRate: e.idleRate ?? 4, selfBob: !!e.selfBob, fitW: e.fitW || e.w, fitH: e.fitH || e.h,
     // A ranger's bow: the frame the arrow leaves on, and her shots on the move.
     ...(e.attackRelease !== null && e.attackRelease !== undefined ? { attackRelease: e.attackRelease, attackWalk: e.attackWalk } : {}),
-    // What glows unlit at night, as the colours themselves (packed as the palette is).
-    // A sheet built in the lab says what glows as palette keys (emissive): their colours, then.
-    ...(e.glow && e.glow.length ? { glow: e.glow.map(packHex) } : e.emissive ? { glow: [...e.emissive].map((k) => packHex(PAL[k])) } : {}),
+    ...(glow.length ? { glow } : {}),
     indexBytes, palette, frames: encoded,
   };
   const head = `// ${e.name}, picked in the Sprite Lab (lab:${pick}); ${e.licence}.\n// Baked by tools/bake-heroes.mjs from its sheet: ${data.frames.length} frames of ${e.w}x${e.h}, ${palette.length - 1} colours.\n`;

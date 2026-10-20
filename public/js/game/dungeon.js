@@ -691,8 +691,8 @@ export class Dungeon {
       // Open floor no box, barrel or prop stands on.
       free: (x, y) => this.tile(x, y) === FLOOR && !taken.has(y * W + x),
       take: (x, y) => taken.add(y * W + x),
-      // A torch on the face over floor tile (x, y).
-      torch: (x, y) => this.torches.some((t) => t.x === x * T + T / 2 && t.y === y * T - 4),
+      // A torch, or the Undercroft's fountain, on the face over floor tile (x, y).
+      torch: (x, y) => this.torches.some((t) => t.x === x * T + T / 2 && t.y === y * T - 4) || this.fountains.some((f) => f.tx === x && f.ty === y - 1),
       // The floor tile at the foot of the wall over column x of room r: the first, from the
       // room's top, with a wall to its north; or -1.
       north: (r, x) => {
@@ -791,7 +791,7 @@ export class Dungeon {
     const S = cam.S, frames = artCanvases('lava'), n = frames.length, fps = CRYPT_ART.lava.fps;
     // World pixels to the screen's, rounded alike for every tile, so neighbours neither gap nor overlap.
     const sx = (wx) => Math.round((wx - cam.x) * S), sy = (wy) => Math.round((wy - cam.y) * S);
-    // Rows or columns i to j of the tile (from its top left), in one colour.
+    // The world's box (x0, y0) to (x1, y1) on the screen, in the fill colour.
     const fill = (x0, y0, x1, y1) => ctx.fillRect(sx(x0), sy(y0), sx(x1) - sx(x0), sy(y1) - sy(y0));
     for (const l of this.lavaTiles) {
       const x = l.tx * T, y = l.ty * T;

@@ -90,9 +90,10 @@ function crowded(name, now, cap, span) {
 // of all sprites (CAP), or of this one, with o.cap (at most that many within o.span seconds).
 export function fxBurst(g, name, x, y, o = {}) {
   const now = g.clock, s = starts[next];
-  if (o.cap && crowded(name, now, o.cap, o.span ?? BUSY)) return null;
-  // A stamp from later than now is a past game's (the clock starts again with each run).
+  // A stamp from later than now is a past game's (the clock starts again with each run). The
+  // CAP first, so that one it leaves out is not counted against its sprite's own cap.
   if (s > now - BUSY && s <= now) return null;
+  if (o.cap && crowded(name, now, o.cap, o.span ?? BUSY)) return null;
   starts[next] = now;
   next = (next + 1) % CAP;
   const b = new FxBurst(name, x, y, o);

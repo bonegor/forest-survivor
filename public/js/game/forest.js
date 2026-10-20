@@ -268,31 +268,24 @@ export class Forest {
       if (px < py) e.x += Math.sign(dx || 1) * px;
       else e.y += Math.sign(dy || 1) * py;
     }
-    // 36 px round: a landmark's posts may stand up to 24 px from the foot that places it in its chunk.
-    const x0 = Math.floor((e.x - 36) / CH), x1 = Math.floor((e.x + 36) / CH);
-    const y0 = Math.floor((e.y - 36) / CH), y1 = Math.floor((e.y + 36) / CH);
-    for (let cy = y0; cy <= y1; cy++) {
-      for (let cx = x0; cx <= x1; cx++) {
-        for (const p of this.chunk(cx, cy).trunks) {
-          const rx = p.trunk + (e.r || 5), ry = rx * 0.65;
-          // In units where the ellipse is a circle of radius rx.
-          const dx = e.x - p.x, dy = ((e.y - p.y) * rx) / ry;
-          const d2 = dx * dx + dy * dy;
-          if (d2 >= rx * rx) continue;
-          const d = Math.sqrt(d2);
-          const nx = d > 1e-3 ? dx / d : 0, ny = d > 1e-3 ? dy / d : 1;
-          // Walking dead straight at the trunk: creep round it rather than stick
-          // forever, to the side the hero leans to (in front of the tree when dead on).
-          const vx = e.vx || 0, vy = ((e.vy || 0) * rx) / ry, v = Math.hypot(vx, vy);
-          const along = nx * vy - ny * vx;
-          const side = Math.abs(along) > 0.02 * v ? Math.sign(along) : nx < 0 ? -1 : 1;
-          const slip = v > 1 && nx * vx + ny * vy < -0.99 * v ? 0.03 * side : 0;
-          const tx = nx - ny * slip, ty = ny + nx * slip, tl = Math.hypot(tx, ty);
-          e.x = p.x + (tx / tl) * rx;
-          e.y = p.y + ((ty / tl) * rx * ry) / rx;
-        }
-      }
-    }
+    this.trunksNear(e.x, e.y, (p) => {
+      const rx = p.trunk + (e.r || 5), ry = rx * 0.65;
+      // In units where the ellipse is a circle of radius rx.
+      const dx = e.x - p.x, dy = ((e.y - p.y) * rx) / ry;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= rx * rx) return;
+      const d = Math.sqrt(d2);
+      const nx = d > 1e-3 ? dx / d : 0, ny = d > 1e-3 ? dy / d : 1;
+      // Walking dead straight at the trunk: creep round it rather than stick
+      // forever, to the side the hero leans to (in front of the tree when dead on).
+      const vx = e.vx || 0, vy = ((e.vy || 0) * rx) / ry, v = Math.hypot(vx, vy);
+      const along = nx * vy - ny * vx;
+      const side = Math.abs(along) > 0.02 * v ? Math.sign(along) : nx < 0 ? -1 : 1;
+      const slip = v > 1 && nx * vx + ny * vy < -0.99 * v ? 0.03 * side : 0;
+      const tx = nx - ny * slip, ty = ny + nx * slip, tl = Math.hypot(tx, ty);
+      e.x = p.x + (tx / tl) * rx;
+      e.y = p.y + ((ty / tl) * rx * ry) / rx;
+    });
   }
 
   // Whether a body of radius r could stand at (x, y): off every trunk and landmark post (as
@@ -320,7 +313,8 @@ export class Forest {
     return near;
   }
 
-  // fn(trunk) for every trunk and landmark post in the chunks within m px of (x, y).
+  // fn(trunk) for every trunk and landmark post in the chunks within m px of (x, y). 36 px round
+  // by default: a landmark's posts may stand up to 24 px from the foot that places it in its chunk.
   trunksNear(x, y, fn, m = 36) {
     const x0 = Math.floor((x - m) / CH), x1 = Math.floor((x + m) / CH);
     const y0 = Math.floor((y - m) / CH), y1 = Math.floor((y + m) / CH);

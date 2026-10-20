@@ -72,6 +72,5 @@ export default {
     ucFountainRed: x72(...anim('wall_fountain_mid_red', 3), ...anim('wall_fountain_basin_red', 3)),
     ucFountainBlue: x72(...anim('wall_fountain_mid_blue', 3), ...anim('wall_fountain_basin_blue', 3)),
     ucGooBase: x72('wall_goo_base'),
-    ucSkull: x72('skull'),
   },
 };

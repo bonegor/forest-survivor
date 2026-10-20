@@ -2,7 +2,7 @@
 import SHRINES from '../../assets/art/shrines.js';
 import { bakedDef } from './baked.js';
 
-const flame =(a, b, c) => ({ emissive: 'oyYfF', frames: [a, b, c] });
+const flame = (a, b, c) => ({ emissive: 'oyYfF', frames: [a, b, c] });
 
 export const PROP_ART = {
   // ------------------------------------------------------------------ forest

@@ -245,6 +245,14 @@ test('a save from before keeps its heroes, and a night won brings in the next he
   assert.deepEqual(P.sanitizeProfile({ heroes: ['knight', 'dragon'] }).heroes, ['knight']);
 });
 
+test('the extras wait their turn in the next goal: the ladder, the Dungeon and Ranked come first', () => {
+  const p = P.sanitizeProfile({ heroes: [...P.LADDER] });
+  assert.deepEqual(P.nextGoal(p), { type: 'survivalHard', hero: 'necromancer', unlocks: 'dungeon' }, 'the Paladin is not the next goal');
+  for (const h of P.LADDER) p.feats[h] = P.FEAT.survivalHard | P.FEAT.dungeon;
+  // (A night won with the Necromancer has brought the Paladin in already.)
+  assert.deepEqual(P.nextGoal(P.sanitizeProfile(p)), { type: 'survive', hero: 'paladin', unlocks: 'druid', minutes: 5 }, 'then the extras, one by one');
+});
+
 test('the full ladder: nights survived, then the Dungeon hero by hero, then Ranked', () => {
   let p = P.defaultProfile();
   const run = (o) => {

@@ -341,7 +341,7 @@ export const WEAPONS = {
   // ---------------------------------- the four of 20 October 2026: one signature each
   // The Paladin's. A pillar of light on the mightiest foe in reach (a boss, a crypt's lord, a
   // champion, else the one with the most health), a splash round it; all it burns is Branded for
-  // BRAND.time s: every blow on it, anyone's, does `brand` more (Game.hitEnemy).
+  // BRAND_TIME s: every blow on it, anyone's, does `brand` more (Game.hitEnemy).
   smite: {
     name: 'Smite',
     icon: 'i_smite',

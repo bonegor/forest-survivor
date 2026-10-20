@@ -840,7 +840,8 @@ export class Bolt {
 
   update(dt) {
     this.t += dt;
-    if (!this.straight && Math.random() < dt * 25) this.jitter();
+    // One from the sky is drawn from art: its path is never drawn, so it needn't flicker.
+    if (!this.straight && !this.art && Math.random() < dt * 25) this.jitter();
     return this.t < this.dur;
   }
 
@@ -1667,13 +1668,16 @@ export class Overgrowth {
       const lt = this.t - v.at;
       if (lt > 0) drawRoot(ctx, cam, spr.frames[rootFrame(spr, lt, left)].get(v.flip), v.x, v.y, Math.min(1, lt / ROOT_RISE));
     }
-    const f = spr.frames[rootFrame(spr, this.t, left)];
-    for (const [e, id] of this.held) if (!e.dead && e.id === id) drawRoot(ctx, cam, f.get(true), e.x + 3, e.y + 1, Math.min(1, this.t / ROOT_RISE));
+    // forEach, not for-of: no [foe, id] pair made for each of the hundreds held, every frame.
+    const img = spr.frames[rootFrame(spr, this.t, left)].get(true), u = Math.min(1, this.t / ROOT_RISE);
+    this.held.forEach((id, e) => {
+      if (!e.dead && e.id === id) drawRoot(ctx, cam, img, e.x + 3, e.y + 1, u);
+    });
   }
 }
 
 // Berserker: Red Frenzy. For its time he chops all round him every FRENZY.every s, on top of his
-// weapons (which strike FRENZY.haste times as fast: Player.weaponHaste); every kill heals him
+// weapons (which strike FRENZY.haste times as fast: Weapon.haste); every kill heals him
 // FRENZY.heal of his health (Game.killEnemy).
 export const FRENZY = { every: 0.15, R: 42, dmg: 22, haste: 2, heal: 0.03 };
 export class Frenzy {

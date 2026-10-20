@@ -14,7 +14,7 @@ export const HEROES = {
     name: 'Sir Aldric',
     title: 'Knight',
     sprite: 'knight',
-    pose: 'knight_pose', // his painted pose on the in-run panels; the hero screen frames the in-game sprite, as for all five
+    pose: 'knight_pose', // his painted pose on the in-run panels; the hero screen frames the in-game sprite, as for every hero
     weapon: 'sword', // in the crypts each hero has his own weapon alone, struck by the player (Game.caveStrike)
     unique: ['sword'],
     color: '#0099db',
@@ -101,7 +101,7 @@ export const HEROES = {
   },
   // The four of 20 October 2026, asked for together ("all four"), after the Necromancer in
   // HERO_ORDER: extras beside the ladder's five (shared/profile.js LADDER). Their sprites are
-  // being drawn in the Sprite Lab; until they are in, art/fallbacks.js draws the Knight's.
+  // in art/hero-sheets.js.
   paladin: {
     id: 'paladin',
     short: 'Paladin',

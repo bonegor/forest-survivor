@@ -26,7 +26,7 @@
 //   pad: n                                  n clear pixels round each side
 // and meta: { ... } goes through as it is (anchorY, idle, fps ...). A pack's licence must be one
 // a public repository can ship (CC0, CC-BY, OGA-BY), or the bake refuses it.
-import { writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readPng } from './png.mjs';
@@ -39,8 +39,26 @@ const SPECS = join(dirname(fileURLToPath(import.meta.url)), 'art');
 mkdirSync(OUT, { recursive: true });
 
 const SHIPPABLE = /^(CC0|CC-BY [34]\.0|OGA-BY 3\.0)$/;
-// Files a pack ships under no licence it can give (dcss-crawl-tiles-cc0/TILES_UNDER_UNKNOWN_LICENSE.md).
-const UNKNOWN = [/dithmeng?os/i];
+// Files a pack ships under no licence it can give (dcss-crawl-tiles-cc0/TILES_UNDER_UNKNOWN_LICENSE.md):
+// every name that list gives, and these, which it lists under older names (dithmengos.png,
+// dngn_altar_fedhas.png) than the files carry.
+const UNKNOWN = [/dithmeng?os/i, /altars?[_/]fedhas/i];
+const unlisted = new Map();
+const isUnlisted = (pack, f) => {
+  if (!unlisted.has(pack)) {
+    const list = join(FROM, 'packs', pack, 'TILES_UNDER_UNKNOWN_LICENSE.md');
+    unlisted.set(pack, new Set(existsSync(list) ? [...readFileSync(list, 'utf8').matchAll(/^\s*-\s*(?:\S*\/)?([^/\s]+\.png)\s*$/gm)].map((m) => m[1].toLowerCase()) : []));
+  }
+  return unlisted.get(pack).has(f.split('/').pop().toLowerCase());
+};
+// The licence a pack's own record gives it (packs/<pack>/SOURCE.md, "- **Licence:** CC0 1.0 ..."):
+// a credit must claim that one, so no pack is credited under a licence it doesn't carry.
+const packLicence = (pack) => {
+  const src = join(FROM, 'packs', pack, 'SOURCE.md');
+  return (existsSync(src) && /^- \*\*Licence:\*\* (.+)$/m.exec(readFileSync(src, 'utf8'))?.[1]) || '';
+};
+// A spec's files, its sheets' too.
+const filesOf = (s) => s.files || (s.sheets ? s.sheets.flatMap(filesOf) : [s.file]);
 
 const all = readdirSync(SPECS).filter((f) => f.endsWith('.mjs')).map((f) => f.slice(0, -4)).sort();
 const named = args.filter((a) => !a.startsWith('--'));
@@ -185,16 +203,22 @@ const credits = [];
 for (const group of all) {
   const { default: def } = await import(pathToFileURL(join(SPECS, `${group}.mjs`)).href);
   const packs = new Map(def.credits.map((c) => [c.pack, c]));
-  for (const c of def.credits) if (!SHIPPABLE.test(c.licence)) throw new Error(`${group}: ${c.pack} is ${c.licence}, which a public repository can't ship`);
+  for (const c of def.credits) {
+    if (!SHIPPABLE.test(c.licence)) throw new Error(`${group}: ${c.pack} is ${c.licence}, which a public repository can't ship`);
+    const own = packLicence(c.pack);
+    if (!`${own} `.startsWith(`${c.licence} `)) throw new Error(`${group}: ${c.pack} is credited ${c.licence}, but its SOURCE.md says "${own || 'nothing'}"`);
+  }
   credits.push(...def.credits.map((c) => ({ ...c, group })));
   if (!groups.includes(group)) continue;
   const out = {}, lines = [];
   for (const [name, spec] of Object.entries(def.sprites)) {
-    const files = spec.files || (spec.sheets ? spec.sheets.map((s) => s.file) : [spec.file]);
+    const files = filesOf(spec);
     for (const f of files) {
-      const pack = f.split('/')[0];
+      const parts = f.split(/[\\/]/), pack = parts[0];
+      // A path that climbs out (pack/../other) would read a pack it isn't credited to.
+      if (parts.includes('..')) throw new Error(`${group}/${name}: ${f} leaves its pack's folder`);
       if (!packs.has(pack)) throw new Error(`${group}/${name}: ${pack} has no credit line`);
-      if (UNKNOWN.some((re) => re.test(f))) throw new Error(`${group}/${name}: ${f} is under no known licence`);
+      if (UNKNOWN.some((re) => re.test(f)) || isUnlisted(pack, f)) throw new Error(`${group}/${name}: ${f} is under no known licence`);
     }
     out[name] = bake(spec);
     lines.push(`//   ${name}: ${out[name].frames.length} frame(s) of ${out[name].w}x${out[name].h}, ${out[name].palette.length} colours, from ${files.length > 1 ? `${files[0]} …` : files[0]}`);

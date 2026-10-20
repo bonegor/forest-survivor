@@ -190,14 +190,16 @@ export function unlocksNext(p, hero) {
 //   { type: 'survive' | 'survivalHard' | 'dungeon', hero, unlocks, minutes? }
 export function nextGoal(p) {
   const next = nextHeroUnlock(p);
-  if (next) return { type: 'survive', hero: prevHero(next), unlocks: next, minutes: HERO_UNLOCK_TIME / 60 };
+  const survive = next && { type: 'survive', hero: prevHero(next), unlocks: next, minutes: HERO_UNLOCK_TIME / 60 };
+  // The ladder's five come first; the extras after them wait until the Dungeon and Ranked are open.
+  if (next && LADDER.includes(next)) return survive;
   if (!modeUnlocked(p, 'dungeon')) return { type: 'survivalHard', hero: 'necromancer', unlocks: 'dungeon' };
   // Each clear of the ladder's five brings the next in; the Necromancer's opens Ranked.
   for (let i = 0; i < LADDER.length; i++) {
     const h = LADDER[i];
     if (!hasFeat(p, h, FEAT.dungeon)) return { type: 'dungeon', hero: h, unlocks: LADDER[i + 1] || 'ranked' };
   }
-  return null;
+  return survive || null;
 }
 
 // Everything currently open, as keys; applyRun diffs these to announce unlocks.
@@ -379,8 +381,9 @@ export function metaBonuses(profile) {
 
 // The longest state decodeState reads. It must fit the biggest cookie the game writes, the
 // profile with all nine heroes in six legendaries (packProfile): about 3 000 characters encoded
-// (test/profile.test.js measures it and keeps a quarter spare; test/server.test.js seals it). A browser keeps at most 4096
-// bytes a cookie, its name included, so nothing longer than this can be one of ours.
+// (test/profile.test.js measures it and keeps a quarter spare; test/server.test.js seals it). A
+// browser keeps at most 4096 bytes a cookie, its name included, so nothing longer than this can
+// be one of ours.
 export const MAX_STATE = 4000;
 
 // base64url(JSON). Our JSON is plain ASCII, so btoa/atob are safe here and

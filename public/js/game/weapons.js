@@ -85,6 +85,7 @@ export class Weapon {
     this.cd = 0.2;
     this.queue = 0; // the new form may not fire volleys
     this.handAt = null;
+    this.handTarget = null; // else its blows by itself would go on seeking a foe struck at long ago
     this.recompute();
     return true;
   }
@@ -111,9 +112,9 @@ export class Weapon {
         this.hand = true;
         const r = K.fire(this);
         this.hand = false;
-        this.handTarget = null;
         if (typeof r === 'number') this.cd = r;
       }
+      this.handTarget = null;
     }
     if (manual) this.cd = Math.max(0, this.cd);
     else if (this.cd <= 0) {
@@ -220,10 +221,9 @@ export function mightiest(g, x, y, R, n, first = null) {
 // The Twin Axes' leap: at a foe within `reach` px (from his feet to its edge) ahead of him: on the
 // way he walks, within `ahead` radians of it (straight on to a little behind square), or standing,
 // on the side he faces, so he never turns for it and never jumps back against the way the player
-// steers. He lands just short of it,
-// `dur` s on, never through a wall, a crypt's wall, lava or a tree's trunk (World.open, tested
-// every `step` px of the way), and only if the hop is longer than `near` px: else he chops where
-// he stands. In the air nothing touches him (Player.untouchable).
+// steers. He lands just short of it, `dur` s on, never through a wall, a crypt's wall, lava or a
+// tree's trunk (World.open, tested every `step` px of the way), and only if the hop is longer
+// than `near` px: else he chops where he stands. In the air nothing touches him (Player.untouchable).
 export const LEAP = { reach: 64, ahead: 1.75, dur: 0.16, step: 3, near: 10, close: 10 };
 // The chop's reach at area 1 (with no leap, he chops for a foe within it and LEAP.close more),
 // and what each kill of Bloodstorm's heals (of his health).
@@ -237,7 +237,8 @@ export function leapTarget(g, p, w) {
   };
   const t = w.handTarget;
   if (t && !t.dead && Math.hypot(t.x - p.x, t.y - p.y) <= LEAP.reach + t.r + p.r && ahead(t)) return t;
-  return g.nearestEnemy(p.x, p.y, LEAP.reach + 12, (e) => ahead(e) && Math.hypot(e.x - p.x, e.y - p.y) - e.r - p.r <= LEAP.reach);
+  // Looked for out to where the widest body's edge (a champion boss's, under 24 px) is in reach.
+  return g.nearestEnemy(p.x, p.y, LEAP.reach + p.r + 24, (e) => ahead(e) && Math.hypot(e.x - p.x, e.y - p.y) - e.r - p.r <= LEAP.reach);
 }
 
 // Where a leap at foe t lands: just short of it, as far along the way as is open; null if that
@@ -755,11 +756,11 @@ export const KINDS = {
       const t = w.targets.length ? w.targets[i % w.targets.length] : null;
       const ang = t && !t.dead ? aimAt(p, t) : w.baseAng;
       const purge = !!(p.ult && p.ult.type === 'purge');
-      const o = { dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, speed: w.s.speed, bane: w.s.bane, nova: !!w.s.nova || purge };
-      silverBolt(g, w, p.x, p.y, ang, { ...o, ult: purge });
+      const o = { dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, speed: w.s.speed, bane: w.s.bane, nova: !!w.s.nova || purge, ult: purge };
+      silverBolt(g, w, p.x, p.y, ang, o);
       if (purge) {
-        silverBolt(g, w, p.x, p.y, ang - PURGE.spread, { ...o, ult: true });
-        silverBolt(g, w, p.x, p.y, ang + PURGE.spread, { ...o, ult: true });
+        silverBolt(g, w, p.x, p.y, ang - PURGE.spread, o);
+        silverBolt(g, w, p.x, p.y, ang + PURGE.spread, o);
       }
       sfx('arrow', { pitch: rand(0.6, 0.7), pan: Math.cos(ang) * 0.3 });
     },
