@@ -2,6 +2,9 @@
 // this class; boss behaviour lives in bosses.js.
 
 import { ENEMIES } from '../data/enemies.js';
+import { HEROES } from '../data/heroes.js';
+import { UPGRADES } from '../shared/profile.js';
+import { BASE_SPEED } from './player.js';
 import { SPR, TINTS, nightBuf, canvasFromBuf } from '../engine/sprites.js';
 import { hexPack, makeBuf, pack } from '../engine/pixels.js';
 import { OUTLINE } from '../art/palette.js';
@@ -60,26 +63,33 @@ let nextId = 1;
 // already dark); 0.95 still leaves dawn's light alone. The ring stays as faint as it was: not a
 // brighter edge, a brighter monster. With the layer drawn stronger it is a smaller share of it
 // (`ringA` 0.3, 0.6 before), so no more of it shows than did, at dusk a hair more.
-// The owner's (20 October 2026): "Speed up the slower monsters. General monster is only a little
-// slower than hero." A monster of the horde walks at least floor + keep of its own speed, so the
-// slow ones close up on the fast and the order between them stays: a Ghoul (23) 51.8, a Skeleton
-// (33) 54.3, a Goblin (45) 57.3, a Dire Wolf (56) 60, the Hellhound (62) as it was; at Veteran's
-// and Normal's pace (x1.12) 58-69 px/s against 70-84 for the heroes. Bosses, the crypts' lords,
-// the Gilded Thief (who must stay a fifth slower than every hero) and props keep their own. One
-// that walks a share slower than its kind (def.slower: the Cultist's tenth) stays that much slower.
-export const HORDE_PACE = { floor: 46, keep: 0.25 };
+// The horde's speeds come in four classes (the owner's, 20 October 2026: "let us have a few
+// classes of speeds ... mice and bats should probably be equally fast and as fast as basic no
+// upgrade knight on normal. Then on nightmare they should be a little faster than basic knights
+// with all speed upgrades ... the fastest animal should be like 5% faster"). SWIFT is the Knight's
+// own pace with no upgrades (70 x 1.067 = 74.7 px/s); the others a tenth less each. Normal and
+// Veteran alike: these are the speeds walked, not multiplied by a difficulty's speed. On a
+// Nightmare every class goes NIGHTMARE_PACE faster, the swift ones 5% past a Knight with every rank
+// of the Armory's Swiftness (90.2 px/s), the rest as far behind them as ever. Bosses, the crypts'
+// lords, the Gilded Thief (who must stay a fifth slower than every hero) and props keep their own;
+// one that walks a share slower than its class (def.slower: the Cultist's tenth) stays so.
+const KNIGHT_PACE = BASE_SPEED * HEROES.knight.stats.speed;
+const SWIFTNESS = UPGRADES.find((u) => u.id === 'swiftness');
+export const PACE_CLASS = { swift: 1, quick: 0.9, steady: 0.8, slow: 0.7 };
+export const PACE_OF = {
+  bat: 'swift', rat: 'swift', imp: 'swift', hellhound: 'swift',
+  wolf: 'quick', spider: 'quick', goblin: 'quick', slimelet: 'quick',
+  skeleton: 'steady', ghost: 'steady', deathknight: 'steady', slime: 'steady', skeletonarcher: 'steady',
+  zombie: 'slow', ogre: 'slow', orc: 'slow', cultist: 'slow',
+};
+export const NIGHTMARE_PACE = 1.05 * (1 + 0.05 * SWIFTNESS.max);
 const isPaced = (def, o = {}) => !(def.boss || def.prop || o.lord || def.ai === 'flee' || def.ai === 'static' || !def.spd);
-export function hordePace(def, o = {}) {
-  if (!isPaced(def, o)) return def.spd;
-  const kind = def.spd / (1 - (def.slower || 0));
-  return Math.max(kind, HORDE_PACE.floor + HORDE_PACE.keep * kind) * (1 - (def.slower || 0));
+// A horde monster's speed in px/s on Normal and Veteran (its class's), or its own for the rest.
+export function hordePace(type, o = {}) {
+  const def = ENEMIES[type];
+  if (!isPaced(def, o) || !PACE_OF[type]) return def.spd;
+  return KNIGHT_PACE * PACE_CLASS[PACE_OF[type]] * (1 - (def.slower || 0));
 }
-
-// And on a Nightmare (the owner's, 20 October 2026: "on nightmare have the faster monsters as fast
-// as hero instead"): every monster of the horde walks at least as fast as the hero's own pace, his
-// hero's speed without the Armory, relics or a haste, so only what he has earned outruns them.
-export const nightmarePace = (g, e, sp) =>
-  g.nightmare && e.paced && g.player ? Math.max(sp, 70 * (g.player.hero.stats.speed || 1)) : sp;
 
 export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 30, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.3, near: 60 };
 
@@ -123,8 +133,8 @@ export class Enemy {
     this.scale = o.scale ?? (def.scale || 1) * (this.elite ? 1.35 : 1);
     this.r = def.r * (this.elite ? 1.3 : 1);
     this.maxHp = this.hp = Math.max(1, def.hp * (o.hpMul ?? 1));
-    this.spd = hordePace(def, o) * (o.spdMul ?? 1);
-    this.paced = isPaced(def, o); // one of the horde, at its pace (hordePace, nightmarePace)
+    this.spd = hordePace(type, o) * (o.spdMul ?? 1);
+    this.paced = isPaced(def, o) && !!PACE_OF[type]; // one of the horde, walking its class's speed (hordePace)
     this.dmg = def.dmg * (o.dmgMul ?? 1);
     this.xp = def.xp;
     this.face = Math.random() < 0.5 ? -1 : 1;
@@ -246,7 +256,8 @@ export class Enemy {
       unaware = !this.aware;
     }
 
-    let sp = nightmarePace(g, this, this.spd * g.diff.speed);
+    // The horde walks its class's speed (hordePace), a Nightmare's faster; the rest scale by the difficulty.
+    let sp = this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed;
     if (this.slowT > 0) sp *= 1 - this.slowF;
     if (this.freezeT > 0) sp = 0;
     if (this.holdCd > 0) this.holdCd -= dt;

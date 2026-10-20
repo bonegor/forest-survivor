@@ -276,28 +276,22 @@ test('the horde is four times what it was on both difficulties: the steady horde
   }
 });
 
-// The owner (20 October 2026): "Speed up the slower monsters. General monster is only a little slower than hero."
-test('the slow monsters of the horde close up on the hero, in their order; bosses, lords and the thief keep theirs', async () => {
-  const { hordePace } = await import('../public/js/game/enemies.js');
+// The owner (20 October 2026): four classes of speed; bats and rats as fast as a Knight with no
+// upgrades on Normal; on a Nightmare the fastest 5% past a Knight with every rank of Swiftness.
+test('the horde walks in four classes: the swift at the bare Knight’s pace, a Nightmare’s 5% past a fully swift Knight', async () => {
+  const { hordePace, PACE_OF, NIGHTMARE_PACE } = await import('../public/js/game/enemies.js');
   const { ENEMIES } = await import('../public/js/data/enemies.js');
-  const walk = ['zombie', 'skeleton', 'goblin', 'wolf', 'hellhound'].map((id) => hordePace(ENEMIES[id]));
-  for (let i = 1; i < walk.length; i++) assert.ok(walk[i] >= walk[i - 1], 'slow stays slower');
-  for (const id of ['zombie', 'skeleton', 'ogre', 'slime']) {
-    const v = hordePace(ENEMIES[id]) * VETERAN.speed;
-    assert.ok(v > 0.8 * 70 && v < 70, `${id} a little slower than the slowest hero (${v})`);
+  const { HEROES } = await import('../public/js/data/heroes.js');
+  const knight = 70 * HEROES.knight.stats.speed;
+  assert.ok(Math.abs(hordePace('bat') - knight) < 1e-9 && hordePace('rat') === hordePace('bat'), 'bats and rats at the Knight’s pace');
+  assert.ok(Math.abs(hordePace('bat') * NIGHTMARE_PACE - knight * 1.15 * 1.05) < 1e-9, 'a Nightmare’s 5% past three ranks of Swiftness');
+  const order = ['bat', 'wolf', 'skeleton', 'zombie'].map((id) => hordePace(id));
+  for (let i = 1; i < order.length; i++) assert.ok(order[i] < order[i - 1], 'each class slower than the last');
+  assert.ok(Math.abs(hordePace('cultist') - hordePace('zombie') * 0.9) < 1e-9, 'the Cultist a tenth slower than its class');
+  for (const [id, d] of Object.entries(ENEMIES)) {
+    if (!(d.boss || d.prop || d.ai === 'flee' || d.ai === 'static' || !d.spd)) assert.ok(PACE_OF[id], `${id} has a class`);
   }
-  assert.ok(Math.abs(hordePace(ENEMIES.cultist) - (46 + 0.25 * 30) * 0.9) < 1e-9, 'the Cultist a tenth slower than its kind');
-  for (const id of ['boneking', 'lich', 'thief']) assert.equal(hordePace(ENEMIES[id]), ENEMIES[id].spd);
-  assert.equal(hordePace(ENEMIES.skeletonarcher, { lord: true }), ENEMIES.skeletonarcher.spd);
-});
-
-// The owner (20 October 2026): "on nightmare have the faster monsters as fast as hero instead".
-test('on a Nightmare the horde walks as fast as the hero\'s own pace; bosses, lords and the thief keep theirs', async () => {
-  const { nightmarePace } = await import('../public/js/game/enemies.js');
-  const g = { nightmare: true, player: { hero: { stats: { speed: 1.15 } } } };
-  const hero = 70 * 1.15;
-  assert.ok(Math.abs(nightmarePace(g, { paced: true }, 40) - hero) < 1e-9, 'a slow one up to him');
-  assert.equal(nightmarePace(g, { paced: true }, 120), 120, 'a faster one stays faster');
-  assert.equal(nightmarePace(g, { paced: false }, 40), 40, 'a boss, lord or thief as it was');
-  assert.equal(nightmarePace({ ...g, nightmare: false }, { paced: true }, 40), 40, 'not without a Nightmare');
+  for (const id of ['boneking', 'lich', 'thief']) assert.equal(hordePace(id), ENEMIES[id].spd);
+  assert.equal(hordePace('skeletonarcher', { lord: true }), ENEMIES.skeletonarcher.spd);
+  assert.ok(hordePace('thief') * VETERAN.speed <= 0.8 * 70 + 1e-9, 'the thief a fifth slower than the slowest hero');
 });
