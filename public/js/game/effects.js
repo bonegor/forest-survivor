@@ -10,6 +10,7 @@ import { ringSprite, discSprite, slashFrame, glow, beamSprite, shadowSprite } fr
 import { PC, P } from './particles.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
 import { danceBlade } from './projectiles.js';
+import { fxBurst, poolFlames, flameSeed } from './fxart.js';
 
 function blitCentered(ctx, img, sx, sy, scale) {
   const w = img.width * scale, h = img.height * scale;
@@ -78,9 +79,11 @@ export class Slash {
 
 // -------------------------------------------------------------- explosion --
 
+// art: the blast's sprite (fxart.js), played over its ring. glowK: how strong its haze and flash
+// are (a Thunderstorm's many shocks: faint, so the horde reads through them).
 const EXPLO = {
-  fire: { ring: '#fee761', glow: '#f77622', light: 'fire', parts: [PC.Y, PC.y, PC.o, PC.O], num: 'fire' },
-  shock: { ring: '#ffffff', glow: '#2ce8f5', light: 'cyan', parts: [PC.w, PC.c, PC.U], num: 'shock' },
+  fire: { ring: '#fee761', glow: '#f77622', light: 'fire', parts: [PC.Y, PC.y, PC.o, PC.O], num: 'fire', art: 'fx_explosion' },
+  shock: { ring: '#ffffff', glow: '#2ce8f5', light: 'cyan', parts: [PC.w, PC.c, PC.U], num: 'shock', glowK: 0.4 },
   holy: { ring: '#ffffff', glow: '#feae34', light: 'holy', parts: [PC.w, PC.Y, PC.y], num: 'holy' },
   frost: { ring: '#ffffff', glow: '#2ce8f5', light: 'cyan', parts: [PC.w, PC.c, PC.U, PC.G], num: 'frost' },
   dark: { ring: '#f6757a', glow: '#b55088', light: 'purple', parts: [PC.P, PC.p, PC.i], num: 'dark' },
@@ -101,12 +104,13 @@ export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
       g.hitEnemy(e, dmg, { w, type: st.num, kb: opts.kb ?? 1.4, kx: dx / (d || 1), ky: dy / (d || 1), ult: opts.ult });
     }
   }
-  g.effects.push(new Explosion(g, x, y, R, style));
+  g.effects.push(new Explosion(g, x, y, R, style, opts.art));
   sfx('explode', { size: clamp(R / 28, 0.6, 1.8), pan: clamp((x - g.player.x) / 200, -1, 1), pitch: rand(0.85, 1.1) });
 }
 
+// art: a sprite for the blast in place of its style's (a meteor's crash: Meteor.update).
 export class Explosion {
-  constructor(g, x, y, R, style) {
+  constructor(g, x, y, R, style, art) {
     this.g = g;
     this.x = x;
     this.y = y;
@@ -114,6 +118,9 @@ export class Explosion {
     this.st = EXPLO[style] || EXPLO.fire;
     this.style = style;
     this.t = 0;
+    // The fire bomb's dome stands on the ground; any other blast bursts round the point.
+    art ??= this.st.art;
+    if (art) fxBurst(g, art, x, y, art === 'fx_explosion' ? { centre: true, fps: 16 } : { fps: 16, dy: 6 });
     const n = Math.min(40, 8 + R * 0.6);
     g.particles.burst(x, y, 4, n, this.st.parts, R * 3.2, 0.5, 2, P.GLOW | P.FADE | P.SHRINK, { flat: 0.8, vz: 50, drag: 3.5 });
     if (style === 'fire') {
@@ -145,11 +152,12 @@ export class Explosion {
     const u = this.t / 0.45;
     const [sx, sy] = toScreen(cam, this.x, this.y - 4);
     const s = this.R * 3.4 * cam.S * (0.6 + u * 0.6);
-    ctx.globalAlpha = Math.max(0, 1 - u * 1.4);
+    const k = this.st.glowK ?? 1;
+    ctx.globalAlpha = Math.max(0, 1 - u * 1.4) * k;
     ctx.drawImage(glow(this.st.glow), sx - s / 2, sy - s / 2, s, s);
     if (u < 0.2) {
       const c = this.R * 1.6 * cam.S;
-      ctx.globalAlpha = 1 - u * 5;
+      ctx.globalAlpha = (1 - u * 5) * k;
       ctx.drawImage(glow('#ffffff'), sx - c / 2, sy - c / 2, c, c);
     }
     ctx.globalAlpha = 1;
@@ -359,9 +367,11 @@ function blitMist(ctx, cam, a) {
 
 // ------------------------------------------------------------------- pool --
 
+// flames: the sprite (fxart.js) of the flames that burn over it, which carry its look: its ground
+// (alpha) and haze (glowK) are fainter under them.
 const POOL_LOOK = {
-  fire: { disc: ['#be4a2f', '#733e39', '#3e2731'], parts: [PC.y, PC.o, PC.O, PC.Y], glow: '#f77622', light: 'fire', num: 'fire' },
-  hell: { disc: ['#0099db', '#124e89', '#262b44'], parts: [PC.c, PC.w, PC.U], glow: '#2ce8f5', light: 'cyan', num: 'frost' },
+  fire: { disc: ['#be4a2f', '#733e39', '#3e2731'], parts: [PC.y, PC.o, PC.O, PC.Y], glow: '#f77622', light: 'fire', num: 'fire', flames: 'fx_flame', alpha: 0.6, glowK: 0.6 },
+  hell: { disc: ['#0099db', '#124e89', '#262b44'], parts: [PC.c, PC.w, PC.U], glow: '#2ce8f5', light: 'cyan', num: 'frost', flames: 'fx_flame_hell', alpha: 0.4, glowK: 0.35 },
   holy: { disc: ['#feae34', '#be4a2f', '#3e2731'], parts: [PC.Y, PC.w, PC.y], glow: '#feae34', light: 'holy', num: 'holy' },
   // Miasma's: a mist (drawn as one with its cloud, layMist), a mote rising now and then.
   poison: { mist: true, parts: [PC.l, PC.L, PC.e], glow: '#63c74d', light: 'green', num: 'poison', dot: 'poison' },
@@ -399,6 +409,7 @@ export class Pool {
     this.sparse = !!opts.sparse;
     this.mist = !!this.look.mist;
     if (this.mist) mistLayout(this);
+    if (this.look.flames) this.seed = flameSeed(x, y);
     if (this.look.marks) {
       this.marks = [];
       for (let i = Math.round(4 + R * 0.35); i > 0; i--) {
@@ -504,6 +515,7 @@ export class Pool {
       ctx.globalAlpha = (this.look.alpha ?? 0.75) * this.alpha;
       blitCentered(ctx, discSprite(R, this.look.disc, 0.55), sx, sy, cam.S);
     }
+    if (this.look.flames) poolFlames(ctx, cam, this.look.flames, this.x, this.y, R, this.t, this.seed, this.alpha);
     // Caltrops: the look's sprite (its small ground frame) at a dozen marks at most, every other one mirrored.
     if (this.marks) {
       const S = cam.S, k = R / this.R, fr = SPR[this.look.marks].frames[1], w = fr.w * S, h = fr.h * S;
@@ -527,7 +539,7 @@ export class Pool {
     const R = this.r;
     const [sx, sy] = toScreen(cam, this.x, this.y);
     const s = R * 2.6 * cam.S;
-    ctx.globalAlpha = (0.22 + Math.sin(this.t * 17) * 0.05) * this.alpha;
+    ctx.globalAlpha = (0.22 + Math.sin(this.t * 17) * 0.05) * this.alpha * (this.look.glowK ?? 1);
     ctx.drawImage(glow(this.look.glow), sx - s / 2, sy - s / 2, s, s);
     ctx.globalAlpha = 1;
     this.g.light(this.x, this.y, R * 3, this.look.light, 0.7 * this.alpha);
@@ -795,6 +807,13 @@ export class Bolt {
     this.t = 0;
     this.dur = style === 'sky' ? 0.24 : this.straight ? 0.22 : 0.18;
     this.jitter();
+    // A bolt from the sky is drawn from art (fxart.js), leaning the way this one comes down; it
+    // keeps only its light. A chain's leaves a splash of sparks on each foe it leaps to.
+    this.art = style === 'sky';
+    // So the horde still reads in a storm: at most 6 strikes on screen at once, and a chain's
+    // splash only while fewer than 3 are.
+    if (this.art) fxBurst(g, 'fx_lightning', this.b.x, this.b.y + 4, { fps: 24, glow: true, alpha: 0.9, flip: this.a.x > this.b.x, cap: 6, span: 0.42 });
+    else if (style === 'chain') fxBurst(g, 'fx_lightning', this.b.x, this.b.y + 5, { from: 6, fps: 20, glow: true, alpha: 0.7, flip: this.a.x > this.b.x, cap: 3, span: 0.42 });
   }
 
   jitter() {
@@ -827,6 +846,10 @@ export class Bolt {
   drawGlow(ctx, cam) {
     const S = cam.S;
     const fade = 1 - this.t / this.dur;
+    if (this.art) {
+      this.g.light(this.b.x, this.b.y, 60, 'cyan', fade);
+      return;
+    }
     const path = () => {
       ctx.beginPath();
       for (let i = 0; i < this.pts.length; i += 2) {
@@ -882,7 +905,7 @@ export class Meteor {
     if (this.t < 0) return true;
     const u = this.t / this.fall;
     if (u >= 1) {
-      explode(this.g, this.tx, this.ty, this.R, this.dmg, this.w, 'fire', { kb: 2, ult: this.opts.ult });
+      explode(this.g, this.tx, this.ty, this.R, this.dmg, this.w, 'fire', { kb: 2, ult: this.opts.ult, art: 'fx_firebomb' });
       if (this.opts.pool) {
         this.g.effects.push(new Pool(this.g, this.w, this.tx, this.ty, this.R * 0.75, this.opts.pool, this.dmg * 0.2, this.opts.tick || 0.35, 'fire'));
       }

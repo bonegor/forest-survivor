@@ -1,6 +1,8 @@
 // Hand-drawn scenery props for the forest and the dungeon.
+import SHRINES from '../../assets/art/shrines.js';
+import { bakedDef } from './baked.js';
 
-const flame = (a, b, c) => ({ emissive: 'oyYfF', frames: [a, b, c] });
+const flame =(a, b, c) => ({ emissive: 'oyYfF', frames: [a, b, c] });
 
 export const PROP_ART = {
   // ------------------------------------------------------------------ forest
@@ -273,6 +275,12 @@ export const PROP_ART = {
       'nNNNNNNNNNNn',
     ]],
   },
+  // Each shrine type's altar (Game.drawShrine), baked from Dungeon Crawl's (tools/art/shrines.mjs).
+  shrine_fury: bakedDef(SHRINES.shrine_fury),
+  shrine_haste: bakedDef(SHRINES.shrine_haste),
+  shrine_fortune: bakedDef(SHRINES.shrine_fortune),
+  shrine_wisdom: bakedDef(SHRINES.shrine_wisdom),
+  shrine_protection: bakedDef(SHRINES.shrine_protection),
   // A crypt by the road: open, its stairs glowing below; then sealed once the hero has been in
   // and come out, its lords slain or not.
   crypt: {

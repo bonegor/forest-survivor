@@ -221,7 +221,7 @@ test('a shrine cuts the layer of a foe behind it, as it hides the foe itself', (
     g.shrines.push(s);
     const { night } = nightPass(g);
     const fr = e.spr.frames[e.frameIndex()], mine = night.findIndex((c) => c[0] === 'drawImage' && nightCanvases(fr, 'night').includes(c[1]));
-    const shrine = night.findIndex((c) => c[0] === 'drawImage' && c[1] === SPR.shrine.frames[0].c);
+    const shrine = night.findIndex((c) => c[0] === 'drawImage' && c[1] === SPR.shrine_haste.frames[0].c); // its type's altar (Game.drawShrine)
     assert.ok(mine >= 0 && shrine > mine, 'the foe behind, then the shrine cut over it');
     assert.equal(night.slice(0, shrine).findLast((c) => c[0] === '=globalCompositeOperation')[1], 'destination-out');
     assert.deepEqual(night[shrine].slice(2), s._rect.slice(0, 4), 'where the shrine was drawn');

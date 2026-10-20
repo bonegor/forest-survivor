@@ -312,7 +312,10 @@ function footpath(ax, ay, bx, by, seed, wander) {
   }
   return pathOf('footpath', xs, ys, hw);
 }
-// The woods between four roads (i + j odd) may hold a landmark, down a footpath from the nearest road.
+// The woods between four roads (i + j odd) may hold a landmark, down a footpath from the nearest
+// road: a graveyard in the cursed woods, elsewhere one of these (the gallows clearing and the
+// sword's glade since 20 October 2026).
+const LANDMARK_KINDS = ['circle', 'ruins', 'woodcamp', 'ruins', 'circle', 'gallows', 'glade'];
 export function landmark(i, j) {
   const key = `${i},${j}`;
   if (landmarkCache.has(key)) return landmarkCache.get(key);
@@ -320,7 +323,7 @@ export function landmark(i, j) {
   if (h(i, j, 6) < 0.55) {
     const x = i * D + (h(i, j, 7) - 0.5) * 0.36 * D, y = j * D + (h(i, j, 8) - 0.5) * 0.36 * D;
     const cursed = zoneRaw(x, y)[1];
-    const kind = cursed > 0.5 ? 'graveyard' : ['circle', 'ruins', 'woodcamp', 'ruins', 'circle'][Math.floor(h(i, j, 9) * 5)];
+    const kind = cursed > 0.5 ? 'graveyard' : LANDMARK_KINDS[Math.floor(h(i, j, 9) * LANDMARK_KINDS.length)];
     let best = Infinity, bx = 0, by = 0;
     for (const [a, b, s] of [[i - 1, j, -1], [i - 1, j, 1], [i, j - 1, 1], [i, j + 1, -1]]) {
       if (!roadExists(a, b, s)) continue;
@@ -337,13 +340,18 @@ export function landmark(i, j) {
     L = { x, y, i, j, kind, props: [], clear: { x, y, r: kind === 'woodcamp' ? 100 : 128 } };
     L.path = footpath(bx, by, x, y + 30, Math.floor(h(i, j, 14) * 1e6), 140);
     const r = rngOf(i, j, 10);
-    const add = (n, px, py, extra) => L.props.push({ n, x: Math.round(px), y: Math.round(py), ...extra });
+    const add = (n, px, py, extra) => {
+      const p = { n, x: Math.round(px), y: Math.round(py), ...extra };
+      L.props.push(p);
+      return p;
+    };
     if (kind === 'circle') {
       for (let k = 0; k < 7; k++) {
         const a = (k / 7) * TAU;
         add('menhir', x + Math.cos(a) * 50, y + Math.sin(a) * 36, { light: ['cyan', 34] });
       }
-      add('campfire', x, y, { anim: 8, light: ['fire', 110] });
+      // The old monument in the middle, its stepped ring centred in the circle's.
+      add('lm_monument', x, y + 10, { light: ['cyan', 80] });
     } else if (kind === 'ruins') {
       for (let k = 0; k < 6; k++) {
         const a = (k / 6) * TAU + r.range(-0.25, 0.25);
@@ -351,14 +359,49 @@ export function landmark(i, j) {
       }
       add('rubble', x + r.range(-16, 16), y + r.range(-8, 8));
       add('rubble', x + r.range(-28, 28), y + r.range(-16, 16));
+      // A mossy gargoyle still keeps the middle, or the heap it fell to.
+      add(r() < 0.6 ? 'lm_gargoyle2' : 'lm_rockpile', x + r.range(-6, 6), y - 6);
     } else if (kind === 'graveyard') {
+      const graves = [];
       for (let row = 0; row < 3; row++) {
         for (let k = 0; k < 4; k++) {
-          if (r() < 0.8) add(r() < 0.6 ? 'gravestone' : 'gravecross', x - 36 + k * 24 + r.range(-3, 3), y - 22 + row * 22 + r.range(-2, 2));
+          if (r() < 0.8) graves.push(add(r() < 0.6 ? 'gravestone' : 'gravecross', x - 36 + k * 24 + r.range(-3, 3), y - 22 + row * 22 + r.range(-2, 2)));
         }
       }
-      add(r() < 0.5 ? 'deadtree1' : 'deadtree2', x + 58, y - 30);
+      // A cursed tree over the graves, its foot behind the back row, a faint violet glow about it.
+      const tree = r();
+      add(tree < 0.4 ? 'lm_skulltree' : tree < 0.75 ? 'lm_skulltree2' : 'lm_driedtree', x + 62, y - 34, { light: ['purple', 50] });
       add('lantern', x - 50, y + 30, { light: ['warm', 60] });
+      // Candles burning on two of the graves, and a skull on a post by the way in.
+      for (let k = 0; k < 2 && graves.length; k++) {
+        const g = graves.splice(Math.floor(r() * graves.length), 1)[0];
+        add(k ? 'lm_candle2' : 'lm_candle', g.x + (r() < 0.5 ? -8 : 8), g.y + 3, { light: ['fire', 30] });
+      }
+      add(r() < 0.5 ? 'lm_skullpost' : 'lm_skullpost2', x + 22, y + 34);
+    } else if (kind === 'gallows') {
+      // A gallows with a gibbet beside it, heads on pikes across from it, and candelabras burning red.
+      // The gibbet stands on the side away from where the footpath comes in, the thin pikes on its side.
+      const s = bx > x ? -1 : 1;
+      add('lm_gallows', x - 8 * s, y - 16);
+      add('lm_blood', x - 6 * s, y - 10);
+      add('lm_gibbet', x + 64 * s, y + 8);
+      add('lm_candelabra', x - 44 * s, y - 22, { light: ['red', 56] });
+      add('lm_candelabra', x + 28 * s, y - 22, { light: ['red', 56] });
+      add('lm_pikehead', x - 64 * s, y + 2);
+      add(r() < 0.5 ? 'lm_pikeblood' : 'lm_pikehead', x - 78 * s, y + 18);
+      add('lm_pike', x - 54 * s, y + 24);
+      add('lm_skullpost', x - 16, y + 30);
+      add('lm_skullpost2', x + 16, y + 30);
+      add('lm_driedtree', x - 84 * s, y - 30);
+    } else if (kind === 'glade') {
+      // A sword in a stone under a pale light, two gargoyles keeping it and candles round it.
+      add('lm_swordstone', x, y, { light: ['moon', 76] });
+      const left = r() < 0.5;
+      add(left ? 'lm_gargoyle' : 'lm_gargoyle2', x - 44, y - 16);
+      add(left ? 'lm_gargoyle2' : 'lm_gargoyle', x + 44, y - 16);
+      for (const a of [-2.6, -1.9, -1.2, -0.5]) add(a < -1.5 ? 'lm_candle' : 'lm_candle2', x + Math.cos(a) * 30, y + 6 + Math.sin(a) * 24, { light: ['fire', 26] });
+      add('lm_rockpile', x + r.range(-60, -40), y + r.range(14, 30));
+      for (let k = r.int(2, 3); k > 0; k--) add('mushrooms', x + r.range(30, 60) * (r() < 0.5 ? -1 : 1), y + r.range(8, 34), { light: ['cyan', 26] });
     } else {
       add('campfire', x, y, { anim: 8, light: ['fire', 110] });
       for (let k = 0; k < 4; k++) add('stump', x + r.range(-50, 50), y + r.range(-34, 34));

@@ -6,6 +6,7 @@ import { rand, TAU, pick } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
 import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode } from './effects.js';
 import { Minion } from './minions.js';
+import { fxBurst } from './fxart.js';
 import { PC, P } from './particles.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
@@ -330,6 +331,7 @@ export const KINDS = {
         kind: 'flask', sprite: hell ? 'blueflask' : 'flask', x: p.x, y: p.y, tx, ty, life: 0.5, w, spin: 12,
         onLand: (x, y) => {
           g.effects.push(new Pool(g, w, x, y, 21 * w.s.area, w.s.dur, w.s.dmg, w.s.tick, hell ? 'hell' : 'fire', hell));
+          fxBurst(g, hell ? 'fx_firebomb_hell' : 'fx_firebomb', x, y, { fps: 18, dy: 6 });
           sfx('flask', { pan: panOf(g, x) });
         },
       });

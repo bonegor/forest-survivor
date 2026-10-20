@@ -1,57 +1,21 @@
 // Boss sprites, facing right.
 
+import BAKED from '../../assets/art/bosses.js';
+import { bakedDef } from './baked.js';
+import { hexPack } from '../engine/pixels.js';
+
+// A baked boss: outlined (so his rim can burn in his colour at night), his glow colours packed,
+// and his main colours named as his own (drawn as they are) so that his death bursts into them.
+const baked = (data, own) => bakedDef(data, {
+  outline: true,
+  glow: data.glow.map((c) => hexPack(c)),
+  palette: Object.fromEntries(own.map((c) => [c, c])),
+});
+
 export const BOSS_ART = {
-  // King Ossarian, the Bone King.
-  boneking: {
-    emissive: 'x',
-    frames: [
-      [
-        '...........y..y..y..........',
-        '...........yy.Y..yy.........',
-        '..........yyyyyyyyy.........',
-        '..........yryyYyyry.........',
-        '..........zzzzzzzzz.........',
-        '.........zzzzzzzzzzZ........',
-        '.........zzkkkzzkkkZ........',
-        '.........zzkxkzzkxkZ........',
-        '.........zZkkkzzkkkZ........',
-        '.........ZzzzzkzzzzZ........',
-        '..........ZzkzkzkzZ.........',
-        '...........ZzZzZzZ..........',
-        '......qppp.ZZZZZ.pppq.......',
-        '....NNNgpjnNNNNNnpjgNNN.....',
-        '...NggGNjnNgggggNnjNGggN....',
-        '...nNgNnpnNgyyygNnpnNgNn....',
-        '....nNn.pnNyrryNnnp.nNn.....',
-        '....zZ.qpnnNgyggNnnpqzZ..G..',
-        '....zz.qpjnnNNNnnjjpqzz.GwG.',
-        '....Zz.qpjjnnnnnjjjpqzZzzGg.',
-        '.......qpjjyyyyyjjjpqyyyzyy.',
-        '......qppjjnnNnnjjjppq..Gg..',
-        '......qppjNnn.nnNjjppq..Gg..',
-        '......qppj.nNn.nNn.jppq.Gg..',
-        '.....qqpjj.nNn.nNn.jjpq.Gg..',
-        '.....qppjj.zZz.zZz.jjppqGg..',
-        '.....qpjjj.nNn.nNn.jjjpqGg..',
-        '....qqpjjj.nNn.nNn.jjjppGg..',
-        '....qppjjjNNnn.NNnn.jjppGg..',
-        '....qqpppKKKK..KKKK.pppqqg..',
-      ],
-      {
-        from: 0,
-        rows: {
-          22: '......qppjNnn..nnNjjppq.Gg..',
-          23: '......qppj.nNn..nNnjppq.Gg..',
-          24: '.....qqpjj.nNn...nNnjpq.Gg..',
-          25: '.....qppjj.zZz...zZzjppqGg..',
-          26: '.....qpjjjnNn....nNnjjpqGg..',
-          27: '....qqpjjjnNn....nNnjjppGg..',
-          28: '....qppjjNNnn....NNnnjppGg..',
-          29: '....qqppKKKK.....KKKKppqqg..',
-        },
-      },
-    ],
-  },
+  // King Ossarian, the Bone King: Foozle's Ancient Skeleton, crowned in his gilded horns
+  // (tools/art/bosses.mjs). His poses play as he strikes (game/bosses.js).
+  boneking: baked(BAKED.boneking, ['#5f6367', '#869598', '#3a3b3d', '#a29d6b', '#836b3f', '#28221f']),
 
   // The Skeleton Archer, lord of every crypt off the forest roads: walking (0, 1) with its
   // longbow held at the grip, drawing it (2) as it takes aim.
@@ -245,54 +209,7 @@ export const BOSS_ART = {
     ],
   },
 
-  // Azgaroth, Lord of Cinders.
-  demonlord: {
-    emissive: 'Yyo',
-    frames: [
-      [
-        '.........T................T.........',
-        '.........zT..............Tz.........',
-        '.........zTT............TTz.........',
-        '..........zTT..........TTz..........',
-        '...........zTRRRRRRRRRRTz...........',
-        '...........RRrrrrrrrrrrRR...........',
-        '..........RrrrrrrrrrrrrrrR..........',
-        '..........RrrYYrrrrrrYYrrR..........',
-        '..mm......RrrkYrrrrrrYkrrR......mm..',
-        '.mRRm.....RRrrrrkkkkrrrrRR.....mRRm.',
-        'mRRRRm.....RRrwkkkkkkwrRR.....mRRRRm',
-        'mRmRRRm....mRRrwrrrrwrRRm....mRRRmRm',
-        'mR.mRRRmmmmRRRRRRRRRRRRRRmmmmRRRm.Rm',
-        'm...mRRRRRRrrrrRRRRRRrrrrRRRRRRm...m',
-        '.....mRRRrrrrorrRRRRrrorrrrRRRm.....',
-        '......RRrrrroyorRRRRroyorrrrRR......',
-        '.....RRrrRrrrorrRrrRrrorrRrrrRR.....',
-        '.....RrrRRRrrrrRRrrRRrrrrRRRrrR.....',
-        '....RRrRRmRRrrRRrrrrRRrrRRmRRrRR....',
-        '....RrrRmmRRRRrrrrrrrrRRRRmmRrrR....',
-        '...RRrRRm.mRRRRrryyrrRRRRm.mRRrRR...',
-        '...RrrRm..mmRRRrroorrRRRmm..mRrrR...',
-        '..zRrRm...mmmRRRRrrRRRRmmm...mRrRz..',
-        '..zzRRm....mmmRRRRRRRRmmm....mRRzz..',
-        '..zzz......mmRRRRRRRRRRmm......zzz..',
-        '...........mRRRrrRRrrRRRm...........',
-        '..........mRRRrrRmmRrrRRRm..........',
-        '..........mRRrrRm..mRrrRRm..........',
-        '..........mRRrRm....mRrRRm..........',
-        '..........mRRRRm....mRRRRm..........',
-        '.........mmRRRm......mRRRmm.........',
-        '........zzmmmmm......mmmmmzz........',
-        '........z.z.z..........z.z.z........',
-      ],
-      {
-        from: 0,
-        rows: {
-          9: '.mRm......RRrrrrkkkkrrrrRR......mRm..',
-          10: 'mRRRm......RRrwkkkkkkwrRR......mRRRm.',
-          11: 'mRmRRm.....mRRrwrrrrwrRRm.....mRRmRm.',
-          12: 'mR.mRRmmmmmRRRRRRRRRRRRRRmmmmmRRm.Rm.',
-        },
-      },
-    ],
-  },
+  // Azgaroth, Lord of Cinders: the Gothicvania demon, halved, his skull and horns in embers
+  // (tools/art/bosses.mjs).
+  demonlord: baked(BAKED.demonlord, ['#621619', '#470c24', '#21112a', '#0d0415']),
 };

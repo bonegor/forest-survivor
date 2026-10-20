@@ -54,9 +54,17 @@ function strike(g, e, x, y, r, dmg, delay, style = 'fire') {
   g.effects.push(new Telegraph(g, { shape: 'circle', x, y, r, dur: delay, onDone: () => blast(g, x, y, r, dmg, style, by) }));
 }
 
-function cast(e, t) {
+// Stands casting for t s, in a pose of its sprite's if it has one (Enemy.frameIndex).
+function cast(e, t, pose = null) {
   e.state = 'cast';
   e.stateT = t;
+  strikePose(e, pose);
+}
+
+// A pose played from now, cast or not.
+function strikePose(e, pose) {
+  e.pose = pose;
+  e.poseAt = e.life;
 }
 
 function casting(e, dt) {
@@ -76,7 +84,7 @@ export const BOSS_AI = {
     e.cd3 -= dt;
     if (e.cdT <= 0 && distP(e) < 160) {
       e.cdT = e.phase ? 4.6 : 6.4;
-      cast(e, 1.15);
+      cast(e, 1.15, 'nova');
       const R = 64, id = e.id;
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: R, dur: 1, follow: e,
@@ -92,7 +100,7 @@ export const BOSS_AI = {
     }
     if (e.cd2 <= 0) {
       e.cd2 = e.phase ? 9 : 12.5;
-      cast(e, 0.9);
+      cast(e, 0.9, 'summon');
       if (Math.random() < 0.6) say(e, pick(['RISE, MY SERVANTS!', 'KNEEL BEFORE YOUR KING!', 'THE DEAD OBEY ME!']));
       g.summonRing('skeleton', e.phase ? 10 : 7, 72, { elite: false });
       sfx('boss');
@@ -102,6 +110,7 @@ export const BOSS_AI = {
       // Five bones, the middle one at the hero; every 3.75 s, so as few as four a volley would be.
       e.cd3 = 3.75;
       fan(g, e, 5, 0.22, 'bone', 115, 12);
+      strikePose(e, 'volley');
     }
     const v = toward(e);
     return [v[0], v[1], e.phase ? 1.3 : 1];
@@ -241,7 +250,7 @@ export const BOSS_AI = {
     if (e.cdT <= 0) {
       e.cdT = [3.6, 2.8, 2][e.phase];
       fan(g, e, [5, 7, 9][e.phase], 0.2, 'firebolt', 105, 15);
-      cast(e, 0.4);
+      cast(e, 0.4, 'volley');
       return [0, 0, 0];
     }
     if (e.cd2 <= 0) {
@@ -252,12 +261,12 @@ export const BOSS_AI = {
         strike(g, e, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 24, 22, 1.05 + i * 0.07, 'fire');
       }
       if (Math.random() < 0.5) say(e, pick(['BURN!', 'THE SKY FALLS!', 'KNEEL IN ASH!']), 1.6);
-      cast(e, 0.6);
+      cast(e, 0.6, 'meteor');
       return [0, 0, 0];
     }
     if (e.data.cd4 <= 0 && d < 85) {
       e.data.cd4 = 5;
-      cast(e, 1);
+      cast(e, 1, 'nova');
       const id = e.id;
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: 84, dur: 0.9, follow: e,
@@ -272,7 +281,7 @@ export const BOSS_AI = {
     if (e.cd3 <= 0) {
       e.cd3 = [13, 11, 9][e.phase];
       g.summonRing('imp', [6, 8, 10][e.phase], 90);
-      cast(e, 0.7);
+      cast(e, 0.7, 'summon');
       return [0, 0, 0];
     }
     const v = toward(e);

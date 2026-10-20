@@ -28,7 +28,7 @@ import { Lighting } from './lighting.js';
 import { SpatialGrid } from './grid.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
-import { Dungeon, cryptLords } from './dungeon.js';
+import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor } from './effects.js';
@@ -59,10 +59,12 @@ export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
 export const CRYPT_STEPS = { w: 9, below: 9 };
 export const CRYPT_PUSH = 0.76;
 
-// A crypt's name, by its crossroads (key 'i,j').
+// A crypt's name, by its crossroads (key 'i,j'). One that wears the Undercroft's look
+// (dungeon.js cryptLook) is an Undercroft.
 export function cryptName(key) {
   const [a, b] = key.split(',').map(Number);
-  return `${CRYPT_KIND[Math.floor(hash2(a, b, 41) * CRYPT_KIND.length)]} of ${CRYPT_OF[Math.floor(hash2(a, b, 42) * CRYPT_OF.length)]}`;
+  const kind = cryptLook(key) === 'undercroft' ? 'Undercroft' : CRYPT_KIND[Math.floor(hash2(a, b, 41) * CRYPT_KIND.length)];
+  return `${kind} of ${CRYPT_OF[Math.floor(hash2(a, b, 42) * CRYPT_OF.length)]}`;
 }
 
 // Whether a card is one of the fillers a level-up falls back on once fewer upgrades are left than
@@ -894,7 +896,7 @@ export class Game {
     const ps = this.particles;
     const pix = fr.pixels;
     const S = e.scale;
-    const ox = e.x - (fr.w * S) / 2, oy = e.y - fr.h * S;
+    const ox = e.x - (fr.w * S) / 2, oy = e.y - (fr.h - e.spr.below) * S;
     // The sprite shatters into its own pixels.
     const step = pix.length > 300 ? 3 : 1;
     const flip = e.face < 0;
@@ -1113,7 +1115,7 @@ export class Game {
       const name = cryptName(d.key);
       this.inCrypt = { key: d.key, depth: d.depth, minute, name, hp: p.hp };
       const theme = minute < 6 ? 'crypt' : minute < 11 ? 'catacombs' : 'inferno';
-      new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, lords: cryptLords(minute, d.depth) });
+      new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, look: cryptLook(d.key), lords: cryptLords(minute, d.depth) });
       p.x = this.world.start.x;
       p.y = this.world.start.y;
       this.gatherMinions();
@@ -2221,13 +2223,16 @@ export class Game {
 
   drawShrine(ctx, c, s) {
     const S = c.S;
-    const img = s.used ? s.spr.frames[0].variant('dim', TINTS.dim, false) : s.spr.frames[0].c;
+    // Its type's altar (art/props.js), burning or shining at its own pace until used, then still.
+    const spr = SPR['shrine_' + s.type] || s.spr;
+    const fr = spr.frames[s.used ? 0 : Math.floor(s.t * (spr.fps || 0)) % spr.frames.length];
+    const img = s.used ? fr.variant('dim', TINTS.dim, false) : fr.c;
     const w = img.width * S, h = img.height * S;
     const X = Math.round((s.x - c.x) * S - w / 2), Y = Math.round((s.y - c.y) * S - h + S);
     ctx.globalAlpha = s.used ? 0.6 : 1;
     ctx.drawImage(img, X, Y, w, h);
     ctx.globalAlpha = 1;
-    s._rect = [X, Y, w, h, s.spr.frames[0]]; // what it hides of the horde's night layer (drawNightEdge)
+    s._rect = [X, Y, w, h, fr]; // what it hides of the horde's night layer (drawNightEdge)
   }
 
   drawCrypt(ctx, c, d) {

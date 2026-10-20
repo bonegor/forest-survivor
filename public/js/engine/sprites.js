@@ -182,6 +182,9 @@ export function buildSprite(name, def) {
     motionRate: def.motionRate || 1, idleRate: def.idleRate ?? 4,
     attack: def.attack || null, attackFps: def.attackFps || 0, selfBob: !!def.selfBob,
     attackRelease: def.attackRelease ?? null, attackWalk: def.attackWalk || null,
+    // A boss's: its poses as it strikes (frame lists at poseFps), the rows of art below its feet
+    // (a blow sweeping low) and its body's [w, h] (what its shadow and glow go by).
+    poses: def.poses || null, poseFps: def.poseFps || 0, below: def.below || 0, body: def.body || null,
     anchorY: built.anchorY ?? frames[0].h - 1,
     fitW: def.fitW || frames[0].w, fitH: def.fitH || frames[0].h,
     fps: def.fps || 0, hires: def.hires || 1, small: def.small || null, picture: def.picture || null, w: frames[0].w, h: frames[0].h };

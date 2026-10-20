@@ -9,9 +9,11 @@
 // the hero (at least HOLE_AWAY tiles' walk away) breaks open on a way up, and moonlight runs
 // along the shortest walk there (A*).
 
-import { SPR } from '../engine/sprites.js';
+import { SPR, Frame, bufToCanvas } from '../engine/sprites.js';
 import { drawText } from '../engine/font.js';
-import { makeCanvas, mulberry32, hexToRgb, clamp, rand, TAU, pick, shuffle } from '../engine/util.js';
+import { makeCanvas, mulberry32, hexToRgb, clamp, rand, TAU, pick, shuffle, hash2 } from '../engine/util.js';
+import { bakedBuffers } from '../art/baked.js';
+import CRYPT_ART from '../../assets/art/crypts.js';
 import { FLOORS, PROP_SITES } from '../data/waves.js';
 import { MAX_LORDS } from '../shared/items.js';
 import { PC, P } from './particles.js';
@@ -79,7 +81,46 @@ export const THEMES = {
     ambient: [92, 52, 50],
     dust: PC.m,
   },
+  // The Undercroft: a crypt's fourth look, laid in 0x72's tiles (tools/art/crypts.mjs) over the
+  // same grid (paintTiles). Only some forest crypts (cryptLook); it plays as the crypt its minute
+  // makes it (crypt, catacombs or inferno), only its look is its own. The palette is the tiles'
+  // own, for what is still painted (a hole broken in its wall). Its fountains light it (addLights).
+  undercroft: {
+    floor: ['#3a2f2e', '#483b3a', '#56484a', '#775c55'],
+    mortar: '#222222',
+    face: ['#775c55', '#5e4a46', '#483b3a', '#3a2f2e'],
+    faceMortar: '#222222',
+    top: ['#120e10', '#171214'],
+    rim: '#aa8d7a',
+    accent: ['#3d734f', '#4ba747'],
+    ambient: [70, 70, 104],
+    dust: PC.a,
+    tiles: true,
+  },
 };
+
+// Which forest crypts wear the Undercroft's look (THEMES.undercroft): about one in three, by its
+// crossroads (key 'i,j'), so its name (game.js cryptName) and its look agree whenever it is entered.
+export const UNDERCROFT_SHARE = 1 / 3;
+export function cryptLook(key) {
+  const [a, b] = key.split(',').map(Number);
+  return hash2(a, b, 44) < UNDERCROFT_SHARE ? 'undercroft' : null;
+}
+
+// The crypts' art (public/assets/art/crypts.js, baked by tools/bake-art.mjs): a sprite's frames
+// as pixel buffers, and as canvases, each made once and only when first wanted.
+const ART = {};
+const artBufs = (name) => (ART[name] ??= bakedBuffers(CRYPT_ART[name]));
+const CANVASES = {};
+const artCanvases = (name) => (CANVASES[name] ??= artBufs(name).map(bufToCanvas));
+// One as a prop's sprite (drawProp): its fire, when hot, glowing unlit (drawPropEmissive).
+const SPRITES = {};
+const isHot = (c) => c >>> 24 && (c & 255) > 180 && ((c >>> 16) & 255) < 90;
+function artSprite(name, hot = false) {
+  return (SPRITES[name] ??= { frames: artBufs(name).map((b) => new Frame(b, hot ? new Set(CRYPT_ART[name].palette.filter(isHot)) : null)) });
+}
+// The lava's crust where a pool meets the floor: its outer pixel and its inner one.
+const CRUST = ['#140b0f', '#7a2a22'];
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5);
 
@@ -168,7 +209,11 @@ export class Dungeon {
     this.floor = floor;
     this.crypt = crypt;
     this.info = crypt ? { name: crypt.name, theme: crypt.theme, guardian: null } : FLOORS[floor - 1];
-    this.theme = THEMES[this.info.theme];
+    // How it looks: its theme's, or a crypt's look of its own (crypt.look, cryptLook). What lies
+    // where, and what sleeps there, always go by info.theme.
+    this.look = (crypt && crypt.look) || this.info.theme;
+    this.theme = THEMES[this.look];
+    this.seed = seed;
     this.dustColor = this.theme.dust;
     this.rng = mulberry32(seed);
     this.props = [];
@@ -190,6 +235,7 @@ export class Dungeon {
     this.bake();
     g.world = this;
     this.populate();
+    this.dress();
   }
 
   // ------------------------------------------------------------- layout --
@@ -372,6 +418,9 @@ export class Dungeon {
     const FACE = theme.face.map((h) => pack(h)), FACEM = pack(theme.faceMortar);
     const TOP = theme.top.map((h) => pack(h)), RIM = pack(theme.rim);
     const LAVA_C = ['#be4a2f', '#f77622', '#feae34', '#fee761'].map((h) => pack(h));
+    // The Undercroft's banners (tile indices of the faces they hang on) and fountains (tileFaces).
+    this.banners = [];
+    this.fountains = [];
     const set = (x, y, col) => {
       if (x >= 0 && y >= 0 && x < pw && y < ph) px[y * pw + x] = col;
     };
@@ -424,15 +473,11 @@ export class Dungeon {
         if (this.isWall(tx - 1, ty)) for (let y = 0; y < T; y++) if ((y & 1) === 0) set(ox, oy + y, FM);
         if (this.isWall(tx + 1, ty)) for (let y = 0; y < T; y++) if ((y & 1) === 1) set(ox + T - 1, oy + y, FM);
         if (t === LAVA) {
-          for (let y = 0; y < T; y++) {
-            for (let x = 0; x < T; x++) {
-              const v = Math.sin((ox + x) * 0.35 + (oy + y) * 0.2) * 0.5 + hash(ox + x, oy + y) * 0.6;
-              const col = LAVA_C[Math.floor(clamp(v * 2.2 + 1, 0, 3.99))];
-              set(ox + x, oy + y, col);
-              epx[(oy + y) * pw + ox + x] = col;
-            }
-          }
-          this.lavaSpots.push({ x: ox + T / 2, y: oy + T / 2 });
+          // Lucifer's lava (crypts.mjs), its first frame: a quarter of its 2x2-tile surface. It
+          // moves, and glows unlit, as drawLava paints it again each frame.
+          const lb = artBufs('lava')[0], qx = (tx & 1) * T, qy = (ty & 1) * T;
+          for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) set(ox + x, oy + y, lb.d[(qy + y) * lb.w + qx + x]);
+          this.lavaSpots.push({ x: ox + T / 2, y: oy + T / 2, tx, ty });
         }
       }
     }
@@ -480,6 +525,30 @@ export class Dungeon {
         }
       }
     }
+    // A look laid in tiles (the Undercroft) over all that was painted: the same grid, the same
+    // draws of rng above (the torches below fall where its theme's would), only the pixels its own.
+    if (theme.tiles) {
+      this.paintTiles(set);
+      epx.fill(0);
+    }
+    // The lava's crust, where a pool meets the floor.
+    this.lavaTiles = this.lavaSpots.map((l) => {
+      const open = (x, y) => this.tile(x, y) !== LAVA;
+      const edges = (open(l.tx, l.ty - 1) ? 1 : 0) | (open(l.tx + 1, l.ty) ? 2 : 0) | (open(l.tx, l.ty + 1) ? 4 : 0) | (open(l.tx - 1, l.ty) ? 8 : 0);
+      return { tx: l.tx, ty: l.ty, edges, phase: hash2(l.tx >> 1, l.ty >> 1, 7) };
+    });
+    const CR = CRUST.map((h) => pack(h));
+    for (const { tx, ty, edges } of this.lavaTiles) {
+      const ox = tx * T, oy = ty * T;
+      for (let k = 1; k >= 0; k--) {
+        for (let i = 0; i < T; i++) {
+          if (edges & 1) set(ox + i, oy + k, CR[k]);
+          if (edges & 2) set(ox + T - 1 - k, oy + i, CR[k]);
+          if (edges & 4) set(ox + i, oy + T - 1 - k, CR[k]);
+          if (edges & 8) set(ox + k, oy + i, CR[k]);
+        }
+      }
+    }
     ctx.putImageData(img, 0, 0);
     ectx.putImageData(eimg, 0, 0);
 
@@ -503,9 +572,14 @@ export class Dungeon {
         while (y < r.y + r.h && !this.isWall(x, y - 1)) y++;
         if (!this.isWall(x, y - 1) || this.tile(x, y) !== FLOOR) continue;
         if (rng() < 0.55) this.torches.push({ x: x * T + T / 2, y: y * T - 4, t: rng() * 10 });
-        else if (this.info.theme !== 'catacombs' && rng() < 0.3) ctx.drawImage(SPR.banner.frames[0].c, x * T + 3, (y - 1) * T - 4);
+        else if (this.info.theme !== 'catacombs' && rng() < 0.3) {
+          // The Undercroft hangs a banner of its own tiles there (tileFaces).
+          if (theme.tiles) this.banners.push((y - 1) * W + x);
+          else ctx.drawImage(SPR.banner.frames[0].c, x * T + 3, (y - 1) * T - 4);
+        }
       }
     }
+    if (theme.tiles) this.tileFaces(ctx);
 
     // Fog of war: one pixel per tile.
     this.seen = new Uint8Array(W * H);
@@ -515,6 +589,227 @@ export class Dungeon {
     for (let i = 0; i < W * H; i++) this.fogImg.data[i * 4 + 3] = 255;
     this.fogDirty = true;
     this.flow = new Int16Array(W * H).fill(-1);
+  }
+
+  // The Undercroft's tiles (0x72's DungeonTileset II, crypts.mjs) over the baked grid, into its
+  // pixels (set): a floor tile on every open tile (lava keeps its own), shadowed under a wall;
+  // the dark of a wall's top, with a stone strip along each side of it the floor sees; and on a
+  // wall facing the floor its bricks, running 8 px up under their cap as a painted face does.
+  paintTiles(set) {
+    const { W, H } = this;
+    const floors = artBufs('ucFloor'), brick = artBufs('ucFace')[0], cap = artBufs('ucCap')[0], [sideE, sideW] = artBufs('ucSides');
+    const TOP = this.theme.top.map((h) => pack(h)), AO = pack(this.theme.mortar);
+    // Rows y0 to y1 (not included) of b, their top row at (ox, oy).
+    const blit = (b, ox, oy, y0 = 0, y1 = b.h) => {
+      for (let y = y0; y < y1; y++) {
+        for (let x = 0; x < b.w; x++) {
+          const c = b.d[y * b.w + x];
+          if (c >>> 24) set(ox + x, oy + y - y0, c);
+        }
+      }
+    };
+    // The cap's first row: what lies above it in its tile is clear.
+    let capTop = 0;
+    while (capTop < cap.h - 1 && !cap.d.slice(capTop * cap.w, (capTop + 1) * cap.w).some((c) => c >>> 24)) capTop++;
+    this.capTop = capTop;
+    const open = (x, y) => this.tile(x, y) !== WALL;
+    for (let ty = 0; ty < H; ty++) {
+      for (let tx = 0; tx < W; tx++) {
+        const t = this.tile(tx, ty), ox = tx * T, oy = ty * T;
+        if (t === LAVA) continue;
+        if (t !== WALL) {
+          // Mostly the plain slab, one in seven a cracked or worn one.
+          const h = hash2(tx, ty, 9);
+          blit(floors[h < 0.86 ? 0 : 1 + Math.floor(hash2(tx, ty, 10) * (floors.length - 1))], ox, oy);
+          if (!open(tx, ty - 1)) for (let y = 0; y < 4; y++) for (let x = 0; x < T; x++) if (BAYER[(y & 3) * 4 + (x & 3)] + 0.5 > (y + 1) / 5) set(ox + x, oy + y, AO);
+          continue;
+        }
+        for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) set(ox + x, oy + y, TOP[hash2(ox + x, oy + y, 11) < 0.15 ? 1 : 0]);
+        if (open(tx + 1, ty)) blit(sideE, ox, oy);
+        if (open(tx - 1, ty)) blit(sideW, ox, oy);
+        if (open(tx, ty - 1)) blit(cap, ox, oy, capTop);
+      }
+    }
+    for (let ty = 0; ty < H; ty++) {
+      for (let tx = 0; tx < W; tx++) {
+        if (this.tile(tx, ty) !== WALL || !open(tx, ty + 1)) continue;
+        const ox = tx * T, oy = ty * T;
+        blit(brick, ox, oy - 8, T - 8);
+        blit(brick, ox, oy);
+        blit(cap, ox, oy - 8, capTop);
+      }
+    }
+  }
+
+  // The Undercroft's faces, once the torches are up (none hidden behind what hangs here): its
+  // banners where another crypt's would hang, now and then a broken brick or goo running down to a
+  // puddle, and a few fountains (drawn moving: drawGroundProps; lit: addLights), red in a crypt
+  // of the Inferno's minutes, else blue. All from a rng of its own: the dungeon's stays as it was.
+  tileFaces(ctx) {
+    const { W, H } = this, deco = mulberry32((this.seed ^ 0x2545f491) >>> 0);
+    const faces = artCanvases('ucFace'), goo = artCanvases('ucGooBase')[0], top = artCanvases('ucFountainTop')[0];
+    // Two colours of banner to a crypt (faces 3-6: red, blue, green, yellow).
+    const colours = shuffle([3, 4, 5, 6], deco).slice(0, 2);
+    const red = this.info.theme === 'inferno';
+    for (let ty = 1; ty < H - 1; ty++) {
+      for (let tx = 1; tx < W - 1; tx++) {
+        if (!this.isWall(tx, ty) || this.tile(tx, ty + 1) !== FLOOR) continue;
+        const ox = tx * T, oy = ty * T, i = ty * W + tx;
+        if (this.torches.some((t) => t.x === ox + T / 2 && t.y === (ty + 1) * T - 4)) continue;
+        if (this.banners.includes(i)) {
+          ctx.drawImage(faces[colours[deco() < 0.5 ? 0 : 1]], ox, oy);
+          continue;
+        }
+        const r = deco();
+        if (r < 0.05) ctx.drawImage(faces[r < 0.025 ? 1 : 2], ox, oy);
+        else if (r < 0.075) {
+          ctx.drawImage(faces[7], ox, oy);
+          ctx.drawImage(goo, ox, oy + T);
+        } else if (r < 0.16 && this.fountains.length < 6 && this.isWall(tx, ty - 1) && this.isWall(tx - 1, ty) && this.isWall(tx + 1, ty)
+          && !this.fountains.some((f) => Math.abs(f.tx - tx) + Math.abs(f.ty - ty) < 8)) {
+          ctx.drawImage(top, ox, oy - 8 - this.capTop);
+          this.fountains.push({ tx, ty, red, phase: deco() });
+        }
+      }
+    }
+  }
+
+  // What the dungeon wears beyond its tiles, once it is filled (so nothing stands where a box or a
+  // barrel does), all from a rng of its own: none of it blocks the way or is in anyone's.
+  // Every lord's room (a Dungeon Run floor's guardian's) is dressed (dressLordRoom); the Inferno
+  // burns Lucifer's torches and hangs its lava lamps and standing flags (dressInferno); the
+  // Undercroft raises 0x72's columns where the others stand pillars.
+  dress() {
+    const deco = mulberry32((this.seed ^ 0x68e31da4) >>> 0), W = this.W;
+    this.torchSprite = this.look === 'inferno' ? artSprite('lavaTorch', true) : SPR.torch;
+    this.flameAt = this.look === 'inferno' ? 19 : 8;
+    if (this.look === 'undercroft') for (const p of this.props) if (p.spr === SPR.pillar) p.spr = artSprite('ucColumn');
+    const taken = new Set();
+    for (const e of this.g.enemies) if (e.prop) taken.add(Math.floor(e.y / T) * W + Math.floor(e.x / T));
+    for (const p of this.props) taken.add(Math.floor((p.y - 2) / T) * W + Math.floor(p.x / T));
+    const spot = {
+      // Open floor no box, barrel or prop stands on.
+      free: (x, y) => this.tile(x, y) === FLOOR && !taken.has(y * W + x),
+      take: (x, y) => taken.add(y * W + x),
+      // A torch on the face over floor tile (x, y).
+      torch: (x, y) => this.torches.some((t) => t.x === x * T + T / 2 && t.y === y * T - 4),
+      // The floor tile at the foot of the wall over column x of room r: the first, from the
+      // room's top, with a wall to its north; or -1.
+      north: (r, x) => {
+        for (let y = r.y; y < r.y + r.h; y++) if (this.tile(x, y) === FLOOR && this.isWall(x, y - 1)) return y;
+        return -1;
+      },
+    };
+    for (const r of this.crypt ? this.lordRooms : [this.guardRoom]) this.dressLordRoom(r, deco, spot);
+    if (this.look === 'inferno') this.dressInferno(deco, spot);
+  }
+
+  // A lord's room: Lucifer's red carpet under him, an arched door in the wall behind it, a suit of
+  // armour standing to either side of that, and maybe a pool of blood on the floor.
+  dressLordRoom(r, deco, spot) {
+    const ctx = this.canvas.getContext('2d');
+    const carpet = artCanvases('carpet')[0];
+    ctx.drawImage(carpet, Math.round(r.cx * T + T / 2 - carpet.width / 2), Math.round(r.cy * T + T / 2 - carpet.height / 2));
+    // The door: in a stretch of wall, deep enough for its arch, with no torch on it.
+    const door = artCanvases('door')[0];
+    let at = r.cx;
+    for (const x of [r.cx, r.cx - 1, r.cx + 1, r.cx - 2, r.cx + 2]) {
+      const y = spot.north(r, x);
+      if (y < 0 || spot.torch(x, y) || !this.isWall(x, y - 2) || !this.isWall(x - 1, y - 1) || !this.isWall(x + 1, y - 1)) continue;
+      ctx.drawImage(door, x * T + Math.floor((T - door.width) / 2), y * T - door.height);
+      at = x;
+      break;
+    }
+    for (const [side, name] of [[-1, 'armourAxe'], [1, 'armourShield']]) {
+      for (const d of [2, 3]) {
+        const x = at + side * d, y = spot.north(r, x);
+        if (y < 0 || !spot.free(x, y) || spot.torch(x, y)) continue;
+        spot.take(x, y);
+        this.props.push({ spr: artSprite(name), x: x * T + T / 2, y: y * T + T - 2, anim: 0, t: 0 });
+        break;
+      }
+    }
+    if (deco() < 0.65) {
+      for (let k = 0; k < 12; k++) {
+        const x = deco.int(r.x + 1, r.x + r.w - 2), y = deco.int(r.y + 1, r.y + r.h - 2);
+        if (Math.abs(x - r.cx) <= 3 && Math.abs(y - r.cy) <= 3) continue;
+        if (![[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => this.tile(x + dx, y + dy) === FLOOR)) continue;
+        const pool = bufToCanvas(this.bloodPool(deco));
+        ctx.drawImage(pool, Math.round(x * T + T / 2 - pool.width / 2), Math.round(y * T + T / 2 - pool.height / 2));
+        break;
+      }
+    }
+  }
+
+  // A pool of blood: a wobbling oval cut from Lucifer's blood (crypts.mjs), rimmed dark, with a
+  // few drops about it.
+  bloodPool(deco) {
+    const tex = artBufs('blood')[0], w = deco.int(20, 28), h = deco.int(11, 14);
+    const b = { w: w + 4, h: h + 4, d: new Uint32Array((w + 4) * (h + 4)) };
+    const p1 = deco() * TAU, p2 = deco() * TAU, sx = deco.int(0, tex.w - 1), sy = deco.int(10, tex.h - h - 3);
+    const inside = (x, y) => {
+      const dx = (x + 0.5 - b.w / 2) / (w / 2), dy = (y + 0.5 - b.h / 2) / (h / 2), a = Math.atan2(dy, dx);
+      return dx * dx + dy * dy < (1 + 0.16 * Math.sin(3 * a + p1) + 0.1 * Math.sin(5 * a + p2)) ** 2 * 0.8;
+    };
+    const RIM = pack('#2a0d10');
+    for (let y = 0; y < b.h; y++) {
+      for (let x = 0; x < b.w; x++) {
+        if (inside(x, y)) b.d[y * b.w + x] = tex.d[(sy + y) * tex.w + ((sx + x) % tex.w)];
+        else if (inside(x - 1, y) || inside(x + 1, y) || inside(x, y - 1) || inside(x, y + 1)) b.d[y * b.w + x] = RIM;
+      }
+    }
+    for (let k = 0; k < 4; k++) {
+      const x = deco.int(0, b.w - 1), y = deco.int(0, b.h - 1);
+      if (!b.d[y * b.w + x]) b.d[y * b.w + x] = tex.d[(sy + 2) * tex.w + 3];
+    }
+    return b;
+  }
+
+  // The Inferno: Lucifer's standing flags against the north walls of some rooms, its lava lamps
+  // hung on others (glowing, though they light nothing: the floor stays as dark as it was).
+  dressInferno(deco, spot) {
+    for (const r of this.rooms) {
+      if (r === this.startRoom) continue;
+      const wants = [deco() < 0.45 && 'flag', deco() < 0.5 && 'lamp'].filter(Boolean);
+      for (const what of wants) {
+        for (let k = 0; k < 6; k++) {
+          const x = deco.int(r.x + 1, r.x + r.w - 2), y = spot.north(r, x);
+          if (y < 0 || spot.torch(x, y) || !spot.free(x, y) || !this.isWall(x - 1, y - 1) || !this.isWall(x + 1, y - 1)) continue;
+          spot.take(x, y);
+          if (what === 'flag') this.props.push({ spr: artSprite('lavaFlag'), x: x * T + T / 2, y: y * T + T - 3, anim: CRYPT_ART.lavaFlag.fps, t: deco() * 12 });
+          else this.props.push({ spr: artSprite('lavaLamp', true), x: x * T + T / 2, y: y * T - 2, anim: CRYPT_ART.lavaLamp.fps, t: deco() * 3 });
+          break;
+        }
+      }
+    }
+  }
+
+  // The lava, moving: each 2x2 tiles of it a frame of Lucifer's bubbling surface of its own
+  // (phase), its crust over it where it meets the floor. Lit with the ground (drawGroundProps),
+  // and again unlit over the dark (drawOverlay).
+  drawLava(ctx, cam, time, crust = true) {
+    const S = cam.S, frames = artCanvases('lava'), n = frames.length, fps = CRYPT_ART.lava.fps;
+    // World pixels to the screen's, rounded alike for every tile, so neighbours neither gap nor overlap.
+    const sx = (wx) => Math.round((wx - cam.x) * S), sy = (wy) => Math.round((wy - cam.y) * S);
+    // Rows or columns i to j of the tile (from its top left), in one colour.
+    const fill = (x0, y0, x1, y1) => ctx.fillRect(sx(x0), sy(y0), sx(x1) - sx(x0), sy(y1) - sy(y0));
+    for (const l of this.lavaTiles) {
+      const x = l.tx * T, y = l.ty * T;
+      if (x + T < cam.x || y + T < cam.y || x > cam.x + cam.W || y > cam.y + cam.H) continue;
+      const f = frames[Math.floor(time * fps + l.phase * n) % n];
+      // The glow alone (crust false) leaves the crust out.
+      const e = crust ? 0 : l.edges, a = e & 8 ? 2 : 0, b = e & 2 ? 2 : 0, c = e & 1 ? 2 : 0, d = e & 4 ? 2 : 0;
+      const X0 = sx(x + a), Y0 = sy(y + c);
+      ctx.drawImage(f, (l.tx & 1) * T + a, (l.ty & 1) * T + c, T - a - b, T - c - d, X0, Y0, sx(x + T - b) - X0, sy(y + T - d) - Y0);
+      if (!crust || !l.edges) continue;
+      for (let k = 1; k >= 0; k--) {
+        ctx.fillStyle = CRUST[k];
+        if (l.edges & 1) fill(x, y + k, x + T, y + k + 1);
+        if (l.edges & 2) fill(x + T - k - 1, y, x + T - k, y + T);
+        if (l.edges & 4) fill(x, y + T - k - 1, x + T, y + T - k);
+        if (l.edges & 8) fill(x + k, y, x + k + 1, y + T);
+      }
+    }
   }
 
   // How many rows of breakables a room has along its walls (data/waves.js PROP_SITES): one row of
@@ -669,7 +964,7 @@ export class Dungeon {
     // Torch embers.
     if (Math.random() < 0.3 && this.torches.length) {
       const t = pick(this.torches);
-      if (Math.abs(t.x - p.x) < 260 && Math.abs(t.y - p.y) < 200) g.particles.emit(t.x + rand(-1, 1), t.y - 8, 0, rand(-4, 4), rand(-6, 0), rand(10, 25), 0.8, 1, PC.y, P.GLOW | P.FADE, 0);
+      if (Math.abs(t.x - p.x) < 260 && Math.abs(t.y - p.y) < 200) g.particles.emit(t.x + rand(-1, 1), t.y - this.flameAt, 0, rand(-4, 4), rand(-6, 0), rand(10, 25), 0.8, 1, PC.y, P.GLOW | P.FADE, 0);
     }
   }
 
@@ -1082,6 +1377,16 @@ export class Dungeon {
   }
 
   drawGroundProps(ctx, cam, time) {
+    if (this.lavaTiles.length) this.drawLava(ctx, cam, time);
+    // The Undercroft's fountains, running: the spout in the wall, the basin at its foot.
+    for (const f of this.fountains) {
+      const x = f.tx * T, y = f.ty * T;
+      if (x + T < cam.x || y + 2 * T < cam.y || x > cam.x + cam.W || y > cam.y + cam.H) continue;
+      const fr = artCanvases(f.red ? 'ucFountainRed' : 'ucFountainBlue'), k = Math.floor(time * 6 + f.phase * 3) % 3;
+      const X = Math.round((x - cam.x) * cam.S), Y = Math.round((y - cam.y) * cam.S), Z = T * cam.S;
+      ctx.drawImage(fr[k], X, Y, Z, Z);
+      ctx.drawImage(fr[3 + k], X, Y + Z, Z, Z);
+    }
     const S = cam.S, img = SPR.stairs.frames[0].c;
     const w = img.width * S, h = img.height * S;
     for (const s of [this.stairs, this.entrance]) {
@@ -1096,7 +1401,7 @@ export class Dungeon {
     }
     for (const t of this.torches) {
       if (t.x < cam.x - 20 || t.x > cam.x + cam.W + 20 || t.y < cam.y - 20 || t.y > cam.y + cam.H + 30) continue;
-      t.spr = SPR.torch;
+      t.spr = this.torchSprite;
       t.anim = 9;
       list.push(t);
     }
@@ -1135,6 +1440,11 @@ export class Dungeon {
       if (!vis(l.x, l.y, 80)) continue;
       g.light(l.x, l.y, 48 + 6 * Math.sin(t * 2 + l.x), 'fire', 0.7);
     }
+    // The Undercroft's fountains glow over their basins.
+    for (const f of this.fountains) {
+      const x = f.tx * T + T / 2, y = (f.ty + 1) * T + 2;
+      if (vis(x, y, 80)) g.light(x, y, 44 + 4 * Math.sin(t * 3 + f.phase * 6), f.red ? 'fire' : 'cyan', 0.75);
+    }
     if (this.stairs) g.light(this.stairs.x, this.stairs.y + 8, 90 + 10 * Math.sin(t * 3), 'green', 1);
     // Moonlight down the crypt's stairs, brighter once the way out is lit, and through the hole.
     if (this.entrance) g.light(this.entrance.x, this.entrance.y + 6, (this.way ? 100 : 70) + 6 * Math.sin(t * 2), 'cyan', this.way ? 1 : 0.9);
@@ -1152,7 +1462,16 @@ export class Dungeon {
   drawOverlay(ctx, cam, time) {
     const S = cam.S;
     // Molten cracks and lava stay bright in the dark.
-    if (this.lavaSpots.length || this.info.theme === 'inferno') {
+    // The lava's glow is added to what the light left of it, so whoever stands before it is lit
+    // by it rather than lost behind it.
+    if (this.lavaTiles.length) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.42 + 0.1 * Math.sin(time * 2.2);
+      this.drawLava(ctx, cam, time, false);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if (this.look === 'inferno') {
       const sx = Math.max(0, Math.floor(cam.x)), sy = Math.max(0, Math.floor(cam.y));
       const sw = Math.min(this.emissive.width - sx, Math.ceil(cam.W) + 2), sh = Math.min(this.emissive.height - sy, Math.ceil(cam.H) + 2);
       if (sw > 0 && sh > 0) {

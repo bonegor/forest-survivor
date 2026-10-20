@@ -167,7 +167,7 @@ export class Enemy {
     }
     this.spawnMax = this.spawnT = o.instant ? 0 : def.rise ? 0.75 : 0.25;
     this.hitT.fill(0);
-    this.h = this.spr.h * this.scale;
+    this.h = (this.spr.body ? this.spr.body[1] : this.spr.h) * this.scale;
     this.name = o.name || null;
     this.mod = o.mod || null;
     this.vampiric = this.mod && this.mod.id === 'vampiric';
@@ -188,6 +188,8 @@ export class Enemy {
     this.lookT = 0;
     this.pack = o.pack || 0;
     this.phase = 0;
+    this.pose = null; // a boss's pose as it strikes (game/bosses.js), from life = poseAt
+    this.poseAt = 0;
     this.speech = null;
     this.shake = 0;
     this.ai = this.boss ? BOSS_AI[type] : null;
@@ -472,16 +474,26 @@ export class Enemy {
   // ------------------------------------------------------------- drawing --
 
   // Round and round its frames, or its walk if the sprite has one; a shooter with a drawing
-  // frame (attack) holds it while it takes aim.
+  // frame (attack) holds it while it takes aim. A boss with poses plays the one it strikes in
+  // (game/bosses.js), held at its end while it casts, and its idle while it stands (asleep,
+  // rising, or casting with no pose); its walk goes motionRate frames to a step of the old one.
   frameIndex() {
     const s = this.spr;
     if (s.attack && this.state === 'wind') return s.attack[0];
-    return s.walk ? s.walk[Math.floor(this.anim) % s.walk.length] : Math.floor(this.anim) % s.frames.length;
+    if (s.poses) {
+      const seq = this.pose && s.poses[this.pose];
+      if (seq) {
+        const i = Math.floor((this.life - this.poseAt) * s.poseFps);
+        if (i < seq.length || this.state === 'cast') return seq[Math.min(i, seq.length - 1)];
+      }
+      if (s.idle && (this.sleeping || this.spawnT > 0 || this.state === 'cast')) return s.idle[Math.floor(this.life * IDLE_FPS) % s.idle.length];
+    }
+    return s.walk ? s.walk[Math.floor(this.anim * s.motionRate) % s.walk.length] : Math.floor(this.anim) % s.frames.length;
   }
 
   drawShadow(ctx, cam) {
     const S = cam.S;
-    const sw = Math.max(6, this.spr.w * 0.7 * this.scale);
+    const sw = Math.max(6, (this.spr.body ? this.spr.body[0] : this.spr.w) * 0.7 * this.scale);
     if (sw !== this._shW) {
       this._shW = sw;
       this._sh = shadowSprite(sw);
@@ -534,7 +546,7 @@ export class Enemy {
     }
     const w = img.width * S * sx, h = img.height * S * sy;
     let X = (this.x - cam.x) * S - w / 2;
-    const Y = (this.y - cam.y) * S - h + S;
+    const Y = (this.y - cam.y) * S - h + S + this.spr.below * S * sy;
     if (this.shake) X += (Math.random() - 0.5) * S * 2;
     if (this.def.fly) {
       const bob = Math.sin(this.life * 6 + this.wob) * 2 * S;
@@ -742,6 +754,8 @@ const nightHole = () => (holeC ??= canvasFromBuf(nightHoleBuf()));
 
 // How long a risen foe's night layer takes to fade in (s).
 const NIGHT_RISE = 0.3;
+// A posed boss's idle, frames a second (frameIndex).
+const IDLE_FPS = 8;
 // A ring colour, at its share of the layer's alpha.
 const ringOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.ringA));
 const RING = ringOf(NIGHT_EDGE.ring);

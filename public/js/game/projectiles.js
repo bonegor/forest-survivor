@@ -5,6 +5,7 @@ import { rand, TAU, lerp } from '../engine/util.js';
 import { shadowSprite, glow, crescentSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { explode } from './effects.js';
+import { fireballFrame } from './fxart.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
 
 const pool = [];
@@ -298,7 +299,7 @@ export class Projectile {
         return;
       }
       case 'fireball':
-        img = this.sprite.frames[Math.floor(this.t * 12) % 2].c;
+        img = fireballFrame(this.t, this.ang);
         break;
       case 'axe':
       case 'spiral':

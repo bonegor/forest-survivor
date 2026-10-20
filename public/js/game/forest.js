@@ -7,6 +7,7 @@ import { SPR } from '../engine/sprites.js';
 import { makeCanvas, hash2, fbm, rand, lerp, clamp, pick } from '../engine/util.js';
 import { PC, P } from './particles.js';
 import { CHUNK as CH, TREE_NAMES, layoutChunk, paintChunk, shrinesNear, cryptsNear, start, trimCaches } from './darkwood.js';
+import { LANDMARK_SOLIDS, LANDMARK_TALL } from '../art/landmarks.js';
 
 // Half the width of each tree's trunk at its foot.
 const TRUNK = { oak1: 3.5, oak2: 3.5, oak3: 3.5, pine1: 2.5, pine2: 2.5, deadtree1: 2.5, deadtree2: 2.5 };
@@ -136,14 +137,18 @@ export class Forest {
     const lay = layoutChunk(cx, cy);
     paintChunk(lay, new Uint32Array(img.data.buffer));
     ctx.putImageData(img, 0, 0);
-    const props = [];
+    const props = [], trunks = [];
     for (const q of lay.props) {
       const spr = SPR[q.n];
       if (!spr) continue;
       const tree = TREE_NAMES.has(q.n);
-      props.push({ spr, x: q.x, y: q.y, frame: 0, anim: q.anim || 0, light: q.light || null, tree, t: hash2(q.x, q.y, 11) * 10, solid: 0, trunk: tree ? TRUNK[q.n] : 0 });
+      const p = { spr, x: q.x, y: q.y, frame: 0, anim: q.anim || 0, light: q.light || null, tree: tree || LANDMARK_TALL.has(q.n), t: hash2(q.x, q.y, 11) * 10, solid: 0, trunk: tree ? TRUNK[q.n] : 0 };
+      props.push(p);
+      if (p.trunk) trunks.push(p);
+      // A landmark's solid parts (its posts, its stone) stop the hero as trunks do.
+      for (const [dx, dy, r] of LANDMARK_SOLIDS[q.n] || []) trunks.push({ x: q.x + dx, y: q.y + dy, trunk: r });
     }
-    return { cx, cy, canvas: c, props, trunks: props.filter((p) => p.trunk), used: 0 };
+    return { cx, cy, canvas: c, props, trunks, used: 0 };
   }
 
   forEachVisible(cam, margin, fn) {
@@ -263,8 +268,9 @@ export class Forest {
       if (px < py) e.x += Math.sign(dx || 1) * px;
       else e.y += Math.sign(dy || 1) * py;
     }
-    const x0 = Math.floor((e.x - 12) / CH), x1 = Math.floor((e.x + 12) / CH);
-    const y0 = Math.floor((e.y - 12) / CH), y1 = Math.floor((e.y + 12) / CH);
+    // 36 px round: a landmark's posts may stand up to 24 px from the foot that places it in its chunk.
+    const x0 = Math.floor((e.x - 36) / CH), x1 = Math.floor((e.x + 36) / CH);
+    const y0 = Math.floor((e.y - 36) / CH), y1 = Math.floor((e.y + 36) / CH);
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         for (const p of this.chunk(cx, cy).trunks) {
