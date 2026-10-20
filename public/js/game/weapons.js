@@ -2,9 +2,9 @@
 
 import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weapons.js';
 import { sfx } from '../engine/audio.js';
-import { rand, TAU, pick } from '../engine/util.js';
+import { rand, TAU, pick, angleDiff } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
-import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode } from './effects.js';
+import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode, Pillar, Burrow, Chop, FRENZY, PURGE, boltTargets, silverBolt } from './effects.js';
 import { Minion } from './minions.js';
 import { fxBurst } from './fxart.js';
 import { PC, P } from './particles.js';
@@ -30,6 +30,8 @@ export class Weapon {
     this.queue = 0;
     this.queueT = 0;
     this.handAt = null; // when a blow struck by hand lands or fires, on the game's clock (strike)
+    this.handTarget = null; // and the foe it is struck at, if any
+    this.hand = false; // true while a blow struck by hand fires (KINDS' fire: it fires, foe or none)
     this.gap = 0.1;
     this.shot = 0;
     this.volley = 0;
@@ -98,8 +100,7 @@ export class Weapon {
     const K = KINDS[this.def.kind];
     if (K.tick) K.tick(this, dt);
     if (!K.fire) return;
-    const haste = this.g.player.buff('haste') ? HASTE : 1;
-    this.cd -= dt * haste;
+    this.cd -= dt * this.haste;
     // A blow struck by hand waits for the sprite's blow frame, by the clock it is drawn by, with the
     // same hair of slack the frame count has (Game.drawPlayer's 1e-6), so a clock a rounding short
     // never shows the blow a frame before it lands.
@@ -107,7 +108,10 @@ export class Weapon {
       if (this.g.clock < this.handAt - 1e-6) return;
       this.handAt = null;
       if (!K.shoot) {
+        this.hand = true;
         const r = K.fire(this);
+        this.hand = false;
+        this.handTarget = null;
         if (typeof r === 'number') this.cd = r;
       }
     }
@@ -124,6 +128,16 @@ export class Weapon {
         this.queueT += this.gap;
       }
     }
+  }
+
+  // How much faster than its cooldown it is ready again: a Shrine of Haste's, the Berserker's
+  // Bloodrage, his Red Frenzy (every weapon), the Witch Hunter's Purge (her crossbow).
+  get haste() {
+    const p = this.g.player, u = p.ult && p.ult.type;
+    let k = (p.buff('haste') ? HASTE : 1) * p.rageHaste;
+    if (u === 'frenzy') k *= FRENZY.haste;
+    else if (u === 'purge' && this.def.kind === 'crossbow') k *= PURGE.haste;
+    return k;
   }
 
   burst(n, gap) {
@@ -145,12 +159,15 @@ export class Weapon {
   strike(ang, delay, target = null) {
     this.cd = this.s.cd;
     this.handAt = this.g.clock + delay;
+    this.handTarget = target;
     const K = KINDS[this.def.kind];
     if (this.def.kind === 'sword') {
       this.aimAng = ang;
       this.burst(this.s.amount, 0.11);
     } else if (K.shoot) {
+      this.hand = true;
       const r = K.fire(this);
+      this.hand = false;
       if (typeof r === 'number') this.cd = r;
       if (K.aim) K.aim(this, target);
     }
@@ -185,6 +202,74 @@ function ray(g, w, x, y, ang, L, dmg, skip = null) {
   for (const [, e] of hits) g.hitEnemy(e, dmg, { w, type: 'dark', kb: w.s.kb, kx: dx, ky: dy });
   g.effects.push(new Bolt(g, [{ x, y: y - 6 }, { x: x + dx * len, y: y + dy * len - 6 }], 'ray', '#b55088'));
   return hits.map((h) => h[1]);
+}
+
+// ------------------------------------------ the four of 20 October 2026 --
+
+// Who Smite strikes first: up to n foes within R of (x, y), the mightiest first (a boss, a crypt's
+// lord, a champion, then the one with the most health); `first`, a foe struck at by hand, ahead.
+const MIGHT = (e) => (e.boss ? 3 : e.lord ? 2 : e.elite ? 1 : 0);
+export function mightiest(g, x, y, R, n, first = null) {
+  const all = g.nearestEnemies(x, y, Infinity, R);
+  all.sort((a, b) => MIGHT(b) - MIGHT(a) || b.hp - a.hp);
+  const i = first && !first.dead ? all.indexOf(first) : -1;
+  if (i > 0) all.unshift(...all.splice(i, 1));
+  return all.slice(0, n);
+}
+
+// The Twin Axes' leap: at a foe within `reach` px (from his feet to its edge) ahead of him: on the
+// way he walks, within `ahead` radians of it (straight on to a little behind square), or standing,
+// on the side he faces, so he never turns for it and never jumps back against the way the player
+// steers. He lands just short of it,
+// `dur` s on, never through a wall, a crypt's wall, lava or a tree's trunk (World.open, tested
+// every `step` px of the way), and only if the hop is longer than `near` px: else he chops where
+// he stands. In the air nothing touches him (Player.untouchable).
+export const LEAP = { reach: 64, ahead: 1.75, dur: 0.16, step: 3, near: 10, close: 10 };
+// The chop's reach at area 1 (with no leap, he chops for a foe within it and LEAP.close more),
+// and what each kill of Bloodstorm's heals (of his health).
+export const CHOP_R = 30;
+export const KILL_HEAL_BLOOD = 0.005;
+
+export function leapTarget(g, p, w) {
+  const ahead = (e) => {
+    const dx = e.x - p.x, dy = e.y - p.y;
+    return p.moving ? Math.abs(angleDiff(p.aim, Math.atan2(dy, dx))) <= LEAP.ahead : dx * p.face >= 0;
+  };
+  const t = w.handTarget;
+  if (t && !t.dead && Math.hypot(t.x - p.x, t.y - p.y) <= LEAP.reach + t.r + p.r && ahead(t)) return t;
+  return g.nearestEnemy(p.x, p.y, LEAP.reach + 12, (e) => ahead(e) && Math.hypot(e.x - p.x, e.y - p.y) - e.r - p.r <= LEAP.reach);
+}
+
+// Where a leap at foe t lands: just short of it, as far along the way as is open; null if that
+// is no farther than LEAP.near (no hop worth taking).
+export function leapSpot(g, p, t) {
+  const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
+  const want = Math.min(LEAP.reach, d - t.r - p.r - 1);
+  if (want <= LEAP.near) return null;
+  const ux = dx / d, uy = dy / d, open = g.world.open;
+  let got = 0;
+  for (let s = LEAP.step; s <= want; s += LEAP.step) {
+    if (open && !g.world.open(p.x + ux * s, p.y + uy * s, p.r)) break;
+    got = s;
+  }
+  if (got < want && got + LEAP.step > want && (!open || g.world.open(p.x + ux * want, p.y + uy * want, p.r))) got = want;
+  return got > LEAP.near ? { x: p.x + ux * got, y: p.y + uy * got } : null;
+}
+
+// The chops of a landing (or of a blow where he stands): `amount` of them, CHOP_GAP s apart.
+const CHOP_GAP = 0.12;
+function chops(w) {
+  const g = w.g;
+  const one = () => g.effects.push(new Chop(g, w, CHOP_R * w.s.area, w.s.dmg));
+  one();
+  for (let i = 1; i < w.s.amount; i++) {
+    g.effects.push({ t: -i * CHOP_GAP, update(dt) {
+      this.t += dt;
+      if (this.t < 0) return true;
+      if (!g.player.dead) one();
+      return false;
+    } });
+  }
 }
 
 export const KINDS = {
@@ -589,6 +674,94 @@ export const KINDS = {
         glow: fae ? ['#fee761', 22, 'holy', 34] : ['#9ee562', 18, 'green', 28],
       });
       if (i % 2 === 0) sfx('blade', { pitch: fae ? 1.4 : 1.1 });
+    },
+  },
+  // Smite and Judgement (the Paladin's): a pillar on each of the mightiest foes in reach, one
+  // after another (a foe struck at by hand first). None in reach: it waits.
+  smite: {
+    reach: 170,
+    fire(w) {
+      const g = w.g, p = g.player;
+      const foes = mightiest(g, p.x, p.y, w.reach, w.s.amount, w.handTarget);
+      if (!foes.length) return false;
+      foes.forEach((e, i) => g.effects.push(new Pillar(g, w, e, i * 0.08)));
+    },
+  },
+
+  // Snaring Roots and World Root (the Druid's): a root tunnels to each of the nearest foes (a
+  // foe struck at by hand first) and grips all round it where it surfaces. None in reach: it waits.
+  roots: {
+    reach: 170,
+    fire(w) {
+      const g = w.g, p = g.player;
+      const foes = g.nearestEnemies(p.x, p.y, w.s.amount, w.reach);
+      const t = w.handTarget;
+      if (t && !t.dead && !foes.includes(t)) foes.unshift(t);
+      if (!foes.length) return false;
+      foes.slice(0, w.s.amount).forEach((e, i) => g.effects.push(new Burrow(g, w, p.x, p.y + 1, e, i * 0.06)));
+      sfx('wood', { pitch: rand(0.3, 0.4) });
+    },
+  },
+
+  // The Twin Axes and Bloodstorm (the Berserker's): he leaps on a foe ahead and chops all round
+  // where he lands (LEAP, Player.leapTo); with no foe ahead in reach but one close, he chops
+  // where he stands; with none, it waits. Bloodstorm's kills heal him a little (Player.leech).
+  leap: {
+    reach: LEAP.reach,
+    fire(w) {
+      const g = w.g, p = g.player;
+      if (p.leap) return 0.05;
+      const R = CHOP_R * w.s.area;
+      const t = leapTarget(g, p, w);
+      if (t) {
+        const to = leapSpot(g, p, t);
+        if (to) {
+          p.leapTo(to.x, to.y, () => chops(w), LEAP.dur);
+          return;
+        }
+      }
+      if (!w.hand && !g.nearestEnemy(p.x, p.y, R + LEAP.close)) return false;
+      chops(w);
+    },
+    kill(w) {
+      const p = w.g.player;
+      if (w.s.heal) p.leech(p.maxHp * KILL_HEAL_BLOOD);
+    },
+  },
+
+  // The Silver Crossbow and the Purifier (the Witch Hunter's): heavy bolts aimed at the nearest of
+  // the wicked in reach (a boss, a lord, a champion, a cultist), else at the nearest foe, a bolt
+  // more at the next for each more it looses; through `pierce` foes, `bane` more on the wicked.
+  // The Purifier's burst in silver light on every foe they strike. Under Purge (her ultimate)
+  // each bolt flies three at once, bursting too, and those are the ultimate's blows. No foe in
+  // reach: it waits, but one struck by hand looses anyway, the way she faces.
+  crossbow: {
+    reach: 230,
+    fire(w) {
+      const g = w.g, p = g.player;
+      w.targets = boltTargets(g, p.x, p.y, w.reach, w.s.amount);
+      if (!w.targets.length && !w.hand) return false;
+      w.baseAng = aimAt(p, w.targets[0], p.aim);
+      w.burst(w.s.amount, w.s.nova ? 0.08 : 0.12);
+    },
+    aim(w, t) {
+      if (t) {
+        w.targets = [t];
+        w.baseAng = aimAt(w.g.player, t);
+      }
+    },
+    shoot(w, i) {
+      const g = w.g, p = g.player;
+      const t = w.targets.length ? w.targets[i % w.targets.length] : null;
+      const ang = t && !t.dead ? aimAt(p, t) : w.baseAng;
+      const purge = !!(p.ult && p.ult.type === 'purge');
+      const o = { dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, speed: w.s.speed, bane: w.s.bane, nova: !!w.s.nova || purge };
+      silverBolt(g, w, p.x, p.y, ang, { ...o, ult: purge });
+      if (purge) {
+        silverBolt(g, w, p.x, p.y, ang - PURGE.spread, { ...o, ult: true });
+        silverBolt(g, w, p.x, p.y, ang + PURGE.spread, { ...o, ult: true });
+      }
+      sfx('arrow', { pitch: rand(0.6, 0.7), pan: Math.cos(ang) * 0.3 });
     },
   },
 };

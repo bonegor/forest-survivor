@@ -31,7 +31,7 @@ import { Forest } from './forest.js';
 import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
-import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor } from './effects.js';
+import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, Sanctum, Overgrowth, Frenzy, Purge, FRENZY } from './effects.js';
 import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
 import { Minion } from './minions.js';
 import { Hints } from './hints.js';
@@ -123,7 +123,7 @@ export function strikeClip(spr) {
 }
 
 // What a hand-struck weapon is called on to do, for the crypt's banner (Game.enterCrypt).
-const STRIKE_VERB = { bow: 'shoot', fireball: 'cast', meteor: 'cast', daggers: 'throw', summon: 'raise the dead' };
+const STRIKE_VERB = { bow: 'shoot', fireball: 'cast', meteor: 'cast', daggers: 'throw', summon: 'raise the dead', smite: 'smite', roots: 'call the roots', leap: 'leap', crossbow: 'shoot' };
 
 // Crypt names, picked by the crossroads; the night's minute picks the stone.
 const CRYPT_KIND = ['Crypt', 'Barrow', 'Tomb', 'Ossuary', 'Sepulchre', 'Vault'];
@@ -786,6 +786,13 @@ export class Game {
     let d = dmg * p.might;
     if (p.buff('fury')) d *= 1.6;
     if (o.ult) d *= 1 + p.level * 0.04;
+    // Smite's brand on the foe; the Witch Hunter's Inquisition on the strong, the Berserker's
+    // Bloodrage, the Druid's Grove Warden.
+    if (e.brandT > 0) d *= 1 + e.brandK;
+    const hs = p.hero.stats;
+    if (hs.bane && (e.boss || e.lord || e.elite)) d *= 1 + hs.bane;
+    if (hs.rage) d *= 1 + hs.rage.might * p.rage;
+    if (hs.grove && p.inGrove) d *= 1 + hs.grove;
     let crit = false;
     // A tick of damage over time (Enemy.addDot) never crits.
     if (!o.noCrit) {
@@ -850,6 +857,9 @@ export class Game {
     this.comboT = 2;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
     p.furyKill(e);
+    // Kills that heal: the Paladin's Devotion (a little, KILL_HEAL), Red Frenzy's (FRENZY.heal each).
+    if (p.hero.stats.killHeal) p.leech(p.hero.stats.killHeal);
+    if (p.ult && p.ult.type === 'frenzy') p.heal(p.maxHp * FRENZY.heal, true);
     if (o.w) {
       o.w.kills++;
       if (o.w.onKill) o.w.onKill(e);
@@ -1522,6 +1532,14 @@ export class Game {
       }
       this.effects.push(new Ring(this, p.x, p.y, 6, 110, 0.7, '#9ee562', false, 3));
       this.pushback(p.x, p.y, 70, 260);
+    } else if (type === 'sanctum') this.effects.push(new Sanctum(this, dur));
+    else if (type === 'overgrowth') this.effects.push(new Overgrowth(this, dur));
+    else if (type === 'frenzy') this.effects.push(new Frenzy(this, dur));
+    else if (type === 'purge') {
+      this.effects.push(new Purge(this, dur));
+      // A volley at once: her crossbow is ready as the purge begins.
+      const w = this.mainWeapon();
+      if (w && w.def.kind === 'crossbow') w.cd = Math.min(w.cd, 0);
     }
   }
 
@@ -2157,7 +2175,7 @@ export class Game {
     // Walk cycles carry their own body bob; two-frame sprites hop on alternate steps.
     const bob = spr.selfBob ? 0 : moving ? (spr.walk ? 0 : -(step % 2)) : Math.sin(p.anim * 2) > 0.6 ? -1 : 0;
     const w = img.width * S, h = img.height * S;
-    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY + bob) * S);
+    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY + bob - p.hop) * S);
     let alpha = 1;
     if (p.invuln > 0 && !(p.ult && p.ult.type === 'shadowdance') && Math.floor(p.invuln * 18) % 2 === 0) alpha = 0.45;
     if (p.ult && p.ult.type === 'shadowdance') alpha = 0.35 + 0.15 * Math.sin(this.clock * 20);

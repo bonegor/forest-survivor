@@ -5,6 +5,10 @@ import ARCHER from '../../assets/heroes/archer.js';
 import MAGE from '../../assets/heroes/mage.js';
 import NECROMANCER from '../../assets/heroes/necromancer.js';
 import ROGUE from '../../assets/heroes/rogue.js';
+import PALADIN from '../../assets/heroes/paladin.js';
+import DRUID from '../../assets/heroes/druid.js';
+import BERSERKER from '../../assets/heroes/berserker.js';
+import WITCHHUNTER from '../../assets/heroes/witchhunter.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -73,3 +77,14 @@ export const ARCHER_POSE = pose(ARCHER_SHEET);
 export const MAGE_POSE = pose(MAGE_SHEET);
 export const NECROMANCER_POSE = pose(NECROMANCER_SHEET);
 export const ROGUE_POSE = pose(ROGUE_SHEET);
+
+// The four of 20 October 2026, drawn in the lab (src/newheroes-oct20): Dame Seraphine the
+// Paladin, Bramwyn the Druid, Ulfric the Berserker and Mercy Crane the Witch Hunter.
+export const PALADIN_SHEET = sheet(PALADIN);
+export const DRUID_SHEET = sheet(DRUID);
+export const BERSERKER_SHEET = sheet(BERSERKER);
+export const WITCHHUNTER_SHEET = sheet(WITCHHUNTER);
+export const PALADIN_POSE = pose(PALADIN_SHEET);
+export const DRUID_POSE = pose(DRUID_SHEET);
+export const BERSERKER_POSE = pose(BERSERKER_SHEET);
+export const WITCHHUNTER_POSE = pose(WITCHHUNTER_SHEET);

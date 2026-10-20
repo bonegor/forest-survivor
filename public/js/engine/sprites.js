@@ -3,6 +3,7 @@
 // tints and pre-rotated copies.
 
 import { ART, resolveFrames } from '../art/defs.js';
+import { ART_FALLBACKS } from '../art/fallbacks.js';
 import { PAL, packedPalette, OUTLINE } from '../art/palette.js';
 import * as px from './pixels.js';
 import { makeCanvas, TAU } from './util.js';
@@ -192,6 +193,8 @@ export function buildSprite(name, def) {
 
 export function buildSprites() {
   for (const [name, def] of Object.entries(ART)) SPR[name] = buildSprite(name, def);
+  // Art not drawn yet is drawn as its stand-in (art/fallbacks.js) until it is.
+  for (const [name, stand] of Object.entries(ART_FALLBACKS)) if (!SPR[name] && SPR[stand]) SPR[name] = SPR[stand];
 }
 
 // Frame for walk step n: the sprite's walk cycle if it has one, else every frame in turn.

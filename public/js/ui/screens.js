@@ -235,6 +235,21 @@ export function portraitFit(fh, maxW) {
   return { s: Math.max(1, Math.min(6, Math.floor((foot - 6) / c.h), Math.floor((maxW - 12) / c.w))), foot };
 }
 
+// The hero screen's cards: as many in a row as fit HERO_CARD.min wide or wider (at most
+// HERO_CARD.max), all nine in one row where they fit (a desktop), else in rows of as many as fit (a
+// phone held upright: five and four); the rows kept short enough on a low screen to leave the
+// detail panel under them room.
+export const HERO_CARD = { min: 44, max: 64, h: 66, low: 56, gap: 6 };
+export function heroCards(W, H, n) {
+  const C = HERO_CARD, wide = (k) => Math.min(C.max, Math.floor((W - 30) / k) - C.gap);
+  let cols = n;
+  while (cols > 1 && wide(cols) < C.min) cols--;
+  const rows = Math.ceil(n / cols);
+  cols = Math.ceil(n / rows);
+  const room = Math.floor((H - 32 - 26 - 100 - 8 - C.gap * (rows - 1)) / rows);
+  return { cols, rows, cw: wide(cols), ch: rows > 1 ? Math.max(C.low, Math.min(C.h, room)) : C.h };
+}
+
 export class HeroScreen {
   enter(app) {
     this.app = app;
@@ -253,14 +268,18 @@ export class HeroScreen {
     ui.begin(dt);
     const prof = app.store.profile;
     const next = nextHeroUnlock(prof);
-    const n = HERO_ORDER.length;
-    const cw = Math.min(64, Math.floor((W - 30) / n) - 6), ch = 66;
-    const cs = cardScale(cw, ch); // the five heroes at one scale
-    const total = n * cw + (n - 1) * 6;
-    let x = Math.round(W / 2 - total / 2);
-    const y = 32;
+    const { cols, cw, ch } = heroCards(W, H, HERO_ORDER.length);
+    const cs = cardScale(cw, ch); // every hero at one scale
+    const y0 = 32;
+    let x = 0, y = y0;
     let focusHero = null;
-    for (const id of HERO_ORDER) {
+    HERO_ORDER.forEach((id, i) => {
+      // Row by row, each row centred (the last may be shorter).
+      if (i % cols === 0) {
+        const k = Math.min(cols, HERO_ORDER.length - i);
+        x = Math.round(W / 2 - (k * cw + (k - 1) * 6) / 2);
+        y = y0 + (i / cols) * (ch + 6);
+      }
       const h = HEROES[id];
       const locked = !prof.heroes.includes(id);
       const fid = 'h_' + id;
@@ -298,7 +317,7 @@ export class HeroScreen {
         }
       }
       x += cw + 6;
-    }
+    });
     focusHero = focusHero || 'knight';
     const bottom = this.detail(ctx, W, H, focusHero, y + ch + 8, !prof.heroes.includes(focusHero));
     let gy = bottom + 6;

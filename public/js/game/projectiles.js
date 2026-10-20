@@ -39,6 +39,8 @@ export function releaseProjectile(p) {
   p.g = null;
   p.w = null;
   p.onLand = null;
+  p.onHit = null;
+  p.wicked = null;
   pool.push(p);
 }
 
@@ -92,6 +94,11 @@ export class Projectile {
     this.crit = o.crit || 0;
     this.trail = o.trail ?? null;
     this.noFury = !!o.noFury; // an ultimate's (danceBlade): its blows charge no fury
+    this.ult = !!o.ult; // an ultimate's (Purge's bolts): its blows count as its own (Game.hitEnemy)
+    // bane more on a foe wicked(e) takes (the Witch Hunter's bolts); onHit(this, e) after each blow.
+    this.bane = o.bane || 0;
+    this.wicked = o.wicked || null;
+    this.onHit = o.onHit || null;
     this.trailT = 0;
     this.hitCd = o.hitCd || 0;
     if (!this.hits) this.hits = new Set();
@@ -241,10 +248,11 @@ export class Projectile {
           this.hits.add(e.id);
         }
         const sp = Math.hypot(this.vx, this.vy) || 1;
-        g.hitEnemy(e, this.dmg, {
+        g.hitEnemy(e, this.bane && this.wicked(e) ? this.dmg * (1 + this.bane) : this.dmg, {
           w: this.w, type: this.type, kb: this.kb, kx: this.vx / sp, ky: this.vy / sp, crit: this.crit,
-          slow: this.slow, slowT: this.slowT, freeze: this.freeze, shatter: this.shatter, noFury: this.noFury,
+          slow: this.slow, slowT: this.slowT, freeze: this.freeze, shatter: this.shatter, noFury: this.noFury, ult: this.ult,
         });
+        if (this.onHit) this.onHit(this, e);
         if (this.kind === 'fireball') {
           this.impact();
           return false;

@@ -5,7 +5,7 @@ import { PASSIVES } from '../data/passives.js';
 import { gearBonuses } from '../shared/items.js';
 import { input } from '../engine/input.js';
 import { sfx } from '../engine/audio.js';
-import { clamp, damp, rand } from '../engine/util.js';
+import { clamp, damp, rand, lerp } from '../engine/util.js';
 import { PC, P } from './particles.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { foeName } from './names.js';
@@ -67,6 +67,13 @@ export function armored(raw, armor) {
   return Math.max(raw * (1 - ARMOR_MOST), Math.min(raw * (1 - ARMOR_CUT) ** armor, raw - armor));
 }
 
+// Heals that come of kills (the Paladin's Devotion, Bloodstorm's): at most `most` of his health a
+// second between them (Player.leech), so a horde mown down at once doesn't fill him at a stroke.
+export const KILL_HEAL = { most: 0.01 };
+// The Druid's Grove Warden: a tree within `near` px of him (World.treeNear), looked for every
+// `every` s.
+export const GROVE = { near: 48, every: 0.25 };
+
 export function xpFor(level) {
   if (level < 20) return 5 + (level - 1) * 10;
   if (level < 40) return 200 + (level - 20) * 18;
@@ -113,6 +120,10 @@ export class Player {
     this.stepT = 0;
     this.heartT = 0;
     this.healPool = 0; // sanctuary heal accumulator
+    this.leechLeft = 0; // what kills may heal him yet this second (leech)
+    this.leap = null; // a leap of the Twin Axes under way (leapTo)
+    this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
+    this.groveT = 0;
     this.recompute();
     this.revivals += this.gearB.revival;
     this.hp = this.maxHp;
@@ -149,6 +160,7 @@ export class Player {
     this.growth = (h.growth || 1) * m.growth * (1 + bonus('growth'));
     this.greed = m.greed * (1 + q.greed);
     this.regenMul = h.regenMul || 1;
+    this.healMul = h.healMul || 1; // the Paladin's Devotion: every heal does this much (heal)
     this.regen = ((h.regen || 0) + m.regen + bonus('regen')) * this.regenMul;
     this.crit = 0.05 + (h.crit || 0) + bonus('crit');
     this.critMult = 2 + q.critMult;
@@ -195,6 +207,37 @@ export class Player {
     this.buffs.set(id, { t, max: t });
   }
 
+  // The Berserker's Bloodrage: 0 at full health to 1 at none (none for any other hero), and how
+  // much faster it makes his weapons (Weapon.haste); hitEnemy adds its damage.
+  get rage() {
+    return this.hero.stats.rage ? clamp(1 - this.hp / this.maxHp, 0, 1) : 0;
+  }
+
+  get rageHaste() {
+    const r = this.hero.stats.rage;
+    return r ? 1 + r.haste * this.rage : 1;
+  }
+
+  // The Twin Axes' leap (weapons.js LEAP): to (x, y) over LEAP.dur s, onLand then. The leap is his
+  // own blow carrying him, never a blow shoving him, and it only goes where the weapon found open.
+  leapTo(x, y, onLand, dur = 0.16) {
+    this.leap = { x0: this.x, y0: this.y, x1: x, y1: y, t: 0, dur, onLand, lx: this.x, ly: this.y };
+  }
+
+  // How high off the ground he is in a leap, in px (Game.drawPlayer).
+  get hop() {
+    const L = this.leap;
+    return L ? Math.sin(Math.min(1, L.t / L.dur) * Math.PI) * 7 : 0;
+  }
+
+  // A heal from a kill (KILL_HEAL): as much of v as this second has left.
+  leech(v) {
+    const h = Math.min(v, this.leechLeft);
+    if (h <= 0) return 0;
+    this.leechLeft -= h;
+    return this.heal(h, true);
+  }
+
   get moveSpeed() {
     let s = BASE_SPEED * this.speedMul;
     if (this.buff('haste')) s *= 1.3;
@@ -218,10 +261,26 @@ export class Player {
       this.aim = Math.atan2(ax.y, ax.x);
       this.face = faceAlong(this.face, ax.x, ax.y);
     }
-    // Only the player moves the hero: no blow, however heavy, shoves him (Enemy.update).
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
-    g.world.collide(this);
+    // Only the player moves the hero: no blow, however heavy, shoves him (Enemy.update). His own
+    // leap carries him (leapTo), the player's steering held while he is in the air.
+    // Carried off mid-leap (a crypt's door, the stairs): the leap is over, and lands nowhere.
+    if (this.leap && Math.hypot(this.x - this.leap.lx, this.y - this.leap.ly) > 1) this.leap = null;
+    if (this.leap) {
+      const L = this.leap;
+      L.t += dt;
+      const u = Math.min(1, L.t / L.dur);
+      this.x = L.lx = lerp(L.x0, L.x1, u);
+      this.y = L.ly = lerp(L.y0, L.y1, u);
+      if (u >= 1) {
+        this.leap = null;
+        g.world.collide(this);
+        if (!this.dead) L.onLand();
+      }
+    } else {
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      g.world.collide(this);
+    }
     const spd = Math.hypot(this.vx, this.vy);
     this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
     if (this.moving) {
@@ -244,6 +303,14 @@ export class Player {
       this.hp = Math.min(this.maxHp, this.hp + h * this.regenMul);
     }
 
+    this.leechLeft = Math.min(this.maxHp * KILL_HEAL.most, this.leechLeft + this.maxHp * KILL_HEAL.most * dt);
+    // Grove Warden: is a tree near him (the forest's; a crypt or the Dungeon has none)?
+    if (this.hero.stats.grove && (this.groveT -= dt) <= 0) {
+      this.groveT = GROVE.every;
+      const was = this.inGrove;
+      this.inGrove = !g.inCrypt && !!(g.world.treeNear && g.world.treeNear(this.x, this.y, GROVE.near));
+      if (this.inGrove && !was) g.particles.burst(this.x, this.y - 4, 4, 6, [PC.L, PC.l, PC.e], 30, 0.6, 1, P.GLOW | P.FADE, { vz: 30 });
+    }
     this.recentKills *= Math.exp(-dt / FURY.window);
     this.invuln = Math.max(0, this.invuln - dt);
     this.swingT = Math.max(0, (this.swingT || 0) - dt);
@@ -278,7 +345,7 @@ export class Player {
   }
 
   get untouchable() {
-    return this.invuln > 0 || (this.ult && this.ult.type === 'shadowdance') || this.g.state !== 'play';
+    return this.invuln > 0 || !!this.leap || (this.ult && this.ult.type === 'shadowdance') || this.g.state !== 'play';
   }
 
   // A blow of amount from src (a foe, by contact) or by (who struck it from afar, as the results
@@ -337,7 +404,7 @@ export class Player {
   heal(amount, quiet = false) {
     if (this.dead) return 0;
     const before = this.hp;
-    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.hp = Math.min(this.maxHp, this.hp + amount * this.healMul);
     const healed = Math.round(this.hp - before);
     if (healed > 0 && !quiet) {
       this.g.numbers.add(this.x, this.y - 18, healed, 'heal');
@@ -397,4 +464,4 @@ export class Player {
   }
 }
 
-export const ULT_DURATION = { whirlwind: 3.5, arrowstorm: 3, cataclysm: 2.6, shadowdance: 3, deadrise: 0.8 };
+export const ULT_DURATION = { whirlwind: 3.5, arrowstorm: 3, cataclysm: 2.6, shadowdance: 3, deadrise: 0.8, sanctum: 5, overgrowth: 3, frenzy: 5, purge: 4 };

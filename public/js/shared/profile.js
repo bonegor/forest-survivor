@@ -7,11 +7,14 @@
 //
 // The ladder:
 //  1. Everyone starts with the Knight in 15-minute Survival.
-//  2. Five minutes on the clock with a hero unlock the next hero.
+//  2. Five minutes on the clock with a hero unlock the next hero, all nine in turn
+//     (HERO_ORDER): the Necromancer's bring in the Paladin, and so on.
 //  3. Surviving the night with the Necromancer opens the Dungeon, for the Knight.
-//  4. Beating the Dungeon with a hero opens it for the next.
+//  4. Beating the Dungeon with one of the ladder's five (LADDER) opens it for the next.
 //  5. Beating the Dungeon with the Necromancer opens Ranked: endless, any hero,
 //     personal bests.
+// The four after the Necromancer (20 October 2026) are extras beside the ladder: once the
+// Dungeon is open they may go down at once, and nothing waits on their clears.
 //
 // Two difficulties (data/difficulty.js): Normal is recorded as the old Medium,
 // Veteran as the old Hard, so saves keep their shape and old Easy wins stay on record.
@@ -27,7 +30,10 @@ export const MODES = ['s15', 'dungeon', 'ranked'];
 export const WIN_MODES = ['s15', 'dungeon']; // Ranked has no victory, only a time
 // Heroes unlock in this order: a run with one that lasts this long on the clock (seconds)
 // brings in the next.
-export const HERO_ORDER = ['knight', 'archer', 'mage', 'rogue', 'necromancer'];
+export const HERO_ORDER = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
+// The ladder's five, whose Dungeon clears each bring the next one into it and the last opens
+// Ranked; the heroes after them are extras (canPlay, nextGoal).
+export const LADDER = HERO_ORDER.slice(0, 5);
 export const BASE_HEROES = ['knight'];
 export const HERO_UNLOCK_TIME = 5 * 60;
 // Per-hero achievements, stored as bit flags. survivalHard is any night won
@@ -147,8 +153,9 @@ export function sanitizeProfile(raw) {
   return p;
 }
 
-// The profile as its cookie keeps it, every hero's gear packed small (shared/items.js): five
-// heroes in six legendaries each still fit.
+// The profile as its cookie keeps it, every hero's gear packed into a string (shared/items.js
+// packGear): all nine heroes in six legendaries each still fit. A cookie written before, each
+// item an array, reads back all the same (sanitizeGear takes both).
 export function packProfile(p) {
   return { ...p, gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
 }
@@ -165,10 +172,11 @@ export function modeUnlocked(p, mode) {
   return false;
 }
 
-// Whether a hero may enter a mode right now.
+// Whether a hero may enter a mode right now. In the Dungeon one of the ladder's five waits for
+// the one before him to beat it; an extra goes down as soon as it is open.
 export function canPlay(p, mode, hero) {
   if (!p.heroes.includes(hero) || !modeUnlocked(p, mode)) return false;
-  if (mode !== 'dungeon' || hero === HERO_ORDER[0]) return true;
+  if (mode !== 'dungeon' || hero === LADDER[0] || !LADDER.includes(hero)) return true;
   return hasFeat(p, prevHero(hero), FEAT.dungeon);
 }
 
@@ -184,10 +192,10 @@ export function nextGoal(p) {
   const next = nextHeroUnlock(p);
   if (next) return { type: 'survive', hero: prevHero(next), unlocks: next, minutes: HERO_UNLOCK_TIME / 60 };
   if (!modeUnlocked(p, 'dungeon')) return { type: 'survivalHard', hero: 'necromancer', unlocks: 'dungeon' };
-  // Each clear brings the next hero in; the Necromancer's opens Ranked.
-  for (let i = 0; i < HERO_ORDER.length; i++) {
-    const h = HERO_ORDER[i];
-    if (!hasFeat(p, h, FEAT.dungeon)) return { type: 'dungeon', hero: h, unlocks: HERO_ORDER[i + 1] || 'ranked' };
+  // Each clear of the ladder's five brings the next in; the Necromancer's opens Ranked.
+  for (let i = 0; i < LADDER.length; i++) {
+    const h = LADDER[i];
+    if (!hasFeat(p, h, FEAT.dungeon)) return { type: 'dungeon', hero: h, unlocks: LADDER[i + 1] || 'ranked' };
   }
   return null;
 }
@@ -197,7 +205,7 @@ function openings(p) {
   const out = p.heroes.filter((h) => !BASE_HEROES.includes(h)).map((h) => 'hero:' + h);
   for (const m of MODES) if (m !== 's15' && modeUnlocked(p, m)) out.push('mode:' + m);
   if (modeUnlocked(p, 'dungeon')) {
-    for (const h of HERO_ORDER.slice(1)) if (canPlay(p, 'dungeon', h)) out.push('dungeon:' + h);
+    for (const h of LADDER.slice(1)) if (canPlay(p, 'dungeon', h)) out.push('dungeon:' + h);
   }
   return out;
 }
@@ -370,8 +378,8 @@ export function metaBonuses(profile) {
 }
 
 // The longest state decodeState reads. It must fit the biggest cookie the game writes, the
-// profile with every hero in six legendaries (packProfile): about 2 500 characters encoded
-// (test/profile.test.js measures it and keeps a quarter spare). A browser keeps at most 4096
+// profile with all nine heroes in six legendaries (packProfile): about 3 000 characters encoded
+// (test/profile.test.js measures it and keeps a quarter spare; test/server.test.js seals it). A browser keeps at most 4096
 // bytes a cookie, its name included, so nothing longer than this can be one of ours.
 export const MAX_STATE = 4000;
 

@@ -227,7 +227,7 @@ export function createDevPanel(app) {
       el('div', { class: 'row' },
         preset('Fresh start', (x) => Object.assign(x, P.defaultProfile())),
         preset('Survival ladder done', (x) => { allHeroes(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard); }),
-        preset('Dungeon open to all', (x) => { allHeroes(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard); feat(x, P.HERO_ORDER.slice(0, -1), P.FEAT.dungeon); }),
+        preset('Dungeon open to all', (x) => { allHeroes(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard); feat(x, P.LADDER.slice(0, -1), P.FEAT.dungeon); }),
         preset('Unlock everything', (x) => { allHeroes(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard | P.FEAT.dungeon); }),
         preset('+10 000 gold', (x) => { x.gold += 10000; }),
         preset('Max Armory', (x) => { for (const u of P.UPGRADES) x.up[u.id] = u.max; }),

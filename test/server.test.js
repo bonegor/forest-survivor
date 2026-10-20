@@ -321,3 +321,37 @@ test('npm run dev opens developer mode without a key', async () => {
     assert.equal(data.profile.gold, 777);
   }, { devOpen: true });
 });
+
+// All nine heroes (the four of 20 October 2026 too) in six legendaries each, every record at its
+// most: the biggest profile there is, sealed by the server into its cookie, still a cookie a
+// browser keeps (4 096 bytes, its name included), and read back whole.
+test('a maximal save of all nine heroes fits the sealed cookie and reads back whole', async () => {
+  const P = await import('../public/js/shared/profile.js');
+  const I = await import('../public/js/shared/items.js');
+  assert.equal(P.HERO_ORDER.length, 9);
+  const p = P.defaultProfile();
+  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, heroes: [...P.HERO_ORDER] });
+  p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999 };
+  for (const m of P.WIN_MODES) p.wins[m] = [1e6, 1e6, 1e6];
+  for (const u of P.UPGRADES) p.up[u.id] = u.max;
+  const legend = (slot) => {
+    const stats = {};
+    for (const id of I.POOLS[slot].slice(-4)) stats[id] = I.statRange(id, I.LEGENDARY)[1];
+    return { slot, rarity: I.LEGENDARY, stats, power: 'undying', seed: 999999 };
+  };
+  for (const h of P.HERO_ORDER) {
+    p.feats[h] = 7;
+    p.ranked[h] = 14400;
+    p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+  }
+  await withServer(async (base) => {
+    const c = client(base);
+    const res = await c.post('/api/dev/profile', { profile: p });
+    assert.equal(res.status, 200);
+    const line = res.headers.getSetCookie().find((s) => s.startsWith('fs_profile='));
+    const pair = line.split(';')[0];
+    assert.ok(pair.length <= 4096 - 256, `${pair.length} bytes, with room to spare under 4 096`);
+    const back = await (await c.get('/api/state')).json();
+    assert.deepEqual(back.profile, P.sanitizeProfile(p), 'every hero, every piece, read back');
+  }, { devOpen: true });
+});

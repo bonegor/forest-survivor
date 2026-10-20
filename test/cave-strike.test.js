@@ -6,7 +6,7 @@ import { SPR } from '../public/js/engine/sprites.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { cryptsNear, start } from '../public/js/game/darkwood.js';
-import { Slash } from '../public/js/game/effects.js';
+import { Slash, Pillar, Burrow, Chop } from '../public/js/game/effects.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const context = { globalAlpha: 1, drawImage() {} };
@@ -146,8 +146,16 @@ test('back in the forest every weapon fights by itself again, and he only walks'
 // The user: "in the dungeons, every hero should have available only its main weapon, make it so -
 // knight has sword, ranger has the bow, etc", and "the other weapons dont fire in there, and the
 // player uses left x or rhight shift.....but maybe also leftshift".
-const OWN = { archer: 'arrow', mage: 'fireball', rogue: 'dagger', necromancer: 'minion' };
-const made = (g, what) => (what === 'minion' ? g.minions.filter((m) => !m.dead).length : g.projectiles.filter((pr) => pr.kind === what).length);
+// The four of 20 October 2026 strike by hand too: a pillar of Smite, a root of Snaring Roots, the
+// Twin Axes' leap (or, with no room to leap, a chop where he stands), a crossbow bolt.
+const OWN = { archer: 'arrow', mage: 'fireball', rogue: 'dagger', necromancer: 'minion', paladin: 'pillar', druid: 'burrow', berserker: 'leap', witchhunter: 'bolt' };
+const made = (g, what) => {
+  if (what === 'minion') return g.minions.filter((m) => !m.dead).length;
+  if (what === 'pillar') return g.effects.filter((e) => e instanceof Pillar).length;
+  if (what === 'burrow') return g.effects.filter((e) => e instanceof Burrow).length;
+  if (what === 'leap') return (g.player.leap ? 1 : 0) + g.effects.filter((e) => e instanceof Chop).length;
+  return g.projectiles.filter((pr) => pr.kind === what).length;
+};
 
 for (const [hero, what] of Object.entries(OWN)) {
   test(`in a crypt the ${hero} has their own weapon alone, and it waits for the player`, () => gameCase((g, p) => {
@@ -193,7 +201,11 @@ for (const [hero, what] of Object.entries(OWN)) {
       assert.ok(Math.abs(left - clip.delay) < 2 / 60, `on the blow frame, ${clip.delay}s in, not ${left}`);
       assert.equal(frame, spr.attack[clip.hit], 'as the sprite strikes');
     } else assert.ok(left < 2 / 60, `at once, with no attack to play (${left})`);
-    if (what !== 'minion') {
+    if (what === 'pillar' || what === 'burrow') {
+      assert.equal(g.effects.find((e) => e instanceof (what === 'pillar' ? Pillar : Burrow)).target, foe, 'at the foe');
+    } else if (what === 'leap') {
+      assert.ok(p.leap ? p.leap.x1 < p.leap.x0 : g.effects.some((e) => e instanceof Chop), 'at the foe, or a chop where he stands');
+    } else if (what !== 'minion') {
       const shot = g.projectiles.find((pr) => pr.kind === what);
       assert.ok(shot.vx < 0 && Math.abs(shot.vy) < Math.abs(shot.vx), 'at the foe');
     }

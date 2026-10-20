@@ -1226,6 +1226,13 @@ export class Dungeon {
     return this.tile(Math.floor(x / T), Math.floor(y / T)) === FLOOR;
   }
 
+  // Whether a body of radius r (at most 6, as collide takes it) could stand at (x, y): open floor
+  // under all of it, no wall, pillar or lava. What a leap tests its way by (weapons.js LEAP).
+  open(x, y, r = 5) {
+    r = Math.min(r, 6);
+    return this.free(x - r, y - r) && this.free(x + r, y - r) && this.free(x - r, y + r) && this.free(x + r, y + r);
+  }
+
   collide(e) {
     const r = Math.min(e.r, 6);
     const x0 = Math.floor((e.x - r) / T), x1 = Math.floor((e.x + r) / T);

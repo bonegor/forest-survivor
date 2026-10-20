@@ -19,6 +19,10 @@ export const HERO_ROLES = [
   { id: 'mage', name: 'Sorcerer' },
   { id: 'rogue', name: 'Shade' },
   { id: 'necromancer', name: 'Necromancer' },
+  { id: 'paladin', name: 'Paladin' },
+  { id: 'druid', name: 'Druid' },
+  { id: 'berserker', name: 'Berserker' },
+  { id: 'witchhunter', name: 'Witch Hunter' },
 ].filter((r) => HEROES[r.id]);
 
 // The scouts' classes, by the game's.

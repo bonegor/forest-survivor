@@ -99,6 +99,80 @@ export const HEROES = {
     ultName: 'Army of the Dead',
     ultDesc: 'Raise a ring of empowered death knights around you.',
   },
+  // The four of 20 October 2026, asked for together ("all four"), after the Necromancer in
+  // HERO_ORDER: extras beside the ladder's five (shared/profile.js LADDER). Their sprites are
+  // being drawn in the Sprite Lab; until they are in, art/fallbacks.js draws the Knight's.
+  paladin: {
+    id: 'paladin',
+    short: 'Paladin',
+    name: 'Dame Seraphine',
+    title: 'Paladin',
+    sprite: 'paladin',
+    pose: 'paladin_pose',
+    weapon: 'smite',
+    unique: ['smite'],
+    color: '#fee761',
+    // Devotion: 140 health (+40%); every heal, regeneration of any kind included, does healMul
+    // as much (Player.heal, regenMul); each kill heals killHeal, at most KILL_HEAL.most a second.
+    stats: { maxHp: 140, regen: 0.1, regenMul: 1.5, healMul: 1.5, killHeal: 0.15 },
+    perk: 'Devotion: +40% health, all healing x1.5, kills heal a little',
+    ult: 'sanctum',
+    ultName: 'Sanctum',
+    ultDesc: 'A dome of light for 5s: foes in it are stunned and burn; she heals.',
+  },
+  druid: {
+    id: 'druid',
+    short: 'Druid',
+    name: 'Bramwyn',
+    title: 'Druid',
+    sprite: 'druid',
+    pose: 'druid_pose',
+    weapon: 'roots',
+    unique: ['roots'],
+    color: '#b86f50',
+    // Grove Warden: `grove` more damage while a tree stands within GROVE.near of him (the forest's;
+    // never in a crypt or the Dungeon), and he regenerates.
+    stats: { maxHp: 110, regen: 0.4, grove: 0.25 },
+    perk: 'Grove Warden: +25% damage near trees, regenerates',
+    ult: 'overgrowth',
+    ultName: 'Overgrowth',
+    ultDesc: 'Vines burst over the whole screen, rooting every foe for 3s.',
+  },
+  berserker: {
+    id: 'berserker',
+    short: 'Berserk',
+    name: 'Ulfric',
+    title: 'Berserker',
+    sprite: 'berserker',
+    pose: 'berserker_pose',
+    weapon: 'twinaxes',
+    unique: ['twinaxes'],
+    color: '#e43b44',
+    // Bloodrage: the lower his health, the harder and faster he strikes, up to rage.might more
+    // damage and rage.haste faster weapons at none left (Player.rage).
+    stats: { maxHp: 120, speed: 1.15, rage: { might: 0.6, haste: 0.3 } },
+    perk: 'Bloodrage: up to +60% damage & +30% attack speed as health falls, +15% speed',
+    ult: 'frenzy',
+    ultName: 'Red Frenzy',
+    ultDesc: 'For 5s he chops all round him without rest; each kill heals 3%.',
+  },
+  witchhunter: {
+    id: 'witchhunter',
+    short: 'Hunter',
+    name: 'Mercy Crane',
+    title: 'Witch Hunter',
+    sprite: 'witchhunter',
+    pose: 'witchhunter_pose',
+    weapon: 'crossbow',
+    unique: ['crossbow'],
+    color: '#c0cbdc',
+    // Inquisition: `bane` more damage on champions, crypt lords and bosses, from all she has.
+    stats: { maxHp: 100, speed: 1.05, crit: 0.1, bane: 0.3 },
+    perk: 'Inquisition: +30% damage to champions, lords & bosses, +10% crit',
+    ult: 'purge',
+    ultName: 'Purge',
+    ultDesc: 'For 4s foes are slowed by half; every bolt flies three at once and bursts.',
+  },
 };
 
 // The light line drawn round a hero that has one (line: the Shadow) on the menus; none in play.

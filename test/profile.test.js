@@ -55,6 +55,32 @@ test('every hero in six legendaries, and every record at its most, still fits th
   assert.deepEqual(P.sanitizeProfile(P.decodeState(plain)), clean, 'encoded, decoded, the same profile');
 });
 
+// Before the four heroes of 20 October 2026 a save kept each item as an array of numbers; nine
+// heroes' gear packed that way would not fit a cookie, so each hero's is one string now. A save
+// packed the old way reads back all the same, and is written the new way from then on.
+test('gear packed the old way (an array an item) reads back, and the new way is a third smaller', () => {
+  const legend = (slot) => {
+    const stats = {};
+    for (const id of I.POOLS[slot].slice(-4)) stats[id] = I.statRange(id, I.LEGENDARY)[1];
+    return { slot, rarity: I.LEGENDARY, stats, power: 'titan', seed: 123456 };
+  };
+  const gear = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+  const common = { slot: 'boots', rarity: 0, stats: { speed: 3 }, power: null, seed: 7 };
+  const old = { v: 3, heroes: ['knight', 'archer'], gear: { knight: Object.fromEntries(Object.entries(gear).map(([s, it]) => [s, I.packItem(it)])), archer: { boots: I.packItem(common) } } };
+  const p = P.sanitizeProfile(JSON.parse(JSON.stringify(old)));
+  assert.deepEqual(p.gear, { knight: gear, archer: { boots: common } });
+  const packed = P.packProfile(p);
+  assert.equal(typeof packed.gear.knight, 'string');
+  assert.equal(packed.gear.archer, '|||0.7.-1.0.3', 'empty slots before it kept, none after');
+  assert.deepEqual(P.sanitizeProfile(JSON.parse(JSON.stringify(packed))).gear, p.gear, 'and back');
+  assert.ok(JSON.stringify(packed.gear.knight).length < JSON.stringify(old.gear.knight).length * 0.67);
+  // Garbage in a packed string is no item, and spoils nothing else.
+  for (const bad of ['zzzz', '4.lfls.9.0.1', '|||x.y', 'a'.repeat(700), '4.lfls.2.0.99999']) {
+    assert.deepEqual(I.sanitizeGear(bad), {}, bad.slice(0, 20));
+  }
+  assert.deepEqual(I.sanitizeGear('|||0.7.-1.0.3|junk'), { boots: common });
+});
+
 // Every crypt lord may drop gear now, up to four a crypt (items.js MAX_LORDS), so a run may report
 // four times the finds it could; the hero still wears six pieces at most, so the report stays small.
 test('the largest run report, six legendaries worn and every find the bound allows, is still small', () => {
@@ -231,13 +257,17 @@ test('the full ladder: nights survived, then the Dungeon hero by hero, then Rank
   assert.equal(P.canPlay(p, 'ranked', 'knight'), false);
   assert.equal(run({ mode: 'dungeon', diff: 'easy', hero: 'knight' }).ok, false, 'locked modes are refused');
 
-  // Survival ladder: a night won is more than five minutes, so it brings in the next hero too.
+  // Survival ladder: a night won is more than five minutes, so it brings in the next hero too; the
+  // Necromancer's opens the Dungeon as well. The four after him are extras: nothing waits on them.
   for (const [i, h] of P.HERO_ORDER.entries()) {
     const next = P.HERO_ORDER[i + 1];
     const r = run({ mode: 's15', hero: h });
-    assert.deepEqual(r.reward.unlocks, [next ? 'hero:' + next : 'mode:dungeon'], h);
+    const want = [...(next ? ['hero:' + next] : []), ...(h === 'necromancer' ? ['mode:dungeon'] : [])];
+    assert.deepEqual(r.reward.unlocks, want, h);
   }
+  assert.deepEqual(P.LADDER, ['knight', 'archer', 'mage', 'rogue', 'necromancer']);
   assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: 'knight', unlocks: 'archer' });
+  for (const h of P.HERO_ORDER.slice(5)) assert.ok(P.canPlay(p, 'dungeon', h), `${h}, an extra, goes down as soon as it opens`);
   assert.ok(P.canPlay(p, 'dungeon', 'knight'));
   assert.equal(P.canPlay(p, 'dungeon', 'archer'), false, 'only the Knight enters the Dungeon at first');
   assert.equal(run({ mode: 'dungeon', diff: 'easy', hero: 'archer', time: 1200 }).ok, false);
@@ -245,11 +275,14 @@ test('the full ladder: nights survived, then the Dungeon hero by hero, then Rank
   // Dungeon ladder: it must be a full clear.
   run({ mode: 'dungeon', diff: 'easy', hero: 'knight', time: 1200, victory: false, floor: 3 });
   assert.equal(P.canPlay(p, 'dungeon', 'archer'), false, 'dying on floor 3 is not a clear');
-  for (const [i, h] of P.HERO_ORDER.slice(0, -1).entries()) {
-    assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: h, unlocks: P.HERO_ORDER[i + 1] });
+  for (const [i, h] of P.LADDER.slice(0, -1).entries()) {
+    assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: h, unlocks: P.LADDER[i + 1] });
     const r = run({ mode: 'dungeon', hero: h, time: 1200 });
-    assert.deepEqual(r.reward.unlocks, ['dungeon:' + P.HERO_ORDER[i + 1]]);
+    assert.deepEqual(r.reward.unlocks, ['dungeon:' + P.LADDER[i + 1]]);
   }
+  // An extra's clear is a win like any other, and brings nothing in.
+  assert.deepEqual(run({ mode: 'dungeon', hero: 'paladin', time: 1200 }).reward.unlocks, []);
+  assert.ok(P.hasFeat(p, 'paladin', P.FEAT.dungeon));
   // The Necromancer's clear opens Ranked.
   assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: 'necromancer', unlocks: 'ranked' });
   assert.deepEqual(run({ mode: 'dungeon', hero: 'necromancer', time: 1200 }).reward.unlocks, ['mode:ranked']);

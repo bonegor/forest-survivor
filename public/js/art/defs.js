@@ -25,10 +25,16 @@ import { PICKUP_ART, PROJECTILE_ART, ICON_ART } from './items.js';
 import { PROC_ART } from './procgen.js';
 import { PROP_ART } from './props.js';
 import { LANDMARK_ART } from './landmarks.js';
+import { PALADIN_ITEMS } from './hero-paladin-items.js';
+import { DRUID_ITEMS } from './hero-druid-items.js';
+import { BERSERKER_ITEMS } from './hero-berserker-items.js';
+import { WITCHHUNTER_ITEMS } from './hero-witchhunter-items.js';
 import { TUNED } from './tuned.js';
 
 // The art as drawn, and as the game draws it: with the colour tunes baked from the sprite tuner.
-export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...PROC_ART, ...PROP_ART, ...LANDMARK_ART };
+export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...PROC_ART, ...PROP_ART, ...LANDMARK_ART,
+  // the four heroes of 20 October 2026: their weapons' icons and what those put on the field
+  ...PALADIN_ITEMS, ...DRUID_ITEMS, ...BERSERKER_ITEMS, ...WITCHHUNTER_ITEMS };
 export const ART = withTunes(DRAWN, TUNED);
 
 // Art with colour tunes (tuned.js, by tools/bake-tune.mjs) laid over it: a sprite's palette

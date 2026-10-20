@@ -8,8 +8,8 @@ import { sfx } from '../engine/audio.js';
 import { rand, TAU, lerp, clamp, ease, angleDiff, pick, hash2, hexToRgb, makeCanvas } from '../engine/util.js';
 import { ringSprite, discSprite, slashFrame, glow, beamSprite, shadowSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
-import { WEAPON_SPRITES } from '../data/weapons.js';
-import { danceBlade } from './projectiles.js';
+import { WEAPON_SPRITES, BRAND_TIME } from '../data/weapons.js';
+import { danceBlade, spawnProjectile } from './projectiles.js';
 import { fxBurst, poolFlames, flameSeed } from './fxart.js';
 
 function blitCentered(ctx, img, sx, sy, scale) {
@@ -89,6 +89,7 @@ const EXPLO = {
   dark: { ring: '#f6757a', glow: '#b55088', light: 'purple', parts: [PC.P, PC.p, PC.i], num: 'dark' },
   blood: { ring: '#e43b44', glow: '#a22633', light: 'red', parts: [PC.r, PC.R, PC.x], num: 'normal' },
   soul: { ring: '#9ee562', glow: '#63c74d', light: 'green', parts: [PC.l, PC.L, PC.w], num: 'normal' },
+  silver: { ring: '#ffffff', glow: '#c0cbdc', light: 'cold', parts: [PC.w, PC.G, PC.g], num: 'holy', glowK: 0.6 },
 };
 
 export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
@@ -1291,5 +1292,490 @@ export class ShadowDance {
     }
     if (Math.random() < 0.5) g.particles.emit(p.x + rand(-5, 5), p.y - rand(0, 14), 0, 0, 0, rand(10, 20), 0.5, 2, pick([PC.p, PC.q, PC.P]), P.FADE | P.GLOW, 0);
     return this.t < this.dur;
+  }
+}
+
+// ------------------------------------------ the four of 20 October 2026 --
+
+// What the strong shrug off: a boss or a crypt's lord held by roots or stunned is only slowed, by
+// HELD_SLOW, for as long. Everything else stands where it is (Enemy.rootT, Enemy.stunT).
+export const HELD_SLOW = 0.5;
+export function rootFoe(e, t) {
+  if (e.dead || e.prop) return;
+  if (e.boss || e.lord) {
+    e.slowT = Math.max(e.slowT, t);
+    e.slowF = Math.max(e.slowF, HELD_SLOW);
+  } else e.rootT = Math.max(e.rootT, t);
+}
+// Stunned: held, and it strikes nothing that touches it (Enemy.update).
+export function stunFoe(e, t) {
+  if (e.dead || e.prop) return;
+  rootFoe(e, t);
+  if (!e.boss && !e.lord) e.stunT = Math.max(e.stunT, t);
+}
+// Smite's brand: k more from every blow (Game.hitEnemy) for BRAND_TIME s; a deeper one holds.
+export function brandFoe(e, k) {
+  if (e.dead || e.prop) return;
+  e.brandK = e.brandT > 0 ? Math.max(e.brandK, k) : k;
+  e.brandT = BRAND_TIME;
+}
+
+// Smite and Judgement: after `delay` a pillar of light falls on a foe (following it till then),
+// striking it and, for a little less, all round it within its splash; all it strikes is branded.
+export const SMITE = { R: 22, splash: 0.75 };
+export class Pillar {
+  constructor(g, w, target, delay = 0) {
+    this.g = g;
+    this.w = w;
+    this.target = target;
+    this.id = target.id;
+    this.x = target.x;
+    this.y = target.y;
+    this.t = -delay;
+    this.struck = false;
+  }
+
+  get R() {
+    return SMITE.R * this.w.s.area;
+  }
+
+  update(dt) {
+    const g = this.g, w = this.w, s = w.s;
+    this.t += dt;
+    if (!this.struck) {
+      const e = this.target, on = !e.dead && e.id === this.id;
+      if (on) {
+        this.x = e.x;
+        this.y = e.y;
+      }
+      if (this.t < 0) return true;
+      this.struck = true;
+      const R = this.R;
+      const cands = g.grid.query(this.x, this.y, R + 14);
+      for (let i = 0; i < cands.length; i++) {
+        const f = cands[i];
+        if (f.dead) continue;
+        const dx = f.x - this.x, dy = f.y - this.y, d = Math.hypot(dx, dy);
+        const main = on && f === e;
+        if (!main && d > R + f.r) continue;
+        g.hitEnemy(f, main ? s.dmg : s.dmg * SMITE.splash, { w, type: 'holy', kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
+        brandFoe(f, s.brand);
+      }
+      g.effects.push(new Beam(g, this.x, this.y + 1, '#fee761', 0.42, 130));
+      g.effects.push(new Ring(g, this.x, this.y, 3, R, 0.3, '#fee761', false, 2));
+      g.particles.burst(this.x, this.y, 4, 14, [PC.Y, PC.y, PC.w], R * 3.5, 0.45, 1, P.GLOW | P.FADE, { flat: 0.8, vz: 60 });
+      sfx('zap', { pitch: rand(0.55, 0.7), pan: clamp((this.x - g.player.x) / 200, -1, 1) });
+    }
+    return this.t < 0.3;
+  }
+
+  drawGround(ctx, cam) {
+    const [sx, sy] = toScreen(cam, this.x, this.y);
+    if (!this.struck) {
+      // The spot it is about to strike, gathering light.
+      if (this.t < -0.25) return;
+      ctx.globalAlpha = 0.4;
+      blitCentered(ctx, ringSprite(this.R * (1 - this.t * 2), '#fee761', 1), sx, sy, cam.S);
+    } else {
+      ctx.globalAlpha = 0.45 * (1 - clamp(this.t / 0.3, 0, 1));
+      blitCentered(ctx, ringSprite(this.R * 0.8, '#fee761', 99), sx, sy, cam.S);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// How a root of Snaring Roots grows: it tunnels (unseen but for a ripple of dirt) at TUNNEL px/s,
+// TUNNEL_MOST s at most, and bursts up where it reaches its foe; each root of the grip rises over
+// ROOT_RISE s and withers over the last ROOT_SINK s of the hold.
+const TUNNEL = 210, TUNNEL_MOST = 1.1, ROOT_RISE = 0.1, ROOT_SINK = 0.25;
+const ROOT_DIRT = [PC.m, PC.b, PC.B];
+// A root sprite's frame for a root ROOT s into its life, with left s to go: rising, grown,
+// withering, gone (the art's frames in turn, as many as it has).
+function rootFrame(spr, lt, left) {
+  const n = spr.frames.length;
+  return lt < ROOT_RISE ? 0 : left > ROOT_SINK ? Math.min(1, n - 1) : left > ROOT_SINK / 2 ? Math.min(2, n - 1) : n - 1;
+}
+// A root drawn growing out of the ground at (x, y): u of its height shows, from its tip down.
+function drawRoot(ctx, cam, img, x, y, u, sc = 1) {
+  const S = cam.S * sc, hh = Math.max(1, Math.round(img.height * u));
+  const sx = (x - cam.x) * cam.S, sy = (y - cam.y) * cam.S;
+  ctx.drawImage(img, 0, 0, img.width, hh, Math.round(sx - (img.width * S) / 2), Math.round(sy + S - hh * S), Math.round(img.width * S), Math.round(hh * S));
+}
+
+// One root of Snaring Roots or World Root: from (x, y) under the ground to `target`, striking
+// nothing on its way; where it surfaces it grips every foe within reach (Grip).
+export class Burrow {
+  constructor(g, w, x, y, target, delay = 0) {
+    this.g = g;
+    this.w = w;
+    this.x = x;
+    this.y = y;
+    this.target = target;
+    this.id = target.id;
+    this.tx = target.x;
+    this.ty = target.y;
+    this.t = -delay;
+    this.trailT = 0;
+  }
+
+  update(dt) {
+    const g = this.g, e = this.target;
+    this.t += dt;
+    if (this.t < 0) return true;
+    if (!e.dead && e.id === this.id) {
+      this.tx = e.x;
+      this.ty = e.y;
+    }
+    const dx = this.tx - this.x, dy = this.ty - this.y, d = Math.hypot(dx, dy);
+    const step = TUNNEL * this.w.s.speed * dt;
+    let up = this.t > TUNNEL_MOST;
+    if (d <= step + 2) {
+      this.x = this.tx;
+      this.y = this.ty;
+      up = true;
+    } else if (!up) {
+      const nx = this.x + (dx / d) * step, ny = this.y + (dy / d) * step;
+      // A wall stops it: it bursts up at the foot of it.
+      if (g.world.solid(nx, ny)) up = true;
+      else {
+        this.x = nx;
+        this.y = ny;
+      }
+    }
+    this.trailT -= dt;
+    if (this.trailT <= 0) {
+      this.trailT = 0.03;
+      g.particles.emit(this.x + rand(-2, 2), this.y + rand(-1, 1), 0, rand(-12, 12), rand(-6, 6), rand(20, 45), 0.35, 1, pick(ROOT_DIRT), P.GROUND | P.FADE, 2, 250);
+    }
+    if (!up) return true;
+    g.effects.push(new Grip(g, this.w, this.x, this.y));
+    return false;
+  }
+}
+
+// Where a root surfaces: every foe within R is struck and held for the weapon's hold (the
+// Hourglass's longer); roots stand round the spot as long, then wither.
+export const GRIP = { R: 18 };
+export class Grip {
+  constructor(g, w, x, y) {
+    const s = w.s;
+    this.g = g;
+    this.w = w;
+    this.x = x;
+    this.y = y;
+    this.t = 0;
+    this.R = GRIP.R * s.area;
+    this.dur = s.hold * g.player.duration;
+    this.sc = clamp(s.area * 0.85, 1, 1.4);
+    const cands = g.grid.query(x, y, this.R + 14);
+    for (let i = 0; i < cands.length; i++) {
+      const e = cands[i];
+      if (e.dead) continue;
+      if (Math.hypot(e.x - x, e.y - y) > this.R + e.r) continue;
+      g.hitEnemy(e, s.dmg, { w, type: 'normal', kb: 0 });
+      rootFoe(e, this.dur);
+    }
+    // The roots: one in the middle and a ring of them round it, more for a wider grip.
+    const n = Math.round(3 + this.R / 6);
+    this.roots = [{ x, y: y + 1, at: 0, flip: false }];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rand(-0.3, 0.3), r = this.R * rand(0.5, 0.9);
+      this.roots.push({ x: x + Math.cos(a) * r, y: y + Math.sin(a) * r * 0.7, at: rand(0, 0.08), flip: Math.cos(a) < 0 });
+    }
+    this.roots.sort((a, b) => a.y - b.y);
+    g.particles.burst(x, y, 2, 14, ROOT_DIRT, this.R * 4, 0.5, 1, P.GROUND | P.FADE, { vz: 80, grav: 300 });
+    sfx('wood', { pitch: rand(0.45, 0.6), pan: clamp((x - g.player.x) / 200, -1, 1) });
+  }
+
+  update(dt) {
+    this.t += dt;
+    return this.t < this.dur;
+  }
+
+  drawGround(ctx, cam) {
+    const [sx, sy] = toScreen(cam, this.x, this.y);
+    ctx.globalAlpha = 0.5 * clamp((this.dur - this.t) / ROOT_SINK, 0, 1);
+    blitCentered(ctx, discSprite(this.R * 0.7, DIRT, 0.5), sx, sy, cam.S);
+    ctx.globalAlpha = 1;
+  }
+
+  draw(ctx, cam) {
+    const spr = SPR[WEAPON_SPRITES.root];
+    if (!spr) return;
+    const left = this.dur - this.t;
+    for (const r of this.roots) {
+      const lt = this.t - r.at;
+      if (lt < 0) continue;
+      drawRoot(ctx, cam, spr.frames[rootFrame(spr, lt, left)].get(r.flip), r.x, r.y, Math.min(1, lt / ROOT_RISE), this.sc);
+    }
+  }
+}
+
+const BLOOD = ['#3e2731', '#a22633', '#e43b44', '#f6757a', '#ffffff'];
+
+// One chop of the Twin Axes (and Bloodstorm), and of Red Frenzy: the axes sweep all round the
+// hero where he stands, striking every foe within R. o.ult: Red Frenzy's (no weapon's).
+export class Chop {
+  constructor(g, w, R, dmg, o = {}) {
+    const p = g.player;
+    this.g = g;
+    this.x = p.x;
+    this.y = p.y;
+    this.R = Math.round(R);
+    this.t = 0;
+    this.dur = 0.2;
+    this.ai = Math.floor(rand(32));
+    const cands = g.grid.query(this.x, this.y, R + 14);
+    for (let i = 0; i < cands.length; i++) {
+      const e = cands[i];
+      if (e.dead) continue;
+      const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy);
+      if (d > R + e.r) continue;
+      g.hitEnemy(e, dmg, { w, type: 'normal', kb: o.kb ?? (w ? w.s.kb : 1), kx: dx / (d || 1), ky: dy / (d || 1), ult: o.ult });
+    }
+    g.particles.burst(this.x, this.y, 5, 6, [PC.r, PC.R, PC.G], R * 3, 0.3, 1, P.FADE, { flat: 0.9, vz: 30 });
+    if (!o.quiet) sfx('slash', { pitch: rand(0.7, 0.85) });
+  }
+
+  update(dt) {
+    this.t += dt;
+    return this.t < this.dur;
+  }
+
+  draw(ctx, cam) {
+    const f = Math.min(5, Math.floor((this.t / this.dur) * 6));
+    const [sx, sy] = toScreen(cam, this.x, this.y - 5);
+    blitCentered(ctx, slashFrame(this.R, 6, this.ai, f, 6, BLOOD), sx, sy, cam.S);
+  }
+}
+
+// Paladin: Sanctum, a dome of light round her for its time. Foes in it are stunned (bosses and
+// lords slowed) and burn; she heals SANCTUM.heal of her health a second (Devotion's more).
+export const SANCTUM = { R: 64, tick: 0.25, dmg: 12, heal: 0.04 };
+export class Sanctum {
+  constructor(g, dur) {
+    this.g = g;
+    this.dur = dur;
+    this.t = 0;
+    this.tickT = 0;
+    this.healT = 0;
+  }
+
+  get R() {
+    return SANCTUM.R * this.g.player.area;
+  }
+
+  get k() {
+    return clamp(Math.min(this.t / 0.2, (this.dur - this.t) / 0.3), 0, 1);
+  }
+
+  update(dt) {
+    const g = this.g, p = g.player, R = this.R;
+    this.t += dt;
+    this.tickT -= dt;
+    this.healT -= dt;
+    if (this.tickT <= 0 && this.t < this.dur) {
+      this.tickT = SANCTUM.tick;
+      const cands = g.grid.query(p.x, p.y, R + 12);
+      for (let i = 0; i < cands.length; i++) {
+        const e = cands[i];
+        if (e.dead || Math.hypot(e.x - p.x, e.y - p.y) > R + e.r) continue;
+        stunFoe(e, SANCTUM.tick + 0.1);
+        g.hitEnemy(e, SANCTUM.dmg, { type: 'holy', kb: 0, ult: true });
+      }
+    }
+    if (this.healT <= 0 && this.t < this.dur) {
+      this.healT = 1;
+      p.heal(p.maxHp * SANCTUM.heal);
+    }
+    if (Math.random() < 0.6) {
+      const a = rand(TAU), r = Math.sqrt(Math.random()) * R;
+      g.particles.emit(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r * 0.8, 0, 0, 0, rand(20, 40), 0.7, 1, pick([PC.Y, PC.y, PC.w]), P.GLOW | P.FADE, 0);
+    }
+    return this.t < this.dur;
+  }
+
+  drawGround(ctx, cam) {
+    const p = this.g.player, [sx, sy] = toScreen(cam, p.x, p.y), R = this.R, k = this.k;
+    ctx.globalAlpha = 0.16 * k;
+    blitCentered(ctx, ringSprite(R, '#fee761', 99), sx, sy, cam.S);
+    ctx.globalAlpha = (0.6 + 0.25 * Math.sin(this.t * 8)) * k;
+    blitCentered(ctx, ringSprite(R, '#fee761', 2), sx, sy, cam.S);
+    ctx.globalAlpha = 1;
+  }
+
+  drawGlow(ctx, cam) {
+    const p = this.g.player, [sx, sy] = toScreen(cam, p.x, p.y - 10), R = this.R, k = this.k;
+    const s = R * 2.6 * cam.S;
+    ctx.globalAlpha = 0.3 * k;
+    ctx.drawImage(glow('#feae34'), sx - s / 2, sy - s / 2, s, s);
+    ctx.globalAlpha = 1;
+    this.g.light(p.x, p.y, R * 2.4, 'holy', 0.9 * k);
+  }
+}
+
+// Druid: Overgrowth. Vines burst over the whole screen: every foe on it is struck and rooted
+// (bosses and lords slowed) for the rest of the ultimate's time, one that comes onto it while it
+// lasts too; those held take a lesser blow every OVERGROWTH.tick s.
+export const OVERGROWTH = { dmg: 12, late: 8, tick: 0.5, tickDmg: 4, vines: 70 };
+export class Overgrowth {
+  constructor(g, dur) {
+    this.g = g;
+    this.dur = dur;
+    this.t = 0;
+    this.tickT = OVERGROWTH.tick;
+    this.held = new Map(); // foe -> its id when caught (a dead one's body comes back as another)
+    this.vines = [];
+    const c = g.cam;
+    for (let i = 0; i < OVERGROWTH.vines; i++) this.vines.push({ x: c.x + rand(c.W), y: c.y + rand(c.H), at: rand(0, 0.35), flip: Math.random() < 0.5 });
+    this.vines.sort((a, b) => a.y - b.y);
+    this.catch(OVERGROWTH.dmg);
+    g.shake(0.5);
+    sfx('wood', { pitch: 0.4 });
+  }
+
+  catch(dmg) {
+    const g = this.g, left = this.dur - this.t;
+    for (const e of g.enemiesOnScreen()) {
+      if (this.held.get(e) === e.id) continue;
+      this.held.set(e, e.id);
+      rootFoe(e, left);
+      g.hitEnemy(e, dmg, { type: 'normal', kb: 0, ult: true });
+    }
+  }
+
+  update(dt) {
+    const g = this.g;
+    this.t += dt;
+    this.tickT -= dt;
+    if (this.tickT <= 0 && this.t < this.dur) {
+      this.tickT = OVERGROWTH.tick;
+      for (const [e, id] of this.held) {
+        if (e.dead || e.id !== id) this.held.delete(e);
+        else g.hitEnemy(e, OVERGROWTH.tickDmg, { type: 'normal', kb: 0, noCrit: true, ult: true });
+      }
+      this.catch(OVERGROWTH.late);
+    }
+    return this.t < this.dur;
+  }
+
+  draw(ctx, cam) {
+    const spr = SPR[WEAPON_SPRITES.root];
+    if (!spr) return;
+    const left = this.dur - this.t;
+    for (const v of this.vines) {
+      const lt = this.t - v.at;
+      if (lt > 0) drawRoot(ctx, cam, spr.frames[rootFrame(spr, lt, left)].get(v.flip), v.x, v.y, Math.min(1, lt / ROOT_RISE));
+    }
+    const f = spr.frames[rootFrame(spr, this.t, left)];
+    for (const [e, id] of this.held) if (!e.dead && e.id === id) drawRoot(ctx, cam, f.get(true), e.x + 3, e.y + 1, Math.min(1, this.t / ROOT_RISE));
+  }
+}
+
+// Berserker: Red Frenzy. For its time he chops all round him every FRENZY.every s, on top of his
+// weapons (which strike FRENZY.haste times as fast: Player.weaponHaste); every kill heals him
+// FRENZY.heal of his health (Game.killEnemy).
+export const FRENZY = { every: 0.15, R: 42, dmg: 22, haste: 2, heal: 0.03 };
+export class Frenzy {
+  constructor(g, dur) {
+    this.g = g;
+    this.dur = dur;
+    this.t = 0;
+    this.k = 0;
+  }
+
+  update(dt) {
+    const g = this.g, p = g.player;
+    this.t += dt;
+    this.k -= dt;
+    while (this.k <= 0 && this.t < this.dur) {
+      this.k += FRENZY.every;
+      g.effects.push(new Chop(g, null, FRENZY.R * p.area, FRENZY.dmg, { ult: true, kb: 0.8, quiet: Math.random() < 0.5 }));
+    }
+    if (Math.random() < 0.5) g.particles.emit(p.x + rand(-5, 5), p.y - rand(2, 14), 0, 0, 0, rand(10, 25), 0.5, 1, pick([PC.r, PC.x, PC.R]), P.GLOW | P.FADE, 0);
+    return this.t < this.dur;
+  }
+
+  drawGlow(ctx, cam) {
+    const p = this.g.player, [sx, sy] = toScreen(cam, p.x, p.y - 8), s = 70 * cam.S;
+    ctx.globalAlpha = 0.25 + 0.1 * Math.sin(this.t * 14);
+    ctx.drawImage(glow('#e43b44'), sx - s / 2, sy - s / 2, s, s);
+    ctx.globalAlpha = 1;
+    this.g.light(p.x, p.y, 70, 'red', 0.7);
+  }
+}
+
+// The wicked, whom the Witch Hunter's bolts seek out first and bite deeper into (bane).
+export const wicked = (e) => !!(e.boss || e.lord || e.elite || e.type === 'cultist');
+
+// Up to n foes for her bolts: the wicked within R, nearest first, then the rest.
+export function boltTargets(g, x, y, R, n) {
+  const near = g.nearestEnemies(x, y, 40, R);
+  return [...near.filter(wicked), ...near.filter((e) => !wicked(e))].slice(0, n);
+}
+
+// The Purifier's bolts (and Purge's) burst in silver light round each foe they strike.
+export const SILVER_BURST = { R: 18, dmg: 0.4 };
+function silverBurst(pr, e) {
+  explode(pr.g, e.x, e.y - 2, SILVER_BURST.R, pr.dmg * SILVER_BURST.dmg, pr.w, 'silver', { kb: 0.6, ult: pr.ult });
+}
+
+// One of her heavy silver bolts from (x, y) along ang (weapons.js KINDS.crossbow, Purge): o.dmg,
+// o.pierce, o.kb, o.speed, o.bane more on the wicked; o.nova: it bursts on every foe it strikes;
+// o.ult: the ultimate's blow. w: the weapon it is, or null (Purge's own).
+export function silverBolt(g, w, x, y, ang, o) {
+  return spawnProjectile(g, {
+    kind: 'bolt', sprite: WEAPON_SPRITES.silverbolt, x, y: y - 1, z: 7, ang, speed: 300 * (o.speed || 1), life: 0.9, r: 3,
+    dmg: o.dmg, pierce: o.pierce, kb: o.kb, w, bane: o.bane || 0, wicked, ult: !!o.ult, trail: o.nova ? PC.w : PC.G,
+    glow: o.nova ? ['#c0cbdc', 16, 'cold', 26] : null, onHit: o.nova ? silverBurst : null,
+  });
+}
+
+// Witch Hunter: Purge. For its time every foe on the screen is slowed by PURGE.slow; her bolts fly
+// three at once and burst (weapons.js KINDS.crossbow), reloading PURGE.haste times as fast; and
+// every PURGE.every s it looses a volley of three bursting bolts of its own (PURGE.bolt) at the
+// nearest of the wicked, else the nearest foe.
+export const PURGE = { slow: 0.5, haste: 1.5, spread: 0.12, every: 0.4, reach: 230, bolt: { dmg: 30, pierce: 3, kb: 0.8, speed: 1.2, bane: 0.5, nova: true, ult: true } };
+export class Purge {
+  constructor(g, dur) {
+    this.g = g;
+    this.dur = dur;
+    this.t = 0;
+    this.k = 0;
+    this.volT = 0; // the next volley of its own
+  }
+
+  update(dt) {
+    const g = this.g;
+    this.t += dt;
+    this.k -= dt;
+    if (this.k <= 0 && this.t < this.dur) {
+      this.k = 0.1;
+      for (const e of g.enemiesOnScreen()) {
+        e.slowT = Math.max(e.slowT, 0.3);
+        e.slowF = Math.max(e.slowF, PURGE.slow);
+      }
+    }
+    this.volT -= dt;
+    if (this.volT <= 0 && this.t < this.dur) {
+      const p = g.player, t = boltTargets(g, p.x, p.y, PURGE.reach, 1)[0];
+      this.volT = t ? PURGE.every : 0.1;
+      if (t) {
+        const ang = Math.atan2(t.y - p.y, t.x - p.x);
+        for (const da of [-PURGE.spread, 0, PURGE.spread]) silverBolt(g, null, p.x, p.y, ang + da, PURGE.bolt);
+        sfx('arrow', { pitch: rand(0.5, 0.6) });
+      }
+    }
+    return this.t < this.dur;
+  }
+
+  drawGlow(ctx, cam) {
+    const k = clamp(Math.min(this.t / 0.2, (this.dur - this.t) / 0.4), 0, 1);
+    ctx.globalAlpha = 0.1 * k;
+    ctx.fillStyle = '#c0cbdc';
+    ctx.fillRect(0, 0, cam.pxW, cam.pxH);
+    ctx.globalAlpha = 1;
+    const p = this.g.player;
+    this.g.light(p.x, p.y, 160, 'cold', 0.6 * k);
   }
 }

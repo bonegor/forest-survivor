@@ -203,9 +203,11 @@ export function sanitizeItem(raw, slot = null) {
   return { slot: s, rarity: r, stats, power, seed };
 }
 
-// Takes items as objects or packed (below).
+// Takes gear as objects, or packed: a slot's item as an array (packItem, the cookies written
+// before nine heroes), or the whole hero's as one string (packGear).
 export function sanitizeGear(raw) {
   const gear = {};
+  if (typeof raw === 'string') raw = unpackGear(raw);
   if (!raw || typeof raw !== 'object') return gear;
   for (const slot of SLOTS) {
     const it = sanitizeItem(Array.isArray(raw[slot]) ? unpackItem(raw[slot], slot) : raw[slot], slot);
@@ -214,7 +216,7 @@ export function sanitizeGear(raw) {
   return gear;
 }
 
-// An item as the profile's cookie keeps it, where every character counts (five heroes' gear has
+// An item as the profile's cookie keeps it, where every character counts (nine heroes' gear has
 // to fit): [rarity, seed, power, stat, value, stat, value, ...], the power and each stat by their
 // place in POWERS and in the slot's pool, and power -1 for none.
 const POWER_IDS = Object.keys(POWERS);
@@ -223,7 +225,21 @@ export function packItem(it) {
   for (const [id, v] of Object.entries(it.stats)) out.push(POOLS[it.slot].indexOf(id), v);
   return out;
 }
-export const packGear = (gear) => Object.fromEntries(Object.entries(gear || {}).map(([slot, it]) => [slot, packItem(it)]));
+// A hero's gear packed into one string: his slots in SLOTS order split by '|' (empty for none, the
+// empties at the end left off), each item its packItem numbers in base 36 split by '.'. Six
+// legendaries take about 150 characters, a third less than they took as arrays.
+export const packGear = (gear) =>
+  SLOTS.map((s) => (gear && gear[s] ? packItem(gear[s]).map((n) => n.toString(36)).join('.') : '')).join('|').replace(/\|+$/, '');
+// Back to a slot -> packed item table for sanitizeGear to check (anything malformed is no item).
+function unpackGear(str) {
+  const out = {};
+  if (str.length > 600) return out;
+  str.split('|').forEach((part, i) => {
+    if (i >= SLOTS.length || !/^-?[0-9a-z]+(\.-?[0-9a-z]+)*$/.test(part)) return;
+    out[SLOTS[i]] = part.split('.').map((n) => parseInt(n, 36));
+  });
+  return out;
+}
 
 // Back to an item for sanitizeItem to check, or null.
 function unpackItem(a, slot) {

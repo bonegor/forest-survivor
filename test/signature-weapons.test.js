@@ -36,7 +36,10 @@ function gameCase(hero, fn, o = {}) {
 const foe = (g, dx, dy, o = {}) => g.spawnEnemy('zombie', g.player.x + dx, g.player.y + dy, { instant: true, hpMul: 1e5, ...o });
 const held = (p) => p.weapons.map((w) => [w.id, w.level]);
 
-const SIGNATURES = { knight: ['sword'], archer: ['bow'], mage: ['fireball'], rogue: ['daggers'], necromancer: ['raise', 'miasma'] };
+const SIGNATURES = {
+  knight: ['sword'], archer: ['bow'], mage: ['fireball'], rogue: ['daggers'], necromancer: ['raise', 'miasma'],
+  paladin: ['smite'], druid: ['roots'], berserker: ['twinaxes'], witchhunter: ['crossbow'],
+};
 
 test('each class has its signature weapon, and every other weapon is shared by all', () => {
   for (const [id, h] of Object.entries(HEROES)) {

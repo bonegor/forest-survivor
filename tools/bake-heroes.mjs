@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readPng } from './png.mjs';
+import { PAL } from '../public/js/art/palette.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const lab = join(root, 'gms/3001/sprites/lab');
@@ -24,6 +25,11 @@ const BAKE = {
   mage: 'mage/grand-archmage-picked',
   necromancer: 'necromancer/soulflame-picked',
   rogue: 'rogue/eclipse-wraith-tweak-1',
+  // The four of 20 October 2026, drawn in the lab (src/newheroes-oct20).
+  paladin: 'paladin/v1',
+  druid: 'druid/v1',
+  berserker: 'berserker/v1',
+  witchhunter: 'witchhunter/v1',
 };
 const OURS = new Set(['made for Forest Survivor', "the game's own"]);
 
@@ -80,7 +86,8 @@ for (const [name, pick] of Object.entries(BAKE)) {
     // A ranger's bow: the frame the arrow leaves on, and her shots on the move.
     ...(e.attackRelease !== null && e.attackRelease !== undefined ? { attackRelease: e.attackRelease, attackWalk: e.attackWalk } : {}),
     // What glows unlit at night, as the colours themselves (packed as the palette is).
-    ...(e.glow && e.glow.length ? { glow: e.glow.map(packHex) } : {}),
+    // A sheet built in the lab says what glows as palette keys (emissive): their colours, then.
+    ...(e.glow && e.glow.length ? { glow: e.glow.map(packHex) } : e.emissive ? { glow: [...e.emissive].map((k) => packHex(PAL[k])) } : {}),
     indexBytes, palette, frames: encoded,
   };
   const head = `// ${e.name}, picked in the Sprite Lab (lab:${pick}); ${e.licence}.\n// Baked by tools/bake-heroes.mjs from its sheet: ${data.frames.length} frames of ${e.w}x${e.h}, ${palette.length - 1} colours.\n`;

@@ -27,7 +27,14 @@ export function statsAt(def, level, from = {}) {
 export const WEAPON_SPRITES = {
   shadowblade: 'shadowblade', // Shadow Blade and Shadowstrike, spun as they fly
   caltrop: 'caltrop', // a scatter of Caltrops in the air, and each one on the ground
+  // The four of 20 October 2026 (until their art is in, art/fallbacks.js stands in for it):
+  brand: 'brand', // Smite's sigil over a branded foe (7x7)
+  root: 'root', // a root of Snaring Roots bursting up, 4 frames rising to withering (10x14)
+  silverbolt: 'silverbolt', // the Silver Crossbow's bolt, pointing right (11x3)
 };
+
+// How long a foe Smite or Judgement struck stays Branded, in seconds (Enemy.brandT).
+export const BRAND_TIME = 3;
 
 export const WEAPONS = {
   // ------------------------------- the Knight's signature, then shared weapons
@@ -331,6 +338,90 @@ export const WEAPONS = {
     evo: { into: 'pestilence', with: 'regen' },
   },
 
+  // ---------------------------------- the four of 20 October 2026: one signature each
+  // The Paladin's. A pillar of light on the mightiest foe in reach (a boss, a crypt's lord, a
+  // champion, else the one with the most health), a splash round it; all it burns is Branded for
+  // BRAND.time s: every blow on it, anyone's, does `brand` more (Game.hitEnemy).
+  smite: {
+    name: 'Smite',
+    icon: 'i_smite',
+    kind: 'smite',
+    desc: 'A pillar of holy light strikes the mightiest foe near and brands all it burns.',
+    base: { dmg: 26, cd: 1.35, amount: 1, area: 1, kb: 0.6, brand: 0.15 },
+    levels: [
+      { dmg: 8, text: 'Damage {+8}.' },
+      { area: 0.25, text: 'Splash {+25%} wider.' },
+      { amount: 1, text: '{+1} pillar.' },
+      { dmg: 10, text: 'Damage {+10}.' },
+      { cd: -0.25, text: 'Strikes {faster}.' },
+      { amount: 1, area: 0.2, text: '{+1} pillar, splash {+20%}.' },
+      { dmg: 12, text: 'Damage {+12}.' },
+    ],
+    evo: { into: 'judgement', with: 'vitality' },
+  },
+  // The Druid's. Not Bramble's line of thorns from the hero, piercing all on its way: a root
+  // tunnels unseen under the ground to the nearest foe, striking nothing on its way, and bursts up
+  // round it, holding (rooting) every foe in its grip for `hold` s; a boss or a crypt's lord is
+  // only slowed. `speed`: how fast it tunnels.
+  roots: {
+    name: 'Snaring Roots',
+    icon: 'i_roots',
+    kind: 'roots',
+    desc: 'A root tunnels to the nearest foe and bursts up round it, holding fast all it grips.',
+    base: { dmg: 16, cd: 1.6, amount: 1, area: 1, hold: 1, speed: 1, kb: 0 },
+    levels: [
+      { dmg: 6, text: 'Damage {+6}.' },
+      { area: 0.2, text: 'Grip {+20%} wider.' },
+      { amount: 1, text: '{+1} root.' },
+      { hold: 0.3, text: 'Holds {+0.3s} longer.' },
+      { dmg: 8, cd: -0.25, text: 'Damage {+8}, grows faster.' },
+      { area: 0.2, hold: 0.2, text: 'Grip {+20%}, holds longer.' },
+      { dmg: 10, text: 'Damage {+10}.' },
+    ],
+    evo: { into: 'worldroot', with: 'duration' },
+  },
+  // The Berserker's. He leaps on a foe ahead of him (a short, quick hop that never crosses a wall
+  // or a trunk: weapons.js KINDS.leap) and chops all round where he lands; with no foe ahead in
+  // reach he chops round his feet. `amount`: chops a landing.
+  twinaxes: {
+    name: 'Twin Axes',
+    icon: 'i_twinaxes',
+    kind: 'leap',
+    desc: 'Leaps on a foe ahead and chops all round where he lands.',
+    base: { dmg: 22, cd: 1.1, amount: 1, area: 1, kb: 1.2 },
+    levels: [
+      { dmg: 7, text: 'Damage {+7}.' },
+      { area: 0.2, text: 'Chops {+20%} wider.' },
+      { cd: -0.15, text: 'Leaps {faster}.' },
+      { dmg: 8, text: 'Damage {+8}.' },
+      { area: 0.15, text: 'Chops {+15%} wider.' },
+      { dmg: 6, cd: -0.15, text: 'Damage {+6}, leaps faster.' },
+      { dmg: 10, area: 0.15, text: 'Damage {+10}, chops wider.' },
+    ],
+    evo: { into: 'bloodstorm', with: 'might' },
+  },
+  // The Witch Hunter's. Not the Ranger's bow, which looses along her facing, nor the Shadow's
+  // blades, which seek the nearest foe and cut through all: a heavy, aimed bolt at the nearest
+  // of the wicked in reach (a boss, a lord, a champion, a cultist), else the nearest foe;
+  // through `pierce` more, `bane` more on the wicked.
+  crossbow: {
+    name: 'Silver Crossbow',
+    icon: 'i_crossbow',
+    kind: 'crossbow',
+    desc: 'Heavy silver bolts at the wicked first; they pierce, and bite deeper into the strong.',
+    base: { dmg: 26, cd: 1.15, amount: 1, speed: 1, pierce: 2, kb: 1, bane: 0.5 },
+    levels: [
+      { dmg: 8, text: 'Damage {+8}.' },
+      { cd: -0.15, text: 'Reloads {faster}.' },
+      { pierce: 1, text: 'Bolts pierce {+1} foe.' },
+      { amount: 1, text: '{+1} bolt.' },
+      { dmg: 10, text: 'Damage {+10}.' },
+      { cd: -0.15, speed: 0.25, text: 'Reloads faster, bolts {+25%} faster.' },
+      { dmg: 12, pierce: 1, text: 'Damage {+12}, pierce {+1}.' },
+    ],
+    evo: { into: 'purifier', with: 'projspeed' },
+  },
+
   // ------------------------------------------------------------- evolutions
   excalibur: {
     name: 'Excalibur',
@@ -467,5 +558,37 @@ export const WEAPONS = {
     evolved: true,
     desc: 'A great plague cloud; foes dying in it burst into poison of their own.',
     base: { dmg: 11, area: 1.6, tick: 0.3, kb: 0, dur: 4, dot: 11, plague: 1 },
+  },
+  judgement: {
+    name: 'Judgement',
+    icon: 'i_judgement',
+    kind: 'smite',
+    evolved: true,
+    desc: 'A volley of pillars on the mightiest foes; their brand burns deeper.',
+    base: { dmg: 64, cd: 0.95, amount: 5, area: 1.7, kb: 0.8, brand: 0.25 },
+  },
+  worldroot: {
+    name: 'World Root',
+    icon: 'i_worldroot',
+    kind: 'roots',
+    evolved: true,
+    desc: 'Three great roots burst up under the horde and hold it long.',
+    base: { dmg: 48, cd: 1.1, amount: 3, area: 1.6, hold: 2.2, speed: 1.3, kb: 0 },
+  },
+  bloodstorm: {
+    name: 'Bloodstorm',
+    icon: 'i_bloodstorm',
+    kind: 'leap',
+    evolved: true,
+    desc: 'Every landing chops twice in a wide circle, and each kill heals him a little.',
+    base: { dmg: 60, cd: 0.65, amount: 2, area: 1.8, kb: 1.4, heal: 1 },
+  },
+  purifier: {
+    name: 'Purifier',
+    icon: 'i_purifier',
+    kind: 'crossbow',
+    evolved: true,
+    desc: 'A burst of three bolts; each bursts in silver light on every foe it strikes.',
+    base: { dmg: 62, cd: 0.7, amount: 3, speed: 1.45, pierce: 6, kb: 1.2, bane: 0.75, nova: 1 },
   },
 };

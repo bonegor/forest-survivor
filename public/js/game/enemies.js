@@ -2,6 +2,7 @@
 // this class; boss behaviour lives in bosses.js.
 
 import { ENEMIES } from '../data/enemies.js';
+import { WEAPON_SPRITES } from '../data/weapons.js';
 import { HEROES } from '../data/heroes.js';
 import { UPGRADES } from '../shared/profile.js';
 import { BASE_SPEED } from './player.js';
@@ -144,6 +145,13 @@ export class Enemy {
     this.slowT = 0;
     this.slowF = 0;
     this.freezeT = 0;
+    // Branded by Smite (Game.hitEnemy: every blow does brandK more while brandT lasts) and held
+    // by roots (rootT: it can't move, though it still strikes what touches it and still shoots);
+    // stunned (stunT, Sanctum's: held, and what touches it is not struck).
+    this.brandT = 0;
+    this.brandK = 0;
+    this.rootT = 0;
+    this.stunT = 0;
     this.holdT = 0;
     this.holdCd = 0;
     this.dotT = 0; // damage over time (addDot): how long it lasts yet
@@ -213,6 +221,9 @@ export class Enemy {
       if (this.slowT <= 0) this.slowF = 0;
     }
     if (this.freezeT > 0) this.freezeT -= dt;
+    if (this.brandT > 0) this.brandT -= dt;
+    if (this.rootT > 0) this.rootT -= dt;
+    if (this.stunT > 0) this.stunT -= dt;
 
     if (this.spawnT > 0) {
       this.spawnT -= dt;
@@ -261,7 +272,7 @@ export class Enemy {
     // The horde walks its class's speed (hordePace), a Nightmare's faster; the rest scale by the difficulty.
     let sp = this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed;
     if (this.slowT > 0) sp *= 1 - this.slowF;
-    if (this.freezeT > 0) sp = 0;
+    if (this.freezeT > 0 || this.rootT > 0) sp = 0;
     if (this.holdCd > 0) this.holdCd -= dt;
     if (this.holdT > 0) {
       this.holdT -= dt;
@@ -375,7 +386,7 @@ export class Enemy {
     this.anim += dt * def.anim * (sp > 1 ? 1 : 0.25);
 
     // Contact damage.
-    if (this.dmg > 0 && this.freezeT <= 0) {
+    if (this.dmg > 0 && this.freezeT <= 0 && this.stunT <= 0) {
       const rr = this.r + p.r;
       if ((p.x - this.x) ** 2 + (p.y - this.y) ** 2 < rr * rr) {
         // It costs the hero health only: no blow, a boss's included, shoves him (Player.update).
@@ -585,12 +596,25 @@ export class Enemy {
       ctx.drawImage(flip ? fr.emf : fr.em, Math.round(X), Math.round(Y), Math.round(w), Math.round(h));
       ctx.globalAlpha = 1;
     }
+    if (this.brandT > 0) this.drawBrand(ctx, cam, X, Y, w);
     if ((this.boss || this.lord) && this.flash <= 0) {
       const col = this.rimColor();
       ctx.globalAlpha = this.alpha * (0.7 + 0.3 * Math.sin(this.life * 6));
       ctx.drawImage(fr.variant('rim' + col, (b) => rimBuf(b, col), flip), Math.round(X), Math.round(Y), Math.round(w), Math.round(h));
       ctx.globalAlpha = 1;
     }
+  }
+
+  // Smite's brand: its sigil (WEAPON_SPRITES.brand) over the foe's head, unlit, bobbing a little,
+  // fading out over its last half second. X, Y, w: where the foe was drawn, on the screen.
+  drawBrand(ctx, cam, X, Y, w) {
+    const spr = SPR[WEAPON_SPRITES.brand];
+    if (!spr) return;
+    const S = cam.S, img = spr.frames[Math.floor(this.life * 6) % spr.frames.length].c;
+    const bob = Math.round(Math.sin(this.life * 5 + this.wob) * 1) * S;
+    ctx.globalAlpha = Math.min(1, this.brandT * 2) * 0.95;
+    ctx.drawImage(img, Math.round(X + w / 2 - (img.width * S) / 2), Math.round(Y - (img.height + 2) * S + bob), img.width * S, img.height * S);
+    ctx.globalAlpha = 1;
   }
 
   // How much of its night layer shows (NIGHT_EDGE): as much as of its body, fading in as that

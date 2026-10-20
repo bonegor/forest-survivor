@@ -31,6 +31,10 @@ const WEAPON_PREF = {
   mage: ['lightning', 'arcane', 'frost', 'flask'],
   rogue: ['flask', 'caltrops', 'glaive', 'wisps'],
   necromancer: ['blades', 'lightning', 'wisps', 'axe'],
+  paladin: ['aura', 'blades', 'lightning', 'axe'],
+  druid: ['thorns', 'wisps', 'frost', 'flask'],
+  berserker: ['aura', 'blades', 'axe', 'caltrops'],
+  witchhunter: ['glaive', 'lightning', 'arcane', 'wisps'],
 };
 const prefOf = (v, id) => {
   const list = WEAPON_PREF[v.hero] || [], r = list.indexOf(id);

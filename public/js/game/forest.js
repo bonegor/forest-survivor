@@ -295,6 +295,38 @@ export class Forest {
     }
   }
 
+  // Whether a body of radius r could stand at (x, y): off every trunk and landmark post (as
+  // collide shapes them) and out of every crypt's walls. What a leap tests its way by (weapons.js LEAP).
+  open(x, y, r = 5) {
+    for (const d of this.g.crypts) {
+      const dx = x - d.x, dy = y - (d.y - CRYPT_BOX.up / 2 - CRYPT_BOX.steps);
+      if (Math.abs(dx) < CRYPT_BOX.w / 2 + 3 && Math.abs(dy) < CRYPT_BOX.up / 2) return false;
+    }
+    let free = true;
+    this.trunksNear(x, y, (t) => {
+      const rx = t.trunk + r, ry = rx * 0.65;
+      if ((x - t.x) ** 2 + (((y - t.y) * rx) / ry) ** 2 < rx * rx) free = false;
+    });
+    return free;
+  }
+
+  // Whether a tree stands within R px of (x, y) (the Druid's Grove Warden): a tree's foot, not a
+  // landmark's post.
+  treeNear(x, y, R) {
+    let near = false;
+    this.trunksNear(x, y, (t) => {
+      if (t.spr && (x - t.x) ** 2 + (y - t.y) ** 2 <= R * R) near = true;
+    }, R);
+    return near;
+  }
+
+  // fn(trunk) for every trunk and landmark post in the chunks within m px of (x, y).
+  trunksNear(x, y, fn, m = 36) {
+    const x0 = Math.floor((x - m) / CH), x1 = Math.floor((x + m) / CH);
+    const y0 = Math.floor((y - m) / CH), y1 = Math.floor((y + m) / CH);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) for (const t of this.chunk(cx, cy).trunks) fn(t);
+  }
+
   lineOfSight() {
     return true;
   }
