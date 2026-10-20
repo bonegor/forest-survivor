@@ -270,8 +270,9 @@ export function sanitizeRun(raw) {
     // Selling what the crypts gave pays too; applyRun adds what selling worn gear paid.
     gold: int(raw.gold, 0, 100 + realTime * MAX_GOLD_PER_SEC + found * RARITIES[LEGENDARY].price),
     claim: int(raw.gold, 0, 1e9),
-    // 120 a second: twice the 60 it was, for the doubled horde (difficulty.js CROWD); a Nightmare twice that.
-    kills: int(raw.kills, 0, 50 + time * 120 * (nightmare ? 2 : 1)),
+    // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD); a
+    // Nightmare twice that.
+    kills: int(raw.kills, 0, 50 + time * 240 * (nightmare ? 2 : 1)),
     level: int(raw.level, 1, 999),
     floor: int(raw.floor, 1, 3),
     realTime,

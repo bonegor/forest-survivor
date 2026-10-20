@@ -266,11 +266,27 @@ test('a run goes about 52% faster than real time: the night in about 9:53, the n
 });
 
 // The owner (20 October 2026): "the thing is even a bit too easy. Double the amount of monsters".
-test('the horde is twice what it was on both difficulties: the steady horde and the swarms, rings and packs', () => {
-  assert.equal(CROWD, 2);
+// Then again: "double the number of monsters on all difficulties".
+test('the horde is four times what it was on both difficulties: the steady horde and the swarms, rings and packs', () => {
+  assert.equal(CROWD, 4);
   const MORE = 1.1 * 1.1 * 1.2;
   for (const d of [VETERAN, NORMAL]) {
-    assert.ok(Math.abs(d.spawn - 1.15 * MORE * 2) < 1e-9, `${d.name}'s steady horde`);
-    assert.ok(Math.abs(d.horde - MORE * 2) < 1e-9, `${d.name}'s swarms, rings and packs`);
+    assert.ok(Math.abs(d.spawn - 1.15 * MORE * 4) < 1e-9, `${d.name}'s steady horde`);
+    assert.ok(Math.abs(d.horde - MORE * 4) < 1e-9, `${d.name}'s swarms, rings and packs`);
   }
+});
+
+// The owner (20 October 2026): "Speed up the slower monsters. General monster is only a little slower than hero."
+test('the slow monsters of the horde close up on the hero, in their order; bosses, lords and the thief keep theirs', async () => {
+  const { hordePace } = await import('../public/js/game/enemies.js');
+  const { ENEMIES } = await import('../public/js/data/enemies.js');
+  const walk = ['zombie', 'skeleton', 'goblin', 'wolf', 'hellhound'].map((id) => hordePace(ENEMIES[id]));
+  for (let i = 1; i < walk.length; i++) assert.ok(walk[i] >= walk[i - 1], 'slow stays slower');
+  for (const id of ['zombie', 'skeleton', 'ogre', 'slime']) {
+    const v = hordePace(ENEMIES[id]) * VETERAN.speed;
+    assert.ok(v > 0.8 * 70 && v < 70, `${id} a little slower than the slowest hero (${v})`);
+  }
+  assert.ok(Math.abs(hordePace(ENEMIES.cultist) - (46 + 0.25 * 30) * 0.9) < 1e-9, 'the Cultist a tenth slower than its kind');
+  for (const id of ['boneking', 'lich', 'thief']) assert.equal(hordePace(ENEMIES[id]), ENEMIES[id].spd);
+  assert.equal(hordePace(ENEMIES.skeletonarcher, { lord: true }), ENEMIES.skeletonarcher.spd);
 });

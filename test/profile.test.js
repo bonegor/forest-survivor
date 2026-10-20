@@ -89,7 +89,7 @@ test('applyRun pays gold, records wins and clamps impossible reports', () => {
 
   const cheat = P.applyRun(p, { mode: 's15', diff: 'easy', victory: false, time: 10, gold: 1e9, kills: 1e9 });
   assert.ok(cheat.profile.gold < 1000, 'gold is capped by run time');
-  assert.ok(cheat.profile.kills <= 50 + 10 * 120);
+  assert.ok(cheat.profile.kills <= 50 + 10 * 240);
 
   assert.equal(P.applyRun(p, { mode: 'nope', diff: 'easy' }).ok, false);
 });

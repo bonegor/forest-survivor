@@ -15,7 +15,8 @@ const MORE = 1.1 * 1.1 * 1.2;
 // Double the amount of monsters". The steady horde and the timed swarms, rings and packs, on both
 // difficulties and a Dungeon Run's floors; a Nightmare doubles that again (hordeMore). The crypts'
 // sleeping packs, champions, thieves, bosses and their summons come as they did.
-export const CROWD = 2;
+// Then, once more (20 October 2026): "double the number of monsters on all difficulties": 4.
+export const CROWD = 4;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 

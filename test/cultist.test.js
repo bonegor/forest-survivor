@@ -27,7 +27,8 @@ test('the red-robed Cultist is drawn half again its size, its body with it, and 
   assert.ok(Math.abs(drawnScale(g, skeleton) - 1) < 0.05, 'other monsters as they were');
   assert.ok(Math.abs(drawnScale(g, champion) - 1.5 * 1.35) < 0.05, 'a Cultist champion bigger still');
   assert.equal(cultist.r, skeleton.r * 1.5, "blows land on all of it: a skeleton's body, half again as big");
-  assert.equal(cultist.spd, 27, 'a tenth slower than the 30 px/s it had');
+  // A tenth slower than its kind's 30 would walk, now that the slow of the horde are sped up (hordePace).
+  assert.ok(Math.abs(cultist.spd - (46 + 0.25 * 30) * 0.9) < 1e-9, `a tenth slower than its kind (${cultist.spd})`);
 });
 
 test("a Cultist's dark bolt flies 15% slower than it did and is drawn half again as big", () => {

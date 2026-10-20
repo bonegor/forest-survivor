@@ -60,6 +60,20 @@ let nextId = 1;
 // already dark); 0.95 still leaves dawn's light alone. The ring stays as faint as it was: not a
 // brighter edge, a brighter monster. With the layer drawn stronger it is a smaller share of it
 // (`ringA` 0.3, 0.6 before), so no more of it shows than did, at dusk a hair more.
+// The owner's (20 October 2026): "Speed up the slower monsters. General monster is only a little
+// slower than hero." A monster of the horde walks at least floor + keep of its own speed, so the
+// slow ones close up on the fast and the order between them stays: a Ghoul (23) 51.8, a Skeleton
+// (33) 54.3, a Goblin (45) 57.3, a Dire Wolf (56) 60, the Hellhound (62) as it was; at Veteran's
+// and Normal's pace (x1.12) 58-69 px/s against 70-84 for the heroes. Bosses, the crypts' lords,
+// the Gilded Thief (who must stay a fifth slower than every hero) and props keep their own. One
+// that walks a share slower than its kind (def.slower: the Cultist's tenth) stays that much slower.
+export const HORDE_PACE = { floor: 46, keep: 0.25 };
+export function hordePace(def, o = {}) {
+  if (def.boss || def.prop || o.lord || def.ai === 'flee' || def.ai === 'static' || !def.spd) return def.spd;
+  const kind = def.spd / (1 - (def.slower || 0));
+  return Math.max(kind, HORDE_PACE.floor + HORDE_PACE.keep * kind) * (1 - (def.slower || 0));
+}
+
 export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 30, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.3, near: 60 };
 
 export class Enemy {
@@ -102,7 +116,7 @@ export class Enemy {
     this.scale = o.scale ?? (def.scale || 1) * (this.elite ? 1.35 : 1);
     this.r = def.r * (this.elite ? 1.3 : 1);
     this.maxHp = this.hp = Math.max(1, def.hp * (o.hpMul ?? 1));
-    this.spd = def.spd * (o.spdMul ?? 1);
+    this.spd = hordePace(def, o) * (o.spdMul ?? 1);
     this.dmg = def.dmg * (o.dmgMul ?? 1);
     this.xp = def.xp;
     this.face = Math.random() < 0.5 ? -1 : 1;

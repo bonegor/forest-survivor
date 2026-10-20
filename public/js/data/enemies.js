@@ -18,7 +18,7 @@ export const ENEMIES = {
   ghost: { name: 'Wraith', sprite: 'ghost', hp: 26, spd: 35, dmg: 9, r: 5, xp: 4, ai: 'phaser', mass: 0.7, anim: 3, death: 'ecto', alpha: 0.78, kbRes: 0.5 },
   // The red-robed caster: few (weight 1 in the night's pockets), big, and slow.
   cultist: {
-    name: 'Cultist', sprite: 'cultist', hp: 32, spd: 27, dmg: 6, r: 7.5, scale: 1.5, xp: 5, ai: 'caster', mass: 1, anim: 3, death: 'dark',
+    name: 'Cultist', sprite: 'cultist', hp: 32, spd: 27, slower: 0.1, dmg: 6, r: 7.5, scale: 1.5, xp: 5, ai: 'caster', mass: 1, anim: 3, death: 'dark',
     shot: { range: 125, cd: 3.2, spd: 61.2, dmg: 10, kind: 'darkbolt', wind: 0.55 },
   },
   orc: {
