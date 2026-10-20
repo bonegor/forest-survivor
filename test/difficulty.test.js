@@ -290,3 +290,14 @@ test('the slow monsters of the horde close up on the hero, in their order; bosse
   for (const id of ['boneking', 'lich', 'thief']) assert.equal(hordePace(ENEMIES[id]), ENEMIES[id].spd);
   assert.equal(hordePace(ENEMIES.skeletonarcher, { lord: true }), ENEMIES.skeletonarcher.spd);
 });
+
+// The owner (20 October 2026): "on nightmare have the faster monsters as fast as hero instead".
+test('on a Nightmare the horde walks as fast as the hero\'s own pace; bosses, lords and the thief keep theirs', async () => {
+  const { nightmarePace } = await import('../public/js/game/enemies.js');
+  const g = { nightmare: true, player: { hero: { stats: { speed: 1.15 } } } };
+  const hero = 70 * 1.15;
+  assert.ok(Math.abs(nightmarePace(g, { paced: true }, 40) - hero) < 1e-9, 'a slow one up to him');
+  assert.equal(nightmarePace(g, { paced: true }, 120), 120, 'a faster one stays faster');
+  assert.equal(nightmarePace(g, { paced: false }, 40), 40, 'a boss, lord or thief as it was');
+  assert.equal(nightmarePace({ ...g, nightmare: false }, { paced: true }, 40), 40, 'not without a Nightmare');
+});
