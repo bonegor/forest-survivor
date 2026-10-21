@@ -40,8 +40,7 @@ export const ENEMIES = {
     name: 'Skeleton Archer', sprite: 'skeletonarcher', hp: 600, spd: 34, dmg: 8, r: 8, xp: 60, ai: 'caster', mass: 30, anim: 4, death: 'bones', kbRes: 0.95,
     shot: { range: 175, cd: 1.7, spd: 170, dmg: 8, kind: 'arrow', wind: 0.5 },
   },
-  // A fifth slower than the slowest hero (the Mage and the Necromancer, 70 px/s) once the
-  // difficulty's speed (1.12) is on it: 56 px/s, so every hero can run it down.
+  // It runs and strolls at a share of the hero's own pace (game/enemies.js THIEF), not at spd.
   thief: { name: 'Gilded Thief', sprite: 'thief', hp: 140, spd: 50, dmg: 0, r: 6, xp: 12, ai: 'flee', mass: 1, anim: 9, death: 'gold', kbRes: 0.3, noTarget: false },
 
   // Breakable props are enemies that never move and never hurt you.
@@ -51,8 +50,9 @@ export const ENEMIES = {
   lantern: { name: 'Lantern', sprite: 'lantern', hp: 4, spd: 0, dmg: 0, r: 3, xp: 0, ai: 'static', prop: true, death: 'wood', mass: 99, light: 'warm' },
 
   // Bosses.
+  // Twice the 30 he walked at (the owner's, 21 October 2026: "Bone King needs to be faster").
   boneking: {
-    name: 'King Ossarian', title: 'The Bone King', sprite: 'boneking', hp: 4000, spd: 30, dmg: 16, r: 12, xp: 120, ai: 'boss',
+    name: 'King Ossarian', title: 'The Bone King', sprite: 'boneking', hp: 4000, spd: 60, dmg: 16, r: 12, xp: 120, ai: 'boss',
     mass: 40, anim: 3, death: 'bones', kbRes: 0.97, boss: true, color: '#feae34',
   },
   butcher: {

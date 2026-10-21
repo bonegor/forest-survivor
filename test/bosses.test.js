@@ -11,15 +11,15 @@ const {musicState} = await mod('public/js/engine/audio.js');
 const {SURVIVAL_BOSSES} = await mod('public/js/data/waves.js');
 const {HEROES} = await mod('public/js/data/heroes.js');
 const {input} = await mod('public/js/engine/input.js');
-const {thiefPace} = await mod('public/js/game/enemies.js');
+const {THIEF, heroPace} = await mod('public/js/game/enemies.js');
 const {EnemyShot} = await mod('public/js/game/projectiles.js');
 const P = await mod('public/js/shared/profile.js');
 
-function gameCase(fn, mode = 's15') {
+function gameCase(fn, mode = 's15', hero = 'knight') {
   const oldRandom = Math.random;
   Math.random = mulberry32(31);
   try {
-    return fn(new Game({hero:'knight', mode, meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}}));
+    return fn(new Game({hero, mode, meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}}));
   } finally {
     Math.random = oldRandom;
   }
@@ -56,22 +56,48 @@ test('with two bosses up, felling one keeps the other on the bar and the boss mu
   assert.equal(musicState().piece, 'forest', 'the forest music once the last has fallen');
 }));
 
-test('a Gilded Thief runs a fifth slower than the slowest hero, so any hero can catch it', () => {
-  const heroes = Object.keys(HEROES);
-  const speeds = heroes.map(hero => new Game({hero, mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}}).player.moveSpeed);
-  const slowest = Math.min(...speeds);
-  gameCase((g) => {
+// The owner's (21 October 2026): it runs from the hero at 80% of his base pace, and once far
+// enough wanders about, running again only when he comes too close.
+test('a Gilded Thief runs from a near hero at 80% of his base pace, and strolls about once far from him', () => {
+  for (const hero of Object.keys(HEROES)) gameCase((g) => {
     step(g, 2);
-    g.spawner.spawnThief(g.phase);
-    const thief = g.enemies.find(e => e.type === 'thief' && !e.dead);
-    assert.ok(thief, 'a thief appears');
-    const sp = thief.spd * g.diff.speed * g.move; // both walk at the run's speed (moveFor)
-    assert.ok(Math.abs(sp / slowest - 0.8) < 0.01, `${sp.toFixed(1)} px/s against the slowest hero's ${slowest.toFixed(1)}`);
-  });
+    const p = g.player;
+    p.devGod = true;
+    for (const w of p.weapons) w.update = () => {};
+    g.spawner.update = () => {};
+    const base = heroPace(g);
+    assert.ok(Math.abs(base - 70 * (HEROES[hero].stats.speed || 1) * g.move) < 1e-9, `${hero}: his class's pace at the run's walking speed`);
+    const t = g.spawnEnemy('thief', p.x + 60, p.y, { instant: true, sent: true });
+    // Near: it runs, at 80% of his pace.
+    let x = t.x, y = t.y;
+    step(g, 30);
+    const run = Math.hypot(t.x - x, t.y - y) * 2;
+    assert.ok(t.fleeing && Math.abs(run / (THIEF.run * base) - 1) < 0.1, `${hero}: it runs at ${run.toFixed(1)} px/s against ${(THIEF.run * base).toFixed(1)}`);
+    assert.ok(THIEF.run * base < p.moveSpeed, `${hero}: slower than him, so he can run it down`);
+    // Far: it strolls, at a walk, this way and that.
+    t.x = p.x + THIEF.safe + 80;
+    t.y = p.y;
+    step(g, 2);
+    assert.equal(t.fleeing, false, `${hero}: far enough, it stops running`);
+    const heads = new Set();
+    for (let s = 0; s < 8; s++) {
+      x = t.x;
+      y = t.y;
+      step(g, 30);
+      const walk = Math.hypot(t.x - x, t.y - y) * 2;
+      assert.ok(walk <= THIEF.walk * base * 1.1, `${hero}: a stroll, ${walk.toFixed(1)} px/s`);
+      heads.add(Math.round(Math.atan2(t.y - y, t.x - x) * 2));
+    }
+    assert.ok(heads.size >= 2, `${hero}: this way and that (${heads.size} headings)`);
+    // Near again: it runs again.
+    t.x = p.x + 80;
+    t.y = p.y;
+    step(g, 2);
+    assert.equal(t.fleeing, true, `${hero}: too close, it runs again`);
+  }, 's15', hero);
 });
 
 test('a hero who sets off five seconds late still reaches a Gilded Thief; one who lets it be loses it', () => {
-  assert.deepEqual([50, 100, 140, 180, 400].map(thiefPace), [1, 1, 0.5, 0.3, 0.3], 'flat out near, a jog far ahead');
   // The slowest hero, standing `delay` seconds, then running straight at it; no blows, only the chase.
   const chase = (delay) => {
     const oldRandom = Math.random, oldBot = input.bot;
@@ -99,7 +125,8 @@ test('a hero who sets off five seconds late still reaches a Gilded Thief; one wh
   const late = chase(5);
   assert.ok(late.reached < 14, `within reach in time: ${JSON.stringify(late)}`);
   const never = chase(Infinity);
-  assert.ok(never.escaped && never.far > 300, `left alone it gets away: ${JSON.stringify(never)}`);
+  // Left alone it soon strolls about nearby, and is gone when its 20 seconds are up.
+  assert.ok(never.escaped, `left alone it gets away: ${JSON.stringify(never)}`);
 });
 
 test('the Bone King rings 11 bones round him (15 when wounded), fans five every 3.75 s', () => gameCase((g) => {

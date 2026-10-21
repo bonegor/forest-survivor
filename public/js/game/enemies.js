@@ -26,12 +26,14 @@ export const STROLL = 0.5;
 // Champions aren't pushed by blows: a blow stops one for HOLD seconds instead, and it
 // can't be stopped again until HOLD_EVERY seconds after that, so hits can't pin it.
 export const HOLD = 0.2, HOLD_EVERY = 0.6;
-// A Gilded Thief runs flat out while the hero is within THIEF_NEAR of it (a fifth slower than
-// the slowest hero) and eases off farther ahead, down to a jog at THIEF_JOG of its speed from
-// THIEF_FAR on, as if taunting him. A hero who sets off five or eight seconds late still
-// catches it; one who lets it be still loses it when its 20 seconds are up.
-export const THIEF_NEAR = 100, THIEF_FAR = 180, THIEF_JOG = 0.3;
-export const thiefPace = (d) => clamp((THIEF_FAR - d) / (THIEF_FAR - THIEF_NEAR), THIEF_JOG, 1);
+// A Gilded Thief (the owner's, 21 October 2026): it runs from the hero at THIEF.run of his own
+// base pace (his class's, at the run's walking speed, before the Armory or a relic quickens him)
+// once he comes within THIEF.near of it, and keeps running until it is THIEF.safe away; then it
+// wanders, a new random way every THIEF.turn seconds, at THIEF.walk of that pace, until he comes
+// near again. It escapes when its 20 seconds are up.
+export const THIEF = { run: 0.8, walk: 0.35, near: 140, safe: 220, turn: [1.5, 3] };
+// The hero's base pace a thief measures itself by (px/s).
+export const heroPace = (g) => BASE_SPEED * (g.player.hero.stats.speed || 1) * g.move;
 // The sparks a foe gives off while it burns or sickens (Enemy.addDot).
 const DOT_SPARKS = { fire: [PC.o, PC.y], poison: [PC.l, PC.L] };
 // What charger() and caster() return: a heading and a share of the monster's own speed. The one
@@ -136,6 +138,9 @@ export class Enemy {
     this.maxHp = this.hp = Math.max(1, def.hp * (o.hpMul ?? 1));
     this.spd = hordePace(type, o) * (o.spdMul ?? 1);
     this.paced = isPaced(def, o) && !!PACE_OF[type]; // one of the horde, walking its class's speed (hordePace)
+    this.fleeing = true; // a thief runs from the start (THIEF)
+    this.turnT = 0;
+    this.wanderA = 0;
     this.dmg = def.dmg * (o.dmgMul ?? 1);
     this.xp = def.xp;
     this.face = Math.random() < 0.5 ? -1 : 1;
@@ -356,12 +361,26 @@ export class Enemy {
         }
         case 'flee': {
           const l = Math.hypot(this.x - p.x, this.y - p.y) || 1;
-          AWAY.x = this.x + ((this.x - p.x) / l) * 60;
-          AWAY.y = this.y + ((this.y - p.y) / l) * 60;
+          if (l < THIEF.near) this.fleeing = true;
+          else if (l > THIEF.safe) this.fleeing = false;
+          if (this.fleeing) {
+            AWAY.x = this.x + ((this.x - p.x) / l) * 60;
+            AWAY.y = this.y + ((this.y - p.y) / l) * 60;
+          } else {
+            // Far enough: a stroll, a new way now and then.
+            this.turnT = (this.turnT ?? 0) - dt;
+            if (this.turnT <= 0) {
+              this.turnT = rand(...THIEF.turn);
+              this.wanderA = rand(TAU);
+            }
+            AWAY.x = this.x + Math.cos(this.wanderA) * 60;
+            AWAY.y = this.y + Math.sin(this.wanderA) * 60;
+          }
           const d = g.world.steer(this, AWAY);
           dx = d[0];
           dy = d[1];
-          sp *= thiefPace(l);
+          // Its own speed, slows and holds as they are, made the share of the hero's pace it runs or walks at.
+          sp *= ((this.fleeing ? THIEF.run : THIEF.walk) * heroPace(g)) / Math.max(1, this.spd * g.diff.speed * g.move);
           if (Math.random() < 0.2) g.particles.emit(this.x + rand(-4, 4), this.y - rand(4, 12), 0, 0, 0, rand(5, 15), 0.6, 1, PC.Y, P.GLOW | P.FADE, 0);
           if (this.life > 20) {
             g.escape(this);
