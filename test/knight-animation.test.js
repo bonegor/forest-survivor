@@ -6,7 +6,9 @@ import {SPR} from '../public/js/engine/sprites.js';
 import {input} from '../public/js/engine/input.js';
 import {defaultProfile,metaBonuses} from '../public/js/shared/profile.js';
 const context={globalAlpha:1,drawImage(){}};
-function game(){return new Game({hero:'knight',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{}});}
+// At the speed the walk was drawn for (move 1): in a run the hero walks GAME_SPEED times as fast
+// (data/difficulty.js moveFor), and his walk plays faster with him.
+function game(){return new Game({hero:'knight',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},move:1});}
 function shown(g){g.drawPlayer(context,g.cam);return SPR.knight.frames.indexOf(g.player._rect[4]);}
 
 test('the real player clock visits the complete plumed walk at its imported cadence',()=>{

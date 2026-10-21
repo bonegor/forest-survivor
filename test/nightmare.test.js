@@ -214,14 +214,15 @@ test('the trial screen hangs the box under Veteran, shut on Normal; a click, Ent
   }
   assert.equal(app.choice.nightmare, true);
   assert.equal(app.choice.diff, 'hard', 'the difficulty untouched');
-  // BEGIN plays it, at the game's speed.
+  // BEGIN plays it: the clock in real time, the hero and the monsters at the game's speed.
   click(s, item(app, 'begin'));
   assert.deepEqual(app.started, { hero: 'knight', mode: 's15', diff: 'hard', nightmare: true });
   const gs = new GameScreen();
   gs.enter({ ...app, devHold: false, store: { profile: defaultProfile(), submitRun: async () => ({ collected: 0, bonus: 0, total: 0, multiplier: 1 }) } });
   try {
     assert.equal(gs.game.nightmare, true);
-    assert.equal(gs.game.pace, GAME_SPEED);
+    assert.equal(gs.game.pace, 1);
+    assert.equal(gs.game.move, GAME_SPEED);
   } finally {
     gs.leave();
   }
@@ -259,7 +260,7 @@ test('the results report a Nightmare and pay it so', async () => {
   };
   try {
     gs.enter(app);
-    for (let f = 0; f < 120; f++) step(); // long enough for 120 gold (profile.js MAX_GOLD_PER_SEC)
+    for (let f = 0; f < 130; f++) step(); // past two seconds of real time: long enough for 120 gold (profile.js MAX_GOLD_PER_SEC)
     gs.game.gold = 120;
     gs.game.player.hurt(1e9);
     for (let f = 0; f < 900 && !(gs.game.state === 'over' && gs.overlay?.res); f++) step();

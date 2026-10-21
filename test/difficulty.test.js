@@ -10,8 +10,8 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { isFew } from '../public/js/game/spawner.js';
-import { armored } from '../public/js/game/player.js';
-import { NORMAL, VETERAN, GAME_SPEED, HARDER, CROWD } from '../public/js/data/difficulty.js';
+import { armored, BASE_SPEED } from '../public/js/game/player.js';
+import { NORMAL, VETERAN, GAME_SPEED, HARDER, CROWD, moveFor } from '../public/js/data/difficulty.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { targetCount } from '../public/js/data/waves.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
@@ -251,19 +251,38 @@ test('the gold a difficulty pays is the profile\'s alone, and its card says so',
   }
 });
 
-// The user (16 October 2026): the general game speed 20% up, on the 10% faster than real time it was;
-// then (20 October 2026) "let the game be 15% faster".
-test('a run goes about 52% faster than real time: the night in about 9:53, the next hero at about 3:18', () => {
+// The user (16 October 2026): the general game speed 20% up, on the 10% it was; then (20 October
+// 2026) "let the game be 15% faster". Then (21 October 2026): "the clock was never to have been
+// sped up. It was always about just hero / monsters being faster. 15 minutes should be 15 minutes".
+test('the night is 15:00 of real time; the hero and the monsters walk about 52% faster than drawn', () => {
   assert.ok(Math.abs(GAME_SPEED - 1.518) < 1e-9);
   assert.ok(Math.abs(GAME_SPEED / (1.1 * 1.2) - 1.15) < 1e-9, '15% faster than the 1.32 it was');
-  assert.equal(fmtTime(15 * 60 / GAME_SPEED + 0.5), '09:53', 'the 15-minute night in real time');
-  assert.equal(fmtTime(HERO_UNLOCK_TIME / GAME_SPEED + 0.5), '03:18', 'the 5:00 that brings in the next hero');
-  // A real second of frames moves a run's clock on GAME_SPEED seconds; the bots keep the game's own pace.
-  for (const pace of [GAME_SPEED, undefined]) {
-    const g = game({ pace }), t0 = g.time;
-    for (let i = 0; i < 60; i++) g.update(1 / 60);
-    assert.ok(Math.abs(g.time - t0 - (pace || 1)) < 1e-9, `pace ${pace}: ${g.time - t0} s on the clock`);
-  }
+  // A real second of frames moves a run's clock on one second, whoever plays it.
+  const g = game(), t0 = g.time;
+  assert.equal(g.pace, 1, 'the clock keeps real time');
+  for (let i = 0; i < 60; i++) g.update(1 / 60);
+  assert.ok(Math.abs(g.time - t0 - 1) < 1e-9, `${g.time - t0} s on the clock`);
+  assert.equal(g.duration, 15 * 60, 'the 15-minute night is 15 minutes');
+  assert.equal(fmtTime(HERO_UNLOCK_TIME), '05:00', 'the next hero at 5:00 of real time');
+  // Only walking is faster: the hero's speed is his base times GAME_SPEED on Veteran.
+  assert.equal(g.move, GAME_SPEED);
+  const p = g.player;
+  assert.ok(Math.abs(p.moveSpeed - BASE_SPEED * p.speedMul * GAME_SPEED) < 1e-9, `the hero walks ${p.moveSpeed.toFixed(1)} px/s`);
+});
+
+// The owner (21 October 2026): "reduce the speed on normal by 20%" ("just the normal"): how fast
+// the hero and the monsters move, the clock as it is.
+test('on Normal the hero and the monsters walk 20% slower than on Veteran; Veteran and Ranked at the game\'s speed', () => {
+  assert.equal(moveFor('s15', 'hard'), GAME_SPEED);
+  assert.equal(moveFor('dungeon', 'hard'), GAME_SPEED);
+  assert.ok(Math.abs(moveFor('s15', 'medium') - GAME_SPEED * 0.8) < 1e-12);
+  assert.ok(Math.abs(moveFor('dungeon', 'medium') - GAME_SPEED * 0.8) < 1e-12);
+  assert.equal(moveFor('ranked', 'medium'), GAME_SPEED, 'Ranked is always Veteran');
+  const n = game({ diff: 'medium' }), v = game({ diff: 'hard' });
+  assert.ok(Math.abs(n.move - GAME_SPEED * 0.8) < 1e-12 && v.move === GAME_SPEED, 'a run walks at its difficulty\'s speed');
+  assert.ok(Math.abs(n.player.moveSpeed / v.player.moveSpeed - 0.8) < 1e-9, 'the same hero 20% slower on Normal');
+  assert.equal(n.pace, 1, 'a Normal night keeps real time too');
+  assert.equal(game({ mode: 'ranked', diff: 'medium' }).move, GAME_SPEED);
 });
 
 // The owner (20 October 2026): "the thing is even a bit too easy. Double the amount of monsters".

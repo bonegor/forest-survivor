@@ -240,7 +240,7 @@ export class Player {
   }
 
   get moveSpeed() {
-    let s = BASE_SPEED * this.speedMul;
+    let s = BASE_SPEED * this.speedMul * this.g.move;
     if (this.buff('haste')) s *= 1.3;
     if (this.ult && this.ult.type === 'whirlwind') s *= 1.15;
     return s;

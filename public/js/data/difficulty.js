@@ -66,6 +66,9 @@ export const NORMAL = {
   few: 1 / 3,
   health: VETERAN.health * NORMAL_HEALTH,
   late: NORMAL_LATE,
+  // The owner's (21 October 2026): "reduce the speed on normal by 20%". On Normal the hero and the
+  // monsters move at 0.8 of the game's speed (GAME_SPEED, moveFor); the clock is real time anyway.
+  pace: 0.8,
   desc: `Monsters have 70% less health and hit half as hard; fewer shoot or charge, more come late. Gold x${DIFF_GOLD.medium}.`,
 };
 
@@ -91,11 +94,16 @@ export const NIGHTMARE = {
 // Veteran's modifier, not a difficulty of its own), and never on Ranked.
 export const nightmareFor = (mode, on, diff) => mode !== 'ranked' && diff === VETERAN.id && on === true;
 
-// The whole game runs this much faster than real time: the night's clock, the hero, the monsters,
-// everything in a run (not the menus), so the 15-minute night passes in about 9 minutes 53
-// seconds, and every warning (a boss's telegraphed blow) is about a third shorter in real time.
-// 1.1, then 20% up (16 October 2026), then the owner's "let the game be 15% faster" (20 October).
+// The hero and the monsters move this much faster than they were drawn to: 1.1, then 20% up (16
+// October 2026), then the owner's "let the game be 15% faster" (20 October). Only how fast they
+// walk (Player.moveSpeed, Enemy.update): the night's clock and all else keep real time, the
+// owner's (21 October 2026): "the clock was never to have been sped up ... 15 minutes should be 15
+// minutes". The bots move at it too, so they play the game as people do.
 export const GAME_SPEED = 1.1 * 1.2 * 1.15;
+
+// How fast the hero and the monsters move in a run of this mode and difficulty: GAME_SPEED, times
+// the difficulty's own pace (Normal's 0.8; Veteran and Ranked as they are).
+export const moveFor = (mode, id) => GAME_SPEED * (diffFor(mode, id).pace ?? 1);
 
 export const MODES = {
   s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn in the Darkwood.' },

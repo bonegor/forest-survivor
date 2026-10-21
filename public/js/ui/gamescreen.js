@@ -13,7 +13,7 @@ import { levelBonus } from '../game/player.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, FILLERS } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
-import { MODES, GAME_SPEED, NIGHTMARE } from '../data/difficulty.js';
+import { MODES, NIGHTMARE } from '../data/difficulty.js';
 import { metaBonuses, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText, goalText } from './ladder.js';
@@ -37,7 +37,6 @@ export class GameScreen {
       meta: metaBonuses(app.store.profile),
       gear: app.store.profile.gear[hero], // this hero's own
       unlocks: unlocksNext(app.store.profile, hero),
-      pace: GAME_SPEED,
       settings: app.settings,
       hints: true,
       saveSettings: () => saveSettings(app.settings),

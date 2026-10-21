@@ -1,6 +1,6 @@
 // A single run: owns every system and runs the update/draw loop.
 
-import { diffFor, nightmareFor } from '../data/difficulty.js';
+import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
@@ -54,10 +54,10 @@ export const BANNERS_MOST = 2;
 // over in `fall`, still in colour; "Slain by …" fades in from `name` (Hud); the results at `end`.
 export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
 // Going into a crypt is meant: the hero stands on its steps (CRYPT_STEPS: half as wide, how far
-// below the door) pushing up for CRYPT_PUSH game seconds (0.5 s of real time at GAME_SPEED),
-// while a prompt fills over the door (Hud.drawCryptDoor); stepping off or letting go starts over.
+// below the door) pushing up for CRYPT_PUSH seconds, half a second, while a prompt fills over the
+// door (Hud.drawCryptDoor); stepping off or letting go starts over.
 export const CRYPT_STEPS = { w: 9, below: 9 };
-export const CRYPT_PUSH = 0.76;
+export const CRYPT_PUSH = 0.5;
 
 // A crypt's name, by its crossroads (key 'i,j'). One that wears the Undercroft's look
 // (dungeon.js cryptLook) is an Undercroft.
@@ -145,7 +145,9 @@ export class Game {
     this.duration = this.mode === 's15' ? 15 * 60 : Infinity;
     this.rankedBest = o.rankedBest || 0; // personal best to beat in Ranked
     this.rankIdx = 0;
-    this.pace = o.pace || 1; // how much faster than real time the run goes (GAME_SPEED; the bots keep 1)
+    this.pace = o.pace || 1; // how much faster than real time the run goes: real time (1) since 21 October 2026
+    // How fast the hero and the monsters move (data/difficulty.js moveFor): the bots' too.
+    this.move = o.move ?? moveFor(o.mode, this.diffId);
     // The hero five minutes on the clock bring in, announced as the clock passes them.
     this.unlocks = o.unlocks || null;
     this.time = 0;

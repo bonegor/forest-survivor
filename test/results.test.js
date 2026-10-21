@@ -59,7 +59,7 @@ async function playToResults(app, { gold = 120, seed = 5 } = {}) {
   try {
     app.startRun();
     const gs = app.screen, g = gs.game;
-    for (let f = 0; f < 120; f++) frame(gs);
+    for (let f = 0; f < 130; f++) frame(gs); // past two seconds of real time: long enough for 120 gold (profile.js MAX_GOLD_PER_SEC)
     g.gold = gold;
     g.player.hurt(1e9);
     for (let f = 0; f < 900 && !(g.state === 'over' && gs.overlay?.res); f++) frame(gs);

@@ -19,12 +19,13 @@ const sum = (gems) => gems.reduce((s, pk) => s + pk.value, 0);
 // The gem sizes of pickups.js: gold from 100 XP, red from 25, green from 5.
 const rankOf = (v) => (v >= 100 ? 3 : v >= 25 ? 2 : v >= 5 ? 1 : 0);
 
-// A seeded run on Normal; `xp` counts what the gems dropped and what the hero picked up.
+// A seeded run, on Normal unless o.diff says ('hard', Veteran: a Nightmare needs it); `xp` counts
+// what the gems dropped and what the hero picked up.
 function play(o, fn) {
   const oldRandom = Math.random, oldBot = input.bot;
   Math.random = mulberry32(o.seed);
   try {
-    const g = new Game({ hero: o.hero, mode: 's15', diff: 'medium', nightmare: !!o.nightmare, meta: P.metaBonuses(P.sanitizeProfile({ up: {} })), settings: { numbers: false }, crypts: false });
+    const g = new Game({ hero: o.hero, mode: 's15', diff: o.diff || 'medium', nightmare: !!o.nightmare, meta: P.metaBonuses(P.sanitizeProfile({ up: o.up || {} })), settings: { numbers: false }, crypts: false });
     const xp = { dropped: 0, collected: 0 };
     const drop = g.dropGem, add = g.player.addXp;
     g.dropGem = function (x, y, v) {
@@ -79,12 +80,15 @@ test("past the cap, the farthest gem's XP drops where the hero fights", () =>
     assert.equal(xp.collected, 400 + e.xp, 'and with them all the XP');
   }));
 
-// Two seeded bot nights past the cap, three minutes of a Nightmare each (the cap is reached from
-// about 1:40): the gems' invariants hold, whatever the balance. The hero can't fall (devGod), so
-// only the gems are on trial.
-test('three minutes of a Nightmare past the cap: no XP lost, never over 380 gems lying, no gem hoarding', () => {
+// Two seeded bot nights past the cap, four minutes of a Nightmare each (the cap is reached from
+// about 2:15 to 3:15, the monsters walking at the game's speed): the gems' invariants hold, whatever
+// the balance. The hero can't fall (devGod), so only the gems are on trial.
+test('four minutes of a Nightmare past the cap: no XP lost, never over 380 gems lying, no gem hoarding', () => {
   for (const o of [{ hero: 'knight', bot: 'autopilot', seed: 2 }, { hero: 'necromancer', bot: 'gems', seed: 1 }]) {
-    play({ ...o, nightmare: true }, (g, p, xp, d) => {
+    // The Armory full, so the hero kills fast enough on Veteran to fill the ground with gems.
+    const up = Object.fromEntries(P.UPGRADES.map((u) => [u.id, u.max]));
+    play({ ...o, diff: 'hard', nightmare: true, up }, (g, p, xp, d) => {
+      assert.equal(g.nightmare, true, 'a Nightmare (Veteran only)');
       p.devGod = true;
       let folds = 0, most = 0, richest = 0;
       const drop = g.dropGem;
@@ -92,7 +96,7 @@ test('three minutes of a Nightmare past the cap: no XP lost, never over 380 gems
         if (liveGems(this).length >= 380) folds++;
         return drop.call(this, x, y, v);
       };
-      for (let t = 1; t <= 180; t++) {
+      for (let t = 1; t <= 240; t++) {
         d.run(t - g.time);
         const gems = liveGems(g);
         most = Math.max(most, gems.filter((pk) => !pk.pulled).length);

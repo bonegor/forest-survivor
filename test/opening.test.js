@@ -12,18 +12,17 @@ import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { GAME_SPEED } from '../public/js/data/difficulty.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
 
-// A seeded Knight on Normal at the game's own pace, unkillable.
+// A seeded Knight on Normal, unkillable: the clock in real time, he walks at Normal's speed (moveFor).
 function game(fn, seed = 4) {
   const random = Math.random, bot = input.bot;
   Math.random = mulberry32(seed);
   try {
-    const g = new Game({ hero: 'knight', mode: 's15', diff: 'medium', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, pace: GAME_SPEED });
+    const g = new Game({ hero: 'knight', mode: 's15', diff: 'medium', meta: metaBonuses(defaultProfile()), settings: { numbers: false } });
     g.player.devGod = true;
     return fn(g, g.player);
   } finally {
@@ -62,7 +61,7 @@ test("a crypt's steps must be pushed up for half a second, its prompt filling; s
     const k = g.doorInfo(door).k;
     assert.ok(k > 0 && k < 1, `it fills (${k.toFixed(2)})`);
     assert.ok(p.y > door.y - 6, 'the crypt walls stop him at its door');
-    assert.ok(Math.abs(CRYPT_PUSH / GAME_SPEED - 0.5) < 0.01, 'half a second of real time');
+    assert.equal(CRYPT_PUSH, 0.5, 'half a second (the clock is real time)');
     // Off the steps and back: it starts over.
     input.bot = { x: 1, y: 0 };
     real(g, 0.3);

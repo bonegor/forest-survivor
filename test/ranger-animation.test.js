@@ -13,7 +13,9 @@ function run(fn){
   const previous=input.bot;
   try{
     input.bot={x:0,y:0};
-    const g=new Game({hero:'archer',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},crypts:false});
+    // At the speed the walk was drawn for (move 1): in a run she walks GAME_SPEED times as fast
+    // (data/difficulty.js moveFor), and her walk plays faster with her.
+    const g=new Game({hero:'archer',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},crypts:false,move:1});
     g.spawner.update=()=>{};g.player.devGod=true;
     fn(g,g.player,g.player.weapons[0]);
   }finally{input.bot=previous;}

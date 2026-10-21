@@ -16,7 +16,6 @@ import { rollItem } from '../public/js/shared/items.js';
 import { MOMENT } from '../public/js/game/game.js';
 import { CHEST_SETTLE } from '../public/js/game/pickups.js';
 import { BAR_FALL } from '../public/js/game/hud.js';
-import { GAME_SPEED } from '../public/js/data/difficulty.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
@@ -106,7 +105,7 @@ test('a crypt lord and a revive hold the screens back too', () =>
 
 test('a dropped chest lies on the ground before it can be opened, even under the hero', () =>
   run((gs, g) => {
-    assert.ok(CHEST_SETTLE / GAME_SPEED >= 0.8, 'at least 0.8 s of real time');
+    assert.ok(CHEST_SETTLE >= 0.8, 'at least 0.8 s (the clock is real time)');
     const p = g.player;
     const chest = g.addPickup('chest', p.x, p.y, 0, { kind: 'elite', pop: false });
     const frames = Math.floor(CHEST_SETTLE * 60) - 1;

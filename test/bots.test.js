@@ -24,7 +24,9 @@ test('a seeded bot game replays exactly and reports its stats', () => {
 });
 
 test('every strategy and level-up policy plays', () => {
-  for (const bot of Object.keys(BOTS)) assert.equal(playGame({ bot, seed: 1, max: 8 }).time, 8, bot);
+  // Five times his health (a test buff): the monsters walk at the game's speed (moveFor), and a
+  // bare Knight standing idle may fall inside the 8 s without it.
+  for (const bot of Object.keys(BOTS)) assert.equal(playGame({ bot, seed: 1, max: 8, buff: { life: 400 } }).time, 8, bot);
   for (const pick of Object.keys(PICKS)) assert.ok(playGame({ bot: 'idle', pick, seed: 2, max: 20 }).level > 1, pick);
   assert.equal(playGame({ bot: 'autopilot', mode: 'dungeon', seed: 1, max: 8 }).floor, 1);
 });

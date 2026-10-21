@@ -65,7 +65,7 @@ test('a Gilded Thief runs a fifth slower than the slowest hero, so any hero can 
     g.spawner.spawnThief(g.phase);
     const thief = g.enemies.find(e => e.type === 'thief' && !e.dead);
     assert.ok(thief, 'a thief appears');
-    const sp = thief.spd * g.diff.speed;
+    const sp = thief.spd * g.diff.speed * g.move; // both walk at the run's speed (moveFor)
     assert.ok(Math.abs(sp / slowest - 0.8) < 0.01, `${sp.toFixed(1)} px/s against the slowest hero's ${slowest.toFixed(1)}`);
   });
 });
