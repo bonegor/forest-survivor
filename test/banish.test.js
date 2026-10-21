@@ -1,7 +1,8 @@
 // BANISH on the level-up screen. The owner (2026-10-20): "have buyable upgrades for banish, reroll,
 // etc. We can lose having upgrade skip entirely, only banish and reroll". The card in focus is gone
-// for the run: never offered again at a level-up or in a chest, and its place is drawn anew. Two a
-// run, one more for each rank of the Armory's Exile, as Insight is to REROLL; never on a filler.
+// for the run: never offered again at a level-up or in a chest, and its place is drawn anew. One a
+// run for each rank of the Armory's Exile, as Insight is to REROLL (two free ones too until
+// progression, 21 October 2026, which a save from before keeps as Exile ranks); never on a filler.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -16,7 +17,10 @@ import * as P from '../public/js/shared/profile.js';
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
 
-function screen(fn, profile = P.defaultProfile()) {
+// A save from before progression (21 October 2026): six slots of each, two banishes and rerolls.
+const before = () => P.sanitizeProfile({ v: 3 });
+
+function screen(fn, profile = before()) {
   const oldRandom = Math.random, oldBot = input.bot, oldDevice = input.device;
   Math.random = mulberry32(9);
   try {
@@ -64,13 +68,14 @@ const centre = (gs, id) => {
 const key = (c) => `${c.type}:${c.id}`;
 const weapon = (id, level = 1, isNew = true) => ({ type: 'weapon', id, level, isNew });
 
-test('two banishes a run, one more for each rank of the Armory\'s Exile (max 5, 250 gold a rank)', () => {
+test('a banish a run for each rank of the Armory\'s Exile (max 5, 250 gold a rank), none without', () => {
   const up = P.UPGRADES.find((u) => u.id === 'banish');
   assert.deepEqual([up.name, up.max, up.cost], ['Exile', 5, 250]);
-  screen((g, gs, p) => assert.equal(p.banishes, 2));
+  screen((g, gs, p) => assert.equal(p.banishes, 0), P.defaultProfile());
+  screen((g, gs, p) => assert.equal(p.banishes, 2), before());
   const prof = P.defaultProfile();
   prof.up.banish = 3;
-  screen((g, gs, p) => assert.equal(p.banishes, 5), prof);
+  screen((g, gs, p) => assert.equal(p.banishes, 3), prof);
 });
 
 test('Exile is bought, refunded and read back as any Armory upgrade; an old save without it has none', () => {
@@ -81,7 +86,7 @@ test('Exile is bought, refunded and read back as any Armory upgrade; an old save
   r = P.buyUpgrade(r.profile, 'banish');
   assert.ok(r.ok);
   assert.equal(r.profile.up.banish, 2);
-  assert.equal(r.profile.gold, 1000 - 250 - 500);
+  assert.equal(r.profile.gold, 1000 - 125 - 500, 'the first rank at half price');
   const back = P.sanitizeProfile(P.decodeState(P.encodeState(P.packProfile(r.profile))));
   assert.equal(back.up.banish, 2, 'through the cookie and back');
   assert.equal(P.metaBonuses(back).banish, 2);
@@ -89,7 +94,7 @@ test('Exile is bought, refunded and read back as any Armory upgrade; an old save
   const old = P.sanitizeProfile({ gold: 5, up: { reroll: 2 } });
   assert.equal(old.up.banish, undefined, 'an old save reads as before');
   assert.equal(P.metaBonuses(old).banish, 0);
-  assert.equal(P.refundUpgrades(r.profile).refunded, 750, 'refunded with the rest');
+  assert.equal(P.refundUpgrades(r.profile).refunded, 625, 'refunded with the rest');
 });
 
 test('a banished weapon or relic is never offered again, at a level-up or in a chest; a filler is never banished', () => {

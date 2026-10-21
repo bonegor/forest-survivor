@@ -13,10 +13,15 @@ export const HARDER = 1.2;
 const MORE = 1.1 * 1.1 * 1.2;
 // The owner's, the same day after another test (20 October 2026): "the thing is even a bit too easy.
 // Double the amount of monsters". The steady horde and the timed swarms, rings and packs, on both
-// difficulties and a Dungeon Run's floors; a Nightmare doubles that again (hordeMore). The crypts'
+// difficulties and a Dungeon Run's floors; a Nightmare multiplies that again (hordeMore). The crypts'
 // sleeping packs, champions, thieves, bosses and their summons come as they did.
 // Then, once more (20 October 2026): "double the number of monsters on all difficulties": 4.
 export const CROWD = 4;
+// The owner's (21 October 2026): "Reduce the numbers of monsters on normal by 3 times what it is rn.
+// Then veteran is double, nightmare is tripple veteran". Normal sends a third of what both sent
+// (NORMAL_CROWD), Veteran twice Normal's (VETERAN_CROWD: two thirds), a Nightmare three times
+// Veteran's (NIGHTMARE.more). The steady horde and the timed swarms, rings and packs alike.
+export const NORMAL_CROWD = 1 / 3, VETERAN_CROWD = 2 * NORMAL_CROWD;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
@@ -34,8 +39,8 @@ export const VETERAN = {
   name: 'Veteran',
   hp: 1.9 * TOUGHER,
   dmg: 1.65 * DEADLIER,
-  spawn: 1.15 * MORE * CROWD,
-  horde: MORE * CROWD,
+  spawn: 1.15 * MORE * CROWD * VETERAN_CROWD,
+  horde: MORE * CROWD * VETERAN_CROWD,
   speed: 1.12,
   elite: 1.35,
   hurt: 1,
@@ -66,6 +71,9 @@ export const NORMAL = {
   few: 1 / 3,
   health: VETERAN.health * NORMAL_HEALTH,
   late: NORMAL_LATE,
+  // Half Veteran's numbers: a third of what both difficulties sent before (NORMAL_CROWD).
+  spawn: VETERAN.spawn * (NORMAL_CROWD / VETERAN_CROWD),
+  horde: VETERAN.horde * (NORMAL_CROWD / VETERAN_CROWD),
   // The owner's (21 October 2026): "reduce the speed on normal by 20%". On Normal the hero and the
   // monsters move at 0.8 of the game's speed (GAME_SPEED, moveFor); the clock is real time anyway.
   pace: 0.8,
@@ -79,15 +87,16 @@ export const DIFFS = { medium: NORMAL, hard: VETERAN };
 // tests, older saves) plays it too: the game as it was tuned.
 export const diffFor = (mode, id) => (mode === 'ranked' ? VETERAN : DIFFS[id] || VETERAN);
 
-// Nightmare, the user's (16 October 2026): a box to tick on the trial screen that doubles the
-// number of monsters. On top of Normal or Veteran, twice as many of the night's monsters come, in
+// Nightmare, the user's (16 October 2026): a box to tick on the trial screen that multiplies the
+// number of monsters, Veteran's only (nightmareFor): three times as many of the night's monsters
+// (the owner's, 21 October 2026; twice before) come, in
 // the steady horde and the timed swarms, rings and packs alike (spawner.js hordeMore), each as
 // strong as ever. Not on Ranked, which keeps one best time per hero. The gold it brings home is
 // the profile's to weigh (shared/profile.js NIGHTMARE_GOLD).
 export const NIGHTMARE = {
   name: 'Nightmare',
-  more: 2,
-  desc: `Nightmare: twice as many monsters. Gold x${NIGHTMARE_GOLD} on top of Veteran's.`,
+  more: 3,
+  desc: `Nightmare: three times as many monsters. Gold x${NIGHTMARE_GOLD} on top of Veteran's.`,
 };
 
 // Whether a run is a Nightmare: only as chosen, only on Veteran (the owner's, 21 October 2026: a

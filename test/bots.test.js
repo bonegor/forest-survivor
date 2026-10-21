@@ -11,8 +11,10 @@ const strip = ({ ms, ...r }) => r; // wall time is all that may differ between r
 test('a seeded bot game replays exactly and reports its stats', () => {
   // Five times his health (a test buff), so a bare Knight outlives the 45 s (data/heroes.js: he loses early now).
   const play = (seed) => strip(playGame({ bot: 'kite', hero: 'knight', mode: 's15', seed, max: 45, buff: { life: 400 } }));
-  const a = play(7);
-  assert.deepEqual(play(7), a);
+  // Seed 3: with two thirds of the old horde on Veteran (data/difficulty.js VETERAN_CROWD), some seeds
+  // keep the kiting Knight clear of the monsters all 45 s; this one fights.
+  const a = play(3);
+  assert.deepEqual(play(3), a);
   assert.equal(a.outcome, 'alive');
   assert.equal(a.time, 45);
   // Fixed 60 Hz steps; an ultimate's launch stops the world 0.2 s (ULT_LAUNCH.stop), 12 more steps each.
@@ -20,7 +22,7 @@ test('a seeded bot game replays exactly and reports its stats', () => {
   assert.ok(a.ticks >= 45 * 60 - 1 && Math.abs(stops - Math.round(stops)) <= 0.1 && stops <= 4, `fixed 60 Hz steps (${a.ticks})`);
   assert.ok(a.kills > 0 && a.level > 1, 'it fought and levelled');
   assert.ok(a.damageTaken >= 0 && a.hits >= 0 && a.weapons[0].startsWith('sword:'));
-  assert.notDeepEqual(play(8), a, 'another seed plays another game');
+  assert.notDeepEqual(play(5), a, 'another seed plays another game');
 });
 
 test('every strategy and level-up policy plays', () => {

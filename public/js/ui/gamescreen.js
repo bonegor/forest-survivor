@@ -14,9 +14,9 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, FILLERS } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
-import { metaBonuses, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost } from '../shared/profile.js';
+import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
-import { unlockText, goalText } from './ladder.js';
+import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
 import { buttonFace } from './skin.js';
 import { OptionsScreen } from './screens.js';
@@ -30,11 +30,12 @@ export class GameScreen {
       hero,
       mode,
       diff: app.choice.diff || 'medium', // Normal or Veteran: Normal unless chosen, as the trial screen shows
-      nightmare: app.choice.nightmare === true, // twice the monsters, if ticked there (Veteran only, never on Ranked)
+      nightmare: app.choice.nightmare === true, // three times the monsters, if ticked there (Veteran only, never on Ranked)
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       // The records a run can break as it goes (Game.checkRecords), as they stand now.
       records: { kills: app.store.profile.best.kills, level: app.store.profile.best.level, time: mode === 's15' ? app.store.profile.best.s15 : 0 },
       meta: metaBonuses(app.store.profile),
+      open: openFor(app.store.profile, hero), // the weapons, relics and ultimate opened so far
       gear: app.store.profile.gear[hero], // this hero's own
       unlocks: unlocksNext(app.store.profile, hero),
       settings: app.settings,
@@ -621,13 +622,16 @@ export class LevelUpOverlay {
       drawText(ctx, hint, W / 2, tipY, { align: 'center', color: this.always >= 0 ? '#fee761' : '#8b9bb4' });
     } else if (!result) {
       // BANISH (B, or a pad's left-stick press to arm it) and REROLL (R, a pad's Y), side by side;
-      // held while the cards are, greyed with none left.
+      // held while the cards are, greyed with none left. A run that began with none of one (none
+      // bought in the Armory's Exile or Insight: shared/progress.js) has no button for it at all,
+      // and the other stands alone in the middle; with neither, the line of help alone.
       const busy = this.busy(), pad = input.device === 'pad', kb = input.device === 'kb';
-      const bw = Math.min(96, Math.floor((W - 22) / 2)), bx = Math.round(W / 2 - bw - 3);
+      const hasB = p.banishes > 0 || this.banishing || (p.meta?.banish || 0) > 0, hasR = p.rerolls > 0 || (p.meta?.reroll || 0) > 0;
+      const bw = Math.min(96, Math.floor((W - 22) / 2)), bx = Math.round(W / 2 - (hasB && hasR ? bw + 3 : bw / 2));
       const canB = this.choices.some((c) => this.canBanish(c));
       const bl = this.banishing ? 'CANCEL' : `BANISH ×${p.banishes}`;
-      if (footButton(ctx, ui, 'banish', bx, rowY, bw, bl, { color: '#e43b44', held: busy, disabled: !canB && !this.banishing, key: kb ? 'B' : pad ? 'LS' : null })) this.toggleBanishing();
-      const rerolled = footButton(ctx, ui, 'reroll', bx + bw + 6, rowY, bw, `REROLL ×${p.rerolls}`, { color: '#2ce8f5', held: busy, disabled: p.rerolls <= 0, key: kb ? 'R' : pad ? 'Y' : null });
+      if (hasB && footButton(ctx, ui, 'banish', bx, rowY, bw, bl, { color: '#e43b44', held: busy, disabled: !canB && !this.banishing, key: kb ? 'B' : pad ? 'LS' : null })) this.toggleBanishing();
+      const rerolled = hasR && footButton(ctx, ui, 'reroll', hasB ? bx + bw + 6 : bx, rowY, bw, `REROLL ×${p.rerolls}`, { color: '#2ce8f5', held: busy, disabled: p.rerolls <= 0, key: kb ? 'R' : pad ? 'Y' : null });
       if ((rerolled || input.pressed('reroll')) && !busy && p.rerolls > 0) {
         p.rerolls--;
         sfx('teleport');
@@ -640,10 +644,10 @@ export class LevelUpOverlay {
         color = '#e43b44';
       } else if (ui.focusId === 'banish') tip = fit(['BANISH: the card in focus is gone for the rest of the run', 'BANISH: gone for the run']);
       else if (ui.focusId === 'reroll') tip = fit(['REROLL: all new cards', 'REROLL']);
-      else if (touch) tip = fit([canB ? 'Tap a card to take it · hold a card to banish it' : 'Tap a card to take it', 'Tap: take · hold: banish']);
+      else if (touch) tip = fit(canB ? ['Tap a card to take it · hold a card to banish it', 'Tap: take · hold: banish'] : ['Tap a card to take it', 'Tap: take']);
       else if (pad) tip = fit(['A takes the card in focus', 'A: take']);
       else tip = fit([`Enter or 1-${n} takes a card`, `Enter/1-${n}: take`]);
-      drawText(ctx, tip, W / 2, tipY, { align: 'center', color });
+      drawText(ctx, tip, W / 2, hasB || hasR ? tipY : rowY + 2, { align: 'center', color });
     }
     ui.end();
     if (this.banishing && input.pressed('back')) this.toggleBanishing();
@@ -1325,6 +1329,61 @@ export function armoryLine(p) {
   return near ? `+${fmtNum(near.need)} gold to ${near.name}` : 'The Armory is complete';
 }
 
+// The results' UNLOCKED: what the run opened (reward.unlocked), as chips of an icon and a name in
+// rows at most maxW wide, the first led by the word itself. Each chip { e, w } or { label, w }.
+const UNLOCK_ROW = 17;
+const UNLOCK_LABEL = 'UNLOCKED';
+export function chipRows(list, maxW) {
+  const rows = [];
+  let row = [{ label: UNLOCK_LABEL, w: textWidth(UNLOCK_LABEL) }], w = row[0].w;
+  for (const e of list) {
+    const cw = Math.min(maxW, 19 + textWidth(codexName(e)));
+    if (w + 10 + cw > maxW && row.length) {
+      rows.push(row);
+      row = [];
+      w = -10;
+    }
+    row.push({ e, w: cw });
+    w += 10 + cw;
+  }
+  if (list.length) rows.push(row);
+  return rows;
+}
+
+// One row of those chips, centred on cx, its icons' tops at y; `more` of them left out told at its
+// end, as many more of the row's chips giving way to that as keep it maxW wide.
+function drawChips(ctx, row, cx, y, more, maxW) {
+  row = [...row];
+  const width = () => row.reduce((s, c) => s + c.w, 0) + 10 * (row.length - 1) + (more > 0 ? 10 + textWidth(`+${more} MORE`) : 0);
+  while (more > 0 && width() > maxW && row.length > 1 && row[row.length - 1].e) {
+    row.pop();
+    more++;
+  }
+  const tail = more > 0 ? `+${more} MORE` : '', total = width();
+  let x = Math.round(cx - total / 2);
+  for (const c of row) {
+    if (c.label) drawText(ctx, c.label, x, y + 4, { color: ['#ffffff', '#9ee562', '#63c74d'] });
+    else {
+      codexIcon(ctx, c.e, x, y, false);
+      drawText(ctx, fitText(codexName(c.e), c.w - 19), x + 19, y + 4, { color: '#fee761' });
+    }
+    x += c.w + 10;
+  }
+  if (tail) drawText(ctx, tail, x, y + 4, { color: '#8b9bb4' });
+}
+
+// The locks nearest to opening, as lines under the gold: 'NEXT: Frost Nova · Survive 3:00 in a run
+// — 2:14 best', all in the longest form that fits every one of them, cut to fit at the last.
+function nearLines(list, w) {
+  const forms = list.map((e) => {
+    const name = codexName(e), rec = codexRecord(e), tail = rec ? ` — ${rec}` : '';
+    return [`NEXT: ${name} · ${e.need}${tail}`, `${name} · ${e.need}${tail}`, `${name}: ${e.need}`];
+  });
+  let k = 0;
+  while (k < 2 && forms.some((f) => textWidth(f[k]) > w)) k++;
+  return forms.map((f) => fitText(f[k], w));
+}
+
 class ResultsOverlay {
   constructor(gs) {
     this.gs = gs;
@@ -1368,7 +1427,7 @@ class ResultsOverlay {
     const res = this.res;
     this.reward = null;
     this.gs.app.store.submitRun({
-      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, floor: res.floor,
+      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, bosses: res.bosses, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
     }).then((r) => {
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
@@ -1471,7 +1530,22 @@ class ResultsOverlay {
     }
     // The weapons beside the rows, or under them on a narrow screen.
     const pw = Math.min(W - 16, 340), side = pw >= 330, nw = Math.min(6, res.weapons.length);
-    const ph = Math.min(H - 52 - L.height * s, 178 + notes.length * 10 + (side ? 0 : nw * 15 - 10));
+    // What the run opened (shared/progress.js: reward.unlocked), in rows of an icon and a name each
+    // under UNLOCKED, and the one or two locks nearest to opening, told under the gold. Their room
+    // is kept from the moment the store answers, so nothing moves when they show. They take the
+    // room the rows and weapons leave (tight: what those, the notes and the gold need), the panel
+    // growing for them where the screen allows; on a low screen the locks give way first, then
+    // the rows of the unlocked down to one.
+    const saved = this.reward && !this.reward.unsaved;
+    const unlocked = saved ? this.reward.unlocked || [] : [];
+    const near = saved ? (this.near ??= nearestLocks(this.gs.app.store.profile, 2)) : [];
+    const base = 178 + notes.length * 10 + (side ? 0 : nw * 15 - 10), cap = H - 52 - L.height * s;
+    const tight = 16 + Math.max(this.rows.length * 10, side ? nw * 15 : 0) + (side ? 0 : nw * 15 + 4) + notes.length * 10 + 55;
+    const chips = chipRows(unlocked, pw - 16);
+    const nChips = Math.min(chips.length, Math.max(1, Math.floor((cap - tight) / UNLOCK_ROW)));
+    const unH = unlocked.length ? nChips * UNLOCK_ROW : 0;
+    const nNear = clamp(Math.floor((cap - tight - unH) / 10), 0, near.length);
+    const ph = Math.min(cap, Math.max(base, tight + unH + nNear * 10));
     const x = Math.round(W / 2 - pw / 2), y = Math.round(24 + L.height * s);
     panel(ctx, x, y, pw, ph, res.victory ? { trim: ['#fee761', '#be4a2f'], rivets: true } : {});
     // The rows, one by one, each with a tick; a record broken stamped NEW BEST.
@@ -1506,8 +1580,16 @@ class ResultsOverlay {
       wy += 15;
     });
     // The gold, counting up once the rows are in and the store has answered; then what next.
-    const gy = y + ph - 51;
+    const gy = y + ph - 51 - nNear * 10;
     notes.forEach(([text, color], i) => drawText(ctx, text, W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
+    if (this.landed && unH) {
+      if (!this.announced) {
+        this.announced = true;
+        sfx('unlock');
+      }
+      const rows = chips.slice(0, nChips), more = unlocked.length - rows.flat().filter((c) => c.e).length;
+      rows.forEach((row, r) => drawChips(ctx, row, W / 2, gy - 6 - notes.length * 10 - unH + r * UNLOCK_ROW, r === rows.length - 1 ? more : 0, pw - 16));
+    }
     const unsaved = this.reward?.unsaved;
     const counting = this.reward && !unsaved && this.t >= this.rowsEnd + TALLY.gap;
     if (unsaved) {
@@ -1527,14 +1609,19 @@ class ResultsOverlay {
         if (Math.floor(this.shown / step) > Math.floor(before / step)) sfx('coin', { pitch: 1 + 0.6 * (this.shown / Math.max(1, total)) });
         if (k >= 1) this.land();
       }
-      const parts = `Collected ${res.gold} × ${this.reward.multiplier}` + (this.reward.bonus ? ` + ${this.reward.bonus} victory bonus` : '');
-      drawText(ctx, fitText(parts, pw - 12), W / 2, gy, { align: 'center', color: '#8b9bb4' });
+      // The gold picked up, the wage for the time on the clock (shared/progress.js wage) and a
+      // win's bonus: in full where it fits.
+      const r = this.reward, bonus = (long) => (r.bonus ? ` + ${r.bonus} ${long ? 'victory bonus' : 'bonus'}` : '');
+      const wage = (long) => (r.wage ? ` + ${r.wage} ${long ? `wage for ${fmtTime(res.time)}` : 'wage'}` : '');
+      const parts = [`Collected ${res.gold} × ${r.multiplier}${wage(true)}${bonus(true)}`, `Collected ${res.gold} × ${r.multiplier}${wage(false)}${bonus(true)}`, `Gold ${res.gold} × ${r.multiplier}${wage(false)}${bonus(false)}`];
+      drawText(ctx, fitText(parts.find((t) => textWidth(t) <= pw - 12) || parts[2], pw - 12), W / 2, gy, { align: 'center', color: '#8b9bb4' });
       const c = textCanvas(`+${fmtNum(Math.floor(this.shown))} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(W / 2 - c.width), gy + 9, c.width * 2, c.height * 2);
     } else if (!this.reward) drawText(ctx, 'Counting your spoils…', W / 2, gy + 6, { align: 'center', color: '#8b9bb4' });
     if (this.landed && this.reward) {
       // What next: the next goal, and what the gold buys.
       const prof = app.store.profile;
+      nearLines(near.slice(0, nNear), pw - 12).forEach((line, i) => drawText(ctx, line, W / 2, y + ph - 20 - (nNear - i) * 10, { align: 'center', color: '#c28569' }));
       drawText(ctx, fitText('NEXT: ' + goalText(nextGoal(prof)), pw - 12), W / 2, y + ph - 20, { align: 'center', color: '#feae34' });
       drawText(ctx, fitText(armoryLine(prof), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
     }

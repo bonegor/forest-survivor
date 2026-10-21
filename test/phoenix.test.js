@@ -10,14 +10,18 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
+import { sanitizeProfile, metaBonuses } from '../public/js/shared/profile.js';
+
+// A save from before progression (21 October 2026): six weapon and relic slots, two rerolls and
+// banishes, as these tests were written for.
+const before = () => sanitizeProfile({ v: 3 });
 
 function gameCase(hero, fn, o = {}) {
   const oldRandom = Math.random, oldBot = input.bot;
   Math.random = mulberry32(31);
   try {
     input.bot = { x: 0, y: 0 };
-    const g = new Game({ hero, mode: 's15', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, crypts: false, ...o });
+    const g = new Game({ hero, mode: 's15', meta: metaBonuses(before()), settings: { numbers: false }, crypts: false, ...o });
     g.spawner.update = () => {};
     g.update(1 / 60);
     return fn(g, g.player);

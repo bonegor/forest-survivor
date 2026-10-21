@@ -30,10 +30,12 @@ const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options
   --max=TIME    stop a game after this much game time, seconds or m:ss (default: 60:00)
   --hz=N        simulation steps per second (default: 60, like a 60 Hz screen)
   --armory=X    Armory ranks: none, max, or might:5,armor:3 (default: none)
+  --slots=N     weapon slots, 1 to 6 (default: 6)
+  --relics=N    relic slots, 0 to 6 (default: 6)
   --buff=X      a test buff in percent on top of the Armory: damage, life, regen, xp, speed,
                 e.g. damage:10,life:20,regen:50 or all:15 (default: none)
   --diff=X      normal or veteran (default: veteran, the game as it was tuned)
-  --nightmare   twice the monsters, on top of Veteran (not Normal, not Ranked; default: off)
+  --nightmare   three times the monsters, on top of Veteran (not Normal, not Ranked; default: off)
   --jobs=N      games played in parallel (default: one per core, less one)
   --each        print a line per game
   --json=FILE   write every game's result to FILE
@@ -74,6 +76,10 @@ async function main(argv) {
   const max = parseTime(opts.max ?? '60:00');
   const armory = parseArmory(opts.armory ?? 'none');
   const buff = parseBuff(opts.buff ?? 'none');
+  const slots = opts.slots === undefined ? undefined : Number(opts.slots);
+  if (slots !== undefined && !(Number.isInteger(slots) && slots >= 1 && slots <= 6)) fail('--slots must be 1 to 6');
+  const relics = opts.relics === undefined ? undefined : Number(opts.relics);
+  if (relics !== undefined && !(Number.isInteger(relics) && relics >= 0 && relics <= 6)) fail('--relics must be 0 to 6');
   const diff = { normal: 'medium', veteran: 'hard' }[opts.diff ?? 'veteran'] ?? fail('--diff must be normal or veteran');
   const nightmare = opts.nightmare === undefined ? false : opts.nightmare === true || fail('--nightmare takes no value');
   if (nightmare && diff !== 'hard') fail('--nightmare is a Veteran modifier: it needs --diff=veteran');
@@ -90,7 +96,7 @@ async function main(argv) {
     combos.push({ bot, pick, hero, mode });
   }
   const jobs = [];
-  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, seed: seed0 + i, hz, max, armory, buff, diff, nightmare });
+  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, seed: seed0 + i, hz, max, armory, buff, slots, relics, diff, nightmare });
 
   const cores = os.availableParallelism ? os.availableParallelism() : os.cpus().length;
   const workers = Math.max(1, Math.min(jobs.length, posInt(opts.jobs ?? Math.max(1, cores - 1), 'jobs')));
@@ -110,7 +116,7 @@ async function main(argv) {
   const seeds = runs > 1 ? `seeds ${seed0}-${seed0 + runs - 1}` : `seed ${seed0}`;
   const arm = Object.keys(armory).length ? 'armory ' + Object.entries(armory).map(([k, r]) => k + ':' + r).join(',') : 'no armory';
   const buffs = Object.keys(buff).length ? ['buff ' + Object.entries(buff).map(([k, x]) => `${k} +${x}%`).join(', ')] : [];
-  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, ...buffs, diff === 'medium' ? 'Normal' : 'Veteran', ...(nightmare ? ['Nightmare'] : [])].join(' · ')}`);
+  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, ...buffs, ...(slots ? [`${slots} weapon slot${slots > 1 ? 's' : ''}`] : []), ...(relics !== undefined ? [`${relics} relic slot${relics === 1 ? '' : 's'}`] : []), diff === 'medium' ? 'Normal' : 'Veteran', ...(nightmare ? ['Nightmare'] : [])].join(' · ')}`);
   console.log(`${jobs.length} game${jobs.length > 1 ? 's' : ''} on ${workers} worker${workers > 1 ? 's' : ''} in ${secs.toFixed(1)} s\n`);
 
   const rows = combos.map((c) => ({ c, s: summarize(results.filter((r) => dims.every((k) => r[k] === c[k]))) }));
@@ -250,7 +256,7 @@ function listStrategies() {
 // --------------------------------------------------------------- options --
 
 function parseArgs(argv) {
-  const known = ['bot', 'pick', 'hero', 'mode', 'runs', 'seed', 'max', 'hz', 'armory', 'buff', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
+  const known = ['bot', 'pick', 'hero', 'mode', 'runs', 'seed', 'max', 'hz', 'armory', 'buff', 'slots', 'relics', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
   const opts = {};
   for (const a of argv) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(a);

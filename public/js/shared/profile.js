@@ -18,13 +18,22 @@
 //
 // Two difficulties (data/difficulty.js): Normal is recorded as the old Medium,
 // Veteran as the old Hard, so saves keep their shape and old Easy wins stay on record.
-// A Nightmare (twice the monsters, on either) is recorded as its difficulty, and pays a
+// A Nightmare (three times the monsters, on Veteran) is recorded as its difficulty, and pays a
 // little more gold (NIGHTMARE_GOLD).
 
-import { RARITIES, LEGENDARY, MAX_LORDS, sanitizeGear, packGear, sameItem, itemPrice } from './items.js';
+// Progression (21 October 2026, shared/progress.js): weapons, relics and each hero's ultimate open
+// by milestones, kept as bits (ul: PROGRESS.locks in order; uu: HERO_ORDER in order); weapon and
+// relic slots are Armory ranks (Arsenal, Reliquary), as are all rerolls and banishes.
 
-// 3: each hero's own gear, and heroes unlocked by time (2: one set of gear, heroes bought).
-export const VERSION = 3;
+import { RARITIES, LEGENDARY, MAX_LORDS, sanitizeGear, packGear, sameItem, itemPrice } from './items.js';
+import { PROGRESS, needText } from './progress.js';
+
+export { PROGRESS, needText };
+
+// 4: progression (unlocks by milestone, slots bought); a save from before keeps all it had
+// (sanitizeProfile, fromBefore). 3: each hero's own gear, and heroes unlocked by time (2: one set
+// of gear, heroes bought).
+export const VERSION = 4;
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
 export const MODES = ['s15', 'dungeon', 'ranked'];
 export const WIN_MODES = ['s15', 'dungeon']; // Ranked has no victory, only a time
@@ -45,8 +54,12 @@ export const RANKS = [
   [25, 'Warlord'], [30, 'Hero'], [40, 'Legend'], [50, 'Mythic'], [60, 'Immortal'],
 ];
 
-// Permanent upgrades bought with gold. Rank n+1 costs `cost * (n + 1)`.
+// Permanent upgrades bought with gold. Rank n+1 costs `cost * (n + 1)`, the first rank half that
+// (PROGRESS.firstRank, upgradeCost).
 export const UPGRADES = [
+  // The owner's (21 October 2026): "the player doesn't start with 6 but starts with fewer".
+  { id: 'arsenal', name: 'Arsenal', desc: '+1 weapon slot', max: 3, cost: 400 },
+  { id: 'reliquary', name: 'Reliquary', desc: '+1 relic slot', max: 3, cost: 300 },
   { id: 'might', name: 'Might', desc: '+5% damage', max: 8, cost: 150 },
   { id: 'armor', name: 'Armor', desc: '+1 armor', max: 5, cost: 250 },
   { id: 'vitality', name: 'Vitality', desc: '+10% max health', max: 5, cost: 180 },
@@ -99,8 +112,14 @@ export function defaultProfile() {
     wins: { s15: [0, 0, 0], dungeon: [0, 0, 0] },
     runs: 0,
     kills: 0,
-    best: { s15: 0, dungeon: 0, kills: 0, level: 0 },
+    // time: the longest run on the clock in any mode; gold: the most gold picked up in a run;
+    // bosses: the most bosses (and crypt lords) slain in a run. Milestones read them (earnedBits).
+    best: { s15: 0, dungeon: 0, kills: 0, level: 0, time: 0, gold: 0, bosses: 0 },
     up: {},
+    // Armory ranks a save from before was given (fromBefore): kept, never refunded (refundUpgrades).
+    gift: {},
+    ul: 0, // the milestones' weapons and relics open: bit i is PROGRESS.locks[i]
+    uu: 0, // the heroes whose ultimate is open: bit i is HERO_ORDER[i]
     heroes: [...BASE_HEROES],
     feats: {}, // hero -> FEAT bits
     ranked: {}, // hero -> best Ranked time in seconds
@@ -121,10 +140,17 @@ export function sanitizeProfile(raw) {
   p.best.dungeon = int(raw.best?.dungeon, 0, 4);
   p.best.kills = int(raw.best?.kills, 0, 1e7);
   p.best.level = int(raw.best?.level, 0, 999);
+  p.best.time = int(raw.best?.time, 0, MAX_TIME.ranked);
+  p.best.gold = int(raw.best?.gold, 0, 1e9);
+  p.best.bosses = int(raw.best?.bosses, 0, 9999);
   for (const u of UPGRADES) {
     const r = int(raw.up?.[u.id], 0, u.max);
     if (r) p.up[u.id] = r;
+    const g = int(GIFTS.includes(u.id) ? giftOf(raw.gift, u.id) : 0, 0, r);
+    if (g) p.gift[u.id] = g;
   }
+  p.ul = int(raw.ul, 0, ALL_LOCKS);
+  p.uu = int(raw.uu, 0, ALL_ULTS);
   if (Array.isArray(raw.heroes)) {
     for (const h of raw.heroes) if (HERO_ORDER.includes(h) && !p.heroes.includes(h)) p.heroes.push(h);
   }
@@ -150,15 +176,124 @@ export function sanitizeProfile(raw) {
   } else if (Object.keys(sanitizeGear(raw.gear)).length) {
     for (const h of p.heroes) p.gear[h] = sanitizeGear(raw.gear);
   }
+  const v = int(raw.v, 0, 99);
+  if (v >= 1 && v < 4) fromBefore(p);
+  // Whatever the records have earned is open (a milestone retuned lower opens for all who passed it).
+  p.ul |= earnedBits(p);
+  for (const h of p.heroes) if (ultEarned(p, h)) p.uu |= heroBit(h);
   return p;
+}
+
+// ------------------------------------------------------------ progression --
+// (shared/progress.js holds the numbers.)
+
+const LOCKS = PROGRESS.locks;
+const ALL_LOCKS = 2 ** LOCKS.length - 1;
+const ALL_ULTS = 2 ** HERO_ORDER.length - 1;
+const heroBit = (h) => 1 << HERO_ORDER.indexOf(h);
+const lockOpen = (p, i) => ((p.ul || 0) & (1 << i)) !== 0;
+const sum = (a) => a.reduce((s, x) => s + x, 0);
+
+// What the profile's records measure, for each kind of milestone (PROGRESS.locks need).
+function measures(p) {
+  return { time: p.best.time, kills: p.kills, level: p.best.level, gold: p.best.gold, bosses: p.best.bosses, wins: sum(p.wins.s15) };
+}
+
+// The bits of every milestone the records have reached.
+function earnedBits(p) {
+  const m = measures(p);
+  let bits = 0;
+  LOCKS.forEach((l, i) => {
+    if (m[l.need] >= l.at) bits |= 1 << i;
+  });
+  return bits;
+}
+
+// Whether a hero's records show a run with him of PROGRESS.ultTime: a Ranked best that long, a win
+// with him (no win is that short), or the next hero brought in (five minutes with him).
+function ultEarned(p, h) {
+  if ((p.ranked[h] || 0) >= PROGRESS.ultTime || (p.feats[h] || 0) !== 0) return true;
+  const next = HERO_ORDER[HERO_ORDER.indexOf(h) + 1];
+  return HERO_UNLOCK_TIME >= PROGRESS.ultTime && !!next && p.heroes.includes(next);
+}
+
+// A save from before progression (version 3 and older) keeps all it had: every milestone its
+// records imply is open; a win implies the run-long ones they never kept (gold, bosses); every
+// hero it owns has his ultimate once any of its runs lasted PROGRESS.ultTime; the Armory's Arsenal
+// and Reliquary are full, so no slot is lost; Insight and Exile get two ranks more (to their max),
+// for the two free rerolls and banishes every run had. Those ranks are a gift (p.gift): kept, and
+// never paid back by a refund.
+function fromBefore(p) {
+  const wins = sum(p.wins.s15) + sum(p.wins.dungeon);
+  p.best.time = Math.max(p.best.time, p.best.s15, ...Object.values(p.ranked), sum(p.wins.dungeon) ? MIN_WIN_TIME.dungeon : 0, sum(p.wins.s15) ? MIN_WIN_TIME.s15 : 0);
+  if (wins) LOCKS.forEach((l, i) => {
+    if (l.need === 'gold' || l.need === 'bosses') p.ul |= 1 << i;
+  });
+  if (p.best.time >= PROGRESS.ultTime) for (const h of p.heroes) p.uu |= heroBit(h);
+  const give = (id, n) => {
+    const u = UPGRADES.find((x) => x.id === id), had = p.up[id] || 0, add = Math.min(n, u.max - had);
+    if (add <= 0) return;
+    p.up[id] = had + add;
+    p.gift[id] = (p.gift[id] || 0) + add;
+  };
+  give('arsenal', 3);
+  give('reliquary', 3);
+  give('reroll', 2);
+  give('banish', 2);
+}
+
+// Every milestone's weapon and relic and every hero's ultimate open, and the Armory's slots full
+// (the debug address, engine/storage.js unlockEverything; the bots, tools/headless.mjs).
+export function openEverything(p) {
+  p.ul = ALL_LOCKS;
+  p.uu = ALL_ULTS;
+  for (const id of ['arsenal', 'reliquary']) p.up[id] = UPGRADES.find((u) => u.id === id).max;
+  return p;
+}
+
+// What the hero may find in a run with this profile: the shared weapons and the relics open (his
+// own signature weapons always are: the game adds them, Game.weaponOpen), and whether his ultimate
+// is. The game takes it as its `open` option.
+export function openFor(profile, hero) {
+  const p = profile || {};
+  const weapons = [...PROGRESS.openWeapons], relics = [...PROGRESS.openRelics];
+  LOCKS.forEach((l, i) => {
+    if (lockOpen(p, i)) (l.type === 'weapon' ? weapons : relics).push(l.id);
+  });
+  return { weapons, relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0 };
+}
+
+// Every lock, for a codex: the open-from-the-start ones (start: true), the milestones with how
+// far the records have come (progress 0..1), and each hero's ultimate (its progress is his Ranked
+// best's, the only time kept for each hero; 1 once open).
+//   [{ type: 'weapon' | 'relic' | 'ult', id, open, need, progress, start? }]
+export function progressList(profile) {
+  const p = sanitizeProfile(profile), m = measures(p);
+  const out = [];
+  for (const id of PROGRESS.openWeapons) out.push({ type: 'weapon', id, open: true, need: null, progress: 1, start: true });
+  for (const id of PROGRESS.openRelics) out.push({ type: 'relic', id, open: true, need: null, progress: 1, start: true });
+  LOCKS.forEach((l, i) => {
+    const open = lockOpen(p, i);
+    out.push({ type: l.type, id: l.id, open, need: needText(l), progress: open ? 1 : Math.min(1, m[l.need] / l.at) });
+  });
+  for (const h of HERO_ORDER) {
+    const open = ((p.uu & heroBit(h)) !== 0);
+    out.push({ type: 'ult', id: h, open, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero', progress: open ? 1 : Math.min(1, (p.ranked[h] || 0) / PROGRESS.ultTime) });
+  }
+  return out;
 }
 
 // The profile as its cookie keeps it, every hero's gear packed into a string (shared/items.js
 // packGear): all nine heroes in six legendaries each still fit. A cookie written before, each
-// item an array, reads back all the same (sanitizeGear takes both).
+// item an array, reads back all the same (sanitizeGear takes both). The gift is one number.
 export function packProfile(p) {
-  return { ...p, gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
+  return { ...p, gift: packGift(p.gift), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
 }
+
+// The Armory ranks a save from before may have been given (fromBefore), two bits each in a cookie.
+const GIFTS = ['arsenal', 'reliquary', 'reroll', 'banish'];
+const packGift = (gift) => GIFTS.reduce((n, id, i) => n + Math.min(3, gift?.[id] || 0) * 4 ** i, 0);
+const giftOf = (raw, id) => (typeof raw === 'number' ? Math.floor(raw / 4 ** GIFTS.indexOf(id)) % 4 : raw?.[id]);
 
 // ------------------------------------------------------------- the ladder --
 
@@ -220,7 +355,9 @@ export function rankTitle(seconds) {
 
 export function upgradeCost(id, rank) {
   const u = UPGRADES.find((x) => x.id === id);
-  return u ? u.cost * (rank + 1) : Infinity;
+  if (!u) return Infinity;
+  // The first rank at a discount (PROGRESS.firstRank), so a little gold always buys something new.
+  return rank === 0 ? Math.round(u.cost * PROGRESS.firstRank) : u.cost * (rank + 1);
 }
 
 export function buyUpgrade(profile, id) {
@@ -239,11 +376,16 @@ export function buyUpgrade(profile, id) {
 export function refundUpgrades(profile) {
   const p = sanitizeProfile(profile);
   let refunded = 0;
+  const kept = {};
+  // Ranks given to a save from before (gift) stay, unpaid; those bought are paid back as the
+  // cheapest ranks.
   for (const [id, rank] of Object.entries(p.up)) {
-    for (let r = 0; r < rank; r++) refunded += upgradeCost(id, r);
+    const keep = Math.min(rank, p.gift[id] || 0);
+    for (let r = 0; r < rank - keep; r++) refunded += upgradeCost(id, r);
+    if (keep) kept[id] = keep;
   }
   p.gold = int(p.gold + refunded, 0, 1e9);
-  p.up = {};
+  p.up = kept;
   return { ok: true, profile: p, refunded };
 }
 
@@ -267,7 +409,7 @@ export function sanitizeRun(raw) {
   const found = raw.mode === 'dungeon' ? 0 : int(raw.found, 0, MAX_LORDS * (Math.floor(realTime / SECS_PER_CRYPT) + 1));
   // A win only counts if the run lasted long enough to be one. Ranked never ends in victory.
   const victory = raw.mode !== 'ranked' && raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
-  // A Nightmare (data/difficulty.js), twice the monsters, only as a run says it was, and never on
+  // A Nightmare (data/difficulty.js), three times the monsters, only as a run says it was, and never on
   // Ranked. A win still counts as its difficulty's.
   // Veteran's modifier (data/difficulty.js nightmareFor): a Normal run is never one.
   const nightmare = raw.mode !== 'ranked' && diff === 'hard' && raw.nightmare === true;
@@ -281,10 +423,13 @@ export function sanitizeRun(raw) {
     // Selling what the crypts gave pays too; applyRun adds what selling worn gear paid.
     gold: int(raw.gold, 0, 100 + realTime * MAX_GOLD_PER_SEC + found * RARITIES[LEGENDARY].price),
     claim: int(raw.gold, 0, 1e9),
-    // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD); a
-    // Nightmare twice that.
-    kills: int(raw.kills, 0, 50 + time * 240 * (nightmare ? 2 : 1)),
+    // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD), and
+    // kept so with Veteran's now two thirds of that (VETERAN_CROWD); a Nightmare three times that.
+    kills: int(raw.kills, 0, 50 + time * 240 * (nightmare ? 3 : 1)),
     level: int(raw.level, 1, 999),
+    // Bosses and crypt lords slain (Game.stats.bosses), for the milestones: no more than a boss a
+    // minute and a few, and every lord of every crypt the run could have reached (as `found`).
+    bosses: int(raw.bosses, 0, 3 + Math.floor(time / 60) + (raw.mode === 'dungeon' ? 0 : MAX_LORDS * (Math.floor(realTime / SECS_PER_CRYPT) + 1))),
     floor: int(raw.floor, 1, 3),
     realTime,
     found,
@@ -296,8 +441,10 @@ export function sanitizeRun(raw) {
 export function runReward(run) {
   const multiplier = DIFF_GOLD[run.diff] * (run.nightmare ? NIGHTMARE_GOLD : 1);
   const collected = Math.round(run.gold * multiplier);
+  // A wage for the time on the clock (PROGRESS.wage a second), at the same rate as the gold.
+  const wage = Math.round(PROGRESS.wage * run.time * multiplier);
   const bonus = run.victory ? Math.round(VICTORY_BONUS[run.mode] * DIFF_BONUS[run.diff]) : 0;
-  return { collected, bonus, total: collected + bonus, multiplier };
+  return { collected, wage, bonus, total: collected + wage + bonus, multiplier };
 }
 
 export function applyRun(profile, rawRun) {
@@ -306,6 +453,7 @@ export function applyRun(profile, rawRun) {
   if (!run) return { ok: false, profile: p, error: 'Invalid run' };
   if (!canPlay(p, run.mode, run.hero)) return { ok: false, profile: p, error: 'That mode is locked for this hero' };
   const before = new Set(openings(p));
+  const ul0 = p.ul, uu0 = p.uu, pickedUp = run.gold;
   // The gear the hero wears at the end is theirs to keep, as long as no more of it is new than
   // the run found; whatever they wore coming in that is gone was sold, and its price may be in
   // the gold. Other heroes' gear is theirs alone.
@@ -345,7 +493,19 @@ export function applyRun(profile, rawRun) {
   }
   p.best.kills = Math.max(p.best.kills, run.kills);
   p.best.level = Math.max(p.best.level, run.level);
+  p.best.time = Math.max(p.best.time, run.time);
+  p.best.gold = Math.max(p.best.gold, pickedUp);
+  p.best.bosses = Math.max(p.best.bosses, run.bosses);
   reward.unlocks = openings(p).filter((k) => !before.has(k));
+  // The milestones this run reached (shared/progress.js), for the results screen to announce:
+  //   [{ type: 'weapon' | 'relic' | 'ult', id, need }]
+  p.ul |= earnedBits(p);
+  if (run.time >= PROGRESS.ultTime) p.uu |= heroBit(run.hero);
+  reward.unlocked = [];
+  LOCKS.forEach((l, i) => {
+    if (lockOpen(p, i) && !(ul0 & (1 << i))) reward.unlocked.push({ type: l.type, id: l.id, need: needText(l) });
+  });
+  if ((p.uu & ~uu0) !== 0) reward.unlocked.push({ type: 'ult', id: run.hero, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero' });
   if (run.mode === 'ranked') reward.ranked = { time: run.time, best: p.ranked[run.hero] || 0, personalBest, title: rankTitle(run.time) };
   return { ok: true, profile: p, reward, run };
 }
@@ -371,8 +531,12 @@ export function metaBonuses(profile) {
     luck: 1 + 0.1 * r('fortune'),
     growth: 1 + 0.04 * r('wisdom'),
     greed: 1 + 0.1 * r('greed'),
-    reroll: r('reroll'),
-    banish: r('banish'),
+    // All of a run's rerolls and banishes (none without the Armory since 21 October 2026), and
+    // its weapon and relic slots (the game keeps to its six at most).
+    reroll: PROGRESS.rerolls + r('reroll'),
+    banish: PROGRESS.banishes + r('banish'),
+    weaponSlots: PROGRESS.weaponSlots + r('arsenal'),
+    relicSlots: PROGRESS.relicSlots + r('reliquary'),
     duration: 1 + 0.06 * r('endurance'),
     projSpeed: 1 + 0.06 * r('velocity'),
     amount: r('echo'),

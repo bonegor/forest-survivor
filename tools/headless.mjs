@@ -39,30 +39,40 @@ buildSprites();
 // Plays one game until it ends or `max` seconds of game time pass, and
 // returns how it went. bot: a spec ('circle:r=60') or a strategy object;
 // armory: Armory ranks, e.g. { might: 5, armor: 3 }; diff: 'medium' (Normal) or 'hard' (Veteran);
-// nightmare: twice the monsters (data/difficulty.js NIGHTMARE; never in Ranked);
-// buff: a test buff in percent on top of the Armory, e.g. { damage: 10, life: 20, regen: 50, xp: 25, speed: 5 }.
+// nightmare: three times the monsters (data/difficulty.js NIGHTMARE; never in Ranked);
+// buff: a test buff in percent on top of the Armory, e.g. { damage: 10, life: 20, regen: 50, xp: 25, speed: 5 };
+// slots, relics: fewer weapon and relic slots than the game's six (or than the profile's);
+// profile: play as this save (shared/profile.js): its Armory (armory is then ignored), its weapon
+// and relic slots, its rerolls and banishes, and only the weapons, relics and ultimate it has
+// opened (openFor). Without one, everything is open, with six slots of each and the two free
+// rerolls and banishes every run had before progression (21 October 2026), as the bots always played.
+// The result's `report` is the run as the game would report it, for P.applyRun.
 export function playGame(o = {}) {
-  const { hero = 'knight', mode = 's15', diff = 'hard', nightmare = false, bot = 'autopilot', params, label, pick = 'build', seed = 1, hz = 60, max = 3600, armory = {}, buff = {}, crypts = false } = o;
+  const { hero = 'knight', mode = 's15', diff = 'hard', nightmare = false, bot = 'autopilot', params, label, pick = 'build', seed = 1, hz = 60, max = 3600, armory = {}, buff = {}, slots, relics, crypts = false, profile = null } = o;
   if (!HEROES[hero]) throw new Error(`Unknown hero "${hero}" (${Object.keys(HEROES).join(', ')})`);
   if (!MODES[mode]) throw new Error(`Unknown mode "${mode}" (${Object.keys(MODES).join(', ')})`);
   const random = Math.random;
   Math.random = mulberry32(seed);
   try {
-    const meta = P.metaBonuses(P.sanitizeProfile({ up: armory })); // ranks clamped like a real save
+    const prof = profile && P.sanitizeProfile(profile);
+    const meta = P.metaBonuses(prof || P.sanitizeProfile({ up: armory })); // ranks clamped like a real save
+    if (!prof) Object.assign(meta, { weaponSlots: 6, relicSlots: 6, reroll: meta.reroll + 2, banish: meta.banish + 2 });
+    const open = prof ? P.openFor(prof, hero) : null;
     for (const [k, pct] of Object.entries(buff)) {
       const [key] = BUFFS[k], x = 1 + pct / 100;
       meta[key] = (meta[key] ?? 1) * x;
     }
-    const g = new Game({ hero, mode, diff, nightmare, meta, settings: {}, crypts, headless: true });
+    const g = new Game({ hero, mode, diff, nightmare, meta, open, settings: {}, crypts, headless: true, maxWeapons: slots, maxRelics: relics });
     const d = new Driver(g, { bot, params, label, pick, hz, rng: mulberry32(Math.imul(seed, 0x9e3779b1) ^ 0x5bd1e995) });
     const t0 = performance.now();
     d.run(max);
     const s = d.summary();
     // What the run banks, as the server would pay it (shared/profile.js): the gold picked up,
-    // clamped to what a run that long could make, times the difficulty's rate, plus a win's bonus.
-    const run = P.sanitizeRun({ mode, diff: g.diffId, nightmare: g.nightmare, hero, victory: s.outcome === 'win', time: g.time, realTime: g.clock, gold: g.gold, kills: g.kills, level: s.level, floor: g.floor });
-    const pay = P.runReward(run);
-    return { bot: d.bot.name, pick: d.pickName, hero, mode, diff: g.diffId, nightmare: g.nightmare, seed, ...s, banked: pay.total, winBonus: pay.bonus, ms: Math.round(performance.now() - t0) };
+    // clamped to what a run that long could make, times the difficulty's rate, plus the wage for its
+    // time and a win's bonus.
+    const report = { mode, diff: g.diffId, nightmare: g.nightmare, hero, victory: s.outcome === 'win', time: Math.floor(g.time), realTime: Math.floor(g.clock), gold: g.gold, kills: g.kills, level: s.level, bosses: g.stats.bosses, floor: g.floor };
+    const pay = P.runReward(P.sanitizeRun(report));
+    return { bot: d.bot.name, pick: d.pickName, hero, mode, diff: g.diffId, nightmare: g.nightmare, seed, ...s, banked: pay.total, winBonus: pay.bonus, wage: pay.wage, report, ms: Math.round(performance.now() - t0) };
   } finally {
     Math.random = random;
   }

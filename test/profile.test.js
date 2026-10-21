@@ -28,9 +28,12 @@ test('encode/decode round-trips and rejects junk', () => {
 test('every hero in six legendaries, and every record at its most, still fits the cookie', () => {
   const p = P.defaultProfile();
   Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, heroes: [...P.HERO_ORDER] });
-  p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999 };
+  p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999, time: 14400, gold: 1e9, bosses: 9999 };
   for (const m of P.WIN_MODES) p.wins[m] = [1e6, 1e6, 1e6];
   for (const u of P.UPGRADES) p.up[u.id] = u.max;
+  // Progression (shared/progress.js): everything open, and the most a save from before was given.
+  P.openEverything(p);
+  p.gift = { arsenal: 3, reliquary: 3, reroll: 2, banish: 2 };
   // The largest a legendary can be: four stats at the top of their roll, the highest seed.
   const legend = (slot) => {
     const stats = {};
@@ -109,7 +112,8 @@ test('applyRun pays gold, records wins and clamps impossible reports', () => {
   assert.ok(r.ok);
   assert.equal(r.reward.collected, 600); // 400 * 1.5 on hard
   assert.equal(r.reward.bonus, 500); // 200 * 2.5
-  assert.equal(r.profile.gold, 1100);
+  assert.equal(r.reward.wage, 675); // 900 s * 0.5 * 1.5 (shared/progress.js wage)
+  assert.equal(r.profile.gold, 1775);
   assert.equal(r.profile.wins.s15[2], 1);
   assert.equal(r.profile.best.s15, 900);
 
@@ -185,12 +189,12 @@ test('buying and refunding upgrades', () => {
   let r = P.buyUpgrade(p, 'might');
   assert.ok(r.ok);
   assert.equal(r.profile.up.might, 1);
-  assert.equal(r.profile.gold, 850);
+  assert.equal(r.profile.gold, 925, 'the first rank at half price');
   r = P.buyUpgrade(r.profile, 'might');
   assert.equal(r.profile.up.might, 2);
-  assert.equal(r.profile.gold, 550); // second rank costs 300
+  assert.equal(r.profile.gold, 625); // second rank costs 300
   const refund = P.refundUpgrades(r.profile);
-  assert.equal(refund.refunded, 450);
+  assert.equal(refund.refunded, 375);
   assert.equal(refund.profile.gold, 1000);
   assert.deepEqual(refund.profile.up, {});
   assert.equal(P.buyUpgrade(p, 'nonexistent').ok, false);
@@ -226,7 +230,7 @@ test('five minutes on the clock with a hero unlock the next, in order and for fr
     const r = run(h, P.HERO_UNLOCK_TIME);
     assert.deepEqual(r.reward.unlocks, ['hero:' + next], h);
     assert.ok(p.heroes.includes(next));
-    assert.equal(p.gold, 0, 'no gold changes hands');
+    assert.equal(r.reward.collected + r.reward.bonus, 0, 'no gold changes hands (but the wage for the time)');
     assert.deepEqual(run(h, 900).reward.unlocks, [], 'once is enough');
   }
   assert.equal(P.nextHeroUnlock(p), null);

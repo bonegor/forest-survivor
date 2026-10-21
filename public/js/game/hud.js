@@ -1,7 +1,7 @@
 // In-game HUD, drawn into the low-res UI canvas (1 unit = 1 art pixel).
 
 import { drawText, textCanvas, textWidth, GLYPH_H } from '../engine/font.js';
-import { logo } from '../ui/ui.js';
+import { logo, padlock } from '../ui/ui.js';
 import { SPR, buildSprite } from '../engine/sprites.js';
 import { input } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
@@ -18,7 +18,7 @@ import { WARN } from './events.js';
 import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { HEROES } from '../data/heroes.js';
 
-// Beside the clock on a Nightmare (twice the monsters; never Ranked).
+// Beside the clock on a Nightmare (three times the monsters; never Ranked).
 const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
 
 const ORB_R = 21, ORB_S = ORB_R * 2 + 6;
@@ -361,6 +361,7 @@ export class Hud {
   // A fury orb picked up: a comet from world point (x, y) to the HUD's orb, carrying `amount` of the
   // fury (already the hero's: the orb's fill waits for it, drawOrbs).
   comet(x, y, amount) {
+    if (this.g.player.ultLocked) return; // no fury to carry to a locked orb
     const cam = this.g.cam, z = cam.S / view.S;
     (this.comets ??= []).push({ x: (x - cam.x) * z, y: (y - 8 - cam.y) * z, amount, t: 0 });
   }
@@ -434,8 +435,16 @@ export class Hud {
     // In a crypt, where he fights by hand with his own weapon alone, the others are dimmed.
     const main = this.g.caveStrike ? this.g.mainWeapon() : null;
     const held = this.held;
+    // The run's slots open; those the Armory's Arsenal and Reliquary have yet to add, locked
+    // (Game.maxWeapons, maxRelics).
+    const { maxWeapons = MAX_WEAPONS, maxRelics = MAX_RELICS } = this.g;
     for (let i = 0; i < MAX_WEAPONS; i++) {
       const h = held && held.weapons[i], w = held ? h && h.w : p.weapons[i];
+      if (i >= maxWeapons && !h && !w) {
+        this.lockedSlot(ctx, x, y);
+        x += 18;
+        continue;
+      }
       if (main && w && w !== main) ctx.globalAlpha = 0.3;
       if (h) this.slot(ctx, x, y, SPR[h.icon], h.evolved ? -1 : h.level, MAX_WEAPON_LEVEL, h.evolved);
       else this.slot(ctx, x, y, w ? SPR[w.def.icon] : null, w ? (w.evolved ? -1 : w.level) : 0, MAX_WEAPON_LEVEL, w && w.evolved);
@@ -448,7 +457,8 @@ export class Hud {
     const ps = held ? held.relics : [...p.passives.entries()];
     for (let i = 0; i < MAX_RELICS; i++) {
       const e = ps[i];
-      this.slot(ctx, x, y + 21, e ? SPR[PASSIVES[e[0]].icon] : null, e ? e[1] : 0, e ? PASSIVES[e[0]].max : 5, false, true);
+      if (i >= maxRelics && !e) this.lockedSlot(ctx, x, y + 21, true);
+      else this.slot(ctx, x, y + 21, e ? SPR[PASSIVES[e[0]].icon] : null, e ? e[1] : 0, e ? PASSIVES[e[0]].max : 5, false, true);
       x += 18;
     }
     // Shrine buffs.
@@ -474,6 +484,17 @@ export class Hud {
     ctx.fillRect(x + 17, y, 1, 17);
     ctx.globalAlpha = 1;
     drawText(ctx, 'EVO', x + 9, y + 19, { align: 'center', color: '#f77622' });
+  }
+
+  // A slot this run doesn't have: a dim frame round a quiet padlock.
+  lockedSlot(ctx, x, y, small) {
+    ctx.fillStyle = '#181425';
+    ctx.fillRect(x, y, 17, 17);
+    ctx.fillStyle = small ? '#1d1928' : '#221c2e';
+    ctx.fillRect(x + 1, y + 1, 15, 15);
+    ctx.globalAlpha = 0.75;
+    padlock(ctx, x + 4, y + 4, 1, '#3a4466', '#5a6988');
+    ctx.globalAlpha = 1;
   }
 
   slot(ctx, x, y, spr, level, max, evolved, small) {
@@ -600,8 +621,16 @@ export class Hud {
     const full = p.fury >= 100 && shown >= 100, almost = !full && shown >= FURY_ORB.almost;
     const fImg = (full ? this.furyFull : this.fury).render(shown / 100, t, full ? 1 : almost ? FURY_ORB.glow : 0);
     const fx = W - fImg.width - 4, fy = H - fImg.height - 4;
-    ctx.drawImage(fImg, fx, fy);
     const ocx = fx + fImg.width / 2, ocy = fy + fImg.height / 2;
+    // His ultimate not open yet (shared/progress.js ultTime; Player.ultLocked): the orb stands
+    // empty and dim behind a padlock, with nothing to press.
+    if (p.ultLocked) {
+      ctx.globalAlpha = 0.45;
+      ctx.drawImage(fImg, fx, fy);
+      ctx.globalAlpha = 0.85;
+      padlock(ctx, ocx - 9, ocy - 9, 2, '#3a4466', '#5a6988');
+      ctx.globalAlpha = 1;
+    } else ctx.drawImage(fImg, fx, fy);
     if (almost) {
       // ALMOST: the rim glows, pulsing.
       ctx.globalAlpha = 0.45 + 0.4 * Math.sin(t * 7);
@@ -620,7 +649,9 @@ export class Hud {
       ctx.globalAlpha = 1;
     }
     // The ultimate's name above the orb, flush with its right edge (centred, a long one ran off).
-    if (p.ult) {
+    if (p.ultLocked) {
+      // Nothing over a locked orb.
+    } else if (p.ult) {
       drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: '#f6757a' });
     } else if (full) {
       const key = input.device === 'pad' ? 'X' : input.device === 'touch' ? 'TAP' : 'SPACE';

@@ -17,7 +17,11 @@ import { input } from '../public/js/engine/input.js';
 import { xpFor } from '../public/js/game/player.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { Driver } from '../public/js/bots/driver.js';
-import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
+import { sanitizeProfile, metaBonuses } from '../public/js/shared/profile.js';
+
+// A save from before progression (21 October 2026): six weapon and relic slots, two rerolls and
+// banishes, as these tests were written for.
+const before = () => sanitizeProfile({ v: 3 });
 
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
@@ -28,7 +32,7 @@ function screen(fn, o = {}) {
   Math.random = mulberry32(o.seed ?? 21);
   try {
     input.bot = { x: 0, y: 0 };
-    const g = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, ...o });
+    const g = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(before()), settings: { numbers: false }, ...o });
     g.player.devGod = true;
     const gs = new GameScreen();
     gs.app = { ui: new UI(), settings: {}, devHold: false, store: {} };
@@ -270,7 +274,7 @@ test('a bot run over an open level-up screen (__fs.sim) takes its level, and the
 test('the auto-pick lasts the run, and a new run asks again', () => {
   screen((g) => {
     g.autoPick = 'heal';
-    const fresh = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(defaultProfile()), settings: { numbers: false } });
+    const fresh = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(before()), settings: { numbers: false } });
     assert.equal(fresh.autoPick, null, 'a new run asks again');
   });
 });

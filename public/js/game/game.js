@@ -137,7 +137,7 @@ export class Game {
     // Normal or Veteran (data/difficulty.js), as chosen; Veteran without.
     this.diff = diffFor(o.mode, o.diff);
     this.diffId = this.diff.id;
-    // A Nightmare, twice the monsters (data/difficulty.js NIGHTMARE), as chosen: Veteran only,
+    // A Nightmare, three times the monsters (data/difficulty.js NIGHTMARE), as chosen: Veteran only,
     // never on Ranked.
     this.nightmare = nightmareFor(o.mode, o.nightmare, this.diffId);
     this.settings = o.settings || {};
@@ -148,6 +148,15 @@ export class Game {
     this.pace = o.pace || 1; // how much faster than real time the run goes: real time (1) since 21 October 2026
     // How fast the hero and the monsters move (data/difficulty.js moveFor): the bots' too.
     this.move = o.move ?? moveFor(o.mode, this.diffId);
+    // How many weapons and relics the hero may carry: the Armory's (shared/profile.js metaBonuses:
+    // three of each, one more a rank of Arsenal or Reliquary), unless a run says otherwise (the
+    // bots try what a hero can do with fewer slots); never more than MAX_WEAPONS, MAX_RELICS.
+    this.maxWeapons = Math.min(MAX_WEAPONS, o.maxWeapons ?? o.meta?.weaponSlots ?? MAX_WEAPONS);
+    this.maxRelics = Math.min(MAX_RELICS, o.maxRelics ?? o.meta?.relicSlots ?? MAX_RELICS);
+    // What the profile has opened (shared/profile.js openFor): { weapons, relics, ult }, the shared
+    // weapons and the relics a run may find and whether the hero's ultimate is open. None given,
+    // everything is (the tests, the bots unless they play as a profile).
+    this.open = o.open || null;
     // The hero five minutes on the clock bring in, announced as the clock passes them.
     this.unlocks = o.unlocks || null;
     this.time = 0;
@@ -250,6 +259,9 @@ export class Game {
     this.hud = new Hud(this);
 
     this.player = new Player(this, o.hero, o.meta);
+    // The owner's (21 October 2026): the special ability locked at first. Until a run with the hero
+    // lasts PROGRESS.ultTime his fury orb stays empty and the ultimate key does nothing (Player).
+    this.player.ultLocked = !!this.open && !this.open.ult;
     // The numbers keep clear of the hero and of the bosses' bodies (numbers.js).
     this.numbers.hero = this.player;
     this.numbers.bodies = this.topList;
@@ -417,18 +429,28 @@ export class Game {
     for (const w of p.weapons) {
       if (!w.maxed && !out('weapon', w.id)) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: 3 });
     }
-    if (p.weapons.length < MAX_WEAPONS) {
-      for (const id of weaponsFor(p.hero)) if (!this.ownsWeapon(id) && !out('weapon', id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
+    if (p.weapons.length < this.maxWeapons) {
+      for (const id of weaponsFor(p.hero)) if (this.weaponOpen(id) && !this.ownsWeapon(id) && !out('weapon', id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
     }
     for (const [id, rank] of p.passives) {
       if (rank < PASSIVES[id].max && !out('passive', id)) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
     }
-    if (p.passives.size < MAX_RELICS) {
+    if (p.passives.size < this.maxRelics) {
       for (const id of PASSIVE_IDS) {
-        if (!p.passives.has(id) && this.relicOffered(id) && !out('passive', id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
+        if (!p.passives.has(id) && this.relicOpen(id) && this.relicOffered(id) && !out('passive', id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
       }
     }
     return pool;
+  }
+
+  // Whether the profile has opened a weapon (the hero's own signatures always are) or a relic
+  // (open, shared/profile.js openFor): nothing locked is ever offered, at a level-up or in a chest.
+  weaponOpen(id) {
+    return !this.open || this.player.hero.unique.includes(id) || this.open.weapons.includes(id);
+  }
+
+  relicOpen(id) {
+    return !this.open || this.open.relics.includes(id);
   }
 
   // Whether a relic he doesn't hold may be offered. The Phoenix Heart (afterSignature) only once
@@ -533,8 +555,9 @@ export class Game {
     if (c.type === 'weapon') {
       const w = p.weapons.find((x) => x.id === c.id);
       if (w) w.levelUp();
-      else if (!this.ownsWeapon(c.id) && p.weapons.length < MAX_WEAPONS) this.addWeapon(c.id);
+      else if (!this.ownsWeapon(c.id) && p.weapons.length < this.maxWeapons && this.weaponOpen(c.id)) this.addWeapon(c.id);
     } else if (c.type === 'passive') {
+      if (!p.passives.has(c.id) && (!this.relicOpen(c.id) || p.passives.size >= this.maxRelics)) return;
       p.passives.set(c.id, (p.passives.get(c.id) || 0) + 1);
       p.recompute();
     } else if (c.type === 'gold') {
@@ -1117,8 +1140,11 @@ export class Game {
       const p = this.player;
       this.forestState = {
         world: this.world, enemies: this.enemies, pickups: this.pickups, decals: this.decals, shrines: this.shrines,
-        crypts: this.crypts, boss: this.boss, objective: this.objective, door: d,
+        crypts: this.crypts, boss: this.boss, objective: this.objective, door: d, warnings: this.warnings,
       };
+      // An event told just before he went down waits with the forest (Spawner.update sleeps in a
+      // crypt): left here, its edge arrow pointed off into the rock all the while.
+      this.warnings = [];
       this.enemies = [];
       this.pickups = [];
       this.decals = [];
@@ -1203,6 +1229,7 @@ export class Game {
     this.crypts = f.crypts;
     this.boss = f.boss;
     this.objective = f.objective;
+    this.warnings = f.warnings;
     this.forestState = null;
     this.inCrypt = null;
     p.x = f.door.x;
@@ -1663,6 +1690,7 @@ export class Game {
       gold: this.gold,
       kills: this.kills,
       level: p.level,
+      bosses: this.stats.bosses, // bosses and crypt lords slain, for the milestones (shared/progress.js)
       floor: this.floor,
       weapons: p.weapons.map((w) => ({ id: w.id, level: w.level, dmg: Math.round(w.dmgDealt), kills: w.kills, since: w.since })),
       stats: { ...this.stats },

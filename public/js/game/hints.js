@@ -41,6 +41,7 @@ export class Hints {
 
   mark(id) {
     this.settings.hints = { ...this.settings.hints, [id]: 1 };
+    this.marked = true; // for done() to keep
   }
 
   say(id) {
@@ -63,10 +64,14 @@ export class Hints {
     if (g.clock > 10 && !this.said('crypt') && g.crypts.some((d) => !d.sealed && onScreen(g.cam, d))) this.say('crypt');
   }
 
-  // The run is over: every hint counts as said, and the settings cookie remembers it.
+  // The run is over: every hint counts as said, and the settings cookie remembers it. But the
+  // ultimate's waits while it is locked (shared/progress.js, 21 October 2026): it is said in the
+  // first run whose orb fills, and kept then.
   done() {
-    if (this.settings.hintsDone) return;
-    this.settings.hints = Object.fromEntries(HINT_IDS.map((id) => [id, 1]));
+    const ids = HINT_IDS.filter((id) => id !== 'fury' || !this.g.player.ultLocked || this.said(id));
+    const fresh = ids.filter((id) => !this.said(id));
+    if (this.settings.hintsDone && !fresh.length && !this.marked) return;
+    for (const id of fresh) this.mark(id);
     this.settings.hintsDone = true;
     this.save();
   }

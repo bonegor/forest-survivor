@@ -12,8 +12,9 @@ import { trialScene, SCENE, heroCrop, portraitBackdrop, pixelEllipse, mix, PORTR
 import { WEAPONS } from '../data/weapons.js';
 import { MODES, NORMAL, VETERAN, NIGHTMARE } from '../data/difficulty.js';
 import { UPGRADES, upgradeCost, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
-import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
-import { goalText, lockReason, featStars } from './ladder.js';
+import { PASSIVES } from '../data/passives.js';
+import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
+import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon } from './ladder.js';
 import { flank } from './skin.js';
 
 const UP_ICONS = {
@@ -21,6 +22,9 @@ const UP_ICONS = {
   swiftness: 'i_movespeed', magnet: 'i_magnet', fortune: 'i_luck', wisdom: 'i_growth', greed: 'i_greed', reroll: 'i_reroll', revival: 'i_revival',
   banish: 'i_reroll', // placeholder (tools/handoff-art.md): Insight's, the other level-up card tool
   endurance: 'i_duration', velocity: 'i_projspeed', echo: 'i_amount',
+  // The slots of 21 October 2026 (shared/progress.js); an axe and a clover stand in until they are
+  // drawn (art/fallbacks.js).
+  arsenal: 'i_arsenal', reliquary: 'i_reliquary',
 };
 
 function goldTag(ctx, app, x, y, align = 'right') {
@@ -105,7 +109,7 @@ export class TitleScreen {
 
     // No Continue: a run is never saved to come back to, only its results when it ends.
     ui.begin(dt);
-    const items = [['play', 'NEW GAME'], ['armory', 'THE ARMORY'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
+    const items = [['play', 'NEW GAME'], ['armory', 'THE ARMORY'], ['codex', 'THE CODEX'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
     const bw = 104, bh = 15, gap = 4;
     let y = Math.round(Math.max(my + 20, H * 0.5 - (items.length * (bh + gap)) / 2 + 6));
     // A pool of shadow under the buttons, so the trees behind don't fight them.
@@ -198,6 +202,7 @@ export class TitleScreen {
     const app = this.app;
     if (id === 'play') app.go('hero');
     else if (id === 'armory') app.go('armory');
+    else if (id === 'codex') app.go('codex');
     else if (id === 'records') app.go('records');
     else if (id === 'options') app.go('options', { back: 'title' });
   }
@@ -498,7 +503,7 @@ export class ModeScreen {
       ty += 9;
     }
     // Normal or Veteran (data/difficulty.js), and under Veteran, hung from it as its modifier, the
-    // Nightmare box (twice the monsters): open only on Veteran (the owner's, 21 October 2026). All
+    // Nightmare box (three times the monsters): open only on Veteran (the owner's, 21 October 2026). All
     // remembered with the settings. Ranked keeps one best per hero, so it is always Veteran and
     // never a Nightmare: there the box isn't shown.
     ty += 5;
@@ -653,6 +658,131 @@ export class ArmoryScreen {
     ui.end();
     if (input.pressed('back')) app.go('title');
   }
+}
+
+// ------------------------------------------------------------------ codex --
+
+// The Codex: every weapon and relic and each of the player's heroes' ultimates, in a tab each:
+// those open in colour, those still shut dimmed under a padlock with what opens them and how far
+// the records have come (shared/progress.js, profile.js progressList). A tab's tiles that don't
+// fit the screen go on pages (the arrows under them, or the mouse wheel).
+const CODEX_TABS = [['weapon', 'WEAPONS'], ['relic', 'RELICS'], ['ult', 'ULTIMATES']];
+export const CODEX_TILE = { min: 136, max: 190, h: 38, gap: 4, top: 46, foot: 46 };
+
+// The tiles' grid for n of them on a W x H screen: as many columns as fit CODEX_TILE.min wide
+// (at most four), as many rows as fit between the tabs and the foot (two lines of the focused
+// tile's detail, the pages and BACK).
+export function codexLayout(W, H, n) {
+  const C = CODEX_TILE;
+  const cols = clamp(Math.floor((W - 16 + C.gap) / (C.min + C.gap)), 1, 4);
+  const cw = Math.min(C.max, Math.floor((W - 16 - (cols - 1) * C.gap) / cols));
+  const rows = Math.max(1, Math.floor((H - C.top - C.foot + C.gap) / (C.h + C.gap)));
+  const per = cols * rows;
+  return { cols, rows, cw, ch: C.h, per, pages: Math.max(1, Math.ceil(n / per)), x0: Math.round(W / 2 - (cols * cw + (cols - 1) * C.gap) / 2), y0: C.top };
+}
+
+export class CodexScreen {
+  enter(app, params = {}) {
+    this.app = app;
+    this.back = params.back || 'title';
+    this.tab = 'weapon';
+    this.page = 0;
+    app.ui.lock(0.2);
+    app.ui.focusId = 'cx_weapon';
+  }
+
+  draw(ctx, W, H, dt) {
+    const app = this.app, ui = app.ui, prof = app.store.profile;
+    app.scene.draw(ctx, W, H, dt, { campfire: false });
+    dim(ctx, W, H, 0.6);
+    header(ctx, W, 'The Codex');
+    ui.begin(dt);
+    const all = codexEntries(prof);
+    // The tabs, each with how many of its kind are open.
+    const tw = Math.min(100, Math.floor((W - 16 - 8) / 3)), tx0 = Math.round(W / 2 - (3 * tw + 8) / 2);
+    CODEX_TABS.forEach(([type, label], i) => {
+      const list = all.filter((e) => e.type === type), open = list.filter((e) => e.open).length;
+      const text = textWidth(`${label} ${open}/${list.length}`) <= tw - 14 ? `${label} ${open}/${list.length}` : label;
+      if (button(ctx, ui, 'cx_' + type, tx0 + i * (tw + 4), 25, tw, 13, text, { on: this.tab === type, color: this.tab === type ? '#fee761' : '#8b9bb4' }) && this.tab !== type) {
+        this.tab = type;
+        this.page = 0;
+      }
+    });
+    const list = all.filter((e) => e.type === this.tab);
+    const L = codexLayout(W, H, list.length);
+    // The mouse wheel turns the pages.
+    if (input.mouse.wheel && L.pages > 1) this.page = clamp(this.page + Math.sign(input.mouse.wheel), 0, L.pages - 1);
+    this.page = clamp(this.page, 0, L.pages - 1);
+    let focused = null;
+    list.slice(this.page * L.per, (this.page + 1) * L.per).forEach((e, i) => {
+      const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = L.y0 + Math.floor(i / L.cols) * (L.ch + CODEX_TILE.gap);
+      const fid = `cx_${e.type}_${e.id}`;
+      ui.item(fid, x, y, L.cw, L.ch);
+      const f = ui.focused(fid);
+      if (f) focused = e;
+      this.tile(ctx, e, x, y, L.cw, L.ch, f);
+    });
+    // The focused tile told in full: what it does once open, else what opens it and how far along.
+    if (focused) {
+      const rec = codexRecord(focused);
+      const text = focused.open ? codexDesc(focused) : focused.need + (rec ? ` — ${rec}` : '');
+      wrapText(text, W - 20).slice(0, 2).forEach((line, i) => drawRich(ctx, line, W / 2, H - 42 + i * 9, { align: 'center', color: focused.open ? '#c0cbdc' : '#feae34', hi: '#fee761' }));
+    }
+    if (L.pages > 1) {
+      const px = Math.round(W / 2);
+      if (button(ctx, ui, 'cx_prev', px - 52, H - 20, 24, 13, '<', { disabled: this.page === 0 })) this.page--;
+      drawText(ctx, `PAGE ${this.page + 1}/${L.pages}`, px, H - 18, { align: 'center', color: '#8b9bb4' });
+      if (button(ctx, ui, 'cx_next', px + 28, H - 20, 24, 13, '>', { disabled: this.page >= L.pages - 1 })) this.page++;
+    }
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go(this.back);
+    ui.end();
+    if (input.pressed('back')) app.go(this.back);
+  }
+
+  // One entry's tile: its icon and name; under them, shut, what opens it and a bar of how far the
+  // records have come; open, what opened it (or that it always was).
+  tile(ctx, e, x, y, w, h, f) {
+    const open = e.open;
+    panel(ctx, x, y, w, h, { trim: f ? ['#fee761', '#be4a2f'] : open ? ['#5a6988', '#3a4466'] : ['#3a4466', '#262b44'], rivets: false, fill: open ? null : '#120e18' });
+    codexIcon(ctx, e, x + 4, y + 4);
+    const tx = x + 23, room = w - 27;
+    drawText(ctx, fitLine(codexName(e), room), tx, y + 4, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
+    const sub = e.type === 'ult' ? HEROES[e.id].title : null;
+    if (open) {
+      const why = e.start ? 'Open from the start' : e.type === 'ult' ? `The ${sub}'s own` : e.need;
+      wrapText(why, room).slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 13 + i * 9, { color: '#5a6988' }));
+      if (!e.start) codexBar(ctx, tx, y + h - 7, room, 1, '#63c74d'); // full: the way it was opened
+      return;
+    }
+    const lines = wrapText(e.need, room);
+    if (lines.length > 2) lines[1] = fitLine(lines.slice(1).join(' '), room);
+    lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 13 + i * 9, { color: f ? '#feae34' : '#c28569' }));
+    codexBar(ctx, tx, y + h - 7, room, e.progress, '#feae34');
+  }
+}
+
+// A tile's bar, w wide at (x, y): k of it filled in col over an empty iron groove.
+function codexBar(ctx, x, y, w, k, col) {
+  ctx.fillStyle = '#0d0b14';
+  ctx.fillRect(x, y, w, 4);
+  ctx.fillStyle = '#262b44';
+  ctx.fillRect(x + 1, y + 1, w - 2, 2);
+  ctx.fillStyle = col;
+  ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * clamp(k, 0, 1)), 2);
+}
+
+// What an open entry does: the weapon's or relic's own line, the ultimate's.
+function codexDesc(e) {
+  if (e.type === 'weapon') return `${codexName(e)}: ${WEAPONS[e.id].desc}`;
+  if (e.type === 'relic') return `${codexName(e)}: ${PASSIVES[e.id].desc}`;
+  return `${codexName(e)}: ${HEROES[e.id].ultDesc}`;
+}
+
+// A line cut to fit a width, with an ellipsis.
+function fitLine(s, w) {
+  if (textWidth(s) <= w) return s;
+  while (s.length > 1 && textWidth(s + '…') > w) s = s.slice(0, -1);
+  return s + '…';
 }
 
 // ---------------------------------------------------------------- records --

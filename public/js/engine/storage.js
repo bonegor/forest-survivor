@@ -21,10 +21,12 @@ const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
 const STALE_RUNS = ['fs_lrun', 'fs_drun'];
 
 // Every hero in, and as if each had survived the night and beaten the Dungeon: every mode open
-// to every hero (shared/profile.js canPlay).
+// to every hero (shared/profile.js canPlay); every weapon, relic and ultimate open, and the
+// Armory's weapon and relic slots full (P.openEverything).
 export function unlockEverything(p) {
   p.heroes = [...P.HERO_ORDER];
   for (const h of P.HERO_ORDER) p.feats[h] = (p.feats[h] || 0) | P.FEAT.survivalHard | P.FEAT.dungeon;
+  P.openEverything(p);
   return p;
 }
 const SETTINGS = 'fs_settings';

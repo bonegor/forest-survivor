@@ -1,5 +1,5 @@
 // Nightmare (the user's, 16 October 2026): a box to tick on the trial screen that doubles the
-// number of monsters: the steady horde and the timed swarms, rings and packs, in Survival and on a
+// number of monsters (three times since 21 October 2026): the steady horde and the timed swarms, rings and packs, in Survival and on a
 // Dungeon Run, each monster as strong as ever. Since 21 October 2026 a Veteran's modifier: its box
 // hangs under Veteran and is shut on Normal, and a Normal run is never one.
 // Never in Ranked, which keeps one best time per hero. It is remembered with the settings, the run
@@ -66,7 +66,7 @@ function sent(g, ev, phase) {
   return n;
 }
 
-test('a Nightmare doubles the steady horde and the timed swarms, rings and packs, on Veteran; Normal is never one', () => {
+test('a Nightmare triples the steady horde and the timed swarms, rings and packs, on Veteran; Normal is never one', () => {
   const phases = [1, 6.3, 12.6, 13.3, 17.5, 20];
   for (const mode of ['s15', 'dungeon']) {
     const calm = game({ diff: 'medium', mode }), ticked = game({ diff: 'medium', mode, nightmare: true });
@@ -93,12 +93,12 @@ test('a Nightmare doubles the steady horde and the timed swarms, rings and packs
     for (const ev of EVENTS) {
       const n = ev.count * rules.horde * (isFew(ev.enemy) ? rules.few : 1) * lateMore(rules, ev.at);
       assert.equal(sent(calm, ev, ev.at), Math.max(1, Math.round(n)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, as it was`);
-      assert.equal(sent(dread, ev, ev.at), Math.max(1, Math.round(n * 2)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, twice over`);
+      assert.equal(sent(dread, ev, ev.at), Math.max(1, Math.round(n * 3)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, three times over`);
       kinds.add(ev.type);
     }
     assert.deepEqual([...kinds].sort(), ['pack', 'ring', 'swarm']);
   }
-  assert.equal(NIGHTMARE.more, 2);
+  assert.equal(NIGHTMARE.more, 3);
 });
 
 test('Ranked is never a Nightmare, and the HUD says NIGHTMARE beside the clock without trouble', () => {
@@ -139,9 +139,9 @@ test('a Nightmare report says so; its gold is paid x1.5 on top, its win and vict
   assert.equal(sanitizeRun({ mode: 'ranked', nightmare: true }).nightmare, false);
   assert.equal(sanitizeRun({ mode: 's15', diff: 'medium', nightmare: true }).nightmare, false, 'never on Normal');
   assert.equal(applyRun(defaultProfile(), { mode: 's15', diff: 'medium', hero: 'knight', time: 900, gold: 200, nightmare: true }).reward.multiplier, DIFF_GOLD.medium, 'nor paid as one');
-  // Twice the monsters, so up to twice the kills a run of its length could make.
+  // Three times the monsters, so up to three times the kills a run of its length could make.
   assert.equal(sanitizeRun({ mode: 's15', time: 900, kills: 1e9 }).kills, 50 + 900 * 240);
-  assert.equal(sanitizeRun({ mode: 's15', diff: 'hard', time: 900, kills: 1e9, nightmare: true }).kills, 50 + 900 * 480);
+  assert.equal(sanitizeRun({ mode: 's15', diff: 'hard', time: 900, kills: 1e9, nightmare: true }).kills, 50 + 900 * 240 * 3);
 });
 
 const frame = (s) => {
@@ -273,7 +273,7 @@ test('the results report a Nightmare and pay it so', async () => {
   assert.equal(gs.overlay.res.nightmare, true);
   assert.equal(sentRuns[0].nightmare, true, 'the report carries it');
   assert.equal(gs.overlay.reward.multiplier, DIFF_GOLD.hard * 1.5, 'Veteran\'s rate, a Nightmare x1.5 on top');
-  assert.equal(store.profile.gold, Math.round(120 * DIFF_GOLD.hard * 1.5));
+  assert.equal(store.profile.gold, Math.round(120 * DIFF_GOLD.hard * 1.5) + gs.overlay.reward.wage, 'and the wage for its time, at that rate');
 });
 
 test('the bots play a Nightmare with --nightmare on Veteran, and refuse it on Normal', () => {

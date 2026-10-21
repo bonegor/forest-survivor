@@ -11,7 +11,7 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { isFew } from '../public/js/game/spawner.js';
 import { armored, BASE_SPEED } from '../public/js/game/player.js';
-import { NORMAL, VETERAN, GAME_SPEED, HARDER, CROWD, moveFor } from '../public/js/data/difficulty.js';
+import { NORMAL, VETERAN, GAME_SPEED, HARDER, CROWD, NORMAL_CROWD, VETERAN_CROWD, moveFor } from '../public/js/data/difficulty.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { targetCount } from '../public/js/data/waves.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
@@ -86,7 +86,7 @@ test('an Armory rank of Armor shows as +1 armor, and is one point of it', () => 
   }
 });
 
-test('on Normal a third as many of the monsters that shoot or lunge come, and the horde is as big', () => {
+test('on Normal a third as many of the monsters that shoot or lunge come, in a horde half the size of Veteran\'s', () => {
   assert.deepEqual(['cultist', 'wolf', 'orc', 'hellhound', 'skeleton', 'imp', 'spider', 'bat'].filter(isFew), ['cultist', 'wolf', 'orc', 'hellhound']);
   const share = (diff, phase) => {
     const g = game({ diff });
@@ -107,7 +107,8 @@ test('on Normal a third as many of the monsters that shoot or lunge come, and th
     assert.ok(vet > 0.1, `phase ${phase}: some come on Veteran (${vet})`);
     assert.ok(Math.abs(normal / vet - 1 / 3) < 0.03, `phase ${phase}: a third as many on Normal (${normal} against ${vet})`);
   }
-  // The packs of them too: the wolves at 9½ minutes, the hellhounds at 22½. Swarms of others stay.
+  // The packs of them too: the wolves at 9½ minutes, the hellhounds at 22½, a third of Normal's
+  // half-size pack. Swarms of others are just Normal's half.
   for (const [ev, few] of [[{ type: 'pack', enemy: 'wolf', count: 8 }, true], [{ type: 'pack', enemy: 'hellhound', count: 10 }, true], [{ type: 'pack', enemy: 'goblin', count: 18 }, false]]) {
     const n = {};
     for (const diff of ['hard', 'medium']) {
@@ -118,7 +119,8 @@ test('on Normal a third as many of the monsters that shoot or lunge come, and th
       n[diff] = k;
     }
     assert.equal(n.hard, Math.round(ev.count * VETERAN.horde));
-    assert.equal(n.medium, few ? Math.round(ev.count * VETERAN.horde / 3) : n.hard, `${ev.enemy}: ${n.medium} against ${n.hard}`);
+    assert.equal(n.medium, Math.round(ev.count * NORMAL.horde * (few ? 1 / 3 : 1)), `${ev.enemy}: ${n.medium} against ${n.hard}`);
+    assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 1 / 2) < 1e-9, 'Normal\'s swarms, rings and packs half Veteran\'s');
   }
 });
 
@@ -194,26 +196,28 @@ test('the round of 20 October 2026: every monster on both difficulties has 20% m
 
 // The user: "in the last 6 minutes 30% more of the same monsters, but they each have 70% less health".
 test('on Normal 30% more monsters come from minute 9 of the night on, not before, and never on Veteran', () => {
+  // Normal's horde is half Veteran's (difficulty.js NORMAL_CROWD), so against Veteran it is a half
+  // until 9:00 and 1.3 halves after.
   const phaseAt = (secs) => (secs / 60) * 1.4; // the 15-minute night's clock
   const before = phaseAt(8 * 60 + 59), after = phaseAt(9 * 60 + 1);
   const vet = game({ diff: 'hard' }), normal = game({ diff: 'medium' });
   const ratio = (phase, a = normal, b = vet) => a.spawner.target(phase) / b.spawner.target(phase);
-  assert.ok(Math.abs(ratio(phaseAt(30)) - 1) < 1e-9 && Math.abs(ratio(before) - 1) < 1e-9, 'the same horde until 9:00');
+  assert.ok(Math.abs(ratio(phaseAt(30)) - 0.5) < 1e-9 && Math.abs(ratio(before) - 0.5) < 1e-9, 'half the horde until 9:00');
   for (const secs of [9 * 60 + 1, 11 * 60, 14 * 60 + 59]) {
-    assert.ok(Math.abs(ratio(phaseAt(secs)) - 1.3) < 1e-9, `30% more at ${secs} s: ${ratio(phaseAt(secs))}`);
+    assert.ok(Math.abs(ratio(phaseAt(secs)) - 0.5 * 1.3) < 1e-9, `30% more at ${secs} s: ${ratio(phaseAt(secs))}`);
   }
   for (const phase of [before, after, 20]) {
     assert.ok(Math.abs(vet.spawner.target(phase) - targetCount(phase) * VETERAN.spawn) < 1e-9, 'Veteran as it was');
   }
   // The timed swarms, rings and packs too.
   const pack = (g, phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
-  assert.equal(pack(normal, before), pack(vet, before));
+  assert.equal(pack(normal, before), Math.round(18 * NORMAL.horde));
   assert.equal(pack(vet, after), Math.round(18 * VETERAN.horde));
-  assert.equal(pack(normal, after), Math.round(18 * VETERAN.horde * 1.3));
+  assert.equal(pack(normal, after), Math.round(18 * NORMAL.horde * 1.3));
   // A Dungeon Run floor's clock maps onto the night's: the Infernal Depths are all past minute 9.
   const dn = game({ diff: 'medium', mode: 'dungeon' }), dv = game({ diff: 'hard', mode: 'dungeon' });
-  assert.ok(Math.abs(ratio(5, dn, dv) - 1) < 1e-9, 'the first floor as on Veteran');
-  assert.ok(Math.abs(ratio(17, dn, dv) - 1.3) < 1e-9, 'the third 30% more');
+  assert.ok(Math.abs(ratio(5, dn, dv) - 0.5) < 1e-9, 'the first floor half Veteran\'s');
+  assert.ok(Math.abs(ratio(17, dn, dv) - 0.5 * 1.3) < 1e-9, 'the third 30% more');
   assert.equal(game({ diff: 'medium', mode: 'ranked' }).diff.late, null, 'Ranked is Veteran');
 });
 
@@ -286,13 +290,15 @@ test('on Normal the hero and the monsters walk 20% slower than on Veteran; Veter
 });
 
 // The owner (20 October 2026): "the thing is even a bit too easy. Double the amount of monsters".
-// Then again: "double the number of monsters on all difficulties".
-test('the horde is four times what it was on both difficulties: the steady horde and the swarms, rings and packs', () => {
+// Then again: "double the number of monsters on all difficulties". Then (21 October 2026): "Reduce
+// the numbers of monsters on normal by 3 times what it is rn. Then veteran is double".
+test('the horde is a third of those four times on Normal and two thirds on Veteran: the steady horde and the swarms, rings and packs', () => {
   assert.equal(CROWD, 4);
+  assert.ok(Math.abs(NORMAL_CROWD - 1 / 3) < 1e-12 && Math.abs(VETERAN_CROWD - 2 / 3) < 1e-12);
   const MORE = 1.1 * 1.1 * 1.2;
-  for (const d of [VETERAN, NORMAL]) {
-    assert.ok(Math.abs(d.spawn - 1.15 * MORE * 4) < 1e-9, `${d.name}'s steady horde`);
-    assert.ok(Math.abs(d.horde - MORE * 4) < 1e-9, `${d.name}'s swarms, rings and packs`);
+  for (const [d, share] of [[VETERAN, 2 / 3], [NORMAL, 1 / 3]]) {
+    assert.ok(Math.abs(d.spawn - 1.15 * MORE * 4 * share) < 1e-9, `${d.name}'s steady horde`);
+    assert.ok(Math.abs(d.horde - MORE * 4 * share) < 1e-9, `${d.name}'s swarms, rings and packs`);
   }
 });
 

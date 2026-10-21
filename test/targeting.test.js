@@ -55,7 +55,7 @@ test('a monster rising out of the ground is passed over by every aim path until 
     assert.equal(targetable(e), true);
     assert.deepEqual(found(g, p), { nearest: e, nearestN: [e], onScreen: [e] }, 'every path finds it');
     KINDS.sword.fire(sword);
-    assert.ok(Math.abs(Math.abs(sword.aimAng) - Math.PI) < 1e-9, 'the sword swings at it');
+    assert.equal(sword.aimAng, p.aim, 'the sword still swings the way he faces, seeking no foe');
   });
 });
 

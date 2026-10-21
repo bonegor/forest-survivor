@@ -276,9 +276,10 @@ function chops(w) {
 export const KINDS = {
   sword: {
     fire(w) {
-      // Swing at the closest foe; with none in reach, the way the hero last moved.
-      const p = w.g.player;
-      w.aimAng = aimAt(p, w.g.nearestEnemy(p.x, p.y, w.reach));
+      // Swing in front of him, the way he last moved, seeking no foe: one on the other side
+      // takes his turning round (the owner's, 21 October 2026). A blow struck by hand in a crypt
+      // still swings at the foe it is struck at (strike).
+      w.aimAng = w.g.player.aim;
       w.burst(w.s.amount, 0.11);
     },
     shoot(w, i) {

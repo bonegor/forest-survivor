@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createHmac } from 'node:crypto';
 import { createServer } from '../server.js';
-import { encodeState, UPGRADES } from '../public/js/shared/profile.js';
+import { encodeState, UPGRADES, PROGRESS } from '../public/js/shared/profile.js';
 
 const SECRET = 'test-secret-'.padEnd(40, 'x');
 
@@ -166,7 +166,8 @@ test('profile lives in an encrypted cookie and survives round trips', async () =
     res = await c.post('/api/run', { mode: 's15', diff: 'hard', victory: true, time: 900, gold: 300, kills: 2000, level: 35 });
     data = await res.json();
     assert.equal(res.status, 200);
-    assert.equal(data.profile.gold, 300 * 1.5 + 200 * 2.5); // Veteran's gold rate and victory bonus
+    // Veteran's gold rate and victory bonus, and the wage for 15 minutes at its rate (shared/progress.js).
+    assert.equal(data.profile.gold, 300 * 1.5 + 200 * 2.5 + 900 * PROGRESS.wage * 1.5);
     assert.deepEqual(Object.keys(c.jar), ['fs_profile'], 'the profile is the one cookie');
     assert.ok(c.jar.fs_profile, 'profile cookie set');
     assert.match(c.jar.fs_profile, /^e1\.[A-Za-z0-9_-]+$/);
@@ -175,13 +176,14 @@ test('profile lives in an encrypted cookie and survives round trips', async () =
 
     res = await c.get('/api/state');
     data = await res.json();
-    assert.equal(data.profile.gold, 950);
+    const paid = 950 + 900 * PROGRESS.wage * 1.5;
+    assert.equal(data.profile.gold, paid);
     assert.equal(data.profile.wins.s15[2], 1);
 
     res = await c.post('/api/buy', { id: 'might' });
     data = await res.json();
     assert.equal(data.profile.up.might, 1);
-    assert.equal(data.profile.gold, 950 - 150);
+    assert.equal(data.profile.gold, paid - 75, 'the first rank at half price');
   });
 });
 
@@ -260,13 +262,15 @@ test('a run report is paid at its difficulty\'s rate, Normal when it names none'
     // No diff: Normal, gold as found and Normal's victory bonus (Veteran pays ×1.5 and ×2.5).
     let data = await (await c.post('/api/run', { mode: 's15', victory: true, time: 900, gold: 300, kills: 2000, level: 35 })).json();
     assert.deepEqual([data.reward.collected, data.reward.bonus, data.reward.multiplier], [300, 200 * 1.5, 1]);
-    assert.equal(data.profile.gold, 600);
+    // And the wage for the time on the clock (shared/progress.js), at the same rate.
+    const wage = (secs, rate) => Math.round(secs * PROGRESS.wage * rate);
+    assert.equal(data.profile.gold, 600 + wage(900, 1));
     assert.equal(data.profile.wins.s15[1], 1, 'a Normal win');
     data = await (await c.post('/api/run', { mode: 's15', diff: 'medium', victory: false, time: 500, gold: 100 })).json();
-    assert.equal(data.reward.total, 100);
+    assert.equal(data.reward.total, 100 + wage(500, 1));
     data = await (await c.post('/api/run', { mode: 's15', diff: 'hard', victory: false, time: 500, gold: 100 })).json();
-    assert.equal(data.reward.total, 150);
-    assert.equal(data.profile.gold, 600 + 100 + 150);
+    assert.equal(data.reward.total, 150 + wage(500, 1.5));
+    assert.equal(data.profile.gold, 600 + 100 + 150 + wage(900, 1) + wage(500, 1) + wage(500, 1.5));
   });
 });
 

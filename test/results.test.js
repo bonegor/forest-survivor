@@ -90,15 +90,16 @@ test('a Normal run is reported as Normal, and paid ×1', async () => {
   assert.equal(app.sent[0].gold, 120);
   const reward = gs.overlay.reward;
   assert.equal(reward.multiplier, 1);
-  assert.equal(reward.total, 120);
+  assert.equal(reward.collected, 120);
+  assert.equal(reward.total, 120 + reward.wage, 'and the wage for its time (shared/progress.js)');
   assert.ok(!reward.unsaved);
-  assert.equal(app.store.profile.gold, 120);
+  assert.equal(app.store.profile.gold, reward.total);
   // And a Veteran one as Veteran.
   const vet = makeApp({ hero: 'knight', mode: 's15', diff: 'hard' });
   const vs = await playToResults(vet);
   assert.equal(vet.sent[0].diff, 'hard');
   assert.equal(vs.overlay.reward.multiplier, 1.5);
-  assert.equal(vet.store.profile.gold, 180);
+  assert.equal(vet.store.profile.gold, 180 + vs.overlay.reward.wage);
 });
 
 test("the results screen leads only back to camp: the hero screen, the run's hero ready, once the count has landed", async () => {
@@ -137,7 +138,7 @@ test('a run the store pays nothing for says it was not saved, and a run with not
   // A run that found no gold is paid nothing, and that is no refusal.
   const none = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
   gs = await playToResults(none, { gold: 0 });
-  assert.equal(gs.overlay.reward.total, 0);
+  assert.equal(gs.overlay.reward.total, gs.overlay.reward.wage, 'only the wage for its time');
   assert.ok(!gs.overlay.reward.unsaved);
   assert.equal(none.store.profile.runs, 1, 'recorded');
   gs.leave();

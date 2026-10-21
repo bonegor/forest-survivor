@@ -304,4 +304,36 @@ export function dim(ctx, W, H, a = 0.65) {
   ctx.fillRect(0, 0, W, H);
 }
 
+// A small padlock (7 x 7, in a dark outline: 9 x 9 at (x, y), times s): what is not open yet, the
+// HUD's slots and fury orb past what the run has, the Codex's locks (shared/progress.js). Quiet
+// iron by default; body and shackle colours to taste.
+const LOCK = ['..###..', '.#...#.', '.#...#.', '#######', '###.###', '###.###', '#######'];
+const locks = new Map();
+export function padlock(ctx, x, y, s = 1, body = '#5a6988', shackle = '#8b9bb4') {
+  const key = body + shackle;
+  let c = locks.get(key);
+  if (!c) {
+    c = makeCanvas(9, 9);
+    const g = c.getContext('2d');
+    const at = (cx, cy) => LOCK[cy - 1]?.[cx - 1] === '#';
+    for (let cy = 0; cy < 9; cy++) {
+      for (let cx = 0; cx < 9; cx++) {
+        if (at(cx, cy)) {
+          // The body's top row catches the light.
+          g.fillStyle = cy <= 3 ? shackle : cy === 4 ? '#c0cbdc' : body;
+          g.fillRect(cx, cy, 1, 1);
+        } else if (cy >= 5 && cy <= 6 && cx === 4) {
+          g.fillStyle = '#0d0b14'; // the keyhole
+          g.fillRect(cx, cy, 1, 1);
+        } else if ([[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dx, dy]) => at(cx + dx, cy + dy))) {
+          g.fillStyle = '#0d0b14';
+          g.fillRect(cx, cy, 1, 1);
+        }
+      }
+    }
+    locks.set(key, c);
+  }
+  ctx.drawImage(c, Math.round(x), Math.round(y), 9 * s, 9 * s);
+}
+
 export { drawText, textCanvas, textWidth, drawRich, wrapText };

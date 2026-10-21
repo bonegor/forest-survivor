@@ -114,8 +114,11 @@ export class Player {
     this.flash = 0;
     this.buffs = new Map(); // id -> { t, max }
     this.revivals = meta.revival || 0;
-    this.rerolls = 2 + (meta.reroll || 0);
-    this.banishes = 2 + (meta.banish || 0); // a card out of the run for good (the level-up's BANISH)
+    // All from the Armory's Insight and Exile since 21 October 2026 (two free of each before):
+    // shared/profile.js metaBonuses.
+    this.rerolls = meta.reroll || 0;
+    this.banishes = meta.banish || 0; // a card out of the run for good (the level-up's BANISH)
+    this.ultLocked = false; // the hero's ultimate not yet opened (Game: open.ult): no fury, no ultimate
     this.dead = false;
     this.stepT = 0;
     this.heartT = 0;
@@ -338,7 +341,7 @@ export class Player {
       this.ult.t -= dt;
       g.updateUlt(this.ult, dt);
       if (this.ult.t <= 0) this.ult = null;
-    } else if (this.fury >= 100 && input.pressed('ult') && !g.ultLaunch) {
+    } else if (this.fury >= 100 && !this.ultLocked && input.pressed('ult') && !g.ultLaunch) {
       // Spent at once, so the press can't be doubled; the launch plays first (Game.launchUlt).
       this.fury = 0;
       g.launchUlt(this.hero.ult);
@@ -434,6 +437,7 @@ export class Player {
   // The orb fills; the moment it is full a chime rings, once until it has been emptied, and the HUD
   // bursts a ring out of it (furyFullAt, on the game's clock).
   addFury(v) {
+    if (this.ultLocked) return; // nothing to fill it for while his ultimate is locked
     const was = this.fury;
     this.fury = Math.min(100, this.fury + v);
     if (was < 100 && this.fury >= 100) {

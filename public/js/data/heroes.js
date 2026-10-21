@@ -118,7 +118,7 @@ export const HEROES = {
     color: '#fee761',
     // Devotion: every heal, regeneration of any kind included, does healMul as much (Player.heal,
     // regenMul); each kill heals killHeal, at most KILL_HEAL.most a second.
-    stats: { maxHp: 75, regen: 0.1, regenMul: 1.5, healMul: 1.5, killHeal: 0.15 },
+    stats: { maxHp: 55, regen: 0.1, regenMul: 1.5, healMul: 1.5, killHeal: 0.15 },
     perk: 'Devotion: all healing x1.5, kills heal a little',
     ult: 'sanctum',
     ultName: 'Sanctum',

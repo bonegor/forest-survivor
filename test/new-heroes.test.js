@@ -119,11 +119,11 @@ test('Judgement drops five pillars on the mightiest, and its brand burns deeper'
 
 test('Devotion: every heal half as much again, and kills heal a little, a share a second at most', () =>
   gameCase('paladin', (g, p) => {
-    assert.equal(p.maxHp, 75);
-    p.hp = 50;
+    assert.equal(p.maxHp, 55);
+    p.hp = 30;
     p.heal(10, true);
-    assert.equal(p.hp, 65, 'a heal of 10 heals 15');
-    p.hp = 50;
+    assert.equal(p.hp, 45, 'a heal of 10 heals 15');
+    p.hp = 30;
     step(g, 90); // the second's allowance fills
     const before = p.hp;
     for (let i = 0; i < 40; i++) g.killEnemy(foe(g, 50, 0, { hpMul: 1 }));

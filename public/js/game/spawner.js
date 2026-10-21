@@ -21,8 +21,8 @@ export const isFew = (type) => !!(ENEMIES[type]?.shot || ENEMIES[type]?.charge);
 // rings and packs alike. Veteran (and so Ranked) never.
 export const lateMore = (diff, phase) => (diff.late && minuteOf(phase) >= diff.late.from ? diff.late.more : 1);
 
-// All the more the run sends: Normal's late horde (lateMore) and, on a Nightmare, twice as many
-// again (difficulty.js NIGHTMARE), on either difficulty. Never on Ranked (Game.nightmare).
+// All the more the run sends: Normal's late horde (lateMore) and, on a Nightmare, three times as
+// many again (difficulty.js NIGHTMARE), on Veteran only. Never on Ranked (Game.nightmare).
 export const hordeMore = (g, phase) => lateMore(g.diff, phase) * (g.nightmare ? NIGHTMARE.more : 1);
 
 export class Spawner {
@@ -102,7 +102,7 @@ export class Spawner {
   }
 
   // How many foes the steady horde keeps up at a phase: the rules' numbers, a tenth fewer on a
-  // dungeon floor, and Normal's late horde and a Nightmare's double on top (hordeMore).
+  // dungeon floor, and Normal's late horde and a Nightmare's triple on top (hordeMore).
   target(phase) {
     const g = this.g;
     return targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * hordeMore(g, phase);

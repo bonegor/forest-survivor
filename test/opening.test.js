@@ -89,7 +89,8 @@ test("the first run's hints come once each, and a second run shows none", () => 
   let saved = 0;
   const app = {
     ui: new UI(), settings, devHold: false, choice: { hero: 'knight', mode: 's15', diff: 'medium' },
-    store: { profile: defaultProfile(), submitRun: async () => ({ collected: 0, bonus: 0, total: 0, multiplier: 1 }) },
+    // The Knight's ultimate open (shared/progress.js), so his orb fills and its hint comes.
+    store: { profile: { ...defaultProfile(), uu: 1 }, submitRun: async () => ({ collected: 0, bonus: 0, total: 0, multiplier: 1 }) },
     go() {},
   };
   const frames = (gs, n) => {

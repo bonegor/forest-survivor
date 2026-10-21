@@ -185,7 +185,7 @@ class BotView {
       xp: p.xp,
       xpNext: p.xpNext,
       fury: p.fury,
-      ultReady: p.fury >= 100 && !p.ult,
+      ultReady: p.fury >= 100 && !p.ult && !p.ultLocked,
       ulting: !!p.ult,
       speed: p.moveSpeed,
       magnet: p.magnet,

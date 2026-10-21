@@ -9,7 +9,7 @@ import { drawText } from './engine/font.js';
 import { makeCanvas } from './engine/util.js';
 import { UI } from './ui/ui.js';
 import { MenuScene } from './ui/background.js';
-import { TitleScreen, HeroScreen, ModeScreen, ArmoryScreen, RecordsScreen, OptionsScreen } from './ui/screens.js';
+import { TitleScreen, HeroScreen, ModeScreen, ArmoryScreen, CodexScreen, RecordsScreen, OptionsScreen } from './ui/screens.js';
 import { GameScreen } from './ui/gamescreen.js';
 
 const SCREENS = {
@@ -17,6 +17,7 @@ const SCREENS = {
   hero: HeroScreen,
   mode: ModeScreen,
   armory: ArmoryScreen,
+  codex: CodexScreen,
   records: RecordsScreen,
   options: OptionsScreen,
   game: GameScreen,

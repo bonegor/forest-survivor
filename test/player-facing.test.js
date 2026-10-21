@@ -50,17 +50,19 @@ function displayedFlip(g) {
 }
 
 for (const direction of [1, -1]) {
-  test(`walking ${direction===1?'right':'left'} keeps its displayed facing when the sword hits behind`, () => gameCase((g,p,w) => {
+  // The owner's (21 October 2026): the sword swings in front of him, seeking no foe; one on the
+  // other side takes his turning round.
+  test(`walking ${direction===1?'right':'left'}, the sword swings ahead of him, not at the nearer foe behind`, () => gameCase((g,p,w) => {
     walk(p, direction);
     const {rear,front} = targets(g, direction);
     const rearHp = rear.hp, frontHp = front.hp;
     w.cd = 0;
-    w.update(0); // Actual closest-enemy targeting, sword queue and Slash.
-    assert.ok(rear.hp < rearHp, 'the rear enemy must still take sword damage');
-    assert.equal(front.hp, frontHp, 'the opposite enemy must not receive this slash');
+    w.update(0); // the sword queue and the Slash, as in play
+    assert.ok(front.hp < frontHp, 'the foe ahead takes the blow');
+    assert.equal(rear.hp, rearHp, 'the nearer foe behind him does not');
     assert.ok(g.stats.damage > 0 && w.dmgDealt > 0, 'real damage accounting remains intact');
-    const ang = direction === 1 ? Math.PI : 0;
-    assert.equal(g.effects.at(-1).ang, ang, 'slash still attacks the rear target');
+    const ang = direction === 1 ? 0 : Math.PI;
+    assert.equal(g.effects.at(-1).ang, ang, 'the slash goes the way he walks');
     assert.equal(p.swingAng, ang, 'lunge still follows the actual attack angle');
     assert.equal(p.swingT, .14, 'attack animation still starts normally');
     const flips = [displayedFlip(g)];
@@ -72,7 +74,7 @@ for (const direction of [1, -1]) {
   }));
 }
 
-test('a level-two alternating sword volley damages both sides without flipping a walking hero', () => gameCase((g,p,w) => {
+test('a level-two sword slashes ahead, then behind, without flipping a walking hero', () => gameCase((g,p,w) => {
   walk(p, 1);
   w.levelUp(); // Real Longsword upgrade adds its second, opposite slash.
   assert.equal(w.s.amount, 2);
@@ -81,21 +83,22 @@ test('a level-two alternating sword volley damages both sides without flipping a
   w.cd = 0;
   w.update(0);
   assert.equal(w.queue, 1);
-  assert.ok(rear.hp < rearHp);
-  assert.equal(front.hp, frontHp);
-  assert.equal(g.effects.at(-1).ang, Math.PI);
-  const rearAfterFirst = rear.hp;
+  assert.ok(front.hp < frontHp, 'the first slash goes ahead');
+  assert.equal(rear.hp, rearHp);
+  assert.equal(g.effects.at(-1).ang, 0);
+  const frontAfterFirst = front.hp;
   const flips = [displayedFlip(g)];
   p.update(.11);
+  rear.x = p.x - 24; // it keeps up with him as he walks on
   g.grid.rebuild(g.enemies, p.x, p.y);
   flips.push(displayedFlip(g));
   w.update(.11);
   flips.push(displayedFlip(g));
   assert.equal(w.queue, 0);
-  assert.ok(front.hp < frontHp, 'the alternate slash still hits in front');
-  assert.equal(rear.hp, rearAfterFirst, 'the second slash remains directed opposite the first');
-  assert.equal(g.effects.at(-1).ang, Math.PI*2);
-  assert.equal(p.swingAng, Math.PI*2);
+  assert.ok(rear.hp < rearHp, 'the second slash goes behind him');
+  assert.equal(front.hp, frontAfterFirst, 'the second slash goes opposite the first');
+  assert.equal(g.effects.at(-1).ang, Math.PI);
+  assert.equal(p.swingAng, Math.PI);
   assert.equal(p.swingT, .14);
   assert.deepEqual(flips, [false,false,false], 'the alternating attack angles must not alter the walk-facing silhouette');
 }));
@@ -110,12 +113,13 @@ test('a standing hero with a level-two sword keeps facing ahead through both sla
   g.grid.rebuild(g.enemies, p.x, p.y);
   w.cd = 0;
   w.update(0);
-  assert.equal(g.effects.at(-1).ang, Math.PI, 'the first slash goes at the foe behind him');
-  assert.ok(foe.hp < foe.maxHp, 'and hits it');
+  assert.equal(g.effects.at(-1).ang, 0, 'the first slash goes ahead, the way he faces');
+  assert.equal(foe.hp, foe.maxHp, 'missing the foe behind him');
   assert.equal(p.face, 1, 'without turning him');
   w.update(.11);
   assert.equal(w.queue, 0);
-  assert.equal(g.effects.at(-1).ang, Math.PI*2, 'the second slash still goes the other way');
+  assert.equal(g.effects.at(-1).ang, Math.PI, 'the second slash goes behind him');
+  assert.ok(foe.hp < foe.maxHp, 'and hits it');
   assert.equal(p.face, 1);
   assert.equal(displayedFlip(g), false);
 }));
@@ -138,7 +142,7 @@ test('a swing at nothing leaves a standing hero facing as he was', () => gameCas
   assert.deepEqual(flips, [true, true], 'he never turns, not even for one slash');
 }));
 
-test('a standing hero is not turned by his sword, which still strikes the nearer foe behind him', () => gameCase((g,p,w) => {
+test('a standing hero is not turned by his sword, which strikes ahead, not at the nearer foe behind him', () => gameCase((g,p,w) => {
   input.bot = {x:0,y:0};
   p.update(1/60);
   assert.equal(p.moving, false);
@@ -146,11 +150,11 @@ test('a standing hero is not turned by his sword, which still strikes the nearer
   const rearHp = rear.hp, frontHp = front.hp;
   w.cd = 0;
   w.update(0);
-  assert.ok(rear.hp < rearHp);
-  assert.equal(front.hp, frontHp);
+  assert.ok(front.hp < frontHp);
+  assert.equal(rear.hp, rearHp);
   assert.equal(p.face, 1);
   assert.equal(displayedFlip(g), false);
-  assert.equal(p.swingAng, Math.PI);
+  assert.equal(p.swingAng, 0);
   assert.equal(p.swingT, .14);
   p.update(1/60);
   assert.equal(p.face, 1);

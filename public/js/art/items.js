@@ -1344,6 +1344,46 @@ export const ICON_ART = {
       '..............',
     ]],
   },
+  // Arsenal: a weapon rack with a sword, a spear and a glowing '+' over its empty slot.
+  i_arsenal: {
+    emissive: 'yY',
+    frames: [[
+      '..w...w.......',
+      '.wGg.wGg......',
+      '.wGg.wGg......',
+      '.wGg..wG...Y..',
+      '.wGg..g....Y..',
+      '.wGg..b..YYYYy',
+      '.wGg..b....Y..',
+      '.wGg..b....y..',
+      'yyyyy.b.......',
+      'ttbtBBbBBBBBBB',
+      'bbmbbbmbbbbbbb',
+      'b............b',
+      'b............b',
+      'm............m',
+    ]],
+  },
+  // Reliquary: a gilded shrine-box, cross on the roof, a glowing gem in its window.
+  i_reliquary: {
+    emissive: 'cwU',
+    frames: [[
+      '......Y.......',
+      '.....YwY......',
+      '......y.......',
+      '....yYYyyo....',
+      '..yYYYyyyyoo..',
+      '.yYYyyyyyyyoO.',
+      '.OOOOOOOOOOOO.',
+      '..yYyyyyyyyo..',
+      '..yYykcUkyyo..',
+      '..yYkcwUukyo..',
+      '..yYkUUuukyo..',
+      '..yYykuukyyo..',
+      '.OOOOOOOOOOOO.',
+      '..O........O..',
+    ]],
+  },
 
   // ------------------------------------------------------------------ gear
   g_helm: {
