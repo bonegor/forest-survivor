@@ -33,7 +33,7 @@ const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options
   --buff=X      a test buff in percent on top of the Armory: damage, life, regen, xp, speed,
                 e.g. damage:10,life:20,regen:50 or all:15 (default: none)
   --diff=X      normal or veteran (default: veteran, the game as it was tuned)
-  --nightmare   twice the monsters, on top of the difficulty (not in Ranked; default: off)
+  --nightmare   twice the monsters, on top of Veteran (not Normal, not Ranked; default: off)
   --jobs=N      games played in parallel (default: one per core, less one)
   --each        print a line per game
   --json=FILE   write every game's result to FILE
@@ -76,6 +76,7 @@ async function main(argv) {
   const buff = parseBuff(opts.buff ?? 'none');
   const diff = { normal: 'medium', veteran: 'hard' }[opts.diff ?? 'veteran'] ?? fail('--diff must be normal or veteran');
   const nightmare = opts.nightmare === undefined ? false : opts.nightmare === true || fail('--nightmare takes no value');
+  if (nightmare && diff !== 'hard') fail('--nightmare is a Veteran modifier: it needs --diff=veteran');
   if (opts.json === true) fail('--json needs a file name: --json=tools/out/bots.json');
   // Catch a bad strategy or parameter here rather than in every worker.
   for (const spec of bots) {

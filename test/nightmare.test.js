@@ -1,6 +1,7 @@
-// Nightmare (the user's, 16 October 2026): a box to tick on the trial screen, beside Normal and
-// Veteran, that doubles the number of monsters: the steady horde and the timed swarms, rings and
-// packs, on either difficulty, in Survival and on a Dungeon Run, each monster as strong as ever.
+// Nightmare (the user's, 16 October 2026): a box to tick on the trial screen that doubles the
+// number of monsters: the steady horde and the timed swarms, rings and packs, in Survival and on a
+// Dungeon Run, each monster as strong as ever. Since 21 October 2026 a Veteran's modifier: its box
+// hangs under Veteran and is shut on Normal, and a Normal run is never one.
 // Never in Ranked, which keeps one best time per hero. It is remembered with the settings, the run
 // report says so, and its gold is paid x1.5 on top of the difficulty's.
 import test from 'node:test';
@@ -65,9 +66,14 @@ function sent(g, ev, phase) {
   return n;
 }
 
-test('a Nightmare doubles the steady horde and the timed swarms, rings and packs, on Normal and Veteran alike', () => {
+test('a Nightmare doubles the steady horde and the timed swarms, rings and packs, on Veteran; Normal is never one', () => {
   const phases = [1, 6.3, 12.6, 13.3, 17.5, 20];
-  for (const diff of ['medium', 'hard']) {
+  for (const mode of ['s15', 'dungeon']) {
+    const calm = game({ diff: 'medium', mode }), ticked = game({ diff: 'medium', mode, nightmare: true });
+    assert.equal(ticked.nightmare, false, `${mode}: a Normal run is never a Nightmare`);
+    for (const ph of phases) assert.equal(ticked.spawner.target(ph), calm.spawner.target(ph));
+  }
+  for (const diff of ['hard']) {
     const rules = diff === 'medium' ? NORMAL : VETERAN;
     for (const mode of ['s15', 'dungeon']) {
       const calm = game({ diff, mode }), dread = game({ diff, mode, nightmare: true });
@@ -118,7 +124,7 @@ test('the Nightmare box is remembered with the settings, off at first', () => {
 
 test('a Nightmare report says so; its gold is paid x1.5 on top, its win and victory bonus are the difficulty\'s', () => {
   assert.equal(NIGHTMARE_GOLD, 1.5);
-  for (const diff of ['medium', 'hard']) {
+  for (const diff of ['hard']) {
     const base = { mode: 's15', diff, hero: 'knight', victory: true, time: 900, gold: 200, kills: 3000, level: 40 };
     const calm = applyRun(defaultProfile(), base), dread = applyRun(defaultProfile(), { ...base, nightmare: true });
     assert.equal(calm.run.nightmare, false);
@@ -131,9 +137,11 @@ test('a Nightmare report says so; its gold is paid x1.5 on top, its win and vict
   // Only a run that says it was one; never in Ranked.
   for (const nightmare of [undefined, 'true', 1, null]) assert.equal(sanitizeRun({ mode: 's15', nightmare }).nightmare, false, String(nightmare));
   assert.equal(sanitizeRun({ mode: 'ranked', nightmare: true }).nightmare, false);
+  assert.equal(sanitizeRun({ mode: 's15', diff: 'medium', nightmare: true }).nightmare, false, 'never on Normal');
+  assert.equal(applyRun(defaultProfile(), { mode: 's15', diff: 'medium', hero: 'knight', time: 900, gold: 200, nightmare: true }).reward.multiplier, DIFF_GOLD.medium, 'nor paid as one');
   // Twice the monsters, so up to twice the kills a run of its length could make.
   assert.equal(sanitizeRun({ mode: 's15', time: 900, kills: 1e9 }).kills, 50 + 900 * 240);
-  assert.equal(sanitizeRun({ mode: 's15', time: 900, kills: 1e9, nightmare: true }).kills, 50 + 900 * 480);
+  assert.equal(sanitizeRun({ mode: 's15', diff: 'hard', time: 900, kills: 1e9, nightmare: true }).kills, 50 + 900 * 480);
 });
 
 const frame = (s) => {
@@ -165,21 +173,31 @@ function trialScreen(profile = defaultProfile(), choice = {}) {
   return { s, app };
 }
 
-test('the trial screen shows the box beside Normal and Veteran, and a click, Enter or the pad\'s A ticks it', () => {
+test('the trial screen hangs the box under Veteran, shut on Normal; a click, Enter or the pad\'s A ticks it', () => {
   const { s, app } = trialScreen();
-  const box = item(app, 'nightmare'), normal = item(app, 'd_medium'), vet = item(app, 'd_hard');
+  let box = item(app, 'nightmare');
+  const normal = item(app, 'd_medium'), vet = item(app, 'd_hard');
   assert.ok(box && normal && vet, 'the box and the two difficulties');
-  assert.equal(box.y, vet.y, 'on their row');
-  assert.ok(box.x > vet.x + vet.w, 'beside Veteran');
-  assert.ok(Math.abs((normal.x + box.x + box.w) / 2 - view.W / 2) <= 1, 'the row centred');
-  // A click.
+  assert.ok(box.y >= vet.y + vet.h, 'on a line of its own, under them');
+  assert.ok(box.x > vet.x && box.x < vet.x + vet.w, 'under Veteran');
+  assert.ok(Math.abs((normal.x + vet.x + vet.w) / 2 - view.W / 2) <= 1, 'the difficulties centred');
+  // On Normal it is shut: a click does nothing.
+  assert.equal(box.disabled, true, 'shut on Normal');
+  click(s, box);
+  assert.equal(app.choice.nightmare, false);
+  // Veteran opens it; a click.
+  click(s, vet);
+  assert.equal(app.choice.diff, 'hard');
+  frame(s);
+  box = item(app, 'nightmare');
+  assert.equal(box.disabled, false, 'open on Veteran');
   click(s, box);
   assert.equal(app.choice.nightmare, true);
   assert.equal(app.settings.nightmare, true);
   assert.equal(loadSettings().nightmare, true, 'saved with the settings');
-  // The keyboard: right from Veteran to the box, then Enter.
+  // The keyboard: down from Veteran to the box, then Enter.
   app.ui.focusId = 'd_hard';
-  input.justDown.add('ArrowRight');
+  input.justDown.add('ArrowDown');
   frame(s);
   assert.equal(app.ui.focusId, 'nightmare');
   input.justDown.add('Enter');
@@ -195,10 +213,10 @@ test('the trial screen shows the box beside Normal and Veteran, and a click, Ent
     input.pad.buttons = [];
   }
   assert.equal(app.choice.nightmare, true);
-  assert.equal(app.choice.diff, 'medium', 'the difficulty untouched');
+  assert.equal(app.choice.diff, 'hard', 'the difficulty untouched');
   // BEGIN plays it, at the game's speed.
   click(s, item(app, 'begin'));
-  assert.deepEqual(app.started, { hero: 'knight', mode: 's15', diff: 'medium', nightmare: true });
+  assert.deepEqual(app.started, { hero: 'knight', mode: 's15', diff: 'hard', nightmare: true });
   const gs = new GameScreen();
   gs.enter({ ...app, devHold: false, store: { profile: defaultProfile(), submitRun: async () => ({ collected: 0, bonus: 0, total: 0, multiplier: 1 }) } });
   try {
@@ -230,7 +248,7 @@ test('the results report a Nightmare and pay it so', async () => {
       return r.reward;
     },
   };
-  const app = { ui: new UI(), settings: { numbers: false }, devHold: false, store, choice: { hero: 'knight', mode: 's15', diff: 'medium', nightmare: true } };
+  const app = { ui: new UI(), settings: { numbers: false }, devHold: false, store, choice: { hero: 'knight', mode: 's15', diff: 'hard', nightmare: true } };
   const random = Math.random, bot = input.bot;
   Math.random = mulberry32(5);
   input.bot = { x: 0, y: 0 };
@@ -253,15 +271,17 @@ test('the results report a Nightmare and pay it so', async () => {
   }
   assert.equal(gs.overlay.res.nightmare, true);
   assert.equal(sentRuns[0].nightmare, true, 'the report carries it');
-  assert.equal(gs.overlay.reward.multiplier, 1.5, 'Normal x1, a Nightmare x1.5 on top');
-  assert.equal(store.profile.gold, 180);
+  assert.equal(gs.overlay.reward.multiplier, DIFF_GOLD.hard * 1.5, 'Veteran\'s rate, a Nightmare x1.5 on top');
+  assert.equal(store.profile.gold, Math.round(120 * DIFF_GOLD.hard * 1.5));
 });
 
-test('the bots play a Nightmare with --nightmare, and without it as before', () => {
+test('the bots play a Nightmare with --nightmare on Veteran, and refuse it on Normal', () => {
   assert.equal(playGame({ bot: 'idle', seed: 1, max: 5, nightmare: true }).nightmare, true);
   assert.equal(playGame({ bot: 'idle', seed: 1, max: 5 }).nightmare, false);
+  assert.equal(playGame({ bot: 'idle', seed: 1, max: 5, diff: 'medium', nightmare: true }).nightmare, false, 'never on Normal');
   const cli = fileURLToPath(new URL('../tools/bots.mjs', import.meta.url));
-  const out = execFileSync(process.execPath, [cli, '--bot=idle', '--runs=1', '--max=5', '--jobs=1', '--diff=normal', '--nightmare'], { encoding: 'utf8' });
-  assert.match(out, /· Normal · Nightmare/);
+  const out = execFileSync(process.execPath, [cli, '--bot=idle', '--runs=1', '--max=5', '--jobs=1', '--diff=veteran', '--nightmare'], { encoding: 'utf8' });
+  assert.match(out, /· Veteran · Nightmare/);
+  assert.throws(() => execFileSync(process.execPath, [cli, '--bot=idle', '--runs=1', '--max=5', '--diff=normal', '--nightmare'], { encoding: 'utf8', stdio: 'pipe' }));
   assert.throws(() => execFileSync(process.execPath, [cli, '--nightmare=yes', '--max=1'], { encoding: 'utf8', stdio: 'pipe' }));
 });

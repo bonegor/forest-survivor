@@ -117,9 +117,9 @@ test('Judgement drops five pillars on the mightiest, and its brand burns deeper'
     assert.ok(foes[6].brandK === 0.25);
   }));
 
-test('Devotion: 140 health, every heal half as much again, and kills heal a little, a share a second at most', () =>
+test('Devotion: every heal half as much again, and kills heal a little, a share a second at most', () =>
   gameCase('paladin', (g, p) => {
-    assert.equal(p.maxHp, 140);
+    assert.equal(p.maxHp, 75);
     p.hp = 50;
     p.heal(10, true);
     assert.equal(p.hp, 65, 'a heal of 10 heals 15');
@@ -290,8 +290,8 @@ test('Bloodrage: the lower his health, the harder and faster he strikes', () =>
     const full = blow(g, e);
     assert.equal(w.haste, 1);
     p.hp = p.maxHp * 0.25;
-    assert.ok(Math.abs(blow(g, e) / full - (1 + 0.6 * 0.75)) < 0.02, 'three quarters gone: +45%');
-    assert.ok(Math.abs(w.haste - (1 + 0.3 * 0.75)) < 1e-9, 'and +22.5% faster');
+    assert.ok(Math.abs(blow(g, e) / full - (1 + 0.3 * 0.75)) < 0.02, 'three quarters gone: +22.5%');
+    assert.ok(Math.abs(w.haste - (1 + 0.15 * 0.75)) < 1e-9, 'and +11.25% faster');
     assert.ok(p.moveSpeed > 70 * 1.14);
   }));
 

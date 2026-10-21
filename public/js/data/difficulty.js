@@ -84,11 +84,12 @@ export const diffFor = (mode, id) => (mode === 'ranked' ? VETERAN : DIFFS[id] ||
 export const NIGHTMARE = {
   name: 'Nightmare',
   more: 2,
-  desc: `Nightmare: twice as many monsters. Gold x${NIGHTMARE_GOLD} on top.`,
+  desc: `Nightmare: twice as many monsters. Gold x${NIGHTMARE_GOLD} on top of Veteran's.`,
 };
 
-// Whether a run is a Nightmare: only as chosen, and never on Ranked.
-export const nightmareFor = (mode, on) => mode !== 'ranked' && on === true;
+// Whether a run is a Nightmare: only as chosen, only on Veteran (the owner's, 21 October 2026: a
+// Veteran's modifier, not a difficulty of its own), and never on Ranked.
+export const nightmareFor = (mode, on, diff) => mode !== 'ranked' && diff === VETERAN.id && on === true;
 
 // The whole game runs this much faster than real time: the night's clock, the hero, the monsters,
 // everything in a run (not the menus), so the 15-minute night passes in about 9 minutes 53

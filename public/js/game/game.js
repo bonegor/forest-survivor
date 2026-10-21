@@ -137,8 +137,9 @@ export class Game {
     // Normal or Veteran (data/difficulty.js), as chosen; Veteran without.
     this.diff = diffFor(o.mode, o.diff);
     this.diffId = this.diff.id;
-    // A Nightmare, twice the monsters (data/difficulty.js NIGHTMARE), as chosen; never on Ranked.
-    this.nightmare = nightmareFor(o.mode, o.nightmare);
+    // A Nightmare, twice the monsters (data/difficulty.js NIGHTMARE), as chosen: Veteran only,
+    // never on Ranked.
+    this.nightmare = nightmareFor(o.mode, o.nightmare, this.diffId);
     this.settings = o.settings || {};
     this.seed = Math.floor(Math.random() * 2 ** 31);
     this.duration = this.mode === 's15' ? 15 * 60 : Infinity;

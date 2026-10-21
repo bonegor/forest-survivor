@@ -242,10 +242,10 @@ export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
 const TICK = [[0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [5, 1], [6, 0]];
 export const checkboxWidth = (label) => textWidth(label) + 30;
 export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
-  const hit = button(ctx, ui, id, x, y, checkboxWidth(label), 13, '', { pointer: true });
-  const f = ui.focused(id), color = o.color || '#fee761';
+  const hit = button(ctx, ui, id, x, y, checkboxWidth(label), 13, '', { pointer: true, disabled: o.disabled });
+  const f = ui.focused(id), color = o.disabled ? '#5d4a52' : o.color || '#fee761';
   const bx = Math.round(x) + 9, by = Math.round(y) + 2;
-  ctx.fillStyle = on ? color : '#9e5b47';
+  ctx.fillStyle = on ? color : o.disabled ? '#4a3540' : '#9e5b47';
   ctx.fillRect(bx, by, 9, 9);
   ctx.fillStyle = '#0d0b14';
   ctx.fillRect(bx + 1, by + 1, 7, 7);
@@ -253,7 +253,7 @@ export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
     ctx.fillStyle = color;
     for (const [tx, ty] of TICK) ctx.fillRect(bx + 1 + tx, by + 1 + ty, 1, 2);
   }
-  drawText(ctx, label, bx + 13, y + 2, { color: f ? '#fee761' : on ? color : '#c28569' });
+  drawText(ctx, label, bx + 13, y + 2, { color: o.disabled ? color : f ? '#fee761' : on ? color : '#c28569' });
   return hit;
 }
 

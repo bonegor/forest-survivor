@@ -35,14 +35,14 @@ function ranger(stats) {
   }
 }
 
-test('the Ranger strikes 20% faster and 20% harder, with 50% more health, at the pace she had', () => {
+test('the Ranger strikes 20% faster and 20% harder, at the pace she had', () => {
   const h = HEROES.archer.stats;
-  assert.equal(h.maxHp, 150);
+  assert.equal(h.maxHp, 80, 'cut to the rule of 21 October 2026 (data/heroes.js)');
   assert.equal(h.might, 1.2);
   assert.ok(Math.abs(h.cooldown * 1.2 - 1) < 1e-12, 'every cooldown divided by 1.2');
   assert.equal(h.speed, BEFORE.speed, 'her pace as it was');
   const now = ranger(), was = ranger(BEFORE);
-  assert.equal(now.maxHp / was.maxHp, 1.5, 'half again the health');
+  assert.equal(now.maxHp / was.maxHp, 0.8, 'her health cut to 80');
   assert.equal(now.hp, now.maxHp, 'and she starts with all of it');
   assert.ok(Math.abs(now.might / was.might - 1.2) < 1e-12, 'her damage 1.2 times');
   assert.ok(Math.abs(now.blow / was.blow - 1.2) < 0.002, `a blow of hers 1.2 times as hard: ${now.blow} against ${was.blow}`);

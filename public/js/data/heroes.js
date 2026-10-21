@@ -7,6 +7,10 @@
 
 import { WEAPONS } from './weapons.js';
 
+// The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
+// wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
+// Knight, Ranger, Shadow, Necromancer, Paladin and Berserker were cut to it that day: their health,
+// the Knight's armour and regeneration, the Berserker's Bloodrage.
 export const HEROES = {
   knight: {
     id: 'knight',
@@ -19,9 +23,9 @@ export const HEROES = {
     unique: ['sword'],
     color: '#0099db',
     // regenMul scales every kind of regeneration he gets (his own, Troll Blood, the Armory's
-    // Recovery, the Protection shrine, Sanctuary) in step with his doubled health.
-    stats: { maxHp: 280, armor: 2, speed: 1.067, regen: 0.3, regenMul: 2 },
-    perk: 'Bulwark: +2 armor, +180% health, regenerates',
+    // Recovery, the Protection shrine, Sanctuary): twice as much.
+    stats: { maxHp: 85, armor: 1, speed: 1.067, regen: 0.15, regenMul: 2 },
+    perk: 'Bulwark: +1 armor, regenerates, every regeneration doubled',
     ult: 'whirlwind',
     ultName: 'Whirlwind',
     ultDesc: 'Spin for 3.5s shredding all nearby foes. Damage taken halved.',
@@ -39,9 +43,9 @@ export const HEROES = {
     // The owner's (20 October 2026): "make ranger attack faster and stronger (both by 20%) and
     // increase ranger health by 50%". Faster is how often her weapons strike (every cooldown
     // divided by 1.2), not her pace, which the thief is measured against; stronger is her damage
-    // (might), the bow's and all else she fires; 150 health where she had 100.
-    stats: { maxHp: 150, might: 1.2, cooldown: 1 / 1.2, speed: 1.15, crit: 0.12, projSpeed: 1.1 },
-    perk: 'Eagle Eye: +20% damage & attack speed, +50% health, +12% crit',
+    // (might), the bow's and all else she fires. Her health, 150 then, is 80 since the rule above.
+    stats: { maxHp: 80, might: 1.2, cooldown: 1 / 1.2, speed: 1.15, crit: 0.12, projSpeed: 1.1 },
+    perk: 'Eagle Eye: +20% damage & attack speed, +12% crit',
     ult: 'arrowstorm',
     ultName: 'Arrow Storm',
     ultDesc: 'Arrows rain on every foe in sight for 3 seconds.',
@@ -76,7 +80,7 @@ export const HEROES = {
     // owner's pick) are lost on their dark panels otherwise. Drawn round him, his colours untouched.
     // None in play, where he is always in the middle of the screen (game.js HERO_MARK).
     line: 1,
-    stats: { maxHp: 95, speed: 1.2, crit: 0.18, luck: 1.2 },
+    stats: { maxHp: 45, speed: 1.2, crit: 0.18, luck: 1.2 },
     perk: 'Shadowstep: +18% crit, +20% speed & luck',
     ult: 'shadowdance',
     ultName: 'Shadow Dance',
@@ -93,7 +97,7 @@ export const HEROES = {
     unique: ['raise', 'miasma'],
     start: ['raise', 'miasma'],
     color: '#9ee562',
-    stats: { maxHp: 90, summonDur: 1.3, growth: 1.1 },
+    stats: { maxHp: 50, summonDur: 1.3, growth: 1.1 },
     perk: 'Grave Pact: minions last 30% longer, +10% XP',
     ult: 'deadrise',
     ultName: 'Army of the Dead',
@@ -112,10 +116,10 @@ export const HEROES = {
     weapon: 'smite',
     unique: ['smite'],
     color: '#fee761',
-    // Devotion: 140 health (+40%); every heal, regeneration of any kind included, does healMul
-    // as much (Player.heal, regenMul); each kill heals killHeal, at most KILL_HEAL.most a second.
-    stats: { maxHp: 140, regen: 0.1, regenMul: 1.5, healMul: 1.5, killHeal: 0.15 },
-    perk: 'Devotion: +40% health, all healing x1.5, kills heal a little',
+    // Devotion: every heal, regeneration of any kind included, does healMul as much (Player.heal,
+    // regenMul); each kill heals killHeal, at most KILL_HEAL.most a second.
+    stats: { maxHp: 75, regen: 0.1, regenMul: 1.5, healMul: 1.5, killHeal: 0.15 },
+    perk: 'Devotion: all healing x1.5, kills heal a little',
     ult: 'sanctum',
     ultName: 'Sanctum',
     ultDesc: 'A dome of light for 5s: foes in it are stunned and burn; she heals.',
@@ -150,8 +154,8 @@ export const HEROES = {
     color: '#e43b44',
     // Bloodrage: the lower his health, the harder and faster he strikes, up to rage.might more
     // damage and rage.haste faster weapons at none left (Player.rage).
-    stats: { maxHp: 120, speed: 1.15, rage: { might: 0.6, haste: 0.3 } },
-    perk: 'Bloodrage: up to +60% damage & +30% attack speed as health falls, +15% speed',
+    stats: { maxHp: 40, speed: 1.15, rage: { might: 0.3, haste: 0.15 } },
+    perk: 'Bloodrage: up to +30% damage & +15% attack speed as health falls, +15% speed',
     ult: 'frenzy',
     ultName: 'Red Frenzy',
     ultDesc: 'For 5s he chops all round him without rest; each kill heals 3%.',

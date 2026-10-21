@@ -269,7 +269,8 @@ export function sanitizeRun(raw) {
   const victory = raw.mode !== 'ranked' && raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
   // A Nightmare (data/difficulty.js), twice the monsters, only as a run says it was, and never on
   // Ranked. A win still counts as its difficulty's.
-  const nightmare = raw.mode !== 'ranked' && raw.nightmare === true;
+  // Veteran's modifier (data/difficulty.js nightmareFor): a Normal run is never one.
+  const nightmare = raw.mode !== 'ranked' && diff === 'hard' && raw.nightmare === true;
   return {
     mode: raw.mode,
     diff,

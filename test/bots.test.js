@@ -9,7 +9,8 @@ import { PICKS } from '../public/js/bots/picks.js';
 const strip = ({ ms, ...r }) => r; // wall time is all that may differ between replays
 
 test('a seeded bot game replays exactly and reports its stats', () => {
-  const play = (seed) => strip(playGame({ bot: 'kite', hero: 'knight', mode: 's15', seed, max: 45 }));
+  // Five times his health (a test buff), so a bare Knight outlives the 45 s (data/heroes.js: he loses early now).
+  const play = (seed) => strip(playGame({ bot: 'kite', hero: 'knight', mode: 's15', seed, max: 45, buff: { life: 400 } }));
   const a = play(7);
   assert.deepEqual(play(7), a);
   assert.equal(a.outcome, 'alive');
@@ -49,7 +50,9 @@ test('strategies of your own, and their parameters', () => {
 
 test('the command line prints a comparison table', () => {
   const cli = fileURLToPath(new URL('../tools/bots.mjs', import.meta.url));
-  const out = execFileSync(process.execPath, [cli, '--bot=idle,kite', '--runs=2', '--max=10', '--jobs=2'], { encoding: 'utf8' });
+  // A test buff of five times the health keeps a bare Knight standing the 10 s.
+  const out = execFileSync(process.execPath, [cli, '--bot=idle,kite', '--runs=2', '--max=10', '--jobs=2', '--buff=life:400'], { encoding: 'utf8' });
+  assert.match(out, /buff life \+400%/);
   assert.match(out, /^bot\s+won\s+died\s+alive\s+median/m);
   assert.match(out, /^idle\s+0\s+0\s+2\s+00:10/m);
   assert.match(out, /^kite\s+/m);

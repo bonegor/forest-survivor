@@ -68,6 +68,7 @@ test('each point of armor takes a tenth off what is left of a blow, or 1 if that
   near(armored(13, 20), 13 * 0.05, 'nor of a small one');
   // In play: what is left is rounded, never below 1, and halved again on Normal.
   const g = game(), p = g.player;
+  p.maxHp = p.hp = 500; // enough to take both blows
   p.armor = 5;
   assert.equal(p.hurt(30), Math.round(30 * VETERAN.dmg * 0.9 ** 5), 'a late blow loses 41% to five points');
   p.invuln = 0;
