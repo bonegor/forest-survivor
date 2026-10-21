@@ -135,8 +135,11 @@ export class Forest {
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(CH, CH);
     const lay = layoutChunk(cx, cy);
-    paintChunk(lay, new Uint32Array(img.data.buffer));
-    ctx.putImageData(img, 0, 0);
+    // Headless, the layout (trees, props, colliders) is all that matters.
+    if (!this.g.headless) {
+      paintChunk(lay, new Uint32Array(img.data.buffer));
+      ctx.putImageData(img, 0, 0);
+    }
     const props = [], trunks = [];
     for (const q of lay.props) {
       const spr = SPR[q.n];

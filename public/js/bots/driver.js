@@ -271,14 +271,15 @@ class BotView {
 
   // Things to pick up within r, nearest first: { x, y, dx, dy, d, kind, value, pulled }.
   // kind: gem (value = XP), coin, goldpile, potion, elixir, magnet, relic,
-  // frostrune, fury, chest. Pulled ones are already flying to the hero.
-  pickups(r = Infinity) {
+  // frostrune, fury, chest. Pulled ones are already flying to the hero. sorted false: in no
+  // order, for a bot that weighs them all anyway (sorting thousands of gems a frame is dear).
+  pickups(r = Infinity, sorted = true) {
     const p = this.g.player, out = [], r2 = r * r;
     for (const pk of this.g.pickups) {
       const dx = pk.x - p.x, dy = pk.y - p.y, d2 = dx * dx + dy * dy;
       if (!pk.dead && d2 <= r2) out.push({ x: pk.x, y: pk.y, dx, dy, d: Math.sqrt(d2), kind: pk.kind, value: pk.value, pulled: pk.pulled });
     }
-    return out.sort(byDist);
+    return sorted ? out.sort(byDist) : out;
   }
 }
 

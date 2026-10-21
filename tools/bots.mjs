@@ -15,6 +15,7 @@ import { HEROES } from '../public/js/data/heroes.js';
 import { MODES } from '../public/js/data/difficulty.js';
 import { UPGRADES } from '../public/js/shared/profile.js';
 import { fmtTime } from '../public/js/engine/util.js';
+import { BUFFS } from './buffs.mjs';
 
 const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options])
 
@@ -29,6 +30,8 @@ const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options
   --max=TIME    stop a game after this much game time, seconds or m:ss (default: 60:00)
   --hz=N        simulation steps per second (default: 60, like a 60 Hz screen)
   --armory=X    Armory ranks: none, max, or might:5,armor:3 (default: none)
+  --buff=X      a test buff in percent on top of the Armory: damage, life, regen, xp, speed,
+                e.g. damage:10,life:20,regen:50 or all:15 (default: none)
   --diff=X      normal or veteran (default: veteran, the game as it was tuned)
   --nightmare   twice the monsters, on top of the difficulty (not in Ranked; default: off)
   --jobs=N      games played in parallel (default: one per core, less one)
@@ -70,6 +73,7 @@ async function main(argv) {
   const hz = posInt(opts.hz ?? 60, 'hz');
   const max = parseTime(opts.max ?? '60:00');
   const armory = parseArmory(opts.armory ?? 'none');
+  const buff = parseBuff(opts.buff ?? 'none');
   const diff = { normal: 'medium', veteran: 'hard' }[opts.diff ?? 'veteran'] ?? fail('--diff must be normal or veteran');
   const nightmare = opts.nightmare === undefined ? false : opts.nightmare === true || fail('--nightmare takes no value');
   if (opts.json === true) fail('--json needs a file name: --json=tools/out/bots.json');
@@ -85,7 +89,7 @@ async function main(argv) {
     combos.push({ bot, pick, hero, mode });
   }
   const jobs = [];
-  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, seed: seed0 + i, hz, max, armory, diff, nightmare });
+  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, seed: seed0 + i, hz, max, armory, buff, diff, nightmare });
 
   const cores = os.availableParallelism ? os.availableParallelism() : os.cpus().length;
   const workers = Math.max(1, Math.min(jobs.length, posInt(opts.jobs ?? Math.max(1, cores - 1), 'jobs')));
@@ -104,7 +108,8 @@ async function main(argv) {
   const same = dims.filter((k) => !varying.includes(k)).map((k) => (k === 'pick' ? 'pick ' : '') + combos[0][k]);
   const seeds = runs > 1 ? `seeds ${seed0}-${seed0 + runs - 1}` : `seed ${seed0}`;
   const arm = Object.keys(armory).length ? 'armory ' + Object.entries(armory).map(([k, r]) => k + ':' + r).join(',') : 'no armory';
-  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, diff === 'medium' ? 'Normal' : 'Veteran', ...(nightmare ? ['Nightmare'] : [])].join(' · ')}`);
+  const buffs = Object.keys(buff).length ? ['buff ' + Object.entries(buff).map(([k, x]) => `${k} +${x}%`).join(', ')] : [];
+  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, ...buffs, diff === 'medium' ? 'Normal' : 'Veteran', ...(nightmare ? ['Nightmare'] : [])].join(' · ')}`);
   console.log(`${jobs.length} game${jobs.length > 1 ? 's' : ''} on ${workers} worker${workers > 1 ? 's' : ''} in ${secs.toFixed(1)} s\n`);
 
   const rows = combos.map((c) => ({ c, s: summarize(results.filter((r) => dims.every((k) => r[k] === c[k]))) }));
@@ -124,7 +129,7 @@ async function main(argv) {
   if (opts.json) {
     const file = resolve(String(opts.json));
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify({ options: { bots, picks, heroes, modes, runs, seed: seed0, hz, max, armory, nightmare }, results }, null, 1));
+    writeFileSync(file, JSON.stringify({ options: { bots, picks, heroes, modes, runs, seed: seed0, hz, max, armory, buff, nightmare }, results }, null, 1));
     console.log(`\nWrote ${results.length} results to ${file}`);
   }
 }
@@ -174,6 +179,9 @@ function summarize(rs) {
     mean: mean((r) => r.time),
     range: n ? [times[0], times[n - 1]] : [0, 0],
     kills: mean((r) => r.kills),
+    gold: mean((r) => r.gold), // picked up in the run
+    banked: mean((r) => r.banked), // what the run pays into the save (headless.mjs)
+    gpm: mean((r) => r.banked / Math.max(1, r.time / 60)), // banked per minute played
     level: mean((r) => r.level),
     dpm: mean((r) => r.damageTaken / Math.max(1, r.time / 60)), // damage taken per minute alive
     bosses: mean((r) => r.bosses),
@@ -197,6 +205,9 @@ function printTable(rows, varying, dungeon) {
     ['mean', (r) => fmtTime(r.s.mean)],
     ['range', (r) => (r.s.range[0] === r.s.range[1] ? fmtTime(r.s.range[0]) : `${fmtTime(r.s.range[0])}-${fmtTime(r.s.range[1])}`)],
     ['kills', (r) => Math.round(r.s.kills)],
+    ['gold', (r) => Math.round(r.s.gold)],
+    ['banked', (r) => Math.round(r.s.banked)],
+    ['banked/min', (r) => Math.round(r.s.gpm)],
     ['level', (r) => r.s.level.toFixed(1)],
     ['dmg/min', (r) => Math.round(r.s.dpm)],
     ['bosses', (r) => r.s.bosses.toFixed(1)],
@@ -209,7 +220,9 @@ function printTable(rows, varying, dungeon) {
   console.log(line(cols.map(([h]) => h)));
   for (const row of cells) console.log(line(row));
   console.log('\nwon/died/alive: games (alive = standing at the cap). median/mean/range: game time survived. kills, level,');
-  console.log('dmg/min (damage taken per minute alive) and bosses (slain): means. killed by: what landed the final blow.');
+  console.log('dmg/min (damage taken per minute alive) and bosses (slain): means. gold: picked up in the run; banked: what');
+  console.log('the run pays into the save (difficulty rate and win bonus, as the server pays it); banked/min: per minute played.');
+  console.log('killed by: what landed the final blow.');
 }
 
 function gameLine(r) {
@@ -217,7 +230,7 @@ function gameLine(r) {
   const out = { win: 'WON  ', dead: 'DIED ', alive: 'ALIVE' }[r.outcome];
   const floor = r.mode === 'dungeon' ? ` floor ${r.floor}` : '';
   const death = r.cause ? `  killed by ${r.cause}` : '';
-  return `${out} ${fmtTime(r.time)}${floor}  L${r.level}  ${r.kills} kills  ${r.damageTaken} dmg in ${r.hits} hits (boss ${r.fromBoss}, mobs ${r.fromMobs}, shots ${r.fromShots})${death}  [${r.weapons.join(' ')} | ${r.passives.join(' ') || '-'}]  ${r.ms} ms`;
+  return `${out} ${fmtTime(r.time)}${floor}  L${r.level}  ${r.kills} kills  ${r.gold} gold, ${r.banked} banked  ${r.damageTaken} dmg in ${r.hits} hits (boss ${r.fromBoss}, mobs ${r.fromMobs}, shots ${r.fromShots})${death}  [${r.weapons.join(' ')} | ${r.passives.join(' ') || '-'}]  ${r.ms} ms`;
 }
 
 function listStrategies() {
@@ -236,7 +249,7 @@ function listStrategies() {
 // --------------------------------------------------------------- options --
 
 function parseArgs(argv) {
-  const known = ['bot', 'pick', 'hero', 'mode', 'runs', 'seed', 'max', 'hz', 'armory', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
+  const known = ['bot', 'pick', 'hero', 'mode', 'runs', 'seed', 'max', 'hz', 'armory', 'buff', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
   const opts = {};
   for (const a of argv) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(a);
@@ -274,6 +287,20 @@ function parseArmory(v) {
     up[id] = Math.min(u.max, Math.max(0, Math.floor(Number(rank ?? u.max)) || 0));
   }
   return up;
+}
+
+// 'none', 'damage:10,life:20', 'all:15' -> { damage: 10, life: 20 } (percent)
+function parseBuff(v) {
+  if (v === 'none') return {};
+  const out = {};
+  for (const part of String(v).split(',')) {
+    const [id, pct] = part.split(':'), x = Number(pct);
+    if (!Number.isFinite(x) || x <= -100) fail(`--buff needs a percent above -100 for "${id}", e.g. damage:10`);
+    if (id === 'all') for (const k of Object.keys(BUFFS)) out[k] = x;
+    else if (BUFFS[id]) out[id] = x;
+    else fail(`Unknown buff "${id}" (${Object.keys(BUFFS).join(', ')}, or all)`);
+  }
+  return out;
 }
 
 // ----------------------------------------------------------------- entry --

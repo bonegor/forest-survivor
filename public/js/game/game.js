@@ -235,7 +235,10 @@ export class Game {
     this.shrines = [];
     this.drawList = [];
     this.topList = []; // bosses and crypt lords, drawn over the rest
-    this.particles = new Particles();
+    // A headless run (tools/headless.mjs, the bots) skips what only the screen shows: particles
+    // and the forest's ground pixels.
+    this.headless = !!o.headless;
+    this.particles = new Particles(this.headless);
     this.numbers = new Numbers();
     this.numbers.enabled = this.settings.numbers !== false;
     this.lighting = new Lighting();
@@ -910,7 +913,7 @@ export class Game {
     // The sprite shatters into its own pixels.
     const step = pix.length > 300 ? 3 : 1;
     const flip = e.face < 0;
-    for (let i = 0; i < pix.length; i += 3 * step) {
+    for (let i = 0, n = ps.off ? 0 : pix.length; i < n; i += 3 * step) {
       if (Math.random() > 0.45 * ps.budget) continue;
       const px = flip ? fr.w - 1 - pix[i] : pix[i];
       const x = ox + px * S, y = oy + pix[i + 1] * S;

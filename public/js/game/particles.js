@@ -33,7 +33,9 @@ function glowSprite(ci) {
 const NO_OPTS = Object.freeze({});
 
 export class Particles {
-  constructor() {
+  // off: a headless run (tools/headless.mjs), where no one sees them: nothing is made at all.
+  constructor(off = false) {
+    this.off = off;
     this.n = 0;
     this.x = new Float32Array(MAX);
     this.y = new Float32Array(MAX);
@@ -56,6 +58,7 @@ export class Particles {
   }
 
   emit(x, y, z, vx, vy, vz, life, size, col, flags = 0, drag = 0, grav = 0) {
+    if (this.off) return;
     let i = this.n;
     if (i >= MAX) {
       // Recycle a random particle rather than dropping the newest effect.
@@ -70,6 +73,7 @@ export class Particles {
 
   // Convenience: radial burst.
   burst(x, y, z, n, cols, speed, life, size, flags, opts = NO_OPTS) {
+    if (this.off) return;
     n = Math.ceil(n * this.budget);
     for (let i = 0; i < n; i++) {
       const a = opts.angle !== undefined ? opts.angle + rand(-opts.spread, opts.spread) : rand(TAU);

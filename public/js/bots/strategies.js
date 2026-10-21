@@ -63,7 +63,7 @@ export const BOTS = {
       return (v) => {
         const near = threats(v, o.avoid);
         let goal = null, cost = Infinity;
-        for (const pk of v.pickups(o.reach)) {
+        for (const pk of v.pickups(o.reach, false)) {
           const c = pk.d / worth(pk, v.me);
           if (!pk.pulled && c < cost) {
             cost = c;
@@ -156,7 +156,7 @@ export const BOTS = {
       // Grab loot when it's calm (chests, potions and scrolls from further away).
       if (dn > 40) {
         let best = null, bd = 1e9;
-        for (const pk of v.pickups(640)) {
+        for (const pk of v.pickups(640, false)) {
           const d2 = pk.d * pk.d, w = pk.kind === 'chest' || pk.kind === 'potion' || pk.kind === 'magnet' ? d2 * 0.1 : d2;
           if (w < bd) {
             bd = w;

@@ -161,7 +161,8 @@ export class Player {
     this.greed = m.greed * (1 + q.greed);
     this.regenMul = h.regenMul || 1;
     this.healMul = h.healMul || 1; // the Paladin's Devotion: every heal does this much (heal)
-    this.regen = ((h.regen || 0) + m.regen + bonus('regen')) * this.regenMul;
+    // regenBoost: a bot's test buff (tools/headless.mjs), all its regeneration times this.
+    this.regen = ((h.regen || 0) + m.regen + bonus('regen')) * this.regenMul * (m.regenBoost || 1);
     this.crit = 0.05 + (h.crit || 0) + bonus('crit');
     this.critMult = 2 + q.critMult;
     // More health to have brings the health with it; less (gear sold) caps it.
