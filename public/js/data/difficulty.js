@@ -21,7 +21,8 @@ export const CROWD = 4;
 // Then veteran is double, nightmare is tripple veteran". Normal sends a third of what both sent
 // (NORMAL_CROWD), Veteran twice Normal's (VETERAN_CROWD: two thirds), a Nightmare three times
 // Veteran's (NIGHTMARE.more). The steady horde and the timed swarms, rings and packs alike.
-export const NORMAL_CROWD = 1 / 3, VETERAN_CROWD = 2 * NORMAL_CROWD;
+// Then, the same day: "Double the amount of monsters on all difficulties": both twice that.
+export const NORMAL_CROWD = 2 / 3, VETERAN_CROWD = 2 * NORMAL_CROWD;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
@@ -77,6 +78,9 @@ export const NORMAL = {
   // The owner's (21 October 2026): "reduce the speed on normal by 20%". On Normal the hero and the
   // monsters move at 0.8 of the game's speed (GAME_SPEED, moveFor); the clock is real time anyway.
   pace: 0.8,
+  // "on normal, reduce the speed of monsters by 10%" (21 October 2026): every monster, bosses too,
+  // walks 10% slower on Normal (Enemy.update); the hero as before.
+  foePace: 0.9,
   desc: `Monsters have 70% less health and hit half as hard; fewer shoot or charge, more come late. Gold x${DIFF_GOLD.medium}.`,
 };
 

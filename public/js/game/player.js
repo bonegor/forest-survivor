@@ -22,14 +22,17 @@ export const ARMOR_MOST = 0.95;
 // not cap, let it go wild. Also, let it be exponential for health", and on 16 October 2026
 // "double the effect of levelling" (it was +0.5%, ×1.005 and a point every 20 levels). From
 // level 2 on, each level adds LEVEL_MIGHT damage, multiplies health by LEVEL_HP (compounding),
-// and every LEVEL_ARMOR levels bring a point of armor. No cap.
-export const LEVEL_MIGHT = 0.01;
-export const LEVEL_HP = 1.01;
+// and every LEVEL_ARMOR levels bring LEVEL_ARMOR_GAIN armor. No cap. Then the owner's (21 October
+// 2026): "Levelups do not make hero stronger", "set change to 0": every gain is nought for now
+// (+0% damage, ×1 health, no armor); only the cards a level-up offers make him stronger.
+export const LEVEL_MIGHT = 0;
+export const LEVEL_HP = 1;
 export const LEVEL_ARMOR = 10;
+export const LEVEL_ARMOR_GAIN = 0;
 export const levelBonus = (level) => ({
   might: 1 + LEVEL_MIGHT * (level - 1),
   hp: LEVEL_HP ** (level - 1),
-  armor: Math.floor(level / LEVEL_ARMOR),
+  armor: LEVEL_ARMOR_GAIN * Math.floor(level / LEVEL_ARMOR),
 });
 
 // The fury orb, out of 100: what fills it. The owner's, 16 October 2026: it "should not be

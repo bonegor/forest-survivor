@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
-import { isFew } from '../public/js/game/spawner.js';
+import { isFew, minuteMore, WAVE, waveAt } from '../public/js/game/spawner.js';
 import { armored, BASE_SPEED } from '../public/js/game/player.js';
 import { NORMAL, VETERAN, GAME_SPEED, HARDER, CROWD, NORMAL_CROWD, VETERAN_CROWD, moveFor } from '../public/js/data/difficulty.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
@@ -108,7 +108,8 @@ test('on Normal a third as many of the monsters that shoot or lunge come, in a h
     assert.ok(Math.abs(normal / vet - 1 / 3) < 0.03, `phase ${phase}: a third as many on Normal (${normal} against ${vet})`);
   }
   // The packs of them too: the wolves at 9½ minutes, the hellhounds at 22½, a third of Normal's
-  // half-size pack. Swarms of others are just Normal's half.
+  // half-size pack. Swarms of others are just Normal's half. (Fired at phase 10, both grown by the
+  // same minute's 5%s, minuteMore.)
   for (const [ev, few] of [[{ type: 'pack', enemy: 'wolf', count: 8 }, true], [{ type: 'pack', enemy: 'hellhound', count: 10 }, true], [{ type: 'pack', enemy: 'goblin', count: 18 }, false]]) {
     const n = {};
     for (const diff of ['hard', 'medium']) {
@@ -118,8 +119,8 @@ test('on Normal a third as many of the monsters that shoot or lunge come, in a h
       g.spawner.fire(ev, 10);
       n[diff] = k;
     }
-    assert.equal(n.hard, Math.round(ev.count * VETERAN.horde));
-    assert.equal(n.medium, Math.round(ev.count * NORMAL.horde * (few ? 1 / 3 : 1)), `${ev.enemy}: ${n.medium} against ${n.hard}`);
+    assert.equal(n.hard, Math.round(ev.count * VETERAN.horde * minuteMore(10)));
+    assert.equal(n.medium, Math.round(ev.count * NORMAL.horde * (few ? 1 / 3 : 1) * minuteMore(10)),`${ev.enemy}: ${n.medium} against ${n.hard}`);
     assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 1 / 2) < 1e-9, 'Normal\'s swarms, rings and packs half Veteran\'s');
   }
 });
@@ -207,13 +208,13 @@ test('on Normal 30% more monsters come from minute 9 of the night on, not before
     assert.ok(Math.abs(ratio(phaseAt(secs)) - 0.5 * 1.3) < 1e-9, `30% more at ${secs} s: ${ratio(phaseAt(secs))}`);
   }
   for (const phase of [before, after, 20]) {
-    assert.ok(Math.abs(vet.spawner.target(phase) - targetCount(phase) * VETERAN.spawn) < 1e-9, 'Veteran as it was');
+    assert.ok(Math.abs(vet.spawner.target(phase) - targetCount(phase) * VETERAN.spawn * minuteMore(phase)) < 1e-9, 'Veteran as it was, but for the minute\'s growth');
   }
   // The timed swarms, rings and packs too.
   const pack = (g, phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
-  assert.equal(pack(normal, before), Math.round(18 * NORMAL.horde));
-  assert.equal(pack(vet, after), Math.round(18 * VETERAN.horde));
-  assert.equal(pack(normal, after), Math.round(18 * NORMAL.horde * 1.3));
+  assert.equal(pack(normal, before), Math.round(18 * NORMAL.horde * minuteMore(before)));
+  assert.equal(pack(vet, after), Math.round(18 * VETERAN.horde * minuteMore(after)));
+  assert.equal(pack(normal, after), Math.round(18 * NORMAL.horde * 1.3 * minuteMore(after)));
   // A Dungeon Run floor's clock maps onto the night's: the Infernal Depths are all past minute 9.
   const dn = game({ diff: 'medium', mode: 'dungeon' }), dv = game({ diff: 'hard', mode: 'dungeon' });
   assert.ok(Math.abs(ratio(5, dn, dv) - 0.5) < 1e-9, 'the first floor half Veteran\'s');
@@ -291,14 +292,100 @@ test('on Normal the hero and the monsters walk 20% slower than on Veteran; Veter
 
 // The owner (20 October 2026): "the thing is even a bit too easy. Double the amount of monsters".
 // Then again: "double the number of monsters on all difficulties". Then (21 October 2026): "Reduce
-// the numbers of monsters on normal by 3 times what it is rn. Then veteran is double".
-test('the horde is a third of those four times on Normal and two thirds on Veteran: the steady horde and the swarms, rings and packs', () => {
+// the numbers of monsters on normal by 3 times what it is rn. Then veteran is double". Then, the
+// same day: "Double the amount of monsters on all difficulties".
+test('the horde is two thirds of those four times on Normal and four thirds on Veteran: the steady horde and the swarms, rings and packs', () => {
   assert.equal(CROWD, 4);
-  assert.ok(Math.abs(NORMAL_CROWD - 1 / 3) < 1e-12 && Math.abs(VETERAN_CROWD - 2 / 3) < 1e-12);
+  assert.ok(Math.abs(NORMAL_CROWD - 2 / 3) < 1e-12 && Math.abs(VETERAN_CROWD - 4 / 3) < 1e-12);
   const MORE = 1.1 * 1.1 * 1.2;
-  for (const [d, share] of [[VETERAN, 2 / 3], [NORMAL, 1 / 3]]) {
+  for (const [d, share] of [[VETERAN, 4 / 3], [NORMAL, 2 / 3]]) {
     assert.ok(Math.abs(d.spawn - 1.15 * MORE * 4 * share) < 1e-9, `${d.name}'s steady horde`);
     assert.ok(Math.abs(d.horde - MORE * 4 * share) < 1e-9, `${d.name}'s swarms, rings and packs`);
+  }
+});
+
+// The owner (21 October 2026): "for every minute passed, increase the monster generation by 5%".
+test('the horde grows by 5% of its first size every minute of the night: the steady horde and the timed swarms alike', () => {
+  const phaseAt = (secs) => (secs / 60) * 1.4; // the 15-minute night's clock
+  assert.equal(minuteMore(0), 1);
+  assert.ok(Math.abs(minuteMore(phaseAt(10 * 60)) - 1.5) < 1e-9, 'half again at 10:00');
+  assert.ok(Math.abs(minuteMore(phaseAt(15 * 60)) - 1.75) < 1e-9, '1.75 times at 15:00');
+  const g = game({ diff: 'hard' });
+  for (const secs of [0, 5 * 60, 10 * 60, 15 * 60]) {
+    const ph = phaseAt(secs);
+    assert.ok(Math.abs(g.spawner.target(ph) - targetCount(ph) * VETERAN.spawn * minuteMore(ph)) < 1e-9, `the steady horde at ${secs} s`);
+  }
+  const pack = (phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
+  assert.equal(pack(phaseAt(10 * 60)), Math.round(18 * VETERAN.horde * 1.5), 'a pack at 10:00 half again as big');
+});
+
+// "make it more wave like, the generation of monsters, like it is too constant", then "not full on
+// waves, just occasionally ... base line, + wave every once in a while" (21 October 2026).
+test('the steady horde keeps its size, and every so often a wave swells it for a while, up to 1.6 times', () => {
+  assert.deepEqual(WAVE, { first: 45, every: 75, length: 15, peak: 0.6 });
+  // The base line: before the first wave and between waves, exactly the horde's size.
+  for (const t of [0, 20, 44.9, 45 + 15 + 0.1, 100, 119.9, 45 + 75 + 15 + 1, 300 - 1e-6]) assert.equal(waveAt(t), 1, `no wave at ${t} s`);
+  // Never below it, at most 1.6 times it, at its height mid-wave.
+  let hi = 0, lo = Infinity;
+  for (let t = 0; t < 900; t += 0.05) {
+    hi = Math.max(hi, waveAt(t));
+    lo = Math.min(lo, waveAt(t));
+  }
+  assert.ok(lo === 1 && hi <= 1.6 + 1e-9 && hi > 1.599, `from ${lo} to ${hi}`);
+  for (const t of [52.5, 127.5, 202.5]) assert.ok(Math.abs(waveAt(t) - 1.6) < 1e-9, `the height of a wave at ${t} s`);
+  assert.ok(waveAt(48) > 1 && waveAt(48) < 1.6 && waveAt(57) > 1 && waveAt(57) < 1.6, 'rising and falling about it');
+  // What the spawner keeps up at a time is the horde's size at that phase times the wave then.
+  const g = game({ diff: 'hard' }), ph = 10;
+  const kept = (t) => ((g.time = t), g.spawner.waveTarget(ph));
+  const base = g.spawner.target(ph);
+  assert.ok(Math.abs(kept(30) - base) < 1e-9, 'before the first wave');
+  assert.ok(Math.abs(kept(52.5) - base * 1.6) < 1e-9, 'at the height of a wave');
+  assert.ok(Math.abs(kept(90) - base) < 1e-9, 'between waves');
+  // And the steady horde really fills up to it: with a fifth more than the base line alive, nothing
+  // comes between waves, but a wave sends more.
+  const fill = (t) => {
+    const h = game({ diff: 'hard' }, 3);
+    h.time = t;
+    h.hostileCount = Math.ceil(h.spawner.target(h.phase) * 1.2);
+    let n = 0;
+    h.spawnEnemy = () => (n++, null);
+    h.spawner.acc = 0;
+    h.spawner.update(1 / 60);
+    return n;
+  };
+  assert.equal(fill(90), 0, 'none between waves');
+  assert.ok(fill(52.5) > 0, 'more in a wave');
+});
+
+// The owner (21 October 2026): "on normal, reduce the speed of monsters by 10%".
+test('on Normal every monster walks 10% slower than the same monster on a run at the monsters\' full pace; Veteran unchanged', () => {
+  assert.equal(NORMAL.foePace, 0.9);
+  assert.ok(VETERAN.foePace === undefined || VETERAN.foePace === 1, 'Veteran at full pace');
+  for (const diff of ['medium', 'hard']) {
+    for (const type of ['skeleton', 'bat', 'boneking']) {
+      const step = (foePace) => {
+        const g = game({ diff });
+        if (foePace !== undefined) g.diff = { ...g.diff, foePace };
+        g.enemies.length = 0;
+        const p = g.player;
+        // The same dice for both (a bat flutters at random).
+        const oldRandom = Math.random;
+        Math.random = mulberry32(5);
+        try {
+          const e = g.spawnEnemy(type, p.x + 200, p.y, { instant: true, aware: true });
+          assert.ok(e, `${type} spawned`);
+          const x0 = e.x, y0 = e.y;
+          e.update(1 / 60);
+          return Math.hypot(e.x - x0, e.y - y0);
+        } finally {
+          Math.random = oldRandom;
+        }
+      };
+      const full = step(1), as = step();
+      assert.ok(full > 0, `${type} walks`);
+      const want = diff === 'medium' ? 0.9 : 1;
+      assert.ok(Math.abs(as / full - want) < 1e-6, `${diff} ${type}: ${as} against ${full}`);
+    }
   }
 });
 

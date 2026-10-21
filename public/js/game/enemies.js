@@ -275,8 +275,8 @@ export class Enemy {
     }
 
     // The horde walks its class's speed (hordePace), a Nightmare's faster; the rest scale by the difficulty.
-    // Both at the run's walking speed (data/difficulty.js moveFor), as the hero's.
-    let sp = (this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed) * g.move;
+    // Both at the run's walking speed (data/difficulty.js moveFor), as the hero's; on Normal 10% slower (foePace).
+    let sp = (this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed) * g.move * (g.diff.foePace ?? 1);
     if (this.slowT > 0) sp *= 1 - this.slowF;
     if (this.freezeT > 0 || this.rootT > 0) sp = 0;
     if (this.holdCd > 0) this.holdCd -= dt;

@@ -21,9 +21,30 @@ export const isFew = (type) => !!(ENEMIES[type]?.shot || ENEMIES[type]?.charge);
 // rings and packs alike. Veteran (and so Ranked) never.
 export const lateMore = (diff, phase) => (diff.late && minuteOf(phase) >= diff.late.from ? diff.late.more : 1);
 
-// All the more the run sends: Normal's late horde (lateMore) and, on a Nightmare, three times as
-// many again (difficulty.js NIGHTMARE), on Veteran only. Never on Ranked (Game.nightmare).
-export const hordeMore = (g, phase) => lateMore(g.diff, phase) * (g.nightmare ? NIGHTMARE.more : 1);
+// The owner's (21 October 2026): "late game should have more monsters ... for every minute passed,
+// increase the monster generation by 5%": the horde grows by PER_MINUTE of its first size each
+// minute of the night (1.75 times it at 15:00), the steady horde and the timed swarms alike.
+export const PER_MINUTE = 0.05;
+export const minuteMore = (phase) => 1 + PER_MINUTE * minuteOf(phase);
+
+// All the more the run sends: a minute's growth (minuteMore), Normal's late horde (lateMore) and,
+// on a Nightmare, three times as many again (difficulty.js NIGHTMARE), on Veteran only. Never on
+// Ranked (Game.nightmare).
+export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * (g.nightmare ? NIGHTMARE.more : 1);
+
+// "make it more wave like, the generation of monsters ... it is too constant", then "not full on
+// waves, just occasionally ... base line, + wave every once in a while" (21 October 2026): the
+// steady horde keeps its size, and every WAVE.every seconds of the night (the first at WAVE.first)
+// a wave swells it for WAVE.length seconds, up to 1 + WAVE.peak times at its height, then lets it
+// go back down. A wave fills the field fast; once it passes, nothing more comes until the hero has
+// thinned it back to its size.
+export const WAVE = { first: 45, every: 75, length: 15, peak: 0.6 };
+export function waveAt(t) {
+  const s = t - WAVE.first;
+  if (s < 0) return 1;
+  const into = s % WAVE.every;
+  return into < WAVE.length ? 1 + WAVE.peak * Math.sin((into / WAVE.length) * Math.PI) : 1;
+}
 
 export class Spawner {
   constructor(g) {
@@ -108,13 +129,18 @@ export class Spawner {
     return targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * hordeMore(g, phase);
   }
 
+  // What it keeps up right now: target, and more while a wave is on (waveAt).
+  waveTarget(phase) {
+    return this.target(phase) * waveAt(this.g.time);
+  }
+
   update(dt) {
     const g = this.g;
     if (g.calm > 0 || g.inCrypt) return; // e.g. dawn, descending, a crypt
     const phase = g.phase;
 
-    // Steady horde.
-    const target = this.target(phase);
+    // Steady horde, in waves.
+    const target = this.waveTarget(phase);
     this.acc -= dt;
     if (this.acc <= 0) {
       const alive = g.hostileCount;
