@@ -106,12 +106,27 @@ export const PROP_LOOT = [
   { kind: 'potion', w: 1 / 3 },
   { kind: 'fury', w: 1 / 3 },
   { kind: 'magnet', w: 1 / 10, lucky: true },
-  { kind: 'coins', w: 0.12 },
+  { kind: 'coins', w: 0.08 },
   { kind: 'goldpile', w: 0.08 },
   { kind: 'elixir', w: 1 / 75, lucky: true },
   { kind: 'frostrune', w: 1 / 75, lucky: true },
   { kind: 'relic', w: 1 / 150, lucky: true },
+  // The timed finds (takePowerUp): a hundredth each; the Treasure Map and the Cursed Skull half as often.
+  { kind: 'wildcap', w: 1 / 100, lucky: true },
+  { kind: 'ward', w: 1 / 100, lucky: true },
+  { kind: 'mirror', w: 1 / 100, lucky: true },
+  { kind: 'map', w: 1 / 200, lucky: true },
+  { kind: 'skull', w: 1 / 200, lucky: true },
 ];
+
+// The timed finds (Game.takePowerUp): [name, what it does, colour, seconds].
+export const POWER_UPS = {
+  wildcap: ['Wild Mushroom', 'Double damage and +30% speed for 10s', '#e43b44', 10],
+  ward: ['Ward Bubble', 'Nothing can touch you for 5s', '#2ce8f5', 5],
+  mirror: ['Mirror Shard', 'Every weapon strikes once more for 10s', '#8fb8ff', 10],
+};
+// The most Cursed Skulls one run can take (Game.cursedSkull).
+export const MAX_SKULLS = 3;
 
 // A blow struck by hand on the hero's sprite: its attack from two frames before the blow frame,
 // where the blade lands or the shot leaves (delay seconds in): the bow's release, else the
@@ -175,6 +190,7 @@ export class Game {
     this.calm = 0;
     this.dawn = 0;
     this.magnetAll = 0;
+    this.skulls = 0; // Cursed Skulls taken this run (cursedSkull)
     this.combo = 0;
     this.comboT = 0;
     // A boss's arrival (arrival.js): the stir before it, its name card, the heartbeat while it is
@@ -459,8 +475,14 @@ export class Game {
   relicOffered(id) {
     const r = PASSIVES[id], p = this.player;
     if (!r.afterSignature) return true;
-    const evolved = p.weapons.some((w) => w.evolved && p.hero.unique.some((u) => WEAPONS[u].evo?.into === w.id));
-    return evolved && (this.phoenixLostAt == null || p.level - this.phoenixLostAt >= (r.again || 0));
+    return this.signatureEvolved() && (this.phoenixLostAt == null || p.level - this.phoenixLostAt >= (r.again || 0));
+  }
+
+  // Whether one of the hero's own signature weapons has evolved this run (the Knight's opens the
+  // Phoenix Heart in the Armory, shared/progress.js).
+  signatureEvolved() {
+    const p = this.player;
+    return p.weapons.some((w) => w.evolved && p.hero.unique.some((u) => WEAPONS[u].evo?.into === w.id));
   }
 
   // A relic used up (the Phoenix Heart, by the revive it gave): gone, its slot free again, and
@@ -814,12 +836,15 @@ export class Game {
     const p = this.player;
     let d = dmg * p.might;
     if (p.buff('fury')) d *= 1.6;
+    if (p.buff('wildcap')) d *= 2;
     if (o.ult) d *= 1 + p.level * 0.04;
     // Smite's brand on the foe; the Witch Hunter's Inquisition on the strong, the Berserker's
     // Bloodrage, the Druid's Grove Warden.
     if (e.brandT > 0) d *= 1 + e.brandK;
     const hs = p.hero.stats;
     if (hs.bane && (e.boss || e.lord || e.elite)) d *= 1 + hs.bane;
+    if (p.huntBane && (e.boss || e.lord || e.elite)) d *= 1 + p.huntBane; // Hunter's Mark
+    if (p.torc) d *= 1 + p.torc * (1 - clamp(p.hp / p.maxHp, 0, 1)); // Berserker's Torc
     if (hs.rage) d *= 1 + hs.rage.might * p.rage;
     if (hs.grove && p.inGrove) d *= 1 + hs.grove;
     let crit = false;
@@ -844,7 +869,7 @@ export class Game {
     if (e.elite) {
       if (o.kb) e.stagger();
     } else if (o.kb && kbRes < 1 && !e.prop) {
-      const k = (o.kb * KNOCKBACK * (1 - kbRes)) / Math.sqrt(e.def.mass || 1);
+      const k = (o.kb * KNOCKBACK * (1 - kbRes) * (1 + p.knock)) / Math.sqrt(e.def.mass || 1); // Ram's Horn
       e.kx += (o.kx || 0) * k;
       e.ky += (o.ky || 0) * k;
     }
@@ -860,9 +885,13 @@ export class Game {
     if (this.numbers.enabled && !o.noNum) this.numbers.add(e.x, e.y - e.h * 0.85, d, crit ? 'crit' : o.type || 'normal', e);
     // Dealt: the health it took, not the overkill.
     const took = Math.min(d, Math.max(0, e.hp + d));
+    if (e.curseT > 0) e.curseRec += took; // Hex Hourglass's curse (Enemy.curse)
     if (o.w) o.w.dmgDealt += took;
     if (this.ultRun && ultBlow(o)) this.ultRun.dmg += took;
     this.stats.damage += took;
+    if (p.fang > 0) p.fangHeal(took); // Vampire Fang
+    // Ember Heart: a blow (not a burn's own tick) may set the foe alight for 3 s at a quarter of it a second.
+    if (p.ember > 0 && !o.noCrit && !e.prop && Math.random() < p.ember) e.addDot('fire', d * 0.25, 3, o.w);
     const pan = clamp((e.x - p.x) / 200, -1, 1);
     if (crit) sfx('crit', { pitch: rand(0.9, 1.1), pan });
     else sfx('hit', { pitch: rand(0.8, 1.2), pan });
@@ -893,6 +922,8 @@ export class Game {
       o.w.kills++;
       if (o.w.onKill) o.w.onKill(e);
     }
+    // Weapons that watch every foe fall, whoever struck it (Weapon.onFoeDeath).
+    for (const w of p.weapons) w.onFoeDeath(e);
     this.deathFx(e, fr);
     // Loot.
     if (e.xp > 0) this.dropGem(e.x, e.y, e.xp);
@@ -1469,6 +1500,21 @@ export class Game {
     }
   }
 
+  // Rimeheart: the foes within R of (x, y) freeze for t s; a boss, a lord or a champion is only
+  // slowed. A frozen foe stands, so it is those chasing him that are held.
+  rimeFreeze(x, y, R, t) {
+    sfx('freeze');
+    this.particles.burst(x, y - 6, 10, 10, [PC.w, PC.c, PC.U], 70, 0.5, 1, P.GLOW | P.FADE, {});
+    for (const e of this.grid.query(x, y, R + 10, tmp)) {
+      if (e.dead || e.prop || e.sealed || e.sleeping || e.dormant) continue;
+      if (Math.hypot(e.x - x, e.y - y) > R + e.r) continue;
+      if (e.boss || e.lord || e.elite) {
+        e.slowT = Math.max(e.slowT, t);
+        e.slowF = Math.max(e.slowF, 0.6);
+      } else e.freezeT = Math.max(e.freezeT, t);
+    }
+  }
+
   holyNova() {
     this.whiteFlash = 0.8;
     sfx('relic');
@@ -1483,6 +1529,56 @@ export class Game {
       if (e.boss || e.elite) this.hitEnemy(e, 200 * this.diff.health, { type: 'holy' });
       else this.killEnemy(e, { noSplit: true });
     }
+  }
+
+  // A Wild Mushroom (double damage, +30% speed, 10 s), a Ward Bubble (untouchable, 5 s) or a
+  // Mirror Shard (every weapon one more shot, 10 s): a buff on the hero (Player.buffs).
+  takePowerUp(kind) {
+    const p = this.player;
+    const [title, sub, col, t] = POWER_UPS[kind];
+    p.addBuff(kind, t);
+    if (kind === 'mirror') p.recompute();
+    sfx(kind === 'ward' ? 'shrine' : 'pick');
+    this.banner(title, sub, col, 1.8);
+    this.effects.push(new Ring(this, p.x, p.y, 4, 50, 0.5, col, true));
+    this.particles.burst(p.x, p.y - 8, 2, 16, [PC.w, PC.c, PC.Y], 70, 0.6, 1, P.GLOW | P.FADE, { vz: 60 });
+  }
+
+  // A Treasure Map: a champion's chest lies a screen or so away in the forest, and the edge
+  // arrow (Hud.drawIndicators) leads to it. Underground there is no such place: gold instead.
+  treasureMap() {
+    const p = this.player;
+    sfx('pick');
+    if (this.mode === 'dungeon' || this.inCrypt) {
+      this.banner('Treasure Map', 'A purse of gold', '#feae34', 1.8);
+      this.addPickup('goldpile', p.x, p.y, Math.round(rand(25, 45)));
+      return;
+    }
+    let x = p.x, y = p.y + 330;
+    for (let i = 0; i < 24; i++) {
+      const a = rand(0, TAU), r = rand(330, 480);
+      x = p.x + Math.cos(a) * r;
+      y = p.y + Math.sin(a) * r;
+      if (!this.world.free || this.world.free(x, y)) break;
+    }
+    this.addPickup('chest', x, y, 0, { kind: 'elite', pop: false });
+    this.banner('Treasure Map', 'Find the chest it marks', '#feae34', 2);
+  }
+
+  // A Cursed Skull: from now on a quarter more monsters (spawner.js hordeMore) and half as much
+  // gold again (Player.recompute), up to three skulls.
+  cursedSkull() {
+    const p = this.player;
+    sfx('boss');
+    this.shake(0.3);
+    if (this.skulls >= MAX_SKULLS) {
+      this.banner('Cursed Skull', 'The curse can grow no deeper', '#e43b44', 2);
+      return;
+    }
+    this.skulls++;
+    p.recompute();
+    this.banner('Cursed Skull', `Monsters +${25 * this.skulls}%, gold +${50 * this.skulls}%`, '#e43b44', 2.4);
+    this.effects.push(new Ring(this, p.x, p.y, 4, 80, 0.7, '#e43b44', true));
   }
 
   freezeAll(t) {
@@ -1691,6 +1787,8 @@ export class Game {
       kills: this.kills,
       level: p.level,
       bosses: this.stats.bosses, // bosses and crypt lords slain, for the milestones (shared/progress.js)
+      evolved: this.signatureEvolved(), // and his signature evolved
+      evos: p.weapons.filter((w) => w.evolved).map((w) => w.id), // and every evolution he held
       floor: this.floor,
       weapons: p.weapons.map((w) => ({ id: w.id, level: w.level, dmg: Math.round(w.dmgDealt), kills: w.kills, since: w.since })),
       stats: { ...this.stats },
@@ -2142,6 +2240,7 @@ export class Game {
     for (const s of this.shrines) this.drawShrineGlow(ctx, c, s);
     for (const d of this.crypts) if (!d.sealed && onScreen(c, d.x, d.y, 60)) this.drawCryptGlow(ctx, c, d);
     for (const pk of this.pickups) pk.drawGlow(ctx, c);
+    if (p.buff('ward') && !p.dead) this.drawWard(ctx, c);
     for (const e of this.effects) if (e.drawGlow) e.drawGlow(ctx, c);
     for (const pr of this.projectiles) pr.drawGlow(ctx, c);
     for (const s of this.eshots) s.drawGlow(ctx, c);
@@ -2182,6 +2281,34 @@ export class Game {
     }
     c.x = bx;
     c.y = by;
+  }
+
+  // The Ward Bubble round the hero: a shimmering shell, flickering in its last second.
+  drawWard(ctx, c) {
+    const p = this.player, S = c.S, t = this.clock, left = p.buffs.get('ward').t;
+    const sx = (p.x - c.x) * S, sy = (p.y - 10 - c.y) * S, R = 17 * S * (1 + 0.03 * Math.sin(t * 6));
+    const a = left < 1 ? 0.4 + 0.4 * Math.sin(t * 30) : 1;
+    const gr = ctx.createRadialGradient(sx, sy, R * 0.55, sx, sy, R);
+    gr.addColorStop(0, 'rgba(44,232,245,0)');
+    gr.addColorStop(1, 'rgba(44,232,245,0.45)');
+    ctx.globalAlpha = a;
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.arc(sx, sy, R, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = '#d6fbff';
+    ctx.lineWidth = Math.max(1, S * 0.6);
+    ctx.globalAlpha = a * (0.55 + 0.25 * Math.sin(t * 5));
+    ctx.beginPath();
+    ctx.arc(sx, sy, R, 0, TAU);
+    ctx.stroke();
+    // A sheen that turns round the shell.
+    ctx.globalAlpha = a * 0.8;
+    ctx.lineWidth = Math.max(1, S);
+    ctx.beginPath();
+    ctx.arc(sx, sy, R * 0.82, t * 1.7, t * 1.7 + 0.9);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   drawPlayer(ctx, c) {

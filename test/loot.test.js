@@ -49,9 +49,10 @@ test('at plain luck a third of boxes hold a potion, a third a fury orb, a tenth 
   near(c.potion, 1 / 3, 'potions');
   near(c.fury, 1 / 3, 'fury orbs');
   near(c.magnet, 1 / 10, 'Scrolls of Gathering');
-  near((c.coin || 0) + (c.goldpile || 0), 0.2, 'gold, the most of what is left');
+  near((c.coin || 0) + (c.goldpile || 0), 0.16, 'gold, the most of what is left');
   near((c.elixir || 0) + (c.frostrune || 0) + (c.relic || 0), 1 / 30, 'elixirs, Frost Runes and Holy Relics');
-  for (const kind of ['elixir', 'frostrune', 'relic']) near(c[kind], share(kind), kind);
+  for (const kind of ['elixir', 'frostrune', 'relic', 'wildcap', 'ward', 'mirror', 'map', 'skull']) near(c[kind], share(kind), kind);
+  assert.ok(c.map < c.wildcap && c.skull < c.ward, 'the Treasure Map and the Cursed Skull rarer than the timed buffs');
   assert.ok(c.relic < c.elixir && c.relic < c.frostrune, 'the Holy Relic the rarest');
   const held = Object.values(c).reduce((s, v) => s + v, 0);
   assert.equal(held, n, 'every box holds one thing, never nothing');

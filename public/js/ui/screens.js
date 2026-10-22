@@ -11,8 +11,9 @@ import { rimRing, silhouette, hexPack } from '../engine/pixels.js';
 import { trialScene, SCENE, heroCrop, portraitBackdrop, pixelEllipse, mix, PORTRAIT } from './scenes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { MODES, NORMAL, VETERAN, NIGHTMARE } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
+import { UPGRADES, upgradeCost, upgradeOpen, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
+import { PROGRESS, needText } from '../shared/progress.js';
 import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon } from './ladder.js';
 import { flank } from './skin.js';
@@ -25,6 +26,7 @@ const UP_ICONS = {
   // The slots of 21 October 2026 (shared/progress.js); an axe and a clover stand in until they are
   // drawn (art/fallbacks.js).
   arsenal: 'i_arsenal', reliquary: 'i_reliquary',
+  phoenix: 'i_revival', // the relic's own placeholder (data/passives.js)
 };
 
 function goldTag(ctx, app, x, y, align = 'right') {
@@ -602,6 +604,8 @@ export class ArmoryScreen {
       const cx = x0 + (i % cols) * (cw + 4), cy = 30 + Math.floor(i / cols) * (ch + 4);
       const rank = prof.up[u.id] || 0;
       const maxed = rank >= u.max;
+      // A milestone's relic for sale (the Phoenix Heart): shut until its milestone is reached.
+      const shut = !upgradeOpen(prof, u);
       const cost = maxed ? 0 : upgradeCost(u.id, rank);
       const fid = 'u_' + u.id;
       // Debug (the debug flag): free, each press a rank more, past the last back to none.
@@ -609,7 +613,7 @@ export class ArmoryScreen {
         app.store.setUpgrades({ [u.id]: maxed ? 0 : rank + 1 });
         sfx(maxed ? 'coin' : 'chest');
         this.flash[u.id] = 0.5;
-      } else if (!DEBUG && ui.item(fid, cx, cy, cw, ch, { disabled: maxed || prof.gold < cost })) {
+      } else if (!DEBUG && ui.item(fid, cx, cy, cw, ch, { disabled: maxed || shut || prof.gold < cost })) {
         app.store.buy(u.id).then((ok) => {
           if (ok) {
             sfx('chest');
@@ -628,7 +632,8 @@ export class ArmoryScreen {
         ctx.fillStyle = r < rank ? '#feae34' : '#3a4466';
         ctx.fillRect(cx + 21 + r * 5, cy + 14, 4, 3);
       }
-      if (maxed) drawText(ctx, 'MAX', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#63c74d' });
+      if (maxed) drawText(ctx, u.max === 1 ? 'OWNED' : 'MAX', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#63c74d' });
+      else if (shut && !DEBUG) drawText(ctx, 'LOCKED', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#5a6988' });
       else if (DEBUG) drawText(ctx, 'FREE', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#feae34' });
       else {
         drawText(ctx, String(cost), cx + cw - 4, cy + ch - 11, { align: 'right', color: prof.gold >= cost ? '#fee761' : '#a22633' });
@@ -638,7 +643,9 @@ export class ArmoryScreen {
     const iy = 30 + rows * (ch + 4) + 2;
     if (focusUp) {
       const rank = prof.up[focusUp.id] || 0;
-      drawText(ctx, `${focusUp.name}: ${focusUp.desc} per rank (${rank}/${focusUp.max})`, W / 2, iy, { align: 'center', color: '#c0cbdc' });
+      const line = focusUp.max === 1 ? `${focusUp.name}: ${focusUp.desc}` : `${focusUp.name}: ${focusUp.desc} per rank (${rank}/${focusUp.max})`;
+      drawText(ctx, line, W / 2, iy, { align: 'center', color: '#c0cbdc' });
+      if (!upgradeOpen(prof, focusUp)) drawText(ctx, `${needText(PROGRESS.locks.find((l) => l.id === focusUp.lock))} to put it up for sale`, W / 2, iy + 10, { align: 'center', color: '#feae34' });
     }
     if (DEBUG) drawText(ctx, 'Debug: each press adds a rank, free; past the last, back to none', W / 2, iy + 10, { align: 'center', color: '#feae34' });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('title');
@@ -717,7 +724,8 @@ export class CodexScreen {
     list.slice(this.page * L.per, (this.page + 1) * L.per).forEach((e, i) => {
       const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = L.y0 + Math.floor(i / L.cols) * (L.ch + CODEX_TILE.gap);
       const fid = `cx_${e.type}_${e.id}`;
-      ui.item(fid, x, y, L.cw, L.ch);
+      // An open weapon pressed is left at home, never offered in a run, or taken along again.
+      if (ui.item(fid, x, y, L.cw, L.ch) && e.type === 'weapon' && e.open) app.store.setHome(e.id, !e.home).then((ok) => ok && sfx(e.home ? 'chest' : 'coin'));
       const f = ui.focused(fid);
       if (f) focused = e;
       this.tile(ctx, e, x, y, L.cw, L.ch, f);
@@ -725,7 +733,8 @@ export class CodexScreen {
     // The focused tile told in full: what it does once open, else what opens it and how far along.
     if (focused) {
       const rec = codexRecord(focused);
-      const text = focused.open ? codexDesc(focused) : focused.need + (rec ? ` — ${rec}` : '');
+      const keep = focused.type === 'weapon' && focused.open ? (focused.home ? ' Left at home: press to take it along.' : ' Press to leave it at home.') : '';
+      const text = focused.open ? codexDesc(focused) + keep : focused.need + (rec ? ` — ${rec}` : '');
       wrapText(text, W - 20).slice(0, 2).forEach((line, i) => drawRich(ctx, line, W / 2, H - 42 + i * 9, { align: 'center', color: focused.open ? '#c0cbdc' : '#feae34', hi: '#fee761' }));
     }
     if (L.pages > 1) {
@@ -749,8 +758,8 @@ export class CodexScreen {
     drawText(ctx, fitLine(codexName(e), room), tx, y + 4, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
     const sub = e.type === 'ult' ? HEROES[e.id].title : null;
     if (open) {
-      const why = e.start ? 'Open from the start' : e.type === 'ult' ? `The ${sub}'s own` : e.need;
-      wrapText(why, room).slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 13 + i * 9, { color: '#5a6988' }));
+      const why = e.home ? 'Left at home' : e.start ? 'Open from the start' : e.type === 'ult' ? `The ${sub}'s own` : e.need;
+      wrapText(why, room).slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 13 + i * 9, { color: e.home ? '#a22633' : '#5a6988' }));
       if (!e.start) codexBar(ctx, tx, y + h - 7, room, 1, '#63c74d'); // full: the way it was opened
       return;
     }

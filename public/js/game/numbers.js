@@ -33,6 +33,7 @@ const STYLES = {
   holy: { color: ['#ffffff', '#fee761', '#feae34'], edge: '#be4a2f', scale: 0.62 },
   shock: { color: ['#ffffff', '#c0f0ff', '#2ce8f5'], edge: '#124e89', scale: 0.62 },
   dark: { color: ['#f6757a', '#b55088', '#68386c'], edge: '#3e2731', scale: 0.6 },
+  bleed: { color: ['#ffb0a8', '#e43b44', '#a22633'], edge: '#3e2731', scale: 0.55 },
   poison: { color: ['#d9ff9e', '#9ee562', '#63c74d'], edge: '#193c3e', scale: 0.58 },
   player: { color: ['#ff8a8a', '#e43b44', '#a22633'], scale: 0.8, plain: true },
   heal: { color: ['#d9ff9e', '#63c74d', '#3e8948'], edge: '#265c42', scale: 0.62, prefix: '+' },
@@ -41,7 +42,7 @@ const STYLES = {
   held: { color: ['#ffffff', '#fee761', '#f77622'], edge: '#733e39', scale: 0.85 },
 };
 // The plain hits on the horde: shown only while there is room for them (PLAIN_MAX).
-const PLAIN = new Set(['normal', 'fire', 'frost', 'holy', 'shock', 'dark', 'poison']);
+const PLAIN = new Set(['normal', 'fire', 'frost', 'holy', 'shock', 'dark', 'poison', 'bleed']);
 // The tiers, lowest first.
 export const TIER = { plain: 0, crit: 1, big: 2 };
 

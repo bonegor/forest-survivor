@@ -48,7 +48,7 @@ test('each class has its signature weapon, and every other weapon is shared by a
     for (const w of startWeapons(h)) assert.ok(h.unique.includes(w), `${id} starts with ${w}, his own`);
     assert.deepEqual(weaponsFor(h), [...h.unique, ...SHARED_WEAPONS], `${id}: his own and the shared`);
   }
-  assert.deepEqual([...SHARED_WEAPONS].sort(), ['arcane', 'aura', 'axe', 'blades', 'caltrops', 'flask', 'frost', 'glaive', 'lightning', 'thorns', 'wisps']);
+  assert.deepEqual([...SHARED_WEAPONS].sort(), ['arcane', 'aura', 'axe', 'bell', 'blades', 'caltrops', 'chain', 'flask', 'frost', 'gale', 'glaive', 'hex', 'hollow', 'hook', 'lantern', 'leech', 'lightning', 'runestone', 'scythe', 'spores', 'starfall', 'thorns', 'wisps']);
   for (const gone of ['bonespear', 'clone', 'grasp', 'spinelance', 'twinshadows', 'gravehands']) assert.equal(WEAPONS[gone], undefined, `${gone} is out of the game`);
 });
 
@@ -164,7 +164,7 @@ const AT_WORK = {
   necromancer: ['miasma', 'pestilence'],
   knight: ['arcane', 'prismatic', 'caltrops', 'razorfield'],
   rogue: ['daggers', 'shadowstrike'],
-  archer: ['bow', 'stormstring'],
+  archer: ['bow', 'stormstring', 'lightning', 'thunderstorm', 'chain', 'stormlash'],
 };
 for (const [hero, ids] of Object.entries(AT_WORK)) {
   for (const id of ids) {

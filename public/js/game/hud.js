@@ -469,7 +469,12 @@ export class Hud {
       ctx.fillRect(bx, y + 42, 26, 9);
       ctx.fillStyle = col;
       ctx.fillRect(bx + 1, y + 43, Math.round(24 * (b.t / b.max)), 7);
-      drawText(ctx, id.slice(0, 4).toUpperCase(), bx + 13, y + 43, { align: 'center', color: '#181425', outline: null });
+      const icon = SPR['i_' + id];
+      if (icon) {
+        // A found power-up: its icon and the seconds left, not a shrine's name.
+        ctx.drawImage(icon.frames[0].c, bx + 1, y + 42, 9, 9);
+        drawText(ctx, String(Math.ceil(b.t)), bx + 18, y + 43, { align: 'center', color: '#181425', outline: null });
+      } else drawText(ctx, id.slice(0, 4).toUpperCase(), bx + 13, y + 43, { align: 'center', color: '#181425', outline: null });
       bx += 28;
     }
   }
@@ -1186,6 +1191,9 @@ export const SHRINE_COLORS = {
   fortune: '#feae34',
   wisdom: '#8f5bb0',
   protection: '#63c74d',
+  wildcap: '#e43b44',
+  ward: '#2ce8f5',
+  mirror: '#8fb8ff',
 };
 
 export const SHRINE_INFO = {

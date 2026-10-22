@@ -11,10 +11,10 @@ const strip = ({ ms, ...r }) => r; // wall time is all that may differ between r
 test('a seeded bot game replays exactly and reports its stats', () => {
   // Five times his health (a test buff), so a bare Knight outlives the 45 s (data/heroes.js: he loses early now).
   const play = (seed) => strip(playGame({ bot: 'kite', hero: 'knight', mode: 's15', seed, max: 45, buff: { life: 400 } }));
-  // Seed 3: with two thirds of the old horde on Veteran (data/difficulty.js VETERAN_CROWD), some seeds
+  // Seed 8 (3 until the weapons of 22 October 2026 changed what the level-ups draw): with two thirds of the old horde on Veteran (data/difficulty.js VETERAN_CROWD), some seeds
   // keep the kiting Knight clear of the monsters all 45 s; this one fights.
-  const a = play(3);
-  assert.deepEqual(play(3), a);
+  const a = play(8);
+  assert.deepEqual(play(8), a);
   assert.equal(a.outcome, 'alive');
   assert.equal(a.time, 45);
   // Fixed 60 Hz steps; an ultimate's launch stops the world 0.2 s (ULT_LAUNCH.stop), 12 more steps each.

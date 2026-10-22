@@ -34,8 +34,10 @@ export const HOLD = 0.2, HOLD_EVERY = 0.6;
 export const THIEF = { run: 0.8, walk: 0.35, near: 140, safe: 220, turn: [1.5, 3] };
 // The hero's base pace a thief measures itself by (px/s).
 export const heroPace = (g) => BASE_SPEED * (g.player.hero.stats.speed || 1) * g.move;
+// How often a confused foe's touch hurts the monsters about it, in seconds.
+export const CONFUSE_TOUCH = 0.5;
 // The sparks a foe gives off while it burns or sickens (Enemy.addDot).
-const DOT_SPARKS = { fire: [PC.o, PC.y], poison: [PC.l, PC.L] };
+const DOT_SPARKS = { fire: [PC.o, PC.y], poison: [PC.l, PC.L], bleed: [PC.r, PC.R] };
 // What charger() and caster() return: a heading and a share of the monster's own speed. The one
 // triple is reused by the next call, so it is read at once (Enemy.update), never kept.
 const AIM = [0, 0, 0];
@@ -157,6 +159,19 @@ export class Enemy {
     this.brandK = 0;
     this.rootT = 0;
     this.stunT = 0;
+    // Confused (confuse): it wanders any way, its touch hurts other monsters (confuseDmg a touch,
+    // for confuseW) and the hero not at all. Cursed (curse): while curseT lasts it records the damage
+    // it takes (curseRec); when it ends it takes curseShare of that again as one blow, for curseW.
+    this.confuseT = 0;
+    this.confuseDmg = 0;
+    this.confuseW = null;
+    this.confuseA = 0;
+    this.confuseTurn = 0;
+    this.confuseHit = 0;
+    this.curseT = 0;
+    this.curseRec = 0;
+    this.curseShare = 0;
+    this.curseW = null;
     this.holdT = 0;
     this.holdCd = 0;
     this.dotT = 0; // damage over time (addDot): how long it lasts yet
@@ -164,6 +179,13 @@ export class Enemy {
     this.dotTick = 0;
     this.dotType = 'fire';
     this.dotW = null; // the weapon it counts for
+    this.bleedBy = -1; // which of a weapon's hooks last opened a bleed on it (hook: two at once cut double)
+    this.fearT = 0; // afraid (scare): runs from the hero for this long
+    this.blowT = 0; // blown back (blow): how long it flies yet, striking foes it meets
+    this.blowId = 0; // the blast that blew it, and the last blast whose collision hurt it
+    this.blowHit = 0;
+    this.blowDmg = 0;
+    this.blowW = null;
     this.state = 'move';
     this.stateT = 0;
     this.cdT = rand(1, 2.5);
@@ -229,6 +251,8 @@ export class Enemy {
     if (this.brandT > 0) this.brandT -= dt;
     if (this.rootT > 0) this.rootT -= dt;
     if (this.stunT > 0) this.stunT -= dt;
+    if (this.confuseT > 0) this.confuseT -= dt;
+    if (this.fearT > 0) this.fearT -= dt;
 
     if (this.spawnT > 0) {
       this.spawnT -= dt;
@@ -246,6 +270,19 @@ export class Enemy {
       this.anim += dt * 0.5;
       if ((p.x - this.x) ** 2 + (p.y - this.y) ** 2 > 120 * 120 || !g.world.lineOfSight(this.x, this.y, p.x, p.y)) return;
       g.wakePack(this);
+    }
+
+    // A curse ends: one blow of its share of all that was dealt under it. The recording already holds
+    // the hero's might, so it is taken out of the blow here (hitEnemy puts it back).
+    if (this.curseT > 0) {
+      this.curseT -= dt;
+      if (this.curseT <= 0) {
+        const rec = this.curseRec * this.curseShare;
+        this.curseRec = 0;
+        g.particles.burst(this.x, this.y - this.h * 0.5, 6, 6, [PC.P, PC.p, PC.i], 50, 0.5, 1, P.GLOW | P.FADE, {});
+        if (rec >= 1) g.hitEnemy(this, rec / p.might, { w: this.curseW, type: 'dark', kb: 0, noCrit: true });
+        if (this.dead) return;
+      }
     }
 
     // Damage over time.
@@ -290,12 +327,31 @@ export class Enemy {
       this.lockT -= dt;
       dx = this.lockX;
       dy = this.lockY;
+    } else if (this.fearT > 0) {
+      // Afraid: it runs straight from the hero, whatever else it would do.
+      const l = Math.hypot(this.x - p.x, this.y - p.y) || 1;
+      AWAY.x = this.x + ((this.x - p.x) / l) * 60;
+      AWAY.y = this.y + ((this.y - p.y) / l) * 60;
+      const d = g.world.steer(this, AWAY);
+      dx = d[0];
+      dy = d[1];
     } else if (unaware) {
       // Neither chasing nor shooting nor charging at a hero it hasn't seen.
       const d = g.world.wander(this, dt);
       dx = d[0];
       dy = d[1];
       sp *= STROLL;
+    } else if (this.confuseT > 0) {
+      // Confused: a way of its own, a new one now and then, at a stroll.
+      this.confuseTurn -= dt;
+      if (this.confuseTurn <= 0) {
+        this.confuseTurn = rand(0.4, 0.9);
+        this.confuseA = rand(TAU);
+      }
+      dx = Math.cos(this.confuseA);
+      dy = Math.sin(this.confuseA);
+      sp *= 0.8;
+      this.confusedTouch(dt);
     } else if (this.ai) {
       const r = this.ai(this, dt, sp);
       dx = r[0];
@@ -401,12 +457,13 @@ export class Enemy {
     this.kx *= kd;
     this.ky *= kd;
     if (!def.fly && def.ai !== 'phaser') g.world.collide(this);
+    if (this.blowT > 0) this.blowInto(dt);
     // It faces the way it goes (facing.js); held, frozen or winding up, it isn't going anywhere.
     if (sp > 0) this.face = faceAlong(this.face, dx, dy);
     this.anim += dt * def.anim * (sp > 1 ? 1 : 0.25);
 
     // Contact damage.
-    if (this.dmg > 0 && this.freezeT <= 0 && this.stunT <= 0) {
+    if (this.dmg > 0 && this.freezeT <= 0 && this.stunT <= 0 && this.confuseT <= 0) {
       const rr = this.r + p.r;
       if ((p.x - this.x) ** 2 + (p.y - this.y) ** 2 < rr * rr) {
         // It costs the hero health only: no blow, a boss's included, shoves him (Player.update).
@@ -427,6 +484,90 @@ export class Enemy {
       this.dotW = w;
     }
     this.dotT = Math.max(this.dotT, t);
+  }
+
+  // The horde alone is shoved, scared or dragged about: never a boss, a crypt's lord, a champion,
+  // a prop, a sealed guardian or one still asleep.
+  get movable() {
+    return !(this.dead || this.boss || this.lord || this.elite || this.prop || this.sealed || this.sleeping || this.dormant || this.spawnT > 0);
+  }
+
+  // Afraid for t seconds (it runs from the hero); false for one that shrugs it off.
+  scare(t) {
+    if (!this.movable) return false;
+    this.fearT = Math.max(this.fearT, t);
+    return true;
+  }
+
+  // Blown from (fromX, fromY) away at speed v (px/s; it slides about v/9 px, Enemy.update's drag)
+  // by blast `id` of weapon w; in flight it strikes any foe it meets for dmg, and is struck for it
+  // too, once each per blast (blowInto). False for one too strong to move.
+  blow(fromX, fromY, v, id, w, dmg) {
+    if (!this.movable) return false;
+    const l = Math.hypot(this.x - fromX, this.y - fromY) || 1;
+    this.kx = ((this.x - fromX) / l) * v;
+    this.ky = ((this.y - fromY) / l) * v;
+    this.blowT = 0.4;
+    this.blowId = id;
+    this.blowW = w;
+    this.blowDmg = dmg;
+    return true;
+  }
+
+  // In flight (blow): the first foe it meets takes a hit, and so does it. Foes bump into nothing
+  // else; this is the one collision, and only while blown.
+  blowInto(dt) {
+    this.blowT -= dt;
+    if (this.blowDmg <= 0 || this.blowHit === this.blowId) return;
+    const g = this.g;
+    for (const o of g.grid.query(this.x, this.y, this.r + 12)) {
+      if (o === this || o.dead || o.prop || o.blowHit === this.blowId) continue;
+      if ((o.x - this.x) ** 2 + (o.y - this.y) ** 2 > (this.r + o.r) ** 2) continue;
+      this.blowHit = o.blowHit = this.blowId;
+      g.hitEnemy(o, this.blowDmg, { w: this.blowW, kb: 0, noCrit: true });
+      if (!this.dead) g.hitEnemy(this, this.blowDmg, { w: this.blowW, kb: 0, noCrit: true });
+      return;
+    }
+  }
+
+  // Confused for t seconds (a regular foe only: no boss, crypt lord, champion or thief), whatever it
+  // touches hurt for dmg, counting for weapon w.
+  confuse(t, dmg, w = null) {
+    if (this.dead || this.prop || this.boss || this.lord || this.elite || this.def.ai === 'flee') return false;
+    if (this.confuseT <= 0) {
+      this.confuseA = rand(TAU);
+      this.confuseTurn = 0;
+      this.confuseHit = 0;
+    }
+    this.confuseT = Math.max(this.confuseT, t);
+    this.confuseDmg = dmg;
+    this.confuseW = w;
+    return true;
+  }
+
+  // Cursed for t seconds: it records what it takes, and takes share of that again when it ends.
+  curse(t, share, w = null) {
+    if (this.dead || this.prop) return false;
+    if (this.curseT <= 0) this.curseRec = 0;
+    this.curseT = Math.max(this.curseT, t);
+    this.curseShare = Math.max(this.curseShare, share);
+    this.curseW = w;
+    return true;
+  }
+
+  // A confused foe's touch (update): every CONFUSE_TOUCH seconds it hurts the monsters it overlaps.
+  confusedTouch(dt) {
+    this.confuseHit -= dt;
+    if (this.confuseHit > 0 || this.confuseDmg <= 0) return;
+    this.confuseHit = CONFUSE_TOUCH;
+    const g = this.g;
+    for (const o of g.grid.query(this.x, this.y, this.r + 14)) {
+      if (o === this || o.dead || o.prop || o.spawnT > 0.3) continue;
+      const rr = this.r + o.r;
+      if ((o.x - this.x) ** 2 + (o.y - this.y) ** 2 > rr * rr) continue;
+      g.hitEnemy(o, this.confuseDmg, { w: this.confuseW, type: 'poison', kb: 0, noCrit: true });
+      if (this.dead) return;
+    }
   }
 
   // A champion taking a blow. A charge already under way carries on.
@@ -617,6 +758,7 @@ export class Enemy {
       ctx.globalAlpha = 1;
     }
     if (this.brandT > 0) this.drawBrand(ctx, cam, X, Y, w);
+    if (this.curseT > 0 || this.confuseT > 0) this.drawMarks(ctx, cam, X, Y, w);
     if ((this.boss || this.lord) && this.flash <= 0) {
       const col = this.rimColor();
       ctx.globalAlpha = this.alpha * (0.7 + 0.3 * Math.sin(this.life * 6));
@@ -635,6 +777,31 @@ export class Enemy {
     ctx.globalAlpha = Math.min(1, this.brandT * 2) * 0.95;
     ctx.drawImage(img, Math.round(X + w / 2 - (img.width * S) / 2), Math.round(Y - (img.height + 2) * S + bob), img.width * S, img.height * S);
     ctx.globalAlpha = 1;
+  }
+
+  // A curse's hourglass (violet, its sand running down with the curse) and a confusion's three
+  // circling sparks, over the foe's head. X, Y, w: where it was drawn, on the screen.
+  drawMarks(ctx, cam, X, Y, w) {
+    const S = cam.S, cx = Math.round(X + w / 2), top = Math.round(Y - 3 * S);
+    if (this.curseT > 0) {
+      const px = (dx, dy, wd, c) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(cx + dx * S, top + dy * S - 8 * S, wd * S, S);
+      };
+      const sand = Math.min(1, this.curseT / 3);
+      px(-2, 0, 5, '#8f5bb0');
+      px(-1, 1, 3, sand > 0.5 ? '#b55088' : '#68386c');
+      px(0, 2, 1, '#b55088');
+      px(-1, 3, 3, sand > 0.5 ? '#68386c' : '#b55088');
+      px(-2, 4, 5, '#8f5bb0');
+    }
+    if (this.confuseT > 0) {
+      for (let i = 0; i < 3; i++) {
+        const a = this.life * 7 + (i * TAU) / 3;
+        ctx.fillStyle = i ? '#fee761' : '#ffffff';
+        ctx.fillRect(Math.round(cx + Math.cos(a) * 5 * S), Math.round(top - 2 * S + Math.sin(a) * 1.5 * S), 2 * S, 2 * S);
+      }
+    }
   }
 
   // How much of its night layer shows (NIGHT_EDGE): as much as of its body, fading in as that

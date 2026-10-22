@@ -72,6 +72,7 @@ function cap(s) {
 
 // What an entry is called: the weapon's or relic's name, the hero's ultimate's.
 export function codexName(e) {
+  if (e.hidden) return '???';
   if (e.type === 'weapon') return WEAPONS[e.id]?.name || e.id;
   if (e.type === 'relic') return PASSIVES[e.id]?.name || e.id;
   return HEROES[e.id]?.ultName || e.id;
@@ -100,6 +101,7 @@ export function codexRecord(e) {
 // An entry's 16 x 16 icon at (x, y): the weapon's or relic's, or for an ultimate the hero himself
 // from the shoulders up. Shut: a ghost of it under a padlock.
 export function codexIcon(ctx, e, x, y, shut = !e.open) {
+  if (e.hidden) return; // one of the second circle, not yet to be seen
   if (shut) ctx.globalAlpha = 0.28;
   if (e.type === 'ult') {
     const spr = SPR[HEROES[e.id]?.sprite];

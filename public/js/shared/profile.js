@@ -47,7 +47,8 @@ export const BASE_HEROES = ['knight'];
 export const HERO_UNLOCK_TIME = 5 * 60;
 // Per-hero achievements, stored as bit flags. survivalHard is any night won
 // (once only Hard counted); dungeonHard (4) lingers in old saves, unused.
-export const FEAT = { survivalHard: 1, dungeon: 2, dungeonHard: 4 };
+// evolved: his signature weapon evolved in a run (the Knight's opens the Phoenix Heart, shared/progress.js).
+export const FEAT = { survivalHard: 1, dungeon: 2, dungeonHard: 4, evolved: 8 };
 // Ranked titles by minutes survived.
 export const RANKS = [
   [0, 'Peasant'], [5, 'Squire'], [10, 'Knight'], [15, 'Champion'], [20, 'Paladin'],
@@ -77,6 +78,8 @@ export const UPGRADES = [
   { id: 'velocity', name: 'Velocity', desc: '+6% projectile speed', max: 3, cost: 120 },
   { id: 'echo', name: 'Echo', desc: '+1 projectile for every weapon', max: 1, cost: 2500 },
   { id: 'revival', name: 'Second Wind', desc: '+1 revive per run', max: 2, cost: 1800 },
+  // A milestone's relic for sale (`lock`: shared/progress.js, a lock with `buy`): shut until it is reached.
+  { id: 'phoenix', name: 'Phoenix Heart', desc: 'the Phoenix Heart among the relics, for every hero', max: 1, cost: 1500, lock: 'phoenix' },
 ];
 
 // What the gold a run found is worth, by difficulty (runReward); the trial screen says so.
@@ -124,6 +127,8 @@ export function defaultProfile() {
     feats: {}, // hero -> FEAT bits
     ranked: {}, // hero -> best Ranked time in seconds
     gear: {}, // hero -> slot -> the item that hero wears there (shared/items.js)
+    ev: [], // the evolutions a lock waits on (need 'evolution') that a run has reached
+    home: [], // the shared weapons left at home: never offered in a run (setHome, the Codex)
   };
 }
 
@@ -150,12 +155,14 @@ export function sanitizeProfile(raw) {
     if (g) p.gift[u.id] = g;
   }
   p.ul = int(raw.ul, 0, ALL_LOCKS);
+  if (Array.isArray(raw.ev)) p.ev = EVO_IDS.filter((id) => raw.ev.includes(id));
+  if (Array.isArray(raw.home)) p.home = SHARED_IDS.filter((id) => raw.home.includes(id));
   p.uu = int(raw.uu, 0, ALL_ULTS);
   if (Array.isArray(raw.heroes)) {
     for (const h of raw.heroes) if (HERO_ORDER.includes(h) && !p.heroes.includes(h)) p.heroes.push(h);
   }
   for (const h of HERO_ORDER) {
-    const f = int(raw.feats?.[h], 0, 7);
+    const f = int(raw.feats?.[h], 0, 15);
     if (f) p.feats[h] = f;
     const t = int(raw.ranked?.[h], 0, MAX_TIME.ranked);
     if (t) p.ranked[h] = t;
@@ -179,7 +186,7 @@ export function sanitizeProfile(raw) {
   const v = int(raw.v, 0, 99);
   if (v >= 1 && v < 4) fromBefore(p);
   // Whatever the records have earned is open (a milestone retuned lower opens for all who passed it).
-  p.ul |= earnedBits(p);
+  p.ul = orBits(p.ul, earnedBits(p));
   for (const h of p.heroes) if (ultEarned(p, h)) p.uu |= heroBit(h);
   return p;
 }
@@ -191,20 +198,44 @@ const LOCKS = PROGRESS.locks;
 const ALL_LOCKS = 2 ** LOCKS.length - 1;
 const ALL_ULTS = 2 ** HERO_ORDER.length - 1;
 const heroBit = (h) => 1 << HERO_ORDER.indexOf(h);
-const lockOpen = (p, i) => ((p.ul || 0) & (1 << i)) !== 0;
+// The locks are more than a 32-bit number's bits, so they are kept with plain arithmetic: a
+// number's bit i is 2 ** i, safe up to 53 of them (test/progress.test.js keeps the table to 50).
+const hasBit = (n, i) => Math.floor((n || 0) / 2 ** i) % 2 === 1;
+const withBit = (n, i) => (hasBit(n, i) ? n : (n || 0) + 2 ** i);
+const orBits = (a, b) => LOCKS.reduce((n, _, i) => (hasBit(b, i) ? withBit(n, i) : n), a || 0);
+const lockOpen = (p, i) => hasBit(p.ul, i);
 const sum = (a) => a.reduce((s, x) => s + x, 0);
 
 // What the profile's records measure, for each kind of milestone (PROGRESS.locks need).
 function measures(p) {
-  return { time: p.best.time, kills: p.kills, level: p.best.level, gold: p.best.gold, bosses: p.best.bosses, wins: sum(p.wins.s15) };
+  return {
+    time: p.best.time, kills: p.kills, level: p.best.level, gold: p.best.gold, bosses: p.best.bosses, wins: sum(p.wins.s15),
+    veteran: p.wins.s15[DIFFICULTIES.indexOf('hard')], dungeon: sum(p.wins.dungeon),
+    heroes: HERO_ORDER.filter((h) => hasFeat(p, h, FEAT.survivalHard)).length,
+  };
 }
+// How far the records have come toward one lock: nothing toward one of the second circle (deep)
+// before a night is won.
+function measure(p, l, m = measures(p)) {
+  if (l.deep && !m.wins) return 0;
+  if (l.need === 'evolution') return +p.ev.includes(l.of);
+  return l.need === 'evolve' ? +hasFeat(p, l.hero, FEAT.evolved) : m[l.need];
+}
+// Whether a lock is of the second circle and still hidden: no night won yet (the Codex names none).
+const hiddenLock = (l, m) => !!l.deep && !m.wins;
+// Every shared weapon the table names, in its order (the ones open from the start, then the locks').
+const SHARED_IDS = [...PROGRESS.openWeapons, ...PROGRESS.locks.filter((l) => l.type === 'weapon').map((l) => l.id)];
+// The evolutions a lock waits on (need 'evolution'), the only ones a profile keeps (p.ev).
+const EVO_IDS = PROGRESS.locks.filter((l) => l.need === 'evolution').map((l) => l.of);
+// Whether a lock's weapon or relic may be found: its milestone reached, and, one for sale, bought.
+const lockUsable = (p, i) => lockOpen(p, i) && (!LOCKS[i].buy || (p.up?.[LOCKS[i].id] || 0) > 0);
 
 // The bits of every milestone the records have reached.
 function earnedBits(p) {
   const m = measures(p);
   let bits = 0;
   LOCKS.forEach((l, i) => {
-    if (m[l.need] >= l.at) bits |= 1 << i;
+    if (measure(p, l, m) >= l.at) bits = withBit(bits, i);
   });
   return bits;
 }
@@ -218,7 +249,8 @@ function ultEarned(p, h) {
 }
 
 // A save from before progression (version 3 and older) keeps all it had: every milestone its
-// records imply is open; a win implies the run-long ones they never kept (gold, bosses); every
+// records imply is open; a win implies the run-long ones they never kept (gold, bosses, and the
+// Phoenix Heart's, which a win opened then: it is for sale to them); every
 // hero it owns has his ultimate once any of its runs lasted PROGRESS.ultTime; the Armory's Arsenal
 // and Reliquary are full, so no slot is lost; Insight and Exile get two ranks more (to their max),
 // for the two free rerolls and banishes every run had. Those ranks are a gift (p.gift): kept, and
@@ -227,7 +259,7 @@ function fromBefore(p) {
   const wins = sum(p.wins.s15) + sum(p.wins.dungeon);
   p.best.time = Math.max(p.best.time, p.best.s15, ...Object.values(p.ranked), sum(p.wins.dungeon) ? MIN_WIN_TIME.dungeon : 0, sum(p.wins.s15) ? MIN_WIN_TIME.s15 : 0);
   if (wins) LOCKS.forEach((l, i) => {
-    if (l.need === 'gold' || l.need === 'bosses') p.ul |= 1 << i;
+    if (l.need === 'gold' || l.need === 'bosses' || l.need === 'evolve') p.ul = withBit(p.ul, i);
   });
   if (p.best.time >= PROGRESS.ultTime) for (const h of p.heroes) p.uu |= heroBit(h);
   const give = (id, n) => {
@@ -247,7 +279,7 @@ function fromBefore(p) {
 export function openEverything(p) {
   p.ul = ALL_LOCKS;
   p.uu = ALL_ULTS;
-  for (const id of ['arsenal', 'reliquary']) p.up[id] = UPGRADES.find((u) => u.id === id).max;
+  for (const id of ['arsenal', 'reliquary', 'phoenix']) p.up[id] = UPGRADES.find((u) => u.id === id).max;
   return p;
 }
 
@@ -258,23 +290,32 @@ export function openFor(profile, hero) {
   const p = profile || {};
   const weapons = [...PROGRESS.openWeapons], relics = [...PROGRESS.openRelics];
   LOCKS.forEach((l, i) => {
-    if (lockOpen(p, i)) (l.type === 'weapon' ? weapons : relics).push(l.id);
+    if (lockUsable(p, i)) (l.type === 'weapon' ? weapons : relics).push(l.id);
   });
-  return { weapons, relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0 };
+  // Those left at home stay there (setHome).
+  const home = Array.isArray(p.home) ? p.home : [];
+  return { weapons: weapons.filter((id) => !home.includes(id)), relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0 };
 }
 
 // Every lock, for a codex: the open-from-the-start ones (start: true), the milestones with how
 // far the records have come (progress 0..1), and each hero's ultimate (its progress is his Ranked
 // best's, the only time kept for each hero; 1 once open).
-//   [{ type: 'weapon' | 'relic' | 'ult', id, open, need, progress, start? }]
+// A lock for sale whose milestone is reached is not open until bought: its need says so (forSale).
+// A shared weapon left at home is open, and says so (home). One of the second circle before a night
+// is won is hidden: the Codex shows neither its name nor its deed.
+//   [{ type: 'weapon' | 'relic' | 'ult', id, open, need, progress, start?, forSale?, home?, hidden? }]
 export function progressList(profile) {
   const p = sanitizeProfile(profile), m = measures(p);
   const out = [];
-  for (const id of PROGRESS.openWeapons) out.push({ type: 'weapon', id, open: true, need: null, progress: 1, start: true });
+  for (const id of PROGRESS.openWeapons) out.push({ type: 'weapon', id, open: true, need: null, progress: 1, start: true, ...(p.home.includes(id) && { home: true }) });
   for (const id of PROGRESS.openRelics) out.push({ type: 'relic', id, open: true, need: null, progress: 1, start: true });
   LOCKS.forEach((l, i) => {
-    const open = lockOpen(p, i);
-    out.push({ type: l.type, id: l.id, open, need: needText(l), progress: open ? 1 : Math.min(1, m[l.need] / l.at) });
+    const reached = lockOpen(p, i), open = lockUsable(p, i), forSale = reached && !open;
+    const e = { type: l.type, id: l.id, open, need: forSale ? 'For sale in the Armory' : needText(l), progress: reached ? 1 : Math.min(1, measure(p, l, m) / l.at) };
+    if (forSale) e.forSale = true;
+    if (hiddenLock(l, m)) Object.assign(e, { hidden: true, need: 'Win a night to learn more' });
+    if (l.type === 'weapon' && p.home.includes(l.id)) e.home = true;
+    out.push(e);
   });
   for (const h of HERO_ORDER) {
     const open = ((p.uu & heroBit(h)) !== 0);
@@ -360,12 +401,30 @@ export function upgradeCost(id, rank) {
   return rank === 0 ? Math.round(u.cost * PROGRESS.firstRank) : u.cost * (rank + 1);
 }
 
+// Whether an Armory upgrade is for sale: always, but a milestone's relic (`lock`) once reached.
+export function upgradeOpen(profile, u) {
+  if (!u.lock) return true;
+  const i = LOCKS.findIndex((l) => l.id === u.lock);
+  return i >= 0 && lockOpen(profile, i);
+}
+
+// A shared weapon left at home (on: true) or taken along again: one left at home is never offered
+// in a run, at a level-up or in a chest. A hero's own signature is never one of them.
+export function setHome(profile, id, on) {
+  const p = sanitizeProfile(profile);
+  if (!SHARED_IDS.includes(id)) return { ok: false, profile: p, error: 'Unknown weapon' };
+  p.home = p.home.filter((x) => x !== id);
+  if (on) p.home.push(id);
+  return { ok: true, profile: p };
+}
+
 export function buyUpgrade(profile, id) {
   const p = sanitizeProfile(profile);
   const u = UPGRADES.find((x) => x.id === id);
   if (!u) return { ok: false, profile: p, error: 'Unknown upgrade' };
   const rank = p.up[id] || 0;
   if (rank >= u.max) return { ok: false, profile: p, error: 'Already at max rank' };
+  if (!upgradeOpen(p, u)) return { ok: false, profile: p, error: 'Not yet for sale' };
   const cost = upgradeCost(id, rank);
   if (p.gold < cost) return { ok: false, profile: p, error: 'Not enough gold' };
   p.gold -= cost;
@@ -431,6 +490,11 @@ export function sanitizeRun(raw) {
     // minute and a few, and every lord of every crypt the run could have reached (as `found`).
     bosses: int(raw.bosses, 0, 3 + Math.floor(time / 60) + (raw.mode === 'dungeon' ? 0 : MAX_LORDS * (Math.floor(realTime / SECS_PER_CRYPT) + 1))),
     floor: int(raw.floor, 1, 3),
+    // His signature evolved (Game.signatureEvolved): it takes eight levels and a relic, so not in
+    // the first two minutes.
+    evolved: raw.evolved === true && time >= 120,
+    // And the evolutions held at the end that a lock waits on (Game.result evos), likewise.
+    evos: time >= 120 && Array.isArray(raw.evos) ? EVO_IDS.filter((id) => raw.evos.includes(id)) : [],
     realTime,
     found,
     // null keeps the gear on record (an older client sends none).
@@ -482,6 +546,8 @@ export function applyRun(profile, rawRun) {
     if (run.mode === 'dungeon') f |= FEAT.dungeon;
     if (f) p.feats[run.hero] = f;
   }
+  if (run.evolved) p.feats[run.hero] = (p.feats[run.hero] || 0) | FEAT.evolved;
+  for (const id of run.evos) if (!p.ev.includes(id)) p.ev.push(id);
   if (run.mode === 'dungeon') {
     const depth = run.victory ? 4 : run.floor;
     p.best.dungeon = Math.max(p.best.dungeon, depth);
@@ -499,11 +565,11 @@ export function applyRun(profile, rawRun) {
   reward.unlocks = openings(p).filter((k) => !before.has(k));
   // The milestones this run reached (shared/progress.js), for the results screen to announce:
   //   [{ type: 'weapon' | 'relic' | 'ult', id, need }]
-  p.ul |= earnedBits(p);
+  p.ul = orBits(p.ul, earnedBits(p));
   if (run.time >= PROGRESS.ultTime) p.uu |= heroBit(run.hero);
   reward.unlocked = [];
   LOCKS.forEach((l, i) => {
-    if (lockOpen(p, i) && !(ul0 & (1 << i))) reward.unlocked.push({ type: l.type, id: l.id, need: needText(l) });
+    if (lockOpen(p, i) && !hasBit(ul0, i)) reward.unlocked.push({ type: l.type, id: l.id, need: needText(l) });
   });
   if ((p.uu & ~uu0) !== 0) reward.unlocked.push({ type: 'ult', id: run.hero, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero' });
   if (run.mode === 'ranked') reward.ranked = { time: run.time, best: p.ranked[run.hero] || 0, personalBest, title: rankTitle(run.time) };

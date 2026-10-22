@@ -27,6 +27,11 @@ const LOOK = {
   relic: { sprite: 'relic', glow: '#fee761', light: 'holy', anim: 2 },
   frostrune: { sprite: 'frostrune', glow: '#2ce8f5', light: 'cyan', anim: 2 },
   fury: { sprite: 'fury', glow: '#b55088', light: 'purple', anim: 3 },
+  wildcap: { sprite: 'wildcap', glow: '#e43b44', light: 'red', anim: 2 },
+  ward: { sprite: 'ward', glow: '#2ce8f5', light: 'cyan', anim: 2 },
+  mirror: { sprite: 'mirror', glow: '#2ce8f5', light: 'cyan', anim: 3 },
+  map: { sprite: 'map', glow: '#feae34', light: 'gold' },
+  skull: { sprite: 'skull', glow: '#e43b44', light: 'red', anim: 2 },
   chest: { sprite: 'chest', glow: '#feae34', light: 'gold' },
 };
 
@@ -202,6 +207,17 @@ export class Pickup {
       case 'frostrune':
         g.freezeAll(6);
         break;
+      case 'wildcap':
+      case 'ward':
+      case 'mirror':
+        g.takePowerUp(this.kind);
+        break;
+      case 'map':
+        g.treasureMap();
+        break;
+      case 'skull':
+        g.cursedSkull();
+        break;
       case 'fury': {
         // The fury is his at once; the look follows: a comet to the HUD orb (Hud.comet).
         const was = p.fury;
@@ -245,6 +261,17 @@ export class Pickup {
     const w = img.width * S * k, h = img.height * S * k;
     const X = Math.round(sx - w / 2), Y = Math.round(sy - h - (this.z + bob + 1) * S);
     ctx.drawImage(img, X, Y, w, h);
+    if (this.kind === 'skull') {
+      // A warning over it: a red "!" that beats, for a pick-up that makes the night harder.
+      const k = Math.max(1, Math.round(S)), a = 0.6 + 0.4 * Math.sin(this.t * 8), bx = Math.round(sx - k), by = Y - 7 * k;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#181425';
+      ctx.fillRect(bx - k, by - k, 3 * k, 6 * k);
+      ctx.fillStyle = '#e43b44';
+      ctx.fillRect(bx, by, k, 3 * k);
+      ctx.fillRect(bx, by + 4 * k, k, k);
+      ctx.globalAlpha = 1;
+    }
     const r = this._r;
     r[0] = X;
     r[1] = Y;

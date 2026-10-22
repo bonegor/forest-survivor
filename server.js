@@ -342,6 +342,11 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
         if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });
         return sendJson(res, 200, { profile: r.profile }, [profileCookie(req, r.profile)]);
       }
+      case 'home': {
+        const r = P.setHome(profile, body.id, body.on === true);
+        if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });
+        return sendJson(res, 200, { profile: r.profile }, [profileCookie(req, r.profile)]);
+      }
       case 'refund': {
         const r = P.refundUpgrades(profile);
         return sendJson(res, 200, { profile: r.profile, refunded: r.refunded }, [profileCookie(req, r.profile)]);

@@ -30,7 +30,7 @@ export const minuteMore = (phase) => 1 + PER_MINUTE * minuteOf(phase);
 // All the more the run sends: a minute's growth (minuteMore), Normal's late horde (lateMore) and,
 // on a Nightmare, three times as many again (difficulty.js NIGHTMARE), on Veteran only. Never on
 // Ranked (Game.nightmare).
-export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * (g.nightmare ? NIGHTMARE.more : 1);
+export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0));
 
 // "make it more wave like, the generation of monsters ... it is too constant", then "not full on
 // waves, just occasionally ... base line, + wave every once in a while" (21 October 2026): the

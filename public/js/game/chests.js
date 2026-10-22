@@ -88,7 +88,7 @@ const DELTA = [
   ['area', 'Area', (v) => `${Math.round(v * 100)}%`],
   ['cd', 'Cooldown', (v) => `${v.toFixed(2)} s`],
 ];
-const COUNT_NOUN = { sword: 'Slashes', bow: 'Arrows', axe: 'Axes', blades: 'Blades', daggers: 'Blades', fireball: 'Fireballs', meteor: 'Meteors', glaive: 'Glaives', wisp: 'Wisps', flask: 'Flasks', summon: 'Skeletons', lightning: 'Bolts', caltrops: 'Caltrops', thorns: 'Thorns', spiral: 'Axes' };
+const COUNT_NOUN = { sword: 'Slashes', bow: 'Arrows', axe: 'Axes', blades: 'Blades', daggers: 'Blades', fireball: 'Fireballs', meteor: 'Meteors', glaive: 'Glaives', wisp: 'Wisps', flask: 'Flasks', summon: 'Skeletons', lightning: 'Bolts', chain: 'Chains',caltrops: 'Caltrops', hook: 'Hooks', thorns: 'Thorns', spiral: 'Axes', lantern: 'Beams', runestone: 'Stones', starfall: 'Stars', leech: 'Chains', spores: 'Mushrooms', hex: 'Curses' };
 export function evolveLines(fromId, toId) {
   const a = statsAt(WEAPONS[fromId], MAX_WEAPON_LEVEL), b = statsAt(WEAPONS[toId], MAX_WEAPON_LEVEL);
   const out = [];

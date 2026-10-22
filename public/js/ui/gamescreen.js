@@ -1427,7 +1427,7 @@ class ResultsOverlay {
     const res = this.res;
     this.reward = null;
     this.gs.app.store.submitRun({
-      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, bosses: res.bosses, floor: res.floor,
+      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, time: res.time, gold: res.gold, kills: res.kills, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
     }).then((r) => {
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the

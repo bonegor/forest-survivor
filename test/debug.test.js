@@ -60,9 +60,10 @@ test('at the debug flag every hero and mode is open, in a save of its own', asyn
   for (const hero of P.HERO_ORDER) for (const mode of P.MODES) assert.ok(P.canPlay(p, mode, hero), `${hero} in ${mode}`);
   assert.equal(p.gold, 0, 'not the player\'s own save');
   // Every weapon, relic and ultimate open (shared/progress.js), and all six slots of each.
-  assert.deepEqual(p.up, { arsenal: 3, reliquary: 3 });
+  assert.deepEqual(p.up, { arsenal: 3, reliquary: 3, phoenix: 1 });
   const open = P.openFor(p, 'knight');
-  assert.ok(open.ult && open.weapons.length === 11 && open.relics.length === 14, 'everything open');
+  const all = (type) => P.progressList(p).filter((l) => l.type === type).length;
+  assert.ok(open.ult && open.weapons.length === all('weapon') && open.relics.length === all('relic') && all('weapon') === 23 && all('relic') === 22, 'everything open');
   assert.ok(P.progressList(p).every((l) => l.open));
   // A run played there is kept there, its unlocks with it.
   const reward = await store.submitRun({ mode: 'ranked', diff: 'hard', hero: 'necromancer', victory: false, time: 120, realTime: 120, kills: 50, level: 6, floor: 1, gold: 30 });
@@ -82,7 +83,7 @@ test('at the debug flag the Armory is set freely, at no cost', async () => {
   const gold = store.profile.gold;
   assert.ok(store.setUpgrades({ might: 8, echo: 1, revival: 2 }));
   // (Arsenal and Reliquary full from the start there: storage.js unlockEverything.)
-  const slots = { arsenal: 3, reliquary: 3 };
+  const slots = { arsenal: 3, reliquary: 3, phoenix: 1 };
   assert.deepEqual(store.profile.up, { ...slots, might: 8, echo: 1, revival: 2 });
   assert.equal(store.profile.gold, gold, 'no gold spent');
   assert.ok(store.setUpgrades({ might: 3, echo: 0, armor: 99, nonsense: 4 }));

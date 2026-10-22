@@ -109,11 +109,12 @@ The hero screen always shows your next goal, stars mark what each hero has conqu
 - **Treasure chests** from champions, bosses and three crypt lords in four. A max-level weapon plus its paired relic **evolves** when you open a chest; the rest of a chest is upgrades drawn like level-up cards (above), and gold. Luck makes a champion's or a boss's chest hold more, never a crypt lord's
 - **Gear** from three crypt lords in four, every lord rolled alike (so up to four pieces a crypt): helm, armor, gloves, boots, amulet and ring, each Common (1 stat), Uncommon (2), Rare (3), Epic (3, stronger) or Legendary (4 and a power: +1 projectile, +40% crit damage, a revive, or +20% health and +2 armor; each power counts once, however many pieces worn carry it). Later in the night and farther from the start the odds get better, and nothing else changes them: **luck plays no part in what a crypt's lords leave**, not the gear's rarity, nor whether a lord leaves gear, a chest or both, nor what its chest holds, nor its gold; that is plain chance (`test/crypts.test.js`). Picking a piece up shows it beside everything worn, with what it would change; wear it (the piece it replaces is sold) or sell it, and sell anything worn while you're there. **Each hero keeps their own gear from run to run**; heroes don't share it (`public/js/shared/items.js`)
 - **Shrines** of Fury, Haste, Fortune, Wisdom and Protection
+- **Power-ups**, only in what you break (never dropped by the horde), luck making them likelier: a **Wild Mushroom** (10 s of double damage and 30% more speed), a **Ward Bubble** (5 s untouchable), a **Mirror Shard** (10 s of +1 projectile for every weapon), each 1 in 100; a **Treasure Map** (a chest a screen or so away, which the edge arrow points to; in a dungeon or crypt, a pile of gold) and a **Cursed Skull** (touch it and the rest of the run brings 25% more monsters and 50% more gold, up to three), each 1 in 200 (`POWER_UPS`, `PROP_LOOT` in `public/js/game/game.js`)
 - Breakable barrels, crates, urns and lanterns, 2 to 5 to a site: in the forest a site every 5 to 9 seconds ahead of you (about 45 props standing at most), in a dungeon or crypt one row along a wall of each room, about three boxes a chamber (`PROP_SITES` in `public/js/data/waves.js`). The hero's weapons break them, and so do the Necromancer's skeletons and death knights: a blow one strikes at a foe breaks any box in its swing as well. They never go for a box instead of a monster, and walk through one as through anything but a wall (`Minion.attack` in `public/js/game/minions.js`). Each holds one thing: a third of them a potion, a third a fury orb, a tenth a Scroll of Gathering, and the rest gold, now and then an elixir or a Frost Rune and, half as often, a Holy Relic (`PROP_LOOT` in `public/js/game/game.js`). Luck makes the scrolls, elixirs, runes and relics likelier
 
 ### Weapons and evolutions
 
-Each hero has a **signature weapon** no other hero can find (the Necromancer has two, and starts with both); every other weapon is **shared by all**, offered to any hero on his level-ups. Relics are shared by all too. A weapon at level 8 with its relic evolves when a chest is opened, into something better than it in every way (`test/signature-weapons.test.js` checks every stat). One relic is unlike the rest: the **Phoenix Heart** (+1 revive, and while it is held **any** weapon at level 8 evolves at a chest, its own relic or not) is offered only once the hero's own signature weapon has evolved; when he falls it is the revive spent first and it is gone (a Second Wind from the Armory or a legendary waits for the next fall), its relic slot free, and it can be offered again 5 levels later. Each time it can be offered it is on the next two level-ups for certain (a reroll keeps it among the new cards), and after that only by chance; a chest draws it only by chance (`test/phoenix.test.js`). Each hero's `unique` and `start` are in `public/js/data/heroes.js` (with `SHARED_WEAPONS` and `weaponsFor`), the weapons in `public/js/data/weapons.js`. An unlisted reference page (on the owner's link list) shows them all, with every level's card and each evolution.
+Each hero has a **signature weapon** no other hero can find (the Necromancer has two, and starts with both); every other weapon is **shared by all**, offered to any hero on his level-ups. Relics are shared by all too. A weapon at level 8 with its relic evolves when a chest is opened, into something better than it in every way (`test/signature-weapons.test.js` checks every stat). One relic is unlike the rest: the **Phoenix Heart** (bought once in the Armory for 1,500 gold, for sale once the Knight has evolved his Longsword, and then found by every hero; +1 revive, and while it is held **any** weapon at level 8 evolves at a chest, its own relic or not) is offered only once the hero's own signature weapon has evolved; when he falls it is the revive spent first and it is gone (a Second Wind from the Armory or a legendary waits for the next fall), its relic slot free, and it can be offered again 5 levels later. Each time it can be offered it is on the next two level-ups for certain (a reroll keeps it among the new cards), and after that only by chance; a chest draws it only by chance (`test/phoenix.test.js`). Each hero's `unique` and `start` are in `public/js/data/heroes.js` (with `SHARED_WEAPONS` and `weaponsFor`), the weapons in `public/js/data/weapons.js`. An unlisted reference page (on the owner's link list) shows them all, with every level's card and each evolution.
 
 **Signature weapons**
 
@@ -136,11 +137,32 @@ Each hero has a **signature weapon** no other hero can find (the Necromancer has
 | Moonglaive | Lodestone | Lodestar |
 | Bramble | Plate Armor | Briarheart |
 | Will-o'-Wisps | Lucky Clover | Fae Lanterns |
-| Chain Lightning | Echo Rune | Thunderstorm |
+| Lightning Strike: a bolt from the sky on the toughest foe near, a splash that stuns | Echo Rune | Thunderstorm: a storm of strikes |
+| Chain Lightning: sparks leap from the hero and arc foe to foe; opens once Lightning Strike has evolved | Spellbook | Storm Lash: each chain forks in two |
 | Frost Nova | Vitality Amulet | Frozen Heart |
 | Arcane Ray: an instant ray through every foe in its line | Giant's Belt | Prismatic Ray: it splits on the first foe it strikes |
 | Firebomb Flask | Hourglass | Hellfire |
 | Caltrops: spikes thrown behind the hero, that cut and slow what follows | Lucky Clover | Razor Field |
+
+**Relics of 22 October 2026**, each opened by a milestone (`public/js/shared/progress.js`), five ranks each (`public/js/data/passives.js`): **Hunter's Mark** (+8% damage to bosses, crypt lords and champions), **Berserker's Torc** (up to +10% damage, the lower the hero's health), **Thornmail** (a monster that strikes him takes 8 back), **Shadow Cloak** (4% to dodge a blow), **Ember Heart** (5% of hits set the foe burning), **Ram's Horn** (+15% knockback, on monsters only), **Vampire Fang** (0.4% of the damage dealt heals him, at most 1.2% of his health a second) and **Rimeheart** (struck, he freezes the foes about him for a moment, every 7 s at most; bosses, lords and champions only slow).
+
+**The second circle** (hidden in the Codex until a night is won; each then opens by its own deed)
+
+| Weapon | Opened by | + Relic | Evolves into |
+| --- | --- | --- | --- |
+| Gale Horn: a gust ahead blows the horde back (never a boss, an elite or the hero); a foe blown into another hurts both | the night won | Swift Boots | Tempest: all round, and slowed |
+| Lighthouse Lantern: a beam sweeps slowly round, burning, and lights the ground | surviving 12:00 | Spellbook | Beacon: two beams, and lit foes take a quarter more |
+| Banshee Bell: a toll that sends the horde fleeing (bosses and elites stand) | 3 bosses in a run | Vitality Amulet | Death Knell: the fleeing leave cutting echoes |
+| Grappling Hook: a hook at the farthest foe that cuts its line twice and makes it bleed; it drags nothing | 25,000 foes in all | Plate Armor | Kraken Chains |
+| Starfall: stars fall on foes in sight | 1,500 gold in a run | Echo Rune | Comet Shower |
+| Runestone: a stone that bounces off the screen's edges, piercing | a night won on Veteran | Eagle Feather | Runestorm: three, each splitting on its first bounce |
+| Leech Chains: chains drain the nearest foes and mend the hero a little | level 50 | Troll Blood | Blood Tether |
+| Grave Hollow: a pit in the thick of the horde draws it in, then caves in | a Dungeon Run won | Lodestone | Abyss: and drags in the gems |
+| Puffcap Spores: mushrooms where foes fall; their spores confuse what treads on them | 3 nights won | Lucky Clover | Fairy Ring |
+| Reaper's Scythe: a slow sweep all round; it reaps foes under 15% health | 60,000 foes in all | Scholar's Crown | Harvest Moon |
+| Hex Hourglass: curses the toughest; when it ends they take a share of all they suffered again | a night won with 3 heroes | Hourglass | Doom |
+
+**Weapons a new player has**: the hero's own and the Throwing Axe and Guardian Blades; Consecration opens at 100 foes slain, Frost Nova at 1:00 survived, and the rest of the shared ones by milestones (`public/js/shared/progress.js`). Any shared weapon open can be **left at home** in the Codex (press its tile): it is never offered in a run until taken along again.
 
 ## Saving: everything lives in cookies
 

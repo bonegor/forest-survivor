@@ -148,6 +148,21 @@ export const store = {
     return r.ok;
   },
 
+  // A shared weapon left at home (on) or taken along again (shared/profile.js setHome).
+  async setHome(id, on) {
+    if (this.mode === 'server') {
+      const data = await api('home', { id, on }).catch((e) => e.data || {});
+      if (data.profile) this.profile = P.sanitizeProfile(data.profile);
+      return !data.error;
+    }
+    const r = P.setHome(this.profile, id, on);
+    if (r.ok) {
+      this.profile = r.profile;
+      this.saveLocal();
+    }
+    return r.ok;
+  },
+
   // Debug only (the debug flag): upgrades set to any ranks, { id: rank }, at no cost.
   setUpgrades(ranks) {
     if (!DEBUG) return false;

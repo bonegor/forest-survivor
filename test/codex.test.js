@@ -68,14 +68,14 @@ test('the Codex draws for a new player and for one with everything open, and tur
 
 test('the locks nearest to opening come furthest along first, each told in its own measure', () => {
   const p = defaultProfile();
-  p.best.time = 2 * 60 + 14;
+  p.best.time = 44;
   p.best.level = 5;
   const near = nearestLocks(p, 2);
   assert.equal(near.length, 2);
   assert.ok(near.every((e) => !e.open));
   assert.ok(near[0].progress >= near[1].progress);
-  assert.equal(near[0].id, 'frost', 'Survive 3:00, at 2:14');
-  assert.match(codexRecord(near[0]), /2:14 best$/);
+  assert.equal(near[0].id, 'frost', 'Survive 1:00, at 0:44');
+  assert.match(codexRecord(near[0]), /0:44 best$/);
   assert.equal(codexRecord({ ...near[0], open: true }), '', 'nothing told of one open');
 });
 

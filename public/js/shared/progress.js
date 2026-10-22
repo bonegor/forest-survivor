@@ -29,7 +29,9 @@ export const PROGRESS = {
   // A hero's ultimate opens once a run with him lasts this long on the clock (any mode).
   ultTime: 2 * 60,
   // Open from the first run; every hero's signature weapon(s) always are too (data/heroes.js unique).
-  openWeapons: ['axe', 'blades', 'aura'],
+  // The owner's (22 October 2026): only a few to start with, the next a run away (Consecration at
+  // 100 foes, Frost Nova at 1:00), then the ladder; the new weapons are to come after it.
+  openWeapons: ['axe', 'blades'],
   openRelics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'],
   // The rest, each opened for the whole account by a milestone. `need` is what is measured:
   //   time:   seconds on the clock in one run (any mode)
@@ -38,9 +40,18 @@ export const PROGRESS = {
   //   gold:   gold picked up in one run (as the run reports it, before the difficulty's rate)
   //   bosses: bosses (and crypt lords) slain in one run (Game.stats.bosses)
   //   wins:   nights won (Survival victories), on any difficulty
+  //   veteran: nights won on Veteran
+  //   dungeon: Dungeon Runs won, on any difficulty
+  //   heroes:  heroes who have won a night
+  //   evolution: 1 once a run has evolved the weapon `of` (an evolution's id) with any hero; `what` names it
+  //   evolve: 1 once `hero` has evolved his signature weapon in a run (FEAT.evolved); `what` names it
+  // `buy`: once its milestone is reached it is for sale in the Armory (shared/profile.js UPGRADES,
+  // by its id), and open only once bought.
+// `deep`: the second circle, the weapons of 22 October 2026: hidden in the Codex and shut until a
+// night is won, whatever the records say; then each opens by its own deed.
   // Its place in this list is its bit in the save (profile.ul): add new ones at the end only.
   locks: [
-    { type: 'weapon', id: 'frost', need: 'time', at: 3 * 60 },
+    { type: 'weapon', id: 'frost', need: 'time', at: 60 },
     { type: 'weapon', id: 'lightning', need: 'kills', at: 1000 },
     { type: 'weapon', id: 'flask', need: 'level', at: 15 },
     { type: 'weapon', id: 'glaive', need: 'time', at: 6 * 60 },
@@ -55,7 +66,31 @@ export const PROGRESS = {
     { type: 'relic', id: 'luck', need: 'gold', at: 500 },
     { type: 'relic', id: 'amount', need: 'bosses', at: 2 },
     { type: 'relic', id: 'growth', need: 'level', at: 40 },
-    { type: 'relic', id: 'phoenix', need: 'wins', at: 1 },
+    // The owner's (22 October 2026): bought, once the Knight has evolved his Longsword; then for all.
+    { type: 'relic', id: 'phoenix', need: 'evolve', hero: 'knight', what: "the Knight's Longsword", at: 1, buy: true },
+    { type: 'weapon', id: 'aura', need: 'kills', at: 100 },
+    { type: 'weapon', id: 'gale', need: 'wins', at: 1, deep: true },
+    { type: 'weapon', id: 'lantern', need: 'time', at: 12 * 60, deep: true },
+    { type: 'weapon', id: 'bell', need: 'bosses', at: 3, deep: true },
+    { type: 'weapon', id: 'hook', need: 'kills', at: 25000, deep: true },
+    { type: 'weapon', id: 'starfall', need: 'gold', at: 1500, deep: true },
+    { type: 'weapon', id: 'runestone', need: 'veteran', at: 1, deep: true },
+    { type: 'weapon', id: 'leech', need: 'level', at: 50, deep: true },
+    { type: 'weapon', id: 'hollow', need: 'dungeon', at: 1, deep: true },
+    { type: 'weapon', id: 'spores', need: 'wins', at: 3, deep: true },
+    { type: 'weapon', id: 'scythe', need: 'kills', at: 60000, deep: true },
+    { type: 'weapon', id: 'hex', need: 'heroes', at: 3, deep: true },
+    // The owner's (22 October 2026): Chain Lightning, sparking from the hero, once Lightning Strike
+    // has evolved; and the relics of that day.
+    { type: 'weapon', id: 'chain', need: 'evolution', of: 'thunderstorm', what: 'Lightning Strike', at: 1 },
+    { type: 'relic', id: 'ramhorn', need: 'time', at: 5 * 60 },
+    { type: 'relic', id: 'thornmail', need: 'kills', at: 3000 },
+    { type: 'relic', id: 'torc', need: 'time', at: 7 * 60 },
+    { type: 'relic', id: 'rime', need: 'gold', at: 800 },
+    { type: 'relic', id: 'cloak', need: 'level', at: 25 },
+    { type: 'relic', id: 'hunter', need: 'bosses', at: 4 },
+    { type: 'relic', id: 'fang', need: 'level', at: 35 },
+    { type: 'relic', id: 'ember', need: 'kills', at: 8000 },
   ],
 };
 
@@ -72,6 +107,11 @@ export function needText(lock) {
     case 'gold': return `Pick up ${thousands(n)} gold in a run`;
     case 'bosses': return n === 1 ? 'Slay a boss in a run' : `Slay ${n} bosses in a run`;
     case 'wins': return n === 1 ? 'Win a night' : `Win ${n} nights`;
+    case 'evolve':
+    case 'evolution': return `Evolve ${lock.what}`;
+    case 'veteran': return n === 1 ? 'Win a night on Veteran' : `Win ${n} nights on Veteran`;
+    case 'dungeon': return n === 1 ? 'Win a Dungeon Run' : `Win ${n} Dungeon Runs`;
+    case 'heroes': return `Win a night with ${n} heroes`;
     default: return '';
   }
 }

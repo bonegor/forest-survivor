@@ -1783,3 +1783,141 @@ export class Purge {
     this.g.light(p.x, p.y, 160, 'cold', 0.6 * k);
   }
 }
+
+// ---------------------------------------------------- the three of 22 October 2026 --
+
+// Leech Chains: a chain from the hero to a foe it has latched onto. Every `tick` it drains the foe
+// and mends the hero a share of his health (the weapon's `heal`). It snaps if the foe gets further
+// than LEECH.snap times its reach; Blood Tether's bursts in blood where it snaps or its foe dies.
+export const LEECH = { reach: 105, snap: 1.5, burstR: 22 };
+
+export class LeechChain {
+  constructor(g, w, e) {
+    this.g = g;
+    this.w = w;
+    this.e = e;
+    this.id = e.id;
+    this.x = e.x;
+    this.y = e.y;
+    this.R = LEECH.reach * w.s.area;
+    this.dur = w.s.dur;
+    this.t = 0;
+    this.tickT = 0.15;
+    this.pulse = 0;
+  }
+
+  update(dt) {
+    const g = this.g, p = g.player, w = this.w, e = this.e;
+    if (p.dead) return false;
+    this.t += dt;
+    const gone = e.dead || e.id !== this.id;
+    if (!gone) {
+      this.x = e.x;
+      this.y = e.y;
+    }
+    const snapped = !gone && Math.hypot(e.x - p.x, e.y - p.y) > this.R * LEECH.snap;
+    if (gone || snapped) {
+      if (w.s.burst) explode(g, this.x, this.y, LEECH.burstR * w.s.area, w.s.dmg * 1.5, w, 'blood', { kb: 0.6 });
+      else g.particles.burst(this.x, this.y - 6, 5, 6, [PC.r, PC.R], 40, 0.4, 1, P.GLOW | P.FADE, {});
+      return false;
+    }
+    if (this.t >= this.dur) return false;
+    this.pulse += dt * 3;
+    this.tickT -= dt;
+    if (this.tickT <= 0) {
+      this.tickT = w.s.tick;
+      if (g.hitEnemy(e, w.s.dmg, { w, type: 'dark', kb: 0, noCrit: true }) > 0) p.heal(p.maxHp * w.s.heal, true);
+    }
+    return true;
+  }
+
+  draw(ctx, cam) {
+    const p = this.g.player, S = cam.S, e = this.e;
+    const ax = (p.x - cam.x) * S, ay = (p.y - 6 - cam.y) * S;
+    const bx = (this.x - cam.x) * S, by = (this.y - (e.dead ? 4 : e.h * 0.4) - cam.y) * S;
+    const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / (5 * S)));
+    const fade = Math.min(1, (this.dur - this.t) / 0.3);
+    ctx.globalAlpha = Math.max(0, fade);
+    for (let i = 0; i <= n; i++) {
+      const u = i / n, sag = Math.sin(u * Math.PI) * 3 * S;
+      const sz = (i % 2 ? 2 : 3) * S;
+      ctx.fillStyle = i % 2 ? '#a22633' : '#e43b44';
+      ctx.fillRect(Math.round(lerp(ax, bx, u) - sz / 2), Math.round(lerp(ay, by, u) + sag - sz / 2), sz, sz);
+    }
+    // A bright bead runs from the foe to the hero: the life he drinks.
+    const u = 1 - (this.pulse % 1), sag = Math.sin(u * Math.PI) * 3 * S;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(Math.round(lerp(ax, bx, u) - S), Math.round(lerp(ay, by, u) + sag - S), 2 * S, 2 * S);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Puffcap Spores: a mushroom (MUSHROOM.grow seconds sprouting, then ready) that bursts in a puff
+// when a regular foe walks over it, and withers after MUSHROOM.life. `shroomOf` is the weapon it
+// counts toward the cap of.
+export const MUSHROOM = { grow: 0.8, life: 40, puffR: 24, reach: 6 };
+
+export class Mushroom {
+  constructor(g, w, x, y) {
+    this.g = g;
+    this.shroomOf = w;
+    this.x = x;
+    this.y = y;
+    this.t = 0;
+  }
+
+  update(dt) {
+    const g = this.g;
+    this.t += dt;
+    if (this.t >= MUSHROOM.life) return false;
+    if (this.t < MUSHROOM.grow) return true;
+    for (const e of g.grid.query(this.x, this.y, MUSHROOM.reach + 14)) {
+      if (e.dead || e.prop || e.boss || e.elite || e.lord || e.spawnT > 0.3) continue;
+      const r = MUSHROOM.reach + e.r * 0.6;
+      if ((e.x - this.x) ** 2 + (e.y - this.y) ** 2 > r * r) continue;
+      sporePuff(g, this.shroomOf, this.x, this.y);
+      return false;
+    }
+    return true;
+  }
+
+  drawGround(ctx, cam) {
+    const fr = SPR.mushroom.frames[this.t < MUSHROOM.grow ? 0 : 1], S = cam.S;
+    if (MUSHROOM.life - this.t < 3 && Math.floor(this.t * 6) % 2) return; // withering: it blinks
+    ctx.drawImage(fr.get(0), Math.round((this.x - cam.x - fr.w / 2) * S), Math.round((this.y - cam.y - fr.h + 2) * S), fr.w * S, fr.h * S);
+  }
+}
+
+// A mushroom of weapon w bursts: foes in the puff take its damage and, those regular enough, are
+// confused for its `dur` (Enemy.confuse), hurting the monsters they touch a third as much.
+export function sporePuff(g, w, x, y) {
+  const R = MUSHROOM.puffR * w.s.area;
+  for (const e of g.grid.query(x, y, R + 14)) {
+    if (e.dead || e.prop) continue;
+    const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy);
+    if (d > R + e.r) continue;
+    g.hitEnemy(e, w.s.dmg, { w, type: 'poison', kb: 0.3, kx: dx / (d || 1), ky: dy / (d || 1), noCrit: true });
+    if (!e.dead) e.confuse(w.s.dur, w.s.dmg * 0.35, w);
+  }
+  g.effects.push(new Ring(g, x, y, 4, R, 0.45, '#9ee562', false, 2));
+  g.particles.burst(x, y - 4, 16, 8, [PC.l, PC.L, PC.z], 55, 0.9, 1, P.GLOW | P.FADE, {});
+  sfx('burn', { pan: clamp((x - g.player.x) / 200, -1, 1) });
+}
+
+// A mushroom of w where (x, y) is, if the weapon's cap allows (forced: the oldest gives way).
+export function plantMushroom(g, w, x, y, force = false) {
+  const spot = g.world.freeSpot(x, y);
+  if (!spot) return false;
+  let n = 0, oldest = null;
+  for (const fx of g.effects) {
+    if (fx.shroomOf !== w) continue;
+    n++;
+    if (!oldest || fx.t > oldest.t) oldest = fx;
+  }
+  if (n >= w.s.cap) {
+    if (!force || !oldest) return false;
+    oldest.t = MUSHROOM.life; // withers at its next update
+  }
+  g.effects.push(new Mushroom(g, w, spot.x, spot.y));
+  return true;
+}

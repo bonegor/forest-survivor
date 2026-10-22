@@ -4,9 +4,11 @@ import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weap
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick, angleDiff } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
-import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode, Pillar, Burrow, Chop, FRENZY, PURGE, boltTargets, silverBolt } from './effects.js';
+import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode, Pillar, Burrow, Chop, FRENZY, PURGE, boltTargets, stunFoe, silverBolt, LeechChain, LEECH, plantMushroom } from './effects.js';
 import { Minion } from './minions.js';
+import { KINDS_LIGHT } from './weapons-light.js';
 import { fxBurst } from './fxart.js';
+import { gust, gustFoes, GALE_R, Hook, Hollow, thickest, toll, tollFoes, BELL_R } from './crowdfx.js';
 import { PC, P } from './particles.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
@@ -94,6 +96,13 @@ export class Weapon {
   onKill(e) {
     const K = KINDS[this.def.kind];
     if (K.kill) K.kill(this, e);
+  }
+
+  // Any foe has died, struck by whom it may (Game.killEnemy): the weapons that seed or spread on a
+  // death (spores, hex) see to it.
+  onFoeDeath(e) {
+    const K = KINDS[this.def.kind];
+    if (K.death) K.death(this, e);
   }
 
   // manual: struck by hand (strike), it waits ready instead of firing by itself.
@@ -205,6 +214,11 @@ function ray(g, w, x, y, ang, L, dmg, skip = null) {
   return hits.map((h) => h[1]);
 }
 
+// A curse of weapon w on foe e (Enemy.curse), marked with a ring.
+function hexCurse(g, w, e) {
+  if (e.curse(w.s.dur, w.s.share, w)) g.effects.push(new Ring(g, e.x, e.y, 3, 14, 0.4, '#b55088', false, 2));
+}
+
 // ------------------------------------------ the four of 20 October 2026 --
 
 // Who Smite strikes first: up to n foes within R of (x, y), the mightiest first (a boss, a crypt's
@@ -274,6 +288,7 @@ function chops(w) {
 }
 
 export const KINDS = {
+  ...KINDS_LIGHT, // the Lantern, Runestone, Scythe and Starfall (weapons-light.js)
   sword: {
     fire(w) {
       // Swing in front of him, the way he last moved, seeking no foe: one on the other side
@@ -452,32 +467,63 @@ export const KINDS = {
       w.struck = new Set();
       w.burst(w.s.amount, 0.09);
     },
+    // Lightning Strike: a bolt falls from the sky on the toughest of the foes nearest the hero (a
+    // different one each time in a volley), a splash round the impact and a brief stun.
     shoot(w) {
-      const g = w.g;
-      const cands = g.enemiesOnScreen().filter((e) => !w.struck.has(e));
-      if (!cands.length) return;
-      let cur = pick(cands);
-      w.struck.add(cur);
-      const hit = new Set([cur]);
-      let dmg = w.s.dmg;
-      g.effects.push(new Bolt(g, [{ x: cur.x + rand(-14, 14), y: cur.y - 150 }, { x: cur.x, y: cur.y - 4 }], 'sky'));
+      const g = w.g, p = g.player;
+      const near = g.enemiesOnScreen().filter((e) => !w.struck.has(e) && !e.prop)
+        .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y)).slice(0, 6);
+      if (!near.length) return;
+      const e = near.reduce((a, b) => (b.hp > a.hp ? b : a));
+      w.struck.add(e);
+      g.effects.push(new Bolt(g, [{ x: e.x + rand(-6, 6), y: e.y - 150 }, { x: e.x, y: e.y - 4 }], 'sky'));
+      g.hitEnemy(e, w.s.dmg, { w, type: 'shock', kb: w.s.kb, kx: rand(-1, 1), ky: rand(-1, 1) });
+      stunFoe(e, w.s.stun);
+      explode(g, e.x, e.y, 26 * w.s.area, w.s.dmg * 0.5, w, 'shock', { kb: w.s.kb });
+      for (const f of g.grid.query(e.x, e.y, 26 * w.s.area + 14)) {
+        if (f !== e && Math.hypot(f.x - e.x, f.y - e.y) <= 26 * w.s.area + f.r) stunFoe(f, w.s.stun * 0.6);
+      }
+      g.particles.burst(e.x, e.y, 8, 10, [PC.c, PC.w, PC.U], 90, 0.35, 1, P.GLOW | P.FADE, { vz: 50 });
+      g.light(e.x, e.y, 90, 'white', 0.9);
+      sfx('zap', { pitch: rand(0.75, 0.95), pan: panOf(g, e.x) });
+    },
+  },
+
+  // Chain Lightning: sparks leap from the hero to the nearest foe and arc on from foe to foe;
+  // Stormlash's fork in two at the first.
+  chain: {
+    reach: 190,
+    fire(w) {
+      w.struck = new Set();
+      w.burst(w.s.amount, 0.12);
+    },
+    shoot(w) {
+      const g = w.g, p = g.player;
       const strike = (e, d) => {
         g.hitEnemy(e, d, { w, type: 'shock', kb: w.s.kb, kx: rand(-1, 1), ky: rand(-1, 1) });
-        g.particles.burst(e.x, e.y, 6, 8, [PC.c, PC.w, PC.U], 80, 0.35, 1, P.GLOW | P.FADE, { vz: 40 });
-        g.light(e.x, e.y, 50, 'cyan', 0.9);
-        if (w.s.blast) explode(g, e.x, e.y, 22 * w.s.area, d * 0.5, w, 'shock');
+        g.particles.burst(e.x, e.y, 5, 8, [PC.c, PC.w], 70, 0.3, 1, P.GLOW | P.FADE, { vz: 30 });
+        g.light(e.x, e.y, 45, 'cyan', 0.8);
       };
-      strike(cur, dmg);
-      for (let c = 0; c < w.s.chains; c++) {
-        const next = g.nearestEnemy(cur.x, cur.y, 75 * w.s.area, (e) => !hit.has(e));
-        if (!next) break;
-        g.effects.push(new Bolt(g, [{ x: cur.x, y: cur.y - 5 }, { x: next.x, y: next.y - 5 }], 'chain'));
-        dmg *= 0.92;
-        strike(next, dmg);
-        hit.add(next);
-        cur = next;
+      let last = null;
+      for (let f = 0; f <= (w.s.fork ? 1 : 0); f++) {
+        let cur = g.nearestEnemy(p.x, p.y, w.reach * w.s.area, (e) => !w.struck.has(e) && !e.prop);
+        if (!cur) break;
+        w.struck.add(cur);
+        g.effects.push(new Bolt(g, [{ x: p.x, y: p.y - 8 }, { x: cur.x, y: cur.y - 5 }], 'chain'));
+        let dmg = w.s.dmg;
+        strike(cur, dmg);
+        for (let c = 0; c < w.s.chains; c++) {
+          const next = g.nearestEnemy(cur.x, cur.y, 75 * w.s.area, (e) => !w.struck.has(e) && !e.prop);
+          if (!next) break;
+          w.struck.add(next);
+          g.effects.push(new Bolt(g, [{ x: cur.x, y: cur.y - 5 }, { x: next.x, y: next.y - 5 }], 'chain'));
+          dmg *= 0.92;
+          strike(next, dmg);
+          cur = next;
+        }
+        last = cur;
       }
-      sfx('zap', { pitch: rand(0.9, 1.1), pan: panOf(g, cur.x) });
+      if (last) sfx('zap', { pitch: rand(1.05, 1.3), pan: panOf(g, last.x) });
     },
   },
 
@@ -524,6 +570,117 @@ export const KINDS = {
           sfx('dagger', { pitch: 0.7, pan: panOf(g, x) });
         },
       });
+    },
+  },
+
+  // Leech Chains: chains latch onto the nearest foes (not one already held) and drain them; they
+  // hang on in w.chains until they end (LeechChain).
+  leech: {
+    fire(w) {
+      const g = w.g, p = g.player;
+      w.chains = (w.chains || []).filter((c) => c.t < c.dur && !c.e.dead);
+      const want = w.s.amount - w.chains.length;
+      if (want <= 0) return 0.4;
+      const held = new Set(w.chains.map((c) => c.e));
+      const reach = LEECH.reach * w.s.area;
+      const foes = g.nearestEnemies(p.x, p.y, want + held.size, reach).filter((e) => !held.has(e)).slice(0, want);
+      if (!foes.length) return 0.4;
+      for (const e of foes) {
+        const c = new LeechChain(g, w, e);
+        w.chains.push(c);
+        g.effects.push(c);
+      }
+      sfx('dagger', { pitch: 0.6 });
+    },
+  },
+
+  // Puffcap Spores: a few mushrooms about the hero on the cooldown (Fairy Ring's in a ring), and
+  // one where a foe dies now and then, whoever struck it; Fairy Ring plants one where a confused
+  // foe dies, always.
+  spores: {
+    fire(w) {
+      const g = w.g, p = g.player, n = w.s.amount;
+      const a0 = rand(TAU);
+      for (let i = 0; i < n; i++) {
+        const a = w.s.ring ? a0 + (i / n) * TAU : rand(TAU);
+        const d = w.s.ring ? 48 : rand(26, 80);
+        plantMushroom(g, w, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * 0.85, true);
+      }
+      g.effects.push(new Ring(g, p.x, p.y, 4, 30, 0.35, '#9ee562', true));
+    },
+    death(w, e) {
+      const g = w.g;
+      if (e.prop || Math.hypot(e.x - g.player.x, e.y - g.player.y) > 260) return;
+      if ((w.s.chain && e.confuseT > 0) || Math.random() < w.s.chance * g.player.luck) plantMushroom(g, w, e.x, e.y);
+    },
+  },
+
+  // Hex Hourglass: curses the toughest foes near him (Enemy.curse); Doom's curse leaps to others
+  // when the cursed foe falls.
+  hex: {
+    reach: 150,
+    fire(w) {
+      const g = w.g, p = g.player;
+      const foes = mightiest(g, p.x, p.y, 150 * w.s.area, 99).filter((e) => e.curseT <= 0).slice(0, w.s.amount);
+      if (!foes.length) return 0.4;
+      for (const e of foes) hexCurse(g, w, e);
+      sfx('zap', { pitch: 0.55, pan: panOf(g, foes[0].x) });
+    },
+    death(w, e) {
+      if (!w.s.spread || e.curseT <= 0 || e.curseW !== w) return;
+      const g = w.g;
+      let n = w.s.spread;
+      for (const o of g.nearestEnemies(e.x, e.y, 8, 90)) {
+        if (n <= 0) break;
+        if (o === e || o.curseT > 0) continue;
+        hexCurse(g, w, o);
+        n--;
+      }
+    },
+  },
+
+  // Gale Horn and Tempest: a blast blows the horde in the cone ahead of him (all round, Tempest's)
+  // back, never a boss, a lord or a champion (Enemy.blow). With no foe in the gust it waits.
+  gale: {
+    reach: GALE_R,
+    fire(w) {
+      const foes = gustFoes(w.g, w);
+      if (!foes.length && !w.hand) return false;
+      gust(w.g, w, foes);
+    },
+  },
+
+  // The Grappling Hook and Kraken Chains: a hook at the farthest foe in reach (the farthest n for
+  // n hooks), the chain cutting every foe on its line out and back, all of them bleeding.
+  hook: {
+    reach: 190,
+    fire(w) {
+      const g = w.g, p = g.player;
+      const foes = g.nearestEnemies(p.x, p.y, 999, w.reach * w.s.area);
+      if (!foes.length) return false;
+      foes.slice(-w.s.amount).reverse().forEach((t, i) => g.effects.push(new Hook(g, w, t, i)));
+      sfx('axe', { pitch: 0.5 });
+    },
+  },
+
+  // Grave Hollow and Abyss: a pit opens in the thickest knot of foes in reach.
+  hollow: {
+    reach: 200,
+    fire(w) {
+      const g = w.g, p = g.player;
+      const t = thickest(g, p.x, p.y, w.reach);
+      if (!t) return false;
+      g.effects.push(new Hollow(g, w, t.x, t.y));
+    },
+  },
+
+  // Banshee Bell and Death Knell: a toll round him sends the horde fleeing (Enemy.scare).
+  bell: {
+    reach: BELL_R,
+    fire(w) {
+      const foes = tollFoes(w.g, w);
+      if (!foes.length && !w.hand) return false;
+      toll(w.g, w, foes);
     },
   },
 

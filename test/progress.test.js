@@ -41,9 +41,9 @@ test('the table covers every shared weapon and relic exactly once, and fits its 
   const relics = [...PROGRESS.openRelics, ...LOCKS.filter((l) => l.type === 'relic').map((l) => l.id)];
   assert.deepEqual([...weapons].sort(), [...SHARED_WEAPONS].sort());
   assert.deepEqual([...relics].sort(), [...PASSIVE_IDS].sort());
-  assert.ok(LOCKS.length <= 30, 'the save keeps them as the bits of one number');
+  assert.ok(LOCKS.length <= 50, 'the save keeps them as the bits of one number, safe to 53');
   for (const l of LOCKS) assert.ok(P.needText(l), l.id);
-  assert.equal(P.needText(LOCKS[0]), 'Survive 3:00 in a run');
+  assert.equal(P.needText(LOCKS[0]), 'Survive 1:00 in a run');
   assert.equal(P.needText(LOCKS[1]), 'Slay 1,000 foes in all');
 });
 
@@ -52,9 +52,9 @@ test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the
   const m = P.metaBonuses(p);
   assert.deepEqual([m.weaponSlots, m.relicSlots, m.reroll, m.banish], [3, 3, 0, 0]);
   const open = P.openFor(p, 'knight');
-  assert.deepEqual(open, { weapons: ['axe', 'blades', 'aura'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false });
+  assert.deepEqual(open, { weapons: ['axe', 'blades'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false });
   const list = P.progressList(p);
-  assert.equal(list.filter((l) => l.open).length, 9, 'the nine starters');
+  assert.equal(list.filter((l) => l.open).length, 8, 'the eight starters');
   assert.ok(list.filter((l) => !l.start).every((l) => !l.open && l.progress === 0 && l.need));
   assert.equal(list.filter((l) => l.type === 'ult').length, P.HERO_ORDER.length);
   game((g, pl) => {
@@ -65,7 +65,7 @@ test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the
 test('each milestone opens from a run report: just short of it nothing, at it the one', () => {
   const stats = { time: 'time', level: 'level', gold: 'gold', bosses: 'bosses' };
   for (const [i, l] of LOCKS.entries()) {
-    if (l.need === 'kills' || l.need === 'wins') continue;
+    if (l.need === 'kills' || l.need === 'wins' || l.need === 'evolve' || l.need === 'evolution' || l.deep) continue; // the second circle: its own test
     const k = stats[l.need];
     // Long enough a run for whatever it reports to stand (sanitizeRun's bounds).
     const base = { ...RUN, time: l.need === 'time' ? l.at - 1 : 60, realTime: 600 };
@@ -73,7 +73,7 @@ test('each milestone opens from a run report: just short of it nothing, at it th
     assert.ok(!short.reward.unlocked.some((u) => u.id === l.id), `${l.id} not yet`);
     const at = P.applyRun(P.defaultProfile(), { ...base, [k]: l.at });
     assert.ok(at.reward.unlocked.some((u) => u.type === l.type && u.id === l.id && u.need === P.needText(l)), `${l.id} at ${l.at}`);
-    assert.ok((at.profile.ul & (1 << i)) !== 0);
+    assert.ok(Math.floor(at.profile.ul / 2 ** i) % 2 === 1);
     const open = P.openFor(at.profile, 'knight');
     assert.ok((l.type === 'weapon' ? open.weapons : open.relics).includes(l.id));
   }
@@ -83,9 +83,19 @@ test('each milestone opens from a run report: just short of it nothing, at it th
   assert.ok(!P.openFor(p, 'knight').weapons.includes('lightning'));
   const second = P.applyRun(p, { ...RUN, time: 100, kills: 600 });
   assert.deepEqual(second.reward.unlocked.map((u) => u.id), ['lightning']);
-  // A night won opens the Phoenix Heart; a Ranked or Dungeon run is no night won.
+  // The Knight's Longsword evolved puts the Phoenix Heart up for sale in the Armory; a night won
+  // no longer does, nor another hero's signature evolved, nor a claim in the first two minutes.
   const night = P.applyRun(P.defaultProfile(), { ...RUN, victory: true, time: 900, realTime: 900 });
-  assert.ok(night.reward.unlocked.some((u) => u.id === 'phoenix'));
+  assert.ok(!night.reward.unlocked.some((u) => u.id === 'phoenix'));
+  assert.ok(!P.applyRun(P.defaultProfile(), { ...RUN, hero: 'knight', time: 119, evolved: true }).reward.unlocked.some((u) => u.id === 'phoenix'));
+  const evolved = P.applyRun(P.defaultProfile(), { ...RUN, time: 300, realTime: 300, evolved: true });
+  assert.deepEqual(evolved.reward.unlocked.filter((u) => u.id === 'phoenix'), [{ type: 'relic', id: 'phoenix', need: "Evolve the Knight's Longsword" }]);
+  let ph = { ...evolved.profile, gold: 5000 };
+  assert.ok(!P.openFor(ph, 'archer').relics.includes('phoenix'), 'not until bought');
+  assert.equal(P.progressList(ph).find((l) => l.id === 'phoenix').need, 'For sale in the Armory');
+  assert.equal(P.buyUpgrade(P.defaultProfile(), 'phoenix').error, 'Not yet for sale');
+  ph = P.buyUpgrade(ph, 'phoenix').profile;
+  assert.ok(P.openFor(ph, 'archer').relics.includes('phoenix') && P.openFor(ph, 'knight').relics.includes('phoenix'), 'then for every hero');
   // A report claiming more bosses than its time allows is held to it.
   assert.equal(P.sanitizeRun({ ...RUN, time: 60, realTime: 60, bosses: 1e6 }).bosses, 3 + 1 + 4 * 2);
 });
@@ -101,11 +111,13 @@ test('the server keeps the milestones a run reached, and the ultimate of the her
     return res.json();
   };
   try {
-    let data = await post('/api/run', { ...RUN, time: 119, level: 15 });
+    let data = await post('/api/run', { ...RUN, time: 59, level: 15 });
     assert.deepEqual(data.reward.unlocked, [{ type: 'weapon', id: 'flask', need: 'Reach level 15 in a run' }]);
+    data = await post('/api/run', { ...RUN, time: 119, kills: 100 });
+    assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['weapon:frost', 'weapon:aura']);
     assert.equal(P.openFor(data.profile, 'knight').ult, false, '1:59 is not enough');
     data = await post('/api/run', { ...RUN, time: 200 });
-    assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['weapon:frost', 'ult:knight']);
+    assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['ult:knight']);
     data = await (await fetch(base + '/api/state', { headers: { cookie } })).json();
     const open = P.openFor(data.profile, 'knight');
     assert.ok(open.ult && open.weapons.includes('frost') && open.weapons.includes('flask'), 'kept in the sealed cookie');
@@ -217,10 +229,11 @@ test('a save from before keeps everything: its records open what they imply, six
   assert.deepEqual(P.metaBonuses(p).weaponSlots, 6);
   const open = P.openFor(p, 'archer');
   assert.ok(open.ult && P.openFor(p, 'knight').ult, 'both owned heroes');
+  assert.equal(P.progressList(p).find((l) => l.id === 'phoenix').forSale, true, 'a night won put the Phoenix Heart up for sale');
   assert.equal(P.openFor(p, 'mage').ult, false);
-  const shut = P.progressList(p).filter((l) => !l.open).map((l) => l.id);
+  const shut = P.progressList(p).filter((l) => !l.open && !LOCKS.find((x) => x.id === l.id)?.deep).map((l) => l.id);
   // The night won is 15:00 and opens the run-long ones; level 35 is short of the Crown's 40.
-  assert.deepEqual(shut, ['growth', ...P.HERO_ORDER.slice(2)]);
+  assert.deepEqual(shut, ['growth', 'phoenix', 'chain', 'ember', ...P.HERO_ORDER.slice(2)], 'the Phoenix Heart for sale; 6,000 slain is short of the Ember Heart');
   // Read again, as the cookie gives it back: nothing more given.
   const again = P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(p))));
   assert.deepEqual(again, p);
@@ -253,10 +266,48 @@ test('the bots play as a profile when given one, and as before without', () => {
 test('progressList measures how far each lock is', () => {
   const p = P.applyRun(P.defaultProfile(), { ...RUN, time: 90, realTime: 90, kills: 250, level: 10, gold: 100 }).profile;
   const at = (id) => P.progressList(p).find((l) => l.id === id && l.type !== 'ult');
-  assert.equal(at('frost').progress, 0.5);
+  assert.equal(at('frost').progress, 1);
+  assert.equal(at('aura').progress, 1);
+  assert.equal(at('glaive').progress, 0.25);
   assert.equal(at('lightning').progress, 0.25);
   assert.equal(at('wisps').progress, 1 / 3);
   assert.equal(at('luck').progress, 0.2);
   assert.equal(at('phoenix').progress, 0);
   assert.deepEqual(Object.keys(at('frost')).sort(), ['id', 'need', 'open', 'progress', 'type']);
+});
+
+test('a weapon left at home is never offered, and comes along again when asked', () => {
+  let p = P.defaultProfile();
+  p = P.setHome(p, 'axe', true).profile;
+  assert.deepEqual(P.openFor(p, 'knight').weapons, ['blades']);
+  assert.equal(P.progressList(p).find((l) => l.id === 'axe').home, true);
+  assert.equal(P.setHome(p, 'sword', true).ok, false, 'a signature never stays at home');
+  assert.deepEqual(P.sanitizeProfile({ ...p, home: ['axe', 'nope', 7] }).home, ['axe']);
+  p = P.setHome(p, 'axe', false).profile;
+  assert.deepEqual(P.openFor(p, 'knight').weapons, ['axe', 'blades']);
+});
+
+test('the second circle stays hidden and shut until a night is won, then opens by its deeds', () => {
+  const deep = LOCKS.filter((l) => l.deep);
+  assert.equal(deep.length, 11);
+  let p = P.applyRun(P.defaultProfile(), { ...RUN, time: 13 * 60, realTime: 13 * 60, bosses: 5 }).profile;
+  const list = P.progressList(p);
+  for (const l of deep) {
+    const e = list.find((x) => x.id === l.id);
+    assert.ok(e.hidden && !e.open && e.progress === 0, `${l.id} hidden`);
+  }
+  assert.ok(!P.openFor(p, 'knight').weapons.includes('lantern'), '12:00 lasted, but no night won yet');
+  const won = P.applyRun(p, { ...RUN, victory: true, time: 900, realTime: 900 });
+  assert.deepEqual(won.reward.unlocked.map((u) => u.id).sort(), ['bell', 'gale', 'lantern']);
+  assert.ok(!P.progressList(won.profile).some((e) => e.hidden));
+});
+
+test('Chain Lightning opens once a run has evolved Lightning Strike, with any hero', () => {
+  let r = P.applyRun(P.defaultProfile(), { ...RUN, time: 119, realTime: 119, evos: ['thunderstorm'] });
+  assert.ok(!r.reward.unlocked.some((u) => u.id === 'chain'), 'not in the first two minutes');
+  r = P.applyRun(r.profile, { ...RUN, hero: 'knight', time: 400, realTime: 400, evos: ['excalibur', 'thunderstorm', 'nope'] });
+  assert.deepEqual(r.reward.unlocked.filter((u) => u.id === 'chain'), [{ type: 'weapon', id: 'chain', need: 'Evolve Lightning Strike' }]);
+  assert.deepEqual(r.profile.ev, ['thunderstorm'], 'only what a lock waits on is kept');
+  assert.ok(P.openFor(r.profile, 'mage').weapons.includes('chain'));
+  assert.deepEqual(P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(r.profile)))).ev, ['thunderstorm']);
 });

@@ -73,6 +73,11 @@ export function armored(raw, armor) {
 // Heals that come of kills (the Paladin's Devotion, Bloodstorm's): at most `most` of his health a
 // second between them (Player.leech), so a horde mown down at once doesn't fill him at a stroke.
 export const KILL_HEAL = { most: 0.01 };
+// Vampire Fang's heal from damage dealt: at most this share of his health a second (Player.fangHeal).
+export const FANG_MOST = 0.012;
+// Rimeheart: foes within `r` px freeze for `base` + `per` per rank beyond the first, then it rests
+// `rest` s less `cut` per rank beyond the first (Player.hurt).
+export const RIME = { r: 50, base: 1, per: 0.2, rest: 7, cut: 0.6 };
 // The Druid's Grove Warden: a tree within `near` px of him (World.treeNear), looked for every
 // `every` s.
 export const GROVE = { near: 48, every: 0.25 };
@@ -127,6 +132,8 @@ export class Player {
     this.heartT = 0;
     this.healPool = 0; // sanctuary heal accumulator
     this.leechLeft = 0; // what kills may heal him yet this second (leech)
+    this.fangLeft = 0; // what Vampire Fang may heal yet this second (FANG_MOST)
+    this.rimeCd = 0; // Rimeheart's rest between freezes
     this.leap = null; // a leap of the Twin Axes under way (leapTo)
     this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
     this.groveT = 0;
@@ -148,7 +155,7 @@ export class Player {
     const h = this.hero.stats, m = this.meta;
     // Worn gear adds to the relics' sums.
     const q = (this.gearB = gearBonuses(this.g.gear));
-    const bonus = (k) => this.passiveSum(k) + q[k];
+    const bonus = (k) => this.passiveSum(k) + (q[k] || 0);
     const oldMax = this.maxHp || 0;
     const lv = levelBonus(this.level);
     this.maxHp = Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * 0.02) * lv.hp);
@@ -157,19 +164,29 @@ export class Player {
     this.might = (h.might || 1) * m.might * (1 + bonus('might') + this.blessings * 0.05) * lv.might;
     this.area = (h.area || 1) * m.area * (1 + bonus('area'));
     this.cooldown = Math.max(0.35, (h.cooldown || 1) * m.cooldown * (1 + bonus('cooldown')));
-    this.amount = bonus('amount') + (m.amount || 0);
+    this.amount = bonus('amount') + (m.amount || 0) + (this.buff('mirror') ? 1 : 0); // a Mirror Shard
     this.duration = (m.duration || 1) * (1 + bonus('duration'));
     this.summonDur = h.summonDur || 1; // the Necromancer's Grave Pact: his minions alone last longer
     this.projSpeed = (h.projSpeed || 1) * (m.projSpeed || 1) * (1 + bonus('projSpeed'));
     this.magnet = BASE_MAGNET * m.magnet * (1 + bonus('magnet'));
     this.luck = (h.luck || 1) * m.luck * (1 + bonus('luck'));
     this.growth = (h.growth || 1) * m.growth * (1 + bonus('growth'));
-    this.greed = m.greed * (1 + q.greed);
+    this.greed = m.greed * (1 + q.greed) * (1 + 0.5 * (this.g.skulls || 0)); // the Cursed Skulls (Game.cursedSkull)
     this.regenMul = h.regenMul || 1;
     this.healMul = h.healMul || 1; // the Paladin's Devotion: every heal does this much (heal)
     // regenBoost: a bot's test buff (tools/headless.mjs), all its regeneration times this.
     this.regen = ((h.regen || 0) + m.regen + bonus('regen')) * this.regenMul * (m.regenBoost || 1);
     this.crit = 0.05 + (h.crit || 0) + bonus('crit');
+    // The relics that bite (hitEnemy, hurt): Hunter's Mark, Berserker's Torc, Thornmail, Shadow
+    // Cloak, Ember Heart, Ram's Horn, Vampire Fang, Rimeheart.
+    this.huntBane = bonus('bane');
+    this.torc = bonus('torc');
+    this.thorns = bonus('thorns');
+    this.dodge = Math.min(0.5, bonus('dodge'));
+    this.ember = bonus('ember');
+    this.knock = bonus('knock');
+    this.fang = bonus('fang');
+    this.rime = bonus('rime');
     this.critMult = 2 + q.critMult;
     // More health to have brings the health with it; less (gear sold) caps it.
     if (oldMax && this.maxHp > oldMax) this.hp += this.maxHp - oldMax;
@@ -245,9 +262,19 @@ export class Player {
     return this.heal(h, true);
   }
 
+  // Vampire Fang: a share of the health a blow took, as much as this second has left (FANG_MOST).
+  fangHeal(took) {
+    const h = Math.min(took * this.fang, this.fangLeft);
+    if (h <= 0) return 0;
+    this.fangLeft -= h;
+    this.hp = Math.min(this.maxHp, this.hp + h * this.healMul);
+    return h;
+  }
+
   get moveSpeed() {
     let s = BASE_SPEED * this.speedMul * this.g.move;
     if (this.buff('haste')) s *= 1.3;
+    if (this.buff('wildcap')) s *= 1.3;
     if (this.ult && this.ult.type === 'whirlwind') s *= 1.15;
     return s;
   }
@@ -256,7 +283,10 @@ export class Player {
     const g = this.g;
     for (const [id, b] of this.buffs) {
       b.t -= dt;
-      if (b.t <= 0) this.buffs.delete(id);
+      if (b.t <= 0) {
+        this.buffs.delete(id);
+        if (id === 'mirror') this.recompute(); // the extra shot goes
+      }
     }
     // Movement.
     const ax = input.axis();
@@ -311,6 +341,8 @@ export class Player {
     }
 
     this.leechLeft = Math.min(this.maxHp * KILL_HEAL.most, this.leechLeft + this.maxHp * KILL_HEAL.most * dt);
+    this.fangLeft = Math.min(this.maxHp * FANG_MOST, this.fangLeft + this.maxHp * FANG_MOST * dt);
+    if (this.rimeCd > 0) this.rimeCd -= dt;
     // Grove Warden: is a tree near him (the forest's; a crypt or the Dungeon has none)?
     if (this.hero.stats.grove && (this.groveT -= dt) <= 0) {
       this.groveT = GROVE.every;
@@ -352,7 +384,7 @@ export class Player {
   }
 
   get untouchable() {
-    return this.invuln > 0 || !!this.leap || (this.ult && this.ult.type === 'shadowdance') || this.g.state !== 'play';
+    return this.invuln > 0 || this.buff('ward') || !!this.leap || (this.ult && this.ult.type === 'shadowdance') || this.g.state !== 'play';
   }
 
   // A blow of amount from src (a foe, by contact) or by (who struck it from afar, as the results
@@ -360,6 +392,13 @@ export class Player {
   hurt(amount, src, by = null) {
     const g = this.g;
     if (this.dead || this.untouchable || this.devGod || g.state === 'faint') return 0;
+    // Shadow Cloak: a dodged blow costs nothing, and a breath of grace stops the next roll at once.
+    if (this.dodge > 0 && Math.random() < this.dodge) {
+      this.invuln = 0.3;
+      g.numbers.text(this.x, this.y - 22, 'Dodged', 'frost');
+      g.particles.burst(this.x, this.y - 8, 6, 8, [PC.j, PC.q, PC.w], 50, 0.4, 1, P.GLOW | P.FADE, {});
+      return 0;
+    }
     let dmg = armored(amount * g.diff.dmg, this.armor);
     if (this.buff('protection')) dmg *= 0.5;
     if (this.ult && this.ult.type === 'whirlwind') dmg *= 0.5;
@@ -383,6 +422,14 @@ export class Player {
     // Shove nearby enemies back so a crowd can't stun-lock you.
     g.pushback(this.x, this.y, 30, 120);
     if (src && src.vampiric) src.hp = Math.min(src.maxHp, src.hp + dmg * 3);
+    // Thornmail: the foe that struck him by contact is struck back (his might applies).
+    if (this.thorns > 0 && src && src.hp > 0 && !src.dead) g.hitEnemy(src, this.thorns, { type: 'normal', kb: 0, noCrit: true });
+    // Rimeheart: the foes about him freeze, then it rests a while.
+    if (this.rime > 0 && this.rimeCd <= 0) {
+      const n = this.rime - 1;
+      this.rimeCd = Math.max(2, RIME.rest - RIME.cut * n);
+      g.rimeFreeze(this.x, this.y, RIME.r, RIME.base + RIME.per * n);
+    }
     if (this.hp <= 0) {
       if (g.inCrypt) {
         // Felled in a crypt he only faints, and wakes outside it (Game.faint): a Second
