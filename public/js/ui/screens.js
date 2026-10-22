@@ -918,7 +918,7 @@ export class OptionsScreen {
     ui.end();
     drawText(ctx, 'WASD / ARROWS move · SPACE ultimate · ESC pause · TAB map', W / 2, H - 34, { align: 'center', color: '#5a6988' });
     // The music's credit, as its licences ask (CC BY-SA 3.0, CC BY 3.0; audio/music/CREDITS.md).
-    drawText(ctx, fitLine('Music: 0 A.D. by Wildfire Games (CC BY-SA 3.0), Alexandr Zhelanov (CC BY 3.0), Juhani Junkala, HydroGene and others', W - 16), W / 2, H - 44, { align: 'center', color: '#3a4466' });
+    drawText(ctx, fitLine('Music: 0 A.D. by Wildfire Games, Ian Alex Mac, Kevin MacLeod (incompetech.com), Askyel (CC BY / BY-SA), Juhani Junkala, HydroGene and others', W - 16), W / 2, H - 44, { align: 'center', color: '#3a4466' });
     return null;
   }
 }
