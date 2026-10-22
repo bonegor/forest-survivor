@@ -26,7 +26,7 @@ import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
 import { Lighting } from './lighting.js';
 import { SpatialGrid } from './grid.js';
-import { jostle } from './crowd.js';
+import { jostle, CROWD } from './crowd.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
 import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
@@ -105,6 +105,12 @@ const DROP_ON = [[16, 0], [-16, 0], [0, 16], [0, -16]];
 // each of them likelier.
 // Seconds a broken box's loot waits before it pops out (breakProp).
 export const PROP_HOLD = 0.2;
+// The owner's (22 October 2026): "Reduce the number of pickups by half and let it be so that the
+// pickups fly a bit away when we break the box, like 2 spots away, perpendicular to hero movement,
+// but not far, just so we dont directly pick them up". So half the boxes hold nothing (empty), and
+// what one holds hops `toss` px to one side of the way the hero walks (of the way to the box when
+// he stands), and waits there to be walked over: the magnet doesn't pull it (Pickup opts.box).
+export const PROP_DROP = { empty: 0.5, toss: 26 };
 
 export const PROP_LOOT = [
   { kind: 'potion', w: 1 / 3 },
@@ -1033,16 +1039,38 @@ export class Game {
     ps.burst(e.x, e.y - 5, 6, 16, cols, 90, 1.1, 1, P.GROUND | P.FADE, { vz: 110, grav: 300 });
     sfx('wood', { pan: clamp((e.x - this.player.x) / 200, -1, 1) });
     this.addDecal('wood', e.x, e.y, 3);
-    const luck = this.player.luck;
+    if (chance(PROP_DROP.empty)) return;
+    const p = this.player, luck = p.luck;
     const { kind } = weighted(PROP_LOOT, (d) => (d.lucky ? d.w * luck : d.w));
     // The owner's (22 October 2026): what a box held pops out a moment after it breaks (PROP_HOLD),
-    // not under the hero's feet the instant he walks into it.
-    const hold = { hold: PROP_HOLD };
+    // not under the hero's feet the instant he walks into it, and to one side (PROP_DROP).
+    const [tx, ty] = this.propToss(e);
+    const drop = (k, value, spread = 0) => this.addPickup(k, e.x, e.y, value, { hold: PROP_HOLD, box: true, toss: [tx + rand(-spread, spread), ty + rand(-spread, spread)] });
     if (kind === 'coins') {
       const n = Math.floor(rand(1, 4));
-      for (let i = 0; i < n; i++) this.addPickup('coin', e.x, e.y, 1, hold);
-    } else if (kind === 'goldpile') this.addPickup('goldpile', e.x, e.y, Math.round(rand(5, 12)), hold);
-    else if (kind) this.addPickup(kind, e.x, e.y, 1, hold);
+      for (let i = 0; i < n; i++) drop('coin', 1, 5);
+    } else if (kind === 'goldpile') drop('goldpile', Math.round(rand(5, 12)));
+    else if (kind) drop(kind, 1);
+  }
+
+  // Where a broken box's loot lands, from the box: PROP_DROP.toss px across the way the hero walks,
+  // to either side; standing, across the way from him to the box.
+  propToss(e) {
+    const p = this.player;
+    let ax = p.vx, ay = p.vy;
+    if (Math.hypot(ax, ay) < 5) {
+      ax = e.x - p.x;
+      ay = e.y - p.y;
+    }
+    let m = Math.hypot(ax, ay);
+    if (m < 1e-3) {
+      const a = rand(TAU);
+      ax = Math.cos(a);
+      ay = Math.sin(a);
+      m = 1;
+    }
+    const side = chance(0.5) ? 1 : -1, d = (PROP_DROP.toss * side) / m;
+    return [-ay * d, ax * d];
   }
 
   bossDefeated(e) {
@@ -2044,12 +2072,15 @@ export class Game {
   // Foes pass through props (barrels, crates...), and in the forest through the trees, so nothing
   // holds a horde up (the user's rule of 16 October). They ease apart from one another (crowd.js,
   // the owner's "monsters repel one another" of 22 October), and none can stand inside the hero:
-  // last, so that easing one off another can't leave it in him. Dungeon walls stop the walkers
+  // last, so that easing one off another can't leave it in him. The foes on him ease him off them
+  // too, softly (CROWD.hero: never as fast as he walks), all but a boss or a lord. Dungeon walls stop the walkers and him
   // (Dungeon.collide), after the easing too.
   separate(dt) {
     const E = this.enemies, p = this.player;
-    if (this.state === 'play' || this.state === 'dying') jostle(E, p.x, p.y, dt);
+    const live = this.state === 'play' || this.state === 'dying';
+    if (live) jostle(E, p.x, p.y, dt);
     const walls = this.world instanceof Dungeon;
+    let sx = 0, sy = 0;
     for (let i = 0; i < E.length; i++) {
       const a = E[i];
       if (a.dead || a.prop) continue;
@@ -2057,11 +2088,28 @@ export class Game {
       if (!a.def.fly) {
         const dx = a.x - p.x, dy = a.y - p.y, d2 = dx * dx + dy * dy, rr = a.r + p.r - 2;
         if (d2 < rr * rr && d2 > 0.01) {
-          const d = Math.sqrt(d2);
-          a.x += (dx / d) * (rr - d) * 0.5;
-          a.y += (dy / d) * (rr - d) * 0.5;
+          const d = Math.sqrt(d2), o = rr - d;
+          a.x += (dx / d) * o * 0.5;
+          a.y += (dy / d) * o * 0.5;
+          // A boss or a lord never moves him (the rule of 15 October: the Bone King shoved him).
+          if (!a.boss && !a.lord) {
+            sx -= (dx / d) * o;
+            sy -= (dy / d) * o;
+          }
         }
       }
+    }
+    if (live && !p.dead && (sx || sy)) {
+      const H = CROWD.hero, k = 1 - Math.exp(-H.rate * dt), most = H.most * dt;
+      let mx = sx * k, my = sy * k;
+      const m = Math.hypot(mx, my);
+      if (m > most) {
+        mx *= most / m;
+        my *= most / m;
+      }
+      p.x += mx;
+      p.y += my;
+      this.world.collide(p);
     }
   }
 

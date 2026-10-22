@@ -7,7 +7,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const mod = (file) => import(pathToFileURL(root + file).href);
 await mod('tools/headless.mjs');
-const { Game } = await mod('public/js/game/game.js');
+const { Game, PROP_DROP } = await mod('public/js/game/game.js');
 const { Minion, claims } = await mod('public/js/game/minions.js');
 const { input } = await mod('public/js/engine/input.js');
 const { mulberry32, TAU } = await mod('public/js/engine/util.js');
@@ -139,6 +139,9 @@ test('skeletons taken into a crypt chase nothing left in the forest', () =>
 const barrels = (g, p, spots) => spots.map(([dx, dy]) => g.spawnEnemy('barrel', p.x + dx, p.y + dy, { instant: true }));
 
 test('a skeleton striking a foe breaks the barrel beside it, and a death knight likewise', () => {
+  // Boxes that hold something (half are empty: PROP_DROP), so what it held can be seen.
+  const empty = PROP_DROP.empty;
+  PROP_DROP.empty = 0;
   for (const knight of [false, true])
     game((g, p) => {
       const [e] = foes(g, [[p.x + 50, p.y]]);
@@ -156,6 +159,7 @@ test('a skeleton striking a foe breaks the barrel beside it, and a death knight 
       assert.ok(barrel.dead, `${knight ? 'a knight' : 'a skeleton'}: the barrel beside its foe is broken`);
       assert.ok(g.pickups.length > 0, 'and what it held lies there');
     });
+  PROP_DROP.empty = empty;
 });
 
 test('with no foe about, skeletons leave the boxes be: they never go for one', () =>

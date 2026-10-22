@@ -42,7 +42,7 @@ test('foes on one spot ease apart to their room, and not at once', () => game((g
   for (let i = 0; i < 12; i++) pile.push(still(g.spawnEnemy('skeleton', p.x + 80, p.y, { instant: true })));
   g.update(1 / 60);
   const spread = () => Math.max(...pile.map((e) => Math.hypot(e.x - p.x - 80, e.y - p.y)));
-  assert.ok(spread() < 6, `soft: one frame moves them only a little (${spread().toFixed(1)} px)`);
+  assert.ok(spread() < 10, `soft: one frame moves them only a little (${spread().toFixed(1)} px)`);
   for (let f = 0; f < 180; f++) g.update(1 / 60);
   let close = 0;
   for (let i = 0; i < pile.length; i++) {
@@ -52,7 +52,7 @@ test('foes on one spot ease apart to their room, and not at once', () => game((g
     }
   }
   assert.equal(close, 0, 'after 3 s none stands inside another');
-  assert.ok(spread() < 40, 'they keep together as a crowd, just not on one spot');
+  assert.ok(spread() < 40 * CROWD.room, `they keep together as a crowd, just not on one spot (${spread().toFixed(1)} px)`);
 }));
 
 test('a boss and a prop never budge, and foes still pass through props', () => game((g, p) => {

@@ -43,6 +43,9 @@ export const GEAR_PILLAR = [0, 0, 70, 120, Infinity];
 
 // Items that fly to you inside the magnet radius.
 const MAGNETIC = new Set(['gem', 'coin', 'goldpile', 'potion', 'fury']);
+// A toss (opts.toss): thrown up at vz, it flies 2·vz/320 s, bounces once at 0.35 of that with 0.4 of
+// its speed and stops; carry is how far that takes it per px/s of its speed.
+const TOSS = { vz: 80, carry: (2 * 80) / 320 + 0.4 * ((2 * 80 * 0.35) / 320) };
 // A dropped chest lies on the ground this long (game seconds) before it can be opened, even under
 // the hero, so it is seen before its screen comes up: 0.82 s, as it was when the clock ran faster.
 export const CHEST_SETTLE = 0.82;
@@ -61,6 +64,13 @@ export class Pickup {
     this.vz = opts.pop === false ? 0 : rand(55, 95);
     this.vx = opts.pop === false ? 0 : rand(-30, 30);
     this.vy = opts.pop === false ? 0 : rand(-20, 20);
+    // Tossed to land about (dx, dy) away (a broken box's: Game.propToss): one arc of TOSS.air s and
+    // a small bounce carry it TOSS.carry times its speed.
+    if (opts.toss) {
+      this.vz = TOSS.vz;
+      this.vx = opts.toss[0] / TOSS.carry;
+      this.vy = opts.toss[1] / TOSS.carry;
+    }
     this.t = rand(3);
     this.age = 0; // seconds since it dropped (CHEST_SETTLE)
     // Seconds it waits, unseen and untouched, before it pops out (a broken box's: Game.breakProp).
@@ -145,7 +155,8 @@ export class Pickup {
     if (p.dead) return true; // the fallen pick nothing up (no XP or gold after the fall)
     const dx = p.x - this.x, dy = p.y - 3 - this.y;
     const d = Math.hypot(dx, dy);
-    if (!this.pulled && MAGNETIC.has(this.kind)) {
+    // A box's loot isn't pulled: it waits where it fell to be walked over (Game PROP_DROP).
+    if (!this.pulled && !this.opts.box && MAGNETIC.has(this.kind)) {
       const range = this.kind === 'gem' ? p.magnet : p.magnet * 0.7;
       if (d < range || (this.kind === 'gem' && g.magnetAll > 0)) {
         this.pulled = true;

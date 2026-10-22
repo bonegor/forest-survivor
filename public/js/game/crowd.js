@@ -1,16 +1,20 @@
 // The horde keeps a little room: foes that overlap ease apart, a share of the overlap each moment
 // (CROWD.rate a second), so a crowd spreads round the hero instead of piling into one heap, yet a
 // press of them still squeezes together. The owner's (22 October 2026): "monsters repel one
-// another". Only foes push foes: they still pass through props and trees (the rule of 16 October),
-// and dungeon walls still hold the walkers. The lighter foe gives the more (def.mass; a champion
+// another", then "increase how much monsters repel a bit. Also, the monsters should repel the hero
+// too" (CROWD.hero, Game.separate). Only foes push foes: they still pass through props and trees
+// (the rule of 16 October), and dungeon walls still hold the walkers. The lighter foe gives the more (def.mass; a champion
 // weighs three times its kind); a boss, a lord or a prop doesn't budge, and a Wraith (ai 'phaser')
 // drifts through everything.
 
 import { SpatialGrid } from './grid.js';
 
 export const CROWD = {
-  rate: 6, // per second: the share of an overlap undone in 1/rate s (soft, not a wall)
-  room: 1.15, // how far apart two foes want to stand, in their radii summed
+  rate: 9, // per second: the share of an overlap undone in 1/rate s (soft, not a wall)
+  room: 1.3, // how far apart two foes want to stand, in their radii summed
+  // The hero eases off the foes on him at `rate` a second too, but never faster than `most` px/s
+  // (slower than any hero walks), so he can always walk out of a crowd, only slower.
+  hero: { rate: 10, most: 40 },
 };
 // Foes up to SMALL across their radius share a fine grid: two of them that touch are always in
 // the same cell or neighbouring ones. Bigger ones (an ogre, a champion brute) are few, and each

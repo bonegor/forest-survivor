@@ -5,14 +5,15 @@ import {pathToFileURL,fileURLToPath} from 'node:url';
 const root = fileURLToPath(new URL('../',import.meta.url));
 const mod = file => import(pathToFileURL(root + '/' + file).href);
 await mod('tools/headless.mjs');
-const {Game, PROP_LOOT} = await mod('public/js/game/game.js');
+const {Game, PROP_LOOT, PROP_DROP} = await mod('public/js/game/game.js');
 const {PROP_SITES} = await mod('public/js/data/waves.js');
 const {Dungeon} = await mod('public/js/game/dungeon.js');
 const {ENEMIES} = await mod('public/js/data/enemies.js');
 const {mulberry32} = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
 
-// Breaks n props with the hero's luck set to `luck`; counts what they leave by kind.
+// Breaks n props with the hero's luck set to `luck`; counts what they leave by kind (and, as
+// 'empty', those that held nothing: PROP_DROP.empty of them).
 function breakProps(luck, n) {
   const oldRandom = Math.random;
   Math.random = mulberry32(5);
@@ -24,6 +25,7 @@ function breakProps(luck, n) {
       g.pickups.length = 0;
       g.breakProp({x: g.player.x + 40, y: g.player.y, type: 'barrel'});
       const kinds = new Set(g.pickups.map(pk => pk.kind));
+      if (!kinds.size) kinds.add('empty');
       for (const k of kinds) counts[k] = (counts[k] || 0) + 1;
     }
     return counts;
@@ -33,7 +35,7 @@ function breakProps(luck, n) {
 }
 
 test('more luck makes every treasure from props likelier, never rarer', () => {
-  const n = 20000, base = breakProps(1, n), lucky = breakProps(2.5, n);
+  const n = 40000, base = breakProps(1, n), lucky = breakProps(2.5, n); // half of them empty (PROP_DROP)
   for (const kind of PROP_LOOT.filter(d => d.lucky).map(d => d.kind)) {
     assert.ok(base[kind] > 0, kind + ' drops at all');
     assert.ok(lucky[kind] > base[kind] * 1.5, `${kind}: ${base[kind]} at luck 1, ${lucky[kind]} at luck 2.5`);
@@ -41,9 +43,13 @@ test('more luck makes every treasure from props likelier, never rarer', () => {
 });
 
 // The user: "one third of boxes have potions, one third has rage powerup, one tenth has a magnet,
-// and the rest have gold" (or the rarer finds), box by box.
+// and the rest have gold" (or the rarer finds), box by box: of the boxes that hold anything, since
+// "Reduce the number of pickups by half" (22 October 2026) left half of them empty.
 test('at plain luck a third of boxes hold a potion, a third a fury orb, a tenth a Scroll of Gathering, the rest gold or a rare find', () => {
-  const n = 30000, c = breakProps(1, n);
+  const all = 60000, c = breakProps(1, all), n = all - c.empty;
+  assert.ok(Math.abs(c.empty / all - PROP_DROP.empty) < 0.01, `empty boxes: ${(c.empty / all).toFixed(3)}`);
+  assert.equal(PROP_DROP.empty, 0.5, 'half the boxes hold nothing');
+  delete c.empty;
   const share = kind => PROP_LOOT.find(d => d.kind === kind).w;
   const near = (got, want, what) => assert.ok(Math.abs(got / n - want) < 0.01, `${what}: ${(got / n).toFixed(4)} vs ${want.toFixed(4)}`);
   near(c.potion, 1 / 3, 'potions');
@@ -55,7 +61,7 @@ test('at plain luck a third of boxes hold a potion, a third a fury orb, a tenth 
   assert.ok(c.map < c.wildcap && c.skull < c.ward, 'the Treasure Map and the Cursed Skull rarer than the timed buffs');
   assert.ok(c.relic < c.elixir && c.relic < c.frostrune, 'the Holy Relic the rarest');
   const held = Object.values(c).reduce((s, v) => s + v, 0);
-  assert.equal(held, n, 'every box holds one thing, never nothing');
+  assert.equal(held, n, 'a box holds one thing or nothing');
   assert.ok(Math.abs(PROP_LOOT.reduce((s, d) => s + d.w, 0) - 1) < 1e-9, 'the weights are the odds at luck 1');
   assert.deepEqual(PROP_LOOT.filter(d => !d.lucky).map(d => d.kind).sort(), ['coins', 'fury', 'goldpile', 'potion'], 'luck favours the rare treasures, not the staples');
 });
