@@ -132,9 +132,9 @@ test('the page carries the server\'s content security policy for static hosts', 
 
 test('music streams whole or in byte ranges, exactly the bytes asked for', async () => {
   const { readFileSync } = await import('node:fs');
-  const file = readFileSync(new URL('../public/audio/music/forest.mp3', import.meta.url));
+  const file = readFileSync(new URL('../public/audio/music/crypt.mp3', import.meta.url));
   await withServer(async (base) => {
-    const url = base + '/audio/music/forest.mp3';
+    const url = base + '/audio/music/crypt.mp3';
     const whole = await fetch(url);
     assert.equal(whole.status, 200);
     assert.equal(whole.headers.get('accept-ranges'), 'bytes');

@@ -1,10 +1,10 @@
 {
-  "title": "title.mp3",
-  "forest": "forest.mp3",
+  "title": "title-celtica.ogg",
+  "forest": "forest-celtic-heroic.ogg",
   "crypt": "crypt.mp3",
-  "boss": "boss.mp3",
-  "victory": { "file": "victory.mp3", "gain": 3.1 },
-  "gameover": { "file": "gameover.mp3", "gain": 4.5 },
+  "boss": "boss-epic-battle.ogg",
+  "victory": "victory-you-are-victorious.ogg",
+  "gameover": "gameover-dried-tears.ogg",
   "dungeon-crypt": "dungeon-crypt.mp3",
   "dungeon-catacombs": "dungeon-catacombs.ogg",
   "dungeon-inferno": "dungeon-inferno.ogg"

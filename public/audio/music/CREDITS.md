@@ -86,18 +86,23 @@ CC0 asks for nothing; the credit is given gladly. Full renders of the tunes play
 
 ## Required
 
+The game's own pieces since 22 October 2026, chosen from the CC library in the private assets
+repository (`cc-music`). The changes are ours; the musicians do not endorse this game. Files made
+from CC BY-SA 3.0 music are themselves CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/).
+
+- **title-celtica.ogg** (title screen and menus): "Celtica" by the Wildfire Games 0 A.D. music team: Omri Lahav (lead composer), Allan Brown, Sam Gossner, Boris Hansen; additional music Jeff Willet, Mike Skalandunas, Shlomi Nogay. Copyright (C) 2009-2010 Wildfire Games, from the game 0 A.D. (https://play0ad.com, http://releases.wildfiregames.com/). Licence: CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). Changes: silence trimmed from both ends, loudness levelled to about -13 LUFS (with a peak limiter), converted to Ogg Vorbis (44.1 kHz stereo, quality 4) (lowered 0.3 dB).
+- **forest-celtic-heroic.ogg** (the night in the Darkwood): three pieces in a row, each crossfaded over 3 s into the next and the whole looping: "Celtic Pride" and "Tale of Warriors" by the Wildfire Games 0 A.D. music team: Omri Lahav (lead composer), Allan Brown, Sam Gossner, Boris Hansen; additional music Jeff Willet, Mike Skalandunas, Shlomi Nogay. Copyright (C) 2009-2010 Wildfire Games, from the game 0 A.D. (https://play0ad.com, http://releases.wildfiregames.com/), CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/); and "Heroic Minority" by Alexandr Zhelanov (https://opengameart.org/users/alexandr-zhelanov), from OpenGameArt as shipped with The Legend of Edgar, CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Changes: silence trimmed from both ends, loudness levelled to about -13 LUFS (with a peak limiter), converted to Ogg Vorbis (44.1 kHz stereo, quality 4); joined into one file (Heroic Minority lowered 0.7 dB, Tale of Warriors raised 3.7 dB). The whole file is CC BY-SA 3.0.
+- **boss-epic-battle.ogg** (boss fights): "Epic Boss Battle" by Juhani Junkala (SubspaceAudio), https://opengameart.org/content/boss-battle-music. CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/); credit given gladly. Changes: silence trimmed from both ends, loudness levelled to about -13 LUFS (with a peak limiter), converted to Ogg Vorbis (44.1 kHz stereo, quality 4) (lowered 4.6 dB).
+- **victory-you-are-victorious.ogg** (dawn / victory): "You Are Victorious!" by the Wildfire Games 0 A.D. music team: Omri Lahav (lead composer), Allan Brown, Sam Gossner, Boris Hansen; additional music Jeff Willet, Mike Skalandunas, Shlomi Nogay. Copyright (C) 2009-2010 Wildfire Games, from the game 0 A.D. (https://play0ad.com, http://releases.wildfiregames.com/). Licence: CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). Changes: silence trimmed from both ends, loudness levelled to about -13 LUFS (with a peak limiter), converted to Ogg Vorbis (44.1 kHz stereo, quality 4).
+- **gameover-dried-tears.ogg** (death): "Dried Tears" by the Wildfire Games 0 A.D. music team: Omri Lahav (lead composer), Allan Brown, Sam Gossner, Boris Hansen; additional music Jeff Willet, Mike Skalandunas, Shlomi Nogay. Copyright (C) 2009-2010 Wildfire Games, from the game 0 A.D. (https://play0ad.com, http://releases.wildfiregames.com/). Licence: CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). Changes: silence trimmed from both ends, loudness levelled to about -13 LUFS (with a peak limiter), converted to Ogg Vorbis (44.1 kHz stereo, quality 4) (lowered 0.3 dB).
+
 - **dungeon-inferno.ogg** (Dungeon Run, floor 3): "The King of Hell", produced by Julie Damsgaard / Spring Spring / Spring Enterprises, https://spring-enterprises.neocities.org. Licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Source: https://opengameart.org/content/the-king-of-hell-final-boss-theme
 
 ## Public domain (CC0; credit not required, but given gladly)
 
 | File | Plays for | Track | Artist | Source |
 | --- | --- | --- | --- | --- |
-| title.mp3 | title screen | 8-bit - Truth | HydroGene | https://opengameart.org/content/8-bit-truth |
-| forest.mp3 | the Darkwood | 8-bit MonsterVania #2 | HydroGene | https://opengameart.org/content/8-bit-monstervania-2-0 |
 | crypt.mp3 | crypts | 8-bit - Infinite Darkness | HydroGene | https://opengameart.org/content/8-bit-infinite-darkness |
-| boss.mp3 | boss fights | 8-bit Danger!! Strong Boss | HydroGene | https://opengameart.org/content/8-bit-danger-strong-boss |
-| victory.mp3 | dawn / victory | Victory | celestialghost8 | https://opengameart.org/content/victory |
-| gameover.mp3 | death | No Hope (You died), retro version | Cleyton Kauffman, https://soundcloud.com/cleytonkauffman (asks to be credited) | https://opengameart.org/content/game-over-theme |
 | dungeon-crypt.mp3 | Dungeon Run, floor 1 | JRPG - End Dungeon | HydroGene | https://opengameart.org/content/jrpg-end-dungeon |
 | dungeon-catacombs.ogg | Dungeon Run, floor 2 | Haunting Chiptune Loop [Void Estate], haunted arcade version | Zane Little Music | https://opengameart.org/content/haunting-chiptune-loop-void-estate |
 
