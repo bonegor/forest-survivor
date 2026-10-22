@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
-import { EVENTS } from '../public/js/data/waves.js';
+import { EVENTS, SWARM_BATCH } from '../public/js/data/waves.js';
 import { WARN, sideWord, eventWords } from '../public/js/game/events.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
@@ -35,6 +35,8 @@ test('every event of the night is told about 2 s before it comes, and comes from
     game((g, p) => {
       const t = (ev.at / 1.4) * 60;
       g.setTime(t - 4 * g.pace);
+      // Its place in the run's own list, every swarm a batch (data/waves.js batchEvents): its first.
+      const idx = g.spawner.events.findIndex((e) => e.at === ev.at && e.type === ev.type && e.enemy === ev.enemy);
       for (const e of g.enemies) e.dead = true;
       let toldAt = null, cameAt = null, told = null;
       const titles = [], banner = g.banner.bind(g);
@@ -50,7 +52,7 @@ test('every event of the night is told about 2 s before it comes, and comes from
           toldAt = g.time;
           told = g.warnings[0];
         }
-        if (g.spawner.eventIdx > EVENTS.indexOf(ev)) cameAt = g.time;
+        if (g.spawner.eventIdx > idx) cameAt = g.time;
       }
       assert.ok(toldAt !== null && cameAt !== null, `${ev.type} of ${ev.enemy}: told and came`);
       const lead = (cameAt - toldAt) / g.pace;
@@ -110,3 +112,37 @@ test('no record to beat (a fresh profile): nothing told', () =>
     g.update(1 / 60);
     assert.equal(g.banners.filter((b) => b.title.startsWith('NEW RECORD')).length, 0);
   }, { records: { kills: 0, level: 0, time: 0 } }));
+
+test('every swarm comes as a batch of 3 to 5, each three times as big, 7 s apart, each told before it', () => {
+  const sizes = new Set();
+  for (let k = 0; k < 40; k++) {
+    game((g) => {
+      const swarms = g.spawner.events.filter((e) => e.type === 'swarm');
+      for (const ev of EVENTS.filter((e) => e.type === 'swarm')) {
+        const batch = swarms.filter((e) => e.enemy === ev.enemy && e.at >= ev.at && e.at < ev.at + 1);
+        sizes.add(batch.length);
+        assert.ok(batch.length >= SWARM_BATCH.min && batch.length <= SWARM_BATCH.max);
+        batch.forEach((e, i) => {
+          assert.equal(e.count, ev.count * 3);
+          // 7 real seconds apart on the 15-minute night's clock (1.4 phase a minute).
+          assert.ok(Math.abs(e.at - (ev.at + (i * 7 * 1.4) / 60)) < 1e-9);
+        });
+      }
+    }, { seed: k + 1 });
+  }
+  assert.deepEqual([...sizes].sort(), [3, 4, 5], 'every size comes');
+  // In play: a batch's swarms each told about 2 s before they come.
+  game((g) => {
+    const ev = EVENTS.find((e) => e.type === 'swarm');
+    g.setTime((ev.at / 1.4) * 60 - 4 * g.pace);
+    const n = g.spawner.events.filter((e) => e.type === 'swarm' && e.at >= ev.at && e.at < ev.at + 1).length;
+    let told = 0, came = 0, last = g.spawner.eventIdx;
+    const seen = new Set();
+    for (let f = 0; f < (4 + n * 7) * 60; f++) {
+      g.update(1 / 60);
+      for (const w of g.warnings) if (!seen.has(w.ev)) { seen.add(w.ev); told++; }
+      if (g.spawner.eventIdx > last) { came += g.spawner.eventIdx - last; last = g.spawner.eventIdx; }
+    }
+    assert.ok(told >= n && came >= n, `${n} swarms told (${told}) and come (${came})`);
+  });
+});

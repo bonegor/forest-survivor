@@ -263,6 +263,7 @@ test('the results report a Nightmare and pay it so', async () => {
     gs.enter(app);
     for (let f = 0; f < 130; f++) step(); // past two seconds of real time: long enough for 120 gold (profile.js MAX_GOLD_PER_SEC)
     gs.game.gold = 120;
+    gs.game.player.invuln = 0; // a blow just taken would shield him from this one
     gs.game.player.hurt(1e9);
     for (let f = 0; f < 900 && !(gs.game.state === 'over' && gs.overlay?.res); f++) step();
     await new Promise((r) => setImmediate(r));

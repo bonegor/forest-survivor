@@ -5,7 +5,7 @@ import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, monsterHp, minuteOf, HORDE_CAP, EVENTS, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { FLOORS, monsterHp, minuteOf, HORDE_CAP, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
@@ -102,6 +102,9 @@ const DROP_ON = [[16, 0], [-16, 0], [0, 16], [0, -16]];
 // a Holy Relic half as often. The horde leaves none of these but the odd coin and fury orb
 // (Game.killEnemy). Luck multiplies the rare treasures' weights, so better luck only ever makes
 // each of them likelier.
+// Seconds a broken box's loot waits before it pops out (breakProp).
+export const PROP_HOLD = 0.2;
+
 export const PROP_LOOT = [
   { kind: 'potion', w: 1 / 3 },
   { kind: 'fury', w: 1 / 3 },
@@ -406,8 +409,8 @@ export class Game {
     this.cryptTime -= d;
     if (this.mode === 'dungeon') this.floorTime = Math.max(0, this.floorTime + d);
     const ph = this.phase, from = this.mode === 'dungeon' ? FLOORS[this.floor - 1].phase0 + 1.5 : 0;
-    sp.eventIdx = EVENTS.findIndex((e) => e.at > ph && e.at >= from);
-    if (sp.eventIdx < 0) sp.eventIdx = EVENTS.length;
+    sp.eventIdx = sp.events.findIndex((e) => e.at > ph && e.at >= from);
+    if (sp.eventIdx < 0) sp.eventIdx = sp.events.length;
     sp.loopAt = 0;
     sp.rewarn();
     if (this.mode === 'ranked') {
@@ -1031,11 +1034,14 @@ export class Game {
     this.addDecal('wood', e.x, e.y, 3);
     const luck = this.player.luck;
     const { kind } = weighted(PROP_LOOT, (d) => (d.lucky ? d.w * luck : d.w));
+    // The owner's (22 October 2026): what a box held pops out a moment after it breaks (PROP_HOLD),
+    // not under the hero's feet the instant he walks into it.
+    const hold = { hold: PROP_HOLD };
     if (kind === 'coins') {
       const n = Math.floor(rand(1, 4));
-      for (let i = 0; i < n; i++) this.addPickup('coin', e.x, e.y, 1);
-    } else if (kind === 'goldpile') this.addPickup('goldpile', e.x, e.y, Math.round(rand(5, 12)));
-    else if (kind) this.addPickup(kind, e.x, e.y);
+      for (let i = 0; i < n; i++) this.addPickup('coin', e.x, e.y, 1, hold);
+    } else if (kind === 'goldpile') this.addPickup('goldpile', e.x, e.y, Math.round(rand(5, 12)), hold);
+    else if (kind) this.addPickup(kind, e.x, e.y, 1, hold);
   }
 
   bossDefeated(e) {

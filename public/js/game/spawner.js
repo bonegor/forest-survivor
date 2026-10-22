@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { EVENTS, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { SWARM_BATCH, batchEvents, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
@@ -58,8 +58,20 @@ export class Spawner {
     this.bossIdx = 0;
     this.loopAt = 0; // Ranked: next looping event, in phase minutes
     this.loopEv = null; // Ranked: that event, rolled and announced (warn)
-    this.warnIdx = 0; // the next of EVENTS to announce (warn)
-    this.warned = new Map(); // EVENTS index -> the announced copy, its side rolled
+    this.warnIdx = 0; // the next of events to announce (warn)
+    this.warned = new Map(); // events index -> the announced copy, its side rolled
+    this._events = null;
+  }
+
+  // The night's timed events, every swarm a batch (data/waves.js batchEvents), rolled once a run
+  // the first time they are asked for: by then the mode and the floor are set, and with them how
+  // far the phase moves in SWARM_BATCH.gap seconds.
+  get events() {
+    if (!this._events) {
+      const g = this.g, per = (this.phaseAfter(60) - g.phase) / 60;
+      this._events = batchEvents(() => randi(SWARM_BATCH.min, SWARM_BATCH.max), SWARM_BATCH.gap * per);
+    }
+    return this._events;
   }
 
   // The phase `s` game seconds from now (the clock and a Dungeon floor's clock alike).
@@ -94,8 +106,8 @@ export class Spawner {
   }
 
   resetForFloor(phase0) {
-    this.eventIdx = EVENTS.findIndex((e) => e.at >= phase0 + 1.5);
-    if (this.eventIdx < 0) this.eventIdx = EVENTS.length;
+    this.eventIdx = this.events.findIndex((e) => e.at >= phase0 + 1.5);
+    if (this.eventIdx < 0) this.eventIdx = this.events.length;
     this.loopAt = 0;
     this.eliteT = 60;
     this.thiefT = rand(90, 170);
@@ -162,24 +174,25 @@ export class Spawner {
     // Timed events, each announced WARN.lead real seconds before (warn).
     const soon = this.phaseAfter(WARN.lead * g.pace);
     if (this.warnIdx < this.eventIdx) this.warnIdx = this.eventIdx;
-    while (this.warnIdx < EVENTS.length && EVENTS[this.warnIdx].at <= soon) {
+    const events = this.events;
+    while (this.warnIdx < events.length && events[this.warnIdx].at <= soon) {
       const i = this.warnIdx++;
-      this.warned.set(i, this.warn({ ...EVENTS[i] }));
+      this.warned.set(i, this.warn({ ...events[i] }));
     }
-    while (this.eventIdx < EVENTS.length && EVENTS[this.eventIdx].at <= phase) {
+    while (this.eventIdx < events.length && events[this.eventIdx].at <= phase) {
       const i = this.eventIdx++;
-      this.fire(this.warned.get(i) || EVENTS[i], phase);
+      this.fire(this.warned.get(i) || events[i], phase);
       this.warned.delete(i);
     }
-    if (g.mode === 'ranked' && this.eventIdx >= EVENTS.length) {
+    if (g.mode === 'ranked' && this.eventIdx >= events.length) {
       if (!this.loopAt) this.loopAt = phase + RANKED_EVENT_EVERY;
       if (!this.loopEv && soon >= this.loopAt) {
-        const ev = pick(EVENTS.filter((e) => e.at >= 18));
+        const ev = pick(events.filter((e) => e.at >= 18));
         this.loopEv = this.warn({ ...ev, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) });
       }
       if (phase >= this.loopAt) {
         this.loopAt = phase + RANKED_EVENT_EVERY;
-        this.fire(this.loopEv || pick(EVENTS.filter((e) => e.at >= 18)), phase);
+        this.fire(this.loopEv || pick(events.filter((e) => e.at >= 18)), phase);
         this.loopEv = null;
       }
     }

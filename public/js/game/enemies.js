@@ -68,6 +68,9 @@ let nextId = 1;
 // already dark); 0.95 still leaves dawn's light alone. The ring stays as faint as it was: not a
 // brighter edge, a brighter monster. With the layer drawn stronger it is a smaller share of it
 // (`ringA` 0.3, 0.6 before), so no more of it shows than did, at dusk a hair more.
+// Then (22 October 2026) "brighter, but like with contrast brighter, not just whiter, but more like
+// shiny and easy to see and stand out": their colours saturated (`sat`) and pulled apart (`contrast`),
+// on top of the lift (gamma 30 before), so they glow in their own hues instead of paling.
 // The horde's speeds come in four classes (the owner's, 20 October 2026: "let us have a few
 // classes of speeds ... mice and bats should probably be equally fast and as fast as basic no
 // upgrade knight on normal. Then on nightmare they should be a little faster than basic knights
@@ -96,7 +99,7 @@ export function hordePace(type, o = {}) {
   return KNIGHT_PACE * PACE_CLASS[PACE_OF[type]] * (1 - (def.slower || 0));
 }
 
-export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 30, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.3, near: 60 };
+export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast: 25, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.3, near: 60 };
 
 export class Enemy {
   constructor() {
@@ -970,10 +973,19 @@ const IDLE_FPS = 8;
 // A ring colour, at its share of the layer's alpha.
 const ringOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.ringA));
 const RING = ringOf(NIGHT_EDGE.ring);
-// A frame in its night colours (NIGHT_EDGE lift and gamma), each colour worked out once; its ink
+// A frame in its night colours (NIGHT_EDGE lift, gamma, sat and contrast), each colour worked out once; its ink
 // outline (a tuned sprite's own: b.ink) and a rim of its own (b.rim) stay as they are.
-const NIGHT_TUNE = { lift: NIGHT_EDGE.lift, gamma: NIGHT_EDGE.gamma };
+// Lifted first, then saturated and pulled apart: contrast before the lift would crush the darks
+// it is there to raise.
+const NIGHT_TUNE = { lift: NIGHT_EDGE.lift, gamma: NIGHT_EDGE.gamma }, NIGHT_POP = { sat: NIGHT_EDGE.sat, contrast: NIGHT_EDGE.contrast };
 const nightColours = new Map();
+const lumOf = (p) => 0.299 * (p & 255) + 0.587 * ((p >> 8) & 255) + 0.114 * ((p >> 16) & 255);
+// One colour by night: lifted, then popped; a mid tone the contrast would leave darker than it was
+// keeps the lift alone, so no monster is ever darker for it.
+function nightColour(hex) {
+  const lifted = shade(hex, NIGHT_TUNE), popped = hexPack(shade(lifted, NIGHT_POP));
+  return (lumOf(popped) >= lumOf(hexPack(hex)) ? popped : hexPack(lifted)) & 0xffffff;
+}
 export function nightLift(b) {
   const ink = b.ink ?? OUTLINE, out = { w: b.w, h: b.h, d: b.d.slice() };
   if (b.ink !== undefined) out.ink = b.ink;
@@ -983,7 +995,7 @@ export function nightLift(b) {
     if (!(c >>> 24) || c === ink || c === b.rim) continue;
     const rgb = c & 0xffffff;
     let to = nightColours.get(rgb);
-    if (to === undefined) nightColours.set(rgb, (to = hexPack(shade(hexOfPacked(c), NIGHT_TUNE)) & 0xffffff));
+    if (to === undefined) nightColours.set(rgb, (to = nightColour(hexOfPacked(c))));
     out.d[i] = ((c & 0xff000000) | to) >>> 0;
   }
   return out;

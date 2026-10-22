@@ -61,8 +61,9 @@ test('a woken crypt lord far from the hero is never moved to him; it walks, if a
     assert.ok(far > 300, `far off (${Math.round(far)} px)`);
     step(g, 120);
     const moved = Math.hypot(lord.x - was.x, lord.y - was.y);
-    assert.ok(moved < lord.spd * 1.12 * g.move * 2 + 4, `it walked at most (${Math.round(moved)} px), no jump`);
-    assert.ok(Math.hypot(lord.x - p.x, lord.y - p.y) > far - 100, 'not beside the hero');
+    const walk = lord.spd * 1.12 * g.move * 2 + 4; // two seconds' walk, a little to spare
+    assert.ok(moved < walk, `it walked at most (${Math.round(moved)} px), no jump`);
+    assert.ok(Math.hypot(lord.x - p.x, lord.y - p.y) > far - walk, 'no nearer the hero than it could walk: not beside him');
   }));
 
 test('damage dealt counts the health a blow took, not the overkill', () =>

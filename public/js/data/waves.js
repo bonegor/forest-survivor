@@ -71,6 +71,27 @@ export const EVENTS = [
   { at: 28.5, type: 'ring', enemy: 'skeleton', count: 60 },
 ];
 
+// The owner's (22 October 2026): a swarm "should be 3x bigger ... in jolts of 3 to 5 ... warning
+// comes, few seconds later, a swarm. Few seconds later new warning, few seconds later new swarm".
+// Each swarm of EVENTS comes as a batch of min..max swarms, each `more` times its count, `gap`
+// real seconds apart, each with its own warning (events.js WARN.lead before it).
+export const SWARM_BATCH = { min: 3, max: 5, more: 3, gap: 7 };
+
+// The night's events with every swarm made a batch: size() how many swarms a batch holds (rolled
+// once a night), gapPh the phase between two of them.
+export function batchEvents(size, gapPh) {
+  const out = [];
+  for (const ev of EVENTS) {
+    if (ev.type !== 'swarm') {
+      out.push(ev);
+      continue;
+    }
+    const n = size();
+    for (let i = 0; i < n; i++) out.push({ ...ev, at: ev.at + i * gapPh, count: ev.count * SWARM_BATCH.more, batch: i });
+  }
+  return out;
+}
+
 // Survival bosses by real elapsed seconds.
 export const SURVIVAL_BOSSES = {
   s15: [

@@ -150,7 +150,7 @@ test('setTime: the horde comes from the new minute\'s pocket, and bosses keep th
     const pocket = Object.keys(W.pocketAt(7.5).spawn);
     for (let i = 0; i < 60; i++) assert.ok(pocket.includes(g.spawner.pickType(g.phase)), 'a monster of minute 7');
     assert.equal(g.spawner.bossIdx, 1, 'the Bone King (4:30) is past, the Butcher (9:00) to come');
-    assert.equal(W.EVENTS[g.spawner.eventIdx].at > g.phase && W.EVENTS[g.spawner.eventIdx - 1].at <= g.phase, true, 'swarms past are done');
+    assert.equal(g.spawner.events[g.spawner.eventIdx].at > g.phase && g.spawner.events[g.spawner.eventIdx - 1].at <= g.phase, true, 'swarms past are done');
     run(g, 1);
     assert.deepEqual(bossesUp(g), [], 'no boss on the jump');
     const types = new Set(g.enemies.filter((e) => !e.prop).map((e) => e.type));
@@ -198,7 +198,7 @@ test('setTime in Ranked and on a Dungeon floor', () => {
     assert.ok(Math.abs(g.phase - (f.phase0 + 2 * f.rate)) < 1e-9, 'the floor\'s clock moves as far');
     g.setTime(0);
     assert.equal(g.floorTime, 0);
-    assert.equal(W.EVENTS[g.spawner.eventIdx].at >= f.phase0 + 1.5, true, 'a floor\'s first minutes stay calm');
+    assert.equal(g.spawner.events[g.spawner.eventIdx].at >= f.phase0 + 1.5, true, 'a floor\'s first minutes stay calm');
   } finally {
     done();
   }

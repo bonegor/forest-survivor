@@ -27,6 +27,10 @@ const toScreen = (cam, x, y) => [(x - cam.x) * cam.S, (y - cam.y) * cam.S];
 const STEEL = ['#5a6988', '#8b9bb4', '#c0cbdc', '#e8f4ff', '#ffffff'];
 const HOLY = ['#be4a2f', '#f77622', '#feae34', '#fee761', '#ffffff'];
 
+// How long and how far a slash strikes (Slash.strike): to, the share of the swing's time; reach,
+// world px past the blade and the foe's body.
+export const SLASH_HIT = { to: 0.7, reach: 4 };
+
 export class Slash {
   constructor(g, w, ang, R, arc, dmg, holy) {
     this.g = g;
@@ -38,22 +42,38 @@ export class Slash {
     this.holy = holy;
     this.ai = ((Math.round((ang / TAU) * 32) % 32) + 32) % 32;
     this.pal = holy ? HOLY : STEEL;
+    this.w = w;
+    this.dmg = dmg;
+    this.hit = new Set(); // each foe once a swing
     const p = g.player;
-    const cands = g.grid.query(p.x, p.y, R + 14);
+    if (holy) g.particles.burst(p.x + Math.cos(ang) * R * 0.7, p.y + Math.sin(ang) * R * 0.7, 6, 8, [PC.Y, PC.y, PC.w], 70, 0.4, 1, P.GLOW | P.FADE, {});
+    this.strike();
+  }
+
+  // The owner's (22 October 2026): "if I hit a monster it doesn't always hit even if the
+  // animation implies a hit". The blow lands where the blade is drawn, round his chest (draw: 7 px
+  // up), on the foe's body (half its height up) with a little to spare (SLASH_HIT.reach); and it
+  // strikes every foe in the arc from the swing's start until SLASH_HIT.to of it, so one stepping
+  // into the swing is struck too, each once.
+  strike() {
+    const g = this.g, p = g.player, w = this.w, R = this.R, cx = p.x, cy = p.y - 7;
+    const cands = g.grid.query(cx, cy, R + 24);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
-      if (e.dead) continue;
-      const dx = e.x - p.x, dy = e.y - p.y;
+      if (e.dead || this.hit.has(e)) continue;
+      const body = Math.max(e.r, (e.h || 0) * 0.3);
+      const dx = e.x - cx, dy = e.y - (e.h || 0) * 0.5 - cy;
       const d = Math.hypot(dx, dy);
-      if (d > R + e.r) continue;
-      if (d > 8 && Math.abs(angleDiff(ang, Math.atan2(dy, dx))) > arc / 2 + Math.atan2(e.r, d)) continue;
-      g.hitEnemy(e, dmg, { w, type: holy ? 'holy' : 'normal', kb: w ? w.s.kb : 1, kx: dx / (d || 1), ky: dy / (d || 1) });
+      if (d > R + body + SLASH_HIT.reach) continue;
+      if (d > 8 && Math.abs(angleDiff(this.ang, Math.atan2(dy, dx))) > this.arc / 2 + Math.atan2(body + SLASH_HIT.reach, d)) continue;
+      this.hit.add(e);
+      g.hitEnemy(e, this.dmg, { w, type: this.holy ? 'holy' : 'normal', kb: w ? w.s.kb : 1, kx: dx / (d || 1), ky: dy / (d || 1) });
     }
-    if (holy) g.particles.burst(p.x + Math.cos(ang) * R * 0.7, p.y + Math.sin(ang) * R * 0.7, 6, 8, [PC.Y, PC.y, PC.w], 70, 0.4, 1, P.GLOW | P.FADE, {});
   }
 
   update(dt) {
     this.t += dt;
+    if (this.t - dt < SLASH_HIT.to * this.dur) this.strike();
     return this.t < this.dur;
   }
 

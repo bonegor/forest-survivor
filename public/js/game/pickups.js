@@ -63,6 +63,8 @@ export class Pickup {
     this.vy = opts.pop === false ? 0 : rand(-20, 20);
     this.t = rand(3);
     this.age = 0; // seconds since it dropped (CHEST_SETTLE)
+    // Seconds it waits, unseen and untouched, before it pops out (a broken box's: Game.breakProp).
+    this.hold = opts.hold || 0;
     this.pulled = false;
     this.speed = 0;
     this.dead = false;
@@ -108,6 +110,10 @@ export class Pickup {
 
   update(dt) {
     if (this.dead) return false; // swept up already, e.g. on the way out of a crypt
+    if (this.hold > 0) {
+      this.hold -= dt;
+      return true;
+    }
     const g = this.g, p = g.player;
     this.t += dt;
     this.age += dt;
@@ -243,6 +249,7 @@ export class Pickup {
     const S = cam.S;
     const sx = (this.x - cam.x) * S, sy = (this.y - cam.y) * S;
     this._rect = null;
+    if (this.hold > 0) return;
     if (sx < -40 || sy < -40 || sx > cam.pxW + 40 || sy > cam.pxH + 40) return;
     const big = this.kind === 'chest', k = this.kind === 'gem' ? GEM_SIZE : big ? this.scale : 1;
     shadows ||= [shadowSprite(14), shadowSprite(5 * GEM_SIZE), shadowSprite(6)];
@@ -292,6 +299,7 @@ export class Pickup {
   }
 
   drawGlow(ctx, cam) {
+    if (this.hold > 0) return;
     const S = cam.S;
     const sx = (this.x - cam.x) * S, sy = (this.y - this.z - 3 - cam.y) * S;
     if (sx < -60 || sy < -60 || sx > cam.pxW + 60 || sy > cam.pxH + 60) return;
