@@ -10567,6 +10567,68 @@
     "glowLeft"
    ],
    "emissive": "w"
+  },
+  {
+   "cls": "knight",
+   "kind": "proposal",
+   "id": "b",
+   "name": "Knight · B",
+   "description": "A weathered knight-errant in blued steel: a flat-topped great helm with a T-visor and a brass brow band, a gold tabard with a navy chevron, a navy kite shield with the gold chevron slung on his back, and a broad longsword held up and forward in guard. He walks with the sword kept in guard; his cut raises it overhead, brings it over the top in a white crescent, sweeps it forward and down, and recovers to guard.",
+   "creator": null,
+   "source": "drawn with claude-pxl (MIT)",
+   "licence": "made for Forest Survivor",
+   "colour": null,
+   "w": 48,
+   "h": 48,
+   "frames": 22,
+   "collection": "Knight B",
+   "origin": "gms/3001/sprites/lab/src/knight-b/knight-b.px.js",
+   "made": "2026-10-22T14:04:50.589Z",
+   "walk": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "idle": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+   ],
+   "attackFps": 13,
+   "attackRelease": null,
+   "attackWalk": null,
+   "walkFps": null,
+   "idleFps": null,
+   "motionRate": 1.051967178624027,
+   "idleRate": 3.75,
+   "anchorY": 40,
+   "selfBob": true,
+   "floating": false,
+   "fitW": 36,
+   "fitH": 34,
+   "outline": false,
+   "sheet": "sheets/knight-b.png",
+   "rows": [
+    "right"
+   ]
   }
  ]
 }

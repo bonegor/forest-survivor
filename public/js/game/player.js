@@ -1,6 +1,6 @@
 // The hero: movement, stats, health, experience, fury and ultimates.
 
-import { HEROES } from '../data/heroes.js';
+import { HEROES, heroLook } from '../data/heroes.js';
 import { PASSIVES } from '../data/passives.js';
 import { gearBonuses } from '../shared/items.js';
 import { input } from '../engine/input.js';
@@ -93,7 +93,7 @@ export class Player {
   constructor(g, heroId, meta) {
     this.g = g;
     this.id = heroId;
-    this.hero = HEROES[heroId];
+    this.hero = heroLook(heroId, g.settings?.skins); // in the look chosen on the hero screen
     this.meta = meta;
     this.x = 0;
     this.y = 0;

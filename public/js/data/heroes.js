@@ -19,6 +19,12 @@ export const HEROES = {
     title: 'Knight',
     sprite: 'knight',
     pose: 'knight_pose', // his painted pose on the in-run panels; the hero screen frames the in-game sprite, as for every hero
+    // His looks, chosen on the hero screen (heroLook): the first is his own. Knight B drawn with
+    // claude-pxl (the owner's, 22 October 2026).
+    skins: [
+      { id: 'a', name: 'Plumed', sprite: 'knight', pose: 'knight_pose' },
+      { id: 'b', name: 'Knight B', sprite: 'knight_b', pose: 'knight_b_pose' },
+    ],
     weapon: 'sword', // in the crypts each hero has his own weapon alone, struck by the player (Game.caveStrike)
     unique: ['sword'],
     color: '#0099db',
@@ -194,3 +200,10 @@ export const weaponsFor = (hero) => [...hero.unique, ...SHARED_WEAPONS];
 // Unlock order lives in shared/profile.js (enforced by the server): five minutes on the clock
 // with one hero bring in the next.
 export { HERO_ORDER } from '../shared/profile.js';
+
+// A hero as he looks with the player's chosen look (settings.skins: hero -> skin id), his sprite
+// and pose swapped; his own look, or one not known, is the hero as he is.
+export function heroLook(id, skins) {
+  const h = HEROES[id], s = h.skins?.find((k) => k.id === skins?.[id]);
+  return s && s !== h.skins[0] ? { ...h, sprite: s.sprite, pose: s.pose, skin: s.id } : h;
+}

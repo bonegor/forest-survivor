@@ -9,6 +9,7 @@ import PALADIN from '../../assets/heroes/paladin.js';
 import DRUID from '../../assets/heroes/druid.js';
 import BERSERKER from '../../assets/heroes/berserker.js';
 import WITCHHUNTER from '../../assets/heroes/witchhunter.js';
+import KNIGHT_B from '../../assets/heroes/knight_b.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -88,3 +89,6 @@ export const PALADIN_POSE = pose(PALADIN_SHEET);
 export const DRUID_POSE = pose(DRUID_SHEET);
 export const BERSERKER_POSE = pose(BERSERKER_SHEET);
 export const WITCHHUNTER_POSE = pose(WITCHHUNTER_SHEET);
+// The Knight's second look (22 October 2026), drawn with claude-pxl (src/knight-b): a skin.
+export const KNIGHT_B_SHEET = sheet(KNIGHT_B);
+export const KNIGHT_B_POSE = pose(KNIGHT_B_SHEET);

@@ -6,7 +6,7 @@ import { SPR, walkFrame } from '../engine/sprites.js';
 import { saveSettings, DEBUG } from '../engine/storage.js';
 import { presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp } from '../engine/util.js';
-import { HEROES, HERO_ORDER, HERO_LINE, startWeapons } from '../data/heroes.js';
+import { HEROES, HERO_ORDER, HERO_LINE, startWeapons, heroLook } from '../data/heroes.js';
 import { rimRing, silhouette, hexPack } from '../engine/pixels.js';
 import { trialScene, SCENE, heroCrop, portraitBackdrop, pixelEllipse, mix, PORTRAIT } from './scenes.js';
 import { WEAPONS } from '../data/weapons.js';
@@ -289,7 +289,7 @@ export class HeroScreen {
         x = Math.round(W / 2 - (k * cw + (k - 1) * gap) / 2);
         y = y0 + (i / cols) * (ch + gap);
       }
-      const h = HEROES[id];
+      const h = heroLook(id, app.settings.skins);
       const locked = !prof.heroes.includes(id);
       const fid = 'h_' + id;
       // A locked hero can't be bought: five minutes with the one before bring them in.
@@ -327,7 +327,9 @@ export class HeroScreen {
       }
       x += cw + gap;
     });
-    focusHero = focusHero || 'knight';
+    // The hero last focused stays in the panel while its LOOK button is (detail).
+    focusHero = focusHero || this.lastHero || 'knight';
+    this.lastHero = focusHero;
     const bottom = this.detail(ctx, W, H, focusHero, y + ch + 8, !prof.heroes.includes(focusHero));
     let gy = bottom + 6;
     for (const line of wrapText('NEXT: ' + goalText(nextGoal(prof)), W - 24)) {
@@ -366,7 +368,7 @@ export class HeroScreen {
   }
 
   detail(ctx, W, H, id, y, locked) {
-    const h = HEROES[id];
+    const h = heroLook(id, this.app.settings.skins);
     const pw = Math.min(W - 16, 330), ph = Math.min(H - y - 26, 120);
     const x = Math.round(W / 2 - pw / 2);
     panel(ctx, x, y, pw, ph, { title: `${h.name.toUpperCase()} — ${h.title.toUpperCase()}` });
@@ -422,6 +424,18 @@ export class HeroScreen {
         drawText(ctx, parts[i], sx, y + ph - 11, { color: got ? col : '#3a4466' });
         sx += widths[i] + 10;
       });
+    }
+    // His looks, one press each to the next (data/heroes.js skins), remembered with the settings.
+    const skins = HEROES[id].skins;
+    if (skins && !locked) {
+      const app = this.app, cur = skins.find((k) => k.id === app.settings.skins?.[id]) || skins[0];
+      if (button(ctx, app.ui, 'look', Math.round(W / 2 - 60), y + ph + 3, 120, 13, `LOOK: ${cur.name.toUpperCase()}`)) {
+        const next = skins[(skins.indexOf(cur) + 1) % skins.length];
+        app.settings.skins = { ...app.settings.skins, [id]: next.id };
+        saveSettings(app.settings);
+        sfx('select');
+      }
+      return y + ph + 18;
     }
     return y + ph;
   }

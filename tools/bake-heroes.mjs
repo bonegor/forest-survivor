@@ -30,6 +30,8 @@ const BAKE = {
   druid: 'druid/v1',
   berserker: 'berserker/v1',
   witchhunter: 'witchhunter/v1',
+  // The Knight's second look, drawn with claude-pxl (src/knight-b), a skin chosen on the hero screen.
+  knight_b: 'knight/b',
 };
 const OURS = new Set(['made for Forest Survivor', "the game's own"]);
 
