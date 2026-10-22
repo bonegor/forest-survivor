@@ -103,3 +103,33 @@ test('EVOLVE READY follows Game.evolvable exactly: L8 with its relic, or any L8 
     g.rollChest('elite');
     assert.equal(same(), 1, 'one evolved, the other still waits');
   }, 3));
+
+// The owner's (22 October 2026): "chests can never give new stuff. Only upgrade existing. If there
+// is no existing to upgrade (all are maxxed out) boxes give out somehting random only then".
+test('a chest only raises what the hero has; something new only once all he has is at its top', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    for (const kind of ['elite', 'boss']) {
+      game((g, p) => {
+        g.addPassive('might', 1);
+        const roll = g.rollChest(kind);
+        for (const it of roll.items) assert.ok(it.type === 'evolve' || !it.isNew, `${kind} seed ${seed}: ${it.type}:${it.id} is not new`);
+      }, seed);
+    }
+  }
+  // All he has at its top (a weapon, a relic), slots free: then the chest gives something new.
+  let fresh = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    game((g, p) => {
+      for (const w of p.weapons) while (w.level < 8) w.levelUp();
+      g.addPassive('magnet', 1);
+      while (g.upgradePool().some((c) => !c.isNew)) {
+        const c = g.upgradePool().find((x) => !x.isNew);
+        g.applyChoice(c, true);
+      }
+      const { items } = g.rollChest('elite');
+      assert.ok(items.length > 0);
+      if (items.some((it) => it.isNew)) fresh++;
+    }, seed);
+  }
+  assert.ok(fresh >= 8, `new things once nothing he has can be raised (${fresh} of 10)`);
+});

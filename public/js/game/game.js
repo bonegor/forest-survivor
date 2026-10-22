@@ -697,9 +697,12 @@ export class Game {
   }
 
   // What a chest holds, given at once: an evolution if one is ready, then draws from the
-  // level-up cards' own pool (a new weapon or relic too, while a slot is free), and gold. With
-  // the pool empty, each draw is the run's auto-pick if the player chose one, else a Blessing of
-  // Valor. The gold is the hero's at once too. The chest screen only shows them, one by one.
+  // level-up cards' own pool, and gold. The owner's (22 October 2026): "chests can never give new
+  // stuff. Only upgrade existing. If there is no existing to upgrade (all are maxxed out) boxes
+  // give out somehting random only then". So a draw is a level of a weapon or relic the hero has;
+  // only when none is left to raise is it anything of the pool (a new weapon or relic, while a
+  // slot is free). With the pool empty, it is the run's auto-pick if the player chose one, else a
+  // Blessing of Valor. The gold is the hero's at once too. The chest screen only shows them.
   rollChest(kind = 'elite') {
     const p = this.player;
     const items = [];
@@ -718,7 +721,8 @@ export class Game {
     for (let i = 0; i < n; i++) {
       // The plain pool by weight: a Phoenix Heart due for certain is due on a level-up's cards
       // (levelChoices), not in a chest; nothing banished.
-      const u = this.drawUpgrades(1)[0] || this.filler(this.autoPick || 'bless');
+      const pool = this.upgradePool(), held = pool.filter((c) => !c.isNew);
+      const u = this.drawUpgrades(1, held.length ? held : pool)[0] || this.filler(this.autoPick || 'bless');
       items.push(u);
       // Apply as we go so later draws see the new levels.
       this.applyChoice(u, true);
