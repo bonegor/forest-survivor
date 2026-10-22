@@ -42,7 +42,7 @@ test('the table covers every shared weapon and relic exactly once, and fits its 
   assert.deepEqual([...weapons].sort(), [...SHARED_WEAPONS].sort());
   assert.deepEqual([...relics].sort(), [...PASSIVE_IDS].sort());
   assert.ok(LOCKS.length <= 50, 'the save keeps them as the bits of one number, safe to 53');
-  for (const l of LOCKS) assert.ok(P.needText(l), l.id);
+  for (const l of LOCKS) if (!l.retired) assert.ok(P.needText(l), l.id);
   assert.equal(P.needText(LOCKS[0]), 'Survive 1:00 in a run');
   assert.equal(P.needText(LOCKS[1]), 'Slay 1,000 foes in all');
 });
@@ -52,9 +52,9 @@ test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the
   const m = P.metaBonuses(p);
   assert.deepEqual([m.weaponSlots, m.relicSlots, m.reroll, m.banish], [3, 3, 0, 0]);
   const open = P.openFor(p, 'knight');
-  assert.deepEqual(open, { weapons: ['axe', 'blades'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false });
+  assert.deepEqual(open, { weapons: ['axe', 'blades', 'aura', 'glaive'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false });
   const list = P.progressList(p);
-  assert.equal(list.filter((l) => l.open).length, 8, 'the eight starters');
+  assert.equal(list.filter((l) => l.open).length, 10, 'the ten starters');
   assert.ok(list.filter((l) => !l.start).every((l) => !l.open && l.progress === 0 && l.need));
   assert.equal(list.filter((l) => l.type === 'ult').length, P.HERO_ORDER.length);
   game((g, pl) => {
@@ -65,7 +65,7 @@ test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the
 test('each milestone opens from a run report: just short of it nothing, at it the one', () => {
   const stats = { time: 'time', level: 'level', gold: 'gold', bosses: 'bosses' };
   for (const [i, l] of LOCKS.entries()) {
-    if (l.need === 'kills' || l.need === 'wins' || l.need === 'evolve' || l.need === 'evolution' || l.deep) continue; // the second circle: its own test
+    if (l.retired || l.need === 'kills' || l.need === 'wins' || l.need === 'evolve' || l.need === 'evolution' || l.deep) continue; // the second circle: its own test
     const k = stats[l.need];
     // Long enough a run for whatever it reports to stand (sanitizeRun's bounds).
     const base = { ...RUN, time: l.need === 'time' ? l.at - 1 : 60, realTime: 600 };
@@ -114,7 +114,7 @@ test('the server keeps the milestones a run reached, and the ultimate of the her
     let data = await post('/api/run', { ...RUN, time: 59, level: 15 });
     assert.deepEqual(data.reward.unlocked, [{ type: 'weapon', id: 'flask', need: 'Reach level 15 in a run' }]);
     data = await post('/api/run', { ...RUN, time: 119, kills: 100 });
-    assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['weapon:frost', 'weapon:aura']);
+    assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['weapon:frost']);
     assert.equal(P.openFor(data.profile, 'knight').ult, false, '1:59 is not enough');
     data = await post('/api/run', { ...RUN, time: 200 });
     assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['ult:knight']);
@@ -267,8 +267,7 @@ test('progressList measures how far each lock is', () => {
   const p = P.applyRun(P.defaultProfile(), { ...RUN, time: 90, realTime: 90, kills: 250, level: 10, gold: 100 }).profile;
   const at = (id) => P.progressList(p).find((l) => l.id === id && l.type !== 'ult');
   assert.equal(at('frost').progress, 1);
-  assert.equal(at('aura').progress, 1);
-  assert.equal(at('glaive').progress, 0.25);
+  assert.equal(at('caltrops').progress, 0.15);
   assert.equal(at('lightning').progress, 0.25);
   assert.equal(at('wisps').progress, 1 / 3);
   assert.equal(at('luck').progress, 0.2);
@@ -279,12 +278,12 @@ test('progressList measures how far each lock is', () => {
 test('a weapon left at home is never offered, and comes along again when asked', () => {
   let p = P.defaultProfile();
   p = P.setHome(p, 'axe', true).profile;
-  assert.deepEqual(P.openFor(p, 'knight').weapons, ['blades']);
+  assert.deepEqual(P.openFor(p, 'knight').weapons, ['blades', 'aura', 'glaive']);
   assert.equal(P.progressList(p).find((l) => l.id === 'axe').home, true);
   assert.equal(P.setHome(p, 'sword', true).ok, false, 'a signature never stays at home');
   assert.deepEqual(P.sanitizeProfile({ ...p, home: ['axe', 'nope', 7] }).home, ['axe']);
   p = P.setHome(p, 'axe', false).profile;
-  assert.deepEqual(P.openFor(p, 'knight').weapons, ['axe', 'blades']);
+  assert.deepEqual(P.openFor(p, 'knight').weapons, ['axe', 'blades', 'aura', 'glaive']);
 });
 
 test('the second circle stays hidden and shut until a night is won, then opens by its deeds', () => {

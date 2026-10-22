@@ -29,9 +29,9 @@ export const PROGRESS = {
   // A hero's ultimate opens once a run with him lasts this long on the clock (any mode).
   ultTime: 2 * 60,
   // Open from the first run; every hero's signature weapon(s) always are too (data/heroes.js unique).
-  // The owner's (22 October 2026): only a few to start with, the next a run away (Consecration at
-  // 100 foes, Frost Nova at 1:00), then the ladder; the new weapons are to come after it.
-  openWeapons: ['axe', 'blades'],
+  // The owner's (22 October 2026): five to start with, the hero's own among them, the next a run
+  // away (Frost Nova at 1:00), then the ladder; the second circle after it.
+  openWeapons: ['axe', 'blades', 'aura', 'glaive'],
   openRelics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'],
   // The rest, each opened for the whole account by a milestone. `need` is what is measured:
   //   time:   seconds on the clock in one run (any mode)
@@ -49,12 +49,13 @@ export const PROGRESS = {
   // by its id), and open only once bought.
 // `deep`: the second circle, the weapons of 22 October 2026: hidden in the Codex and shut until a
 // night is won, whatever the records say; then each opens by its own deed.
-  // Its place in this list is its bit in the save (profile.ul): add new ones at the end only.
+  // Its place in this list is its bit in the save (profile.ul): add new ones at the end only, and
+  // leave one no longer locked in its place as { retired: id }, a bit that opens nothing.
   locks: [
     { type: 'weapon', id: 'frost', need: 'time', at: 60 },
     { type: 'weapon', id: 'lightning', need: 'kills', at: 1000 },
     { type: 'weapon', id: 'flask', need: 'level', at: 15 },
-    { type: 'weapon', id: 'glaive', need: 'time', at: 6 * 60 },
+    { retired: 'glaive' }, // open from the start since 22 October 2026
     { type: 'weapon', id: 'thorns', need: 'kills', at: 5000 },
     { type: 'weapon', id: 'wisps', need: 'level', at: 30 },
     { type: 'weapon', id: 'arcane', need: 'bosses', at: 1 },
@@ -68,7 +69,7 @@ export const PROGRESS = {
     { type: 'relic', id: 'growth', need: 'level', at: 40 },
     // The owner's (22 October 2026): bought, once the Knight has evolved his Longsword; then for all.
     { type: 'relic', id: 'phoenix', need: 'evolve', hero: 'knight', what: "the Knight's Longsword", at: 1, buy: true },
-    { type: 'weapon', id: 'aura', need: 'kills', at: 100 },
+    { retired: 'aura' }, // 100 foes slain until it was open from the start, the same day
     { type: 'weapon', id: 'gale', need: 'wins', at: 1, deep: true },
     { type: 'weapon', id: 'lantern', need: 'time', at: 12 * 60, deep: true },
     { type: 'weapon', id: 'bell', need: 'bosses', at: 3, deep: true },

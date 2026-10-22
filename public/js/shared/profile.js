@@ -203,7 +203,7 @@ const heroBit = (h) => 1 << HERO_ORDER.indexOf(h);
 const hasBit = (n, i) => Math.floor((n || 0) / 2 ** i) % 2 === 1;
 const withBit = (n, i) => (hasBit(n, i) ? n : (n || 0) + 2 ** i);
 const orBits = (a, b) => LOCKS.reduce((n, _, i) => (hasBit(b, i) ? withBit(n, i) : n), a || 0);
-const lockOpen = (p, i) => hasBit(p.ul, i);
+const lockOpen = (p, i) => !LOCKS[i].retired && hasBit(p.ul, i);
 const sum = (a) => a.reduce((s, x) => s + x, 0);
 
 // What the profile's records measure, for each kind of milestone (PROGRESS.locks need).
@@ -310,6 +310,7 @@ export function progressList(profile) {
   for (const id of PROGRESS.openWeapons) out.push({ type: 'weapon', id, open: true, need: null, progress: 1, start: true, ...(p.home.includes(id) && { home: true }) });
   for (const id of PROGRESS.openRelics) out.push({ type: 'relic', id, open: true, need: null, progress: 1, start: true });
   LOCKS.forEach((l, i) => {
+    if (l.retired) return;
     const reached = lockOpen(p, i), open = lockUsable(p, i), forSale = reached && !open;
     const e = { type: l.type, id: l.id, open, need: forSale ? 'For sale in the Armory' : needText(l), progress: reached ? 1 : Math.min(1, measure(p, l, m) / l.at) };
     if (forSale) e.forSale = true;
