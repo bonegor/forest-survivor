@@ -21,19 +21,21 @@ ramps("knbspSw", "kNmMq", "kVvu", "kLl", "kzgh")
 const PART = { outline: "k", pivot: [0, 0] }
 
 // ---------------------------------------------------------------- parts (grids, fill at 0,0)
-// The helm, 10x9, 3/4 facing right: a sleek dome in deep violet, lit on its crown and face
-// plate, a silver brow and ridge, a cool rim on the back edge and the glowing visor slit (g) cut
-// to the front edge.
+// The helm, 9x10, 3/4 facing right: a barrel helm, a flat crown, straight sides, a glowing visor
+// slit (g) cut to the front edge. Shaded as a cylinder: a cool rim on the far edge, a dark core
+// shadow behind it, then a vertical highlight band (w) toward the lit front, falling off a little
+// at the edge. A dark brow band over the slit, two vents below it.
 sprite("_helm", PART, `
-  ...cpSSw..
-  ..cpsSwSpS
-  .cpssSwSpp
-  cbsssbSSpp
-  bbsbbbnnnb
-  nbbsskgggg
-  nbnsssSppp
-  .nbbssSpsb
-  ..nnbbbbb.`)
+  .bspSwSp.
+  cbspSwSps
+  cbspSSSps
+  nbbbnnnnn
+  nbbbkgggg
+  nbsspbbbb
+  nbspSwSps
+  nbspSwSps
+  nbspSwnps
+  .nbspSSp.`)
 
 // The crescent crest, 5x6: a silver moon standing on the crown of the helm, horns forward, its
 // inner edge glowing (g). A star floats in its mouth (drawn in code).
@@ -254,13 +256,13 @@ function figure(c, f) {
   c.stamp("_torso", 17 + ux, 17 + uy)
   if (f.trail) { const [r, from, to, th] = f.trail; trail(c, sh[0], sh[1], r, from, to, th) }
   if (f.armFirst) armNear(c, sh, f.elbow, f.hand, f.buckler)    // the wind-up: the helm in front of the raised arm
-  c.stamp("_crest", 19 + ux, 6 + uy + hy)
   { // the star in the crescent mouth twinkles with the cloak
-    const sx = 26 + ux, sy = 8 + uy + hy, on = f.tw % 4
+    const sx = 25 + ux, sy = 8 + uy + hy, on = f.tw % 4
     c.px(sx, sy, on < 2 ? "y" : "d")
     if (on === 0) { c.px(sx - 1, sy, "d"); c.px(sx + 1, sy, "d"); c.px(sx, sy - 1, "d"); c.px(sx, sy + 1, "d") }
   }
-  c.stamp("_helm", 19 + ux, 11 + uy + hy)
+  c.stamp("_helm", 20 + ux, 10 + uy + hy)
+  c.stamp("_crest", 18 + ux, 6 + uy + hy)    // the crest is mounted on the crown, in front of it
   if (!f.armFirst) armNear(c, sh, f.elbow, f.hand, f.buckler)
   sabre(c, f.hand[0], f.hand[1], f.deg, f.len, f.bend, f.glint ?? -1)
   fist(c, f.hand[0], f.hand[1])

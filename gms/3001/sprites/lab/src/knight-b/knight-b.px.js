@@ -24,16 +24,16 @@ const PART = { outline: "k", pivot: [0, 0] }
 // rivet; the bright vertical where side turns to face; the face plate with a brass brow, the
 // eye slit and the breath slit (the T), breath holes, and the cheek plates cut in at an angle.
 sprite("_helm", PART, `
-  ..cSwwSS..
-  .cSSSwwSSs
-  csssSSSSSs
-  cbssSwyyyo
-  bbssSwkkkk
-  nbnsSSSkSs
-  nbbsSwSkSn
-  nbbbsSsSnk
-  .nbbsSSn..
-  ..nnbbn...`)
+  .cSSwwSs.
+  cSSSwwSSs
+  cbssSwSSs
+  bbssSyyyo
+  nbssSkkkk
+  nbssSwSks
+  nbssSwSks
+  nbbsSwSkb
+  .nbbsSSsb
+  ..nnbbbn.`)
 
 // The torso, 12x11: the back plate in shade with a rim, the gold tabard with folds and its navy
 // chevron, the near side under the arm, a belt with a brass buckle (it dips at the front), then
@@ -186,7 +186,7 @@ function figure(c, f) {
   }
   if (f.swordBehind) sword(c, hand[0], hand[1], f.deg, f.len)
   if (f.helmOverArm) armIn(c, sh, elbow, hand)        // the wind-up: the helm in front of the upper arm
-  c.stamp("_helm", 19 + ux, 8 + uy + (f.hy || 0))
+  c.stamp("_helm", 20 + ux, 8 + uy + (f.hy || 0))
   if (f.helmOverArm) { limb(c, elbow[0], elbow[1], 1.3, hand[0], hand[1], 1.2, "nbsSw"); c.px(elbow[0], elbow[1], "w"); fist(c, hand[0], hand[1]) }
   else if (f.rest) { c.stamp("_arm", 26 + ux, 18 + uy); sword(c, hand[0], hand[1], f.deg, f.len, f.glint ?? -1); fist(c, hand[0], hand[1]) }
   else {

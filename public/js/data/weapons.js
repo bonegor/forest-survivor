@@ -42,8 +42,8 @@ export const WEAPONS = {
     name: 'Longsword',
     icon: 'i_sword',
     kind: 'sword',
-    desc: 'Cleaves everything in front of you.',
-    base: { dmg: 15, cd: 1, amount: 1, area: 1, kb: 1.3 },
+    desc: 'A quick, short steel cut at everything in front of you.',
+    base: { dmg: 14, cd: 0.9, amount: 1, area: 1, kb: 1.3 },
     levels: [
       { amount: 1, text: 'Also slashes {behind} you.' },
       { dmg: 6, text: 'Damage {+6}.' },
@@ -478,13 +478,14 @@ export const WEAPONS = {
     ],
     evo: { into: 'runestorm', with: 'projspeed' },
   },
-  // The Scythe: exec, the share of health under which a mortal foe (no boss, champion or lord) is taken outright.
+  // The Scythe: exec, the share of health under which a mortal foe (no boss, champion or lord) is
+  // taken outright. Slow and wide where the Longsword is quick and short (SCYTHE in weapons-light.js).
   scythe: {
     name: "Reaper's Scythe",
     icon: 'i_scythe',
     kind: 'scythe',
-    desc: 'A slow sweep all the way round you; foes it leaves under 15% health are reaped outright.',
-    base: { dmg: 14, cd: 4.5, area: 1, speed: 1, kb: 0.4, exec: 0.15 },
+    desc: "A reaper's slow, wide sweep all the way round you; foes it leaves under 15% health are reaped outright.",
+    base: { dmg: 14, cd: 5, area: 1, speed: 1, kb: 0.4, exec: 0.15 },
     levels: [
       { dmg: 5, text: 'Damage {+5}.' },
       { area: 0.15, text: 'Area {+15%}.' },
@@ -643,7 +644,7 @@ export const WEAPONS = {
     kind: 'sword',
     evolved: true,
     desc: 'Holy blade. Every swing hurls a wave of light.',
-    base: { dmg: 40, cd: 0.8, amount: 4, area: 1.55, kb: 1.8, wave: 1 },
+    base: { dmg: 40, cd: 0.7, amount: 4, area: 1.55, kb: 1.8, wave: 1 },
   },
   whirlwind: {
     name: 'Whirlwind',
@@ -802,8 +803,8 @@ export const WEAPONS = {
     icon: 'i_harvest',
     kind: 'scythe',
     evolved: true,
-    desc: 'Reaps foes under a quarter of their health, more as the night wears on, and every kill leaves extra XP.',
-    base: { dmg: 42, cd: 3.2, area: 1.6, speed: 1.3, kb: 0.6, exec: 0.25, execGrow: 0.01, execMax: 0.4, reap: 0.5 },
+    desc: 'Two moonlit blades reap foes under a quarter of their health, more as the night wears on, and every kill leaves extra XP.',
+    base: { dmg: 42, cd: 3.2, area: 1.6, speed: 1.3, kb: 0.6, exec: 0.25, execGrow: 0.01, execMax: 0.4, reap: 0.5, blades: 2 },
   },
   comet: {
     name: 'Comet Shower',

@@ -41,7 +41,8 @@ export const ENEMIES = {
     shot: { range: 175, cd: 1.7, spd: 170, dmg: 8, kind: 'arrow', wind: 0.5 },
   },
   // It runs and strolls at a share of the hero's own pace (game/enemies.js THIEF), not at spd.
-  thief: { name: 'Gilded Thief', sprite: 'thief', hp: 140, spd: 50, dmg: 0, r: 6, xp: 12, ai: 'flee', mass: 1, anim: 9, death: 'gold', kbRes: 0.3, noTarget: false },
+  // kbRes 1: no blow shoves him; he only runs and strolls at his own pace (22 October 2026).
+  thief: { name: 'Gilded Thief', sprite: 'thief', hp: 140, spd: 50, dmg: 0, r: 6, xp: 12, ai: 'flee', mass: 1, anim: 9, death: 'gold', kbRes: 1, noTarget: false },
 
   // Breakable props are enemies that never move and never hurt you.
   barrel: { name: 'Barrel', sprite: 'barrel', hp: 6, spd: 0, dmg: 0, r: 5, xp: 0, ai: 'static', prop: true, death: 'wood', mass: 99 },

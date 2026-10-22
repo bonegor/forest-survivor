@@ -161,7 +161,7 @@ Each hero has a **signature weapon** no other hero can find (the Necromancer has
 | Leech Chains: chains drain the nearest foes and mend the hero a little | level 50 | Troll Blood | Blood Tether |
 | Grave Hollow: a pit in the thick of the horde draws it in, then caves in | a Dungeon Run won | Lodestone | Abyss: and drags in the gems |
 | Puffcap Spores: mushrooms where foes fall; their spores confuse what treads on them | 3 nights won | Lucky Clover | Fairy Ring |
-| Reaper's Scythe: a slow sweep all round; it reaps foes under 15% health | 60,000 foes in all | Scholar's Crown | Harvest Moon |
+| Reaper's Scythe: a slow, wide reaper's sweep all round, far past a sword's reach; it reaps foes under 15% health | 60,000 foes in all | Scholar's Crown | Harvest Moon |
 | Hex Hourglass: curses the toughest; when it ends they take a share of all they suffered again | a night won with 3 heroes | Hourglass | Doom |
 
 **Weapons a new player has**: five, the hero's own and the Throwing Axe, Guardian Blades, Moonglaive and Caltrops; Frost Nova opens at 1:00 survived, Consecration once the hero has fallen 10 times (a run quit or won is no fall), and the rest of the shared ones by milestones (`public/js/shared/progress.js`). Any shared weapon open can be **left at home** in the Codex (press its tile): it is never offered in a run until taken along again.

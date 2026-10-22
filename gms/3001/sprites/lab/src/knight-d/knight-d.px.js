@@ -26,19 +26,19 @@ const PART = { outline: "k", pivot: [0, 0] }
 const must = (rows, w, name) => rows.forEach((r, i) => { if (r.length !== w) throw new Error(name + " row " + i + " is " + r.length + ", not " + w + ": " + r) })
 
 // ---------------------------------------------------------------- parts (grids, fill at 0,0)
-// The open helm, 11x10, 3/4 facing right: a silver dome with a lit crown, a brim band, the near
+// The open helm, 11x10, 3/4 facing right: a barrel of ice enamel (flat crown, straight sides, a vertical highlight band lit from the left, darker to the right), a brim band, the near
 // ear flap on the left, and the face on the right: a stern brow, icy eyes, a cold cheek.
 const HELM = [
-  "...abdddb..",
-  "..abdeeedb.",
-  ".abcdeeddcb",
-  ".suuvvvuuus",
-  ".sbtxLLyLL.",
-  ".sbbxHJyHJ.",
-  ".saaxyyyyy.",
-  ".saaxpyypy.",
-  "..sbxxyyy..",
-  "...sabyy...",
+  "..deedcbb..",
+  ".bdeedcbba.",
+  ".bdeedcbba.",
+  ".suvvvuuts.",
+  ".bdcxLLyLL.",
+  ".bdcxHJyHJ.",
+  ".bdbxyyyyx.",
+  ".bdbxpyypx.",
+  ".bdbxyyyyx.",
+  "..bbxyyyy..",
 ]
 must(HELM, 11, "helm")
 sprite("_helm", PART, HELM.join("\n"))

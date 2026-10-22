@@ -76,3 +76,7 @@ Changed, and why:
 Still weak: the follow-through (f19-21) arm is a few pixels only, the far leg is dark on dark ground, the raised arm in f16-17 is a flat blue band, and the figure is very pale (mantle, helm, tassets) so on bright terrain it relies on the ink.
 
 Rebuild helper used for review: build, then `build-sheet-d.mjs` (as above); previews are `knight-d-rev-*` in the preview folder.
+
+## HELM (22 Oct 2026: less ball, more cylinder)
+
+The owner found the new heroes' heads too round. Only the `_helm` grid changed (it is stamped in every frame, so idle, walk and attack all follow): the body is now 9 wide x 10 tall (was a dome 10-11 wide with a tapering chin), a flat crown (top row two steps in at each corner, one step of rounding), straight vertical sides, a squared jaw with one rounded step at the bottom. Shading follows a cylinder: a vertical highlight band (`d e e d`) just left of centre on the crown and the left cheek-guard, falling off to `b a` on the right; the face's far cheek is shaded `x`. The brim is a straight silver band. Wings, eyes, brow, colours, glow, positions and sword are untouched; the helm sits at the same place, so feet stay on row 39 and the figure box is the same (the head is 2 px narrower, not bigger). Rebuilt with the steps above; `pxl check` has no warnings. Before/after previews: scratchpad `helm-d/`.

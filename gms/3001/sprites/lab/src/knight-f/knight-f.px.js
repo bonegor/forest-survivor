@@ -20,19 +20,22 @@ ramps("kaApPq", "kngmMlL", "koOyY", "kwWxX")
 const PART = { outline: "k", pivot: [0, 0] }
 
 // ---------------------------------------------------------------- parts
-// The helm, 11x10, 3/4 facing right: moss lacquer, a bark brow band, a dark visor with two
-// glowing eyes, a leaf cheek plate under it.
+// The helm, 10x11, 3/4 facing right: a barrel helm, a little taller than wide. Flat crown (one
+// step of rounding at the corners), straight sides, one step in at the chin. Shaded as a
+// cylinder: a vertical lit band on the crown (cols 4-6), darker toward the far (left) edge and a
+// little toward the near edge. A bark brow band, a dark visor with two glowing eyes, a bark jaw.
 sprite("_helm", PART, `
-  ...gMlLlm..
-  ..FmMlLLlm.
-  .fymMMlLlMm
-  ggfAPPPqPPA
-  gnmAddEdEdA
-  gnmAddEdEdA
-  gnmmAdddddA
-  .gnAppPPpPn
-  ..gnAppPpn.
-  ...aAApPn..`)
+  .gmMlLlmg.
+  nFmMlLLlmg
+  nfmMlLLlmg
+  ngmMlLLlmg
+  ngAPPPqPPA
+  ngAddEdEdA
+  ngAddEdEdA
+  ngAddddddA
+  ngApPPqPpA
+  ngAppPqPpA
+  .aAApPPpn.`)
 
 // Antlers: forked bark branches placed pixel by pixel (1 px branches carry 1 px of ink each
 // side, so prongs stand 3+ px apart). `pts` run from the base up; the lit tone alternates
@@ -243,8 +246,8 @@ function figure(c, f) {
   }
   if (f.swordBehind) sword(c, hand[0], hand[1], f.deg, f.len)
   if (f.helmOverArm) armIn(c, sh, elbow, hand)
-  c.stamp("_helm", 19 + ux, 9 + uy + (f.hy || 0))
-  if (f.blink) { c.px(25 + ux, 14 + uy + (f.hy || 0), "d"); c.px(27 + ux, 14 + uy + (f.hy || 0), "d") }   // eyes shut to a slit
+  c.stamp("_helm", 20 + ux, 8 + uy + (f.hy || 0))
+  if (f.blink) { c.px(25 + ux, 13 + uy + (f.hy || 0), "d"); c.px(27 + ux, 13 + uy + (f.hy || 0), "d") }   // eyes shut to a slit
   if (f.helmOverArm) { limb(c, elbow[0], elbow[1], 1.3, hand[0], hand[1], 1.2, "aApPq"); c.px(elbow[0], elbow[1], "l"); fist(c, hand[0], hand[1]) }
   else if (f.rest) { c.stamp("_arm", 26 + ux, 18 + uy); sword(c, hand[0], hand[1], f.deg, f.len, f.glint ?? -1); fist(c, hand[0], hand[1]) }
   else {

@@ -312,7 +312,7 @@ export const KINDS = {
           pierce: 999, kb: 1.2, w, type: 'holy',
         });
       }
-      sfx('slash', { pitch: rand(0.85, 1.15) });
+      sfx('slash', { pitch: rand(1.05, 1.3) });
     },
   },
 

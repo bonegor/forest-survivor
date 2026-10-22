@@ -184,7 +184,7 @@ const arp = (t, notes, step, o) => notes.forEach((f, i) => tone(t + i * step, { 
 
 // [minInterval seconds, maxVoices]
 const LIMITS = {
-  hit: [0.035, 6], crit: [0.05, 4], slash: [0.05, 3], arrow: [0.04, 4], dagger: [0.03, 4], fireball: [0.08, 3],
+  hit: [0.035, 6], crit: [0.05, 4], slash: [0.05, 3], whoosh: [0.3, 1], reap: [0.08, 2], arrow: [0.04, 4], dagger: [0.03, 4], fireball: [0.08, 3],
   explode: [0.06, 4], zap: [0.06, 3], axe: [0.08, 3], shard: [0.1, 2], gem: [0.025, 5], coin: [0.04, 4],
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
@@ -212,6 +212,16 @@ const SFX = {
   slash: (t, o) => {
     noise(t, { filter: 'bandpass', f0: 3200 * o.p, f1: 700, q: 1.6, dur: 0.16, vol: 0.32, attack: 0.01, pan: o.pan });
     tone(t, { type: 'sawtooth', f0: 700 * o.p, f1: 220, dur: 0.1, vol: 0.03, pan: o.pan });
+  },
+  // Reaper's Scythe: a slow, soft whoosh of air as the blade goes round, and a hollow falling
+  // two-note sigh for each foe it reaps.
+  whoosh: (t, o) => {
+    noise(t, { filter: 'bandpass', f0: 320 * o.p, f1: 1100 * o.p, q: 0.9, dur: 0.6, vol: 0.2, attack: 0.22, curve: 'lin', pan: o.pan });
+    tone(t, { type: 'sine', f0: 120 * o.p, f1: 80, dur: 0.5, vol: 0.035, attack: 0.12 });
+  },
+  reap: (t, o) => {
+    tone(t, { type: 'triangle', f0: 660 * o.p, f1: 330 * o.p, dur: 0.32, vol: 0.05, pan: o.pan });
+    tone(t + 0.06, { type: 'sine', f0: 494 * o.p, f1: 247 * o.p, dur: 0.4, vol: 0.04, detune: 12, pan: o.pan });
   },
   arrow: (t, o) => {
     noise(t, { filter: 'highpass', f0: 3000, dur: 0.06, vol: 0.12, pan: o.pan });

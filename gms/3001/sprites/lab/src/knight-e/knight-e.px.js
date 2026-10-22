@@ -27,19 +27,21 @@ function grid(rows) {
 }
 
 // ---------------------------------------------------------------- parts (grids, fill at 0,0)
-// The helm, 11x10, in 3/4 facing right: a faceted dome lit from the top, a lowered brow that
-// points at the front, the visor slit with two slanted red eyes, and an angular chin guard.
+// The helm, 11x11 (stamped at hx, hy - 1), in 3/4 facing right: a barrel helm, a cylinder. A flat
+// crown, straight sides, a vertical highlight band on the lit front with the dark far side
+// behind, a brow ledge, the visor slit with two slanted red eyes, vented cheeks, a squared chin.
 sprite("_helm", PART, grid([
-  "..arcdddcb..",
-  ".arcddeddcb.",
-  "abrcddddcccb",
-  "abbcdcdcccbb",
-  "abbbbcddddde",
-  "aabbbbkkkkkk",
-  "aabbbbkkkkkk",
-  "abbbbcbdbcbb",
-  "aabbbbcdcbb.",
-  ".aabbbbbbb..",
+  ".rbcddddcb.",
+  "rabcddeddcb",
+  "abbbcdddcbb",
+  "abbbcdedcbb",
+  "abbbcdddcbb",
+  "abbbbcdddcc",
+  "aabbkkkkkkk",
+  "aabbkkkkkkk",
+  "abbbcdddcab",
+  "abbbcdddcab",
+  ".abbbcccbb.",
 ]))
 // The horns: curved out and up, tips leaning in. The near one on the helm's back-left corner
 // (placed at helm - 4, - 5), the far one smaller on the front-right (placed at helm + 8, - 4).
@@ -172,8 +174,8 @@ function horns(c, hx, hy) {
 function hornNear(c, hx, hy) { c.stamp("_hornN", hx - 4, hy - 4) }
 function eyes(c, hx, hy, blink) {
   if (blink) return
-  c.px(hx + 7, hy + 5, "Z"); c.px(hx + 7, hy + 6, "X"); c.px(hx + 8, hy + 6, "Y")
-  c.px(hx + 10, hy + 6, "Y"); c.px(hx + 11, hy + 5, "Z")
+  c.px(hx + 6, hy + 5, "Z"); c.px(hx + 6, hy + 6, "X"); c.px(hx + 7, hy + 6, "Y")
+  c.px(hx + 9, hy + 6, "Y"); c.px(hx + 10, hy + 5, "Z")
 }
 
 // The greatsword, drawn as a shape: its hand at (hx, hy), pointing `deg` (clockwise from right),
@@ -280,7 +282,7 @@ function figure(c, f) {
   const hx = 18 + ux, hy = 9 + uy + (f.hy || 0)
   horns(c, hx, hy)
   hornNear(c, hx, hy)
-  c.stamp("_helm", hx, hy)
+  c.stamp("_helm", hx, hy - 1)
   eyes(c, hx, hy, f.blink)
   if (f.front) sword(c, hand[0], hand[1], f.deg, f.len, "blade", f.pulse)
   else sword(c, hand[0], hand[1], f.deg, f.len, "blade", f.pulse, (x) => x >= CUT)

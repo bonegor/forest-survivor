@@ -1,5 +1,5 @@
 // Knight C, the Ember Knight, for Forest Survivor: a hot-headed young knight forged in a volcano.
-// Crimson plate and blackened brass with glowing orange seams, a rounded sallet whose crest is a
+// Crimson plate and blackened brass with glowing orange seams, a barrel-shaped helm (flat crown, straight sides) whose crest is a
 // living flame, a big glowing eye-slit, a scorched half-cape, no shield, one broad flamberge whose
 // edge glows ember-orange. 22 frames of 48x48 facing right, one row: idle 0-7, walk 8-15, attack 16-21.
 // Drawn in a 46x46 canvas laid at (1, 1) of the 48x48 frame (canvas x,y = sheet x-1,y-1).
@@ -20,21 +20,23 @@ ramps("kRrCch", "kuUjJH", "kmMN", "kLl", "kvVW", "kQaAF")
 const PART = { outline: "k", pivot: [0, 0] }
 
 // ---------------------------------------------------------------- parts (grids, fill at 0,0)
-// The sallet, 11x10, 3/4 facing right. A brass crest socket on top (the flame rises from it), a
-// rounded crimson dome lit from above and a little to the front, a brass brow band, the big
-// glowing eye-slit (A F A over an a), cheek guards in brass and the sallet's tail flaring at the
-// back (left).
+// The sallet, 10x11, a barrel of blackened bronze seen 3/4 facing right: a flat crown (one step of
+// rounding at the corners), straight vertical sides and a cylinder's shading: dark at the far (left)
+// edge, a vertical highlight band on the lit side, the near edge turning away again. A bright brow
+// band, the big glowing eye-slit (a A over F) cut in the dark face opening, bronze cheek plate and a
+// jaw rim. The flame rises from the crown (drawn over its middle).
 sprite("_helm", PART, `
-  ...UjJjU...
-  ..UjJHJjjU.
-  .UjJHHJJjjU
-  UUjjJJJJJjj
-  UjjjjJJJJJH
-  UuUuuaAuaAu
-  UuUuuuFuuFu
-  .UjUuuuuUUu
-  ..UjjJjjUu.
-  ...uUjjuu..`)
+  .UjjJJJjU.
+  uUjjJHJJjU
+  uUjjJHJJjU
+  uUjJJHJJJU
+  uUjuaAuaAu
+  uUjuuFuuFu
+  uUjjuuuuuU
+  uUjjjUuuUJ
+  uUjjJHJjjU
+  uUjjJHJjjU
+  .uUjjjjUu.`)
 
 // The torso, 11x11: crimson breastplate with a glowing seam cracked down it, a brass gorget and
 // belt with a glowing buckle, then the tassets (skirt plates) with a hot edge.
@@ -108,7 +110,7 @@ const TONGUES = [
 ]
 function flame(c, bx, by, p, lean = 0, boost = 0) {
   for (const t of TONGUES) {
-    const h = Math.max(3, Math.round(t.h + boost + Math.sin(p + t.ph) * 1.6))
+    const h = Math.min(by + 1, Math.max(3, Math.round(t.h + boost + Math.sin(p + t.ph) * 1.6)))   // never above the canvas
     const sway = Math.sin(p * 1 + t.ph * 1.7) * 1.1
     for (let r = 0; r < h; r++) {
       const f = r / h
@@ -243,8 +245,8 @@ function figure(c, f) {
   }
   if (f.swordBehind) sword(c, hand[0], hand[1], f.deg, f.len, f.pulse || 0)
   if (f.helmOverArm) armIn(c, sh, elbow, hand)
-  c.stamp("_helm", hx, hy)
-  flame(c, hx + 6, hy, f.ph, f.lean || 0, f.boost || 0)
+  c.stamp("_helm", hx + 1, hy - 1)
+  flame(c, hx + 6, hy - 2, f.ph, f.lean || 0, (f.boost || 0))
   if (f.swordFront) sword(c, hand[0], hand[1], f.deg, f.len, f.pulse || 0)
   if (f.helmOverArm) { limb(c, elbow[0], elbow[1], 1.3, hand[0], hand[1], 1.2, "RrCch"); c.px(elbow[0], elbow[1], "J"); fist(c, hand[0], hand[1]) }
   else if (f.rest) { sword(c, hand[0], hand[1], f.deg, f.len, f.pulse || 0); armIn(c, sh, elbow, hand); fist(c, hand[0], hand[1]) }

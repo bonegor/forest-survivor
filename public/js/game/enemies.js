@@ -491,8 +491,10 @@ export class Enemy {
 
   // The horde alone is shoved, scared or dragged about: never a boss, a crypt's lord, a champion,
   // a prop, a sealed guardian or one still asleep.
+  // The Gilded Thief keeps his own pace (THIEF: the owner's, he runs and strolls as set): no gust,
+  // pull or fright moves him (22 October 2026: "the thief now seems to jump").
   get movable() {
-    return !(this.dead || this.boss || this.lord || this.elite || this.prop || this.sealed || this.sleeping || this.dormant || this.spawnT > 0);
+    return !(this.dead || this.boss || this.lord || this.elite || this.prop || this.sealed || this.sleeping || this.dormant || this.spawnT > 0 || this.def.ai === 'flee');
   }
 
   // Afraid for t seconds (it runs from the hero); false for one that shrugs it off.

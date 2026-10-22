@@ -52,8 +52,10 @@ export function gust(g, w, foes) {
 // ------------------------------------------------------------------ hook --
 
 const HOOK_OUT = 0.16, HOOK_BACK = 0.18, HOOK_W = 5;
+// The hook at the rope's end: a J of steel ('w', its glint).
+const HOOK_ART = ['.w#', '..#', '#.#', '.#.'];
 
-// A barbed hook flying from the hero at a foe and a chain ripping back: each way, every foe on
+// A barbed hook flying from the hero at a foe and its rope ripping back: each way, every foe on
 // the line is cut and bleeds. Hook i of a volley; two hooks bleeding a foe cut double (twin).
 export class Hook {
   constructor(g, w, target, i) {
@@ -111,16 +113,24 @@ export class Hook {
     const k = clamp(this.back ? 1 - u : u, 0, 1);
     const ex = lerp(p.x, this.x, k), ey = lerp(p.y, this.y, k);
     const [sx, sy] = toScreen(cam, p.x, p.y - 6), [tx, ty] = toScreen(cam, ex, ey - 6);
-    const n = Math.max(2, Math.round(Math.hypot(tx - sx, ty - sy) / (5 * cam.S))), S = Math.max(1, Math.round(cam.S));
+    // A taut tan rope, twisted (not the Leech Chains' red links, nor a lightning's jag), and at
+    // its end a steel hook; the Kraken Chains' is a dark iron chain.
+    const [c0, c1] = this.w.s.twin ? ['#5a6988', '#262b44'] : ['#b86f50', '#733e39'];
+    const n = Math.max(2, Math.round(Math.hypot(tx - sx, ty - sy) / cam.S)), S = Math.max(1, Math.round(cam.S));
     for (let j = 0; j <= n; j++) {
       const f = j / n;
-      ctx.fillStyle = j % 2 ? '#8b9bb4' : '#5a6988';
+      ctx.fillStyle = j % 3 ? c0 : c1;
       ctx.fillRect(Math.round(lerp(sx, tx, f)), Math.round(lerp(sy, ty, f)), S, S);
     }
-    ctx.fillStyle = '#e8f4ff';
-    ctx.fillRect(Math.round(tx) - S, Math.round(ty) - S, S * 3, S * 3);
-    ctx.fillStyle = '#c0cbdc';
-    ctx.fillRect(Math.round(tx) - S * 2, Math.round(ty), S, S * 2);
+    const hx = Math.round(tx) - S, hy = Math.round(ty) - 2 * S;
+    for (let r = 0; r < HOOK_ART.length; r++) {
+      for (let c = 0; c < 3; c++) {
+        const ch = HOOK_ART[r][c];
+        if (ch === '.') continue;
+        ctx.fillStyle = ch === 'w' ? '#ffffff' : '#c0cbdc';
+        ctx.fillRect(hx + c * S, hy + r * S, S, S);
+      }
+    }
   }
 }
 

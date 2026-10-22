@@ -6,7 +6,7 @@
 import { SPR } from '../engine/sprites.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, lerp, clamp, ease, angleDiff, pick, hash2, hexToRgb, makeCanvas } from '../engine/util.js';
-import { ringSprite, discSprite, slashFrame, glow, beamSprite, shadowSprite } from './fxsprites.js';
+import { ringSprite, discSprite, slashFrame, glow, glint, beamSprite, shadowSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { WEAPON_SPRITES, BRAND_TIME } from '../data/weapons.js';
 import { danceBlade, spawnProjectile } from './projectiles.js';
@@ -24,12 +24,15 @@ const toScreen = (cam, x, y) => [(x - cam.x) * cam.S, (y - cam.y) * cam.S];
 
 // ------------------------------------------------------------------ slash --
 
-const STEEL = ['#5a6988', '#8b9bb4', '#c0cbdc', '#e8f4ff', '#ffffff'];
+// The Longsword's: bright, crisp steel, white at the edge (the Scythe's ghost-light is nothing like it).
+const STEEL = ['#8b9bb4', '#c0cbdc', '#e8f4ff', '#ffffff', '#ffffff'];
 const HOLY = ['#be4a2f', '#f77622', '#feae34', '#fee761', '#ffffff'];
 
 // How long and how far a slash strikes (Slash.strike): to, the share of the swing's time; reach,
 // world px past the blade and the foe's body.
 export const SLASH_HIT = { to: 0.7, reach: 4 };
+// How long a slash is seen: a quick cut.
+export const SLASH_DUR = 0.16;
 
 export class Slash {
   constructor(g, w, ang, R, arc, dmg, holy) {
@@ -38,7 +41,7 @@ export class Slash {
     this.R = Math.round(R);
     this.arc = arc;
     this.t = 0;
-    this.dur = 0.22;
+    this.dur = SLASH_DUR;
     this.holy = holy;
     this.ai = ((Math.round((ang / TAU) * 32) % 32) + 32) % 32;
     this.pal = holy ? HOLY : STEEL;
@@ -86,8 +89,16 @@ export class Slash {
   }
 
   drawGlow(ctx, cam) {
-    if (!this.holy) return;
     const p = this.g.player;
+    if (!this.holy) {
+      // A glint of steel at the cut's leading tip (where slashFrame draws it), at its reach.
+      const u = this.t / this.dur;
+      if (u > 0.75) return;
+      const a = (this.ai / 32) * TAU - this.arc / 2 + this.arc * Math.min(1, ((Math.min(5, Math.floor(u * 6)) + 1) / 6) * 1.45);
+      const [gx, gy] = toScreen(cam, p.x + Math.cos(a) * (this.R - 1), p.y - 7 + Math.sin(a) * (this.R - 1));
+      glint(ctx, gx, gy, (3 - u * 2) * cam.S, cam.S, '#ffffff');
+      return;
+    }
     const [sx, sy] = toScreen(cam, p.x + Math.cos(this.ang) * this.R * 0.6, p.y - 7 + Math.sin(this.ang) * this.R * 0.6);
     const s = this.R * 2.2 * cam.S;
     ctx.globalAlpha = 0.5 * (1 - this.t / this.dur);
@@ -1858,14 +1869,16 @@ export class LeechChain {
     const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / (5 * S)));
     const fade = Math.min(1, (this.dur - this.t) / 0.3);
     ctx.globalAlpha = Math.max(0, fade);
+    // It writhes, alive (the Grappling Hook's rope hangs taut).
+    const wr = (u) => Math.sin(u * Math.PI) * (3 + Math.sin(u * 9 - this.t * 10) * 1.5) * S;
     for (let i = 0; i <= n; i++) {
-      const u = i / n, sag = Math.sin(u * Math.PI) * 3 * S;
+      const u = i / n, sag = wr(u);
       const sz = (i % 2 ? 2 : 3) * S;
       ctx.fillStyle = i % 2 ? '#a22633' : '#e43b44';
       ctx.fillRect(Math.round(lerp(ax, bx, u) - sz / 2), Math.round(lerp(ay, by, u) + sag - sz / 2), sz, sz);
     }
     // A bright bead runs from the foe to the hero: the life he drinks.
-    const u = 1 - (this.pulse % 1), sag = Math.sin(u * Math.PI) * 3 * S;
+    const u = 1 - (this.pulse % 1), sag = wr(u);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(Math.round(lerp(ax, bx, u) - S), Math.round(lerp(ay, by, u) + sag - S), 2 * S, 2 * S);
     ctx.globalAlpha = 1;

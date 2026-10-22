@@ -69,3 +69,7 @@ What was changed and why:
 - Code: `sword()` takes a clip function (the wind-up blade passes behind the body); the idle/walk/attack tables were rewritten; the cloak lift sign was fixed for the walk.
 
 Still weak: the hand/arm/pauldron area is dense at x6 (hilt, two fists, vambrace, pauldron spike all within 8 px); the forward-cut blade is short (12-14 px) and leans on the crescent; a stray ink pixel left of the near horn on f17 (the crescent's tail); the idle changes little besides the breath, blink and edge pulse; the horns still read slightly "antenna" on the far side.
+
+## HELM (2026-10-22)
+
+The owner found the new heroes' heads too round ("like balls"). The Black Knight's helm is now a barrel helm, a slight cylinder: `_helm` is 11x11 (was a 12x10 dome; stamped at hy - 1, so the bottom, brow and eyes sit where they did) with a flat crown line, straight vertical sides, one-pixel cut corners, a brow ledge, a squared chin, and cylinder shading: dark far (back) side with the cool rim, a vertical highlight band (`d`, specks `e`) on the lit front, a darker edge at the very front. The slit and eye pixels moved one column left to fit (`eyes()`). Horns, colours, glow, body and feet untouched (head about the same size, +1 px of height); the helm is shared by all 22 frames, so idle, walk and attack all changed. Rebuilt with the steps above (`pxl check` clean); `sheets/knight-e.png` is the new 1056x144 sheet with glow rows, `made` updated in `entry.json`.

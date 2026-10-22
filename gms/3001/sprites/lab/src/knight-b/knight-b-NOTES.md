@@ -83,3 +83,7 @@ The first version read flat and chibi beside Knight A and the Paladin. What chan
 - **Walk.** The passing phases were spread (`GAIT` [1,0] / [0,2] / [-2,2]) and the hips widened, so the far leg shows as a darker leg with its own ink on the passing frames instead of merging.
 - **Kept.** Colour concept, 22 frames 48x48 facing right, feet on row 39 (anchorY 40), baked-in ink, catalog fields.
 - **Still weak.** The walk's crossing frame (sheet frame 11) hides most of the far leg, as a profile walk does. The f16 fist overlaps the helm's top corner. The near pauldron is a big rounded mass that hides the tabard's right half.
+
+## HELM (2026-10-22, owner: heads too round, "more cylindrical")
+
+The `_helm` part was redrawn as a barrel great helm: 9 wide x 10 tall (was 10x10, a round bucket), so it is taller than wide and a little smaller in area. A flat lit crown, straight vertical sides down to a one-step chamfer at the chin, crisp crown corners. The shading follows a cylinder: dark far side (`n b`), a vertical highlight band (`S w`) on the lit side, falling off to `s b` at the face edge, instead of a spherical highlight. The brass brow, T-visor, breath slit and the cool rim (`c`) are kept; the helm is stamped at x 20 (was 19) so its right edge and the visor stay where they were. All 22 frames use the one part. Same rebuild steps as above; `pxl check` has no warnings; the feet are still on row 39.
