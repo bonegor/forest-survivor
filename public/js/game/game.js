@@ -26,6 +26,7 @@ import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
 import { Lighting } from './lighting.js';
 import { SpatialGrid } from './grid.js';
+import { jostle } from './crowd.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
 import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
@@ -1747,7 +1748,9 @@ export class Game {
     const R = Math.hypot(this.cam.W, this.cam.H) * 0.55;
     const from = ev.type === 'swarm' ? [-Math.cos(ev.dir) * R, -Math.sin(ev.dir) * R] : ev.type === 'pack' && ev.off ? ev.off : null;
     const [title, sub] = eventWords(ev, from ? sideWord(from) : '');
-    this.banner(title, sub, '#e43b44', WARN.lead + 0.4);
+    // A batch's swarms each say which they are (data/waves.js batchEvents), "2 of 4".
+    const which = ev.of > 1 ? `${ev.batch + 1} of ${ev.of}` : '';
+    this.banner(title, [sub, which].filter(Boolean).join(' · '), '#e43b44', WARN.lead + 0.4);
     sfx('warn' + ev.type);
     this.warnings.push({ ev, from, t: 0 });
   }
@@ -1989,7 +1992,7 @@ export class Game {
     }
     this.hostileCount = hostile;
     this.propCount = props;
-    this.separate();
+    this.separate(dt);
     this.relocT -= dt;
     if (this.relocT <= 0) {
       this.relocT = 0.5;
@@ -2038,15 +2041,19 @@ export class Game {
     if (this.hints) this.hints.update();
   }
 
-  // Foes pass through one another and through props (barrels, crates...), and in the forest
-  // through the trees, so nothing holds a horde up; the only thing they can't do is stand inside
-  // the hero. Dungeon walls alone stop them (Dungeon.collide). The user's rule: "They cannot bump
-  // into anything, apart from, obviously, in the dungeon where there is no space."
-  separate() {
+  // Foes pass through props (barrels, crates...), and in the forest through the trees, so nothing
+  // holds a horde up (the user's rule of 16 October). They ease apart from one another (crowd.js,
+  // the owner's "monsters repel one another" of 22 October), and none can stand inside the hero:
+  // last, so that easing one off another can't leave it in him. Dungeon walls stop the walkers
+  // (Dungeon.collide), after the easing too.
+  separate(dt) {
     const E = this.enemies, p = this.player;
+    if (this.state === 'play' || this.state === 'dying') jostle(E, p.x, p.y, dt);
+    const walls = this.world instanceof Dungeon;
     for (let i = 0; i < E.length; i++) {
       const a = E[i];
       if (a.dead || a.prop) continue;
+      if (walls && !a.def.fly && a.def.ai !== 'phaser') this.world.collide(a);
       if (!a.def.fly) {
         const dx = a.x - p.x, dy = a.y - p.y, d2 = dx * dx + dy * dy, rr = a.r + p.r - 2;
         if (d2 < rr * rr && d2 > 0.01) {

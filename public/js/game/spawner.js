@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { SWARM_BATCH, batchEvents, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { EVENTS, SWARM_BATCH, batchEvents, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
@@ -38,6 +38,10 @@ export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phas
 // a wave swells it for WAVE.length seconds, up to 1 + WAVE.peak times at its height, then lets it
 // go back down. A wave fills the field fast; once it passes, nothing more comes until the hero has
 // thinned it back to its size.
+// A timed swarm's stream: how wide across its way and how deep along it (the owner's "slightly less
+// clumped up", 22 October 2026; it was 120 x 20).
+export const SWARM_SPREAD = { wide: 170, deep: 70 };
+
 export const WAVE = { first: 45, every: 75, length: 15, peak: 0.6 };
 export function waveAt(t) {
   const s = t - WAVE.first;
@@ -56,8 +60,7 @@ export class Spawner {
     this.propT = 4;
     this.shrineT = 45;
     this.bossIdx = 0;
-    this.loopAt = 0; // Ranked: next looping event, in phase minutes
-    this.loopEv = null; // Ranked: that event, rolled and announced (warn)
+    this.loopAt = 0; // Ranked: next looping event, in phase minutes (put in events when near)
     this.warnIdx = 0; // the next of events to announce (warn)
     this.warned = new Map(); // events index -> the announced copy, its side rolled
     this._events = null;
@@ -67,11 +70,15 @@ export class Spawner {
   // the first time they are asked for: by then the mode and the floor are set, and with them how
   // far the phase moves in SWARM_BATCH.gap seconds.
   get events() {
-    if (!this._events) {
-      const g = this.g, per = (this.phaseAfter(60) - g.phase) / 60;
-      this._events = batchEvents(() => randi(SWARM_BATCH.min, SWARM_BATCH.max), SWARM_BATCH.gap * per);
-    }
+    if (!this._events) this._events = this.batch(EVENTS);
     return this._events;
+  }
+
+  // Events with every swarm made a batch (data/waves.js batchEvents), its swarms SWARM_BATCH.gap
+  // game seconds apart at the pace the phase moves now.
+  batch(list) {
+    const per = (this.phaseAfter(60) - this.g.phase) / 60;
+    return batchEvents(() => randi(SWARM_BATCH.min, SWARM_BATCH.max), SWARM_BATCH.gap * per, list);
   }
 
   // The phase `s` game seconds from now (the clock and a Dungeon floor's clock alike).
@@ -101,7 +108,6 @@ export class Spawner {
   rewarn() {
     this.warnIdx = this.eventIdx;
     this.warned.clear();
-    this.loopEv = null;
     this.g.warnings = [];
   }
 
@@ -175,6 +181,17 @@ export class Spawner {
     const soon = this.phaseAfter(WARN.lead * g.pace);
     if (this.warnIdx < this.eventIdx) this.warnIdx = this.eventIdx;
     const events = this.events;
+    // Ranked, once the night's are spent: one of its later events again every RANKED_EVENT_EVERY,
+    // growing past phase 30, put at the end of the list (a swarm as a whole batch), where it is
+    // announced and comes like the night's own.
+    if (g.mode === 'ranked' && this.eventIdx >= events.length) {
+      if (!this.loopAt) this.loopAt = phase + RANKED_EVENT_EVERY;
+      if (soon >= this.loopAt) {
+        const ev = pick(EVENTS.filter((e) => e.at >= 18));
+        events.push(...this.batch([{ ...ev, at: this.loopAt, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) }]));
+        this.loopAt = 0;
+      }
+    }
     while (this.warnIdx < events.length && events[this.warnIdx].at <= soon) {
       const i = this.warnIdx++;
       this.warned.set(i, this.warn({ ...events[i] }));
@@ -183,18 +200,6 @@ export class Spawner {
       const i = this.eventIdx++;
       this.fire(this.warned.get(i) || events[i], phase);
       this.warned.delete(i);
-    }
-    if (g.mode === 'ranked' && this.eventIdx >= events.length) {
-      if (!this.loopAt) this.loopAt = phase + RANKED_EVENT_EVERY;
-      if (!this.loopEv && soon >= this.loopAt) {
-        const ev = pick(events.filter((e) => e.at >= 18));
-        this.loopEv = this.warn({ ...ev, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) });
-      }
-      if (phase >= this.loopAt) {
-        this.loopAt = phase + RANKED_EVENT_EVERY;
-        this.fire(this.loopEv || pick(events.filter((e) => e.at >= 18)), phase);
-        this.loopEv = null;
-      }
     }
 
     // Champions.
@@ -270,14 +275,15 @@ export class Spawner {
         break;
       }
       case 'swarm': {
-        // A dense stream crossing the screen, from the side its warning showed.
+        // A stream crossing the screen, from the side its warning showed: SWARM_SPREAD.wide px
+        // across and up to .deep px deep, so it comes loose rather than as one clump.
         const a = ev.dir ?? rand(TAU);
         const dx = Math.cos(a), dy = Math.sin(a);
         const R = Math.hypot(cam.W, cam.H) * 0.55;
         const sx = p.x - dx * R, sy = p.y - dy * R;
         for (let i = 0; i < ev.count; i++) {
-          const off = (i / ev.count - 0.5) * 120;
-          const x = sx - dy * off + rand(-10, 10), y = sy + dx * off + rand(-10, 10);
+          const off = (i / ev.count - 0.5) * SWARM_SPREAD.wide + rand(-8, 8), back = rand(SWARM_SPREAD.deep);
+          const x = sx - dy * off - dx * back, y = sy + dx * off - dy * back;
           const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6, aware: true, sent: true });
           if (e) e.spd *= 1.2;
         }

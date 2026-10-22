@@ -113,7 +113,7 @@ test('no record to beat (a fresh profile): nothing told', () =>
     assert.equal(g.banners.filter((b) => b.title.startsWith('NEW RECORD')).length, 0);
   }, { records: { kills: 0, level: 0, time: 0 } }));
 
-test('every swarm comes as a batch of 3 to 5, each three times as big, 7 s apart, each told before it', () => {
+test('every swarm comes as a batch of 2 to 5, each three times as big, 7 s apart, each told before it which of the batch it is', () => {
   const sizes = new Set();
   for (let k = 0; k < 40; k++) {
     game((g) => {
@@ -124,13 +124,15 @@ test('every swarm comes as a batch of 3 to 5, each three times as big, 7 s apart
         assert.ok(batch.length >= SWARM_BATCH.min && batch.length <= SWARM_BATCH.max);
         batch.forEach((e, i) => {
           assert.equal(e.count, ev.count * 3);
+          assert.equal(e.batch, i);
+          assert.equal(e.of, batch.length);
           // 7 real seconds apart on the 15-minute night's clock (1.4 phase a minute).
           assert.ok(Math.abs(e.at - (ev.at + (i * 7 * 1.4) / 60)) < 1e-9);
         });
       }
     }, { seed: k + 1 });
   }
-  assert.deepEqual([...sizes].sort(), [3, 4, 5], 'every size comes');
+  assert.deepEqual([...sizes].sort(), [2, 3, 4, 5], 'every size comes');
   // In play: a batch's swarms each told about 2 s before they come.
   game((g) => {
     const ev = EVENTS.find((e) => e.type === 'swarm');
@@ -140,7 +142,12 @@ test('every swarm comes as a batch of 3 to 5, each three times as big, 7 s apart
     const seen = new Set();
     for (let f = 0; f < (4 + n * 7) * 60; f++) {
       g.update(1 / 60);
-      for (const w of g.warnings) if (!seen.has(w.ev)) { seen.add(w.ev); told++; }
+      for (const w of g.warnings) {
+        if (seen.has(w.ev)) continue;
+        seen.add(w.ev);
+        told++;
+        assert.ok(g.banners.some((b) => b.sub.endsWith(`${w.ev.batch + 1} of ${n}`)), 'its banner says which of the batch it is');
+      }
       if (g.spawner.eventIdx > last) { came += g.spawner.eventIdx - last; last = g.spawner.eventIdx; }
     }
     assert.ok(told >= n && came >= n, `${n} swarms told (${told}) and come (${came})`);

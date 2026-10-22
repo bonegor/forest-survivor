@@ -72,22 +72,24 @@ export const EVENTS = [
 ];
 
 // The owner's (22 October 2026): a swarm "should be 3x bigger ... in jolts of 3 to 5 ... warning
-// comes, few seconds later, a swarm. Few seconds later new warning, few seconds later new swarm".
-// Each swarm of EVENTS comes as a batch of min..max swarms, each `more` times its count, `gap`
-// real seconds apart, each with its own warning (events.js WARN.lead before it).
-export const SWARM_BATCH = { min: 3, max: 5, more: 3, gap: 7 };
+// comes, few seconds later, a swarm. Few seconds later new warning, few seconds later new swarm",
+// then "during a swarm batch have this done 2-5 times". Each swarm of EVENTS comes as a batch of
+// min..max swarms, each `more` times its count, `gap` game seconds apart, each with its own
+// warning (events.js WARN.lead before it) telling which of the batch it is.
+export const SWARM_BATCH = { min: 2, max: 5, more: 3, gap: 7 };
 
 // The night's events with every swarm made a batch: size() how many swarms a batch holds (rolled
 // once a night), gapPh the phase between two of them.
-export function batchEvents(size, gapPh) {
+// Each swarm of the batch knows its place in it (batch, from 0) and the batch's size (of).
+export function batchEvents(size, gapPh, list = EVENTS) {
   const out = [];
-  for (const ev of EVENTS) {
+  for (const ev of list) {
     if (ev.type !== 'swarm') {
       out.push(ev);
       continue;
     }
     const n = size();
-    for (let i = 0; i < n; i++) out.push({ ...ev, at: ev.at + i * gapPh, count: ev.count * SWARM_BATCH.more, batch: i });
+    for (let i = 0; i < n; i++) out.push({ ...ev, at: ev.at + i * gapPh, count: ev.count * SWARM_BATCH.more, batch: i, of: n });
   }
   return out;
 }

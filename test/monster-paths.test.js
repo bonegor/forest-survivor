@@ -3,7 +3,9 @@
 // in the dungeon where there is no space. There they need to follow the hero on vision." Asked,
 // they chose: in dungeons too monsters pass through one another (walls alone stop them), and a
 // monster there chases the hero once it has seen him, round corners too. Then they chose to keep
-// that to the crypts: a Dungeon Run floor's horde hunts the hero from anywhere, as before.
+// that to the crypts: a Dungeon Run floor's horde hunts the hero from anywhere, as before. On 22
+// October 2026 the owner asked that "monsters repel one another" (crowd.js): they ease apart, softly,
+// but still pass through props and trees.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -40,12 +42,12 @@ const run = (g, seconds) => {
   for (let i = 0; i < seconds * 60; i++) g.update(1 / 60);
 };
 
-test('in the forest monsters pass through one another, a crate and a tree trunk', () =>
+test('in the forest monsters ease apart from one another but pass through a crate and a tree trunk', () =>
   game('s15', (g, p) => {
-    // Two on one spot, walking the same way: nothing pushes them apart.
+    // Two on one spot, walking the same way: they ease apart (crowd.js).
     const a = g.spawnEnemy('zombie', p.x + 90, p.y, { instant: true }), b = g.spawnEnemy('zombie', p.x + 90, p.y, { instant: true });
     run(g, 0.5);
-    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) < 0.5, 'still one on the other');
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > (a.r + b.r) * 0.8, 'no longer one on the other');
     // A crate on the way: the skeleton walks through it.
     const crate = g.spawnEnemy('crate', p.x - 40, p.y, { instant: true });
     const sk = g.spawnEnemy('skeleton', p.x - 70, p.y, { instant: true });
@@ -145,7 +147,7 @@ test('in a crypt a monster strolls until it sees the hero, then follows him roun
     assert.equal(SIGHT, 160, 'it sees as far as the hero does');
   }));
 
-test('in a crypt a monster struck knows where the hero is; what is sent at him knows anyway; monsters pass through one another', () =>
+test('in a crypt a monster struck knows where the hero is; what is sent at him knows anyway; monsters ease apart there too', () =>
   crypt((g, p) => {
     const at = spotAway(g, p, 8, 30);
     const foe = g.spawnEnemy('skeleton', at.x, at.y, { instant: true, hpMul: 1e6 });
@@ -156,10 +158,11 @@ test('in a crypt a monster struck knows where the hero is; what is sent at him k
     g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 4 }, 3);
     const pack = g.enemies.filter((e) => e.type === 'goblin' && !e.dead);
     assert.ok(pack.length && pack.every((e) => e.aware), 'a pack sent at him knows where he is');
-    // Two on one spot: nothing pushes them apart.
+    // Two on one spot: they ease apart, and the walls still hold them.
     const a = g.spawnEnemy('zombie', at.x, at.y, { instant: true, aware: true }), b = g.spawnEnemy('zombie', at.x, at.y, { instant: true, aware: true });
     run(g, 0.5);
-    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) < 0.5, 'still one on the other');
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 1, 'no longer one on the other');
+    for (const e of [a, b]) assert.ok(g.world.open(e.x, e.y, 3), 'on open floor');
   }));
 
 // Then the user's choice on Dungeon Run: "Switch Dungeon Run back": its horde hunts the hero from
