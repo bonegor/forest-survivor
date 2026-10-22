@@ -164,7 +164,7 @@ Each hero has a **signature weapon** no other hero can find (the Necromancer has
 | Reaper's Scythe: a slow, wide reaper's sweep all round, far past a sword's reach; it reaps foes under 15% health | 60,000 foes in all | Scholar's Crown | Harvest Moon |
 | Hex Hourglass: curses the toughest; when it ends they take a share of all they suffered again | a night won with 3 heroes | Hourglass | Doom |
 
-**Weapons a new player has**: five, the hero's own and the Throwing Axe, Guardian Blades, Moonglaive and Caltrops; Frost Nova opens at 1:00 survived, Consecration once the hero has fallen 10 times (a run quit or won is no fall), and the rest of the shared ones by milestones (`public/js/shared/progress.js`). Any shared weapon open can be **left at home** in the Codex (press its tile): it is never offered in a run until taken along again.
+**Weapons a new player has**: five, the hero's own and the Throwing Axe, Guardian Blades, Moonglaive and Caltrops; Frost Nova opens at 1:00 survived, Consecration once the hero has fallen 10 times (a run quit or won is no fall), and the rest of the shared ones by milestones (`public/js/shared/progress.js`). Any shared weapon open can be **left at home** in the Codex (press its tile): it is never offered in a run until taken along again. Consecration stands first on the Codex's second line, right after the ones open from the start. Where a tab runs over the screen it scrolls: the mouse wheel a row at a time, a drag with the mouse or a finger, or the focus moved with the keys or a pad.
 
 ## Saving: everything lives in cookies
 

@@ -121,8 +121,20 @@ export function codexIcon(ctx, e, x, y, shut = !e.open) {
 }
 
 // The Codex's entries for this profile: every weapon and relic, and the ultimates of the heroes
-// it has (a hero still to come shows his in time).
-export const codexEntries = (p) => progressList(p).filter((e) => e.type !== 'ult' || p.heroes?.includes(e.id));
+// it has (a hero still to come shows his in time). Those of CODEX_SOON come right after the ones
+// open from the start: Consecration first on the weapons' second line (the owner's, 22 October
+// 2026), whatever its place in the lock table (whose order the saves' bits keep).
+export const CODEX_SOON = ['aura'];
+export function codexEntries(p) {
+  const all = progressList(p).filter((e) => e.type !== 'ult' || p.heroes?.includes(e.id));
+  const soon = all.filter((e) => !e.start && CODEX_SOON.includes(e.id));
+  const rest = all.filter((e) => !soon.includes(e));
+  for (const e of soon) {
+    const at = rest.findLastIndex((x) => x.type === e.type && x.start) + 1;
+    rest.splice(at, 0, e);
+  }
+  return rest;
+}
 
 // The n locks nearest to opening, the furthest along first.
 export const nearestLocks = (p, n = 2) => codexEntries(p).filter((e) => !e.open).sort((a, b) => b.progress - a.progress).slice(0, n);

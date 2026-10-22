@@ -686,20 +686,23 @@ export class ArmoryScreen {
 // The Codex: every weapon and relic and each of the player's heroes' ultimates, in a tab each:
 // those open in colour, those still shut dimmed under a padlock with what opens them and how far
 // the records have come (shared/progress.js, profile.js progressList). A tab's tiles that don't
-// fit the screen go on pages (the arrows under them, or the mouse wheel).
+// fit the screen scroll (the owner's, 22 October 2026: "scrollable, not paged"): the mouse wheel a
+// row a notch, a drag of the mouse or a finger, and the focus moved by the keys or a pad brings
+// its tile into view.
 const CODEX_TABS = [['weapon', 'WEAPONS'], ['relic', 'RELICS'], ['ult', 'ULTIMATES']];
 export const CODEX_TILE = { min: 136, max: 190, h: 38, gap: 4, top: 46, foot: 46 };
 
 // The tiles' grid for n of them on a W x H screen: as many columns as fit CODEX_TILE.min wide
-// (at most four), as many rows as fit between the tabs and the foot (two lines of the focused
-// tile's detail, the pages and BACK).
+// (at most four), in a view from the tabs down to the foot (two lines of the focused tile's
+// detail and BACK), `rows` of them in sight; `most` how far the grid scrolls (0: it all fits).
 export function codexLayout(W, H, n) {
   const C = CODEX_TILE;
   const cols = clamp(Math.floor((W - 16 + C.gap) / (C.min + C.gap)), 1, 4);
   const cw = Math.min(C.max, Math.floor((W - 16 - (cols - 1) * C.gap) / cols));
-  const rows = Math.max(1, Math.floor((H - C.top - C.foot + C.gap) / (C.h + C.gap)));
-  const per = cols * rows;
-  return { cols, rows, cw, ch: C.h, per, pages: Math.max(1, Math.ceil(n / per)), x0: Math.round(W / 2 - (cols * cw + (cols - 1) * C.gap) / 2), y0: C.top };
+  const view = H - C.top - C.foot, step = C.h + C.gap;
+  const rows = Math.max(1, Math.floor((view + C.gap) / step)), total = Math.ceil(n / cols);
+  const most = Math.max(0, total * step - C.gap - view);
+  return { cols, rows, total, cw, ch: C.h, step, view, most, x0: Math.round(W / 2 - (cols * cw + (cols - 1) * C.gap) / 2), y0: C.top };
 }
 
 export class CodexScreen {
@@ -707,7 +710,10 @@ export class CodexScreen {
     this.app = app;
     this.back = params.back || 'title';
     this.tab = 'weapon';
-    this.page = 0;
+    this.scroll = 0; // px the grid is scrolled, easing to want
+    this.want = 0;
+    this.drag = null; // a press in the grid: where it began, and whether it has become a drag
+    this.seen = null; // the focus last frame: a new one by the keys is scrolled into view
     app.ui.lock(0.2);
     app.ui.focusId = 'cx_weapon';
   }
@@ -726,24 +732,48 @@ export class CodexScreen {
       const text = textWidth(`${label} ${open}/${list.length}`) <= tw - 14 ? `${label} ${open}/${list.length}` : label;
       if (button(ctx, ui, 'cx_' + type, tx0 + i * (tw + 4), 25, tw, 13, text, { on: this.tab === type, color: this.tab === type ? '#fee761' : '#8b9bb4' }) && this.tab !== type) {
         this.tab = type;
-        this.page = 0;
+        this.scroll = this.want = 0;
       }
     });
     const list = all.filter((e) => e.type === this.tab);
     const L = codexLayout(W, H, list.length);
-    // The mouse wheel turns the pages.
-    if (input.mouse.wheel && L.pages > 1) this.page = clamp(this.page + Math.sign(input.mouse.wheel), 0, L.pages - 1);
-    this.page = clamp(this.page, 0, L.pages - 1);
+    this.scrollGrid(L, dt);
+    // The focus moved onto a tile by the keys or a pad: brought into view.
+    const at = list.findIndex((e) => ui.focusId === `cx_${e.type}_${e.id}`);
+    if (at >= 0 && ui.focusId !== this.seen) {
+      const top = Math.floor(at / L.cols) * L.step;
+      if (top < this.want) this.want = top;
+      else if (top + L.ch > this.want + L.view) this.want = top + L.ch - L.view;
+      this.want = clamp(this.want, 0, L.most);
+    }
     let focused = null;
-    list.slice(this.page * L.per, (this.page + 1) * L.per).forEach((e, i) => {
-      const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = L.y0 + Math.floor(i / L.cols) * (L.ch + CODEX_TILE.gap);
+    const m = input.mouse, out = m.y < L.y0 || m.y >= L.y0 + L.view || !!this.drag?.moved;
+    // The rows in sight, and one more each side, so the keys can step onto the next.
+    const r0 = Math.max(0, Math.floor(this.scroll / L.step) - 1), r1 = Math.min(L.total - 1, Math.floor((this.scroll + L.view) / L.step) + 1);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, L.y0, W, L.view);
+    ctx.clip();
+    list.slice(r0 * L.cols, (r1 + 1) * L.cols).forEach((e, k) => {
+      const i = r0 * L.cols + k;
+      const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = Math.round(L.y0 + Math.floor(i / L.cols) * L.step - this.scroll);
       const fid = `cx_${e.type}_${e.id}`;
       // An open weapon pressed is left at home, never offered in a run, or taken along again.
-      if (ui.item(fid, x, y, L.cw, L.ch) && e.type === 'weapon' && e.open) app.store.setHome(e.id, !e.home).then((ok) => ok && sfx(e.home ? 'chest' : 'coin'));
+      if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out }) && e.type === 'weapon' && e.open) app.store.setHome(e.id, !e.home).then((ok) => ok && sfx(e.home ? 'chest' : 'coin'));
       const f = ui.focused(fid);
       if (f) focused = e;
       this.tile(ctx, e, x, y, L.cw, L.ch, f);
     });
+    ctx.restore();
+    // The bar: where the view is in the whole grid.
+    if (L.most > 0) {
+      const bx = Math.min(W - 4, L.x0 + L.cols * L.cw + (L.cols - 1) * CODEX_TILE.gap + 2), whole = L.view + L.most;
+      const bh = Math.max(10, Math.round((L.view * L.view) / whole)), by = L.y0 + Math.round(((L.view - bh) * this.scroll) / L.most);
+      ctx.fillStyle = '#262b44';
+      ctx.fillRect(bx, L.y0, 2, L.view);
+      ctx.fillStyle = '#8b9bb4';
+      ctx.fillRect(bx, by, 2, bh);
+    }
     // The focused tile told in full: what it does once open, else what opens it and how far along.
     if (focused) {
       const rec = codexRecord(focused);
@@ -751,15 +781,29 @@ export class CodexScreen {
       const text = focused.open ? codexDesc(focused) + keep : focused.need + (rec ? ` — ${rec}` : '');
       wrapText(text, W - 20).slice(0, 2).forEach((line, i) => drawRich(ctx, line, W / 2, H - 42 + i * 9, { align: 'center', color: focused.open ? '#c0cbdc' : '#feae34', hi: '#fee761' }));
     }
-    if (L.pages > 1) {
-      const px = Math.round(W / 2);
-      if (button(ctx, ui, 'cx_prev', px - 52, H - 20, 24, 13, '<', { disabled: this.page === 0 })) this.page--;
-      drawText(ctx, `PAGE ${this.page + 1}/${L.pages}`, px, H - 18, { align: 'center', color: '#8b9bb4' });
-      if (button(ctx, ui, 'cx_next', px + 28, H - 20, 24, 13, '>', { disabled: this.page >= L.pages - 1 })) this.page++;
-    }
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go(this.back);
     ui.end();
+    this.seen = ui.focusId;
     if (input.pressed('back')) app.go(this.back);
+  }
+
+  // The grid's scroll: the wheel a row a notch; a press in the grid that moves more than a few
+  // pixels drags it (and lifting then is no click); it eases to where it is wanted.
+  scrollGrid(L, dt) {
+    const m = input.mouse;
+    if (m.wheel) this.want += Math.sign(m.wheel) * L.step;
+    if (m.down && !this.drag && m.y >= L.y0 && m.y < L.y0 + L.view) this.drag = { y: m.y, from: this.want, moved: false };
+    if (this.drag) {
+      if (Math.abs(m.y - this.drag.y) > 4) this.drag.moved = true;
+      if (this.drag.moved) this.want = this.scroll = clamp(this.drag.from - (m.y - this.drag.y), 0, L.most);
+      if (!m.down) {
+        if (this.drag.moved) m.clicked = false;
+        this.drag = null;
+      }
+    }
+    this.want = clamp(this.want, 0, L.most);
+    this.scroll += (this.want - this.scroll) * Math.min(1, dt * 14);
+    if (Math.abs(this.want - this.scroll) < 0.5) this.scroll = this.want;
   }
 
   // One entry's tile: its icon and name; under them, shut, what opens it and a bar of how far the

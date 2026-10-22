@@ -47,7 +47,8 @@ export class UI {
     const it = { id, x, y, w, h, disabled: !!opts.disabled };
     this.items.push(it);
     const m = input.mouse;
-    const inside = m.x >= x && m.y >= y && m.x < x + w && m.y < y + h;
+    // opts.noMouse: the mouse leaves it be (a Codex tile scrolled under the tabs or the foot).
+    const inside = !opts.noMouse && m.x >= x && m.y >= y && m.x < x + w && m.y < y + h;
     if (inside && m.moved && this.focusId !== id) {
       this.focusId = id;
       if (!it.disabled) sfx('ui', { pitch: 1.2 });

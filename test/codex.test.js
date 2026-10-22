@@ -1,5 +1,5 @@
 // The progression's screens (shared/progress.js): the Codex's tiles fit a desktop, a laptop and a
-// phone held upright, paged where a tab runs over; the results' UNLOCKED rows keep inside the
+// phone held upright, scrolled where a tab runs over; the results' UNLOCKED rows keep inside the
 // panel and the nearest locks are the furthest along; the HUD draws the slots and the ultimate a
 // run hasn't opened locked.
 import test from 'node:test';
@@ -27,20 +27,21 @@ const everything = () => {
   return p;
 };
 
-test('the Codex: every tab\'s tiles on the screen at every size, on pages where they run over', () => {
+test('the Codex: every tab\'s tiles on the screen at every size, scrolling where they run over', () => {
   const all = codexEntries(everything());
   for (const [W, H] of SIZES) {
     for (const type of ['weapon', 'relic', 'ult']) {
       const n = all.filter((e) => e.type === type).length, L = codexLayout(W, H, n);
       assert.ok(L.x0 >= 4 && L.x0 + L.cols * L.cw + (L.cols - 1) * CODEX_TILE.gap <= W - 4, `${W}x${H} ${type}: within the sides`);
-      assert.ok(L.y0 + L.rows * (L.ch + CODEX_TILE.gap) - CODEX_TILE.gap <= H - CODEX_TILE.foot, `${W}x${H} ${type}: above the foot`);
-      assert.ok(L.pages * L.per >= n, `${W}x${H} ${type}: every tile on a page`);
+      assert.ok(L.y0 + L.view <= H - CODEX_TILE.foot, `${W}x${H} ${type}: above the foot`);
+      assert.ok(L.total * L.step - CODEX_TILE.gap - L.most <= L.view, `${W}x${H} ${type}: scrolled to the end, the last row in sight`);
+      assert.equal(L.most > 0, L.total > L.rows, `${W}x${H} ${type}: it scrolls only where it runs over`);
       assert.ok(L.cw >= CODEX_TILE.min || L.cols === 1, `${W}x${H} ${type}: tiles wide enough for their lines`);
     }
   }
 });
 
-test('the Codex draws for a new player and for one with everything open, and turns its pages', () => {
+test('the Codex draws for a new player and for one with everything open, and scrolls', () => {
   for (const prof of [defaultProfile(), everything()]) {
     for (const [W, H] of SIZES) {
       const app = { ui: new UI(), scene: { draw() {} }, store: { profile: prof }, go(name) { this.went = name; } };
@@ -49,14 +50,19 @@ test('the Codex draws for a new player and for one with everything open, and tur
       app.ui.lockT = 0;
       for (const type of ['weapon', 'relic', 'ult']) {
         s.tab = type;
-        s.page = 0;
+        s.scroll = s.want = 0;
         s.draw(ctx, W, H, 1 / 60);
         const ids = app.ui.items.map((it) => it.id);
         assert.ok(['cx_weapon', 'cx_relic', 'cx_ult', 'back'].every((id) => ids.includes(id)), 'the tabs and BACK');
-        const L = codexLayout(W, H, codexEntries(prof).filter((e) => e.type === type).length);
-        assert.equal(ids.filter((id) => id.startsWith(`cx_${type}_`)).length, Math.min(L.per, codexEntries(prof).filter((e) => e.type === type).length), 'a page of tiles');
-        assert.equal(ids.includes('cx_next'), L.pages > 1, 'the page arrows only where it runs over');
-        for (const it of app.ui.items) assert.ok(it.x >= 0 && it.y >= 0 && it.x + it.w <= W && it.y + it.h <= H, `${it.id} on the screen at ${W}x${H}`);
+        const n = codexEntries(prof).filter((e) => e.type === type).length, L = codexLayout(W, H, n);
+        // The rows in sight and one more below (to step onto with the keys).
+        assert.equal(ids.filter((id) => id.startsWith(`cx_${type}_`)).length, Math.min(n, L.cols * (Math.floor(L.view / L.step) + 2)), 'the tiles in sight, and a row more');
+        assert.ok(!ids.includes('cx_next'), 'no page arrows');
+        // The tabs and BACK on the screen; a tile may run under the foot (the row past the view, clipped).
+        for (const it of app.ui.items) {
+          const tile = it.id.startsWith(`cx_${type}_`);
+          assert.ok(it.x >= 0 && it.y >= 0 && it.x + it.w <= W && (tile ? it.y < H : it.y + it.h <= H), `${it.id} on the screen at ${W}x${H}`);
+        }
       }
     }
   }
@@ -116,4 +122,48 @@ test('the HUD draws the slots a run hasn\'t opened and a shut ultimate locked', 
     input.bot = oldBot;
     Math.random = oldRandom;
   }
+});
+
+test('the Codex scrolls: the wheel a row, the keys bring the focused tile into view; Consecration leads the second line', () => {
+  const prof = everything();
+  const weapons = codexEntries(prof).filter((e) => e.type === 'weapon');
+  const starts = weapons.filter((e) => e.start).length;
+  assert.equal(starts, 4, "four open from the start: a line of four on a 1280-wide screen");
+  assert.equal(weapons[starts].id, 'aura', 'Consecration first on the second line');
+  const [W, H] = [480, 270]; // 1920 x 1080: the weapons run over
+  const app = { ui: new UI(), scene: { draw() {} }, store: { profile: prof }, go() {} };
+  const s = new CodexScreen();
+  s.enter(app);
+  app.ui.lockT = 0;
+  const L = codexLayout(W, H, weapons.length);
+  assert.ok(L.most > 0, 'every weapon is more than a screen');
+  const frame = () => {
+    s.draw(ctx, W, H, 1 / 60);
+    input.mouse.wheel = 0;
+  };
+  input.mouse.x = input.mouse.y = -1;
+  frame();
+  input.mouse.wheel = 1;
+  for (let i = 0; i < 60; i++) frame();
+  assert.equal(s.scroll, L.step, 'a notch, a row');
+  // The last tile focused (as the keys would): scrolled to it.
+  const last = weapons[weapons.length - 1];
+  app.ui.focusId = `cx_weapon_${last.id}`;
+  for (let i = 0; i < 60; i++) frame();
+  assert.equal(s.scroll, L.most, 'down to the end');
+  const tile = app.ui.items.find((it) => it.id === `cx_weapon_${last.id}`);
+  assert.ok(tile && tile.y >= L.y0 && tile.y + tile.h <= L.y0 + L.view, 'the last tile in full view');
+  // A drag down with the mouse: back to the top, and lifting is no click.
+  input.mouse.x = W / 2;
+  input.mouse.y = L.y0 + 10;
+  input.mouse.down = true;
+  frame();
+  input.mouse.y = L.y0 + 10 + L.most;
+  frame();
+  input.mouse.down = false;
+  input.mouse.clicked = true;
+  frame();
+  assert.equal(s.scroll, 0, 'dragged back to the top');
+  assert.equal(input.mouse.clicked, false, 'the drag is no click');
+  input.mouse.x = input.mouse.y = -1;
 });
