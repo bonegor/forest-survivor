@@ -120,7 +120,7 @@ export function defaultProfile() {
     // bosses: the most bosses (and crypt lords) slain in a run. Milestones read them (earnedBits).
     best: { s15: 0, dungeon: 0, kills: 0, level: 0, time: 0, gold: 0, bosses: 0 },
     up: {},
-    // Armory ranks a save from before was given (fromBefore): kept, never refunded (refundUpgrades).
+    // Armory ranks a save from before was given (fromBefore); a refund pays them back as gold too.
     gift: {},
     ul: 0, // the milestones' weapons and relics open: bit i is PROGRESS.locks[i]
     uu: 0, // the heroes whose ultimate is open: bit i is HERO_ORDER[i]
@@ -255,8 +255,8 @@ function ultEarned(p, h) {
 // Phoenix Heart's, which a win opened then: it is for sale to them); every
 // hero it owns has his ultimate once any of its runs lasted PROGRESS.ultTime; the Armory's Arsenal
 // and Reliquary are full, so no slot is lost; Insight and Exile get two ranks more (to their max),
-// for the two free rerolls and banishes every run had. Those ranks are a gift (p.gift): kept, and
-// never paid back by a refund.
+// for the two free rerolls and banishes every run had. Those ranks are a gift (p.gift), given once;
+// Refund All takes them back as gold like the rest (refundUpgrades).
 function fromBefore(p) {
   const wins = sum(p.wins.s15) + sum(p.wins.dungeon);
   p.best.time = Math.max(p.best.time, p.best.s15, ...Object.values(p.ranked), sum(p.wins.dungeon) ? MIN_WIN_TIME.dungeon : 0, sum(p.wins.s15) ? MIN_WIN_TIME.s15 : 0);
@@ -435,19 +435,16 @@ export function buyUpgrade(profile, id) {
   return { ok: true, profile: p };
 }
 
+// Every rank goes, and each is paid back at its price. The owner's (22 October 2026): Refund All
+// must reset the whole Armory; the ranks given to a save from before (gift) go too, paid back as
+// gold like the rest, so they can be bought again.
 export function refundUpgrades(profile) {
   const p = sanitizeProfile(profile);
   let refunded = 0;
-  const kept = {};
-  // Ranks given to a save from before (gift) stay, unpaid; those bought are paid back as the
-  // cheapest ranks.
-  for (const [id, rank] of Object.entries(p.up)) {
-    const keep = Math.min(rank, p.gift[id] || 0);
-    for (let r = 0; r < rank - keep; r++) refunded += upgradeCost(id, r);
-    if (keep) kept[id] = keep;
-  }
+  for (const [id, rank] of Object.entries(p.up)) for (let r = 0; r < rank; r++) refunded += upgradeCost(id, r);
   p.gold = int(p.gold + refunded, 0, 1e9);
-  p.up = kept;
+  p.up = {};
+  p.gift = {};
   return { ok: true, profile: p, refunded };
 }
 

@@ -237,10 +237,14 @@ test('a save from before keeps everything: its records open what they imply, six
   // Read again, as the cookie gives it back: nothing more given.
   const again = P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(p))));
   assert.deepEqual(again, p);
-  // A refund pays back what was bought, never what was given.
+  // Refund All resets the whole Armory, the given ranks too, each paid back at its price; and
+  // read back from the cookie, nothing is given again.
   const r = P.refundUpgrades(p);
-  assert.deepEqual(r.profile.up, { arsenal: 3, reliquary: 3, reroll: 1, banish: 2 });
-  assert.equal(r.refunded, P.upgradeCost('might', 0) + P.upgradeCost('might', 1) + [0, 1, 2, 3].reduce((s, k) => s + P.upgradeCost('reroll', k), 0));
+  assert.deepEqual(r.profile.up, {});
+  const cost = (id, n) => [...Array(n).keys()].reduce((s, k) => s + P.upgradeCost(id, k), 0);
+  assert.equal(r.refunded, cost('arsenal', 3) + cost('reliquary', 3) + cost('might', 2) + cost('reroll', 5) + cost('banish', 2));
+  const after = P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(r.profile))));
+  assert.deepEqual(after.up, {}, 'still empty through the cookie');
   // An old save with no records gets the slots and the free rerolls, and nothing else.
   const bare = P.sanitizeProfile({ v: 2 });
   assert.deepEqual(P.openFor(bare, 'knight'), P.openFor(P.defaultProfile(), 'knight'));
