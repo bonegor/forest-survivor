@@ -24,7 +24,7 @@ Object.defineProperty(document, 'cookie', {
   },
 });
 const { Game } = await import('../public/js/game/game.js');
-const { lateMore, isFew } = await import('../public/js/game/spawner.js');
+const { lateMore, isFew, minuteMore } = await import('../public/js/game/spawner.js');
 const { NORMAL, VETERAN, NIGHTMARE, GAME_SPEED } = await import('../public/js/data/difficulty.js');
 const { EVENTS } = await import('../public/js/data/waves.js');
 const { mulberry32 } = await import('../public/js/engine/util.js');
@@ -87,11 +87,12 @@ test('a Nightmare triples the steady horde and the timed swarms, rings and packs
         assert.equal(dread.spawner.stats(ph).hpMul, calm.spawner.stats(ph).hpMul);
       }
     }
-    // Every event of the night, of every kind, at its own time (Normal's late 30% too).
+    // Every event of the night, of every kind, at its own time (Normal's late 30% too, and the
+    // 5% a minute the horde grows, minuteMore).
     const calm = game({ diff }), dread = game({ diff, nightmare: true });
     const kinds = new Set();
     for (const ev of EVENTS) {
-      const n = ev.count * rules.horde * (isFew(ev.enemy) ? rules.few : 1) * lateMore(rules, ev.at);
+      const n = ev.count * rules.horde * (isFew(ev.enemy) ? rules.few : 1) * lateMore(rules, ev.at) * minuteMore(ev.at);
       assert.equal(sent(calm, ev, ev.at), Math.max(1, Math.round(n)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, as it was`);
       assert.equal(sent(dread, ev, ev.at), Math.max(1, Math.round(n * 3)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, three times over`);
       kinds.add(ev.type);

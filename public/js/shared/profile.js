@@ -115,6 +115,7 @@ export function defaultProfile() {
     wins: { s15: [0, 0, 0], dungeon: [0, 0, 0] },
     runs: 0,
     kills: 0,
+    deaths: 0, // runs that ended with the hero fallen (milestones: shared/progress.js deaths)
     // time: the longest run on the clock in any mode; gold: the most gold picked up in a run;
     // bosses: the most bosses (and crypt lords) slain in a run. Milestones read them (earnedBits).
     best: { s15: 0, dungeon: 0, kills: 0, level: 0, time: 0, gold: 0, bosses: 0 },
@@ -141,6 +142,7 @@ export function sanitizeProfile(raw) {
   }
   p.runs = int(raw.runs, 0, 1e7);
   p.kills = int(raw.kills, 0, 1e12);
+  p.deaths = int(raw.deaths, 0, 1e7);
   p.best.s15 = int(raw.best?.s15, 0, MAX_TIME.s15);
   p.best.dungeon = int(raw.best?.dungeon, 0, 4);
   p.best.kills = int(raw.best?.kills, 0, 1e7);
@@ -210,7 +212,7 @@ const sum = (a) => a.reduce((s, x) => s + x, 0);
 function measures(p) {
   return {
     time: p.best.time, kills: p.kills, level: p.best.level, gold: p.best.gold, bosses: p.best.bosses, wins: sum(p.wins.s15),
-    veteran: p.wins.s15[DIFFICULTIES.indexOf('hard')], dungeon: sum(p.wins.dungeon),
+    deaths: p.deaths, veteran: p.wins.s15[DIFFICULTIES.indexOf('hard')], dungeon: sum(p.wins.dungeon),
     heroes: HERO_ORDER.filter((h) => hasFeat(p, h, FEAT.survivalHard)).length,
   };
 }
@@ -479,6 +481,8 @@ export function sanitizeRun(raw) {
     nightmare,
     hero: isId(raw.hero) ? raw.hero : 'knight',
     victory,
+    // Fallen, not quit: never a win.
+    died: !victory && raw.died === true,
     time,
     // Selling what the crypts gave pays too; applyRun adds what selling worn gear paid.
     gold: int(raw.gold, 0, 100 + realTime * MAX_GOLD_PER_SEC + found * RARITIES[LEGENDARY].price),
@@ -539,6 +543,7 @@ export function applyRun(profile, rawRun) {
   p.gold = int(p.gold + reward.total, 0, 1e9);
   p.runs = int(p.runs + 1, 0, 1e7);
   p.kills = int(p.kills + run.kills, 0, 1e12);
+  if (run.died) p.deaths = int(p.deaths + 1, 0, 1e7);
   let personalBest = false;
   if (run.victory) {
     p.wins[run.mode][DIFFICULTIES.indexOf(run.diff)] += 1;

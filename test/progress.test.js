@@ -52,7 +52,7 @@ test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the
   const m = P.metaBonuses(p);
   assert.deepEqual([m.weaponSlots, m.relicSlots, m.reroll, m.banish], [3, 3, 0, 0]);
   const open = P.openFor(p, 'knight');
-  assert.deepEqual(open, { weapons: ['axe', 'blades', 'aura', 'glaive'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false });
+  assert.deepEqual(open, { weapons: ['axe', 'blades', 'glaive', 'caltrops'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false });
   const list = P.progressList(p);
   assert.equal(list.filter((l) => l.open).length, 10, 'the ten starters');
   assert.ok(list.filter((l) => !l.start).every((l) => !l.open && l.progress === 0 && l.need));
@@ -65,7 +65,7 @@ test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the
 test('each milestone opens from a run report: just short of it nothing, at it the one', () => {
   const stats = { time: 'time', level: 'level', gold: 'gold', bosses: 'bosses' };
   for (const [i, l] of LOCKS.entries()) {
-    if (l.retired || l.need === 'kills' || l.need === 'wins' || l.need === 'evolve' || l.need === 'evolution' || l.deep) continue; // the second circle: its own test
+    if (l.retired || l.need === 'kills' || l.need === 'wins' || l.need === 'evolve' || l.need === 'evolution' || l.need === 'deaths' || l.deep) continue; // the second circle: its own test
     const k = stats[l.need];
     // Long enough a run for whatever it reports to stand (sanitizeRun's bounds).
     const base = { ...RUN, time: l.need === 'time' ? l.at - 1 : 60, realTime: 600 };
@@ -155,9 +155,9 @@ test('nothing locked is ever offered, at a level-up or in a chest; his own signa
       for (const id of open.relics) assert.ok(seen.has(id) || pl.passives.has(id), `${id} is offered`);
       // A card naming a locked one, however it came, gives nothing.
       const before = pl.weapons.length;
-      g.applyChoice({ type: 'weapon', id: 'caltrops', level: 1, isNew: true });
+      g.applyChoice({ type: 'weapon', id: 'arcane', level: 1, isNew: true });
       g.applyChoice({ type: 'passive', id: 'phoenix', level: 1, isNew: true });
-      assert.ok(pl.weapons.length <= before && !pl.weapons.some((w) => w.id === 'caltrops') && !pl.passives.has('phoenix'));
+      assert.ok(pl.weapons.length <= before && !pl.weapons.some((w) => w.id === 'arcane') && !pl.passives.has('phoenix'));
     }, p, hero);
   }
   // Without a profile's locks (the tests, the bots by default) everything is as before.
@@ -233,7 +233,7 @@ test('a save from before keeps everything: its records open what they imply, six
   assert.equal(P.openFor(p, 'mage').ult, false);
   const shut = P.progressList(p).filter((l) => !l.open && !LOCKS.find((x) => x.id === l.id)?.deep).map((l) => l.id);
   // The night won is 15:00 and opens the run-long ones; level 35 is short of the Crown's 40.
-  assert.deepEqual(shut, ['growth', 'phoenix', 'chain', 'ember', ...P.HERO_ORDER.slice(2)], 'the Phoenix Heart for sale; 6,000 slain is short of the Ember Heart');
+  assert.deepEqual(shut, ['growth', 'phoenix', 'chain', 'ember', 'aura', ...P.HERO_ORDER.slice(2)], 'the Phoenix Heart for sale; 6,000 slain is short of the Ember Heart');
   // Read again, as the cookie gives it back: nothing more given.
   const again = P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(p))));
   assert.deepEqual(again, p);
@@ -267,7 +267,7 @@ test('progressList measures how far each lock is', () => {
   const p = P.applyRun(P.defaultProfile(), { ...RUN, time: 90, realTime: 90, kills: 250, level: 10, gold: 100 }).profile;
   const at = (id) => P.progressList(p).find((l) => l.id === id && l.type !== 'ult');
   assert.equal(at('frost').progress, 1);
-  assert.equal(at('caltrops').progress, 0.15);
+  assert.equal(at('aura').progress, 0, 'no fall yet');
   assert.equal(at('lightning').progress, 0.25);
   assert.equal(at('wisps').progress, 1 / 3);
   assert.equal(at('luck').progress, 0.2);
@@ -278,12 +278,12 @@ test('progressList measures how far each lock is', () => {
 test('a weapon left at home is never offered, and comes along again when asked', () => {
   let p = P.defaultProfile();
   p = P.setHome(p, 'axe', true).profile;
-  assert.deepEqual(P.openFor(p, 'knight').weapons, ['blades', 'aura', 'glaive']);
+  assert.deepEqual(P.openFor(p, 'knight').weapons, ['blades', 'glaive', 'caltrops']);
   assert.equal(P.progressList(p).find((l) => l.id === 'axe').home, true);
   assert.equal(P.setHome(p, 'sword', true).ok, false, 'a signature never stays at home');
   assert.deepEqual(P.sanitizeProfile({ ...p, home: ['axe', 'nope', 7] }).home, ['axe']);
   p = P.setHome(p, 'axe', false).profile;
-  assert.deepEqual(P.openFor(p, 'knight').weapons, ['axe', 'blades', 'aura', 'glaive']);
+  assert.deepEqual(P.openFor(p, 'knight').weapons, ['axe', 'blades', 'glaive', 'caltrops']);
 });
 
 test('the second circle stays hidden and shut until a night is won, then opens by its deeds', () => {
@@ -309,4 +309,17 @@ test('Chain Lightning opens once a run has evolved Lightning Strike, with any he
   assert.deepEqual(r.profile.ev, ['thunderstorm'], 'only what a lock waits on is kept');
   assert.ok(P.openFor(r.profile, 'mage').weapons.includes('chain'));
   assert.deepEqual(P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(r.profile)))).ev, ['thunderstorm']);
+});
+
+test('Consecration opens on the tenth fall: a run quit or won is no fall', () => {
+  let p = P.defaultProfile();
+  for (let i = 0; i < 9; i++) p = P.applyRun(p, { ...RUN, died: true }).profile;
+  p = P.applyRun(p, { ...RUN }).profile; // quit
+  p = P.applyRun(p, { ...RUN, died: true, victory: true, time: 900, realTime: 900 }).profile; // won
+  assert.equal(p.deaths, 9);
+  assert.ok(!P.openFor(p, 'knight').weapons.includes('aura'));
+  assert.equal(P.progressList(p).find((l) => l.id === 'aura').need, 'Fall 10 times');
+  const r = P.applyRun(p, { ...RUN, died: true });
+  assert.deepEqual(r.reward.unlocked.map((u) => u.id), ['aura']);
+  assert.ok(P.openFor(r.profile, 'knight').weapons.includes('aura'));
 });

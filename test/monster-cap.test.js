@@ -163,11 +163,12 @@ test('the steady horde makes room for HORDE_CAP.perFrame a frame at most', () =>
 
 test('a ring round the hero at the cap comes in full, in the place of foes off the screen', () => {
   const g = game(), p = g.player, F = farOf(g);
-  // 480 off the screen (a ring is some 2.7 times its first size: the horde doubled twice, then Veteran's
-  // cut to two thirds), a few far and most just past its edge; the rest on it.
+  // 600 off the screen (a ring is some 4.3 times its first size at 12:00: the horde doubled twice,
+  // Veteran's four thirds, and 5% more a minute, spawner.js minuteMore), a few far and most just past
+  // its edge; the rest on it.
   const off = [];
-  for (let i = 0; i < 480; i++) {
-    const a = (i / 480) * Math.PI * 2, r = i % 10 ? F * 0.9 : F * 1.3;
+  for (let i = 0; i < 600; i++) {
+    const a = (i / 600) * Math.PI * 2, r = i % 10 ? F * 0.9 : F * 1.3;
     off.push(['skeleton', p.x + Math.cos(a) * r, p.y + Math.sin(a) * r]);
   }
   fill(g, off);

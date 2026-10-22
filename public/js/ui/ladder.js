@@ -94,6 +94,7 @@ export function codexRecord(e) {
     case 'gold': return `${fmtNum(v)} best`;
     case 'bosses': return `${v} best`;
     case 'wins': return `${v} won`;
+    case 'deaths': return `${v} fallen`;
     default: return '';
   }
 }

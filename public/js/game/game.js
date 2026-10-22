@@ -1773,11 +1773,13 @@ export class Game {
   }
 
   finish(victory) {
+    const died = this.state === 'dying'; // fallen, not quit (Game.update's death, DEATH.end)
     this.state = 'over';
     if (this.hints) this.hints.done();
     const p = this.player;
     this.result = {
       victory,
+      died, // for the Consecration's milestone (shared/progress.js deaths)
       mode: this.mode,
       diff: this.diffId,
       nightmare: this.nightmare,

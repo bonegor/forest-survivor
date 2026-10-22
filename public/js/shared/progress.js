@@ -29,9 +29,10 @@ export const PROGRESS = {
   // A hero's ultimate opens once a run with him lasts this long on the clock (any mode).
   ultTime: 2 * 60,
   // Open from the first run; every hero's signature weapon(s) always are too (data/heroes.js unique).
-  // The owner's (22 October 2026): five to start with, the hero's own among them, the next a run
-  // away (Frost Nova at 1:00), then the ladder; the second circle after it.
-  openWeapons: ['axe', 'blades', 'aura', 'glaive'],
+  // The owner's (22 October 2026): five to start with, the hero's own among them (the boomerang and
+  // the spikes too), Frost Nova a run away (1:00), Consecration after ten falls, then the ladder;
+  // the second circle after it.
+  openWeapons: ['axe', 'blades', 'glaive', 'caltrops'],
   openRelics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'],
   // The rest, each opened for the whole account by a milestone. `need` is what is measured:
   //   time:   seconds on the clock in one run (any mode)
@@ -40,6 +41,7 @@ export const PROGRESS = {
   //   gold:   gold picked up in one run (as the run reports it, before the difficulty's rate)
   //   bosses: bosses (and crypt lords) slain in one run (Game.stats.bosses)
   //   wins:   nights won (Survival victories), on any difficulty
+  //   deaths: runs that ended with the hero fallen (not quit, not won), over all runs together
   //   veteran: nights won on Veteran
   //   dungeon: Dungeon Runs won, on any difficulty
   //   heroes:  heroes who have won a night
@@ -59,7 +61,7 @@ export const PROGRESS = {
     { type: 'weapon', id: 'thorns', need: 'kills', at: 5000 },
     { type: 'weapon', id: 'wisps', need: 'level', at: 30 },
     { type: 'weapon', id: 'arcane', need: 'bosses', at: 1 },
-    { type: 'weapon', id: 'caltrops', need: 'time', at: 10 * 60 },
+    { retired: 'caltrops' }, // open from the start since 22 October 2026
     { type: 'relic', id: 'cooldown', need: 'time', at: 4 * 60 },
     { type: 'relic', id: 'area', need: 'level', at: 20 },
     { type: 'relic', id: 'projspeed', need: 'kills', at: 2000 },
@@ -92,6 +94,8 @@ export const PROGRESS = {
     { type: 'relic', id: 'hunter', need: 'bosses', at: 4 },
     { type: 'relic', id: 'fang', need: 'level', at: 35 },
     { type: 'relic', id: 'ember', need: 'kills', at: 8000 },
+    // "consecration should be tied to 10 deaths of the hero" (22 October 2026).
+    { type: 'weapon', id: 'aura', need: 'deaths', at: 10 },
   ],
 };
 
@@ -113,6 +117,7 @@ export function needText(lock) {
     case 'veteran': return n === 1 ? 'Win a night on Veteran' : `Win ${n} nights on Veteran`;
     case 'dungeon': return n === 1 ? 'Win a Dungeon Run' : `Win ${n} Dungeon Runs`;
     case 'heroes': return `Win a night with ${n} heroes`;
+    case 'deaths': return n === 1 ? 'Fall once' : `Fall ${n} times`;
     default: return '';
   }
 }
