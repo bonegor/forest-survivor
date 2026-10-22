@@ -10,6 +10,11 @@ import DRUID from '../../assets/heroes/druid.js';
 import BERSERKER from '../../assets/heroes/berserker.js';
 import WITCHHUNTER from '../../assets/heroes/witchhunter.js';
 import KNIGHT_B from '../../assets/heroes/knight_b.js';
+import KNIGHT_C from '../../assets/heroes/knight_c.js';
+import KNIGHT_D from '../../assets/heroes/knight_d.js';
+import KNIGHT_E from '../../assets/heroes/knight_e.js';
+import KNIGHT_F from '../../assets/heroes/knight_f.js';
+import KNIGHT_G from '../../assets/heroes/knight_g.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -92,3 +97,14 @@ export const WITCHHUNTER_POSE = pose(WITCHHUNTER_SHEET);
 // The Knight's second look (22 October 2026), drawn with claude-pxl (src/knight-b): a skin.
 export const KNIGHT_B_SHEET = sheet(KNIGHT_B);
 export const KNIGHT_B_POSE = pose(KNIGHT_B_SHEET);
+// And five more (src/knight-c .. knight-g).
+export const KNIGHT_C_SHEET = sheet(KNIGHT_C);
+export const KNIGHT_C_POSE = pose(KNIGHT_C_SHEET);
+export const KNIGHT_D_SHEET = sheet(KNIGHT_D);
+export const KNIGHT_D_POSE = pose(KNIGHT_D_SHEET);
+export const KNIGHT_E_SHEET = sheet(KNIGHT_E);
+export const KNIGHT_E_POSE = pose(KNIGHT_E_SHEET);
+export const KNIGHT_F_SHEET = sheet(KNIGHT_F);
+export const KNIGHT_F_POSE = pose(KNIGHT_F_SHEET);
+export const KNIGHT_G_SHEET = sheet(KNIGHT_G);
+export const KNIGHT_G_POSE = pose(KNIGHT_G_SHEET);

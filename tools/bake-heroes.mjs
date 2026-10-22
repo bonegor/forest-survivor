@@ -32,6 +32,12 @@ const BAKE = {
   witchhunter: 'witchhunter/v1',
   // The Knight's second look, drawn with claude-pxl (src/knight-b), a skin chosen on the hero screen.
   knight_b: 'knight/b',
+  // Five more of 22 October 2026, each drawn with claude-pxl by its own artist and reviewer subagent.
+  knight_c: 'knight/c',
+  knight_d: 'knight/d',
+  knight_e: 'knight/e',
+  knight_f: 'knight/f',
+  knight_g: 'knight/g',
 };
 const OURS = new Set(['made for Forest Survivor', "the game's own"]);
 

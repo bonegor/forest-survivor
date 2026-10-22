@@ -1,0 +1,70 @@
+{
+  "cls": "knight",
+  "kind": "proposal",
+  "id": "c",
+  "name": "Knight · Ember",
+  "description": "The Ember Knight: a hot-headed young knight forged in a volcano. A blackened-brass sallet with a living flame for a crest and two big glowing eyes, crimson plate cracked with glowing seams, a scorched half-cape and no shield, one broad flamberge whose edges glow ember-orange, carried low and forward with a swagger. His cut rears the blade back over the helm, brings it over in a blazing crescent that leaves sparks, sweeps it down in front and recovers.",
+  "creator": null,
+  "source": "drawn with claude-pxl (MIT)",
+  "licence": "made for Forest Survivor",
+  "colour": null,
+  "w": 48,
+  "h": 48,
+  "frames": 22,
+  "collection": "Knight looks",
+  "origin": "gms/3001/sprites/lab/src/knight-c/knight-c.px.js",
+  "made": "2026-10-22T14:56:30.879Z",
+  "walk": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "idle": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "attackFps": 13,
+  "attackRelease": null,
+  "attackWalk": null,
+  "walkFps": null,
+  "idleFps": null,
+  "motionRate": 1.051967178624027,
+  "idleRate": 3.75,
+  "anchorY": 40,
+  "selfBob": true,
+  "floating": false,
+  "fitW": 36,
+  "fitH": 34,
+  "outline": false,
+  "sheet": "sheets/knight-c.png",
+  "rows": [
+    "right",
+    "glow",
+    "glowLeft"
+  ],
+  "glow": [
+    "#d9391a",
+    "#ff6a1a",
+    "#ffa83a",
+    "#ffe58c"
+  ]
+}

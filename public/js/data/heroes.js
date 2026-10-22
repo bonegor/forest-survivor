@@ -19,11 +19,16 @@ export const HEROES = {
     title: 'Knight',
     sprite: 'knight',
     pose: 'knight_pose', // his painted pose on the in-run panels; the hero screen frames the in-game sprite, as for every hero
-    // His looks, chosen on the hero screen (heroLook): the first is his own. Knight B drawn with
-    // claude-pxl (the owner's, 22 October 2026).
+    // His looks, chosen on the hero screen (heroLook): the first is his own. Knight B and the five
+    // after him drawn with claude-pxl (the owner's, 22 October 2026).
     skins: [
       { id: 'a', name: 'Plumed', sprite: 'knight', pose: 'knight_pose' },
       { id: 'b', name: 'Knight B', sprite: 'knight_b', pose: 'knight_b_pose' },
+      { id: 'c', name: 'Ember', sprite: 'knight_c', pose: 'knight_c_pose' },
+      { id: 'd', name: 'Frost Warden', sprite: 'knight_d', pose: 'knight_d_pose' },
+      { id: 'e', name: 'Black Knight', sprite: 'knight_e', pose: 'knight_e_pose' },
+      { id: 'f', name: 'Thorn Knight', sprite: 'knight_f', pose: 'knight_f_pose' },
+      { id: 'g', name: 'Moon Knight', sprite: 'knight_g', pose: 'knight_g_pose' },
     ],
     weapon: 'sword', // in the crypts each hero has his own weapon alone, struck by the player (Game.caveStrike)
     unique: ['sword'],

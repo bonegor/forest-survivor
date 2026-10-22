@@ -9,14 +9,16 @@ import { SPR } from '../public/js/engine/sprites.js';
 import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
-test('the Knight has two looks, each a full sprite of its own', () => {
+test('the Knight has seven looks, each a full sprite of its own, with glow where it glows', () => {
   const skins = HEROES.knight.skins;
-  assert.deepEqual(skins.map((s) => s.id), ['a', 'b']);
+  assert.deepEqual(skins.map((s) => s.id), ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+  assert.equal(new Set(skins.map((s) => s.sprite)).size, skins.length, 'each its own sprite');
   assert.equal(skins[0].sprite, HEROES.knight.sprite, 'the first is his own');
   for (const s of skins) {
     const spr = SPR[s.sprite];
     assert.ok(spr && spr.frames.length && spr.idle.length && spr.walk.length && spr.attack.length, s.id);
     assert.ok(SPR[s.pose], `${s.id}: a pose`);
+    assert.equal(spr.frames.length, s.id === 'a' ? spr.frames.length : 22, `${s.id}: 22 frames`);
   }
 });
 

@@ -1,0 +1,71 @@
+{
+  "cls": "knight",
+  "kind": "proposal",
+  "id": "f",
+  "name": "Knight · Thorn Knight",
+  "description": "A guardian of the ancient forest: dark bark armour with moss-green lacquered plates, small leaves and tiny pink flowers growing from the joints, a round helm with branching antlers (one carries a leaf) and glowing green eyes in a dark visor, a teal leaf-shaped cape and a round wooden shield with a carved tree slung on his back, and a bronze leaf-bladed sword wound with a glowing vine. He walks with the sword in guard and blinks now and then; his cut lifts the sword behind the antlers, whips a bright green arc overhead and down in front, shedding leaves, and settles back to guard.",
+  "creator": null,
+  "source": "drawn with claude-pxl (MIT)",
+  "licence": "made for Forest Survivor",
+  "colour": null,
+  "w": 48,
+  "h": 48,
+  "frames": 22,
+  "collection": "Knight looks",
+  "origin": "gms/3001/sprites/lab/src/knight-f/knight-f.px.js",
+  "made": "2026-10-22T15:10:08.401Z",
+  "walk": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "idle": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "attackFps": 13,
+  "attackRelease": null,
+  "attackWalk": null,
+  "walkFps": null,
+  "idleFps": null,
+  "motionRate": 1.051967178624027,
+  "idleRate": 3.75,
+  "anchorY": 40,
+  "selfBob": true,
+  "floating": false,
+  "fitW": 36,
+  "fitH": 34,
+  "outline": false,
+  "sheet": "sheets/knight-f.png",
+  "rows": [
+    "right",
+    "glow",
+    "glowLeft"
+  ],
+  "emissive": null,
+  "glow": [
+    "#d8ff8a",
+    "#5bff7d",
+    "#c4ff9c",
+    "#fff6d6"
+  ]
+}

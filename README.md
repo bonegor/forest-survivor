@@ -95,7 +95,7 @@ The clock keeps **real time**: the 15-minute night takes 15 minutes, and the 5:0
 
 ### The unlock ladder
 
-1. You start with the **Knight** and **15-minute Survival** only. The Knight has two looks, chosen with **LOOK** under his panel on the hero screen and remembered with the settings: his own plumed knight and **Knight B**, a knight-errant in blued steel drawn with claude-pxl (MIT; `gms/3001/sprites/lab/src/knight-b/`, baked by `tools/bake-heroes.mjs`).
+1. You start with the **Knight** and **15-minute Survival** only. The Knight has seven looks, chosen with **LOOK** under his panel on the hero screen and remembered with the settings: his own plumed knight, **Knight B** (a knight-errant in blued steel), the **Ember** knight (a living flame crest), the **Frost Warden** (winged helm, wolf-fur mantle), the **Black Knight** (horned, red-eyed), the **Thorn Knight** (antlers and a leaf blade) and the **Moon Knight** (a crescent crest and a starry cloak). Each was drawn with claude-pxl (MIT) by an artist subagent and refined by a reviewer (`gms/3001/sprites/lab/src/knight-<b..g>/`, baked by `tools/bake-heroes.mjs`).
 2. Last **5 minutes** on the clock with a hero to unlock the next hero, free. A banner says so at 5:00, and the hero is yours when the run ends, whether you win, fall or quit.
 3. Surviving the night with the **Necromancer** opens the **Dungeon**, for the Knight only at first.
 4. **Beat the Dungeon** with a hero to bring the next hero into it.

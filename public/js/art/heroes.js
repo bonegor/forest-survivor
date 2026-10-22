@@ -2,7 +2,8 @@
 
 import { KNIGHT_PLUMED } from './knight-plumed.js';
 import { ARCHER_SHEET, ARCHER_POSE, MAGE_SHEET, MAGE_POSE, NECROMANCER_SHEET, NECROMANCER_POSE, ROGUE_SHEET, ROGUE_POSE,
-  PALADIN_SHEET, PALADIN_POSE, DRUID_SHEET, DRUID_POSE, BERSERKER_SHEET, BERSERKER_POSE, WITCHHUNTER_SHEET, WITCHHUNTER_POSE, KNIGHT_B_SHEET, KNIGHT_B_POSE } from './hero-sheets.js';
+  PALADIN_SHEET, PALADIN_POSE, DRUID_SHEET, DRUID_POSE, BERSERKER_SHEET, BERSERKER_POSE, WITCHHUNTER_SHEET, WITCHHUNTER_POSE, KNIGHT_B_SHEET, KNIGHT_B_POSE,
+  KNIGHT_C_SHEET, KNIGHT_C_POSE, KNIGHT_D_SHEET, KNIGHT_D_POSE, KNIGHT_E_SHEET, KNIGHT_E_POSE, KNIGHT_F_SHEET, KNIGHT_F_POSE, KNIGHT_G_SHEET, KNIGHT_G_POSE } from './hero-sheets.js';
 import { KNIGHT_PORTRAIT_V2 } from './knight-portrait-v2.js';
 
 export const HERO_ART = {
@@ -41,4 +42,14 @@ export const HERO_ART = {
   // The Knight's second look, chosen on the hero screen (data/heroes.js skins).
   knight_b: KNIGHT_B_SHEET,
   knight_b_pose: KNIGHT_B_POSE,
+  knight_c: KNIGHT_C_SHEET,
+  knight_c_pose: KNIGHT_C_POSE,
+  knight_d: KNIGHT_D_SHEET,
+  knight_d_pose: KNIGHT_D_POSE,
+  knight_e: KNIGHT_E_SHEET,
+  knight_e_pose: KNIGHT_E_POSE,
+  knight_f: KNIGHT_F_SHEET,
+  knight_f_pose: KNIGHT_F_POSE,
+  knight_g: KNIGHT_G_SHEET,
+  knight_g_pose: KNIGHT_G_POSE,
 };

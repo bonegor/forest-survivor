@@ -1,0 +1,70 @@
+{
+  "cls": "knight",
+  "kind": "proposal",
+  "id": "e",
+  "name": "Knight · Black Knight",
+  "description": "A brooding little tyrant in jagged obsidian plate: a closed helm with two curved horns and two glowing red eyes in its visor slit, spiky pauldrons, a tattered blood-red cloak that streams behind him, and a jagged greatsword held up before him in both hands, its edge a glowing red saw. He walks with the blade rocking, cloak flapping; his cut swings it back, brings it over in a dark-red crescent, slams it down and lifts it to guard again.",
+  "creator": null,
+  "source": "drawn with claude-pxl (MIT)",
+  "licence": "made for Forest Survivor",
+  "colour": null,
+  "w": 48,
+  "h": 48,
+  "frames": 22,
+  "collection": "Knight looks",
+  "origin": "gms/3001/sprites/lab/src/knight-e/knight-e.px.js",
+  "made": "2026-10-22T15:11:17.595Z",
+  "walk": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "idle": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "attackFps": 13,
+  "attackRelease": null,
+  "attackWalk": null,
+  "walkFps": null,
+  "idleFps": null,
+  "motionRate": 1.051967178624027,
+  "idleRate": 3.75,
+  "anchorY": 40,
+  "selfBob": true,
+  "floating": false,
+  "fitW": 36,
+  "fitH": 34,
+  "outline": false,
+  "sheet": "sheets/knight-e.png",
+  "rows": [
+    "right",
+    "glow",
+    "glowLeft"
+  ],
+  "emissive": null,
+  "glow": [
+    "#ff2e35",
+    "#ff5a3c",
+    "#b3162a"
+  ]
+}

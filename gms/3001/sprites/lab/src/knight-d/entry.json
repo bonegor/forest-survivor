@@ -1,0 +1,70 @@
+{
+  "cls": "knight",
+  "kind": "proposal",
+  "id": "d",
+  "name": "Knight · Frost Warden",
+  "description": "A northern guardian from the frozen peaks: pale ice-blue enamel plate with silver trim, a shaggy white wolf-fur mantle round his shoulders, an open helm with two swept-back silver wings over a small stern face with icy eyes, a round shield of blue ice carrying a glowing snowflake, and a crystal longsword held upright beside his head. He walks with the sword raised; his cut lifts the blade over the helm, sweeps it forward in a wide cold arc that sheds ice shards and snow, and brings it back to guard.",
+  "creator": null,
+  "source": "drawn with claude-pxl (MIT)",
+  "licence": "made for Forest Survivor",
+  "colour": null,
+  "w": 48,
+  "h": 48,
+  "frames": 22,
+  "collection": "Knight looks",
+  "origin": "gms/3001/sprites/lab/src/knight-d/knight-d.px.js",
+  "made": "2026-10-22T15:10:08.149Z",
+  "walk": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "idle": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "attackFps": 13,
+  "attackRelease": null,
+  "attackWalk": null,
+  "walkFps": null,
+  "idleFps": null,
+  "motionRate": 1.051967178624027,
+  "idleRate": 3.75,
+  "anchorY": 40,
+  "selfBob": true,
+  "floating": false,
+  "fitW": 36,
+  "fitH": 34,
+  "outline": false,
+  "sheet": "sheets/knight-d.png",
+  "rows": [
+    "right",
+    "glow",
+    "glowLeft"
+  ],
+  "emissive": null,
+  "glow": [
+    "#4fcdfc",
+    "#a6efff",
+    "#effeff"
+  ]
+}
