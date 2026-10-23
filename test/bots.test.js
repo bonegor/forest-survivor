@@ -9,9 +9,9 @@ import { PICKS } from '../public/js/bots/picks.js';
 const strip = ({ ms, ...r }) => r; // wall time is all that may differ between replays
 
 test('a seeded bot game replays exactly and reports its stats', () => {
-  // Ten times his health (a test buff), so a bare Knight outlives the 45 s (data/heroes.js: he loses
-  // early now, and his sword cuts only 45° since 23 October 2026).
-  const play = (seed) => strip(playGame({ bot: 'kite', hero: 'knight', mode: 's15', seed, max: 45, buff: { life: 900 } }));
+  // Thirty times his health (a test buff), so a bare Knight outlives the 45 s (data/heroes.js: he loses
+  // early now, his sword cuts only 45°, and since 23 October 2026 a blow can land every 0.22 s).
+  const play = (seed) => strip(playGame({ bot: 'kite', hero: 'knight', mode: 's15', seed, max: 45, buff: { life: 2900 } }));
   // Seed 3 (3, then 8, then 2, until the weapons, the quicker sword, the crowd's push and the
   // emptier boxes of 22 October 2026 changed what the level-ups draw and when he cuts): with two thirds of the old horde on Elite (data/difficulty.js ELITE_CROWD), some seeds
   // keep the kiting Knight clear of the monsters all 45 s; this one fights.
@@ -43,7 +43,9 @@ test('a death ends the run and names the killer', () => {
 });
 
 test('strategies of your own, and their parameters', () => {
-  const east = playGame({ bot: (v) => ({ x: 1, y: 0 }), label: 'east', seed: 1, max: 5 });
+  // Five times his health (a test buff): walking into the first swarm, a bare Knight falls in under
+  // 5 s since a blow can land every 0.22 s (23 October 2026).
+  const east = playGame({ bot: (v) => ({ x: 1, y: 0 }), label: 'east', seed: 1, max: 5, buff: { life: 400 } });
   assert.equal(east.bot, 'east');
   assert.equal(east.time, 5);
   const picky = { params: { slot: 0 }, make: (o) => ({ tick: () => ({ x: 0, y: 0 }), pick: () => o.slot }) };
