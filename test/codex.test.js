@@ -49,7 +49,9 @@ test('the Codex draws for a new player and for one with everything open, and scr
       s.enter(app);
       app.ui.lockT = 0;
       for (const type of ['weapon', 'relic', 'ult']) {
+        // The tab in focus is the tab open (a row of choices: moving along it opens each).
         s.tab = type;
+        app.ui.focusId = 'cx_' + type;
         s.scroll = s.want = 0;
         s.draw(ctx, W, H, 1 / 60);
         const ids = app.ui.items.map((it) => it.id);

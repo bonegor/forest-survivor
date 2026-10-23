@@ -174,14 +174,14 @@ function trialScreen(profile = defaultProfile(), choice = {}) {
   return { s, app };
 }
 
-test('the trial screen hangs the box under Elite, shut on Veteran; a click, Enter or the pad\'s A ticks it', () => {
+test('the trial screen puts the box under the difficulties, shut but on Elite; a click, Enter or the pad\'s A ticks it', () => {
   const { s, app } = trialScreen();
   let box = item(app, 'nightmare');
   const normal = item(app, 'd_easy'), mid = item(app, 'd_medium'), vet = item(app, 'd_hard');
   assert.ok(box && normal && mid && vet, 'the box and the three difficulties');
   assert.ok(normal.x < mid.x && mid.x < vet.x, 'Normal, Veteran, Elite, left to right');
   assert.ok(box.y >= vet.y + vet.h, 'on a line of its own, under them');
-  assert.ok(box.x > vet.x && box.x < vet.x + vet.w, 'under Elite');
+  assert.ok(Math.abs(box.x + box.w / 2 - view.W / 2) <= 1, 'centred under the row (23 October 2026)');
   assert.ok(Math.abs((normal.x + vet.x + vet.w) / 2 - view.W / 2) <= 1, 'the difficulties centred');
   // On Veteran it is shut: a click does nothing.
   assert.equal(box.disabled, true, 'shut on Veteran');
@@ -228,6 +228,37 @@ test('the trial screen hangs the box under Elite, shut on Veteran; a click, Ente
   } finally {
     gs.leave();
   }
+});
+
+// The owner's (23 October 2026): menus that "respect left, right, up, down". On the trial screen the
+// trials and the difficulties are rows of choices: moving along one picks what it lands on, and up
+// or down into one comes back to its choice.
+test('moving along the trials or the difficulties picks them; up and down come back to the choice', () => {
+  const { s, app } = trialScreen(unlockEverything(defaultProfile()), { diff: 'easy' });
+  // The focus moves at the end of a frame; the row reads it, and picks, on the next.
+  const press = (key) => {
+    input.justDown.add(key);
+    frame(s);
+    frame(s);
+  };
+  app.ui.focusId = 'm_s15';
+  press('ArrowRight');
+  assert.deepEqual([app.ui.focusId, app.choice.mode], ['m_dungeon', 'dungeon']);
+  press('ArrowDown');
+  assert.equal(app.ui.focusId, 'd_easy', 'down onto the difficulty chosen');
+  press('ArrowRight');
+  press('ArrowRight');
+  assert.deepEqual([app.ui.focusId, app.choice.diff], ['d_hard', 'hard']);
+  press('ArrowDown');
+  assert.equal(app.ui.focusId, 'nightmare');
+  press('ArrowDown');
+  assert.equal(app.ui.focusId, 'begin');
+  press('ArrowUp');
+  press('ArrowUp');
+  assert.equal(app.ui.focusId, 'd_hard', 'up onto Elite, the one chosen, not the nearest');
+  press('ArrowUp');
+  assert.equal(app.ui.focusId, 'm_dungeon', 'up onto the trial chosen');
+  assert.equal(app.choice.diff, 'hard', 'passing by changes nothing');
 });
 
 test('Ranked\'s trial card shows no box, and a Nightmare ticked before plays Ranked as Ranked', () => {

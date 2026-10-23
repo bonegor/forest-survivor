@@ -1239,60 +1239,61 @@ export class PauseOverlay {
       return null;
     }
     dim(ctx, W, H, 0.6);
-    const pw = Math.min(W - 16, 320), ph = Math.min(H - 20, 196);
+    const p = g.player, auto = FILLERS[g.autoPick]?.short;
+    // As tall as the build it shows (its longer column), the buttons and, if any, the ALWAYS line.
+    const listed = Math.max(1, p.weapons.length, p.passives.size);
+    const pw = Math.min(W - 16, 320), ph = Math.min(H - 20, 26 + 12 + listed * 15 + 8 + 58 + (auto ? 18 : 0));
     const x = Math.round(W / 2 - pw / 2), y = Math.round(H / 2 - ph / 2) + 4;
     panel(ctx, x, y, pw, ph, { title: 'PAUSED' });
-    const p = g.player;
-    // Build.
-    let bx = x + 8, by = y + 10;
-    drawText(ctx, 'WEAPONS', bx, by, { color: '#8b9bb4' });
-    by += 10;
-    for (const w of p.weapons) {
-      ctx.drawImage(SPR[w.def.icon].frames[0].c, bx, by - 3);
-      drawText(ctx, `${w.def.name}`, bx + 18, by + 1, { color: w.evolved ? '#f77622' : '#c0cbdc' });
-      drawText(ctx, w.evolved ? 'MAX' : `LV ${w.level}`, x + pw / 2 - 6, by + 1, { align: 'right', color: '#8b9bb4' });
-      by += 15;
-    }
-    let sx = x + pw / 2 + 4, sy = y + 10;
-    drawText(ctx, 'RELICS', sx, sy, { color: '#8b9bb4' });
-    sy += 10;
-    for (const [id, r] of p.passives) {
-      ctx.drawImage(SPR[PASSIVES[id].icon].frames[0].c, sx, sy - 3);
-      drawText(ctx, PASSIVES[id].name, sx + 18, sy + 1, { color: '#c0cbdc' });
-      drawText(ctx, `${r}`, x + pw - 8, sy + 1, { align: 'right', color: '#8b9bb4' });
-      sy += 15;
-    }
-    const statY = Math.max(by, sy) + 2;
-    // The clock the HUD showed: in a timed run, the time left.
+    // The run so far along the top (the clock as the HUD showed it: in a timed run, the time left),
+    // or, once QUIT RUN is pressed, what quitting means.
     const stats = `${clockCountsDown(g) ? 'TIME LEFT' : 'TIME'} ${fmtTime(clockTime(g))} · LV ${p.level} · KILLS ${fmtNum(g.kills)} · GOLD ${fmtNum(g.gold)}`;
     const note = this.confirm ? 'Quitting ends the run. The gold you found is kept.' : stats;
-    const auto = FILLERS[g.autoPick]?.short;
-    drawText(ctx, note, W / 2, Math.min(statY, y + ph - (auto ? 66 : 50)), { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
+    drawText(ctx, note, W / 2, y + 11, { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
+    // The build in two columns, a rule between: weapons and their levels, relics and their ranks.
+    const mid = x + Math.round(pw / 2), top = y + 26;
+    const column = (cx, right, title, rows) => {
+      drawText(ctx, title, cx, top, { color: '#8b9bb4' });
+      let ry = top + 12;
+      if (!rows.length) drawText(ctx, 'None yet', cx, ry + 1, { color: '#5a6988' });
+      for (const [icon, name, tag, color] of rows) {
+        ctx.drawImage(SPR[icon].frames[0].c, cx, ry - 3);
+        drawText(ctx, name, cx + 18, ry + 1, { color });
+        drawText(ctx, tag, right, ry + 1, { align: 'right', color: '#8b9bb4' });
+        ry += 15;
+      }
+      return ry;
+    };
+    const wy = column(x + 10, mid - 8, 'WEAPONS', p.weapons.map((w) => [w.def.icon, w.def.name, w.evolved ? 'MAX' : `LV ${w.level}`, w.evolved ? '#f77622' : '#c0cbdc']));
+    const ry = column(mid + 8, x + pw - 10, 'RELICS', [...p.passives].map(([id, r]) => [PASSIVES[id].icon, PASSIVES[id].name, `${r}`, '#c0cbdc']));
+    ctx.fillStyle = '#3a4466';
+    ctx.fillRect(mid, top, 1, Math.max(wy, ry) - top - 4);
     ui.begin(dt);
-    const bw = Math.min(90, (pw - 30) / 2);
-    const row1 = y + ph - 38, row2 = y + ph - 20;
+    // RESUME, OPTIONS and QUIT RUN one under another at the foot (the owner's, 23 October 2026:
+    // menus that "respect left, right, up, down"), the way out last.
+    const bw = 110, bx = Math.round(W / 2 - bw / 2), row = (k) => y + ph - 20 - (2 - k) * 18;
     // The filler every level-up takes since the player ticked ALWAYS on it, and the way back to
     // being asked (Game.autoPick).
     if (auto) {
       const label = `Level-ups: always ${auto}`, aw = 64, lw = textWidth(label);
-      const lx = Math.round(W / 2 - (lw + 6 + aw) / 2), ay = row1 - 17;
+      const lx = Math.round(W / 2 - (lw + 6 + aw) / 2), ay = row(0) - 18;
       drawText(ctx, label, lx, ay + 3, { color: '#fee761' });
       if (button(ctx, ui, 'ask', lx + lw + 6, ay, aw, 12, 'ASK AGAIN', { color: '#2ce8f5', pointer: false })) {
         g.autoPick = null;
         ui.focusId = 'resume';
       }
     }
-    if (button(ctx, ui, 'resume', Math.round(W / 2 - bw - 4), row1, bw, 13, 'RESUME') || (input.pressed('pause') && ui.lockT <= 0)) {
+    if (button(ctx, ui, 'resume', bx, row(0), bw, 13, 'RESUME') || (input.pressed('pause') && ui.lockT <= 0)) {
       g.state = 'play';
       return 'close';
     }
-    if (button(ctx, ui, 'opts', Math.round(W / 2 + 4), row1, bw, 13, 'OPTIONS')) {
+    if (button(ctx, ui, 'opts', bx, row(1), bw, 13, 'OPTIONS')) {
       this.options = new OptionsScreen();
       this.options.enter(app, { back: null });
     }
     // One way out of a run: it ends, with its results and gold. (A run is never saved to pick
     // up again.)
-    if (button(ctx, ui, 'quit', Math.round(W / 2 - bw / 2), row2, bw, 13, this.confirm ? 'SURE?' : 'QUIT RUN', { color: '#e43b44' })) {
+    if (button(ctx, ui, 'quit', bx, row(2), bw, 13, this.confirm ? 'SURE? QUIT RUN' : 'QUIT RUN', { color: '#e43b44' })) {
       if (this.confirm) {
         g.finish(false);
         this.gs.open(new ResultsOverlay(this.gs));

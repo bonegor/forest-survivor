@@ -17,12 +17,14 @@ export class UI {
     this.lockT = 0;
     this.navSound = true;
     this.noSpace = false; // Space doesn't confirm: a choice that popped up mid-fight, where Space is the ultimate
+    this.taken = new Set(); // directions a widget in focus uses itself this frame (take): they don't move the focus
   }
 
   begin(dt) {
     this.t += dt;
     this.lockT = Math.max(0, this.lockT - dt);
     this.items.length = 0;
+    this.taken.clear();
     this.fired = false;
     if (this.pending !== undefined) {
       this.focusId = this.pending;
@@ -35,6 +37,12 @@ export class UI {
     this.pending = id;
   }
 
+  // The focused widget uses these directions itself this frame (a stepper's left and right), so
+  // they don't also move the focus away from it.
+  take(...dirs) {
+    for (const d of dirs) this.taken.add(d);
+  }
+
   // Ignore input for a moment (e.g. right after a modal opens).
   lock(t = 0.25) {
     this.lockT = t;
@@ -43,8 +51,11 @@ export class UI {
   // Registers a focusable rect. Returns true when activated this frame. opts.held: it takes the
   // focus (hover, the keys, a click or a tap) but can't be activated yet, and a press on it is
   // dropped, never kept for later (the level-up's cards in their first moments).
+  // opts.group and opts.home: a row of choices (the trials, the difficulties, the Codex's tabs). Up
+  // or down into the row lands on its home, the one chosen, not on whichever is nearest (end).
+  // opts.fallback: reached by the arrows only when nothing else lies that way (BACK, in its corner).
   item(id, x, y, w, h, opts = {}) {
-    const it = { id, x, y, w, h, disabled: !!opts.disabled };
+    const it = { id, x, y, w, h, disabled: !!opts.disabled, group: opts.group || null, home: !!opts.home, fallback: !!opts.fallback };
     this.items.push(it);
     const m = input.mouse;
     // opts.noMouse: the mouse leaves it be (a Codex tile scrolled under the tabs or the foot).
@@ -87,22 +98,25 @@ export class UI {
     if (this.lockT > 0) return;
     const dirs = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
     for (const [k, [dx, dy]] of Object.entries(dirs)) {
-      if (!input.pressed(k)) continue;
+      if (!input.pressed(k) || this.taken.has(k)) continue;
       const cur = this.items.find((i) => i.id === this.focusId);
       const cx = cur.x + cur.w / 2, cy = cur.y + cur.h / 2;
       let best = null, bs = Infinity;
-      for (const it of this.items) {
-        if (it === cur) continue;
-        const ix = it.x + it.w / 2, iy = it.y + it.h / 2;
-        const vx = ix - cx, vy = iy - cy;
-        const along = vx * dx + vy * dy;
-        if (along <= 0.5) continue;
-        const across = Math.abs(vx * dy - vy * dx);
-        const score = along + across * 2.2;
-        if (score < bs) {
-          bs = score;
-          best = it;
+      for (const pass of [false, true]) {
+        for (const it of this.items) {
+          if (it === cur || it.fallback !== pass) continue;
+          const ix = it.x + it.w / 2, iy = it.y + it.h / 2;
+          const vx = ix - cx, vy = iy - cy;
+          const along = vx * dx + vy * dy;
+          if (along <= 0.5) continue;
+          const across = Math.abs(vx * dy - vy * dx);
+          const score = along + across * 2.2;
+          if (score < bs) {
+            bs = score;
+            best = it;
+          }
         }
+        if (best) break;
       }
       if (!best) {
         // Wrap around within the same row/column.
@@ -112,6 +126,8 @@ export class UI {
           best = cands[0];
         }
       }
+      // Up or down into another row of choices: onto the one it has chosen.
+      if (best && dy && best.group && best.group !== cur.group) best = this.items.find((i) => i.group === best.group && i.home) || best;
       if (best) {
         this.focusId = best.id;
         sfx('ui');
@@ -227,6 +243,7 @@ export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
   const f = ui.focused(id);
   drawText(ctx, label, x + 14, y + 2, { color: f ? '#fee761' : '#ead4aa' });
   drawText(ctx, `< ${value} >`, x + w - 14, y + 2, { align: 'right', color: f ? '#ffffff' : '#c28569' });
+  if (f) ui.take('left', 'right');
   if (!f || ui.lockT > 0) return hit ? 1 : 0;
   if (input.pressed('left')) return -1;
   if (input.pressed('right')) return 1;

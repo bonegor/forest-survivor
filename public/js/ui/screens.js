@@ -45,6 +45,16 @@ function header(ctx, W, title, y = 4) {
   flank(ctx, W / 2 - hw - 4, W / 2 + hw + 4, y + 12, Math.min(48, W / 2 - hw - 10));
 }
 
+// The keys a menu answers to, along its foot beside BACK (the owner's, 23 October 2026: the menus
+// should "respect left, right, up, down" and Enter): the arrows move, and in a row of choices pick
+// one; Enter takes it; Escape goes back. Not on a touch screen, nor where it would reach BACK.
+function keysHint(ctx, W, H, text = 'ARROWS move · ENTER select · ESC back') {
+  if (input.device === 'touch') return;
+  if (input.device === 'pad') text = text.replace('ARROWS', 'D-PAD').replace('ENTER', 'A').replace('ESC', 'B');
+  if (textWidth(text) > W - 2 * 76) return;
+  drawText(ctx, text, W / 2, H - 16, { align: 'center', color: '#5a6988', outline: null });
+}
+
 // ------------------------------------------------------------------ title --
 
 export class TitleScreen {
@@ -133,7 +143,7 @@ export class TitleScreen {
     ctx.drawImage(SPR.h_trophy.frames[0].c, W - 14 - textWidth(String(wins)), H - 13);
     drawText(ctx, String(wins), W - 5, H - 12, { align: 'right', color: '#fee761' });
     if (DEBUG) drawText(ctx, 'Debug: everything unlocked, saved apart from your own progress', W / 2, H - 12, { align: 'center', color: '#feae34' });
-    else drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress kept in cookies (offline)', W / 2, H - 12, { align: 'center', color: '#5d4a52', outline: null });
+    else drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress saved in this browser', W / 2, H - 12, { align: 'center', color: '#5d4a52', outline: null });
   }
 
   // A save exists but can't be read: say so and offer a clean start instead of
@@ -247,7 +257,7 @@ export function portraitFit(fh, maxW) {
 // phone held upright: five and four); the rows kept short enough on a low screen to leave the
 // detail panel under them room. A screen too low for rows even HERO_CARD.low tall (a 1366 x 768
 // laptop) keeps all in one row, down to HERO_CARD.tight wide, rather than crush the panel.
-export const HERO_CARD = { min: 44, tight: 38, max: 64, h: 66, low: 56, gap: 6 };
+export const HERO_CARD = { min: 44, tight: 38, max: 64, h: 66, low: 56, gap: 4 };
 export function heroCards(W, H, n) {
   const C = HERO_CARD, wide = (k) => Math.min(C.max, Math.floor((W - 30) / k) - C.gap);
   const room = (rows) => Math.floor((H - 32 - 26 - 100 - 8 - C.gap * (rows - 1)) / rows);
@@ -292,8 +302,9 @@ export class HeroScreen {
       const h = heroLook(id, app.settings.skins);
       const locked = !prof.heroes.includes(id);
       const fid = 'h_' + id;
-      // A locked hero can't be bought: five minutes with the one before bring them in.
-      if (ui.item(fid, x, y, cw, ch) && !locked) {
+      // A locked hero can't be bought: five minutes with the one before bring them in. Up from below
+      // comes back to the hero shown in the panel.
+      if (ui.item(fid, x, y, cw, ch, { group: 'heroes', home: id === (this.lastHero || app.choice.hero) }) && !locked) {
         app.choice.hero = id;
         app.go('mode');
       }
@@ -316,7 +327,7 @@ export class HeroScreen {
         drawText(ctx, id === next ? `${HERO_UNLOCK_TIME / 60} MIN` : 'LOCKED', x + cw / 2, y + ch - 12, { align: 'center', color: id === next ? '#feae34' : '#5a6988' });
       } else {
         // The title, or its short form where the card is too narrow for it (labels never run together).
-        const label = textWidth(h.title.toUpperCase()) <= cw - 2 ? h.title.toUpperCase() : h.short.toUpperCase();
+        const label = textWidth(h.title.toUpperCase()) <= cw - 8 ? h.title.toUpperCase() : h.short.toUpperCase();
         drawText(ctx, label, x + cw / 2, y + ch - 12, { align: 'center', color: f ? '#fee761' : '#c0cbdc' });
         // Achievement stars: night survived, Dungeon beaten.
         let sx = x + cw - 8;
@@ -330,14 +341,16 @@ export class HeroScreen {
     // The hero last focused stays in the panel while its LOOK button is (detail).
     focusHero = focusHero || this.lastHero || 'knight';
     this.lastHero = focusHero;
-    const bottom = this.detail(ctx, W, H, focusHero, y + ch + 8, !prof.heroes.includes(focusHero));
+    // Clear of the cards: the panel's name plate stands 8 px over its top edge.
+    const bottom = this.detail(ctx, W, H, focusHero, y + ch + 14, !prof.heroes.includes(focusHero));
     let gy = bottom + 6;
     for (const line of wrapText('NEXT: ' + goalText(nextGoal(prof)), W - 24)) {
       if (gy > H - 32) break;
       drawText(ctx, line, W / 2, gy, { align: 'center', color: '#feae34' });
       gy += 9;
     }
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('title');
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
+    keysHint(ctx, W, H);
     ui.end();
     if (input.pressed('back') && ui.lockT <= 0) app.go('title');
   }
@@ -369,7 +382,7 @@ export class HeroScreen {
 
   detail(ctx, W, H, id, y, locked) {
     const h = heroLook(id, this.app.settings.skins);
-    const pw = Math.min(W - 16, 330), ph = Math.min(H - y - 26, 120);
+    const pw = Math.min(W - 16, 330), ph = Math.min(H - y - 40, 120);
     const x = Math.round(W / 2 - pw / 2);
     panel(ctx, x, y, pw, ph, { title: `${h.name.toUpperCase()} — ${h.title.toUpperCase()}` });
     // The portrait frame, as tall as the panel allows over the line of stars under it.
@@ -425,17 +438,18 @@ export class HeroScreen {
         sx += widths[i] + 10;
       });
     }
-    // His looks, one press each to the next (data/heroes.js skins), remembered with the settings.
+    // His looks (data/heroes.js skins), left and right through them, remembered with the settings.
     const skins = HEROES[id].skins;
     if (skins && !locked) {
       const app = this.app, cur = skins.find((k) => k.id === app.settings.skins?.[id]) || skins[0];
-      if (button(ctx, app.ui, 'look', Math.round(W / 2 - 60), y + ph + 3, 120, 13, `LOOK: ${cur.name.toUpperCase()}`)) {
-        const next = skins[(skins.indexOf(cur) + 1) % skins.length];
+      const d = stepper(ctx, app.ui, 'look', Math.round(W / 2 - 80), y + ph + 4, 160, 'LOOK', cur.name.toUpperCase());
+      if (d) {
+        const next = skins[(skins.indexOf(cur) + d + skins.length) % skins.length];
         app.settings.skins = { ...app.settings.skins, [id]: next.id };
         saveSettings(app.settings);
         sfx('select');
       }
-      return y + ph + 18;
+      return y + ph + 19;
     }
     return y + ph;
   }
@@ -468,16 +482,17 @@ export class ModeScreen {
     let x = Math.round(W / 2 - total / 2);
     const y = 34;
     let focusMode = null;
+    // The trials, a row of choices (the owner's, 23 October 2026: the menus should "respect left,
+    // right, up, down"): moving along it picks the trial in focus, if this hero may enter it; up or
+    // down into it comes back to the one picked (ui.js group). Enter goes on to BEGIN.
     for (const m of modes) {
       const M = MODES[m];
       const fid = 'm_' + m;
       const open = canPlay(prof, m, hero);
-      if (ui.item(fid, x, y, cw, ch, { disabled: !open })) {
-        app.choice.mode = m;
-        ui.focus('begin');
-      }
+      if (ui.item(fid, x, y, cw, ch, { disabled: !open, group: 'trial', home: app.choice.mode === m })) ui.focus('begin');
       const f = ui.focused(fid);
       if (f) focusMode = m;
+      if (f && open && app.choice.mode !== m) app.choice.mode = m;
       const sel = app.choice.mode === m;
       panel(ctx, x, y, cw, ch, { trim: f ? ['#ffffff', '#feae34'] : sel ? ['#feae34', '#733e39'] : ['#5a6988', '#3a4466'], rivets: sel, fill: sel ? '#241b2c' : open ? null : '#120e18' });
       // Each trial its own scene (scenes.js): Survival's dusk, the Dungeon's stairs, Ranked's blood
@@ -510,81 +525,57 @@ export class ModeScreen {
       x += cw + 6;
     }
     const mode = app.choice.mode;
-    // The focused trial's description, or what it takes to unlock it.
+    const tw = Math.min(W - 20, 360);
+    // The focused trial's description, or what it takes to unlock it: two lines kept for it, so
+    // nothing under it moves as the focus does.
     const lockedFocus = focusMode && !canPlay(prof, focusMode, hero);
     const desc = lockedFocus ? `To unlock: ${lockReason(prof, focusMode, hero)}` : MODES[focusMode || mode].desc;
-    let ty = y + ch + 5;
-    for (const line of wrapText(desc, W - 20)) {
-      drawText(ctx, line, W / 2, ty, { align: 'center', color: lockedFocus ? '#feae34' : '#c0cbdc' });
-      ty += 9;
-    }
-    // Normal, Veteran or Elite (data/difficulty.js), and under Elite, hung from it as its modifier,
-    // the Nightmare box (three times the monsters): open only on Elite (the owner's, 21 October 2026,
-    // of it as Veteran). All remembered with the settings. Ranked keeps one best per hero, so it is
-    // always Elite and never a Nightmare: there the box isn't shown.
-    ty += 5;
+    wrapText(desc, tw).slice(0, 2).forEach((line, i) => drawText(ctx, line, W / 2, y + ch + 5 + i * 9, { align: 'center', color: lockedFocus ? '#feae34' : '#c0cbdc' }));
+    // Normal, Veteran or Elite (data/difficulty.js), a row of choices like the trials: moving along
+    // it picks one. Under it the Nightmare box (three times the monsters), open only on Elite (the
+    // owner's, 21 October 2026). All remembered with the settings. Ranked keeps one best per hero,
+    // so it is always Elite and never a Nightmare: there neither is shown.
+    let ty = y + ch + 25;
+    const note = [];
     if (mode === 'ranked') {
-      for (const line of wrapText(`Ranked is always played as Elite, never as a ${NIGHTMARE.name}`, W - 20)) {
-        drawText(ctx, line, W / 2, ty, { align: 'center', color: '#8b9bb4' });
-        ty += 9;
-      }
+      note.push([`Ranked is always played as Elite, never as a ${NIGHTMARE.name}.`, '#8b9bb4']);
+      const best = prof.ranked[hero] || 0;
+      note.push([best ? `Your best with the ${HEROES[hero].title}: ${fmtTime(best)} · ${rankTitle(best).toUpperCase()}` : `No Ranked run with the ${HEROES[hero].title} yet`, '#feae34']);
     } else {
       const elite = app.choice.diff === ELITE.id, nightmare = elite && app.choice.nightmare === true;
       const DIFF_ROW = [NORMAL, VETERAN, ELITE];
       const bw = 64, gap = 8, bx = Math.round(W / 2 - (DIFF_ROW.length * bw + (DIFF_ROW.length - 1) * gap) / 2);
       DIFF_ROW.forEach((d, i) => {
-        const dx = bx + i * (bw + gap), on = app.choice.diff === d.id;
-        if (button(ctx, ui, 'd_' + d.id, dx, ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4', on })) {
+        const id = 'd_' + d.id, on = app.choice.diff === d.id;
+        if (button(ctx, ui, id, bx + i * (bw + gap), ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4', on, group: 'diff', home: on })) ui.focus('begin');
+        if (ui.focused(id) && !on) {
           app.choice.diff = app.settings.diff = d.id;
           saveSettings(app.settings);
-          sfx('select');
         }
       });
-      // The bracket from under Elite to its box, lit when it is on.
-      const vx = bx + DIFF_ROW.indexOf(ELITE) * (bw + gap) + 8, ny = ty + 16;
-      ctx.fillStyle = nightmare ? '#f6757a' : elite ? '#9e5b47' : '#4a3540';
-      ctx.fillRect(vx, ty + 13, 1, 9);
-      ctx.fillRect(vx, ny + 6, 5, 1);
-      const label = NIGHTMARE.name.toUpperCase();
-      if (checkbox(ctx, ui, 'nightmare', vx + 3, ny, label, nightmare, { color: '#f6757a', disabled: !elite })) {
+      // The box, centred under the row; shut but for Elite, and saying so.
+      const label = elite ? NIGHTMARE.name.toUpperCase() : `${NIGHTMARE.name.toUpperCase()} · ELITE ONLY`;
+      if (checkbox(ctx, ui, 'nightmare', Math.round(W / 2 - checkboxWidth(label) / 2), ty + 17, label, nightmare, { color: '#f6757a', disabled: !elite })) {
         app.choice.nightmare = app.settings.nightmare = !nightmare;
         saveSettings(app.settings);
       }
-      // Why it is shut on Normal and Veteran: beside it where there is room, else under the description.
-      const hintX = vx + 3 + checkboxWidth(label) + 4, hintBeside = hintX + textWidth('ELITE ONLY') <= W - 4;
-      if (!elite && hintBeside) drawText(ctx, 'ELITE ONLY', hintX, ny + 3, { color: '#5d4a52' });
-      ty += 35;
+      ty += 34;
       const d = DIFF_ROW.find((x) => x.id === app.choice.diff) || NORMAL;
-      for (const line of wrapText(d.desc, W - 20)) {
-        drawText(ctx, line, W / 2, ty, { align: 'center', color: '#8b9bb4' });
+      note.push([d.desc, '#8b9bb4']);
+      if (nightmare) note.push([NIGHTMARE.desc, '#f6757a']);
+    }
+    for (const [text, color] of note) {
+      for (const line of wrapText(text, tw)) {
+        drawText(ctx, line, W / 2, ty, { align: 'center', color });
         ty += 9;
       }
-      if (!elite && !hintBeside) {
-        drawText(ctx, `${NIGHTMARE.name}: Elite only`, W / 2, ty, { align: 'center', color: '#5d4a52' });
-        ty += 9;
-      }
-      // As it is now, ticked this frame or not, so what follows stays put.
-      if (elite && app.choice.nightmare === true) {
-        for (const line of wrapText(NIGHTMARE.desc, W - 20)) {
-          drawText(ctx, line, W / 2, ty, { align: 'center', color: '#f6757a' });
-          ty += 9;
-        }
-      }
     }
-    const dy = ty + 6;
-    let beginY = dy + 14;
-    if (mode === 'ranked') {
-      // The record to beat is this hero's best.
-      const best = prof.ranked[hero] || 0;
-      let ry = dy;
-      for (const line of wrapText(best ? `Your best with the ${HEROES[hero].title}: ${fmtTime(best)} · ${rankTitle(best).toUpperCase()}` : `No Ranked run with the ${HEROES[hero].title} yet`, W - 20)) {
-        drawText(ctx, line, W / 2, ry, { align: 'center', color: '#feae34' });
-        ry += 9;
-      }
-      beginY = Math.max(beginY, ry + 6);
-    }
-    if (button(ctx, ui, 'begin', Math.round(W / 2 - 50), Math.min(H - 22, beginY), 100, 15, 'BEGIN', { color: '#fee761' })) app.startRun();
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('hero');
+    // BEGIN in one place whatever is chosen: under room for the longest notes (four lines), and on a
+    // short screen no lower than over the keys' line.
+    const beginY = Math.max(ty + 6, Math.min(H - 44, y + ch + 25 + 34 + 4 * 9 + 8));
+    if (button(ctx, ui, 'begin', Math.round(W / 2 - 50), beginY, 100, 15, 'BEGIN', { color: '#fee761' })) app.startRun();
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('hero');
+    keysHint(ctx, W, H);
     ui.end();
     if (input.pressed('back')) app.go('hero');
   }
@@ -663,7 +654,8 @@ export class ArmoryScreen {
       if (!upgradeOpen(prof, focusUp)) drawText(ctx, `${needText(PROGRESS.locks.find((l) => l.id === focusUp.lock))} to put it up for sale`, W / 2, iy + 10, { align: 'center', color: '#feae34' });
     }
     if (DEBUG) drawText(ctx, 'Debug: each press adds a rank, free; past the last, back to none', W / 2, iy + 10, { align: 'center', color: '#feae34' });
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('title');
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
+    keysHint(ctx, W, H, 'ARROWS move · ENTER buy · ESC back');
     const spent = Object.keys(prof.up).length > 0;
     if (DEBUG) {
       if (button(ctx, ui, 'maxall', W - 172, H - 20, 80, 13, 'MAX ALL')) {
@@ -700,8 +692,10 @@ export function codexLayout(W, H, n) {
   const C = CODEX_TILE;
   const cols = clamp(Math.floor((W - 16 + C.gap) / (C.min + C.gap)), 1, 4);
   const cw = Math.min(C.max, Math.floor((W - 16 - (cols - 1) * C.gap) / cols));
-  const view = H - C.top - C.foot, step = C.h + C.gap;
-  const rows = Math.max(1, Math.floor((view + C.gap) / step)), total = Math.ceil(n / cols);
+  const step = C.h + C.gap, room = H - C.top - C.foot;
+  // Whole rows only, never one cut in half at the foot.
+  const rows = Math.max(1, Math.floor((room + C.gap) / step)), total = Math.ceil(n / cols);
+  const view = Math.min(room, rows * step - C.gap);
   const most = Math.max(0, total * step - C.gap - view);
   return { cols, rows, total, cw, ch: C.h, step, view, most, x0: Math.round(W / 2 - (cols * cw + (cols - 1) * C.gap) / 2), y0: C.top };
 }
@@ -726,12 +720,16 @@ export class CodexScreen {
     header(ctx, W, 'The Codex');
     ui.begin(dt);
     const all = codexEntries(prof);
-    // The tabs, each with how many of its kind are open.
+    // The tabs, each with how many of its kind are open: a row of choices, moving along it opens the
+    // tab in focus, and up from the tiles comes back to the open one (ui.js group). Enter goes down
+    // to its first tile.
     const tw = Math.min(100, Math.floor((W - 16 - 8) / 3)), tx0 = Math.round(W / 2 - (3 * tw + 8) / 2);
     CODEX_TABS.forEach(([type, label], i) => {
       const list = all.filter((e) => e.type === type), open = list.filter((e) => e.open).length;
       const text = textWidth(`${label} ${open}/${list.length}`) <= tw - 14 ? `${label} ${open}/${list.length}` : label;
-      if (button(ctx, ui, 'cx_' + type, tx0 + i * (tw + 4), 25, tw, 13, text, { on: this.tab === type, color: this.tab === type ? '#fee761' : '#8b9bb4' }) && this.tab !== type) {
+      const id = 'cx_' + type, on = this.tab === type;
+      if (button(ctx, ui, id, tx0 + i * (tw + 4), 25, tw, 13, text, { on, color: on ? '#fee761' : '#8b9bb4', group: 'tabs', home: on }) && list.length) ui.focus(`cx_${type}_${list[0].id}`);
+      if (ui.focused(id) && !on) {
         this.tab = type;
         this.scroll = this.want = 0;
       }
@@ -782,7 +780,8 @@ export class CodexScreen {
       const text = focused.open ? codexDesc(focused) + keep : focused.need + (rec ? ` — ${rec}` : '');
       wrapText(text, W - 20).slice(0, 2).forEach((line, i) => drawRich(ctx, line, W / 2, H - 42 + i * 9, { align: 'center', color: focused.open ? '#c0cbdc' : '#feae34', hi: '#fee761' }));
     }
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go(this.back);
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go(this.back);
+    keysHint(ctx, W, H);
     ui.end();
     this.seen = ui.focusId;
     if (input.pressed('back')) app.go(this.back);
@@ -869,19 +868,20 @@ export class RecordsScreen {
     const p = app.store.profile;
     // Ranked personal bests, one row per hero that has a run.
     const ranked = HERO_ORDER.filter((h) => p.ranked[h]).map((h) => [`${HEROES[h].name}, ${HEROES[h].title}`, `${fmtTime(p.ranked[h])} · ${rankTitle(p.ranked[h])}`]);
-    const pw = Math.min(W - 16, 300), ph = Math.min(H - 62, 170 + Math.max(1, ranked.length) * 10 + 14);
-    const x = Math.round(W / 2 - pw / 2), y = 40;
+    // As tall as what it holds: the wins, the records, the Ranked bests.
+    const pw = Math.min(W - 16, 300), ph = Math.min(H - 62, 10 + 12 + 2 * 11 + 6 + 7 * 10 + 4 + 10 + Math.max(1, ranked.length) * 10 + 6);
+    const x = Math.round(W / 2 - pw / 2), y = Math.max(36, Math.round((H - 26 - ph) / 2) + 6);
     panel(ctx, x, y, pw, ph, { title: 'VICTORIES' });
-    const cx = [x + 10, x + pw - 50];
+    const cx = [x + 10, x + pw - 10];
     let ty = y + 10;
     drawText(ctx, 'TRIAL', cx[0], ty, { color: '#8b9bb4' });
-    drawText(ctx, 'WINS', cx[1] + 20, ty, { align: 'center', color: '#8b9bb4' });
+    drawText(ctx, 'WINS', cx[1], ty, { align: 'right', color: '#8b9bb4' });
     ty += 12;
     for (const m of ['s15', 'dungeon']) {
       // Wins from every difficulty there used to be.
       const w = p.wins[m].reduce((s, n) => s + n, 0);
       drawText(ctx, `${MODES[m].name} ${MODES[m].sub}`, cx[0], ty, { color: '#c0cbdc' });
-      drawText(ctx, String(w), cx[1] + 20, ty, { align: 'center', color: w ? '#fee761' : '#3a4466' });
+      drawText(ctx, String(w), cx[1], ty, { align: 'right', color: w ? '#fee761' : '#5a6988' });
       ty += 11;
     }
     ty += 6;
@@ -906,7 +906,8 @@ export class RecordsScreen {
     if (!ranked.length) line(modeUnlocked(p, 'ranked') ? 'No Ranked runs yet' : 'Locked', '', '#3a4466');
     for (const [k, v] of ranked) line(k, v, '#8b9bb4', '#fee761');
     ui.begin(dt);
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK')) app.go('title');
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
+    keysHint(ctx, W, H, 'ENTER or ESC back');
     ui.end();
     if (input.pressed('back')) app.go('title');
   }
@@ -960,6 +961,8 @@ export class OptionsScreen {
     }
     if (button(ctx, ui, 'o_full', x, y, w, 13, document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN')) app.toggleFullscreen();
     y += 17;
+    // Erasing everything stands apart from the rest, so a press too many down the list can't land on it.
+    y += 8;
     if (!embedded) {
       if (button(ctx, ui, 'o_reset', x, y, w, 13, this.confirmReset ? 'REALLY ERASE ALL PROGRESS?' : 'RESET PROGRESS', { color: '#e43b44' })) {
         if (this.confirmReset) {
@@ -970,14 +973,17 @@ export class OptionsScreen {
       }
       y += 17;
     }
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK') || input.pressed('back')) {
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true }) || input.pressed('back')) {
       if (embedded) return 'close';
       app.go(this.back);
     }
+    keysHint(ctx, W, H, 'UP/DOWN move · LEFT/RIGHT change · ESC back');
     ui.end();
-    drawText(ctx, 'WASD / ARROWS move · SPACE ultimate · ESC pause · TAB map', W / 2, H - 34, { align: 'center', color: '#5a6988' });
-    // The music's credit, as its licences ask (CC BY-SA 3.0, CC BY 3.0; audio/music/CREDITS.md).
-    drawText(ctx, fitLine('Music: Askyel, Ian Alex Mac, Gundatsch, Muldjord, Alexandr Zhelanov, Lincoln Domina, 0 A.D. by Wildfire Games (CC BY / BY-SA), Juhani Junkala, HydroGene and others', W - 16), W / 2, H - 44, { align: 'center', color: '#3a4466' });
+    drawText(ctx, 'In play: WASD / ARROWS move · SPACE ultimate · ESC pause · TAB map', W / 2, H - 36, { align: 'center', color: '#8b9bb4' });
+    // The music's credit, as its licences ask (CC BY-SA 3.0, CC BY 3.0; audio/music/CREDITS.md): in
+    // full, on as many lines as it takes, over the controls.
+    const credit = wrapText('Music: Askyel, Ian Alex Mac, Gundatsch, Muldjord, Alexandr Zhelanov, Lincoln Domina, 0 A.D. by Wildfire Games (CC BY / BY-SA), Juhani Junkala, HydroGene and others', Math.min(W - 16, 420));
+    credit.forEach((line, i) => drawText(ctx, line, W / 2, H - 48 - (credit.length - 1 - i) * 9, { align: 'center', color: '#5a6988' }));
     return null;
   }
 }
