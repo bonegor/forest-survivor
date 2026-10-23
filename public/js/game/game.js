@@ -152,6 +152,12 @@ const STRIKE_VERB = { bow: 'shoot', fireball: 'cast', meteor: 'cast', daggers: '
 
 // Crypt names, picked by the crossroads; the night's minute picks the stone.
 const CRYPT_KIND = ['Crypt', 'Barrow', 'Tomb', 'Ossuary', 'Sepulchre', 'Vault'];
+// The monsters' blows (Game.dmgScale): DMG_AT_DAWN times as hard at dawn, phase 21 (15:00), along
+// a curve; past dawn, as the old rule had them climb. The old rule: gentle, then steeper from phase
+// 10, a little less steep from 20 (2.1 times at dawn), and steeper again from 30.
+const DAWN_PHASE = 21, DMG_AT_DAWN = 5;
+const oldDmgScale = (ph) => 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.06 - Math.max(0, ph - 20) * 0.04 + Math.max(0, ph - 30) * 0.1;
+
 const CRYPT_OF = ['the Hollow King', 'Saint Aldwyn', 'the Nameless', 'Mourn', 'the Weeping Widow', 'Old Bones', 'the Last Knight', 'the Ashen Monk', 'the Drowned', 'Vesper', 'the Pale Hunt', 'Black Ondra'];
 // How many of a crypt's lords, in its banners.
 const LORDS_WORD = ['No', 'One', 'Two', 'Three', 'Four'];
@@ -332,10 +338,14 @@ export class Game {
     return this.time + this.cryptTime;
   }
 
-  // Enemy damage stays gentle early and climbs once the night gets long.
+  // Enemy damage stays gentle early and climbs once the night gets long: one smooth curve to five
+  // times at dawn (the owner's, 23 October 2026: "have it more nicely scaled and get to 5X instead
+  // of 2.1X"), about x1.1 at 3:00, x1.3 at 5:00, x2.5 at 10:00, x3.3 at 12:00. Past dawn (Ranked)
+  // it climbs on as it always did, from those five times (oldDmgScale).
   get dmgScale() {
     const ph = this.phase;
-    return 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.06 - Math.max(0, ph - 20) * 0.04 + Math.max(0, ph - 30) * 0.1;
+    if (ph <= DAWN_PHASE) return 1 + (DMG_AT_DAWN - 1) * (ph / DAWN_PHASE) ** 2.5;
+    return (DMG_AT_DAWN * oldDmgScale(ph)) / oldDmgScale(DAWN_PHASE);
   }
 
   // ------------------------------------------------------------ floors --

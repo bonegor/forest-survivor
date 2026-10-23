@@ -406,7 +406,9 @@ export class Player {
     dmg = Math.max(1, Math.round(dmg * g.diff.hurt));
     this.hp -= dmg;
     this.lastBlow = by || (src ? foeName(src) : null);
-    this.invuln = 0.6;
+    // A moment's grace before the next blow can land: 0.22 s (the owner's, 23 October 2026; 0.6 s
+    // before, when a crowd round him hurt no more than one foe did).
+    this.invuln = 0.22;
     this.flash = 0.12;
     this.addFury((FURY.hurt * dmg) / this.maxHp);
     g.stats.damageTaken += dmg;
