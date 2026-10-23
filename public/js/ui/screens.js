@@ -14,9 +14,13 @@ import { MODES, NORMAL, VETERAN, ELITE, NIGHTMARE } from '../data/difficulty.js'
 import { UPGRADES, upgradeCost, upgradeOpen, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from '../shared/progress.js';
-import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
+import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon } from './ladder.js';
 import { flank } from './skin.js';
+import { MenuDialog } from './menu-dialog.js';
+import { codexSummary, codexDescription, evolutionRecipe, shortNeed, HERO_SUMMARY } from './menu-copy.js';
+import { openFor, metaBonuses } from '../shared/profile.js';
+import { SLOTS, SLOT_NAMES, itemName, itemLines, RARITIES } from '../shared/items.js';
 
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
@@ -121,7 +125,7 @@ export class TitleScreen {
 
     // No Continue: a run is never saved to come back to, only its results when it ends.
     ui.begin(dt);
-    const items = [['play', 'NEW GAME'], ['armory', 'THE ARMORY'], ['codex', 'THE CODEX'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
+    const items = [['play', 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
     const bw = 104, bh = 15, gap = 4;
     let y = Math.round(Math.max(my + 20, H * 0.5 - (items.length * (bh + gap)) / 2 + 6));
     // A pool of shadow under the buttons, so the trees behind don't fight them.
@@ -135,6 +139,10 @@ export class TitleScreen {
       if (button(ctx, ui, id, Math.round(W / 2 - bw / 2), y, bw, bh, label)) this.pick(id);
       y += bh + gap;
     }
+    const goal = nextGoal(app.store.profile);
+    if (goal && y + 25 < H - 40) {
+      wrapText(goalText(goal), Math.min(320, W - 32)).forEach((line, i) => drawText(ctx, line, W / 2, y + 7 + i * 10, { align: 'center', color: '#c0cbdc' }));
+    }
     ui.end();
     // Footer.
     const p = app.store.profile;
@@ -143,7 +151,7 @@ export class TitleScreen {
     ctx.drawImage(SPR.h_trophy.frames[0].c, W - 14 - textWidth(String(wins)), H - 13);
     drawText(ctx, String(wins), W - 5, H - 12, { align: 'right', color: '#fee761' });
     if (DEBUG) drawText(ctx, 'Debug: everything unlocked, saved apart from your own progress', W / 2, H - 12, { align: 'center', color: '#feae34' });
-    else drawText(ctx, app.store.mode === 'server' ? 'Progress kept in encrypted cookies' : 'Progress saved in this browser', W / 2, H - 12, { align: 'center', color: '#5d4a52', outline: null });
+    else drawText(ctx, 'Progress saved automatically after each run', W / 2, H - 12, { align: 'center', color: '#8b9bb4', outline: null });
   }
 
   // A save exists but can't be read: say so and offer a clean start instead of
@@ -283,6 +291,10 @@ export class HeroScreen {
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.45);
     header(ctx, W, 'Choose your Hero');
+    if (this.dialog) {
+      if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null; ui.focus('h_' + this.lastHero); ui.lock(0.2); }
+      return;
+    }
     goldTag(ctx, app, W - 6, 9);
     ui.begin(dt);
     const prof = app.store.profile;
@@ -306,7 +318,8 @@ export class HeroScreen {
       // comes back to the hero shown in the panel.
       if (ui.item(fid, x, y, cw, ch, { group: 'heroes', home: id === (this.lastHero || app.choice.hero) }) && !locked) {
         app.choice.hero = id;
-        app.go('mode');
+        this.lastHero = id;
+        ui.focus('hero_continue');
       }
       const f = ui.focused(fid);
       if (f) focusHero = id;
@@ -345,12 +358,41 @@ export class HeroScreen {
     const bottom = this.detail(ctx, W, H, focusHero, y + ch + 14, !prof.heroes.includes(focusHero));
     let gy = bottom + 6;
     for (const line of wrapText('NEXT: ' + goalText(nextGoal(prof)), W - 24)) {
-      if (gy > H - 32) break;
+      if (gy > H - 56) break;
       drawText(ctx, line, W / 2, gy, { align: 'center', color: '#feae34' });
       gy += 9;
     }
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
-    keysHint(ctx, W, H);
+    if (button(ctx, ui, 'back', 8, H - 20, 44, 13, 'BACK', { fallback: true })) app.go('title');
+    const owned = prof.heroes.includes(focusHero);
+    if (button(ctx, ui, 'equipment', 58, H - 20, 54, 13, 'GEAR', { disabled: !owned })) {
+      const gear = prof.gear[focusHero] || {};
+      const lines = [{ text: `${HEROES[focusHero].title}'s equipment · kept between runs`, color: '#fee761' }];
+      for (const slot of SLOTS) {
+        const it = gear[slot];
+        lines.push({ text: it ? itemName(it) : `${SLOT_NAMES[slot]} · empty`, color: it ? RARITIES[it.rarity].color : '#8b9bb4' });
+        if (it) lines.push(...itemLines(it));
+      }
+      lines.push('Find equipment in forest crypts. Each hero keeps their own gear.');
+      this.dialog = new MenuDialog('Equipment', lines);ui.focus('detail_close');ui.lock(0.2);
+    }
+    if (button(ctx, ui, 'journey', 118, H - 20, 68, 13, 'JOURNEY')) {
+      this.dialog = new MenuDialog('Your journey', [
+        { text: goalText(nextGoal(prof)), color: '#fee761' },
+        `${prof.heroes.length}/${HERO_ORDER.length} heroes recruited. Survive 5 minutes with a hero to recruit the next.`,
+        'Survive the night with the Necromancer to open the Dungeon for the Knight.',
+        'Clear the Dungeon with Knight, Ranger, Sorcerer, Shadow, then Necromancer to open Ranked. The other heroes may enter once the Dungeon opens.',
+        'Ranked: endless runs, personal bests and rank titles.',
+        'Weapons and relics unlock through milestones in the Codex. Permanent upgrades are bought in the Armory.',
+      ]);ui.focus('detail_close');ui.lock(0.2);
+    }
+    if (button(ctx, ui, 'abilities', 192, H - 20, 80, 13, 'ABILITIES')) {
+      const h = HEROES[focusHero], ult = openFor(prof, focusHero).ult;
+      this.dialog = new MenuDialog(h.title, [h.perk, `Starts with ${startWeapons(h).map(id => WEAPONS[id].name).join(' + ')}`, { text: h.ultName, color: '#fee761' }, h.ultDesc, ult ? 'Ultimate unlocked' : `Unlock: survive ${fmtTime(PROGRESS.ultTime)} with this hero`]);ui.focus('detail_close');ui.lock(0.2);
+    }
+    const playY = Math.min(H - 43, Math.max(bottom + 34, gy + 8));
+    if (button(ctx, ui, 'hero_continue', Math.round(W / 2 - 70), playY, 140, 16, owned ? `PLAY ${HEROES[focusHero].title.toUpperCase()}` : 'HERO LOCKED', { disabled: !owned, color: '#fee761' })) {
+      app.choice.hero = focusHero;app.go('mode');
+    }
     ui.end();
     if (input.pressed('back') && ui.lockT <= 0) app.go('title');
   }
@@ -382,7 +424,7 @@ export class HeroScreen {
 
   detail(ctx, W, H, id, y, locked) {
     const h = heroLook(id, this.app.settings.skins);
-    const pw = Math.min(W - 16, 330), ph = Math.min(H - y - 40, 120);
+    const pw = Math.min(W - 16, 400), ph = Math.min(H - y - 72, 140);
     const x = Math.round(W / 2 - pw / 2);
     panel(ctx, x, y, pw, ph, { title: `${h.name.toUpperCase()} — ${h.title.toUpperCase()}` });
     // The portrait frame, as tall as the panel allows over the line of stars under it.
@@ -392,14 +434,10 @@ export class HeroScreen {
     let ty = y + 9;
     const stat = (label, v, max, col) => {
       drawText(ctx, label, tx, ty, { color: '#8b9bb4' });
-      const bx = tx + 40, bw = Math.min(70, tw - 44);
-      ctx.fillStyle = '#0d0b14';
-      ctx.fillRect(bx, ty + 1, bw, 5);
-      ctx.fillStyle = col;
-      ctx.fillRect(bx + 1, ty + 2, Math.round((bw - 2) * clamp(v / max, 0, 1)), 3);
+      drawText(ctx, label === 'SPEED' ? `${Math.round(v * 100)}%` : String(v), tx + tw, ty, { align: 'right', color: col });
       ty += 9;
     };
-    stat('HEALTH', h.stats.maxHp, 300, '#e43b44');
+    stat('BASE HP', h.stats.maxHp, 300, '#e43b44');
     stat('SPEED', h.stats.speed || 1, 1.25, '#2ce8f5');
     // What he starts with: one weapon, or the Necromancer's two side by side.
     const start = startWeapons(h).map((id) => WEAPONS[id]);
@@ -408,26 +446,28 @@ export class HeroScreen {
     const names = wrapText(start.map((w) => w.name).join(' + '), tx + tw - nx);
     names.forEach((ln, i) => drawText(ctx, ln, nx, ty + 3 + i * 9 - (names.length - 1) * 4, { color: '#fee761' }));
     ty += 17;
-    for (const line of wrapText(h.perk, tw)) {
+    for (const line of wrapText(HERO_SUMMARY[id][0], tw)) {
+      if (ty > y + ph - 38) break;
       drawText(ctx, line, tx, ty, { color: '#c0cbdc' });
       ty += 9;
     }
     ty += 2;
-    drawText(ctx, `ULTIMATE: ${h.ultName.toUpperCase()}`, tx, ty, { color: '#f6757a' });
+    const ultimateOpen = openFor(this.app.store.profile, id).ult;
+    drawText(ctx, fitLine('ULT · ' + h.ultName, tw), tx, ty, { color: ultimateOpen ? '#f6757a' : '#8b9bb4' });
     ty += 9;
-    for (const line of wrapText(h.ultDesc, tw)) {
-      if (ty > y + ph - 10) break;
+    for (const line of wrapText(ultimateOpen ? HERO_SUMMARY[id][1] : `Locked · survive ${fmtTime(PROGRESS.ultTime)} with this hero`, tw)) {
+      if (ty > y + ph - (locked || ph >= 125 ? 24 : 10)) break;
       drawText(ctx, line, tx, ty, { color: '#8b9bb4' });
       ty += 9;
     }
     const prof = this.app.store.profile;
     if (locked) {
-      const next = nextHeroUnlock(prof);
+    const next = nextHeroUnlock(prof);
       const prev = HERO_ORDER[HERO_ORDER.indexOf(id) - 1];
       const msg = next !== id ? `UNLOCK THE ${HEROES[next].title.toUpperCase()} FIRST`
         : `SURVIVE ${HERO_UNLOCK_TIME / 60} MINUTES WITH THE ${HEROES[prev].title.toUpperCase()}`;
       drawText(ctx, msg, x + pw / 2, y + ph - 11, { align: 'center', color: next === id ? '#feae34' : '#8b9bb4' });
-    } else {
+    } else if (ph >= 125) {
       // Which trials this hero has conquered.
       const stars = featStars(prof, id);
       const parts = stars.map(([label]) => `★ ${label}`);
@@ -489,10 +529,11 @@ export class ModeScreen {
       const M = MODES[m];
       const fid = 'm_' + m;
       const open = canPlay(prof, m, hero);
-      if (ui.item(fid, x, y, cw, ch, { disabled: !open, group: 'trial', home: app.choice.mode === m })) ui.focus('begin');
+      const activated = ui.item(fid, x, y, cw, ch, { disabled: !open, group: 'trial', home: app.choice.mode === m });
+      if (activated) { app.choice.mode = m; ui.focus('begin'); }
       const f = ui.focused(fid);
       if (f) focusMode = m;
-      if (f && open && app.choice.mode !== m) app.choice.mode = m;
+      if (f && open && ui.focusSource !== 'pointer' && app.choice.mode !== m) app.choice.mode = m;
       const sel = app.choice.mode === m;
       panel(ctx, x, y, cw, ch, { trim: f ? ['#ffffff', '#feae34'] : sel ? ['#feae34', '#733e39'] : ['#5a6988', '#3a4466'], rivets: sel, fill: sel ? '#241b2c' : open ? null : '#120e18' });
       // Each trial its own scene (scenes.js): Survival's dusk, the Dungeon's stairs, Ranked's blood
@@ -538,7 +579,7 @@ export class ModeScreen {
     let ty = y + ch + 25;
     const note = [];
     if (mode === 'ranked') {
-      note.push([`Ranked is always played as Elite, never as a ${NIGHTMARE.name}.`, '#8b9bb4']);
+      note.push(['Endless personal bests · Elite difficulty', '#8b9bb4']);
       const best = prof.ranked[hero] || 0;
       note.push([best ? `Your best with the ${HEROES[hero].title}: ${fmtTime(best)} · ${rankTitle(best).toUpperCase()}` : `No Ranked run with the ${HEROES[hero].title} yet`, '#feae34']);
     } else {
@@ -547,8 +588,9 @@ export class ModeScreen {
       const bw = 64, gap = 8, bx = Math.round(W / 2 - (DIFF_ROW.length * bw + (DIFF_ROW.length - 1) * gap) / 2);
       DIFF_ROW.forEach((d, i) => {
         const id = 'd_' + d.id, on = app.choice.diff === d.id;
-        if (button(ctx, ui, id, bx + i * (bw + gap), ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4', on, group: 'diff', home: on })) ui.focus('begin');
-        if (ui.focused(id) && !on) {
+        const activated = button(ctx, ui, id, bx + i * (bw + gap), ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4', on, group: 'diff', home: on });
+        if (activated) ui.focus('begin');
+        if ((activated || (ui.focused(id) && ui.focusSource !== 'pointer')) && !on) {
           app.choice.diff = app.settings.diff = d.id;
           saveSettings(app.settings);
         }
@@ -583,94 +625,88 @@ export class ModeScreen {
 
 // ----------------------------------------------------------------- armory --
 
+const UPGRADE_GROUPS = [
+  ['power', 'POWER', ['might', 'haste', 'reach', 'endurance', 'velocity', 'echo']],
+  ['survival', 'SURVIVAL', ['armor', 'vitality', 'recovery', 'swiftness', 'revival', 'phoenix']],
+  ['preparation', 'PREPARATION', ['arsenal', 'reliquary', 'magnet', 'fortune', 'wisdom', 'greed', 'reroll', 'banish']],
+];
+export function upgradeEffect(p, id) {
+  if (id === 'phoenix') return p.up.phoenix ? 'Relic available' : 'Relic unavailable';
+  const key = { vitality: 'maxHp', recovery: 'regen', haste: 'cooldown', reach: 'area', swiftness: 'speed', fortune: 'luck', wisdom: 'growth', arsenal: 'weaponSlots', reliquary: 'relicSlots', endurance: 'duration', velocity: 'projSpeed', echo: 'amount' }[id] || id;
+  const n = metaBonuses(p)[key];
+  if (['armor', 'recovery', 'arsenal', 'reliquary', 'reroll', 'banish', 'echo', 'revival'].includes(id)) return String(Math.round(n * 10) / 10);
+  const pct = Math.round((n - 1) * 100);
+  return `${pct >= 0 ? '+' : ''}${pct}%`;
+}
 export class ArmoryScreen {
   enter(app) {
-    this.app = app;
-    this.t = 0;
-    this.flash = {};
-    app.ui.lock(0.2);
-    app.ui.focusId = 'u_might';
-    playMusic('title');
+    this.app = app;this.tab = 'power';this.selected = 'might';this.busy = false;
+    app.ui.lock(0.2);app.ui.focusId = 'u_might';playMusic('title');
   }
-
+  inspect(u) {
+    const p = this.app.store.profile, rank = p.up[u.id] || 0, maxed = rank >= u.max;
+    const cost = upgradeCost(u.id, rank), open = upgradeOpen(p, u);
+    this.selected = u.id;
+    const lines = [{ text: u.desc, color: '#fee761' }, `Rank ${rank}/${u.max} · permanent for all heroes`];
+    if (!open) lines.push(shortNeed(needText(PROGRESS.locks.find(l => l.id === u.lock))));
+    else if (!maxed) lines.push(`Current ${upgradeEffect(p, u.id)} → next ${upgradeEffect({ ...p, up: { ...p.up, [u.id]: rank + 1 } }, u.id)}`, `${cost} gold · you have ${fmtNum(p.gold)}`, p.gold >= cost ? `${fmtNum(p.gold - cost)} gold after purchase` : `${cost - p.gold} more gold needed`);
+    else lines.push('Fully upgraded');
+    this.dialog = new MenuDialog(u.name, lines, DEBUG ? [{ id: 'buy', label: maxed ? 'CLEAR RANKS' : 'ADD RANK · FREE' }] : [{ id: 'buy', label: maxed ? 'FULLY UPGRADED' : !open ? 'LOCKED' : `BUY · ${cost} GOLD`, disabled: maxed || !open || p.gold < cost || this.busy }]);
+    this.app.ui.focus('detail_close');this.app.ui.lock(0.2);
+  }
   draw(ctx, W, H, dt) {
-    const app = this.app, ui = app.ui;
-    this.t += dt;
-    app.scene.draw(ctx, W, H, dt, { campfire: false });
-    dim(ctx, W, H, 0.55);
-    header(ctx, W, 'The Armory');
-    goldTag(ctx, app, W - 6, 9);
+    const app = this.app, ui = app.ui, p = app.store.profile;
+    app.scene.draw(ctx, W, H, dt, { campfire: false });dim(ctx, W, H, 0.65);
+    header(ctx, W, 'The Armory');goldTag(ctx, app, W - 6, 9);
+    if (this.dialog) {
+      const action = this.dialog.draw(ctx, ui, W, H, dt);
+      if (action === 'buy' && !this.busy) {
+        const u = UPGRADES.find(u => u.id === this.selected), rank = p.up[u.id] || 0;
+        this.busy = true;
+        Promise.resolve(DEBUG ? app.store.setUpgrades({ [u.id]: rank >= u.max ? 0 : rank + 1 }) : app.store.buy(u.id)).then(ok => { if (ok) sfx('chest'); }).catch(() => { this.message = 'Purchase failed. Please try again.'; }).finally(() => { this.busy = false; });
+      }
+      if (action === 'refund' && !this.busy) { this.busy = true;Promise.resolve(app.store.refund()).catch(() => { this.message = 'Refund failed. Please try again.'; }).finally(() => { this.busy = false; }); }
+      if (action) { this.dialog = null;ui.focus('u_' + this.selected);ui.lock(0.2); }
+      return;
+    }
     ui.begin(dt);
-    const prof = app.store.profile;
-    const cols = Math.max(3, Math.min(5, Math.floor((W - 16) / 84)));
-    const cw = Math.floor((W - 16 - (cols - 1) * 4) / cols), ch = 30;
-    const x0 = Math.round(W / 2 - (cols * cw + (cols - 1) * 4) / 2);
-    let focusUp = null;
-    UPGRADES.forEach((u, i) => {
-      const cx = x0 + (i % cols) * (cw + 4), cy = 30 + Math.floor(i / cols) * (ch + 4);
-      const rank = prof.up[u.id] || 0;
-      const maxed = rank >= u.max;
-      // A milestone's relic for sale (the Phoenix Heart): shut until its milestone is reached.
-      const shut = !upgradeOpen(prof, u);
-      const cost = maxed ? 0 : upgradeCost(u.id, rank);
-      const fid = 'u_' + u.id;
-      // Debug (the debug flag): free, each press a rank more, past the last back to none.
-      if (DEBUG && ui.item(fid, cx, cy, cw, ch)) {
-        app.store.setUpgrades({ [u.id]: maxed ? 0 : rank + 1 });
-        sfx(maxed ? 'coin' : 'chest');
-        this.flash[u.id] = 0.5;
-      } else if (!DEBUG && ui.item(fid, cx, cy, cw, ch, { disabled: maxed || shut || prof.gold < cost })) {
-        app.store.buy(u.id).then((ok) => {
-          if (ok) {
-            sfx('chest');
-            this.flash[u.id] = 0.5;
-          }
-        });
-      }
-      const f = ui.focused(fid);
-      if (f) focusUp = u;
-      const fl = this.flash[u.id] > 0;
-      if (fl) this.flash[u.id] -= dt;
-      panel(ctx, cx, cy, cw, ch, { trim: fl ? ['#ffffff', '#feae34'] : f ? ['#fee761', '#be4a2f'] : ['#5a6988', '#3a4466'], rivets: false, fill: fl ? '#3e2731' : null });
-      ctx.drawImage(SPR[UP_ICONS[u.id]].frames[0].c, cx + 3, cy + 3);
-      drawText(ctx, u.name, cx + 21, cy + 4, { color: f ? '#fee761' : '#c0cbdc' });
-      for (let r = 0; r < u.max; r++) {
-        ctx.fillStyle = r < rank ? '#feae34' : '#3a4466';
-        ctx.fillRect(cx + 21 + r * 5, cy + 14, 4, 3);
-      }
-      if (maxed) drawText(ctx, u.max === 1 ? 'OWNED' : 'MAX', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#63c74d' });
-      else if (shut && !DEBUG) drawText(ctx, 'LOCKED', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#5a6988' });
-      else if (DEBUG) drawText(ctx, 'FREE', cx + cw - 4, cy + ch - 11, { align: 'right', color: '#feae34' });
-      else {
-        drawText(ctx, String(cost), cx + cw - 4, cy + ch - 11, { align: 'right', color: prof.gold >= cost ? '#fee761' : '#a22633' });
-      }
+    drawText(ctx, 'Permanent upgrades · all heroes', W / 2, 26, { align: 'center', color: '#8b9bb4' });
+    const tw = Math.min(105, Math.floor((W - 24) / 3)), tx = Math.round((W - 3 * tw - 8) / 2);
+    UPGRADE_GROUPS.forEach(([id, label], i) => {
+      if (button(ctx, ui, 'ug_' + id, tx + i * (tw + 4), 40, tw, 15, label, { on: this.tab === id })) this.tab = id;
+      if (ui.focused('ug_' + id) && ui.focusSource !== 'pointer') this.tab = id;
     });
-    const rows = Math.ceil(UPGRADES.length / cols);
-    const iy = 30 + rows * (ch + 4) + 2;
-    if (focusUp) {
-      const rank = prof.up[focusUp.id] || 0;
-      const line = focusUp.max === 1 ? `${focusUp.name}: ${focusUp.desc}` : `${focusUp.name}: ${focusUp.desc} per rank (${rank}/${focusUp.max})`;
-      drawText(ctx, line, W / 2, iy, { align: 'center', color: '#c0cbdc' });
-      if (!upgradeOpen(prof, focusUp)) drawText(ctx, `${needText(PROGRESS.locks.find((l) => l.id === focusUp.lock))} to put it up for sale`, W / 2, iy + 10, { align: 'center', color: '#feae34' });
+    const ids = UPGRADE_GROUPS.find(g => g[0] === this.tab)[2];
+    const width = Math.min(W - 24, 450), cols = width >= 390 ? 3 : 2, cw = Math.floor((width - (cols - 1) * 6) / cols), ch = 37;
+    const x = Math.round((W - width) / 2);
+    ids.forEach((id, i) => {
+      const u = UPGRADES.find(u => u.id === id), rank = p.up[id] || 0;
+      const maxed = rank >= u.max, open = upgradeOpen(p, u), cost = upgradeCost(id, rank);
+      const cx = x + i % cols * (cw + 6), cy = 64 + Math.floor(i / cols) * (ch + 6);
+      if (ui.item('u_' + id, cx, cy, cw, ch)) this.inspect(u);
+      const f = ui.focused('u_' + id);if (f) this.selected = id;
+      panel(ctx, cx, cy, cw, ch, { rivets: false, fill: '#15131f', trim: f ? ['#fee761', '#be4a2f'] : ['#3a4466', '#262b44'] });
+      ctx.drawImage(SPR[UP_ICONS[id]].frames[0].c, cx + 5, cy + 5);
+      drawText(ctx, u.name, cx + 24, cy + 6, { color: f ? '#fee761' : '#ead4aa' });
+      drawText(ctx, `${rank}/${u.max}`, cx + 7, cy + 24, { color: '#8b9bb4' });
+      drawText(ctx, maxed ? 'MAX' : !open ? 'LOCKED' : DEBUG ? 'FREE' : `${cost} G`, cx + cw - 7, cy + 24, { align: 'right', color: maxed ? '#9ee562' : !open || cost > p.gold ? '#8b9bb4' : '#fee761' });
+    });
+    const selected = UPGRADES.find(u => u.id === this.selected), bottom = 64 + Math.ceil(ids.length / cols) * (ch + 6);
+    if (bottom + 30 < H - 28) wrapText(selected.desc, width - 12).forEach((line, i) => drawText(ctx, line, W / 2, bottom + 6 + i * 10, { align: 'center', color: '#c0cbdc' }));
+    if (bottom + 80 < H - 28) {
+      const bonuses = metaBonuses(p), sy = bottom + 42;
+      panel(ctx, x, sy, width, 43, { title: 'Your preparation', rivets: false, fill: '#15131f' });
+      drawText(ctx, `${bonuses.weaponSlots} weapon slots · ${bonuses.relicSlots} relic slots`, W / 2, sy + 12, { align: 'center', color: '#ead4aa' });
+      drawText(ctx, `${bonuses.reroll} rerolls · ${bonuses.banish} banishes · ${bonuses.revival} revives`, W / 2, sy + 26, { align: 'center', color: '#8b9bb4' });
     }
-    if (DEBUG) drawText(ctx, 'Debug: each press adds a rank, free; past the last, back to none', W / 2, iy + 10, { align: 'center', color: '#feae34' });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
-    keysHint(ctx, W, H, 'ARROWS move · ENTER buy · ESC back');
-    const spent = Object.keys(prof.up).length > 0;
-    if (DEBUG) {
-      if (button(ctx, ui, 'maxall', W - 172, H - 20, 80, 13, 'MAX ALL')) {
-        app.store.setUpgrades(Object.fromEntries(UPGRADES.map((u) => [u.id, u.max])));
-        sfx('chest');
-      }
-      if (button(ctx, ui, 'clearall', W - 88, H - 20, 80, 13, 'CLEAR ALL', { disabled: !spent })) {
-        app.store.setUpgrades(Object.fromEntries(UPGRADES.map((u) => [u.id, 0])));
-        sfx('coin');
-      }
-    } else if (button(ctx, ui, 'refund', W - 88, H - 20, 80, 13, 'REFUND ALL', { disabled: !spent })) {
-      app.store.refund().then(() => sfx('coin'));
+    if (this.message) drawText(ctx, this.message, W / 2, H - 34, { align: 'center', color: '#f6757a' });
+    if (button(ctx, ui, DEBUG ? 'clearall' : 'refund', W - 98, H - 20, 90, 13, DEBUG ? 'CLEAR ALL' : 'REFUND ALL', { disabled: this.busy || !Object.values(p.up).some(Boolean) })) {
+      if (DEBUG) app.store.setUpgrades(Object.fromEntries(UPGRADES.map(u => [u.id, 0])));
+      else { this.dialog = new MenuDialog('Refund upgrades?', ['Return all purchased ranks to gold.', 'This removes their bonuses from future runs. You can buy them again.'], [{ id: 'refund', label: 'REFUND ALL UPGRADES' }]);ui.focus('detail_close');ui.lock(0.2); }
     }
-    ui.end();
-    if (input.pressed('back')) app.go('title');
+    if (DEBUG && button(ctx, ui, 'maxall', Math.round(W / 2 - 40), H - 20, 80, 13, 'MAX ALL')) app.store.setUpgrades(Object.fromEntries(UPGRADES.map(u => [u.id, u.max])));
+    ui.end();if (input.pressed('back')) app.go('title');
   }
 }
 
@@ -685,13 +721,20 @@ export class ArmoryScreen {
 const CODEX_TABS = [['weapon', 'WEAPONS'], ['relic', 'RELICS'], ['ult', 'ULTIMATES']];
 export const CODEX_TILE = { min: 136, max: 190, h: 38, gap: 4, top: 46, foot: 46 };
 
+export function menuEntries(profile) {
+  const entries = codexEntries(profile), hidden = entries.filter(e => e.hidden);
+  // One discovery card replaces a wall of identical mystery requirements.
+  return entries.filter(e => !e.hidden || e === hidden[0]).map(e => e === hidden[0] ? { ...e, hiddenCount: hidden.length } : e);
+}
+
 // The tiles' grid for n of them on a W x H screen: as many columns as fit CODEX_TILE.min wide
 // (at most four), in a view from the tabs down to the foot (two lines of the focused tile's
 // detail and BACK), `rows` of them in sight; `most` how far the grid scrolls (0: it all fits).
 export function codexLayout(W, H, n) {
   const C = CODEX_TILE;
-  const cols = clamp(Math.floor((W - 16 + C.gap) / (C.min + C.gap)), 1, 4);
-  const cw = Math.min(C.max, Math.floor((W - 16 - (cols - 1) * C.gap) / cols));
+  const width = Math.min(480, W - 24);
+  const cols = clamp(Math.floor((width + C.gap) / (C.min + C.gap)), 1, 3);
+  const cw = Math.min(C.max, Math.floor((width - (cols - 1) * C.gap) / cols));
   const step = C.h + C.gap, room = H - C.top - C.foot;
   // Whole rows only, never one cut in half at the foot.
   const rows = Math.max(1, Math.floor((room + C.gap) / step)), total = Math.ceil(n / cols);
@@ -718,6 +761,16 @@ export class CodexScreen {
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.6);
     header(ctx, W, 'The Codex');
+    if (this.detail) {
+      const e = codexEntries(prof).find(e => `${e.type}_${e.id}` === this.detailKey);
+      const action = this.detail.draw(ctx, ui, W, H, dt);
+      if (action === 'pool' && e?.open && e.type === 'weapon' && !this.busy) {
+        this.busy = true;
+        app.store.setHome(e.id, !e.home).then(ok => { if (ok) sfx('select'); }).catch(() => { this.message = 'Could not save weapon choice. Try again.'; }).finally(() => { this.busy = false; });
+      }
+      if (action) { this.detail = null; ui.focus('cx_' + this.detailKey); ui.lock(0.2); }
+      return;
+    }
     ui.begin(dt);
     const all = codexEntries(prof);
     // The tabs, each with how many of its kind are open: a row of choices, moving along it opens the
@@ -734,7 +787,7 @@ export class CodexScreen {
         this.scroll = this.want = 0;
       }
     });
-    const list = all.filter((e) => e.type === this.tab);
+    const list = menuEntries(prof).filter((e) => e.type === this.tab);
     const L = codexLayout(W, H, list.length);
     this.scrollGrid(L, dt);
     // The focus moved onto a tile by the keys or a pad: brought into view.
@@ -757,8 +810,16 @@ export class CodexScreen {
       const i = r0 * L.cols + k;
       const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = Math.round(L.y0 + Math.floor(i / L.cols) * L.step - this.scroll);
       const fid = `cx_${e.type}_${e.id}`;
-      // An open weapon pressed is left at home, never offered in a run, or taken along again.
-      if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out }) && e.type === 'weapon' && e.open) app.store.setHome(e.id, !e.home).then((ok) => ok && sfx(e.home ? 'chest' : 'coin'));
+      if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out })) {
+        const recipe = evolutionRecipe(e);
+        const lines = [codexDescription(e)];
+        if (!e.open) lines.push({ text: e.need, color: '#feae34' }, codexRecord(e));
+        if (e.type === 'relic' && e.open) lines.push(`${PASSIVES[e.id].max} ranks · bonuses apply during a run`);
+        if (recipe) lines.push({ text: recipe, color: '#fee761' });
+        if (e.type === 'weapon' && e.open) lines.push(e.home ? 'Excluded from level-up offers.' : 'Included in level-up offers.');
+        this.detail = new MenuDialog(codexName(e), lines.filter(Boolean), e.type === 'weapon' && e.open ? [{ id: 'pool', label: e.home ? 'INCLUDE IN RUNS' : 'EXCLUDE FROM RUNS' }] : []);
+        this.detailKey = `${e.type}_${e.id}`;ui.focus('detail_close');ui.lock(0.2);
+      }
       const f = ui.focused(fid);
       if (f) focused = e;
       this.tile(ctx, e, x, y, L.cw, L.ch, f);
@@ -775,10 +836,10 @@ export class CodexScreen {
     }
     // The focused tile told in full: what it does once open, else what opens it and how far along.
     if (focused) {
-      const rec = codexRecord(focused);
-      const keep = focused.type === 'weapon' && focused.open ? (focused.home ? ' Left at home: press to take it along.' : ' Press to leave it at home.') : '';
-      const text = focused.open ? codexDesc(focused) + keep : focused.need + (rec ? ` — ${rec}` : '');
-      wrapText(text, W - 20).slice(0, 2).forEach((line, i) => drawRich(ctx, line, W / 2, H - 42 + i * 9, { align: 'center', color: focused.open ? '#c0cbdc' : '#feae34', hi: '#fee761' }));
+      const status = focused.open ? (focused.home ? 'Excluded from runs' : 'Unlocked') : codexRecord(focused) || 'Locked';
+      drawText(ctx, this.message || `${status} · Select for details`, W / 2, H - 38, { align: 'center', color: '#8b9bb4' });
+    } else {
+      drawText(ctx, this.message || 'Select an entry to inspect it', W / 2, H - 38, { align: 'center', color: '#8b9bb4' });
     }
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go(this.back);
     keysHint(ctx, W, H);
@@ -810,21 +871,14 @@ export class CodexScreen {
   // records have come; open, what opened it (or that it always was).
   tile(ctx, e, x, y, w, h, f) {
     const open = e.open;
-    panel(ctx, x, y, w, h, { trim: f ? ['#fee761', '#be4a2f'] : open ? ['#5a6988', '#3a4466'] : ['#3a4466', '#262b44'], rivets: false, fill: open ? null : '#120e18' });
+    panel(ctx, x, y, w, h, { trim: f ? ['#fee761', '#be4a2f'] : open ? ['#5a6988', '#3a4466'] : ['#3a4466', '#262b44'], rivets: false, fill: open ? '#15131f' : '#120e18' });
     codexIcon(ctx, e, x + 4, y + 4);
     const tx = x + 23, room = w - 27;
-    drawText(ctx, fitLine(codexName(e), room), tx, y + 4, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
-    const sub = e.type === 'ult' ? HEROES[e.id].title : null;
-    if (open) {
-      const why = e.home ? 'Left at home' : e.start ? 'Open from the start' : e.type === 'ult' ? `The ${sub}'s own` : e.need;
-      wrapText(why, room).slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 13 + i * 9, { color: e.home ? '#a22633' : '#5a6988' }));
-      if (!e.start) codexBar(ctx, tx, y + h - 7, room, 1, '#63c74d'); // full: the way it was opened
-      return;
-    }
-    const lines = wrapText(e.need, room);
+    drawText(ctx, fitLine(e.hiddenCount ? `${e.hiddenCount} hidden weapons` : codexName(e), room), tx, y + 4, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
+    const lines = wrapText(e.home ? 'Excluded from runs' : codexSummary(e), room);
     if (lines.length > 2) lines[1] = fitLine(lines.slice(1).join(' '), room);
-    lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 13 + i * 9, { color: f ? '#feae34' : '#c28569' }));
-    codexBar(ctx, tx, y + h - 7, room, e.progress, '#feae34');
+    lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 14 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
+    if (!open) codexBar(ctx, tx, y + h - 5, room, e.progress, '#feae34');
   }
 }
 
@@ -838,13 +892,6 @@ function codexBar(ctx, x, y, w, k, col) {
   ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * clamp(k, 0, 1)), 2);
 }
 
-// What an open entry does: the weapon's or relic's own line, the ultimate's.
-function codexDesc(e) {
-  if (e.type === 'weapon') return `${codexName(e)}: ${WEAPONS[e.id].desc}`;
-  if (e.type === 'relic') return `${codexName(e)}: ${PASSIVES[e.id].desc}`;
-  return `${codexName(e)}: ${HEROES[e.id].ultDesc}`;
-}
-
 // A line cut to fit a width, with an ellipsis.
 function fitLine(s, w) {
   if (textWidth(s) <= w) return s;
@@ -855,61 +902,35 @@ function fitLine(s, w) {
 // ---------------------------------------------------------------- records --
 
 export class RecordsScreen {
-  enter(app) {
-    this.app = app;
-    app.ui.lock(0.2);
-  }
-
+  enter(app) { this.app = app;this.tab = 'overview';app.ui.lock(0.2); }
   draw(ctx, W, H, dt) {
-    const app = this.app, ui = app.ui;
-    app.scene.draw(ctx, W, H, dt, { campfire: false });
-    dim(ctx, W, H, 0.55);
-    header(ctx, W, 'Records');
-    const p = app.store.profile;
-    // Ranked personal bests, one row per hero that has a run.
-    const ranked = HERO_ORDER.filter((h) => p.ranked[h]).map((h) => [`${HEROES[h].name}, ${HEROES[h].title}`, `${fmtTime(p.ranked[h])} · ${rankTitle(p.ranked[h])}`]);
-    // As tall as what it holds: the wins, the records, the Ranked bests.
-    const pw = Math.min(W - 16, 300), ph = Math.min(H - 62, 10 + 12 + 2 * 11 + 6 + 7 * 10 + 4 + 10 + Math.max(1, ranked.length) * 10 + 6);
-    const x = Math.round(W / 2 - pw / 2), y = Math.max(36, Math.round((H - 26 - ph) / 2) + 6);
-    panel(ctx, x, y, pw, ph, { title: 'VICTORIES' });
-    const cx = [x + 10, x + pw - 10];
-    let ty = y + 10;
-    drawText(ctx, 'TRIAL', cx[0], ty, { color: '#8b9bb4' });
-    drawText(ctx, 'WINS', cx[1], ty, { align: 'right', color: '#8b9bb4' });
-    ty += 12;
-    for (const m of ['s15', 'dungeon']) {
-      // Wins from every difficulty there used to be.
-      const w = p.wins[m].reduce((s, n) => s + n, 0);
-      drawText(ctx, `${MODES[m].name} ${MODES[m].sub}`, cx[0], ty, { color: '#c0cbdc' });
-      drawText(ctx, String(w), cx[1], ty, { align: 'right', color: w ? '#fee761' : '#5a6988' });
-      ty += 11;
-    }
-    ty += 6;
-    const rows = [
-      ['Runs played', fmtNum(p.runs)],
-      ['Monsters slain', fmtNum(p.kills)],
-      ['Most kills in a run', fmtNum(p.best.kills)],
-      ['Highest level', String(p.best.level)],
-      ['Longest night (15 min)', fmtTime(p.best.s15)],
-      ['Deepest floor', p.best.dungeon >= 4 ? 'Conquered' : p.best.dungeon ? `Floor ${p.best.dungeon}` : '—'],
-      ['Gold', fmtNum(p.gold)],
-    ];
-    const line = (k, v, kc = '#8b9bb4', vc = '#c0cbdc') => {
-      if (ty > y + ph - 10) return;
-      drawText(ctx, k, cx[0], ty, { color: kc });
-      drawText(ctx, v, x + pw - 10, ty, { align: 'right', color: vc });
-      ty += 10;
-    };
-    for (const [k, v] of rows) line(k, v);
-    ty += 4;
-    line('RANKED BESTS', '', '#feae34');
-    if (!ranked.length) line(modeUnlocked(p, 'ranked') ? 'No Ranked runs yet' : 'Locked', '', '#3a4466');
-    for (const [k, v] of ranked) line(k, v, '#8b9bb4', '#fee761');
+    const app = this.app, ui = app.ui, p = app.store.profile;
+    app.scene.draw(ctx, W, H, dt, { campfire: false });dim(ctx, W, H, 0.65);header(ctx, W, 'Records');
+    if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('records_ranked');ui.lock(0.2); }return; }
     ui.begin(dt);
+    for (const [i, id] of ['overview', 'ranked'].entries()) if (button(ctx, ui, 'records_' + id, W / 2 - 104 + i * 108, 28, 100, 15, id.toUpperCase(), { on: this.tab === id })) this.tab = id;
+    const rows = this.tab === 'overview' ? [
+      ['Nights won', String(p.wins.s15.reduce((a,b) => a+b, 0))],
+      ['Dungeons cleared', String(p.wins.dungeon.reduce((a,b) => a+b, 0))],
+      ['Runs played', fmtNum(p.runs)], ['Monsters slain', fmtNum(p.kills)],
+      ['Most kills / run', fmtNum(p.best.kills)], ['Highest level', String(p.best.level)],
+      ['Longest night', fmtTime(p.best.s15)], ['Deepest floor', p.best.dungeon >= 4 ? 'Conquered' : String(p.best.dungeon || '—')],
+      ['Heroes recruited', `${p.heroes.length}/${HERO_ORDER.length}`],
+    ] : HERO_ORDER.map(h => [HEROES[h].title, p.ranked[h] ? `${fmtTime(p.ranked[h])} · ${rankTitle(p.ranked[h])}` : 'No record']);
+    const w = Math.min(380, W - 24), x = Math.round((W - w) / 2), step = Math.min(22, Math.floor((H - 86) / rows.length));
+    panel(ctx, x, 54, w, rows.length * step + 12, { rivets: false, fill: '#15131f' });
+    rows.forEach(([label, value], i) => {
+      const y = 61 + i * step;
+      if (this.tab === 'ranked' && ui.item('record_' + HERO_ORDER[i], x + 6, y - 2, w - 12, step)) {
+        const best = p.ranked[HERO_ORDER[i]] || 0;
+        this.dialog = new MenuDialog(HEROES[HERO_ORDER[i]].title, [`Personal best: ${fmtTime(best)}`, `Title: ${rankTitle(best)}`, modeUnlocked(p, 'ranked') ? 'Endless runs on Elite. Your records are personal, not a shared leaderboard.' : 'Beat the Dungeon with the Necromancer to unlock Ranked.']);ui.focus('detail_close');ui.lock(0.2);
+      }
+      if (i % 2 === 0) { ctx.fillStyle = '#1d1b2a';ctx.fillRect(x + 3, y - 2, w - 6, step); }
+      drawText(ctx, label, x + 10, y, { color: ui.focused('record_' + HERO_ORDER[i]) ? '#fee761' : '#c0cbdc' });
+      drawText(ctx, value, x + w - 10, y, { align: 'right', color: '#fee761' });
+    });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
-    keysHint(ctx, W, H, 'ENTER or ESC back');
-    ui.end();
-    if (input.pressed('back')) app.go('title');
+    ui.end();if (input.pressed('back')) app.go('title');
   }
 }
 
@@ -931,6 +952,12 @@ export class OptionsScreen {
       dim(ctx, W, H, 0.55);
     } else dim(ctx, W, H, 0.7);
     header(ctx, W, 'Options');
+    if (this.dialog) {
+      const action = this.dialog.draw(ctx, ui, W, H, dt);
+      if (action === 'reset') app.store.reset();
+      if (action) { this.dialog = null;ui.focus('o_music');ui.lock(0.2); }
+      return null;
+    }
     ui.begin(dt);
     const w = Math.min(220, W - 30), x = Math.round(W / 2 - w / 2);
     let y = 36;
@@ -939,13 +966,13 @@ export class OptionsScreen {
       setVolumes(s.music, s.sfx);
       app.applySettings();
     };
-    let d = stepper(ctx, ui, 'o_music', x, y, w, 'MUSIC', `${Math.round(s.music * 10)}`);
+    let d = stepper(ctx, ui, 'o_music', x, y, w, 'MUSIC', `${Math.round(s.music * 100)}%`);
     if (d) {
       s.music = clamp(Math.round(s.music * 10 + d) / 10, 0, 1);
       changed();
     }
     y += 17;
-    d = stepper(ctx, ui, 'o_sfx', x, y, w, 'SOUND EFFECTS', `${Math.round(s.sfx * 10)}`);
+    d = stepper(ctx, ui, 'o_sfx', x, y, w, 'SOUND EFFECTS', `${Math.round(s.sfx * 100)}%`);
     if (d) {
       s.sfx = clamp(Math.round(s.sfx * 10 + d) / 10, 0, 1);
       changed();
@@ -964,12 +991,8 @@ export class OptionsScreen {
     // Erasing everything stands apart from the rest, so a press too many down the list can't land on it.
     y += 8;
     if (!embedded) {
-      if (button(ctx, ui, 'o_reset', x, y, w, 13, this.confirmReset ? 'REALLY ERASE ALL PROGRESS?' : 'RESET PROGRESS', { color: '#e43b44' })) {
-        if (this.confirmReset) {
-          app.store.reset();
-          this.confirmReset = false;
-          sfx('back');
-        } else this.confirmReset = true;
+      if (button(ctx, ui, 'o_reset', x, y, w, 13, 'RESET PROGRESS', { color: '#f6757a' })) {
+        this.dialog = new MenuDialog('Erase progress?', ['This deletes your gold, heroes, equipment, upgrades and records.', 'This cannot be undone.'], [{ id: 'reset', label: 'ERASE ALL PROGRESS', color: '#f6757a' }]);ui.focus('detail_close');ui.lock(0.2);
       }
       y += 17;
     }
@@ -977,13 +1000,19 @@ export class OptionsScreen {
       if (embedded) return 'close';
       app.go(this.back);
     }
-    keysHint(ctx, W, H, 'UP/DOWN move · LEFT/RIGHT change · ESC back');
+    if (button(ctx, ui, 'controls', W / 2 - 104, H - 44, 100, 15, 'CONTROLS')) {
+      this.dialog = new MenuDialog('Controls', ['Move: WASD / arrows · gamepad stick / D-pad · drag on touch', 'Ultimate: Space / E / Q · gamepad X / triggers · tap fury orb', 'Crypt strike: X / Shift · shoulder buttons · second finger', 'Pause: Esc / P · Start · pause button', 'Map: Tab / M · gamepad Back', 'Menus: arrows to browse, Enter to choose, Escape to go back.', 'Level-up: 1–4 choose · R reroll · B banish']);ui.focus('detail_close');ui.lock(0.2);
+    }
+    if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
+      this.dialog = new MenuDialog('Credits', [
+        'Music: Askyel, Ian Alex Mac, Gundatsch, Muldjord, Alexandr Zhelanov, Lincoln Domina, 0 A.D. by Wildfire Games (CC BY / BY-SA), Juhani Junkala, HydroGene and others',
+        'UI: Foozle Lucifer RPG UI and Kenney Fantasy UI Borders (CC0).',
+        'Fonts: Pixtura12 by eishiya; Jacquard by Sarah Cadigan-Fried (SIL OFL).',
+        'Full track credits and licences are included with the game.',
+      ]);ui.focus('detail_close');ui.lock(0.2);
+    }
+    keysHint(ctx, W, H, 'ARROWS adjust · ENTER select · ESC back');
     ui.end();
-    drawText(ctx, 'In play: WASD / ARROWS move · SPACE ultimate · ESC pause · TAB map', W / 2, H - 36, { align: 'center', color: '#8b9bb4' });
-    // The music's credit, as its licences ask (CC BY-SA 3.0, CC BY 3.0; audio/music/CREDITS.md): in
-    // full, on as many lines as it takes, over the controls.
-    const credit = wrapText('Music: Askyel, Ian Alex Mac, Gundatsch, Muldjord, Alexandr Zhelanov, Lincoln Domina, 0 A.D. by Wildfire Games (CC BY / BY-SA), Juhani Junkala, HydroGene and others', Math.min(W - 16, 420));
-    credit.forEach((line, i) => drawText(ctx, line, W / 2, H - 48 - (credit.length - 1 - i) * 9, { align: 'center', color: '#5a6988' }));
     return null;
   }
 }

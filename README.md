@@ -171,7 +171,7 @@ Each hero has a **signature weapon** no other hero can find (the Necromancer has
 | Reaper's Scythe: a slow, wide reaper's sweep all round, far past a sword's reach; it reaps foes under 15% health | 60,000 foes in all | Scholar's Crown | Harvest Moon |
 | Hex Hourglass: curses the toughest; when it ends they take a share of all they suffered again | a night won with 3 heroes | Hourglass | Doom |
 
-**Weapons a new player has**: five, the hero's own and the Throwing Axe, Guardian Blades, Moonglaive and Caltrops; Frost Nova opens at 1:00 survived, Consecration once the hero has fallen 10 times (a run quit or won is no fall), and the rest of the shared ones by milestones (`public/js/shared/progress.js`). Any shared weapon open can be **left at home** in the Codex (press its tile): it is never offered in a run until taken along again. Consecration stands first on the Codex's second line, right after the ones open from the start. Where a tab runs over the screen it scrolls: the mouse wheel a row at a time, a drag with the mouse or a finger, or the focus moved with the keys or a pad.
+**Weapons a new player has**: five, the hero's own and the Throwing Axe, Guardian Blades, Moonglaive and Caltrops; Frost Nova opens at 1:00 survived, Consecration once the hero has fallen 10 times (a run quit or won is no fall), and the rest of the shared ones by milestones (`public/js/shared/progress.js`). Any shared weapon open can be **left at home** in the Codex (select its tile, then choose **EXCLUDE FROM RUNS**): it is never offered in a run until taken along again. Consecration stands first on the Codex's second line, right after the ones open from the start. Where a tab runs over the screen it scrolls: the mouse wheel a row at a time, a drag with the mouse or a finger, or the focus moved with the keys or a pad.
 
 ## Saving: everything lives in cookies
 
@@ -227,9 +227,11 @@ The server checks every edit, so shipping the panel's code to players unlocks no
 
 ### The debug address
 
-An unlisted address (a random token as a query flag, `DEBUG_FLAG` in `public/js/engine/storage.js`; the owner's link list has it) opens the game with every hero and every mode unlocked, on GitHub Pages too. Each hero shows as having survived the night and beaten the Dungeon, which is what unlocks them. In the Armory every upgrade is free: each press adds a rank, and past the last it goes back to none; **MAX ALL** and **CLEAR ALL** set them all. It keeps a save of its own (the `fs_dprofile` cookie, never the server's), so whatever is played or set there leaves the player's own progress alone (`public/js/engine/storage.js`).
+An unlisted address (a random token as a query flag, `DEBUG_FLAG` in `public/js/engine/storage.js`; the owner's link list has it) opens the game with every hero and every mode unlocked, on GitHub Pages too. Each hero shows as having survived the night and beaten the Dungeon, which is what unlocks them. In the Armory every upgrade is free: inspect a tile and choose **ADD RANK**; at maximum, **CLEAR RANKS** resets it; **MAX ALL** and **CLEAR ALL** set them all. It keeps a save of its own (the `fs_dprofile` cookie, never the server's), so whatever is played or set there leaves the player's own progress alone (`public/js/engine/storage.js`).
 
 ## Meta-progression (the Armory)
+
+The menu groups permanent upgrades into Power, Survival and Preparation. Select a tile to inspect its current and next effect, then buy explicitly. Hero selection includes Gear, Abilities and a Journey overview, with a separate Play button. Codex tiles show short effects or requirements; full descriptions and named evolution recipes are in the detail panel. Mystery weapons share one discovery card until revealed. Records separates the overview from all nine heroes’ Ranked records. Mouse hover previews modes and difficulties without changing them; keyboard and gamepad navigation still selects along each row.
 
 Gold from runs buys permanent ranks: Might, Armor, Vitality, Recovery, Haste, Reach, Swiftness, Magnetism, Fortune, Wisdom, Greed, Insight (rerolls), Exile (banishes), Endurance (effect duration), Velocity (projectile speed), Echo (+1 projectile for every weapon) and Second Wind (up to two revives). Ranks can be refunded at any time. Each rank of Armor is a point of armor.
 

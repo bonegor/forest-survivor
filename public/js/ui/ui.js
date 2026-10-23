@@ -13,6 +13,7 @@ export class UI {
   constructor() {
     this.items = [];
     this.focusId = null;
+    this.focusSource = 'keys';
     this.t = 0;
     this.lockT = 0;
     this.navSound = true;
@@ -62,6 +63,7 @@ export class UI {
     const inside = !opts.noMouse && m.x >= x && m.y >= y && m.x < x + w && m.y < y + h;
     if (inside && m.moved && this.focusId !== id) {
       this.focusId = id;
+      this.focusSource = 'pointer';
       if (!it.disabled) sfx('ui', { pitch: 1.2 });
     }
     if (this.focusId === null) this.focusId = id;
@@ -130,6 +132,7 @@ export class UI {
       if (best && dy && best.group && best.group !== cur.group) best = this.items.find((i) => i.group === best.group && i.home) || best;
       if (best) {
         this.focusId = best.id;
+        this.focusSource = 'keys';
         sfx('ui');
       }
       break;

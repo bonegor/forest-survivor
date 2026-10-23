@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
-import { CodexScreen, codexLayout, CODEX_TILE } from '../public/js/ui/screens.js';
+import { CodexScreen, codexLayout, CODEX_TILE, menuEntries } from '../public/js/ui/screens.js';
 import { chipRows } from '../public/js/ui/gamescreen.js';
 import { codexEntries, codexRecord, nearestLocks } from '../public/js/ui/ladder.js';
 import { UI } from '../public/js/ui/ui.js';
@@ -56,7 +56,7 @@ test('the Codex draws for a new player and for one with everything open, and scr
         s.draw(ctx, W, H, 1 / 60);
         const ids = app.ui.items.map((it) => it.id);
         assert.ok(['cx_weapon', 'cx_relic', 'cx_ult', 'back'].every((id) => ids.includes(id)), 'the tabs and BACK');
-        const n = codexEntries(prof).filter((e) => e.type === type).length, L = codexLayout(W, H, n);
+        const n = menuEntries(prof).filter((e) => e.type === type).length, L = codexLayout(W, H, n);
         // The rows in sight and one more below (to step onto with the keys).
         assert.equal(ids.filter((id) => id.startsWith(`cx_${type}_`)).length, Math.min(n, L.cols * (Math.floor(L.view / L.step) + 2)), 'the tiles in sight, and a row more');
         assert.ok(!ids.includes('cx_next'), 'no page arrows');
@@ -128,7 +128,7 @@ test('the HUD draws the slots a run hasn\'t opened and a shut ultimate locked', 
 
 test('the Codex scrolls: the wheel a row, the keys bring the focused tile into view; Consecration leads the second line', () => {
   const prof = everything();
-  const weapons = codexEntries(prof).filter((e) => e.type === 'weapon');
+  const weapons = menuEntries(prof).filter((e) => e.type === 'weapon');
   const starts = weapons.filter((e) => e.start).length;
   assert.equal(starts, 4, "four open from the start: a line of four on a 1280-wide screen");
   assert.equal(weapons[starts].id, 'aura', 'Consecration first on the second line');

@@ -138,13 +138,13 @@ function choiceInfo(g, c) {
     const def = WEAPONS[c.id];
     const desc = c.isNew ? def.desc : def.levels[c.level - 2]?.text || def.desc;
     let hint = null;
-    if (def.evo) hint = { text: 'Evolves with', icon: PASSIVES[def.evo.with].icon, owned: p.passives.has(def.evo.with) };
+    if (def.evo) hint = { text: 'Evolves with', name: PASSIVES[def.evo.with].name, icon: PASSIVES[def.evo.with].icon, owned: p.passives.has(def.evo.with) };
     return { name: def.name, icon: def.icon, desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW WEAPON' : `LV ${c.level}`, color: c.isNew ? '#0099db' : '#c0cbdc', hint, max: MAX_WEAPON_LEVEL };
   }
   if (c.type === 'passive') {
     const def = PASSIVES[c.id];
     let hint = null;
-    for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id) hint = { text: 'Evolves', icon: w.def.icon, owned: true };
+    for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id) hint = { text: 'Evolves', name: w.def.name, icon: w.def.icon, owned: true };
     return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, max: def.max };
   }
   const { name, icon } = FILLERS[c.type];
@@ -522,7 +522,7 @@ export class LevelUpOverlay {
         if (gold) drawText(ctx, `COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, x + w - 6, y + lift + h - 14, { align: 'right', color: blink ? '#fee761' : '#feae34' });
         else if (info.hint && h >= 64) {
           const hx = x + w - 6 - 16, hy = y + lift + h - 20;
-          drawText(ctx, info.hint.text, hx - 3, hy + 4, { align: 'right', color: info.hint.owned ? '#feae34' : '#5a6988' });
+          drawText(ctx, fitText(`${info.hint.name} · ${info.hint.owned ? 'owned' : 'missing'}`, w - 50), hx - 3, hy + 4, { align: 'right', color: info.hint.owned ? '#feae34' : '#8b9bb4' });
           ctx.drawImage(SPR[info.hint.icon].frames[0].c, hx, hy);
         }
       } else {
@@ -553,8 +553,8 @@ export class LevelUpOverlay {
           lines.forEach((ln, j) => drawText(ctx, ln, x + w / 2, y + lift + h - 17 - (lines.length - 1 - j) * 9, { align: 'center', color: blink ? '#fee761' : '#feae34' }));
         } else if (info.hint && h > 120) {
           const hy = y + lift + h - 25;
-          drawText(ctx, info.hint.text, x + w / 2 - 6, hy + 4, { align: 'center', color: info.hint.owned ? '#feae34' : '#5a6988' });
-          ctx.drawImage(SPR[info.hint.icon].frames[0].c, Math.round(x + w / 2 + textWidth(info.hint.text) / 2 - 3), hy);
+          drawText(ctx, fitText(info.hint.name, w - 12), x + w / 2, hy - 2, { align: 'center', color: '#c0cbdc' });
+          drawText(ctx, info.hint.owned ? 'Partner owned' : 'Partner missing', x + w / 2, hy + 8, { align: 'center', color: info.hint.owned ? '#feae34' : '#8b9bb4' });
         }
       }
       if (!touch) drawText(ctx, String(i + 1), x + 7, y + lift + 6, { color: lit ? '#8b9bb4' : '#5a6988', outline: null });
@@ -1142,7 +1142,7 @@ class ItemOverlay {
     }
     const gap = 6, cw = Math.min(180, Math.floor((W - 16 - gap) / 2));
     const x0 = Math.round(W / 2 - cw - gap / 2), x1 = x0 + cw + gap;
-    const ph = H - top - 6;
+    const ph = Math.min(240, H - top - 6);
     ui.begin(dt);
     let res = null;
     // The find.
@@ -1629,14 +1629,14 @@ class ResultsOverlay {
     ui.begin(dt);
     if (unsaved && this.reward.down && button(ctx, ui, 'resubmit', Math.round(W / 2 - 50), gy + 10, 100, 13, 'SAVE AGAIN')) this.submit();
     const by = Math.min(H - 20, y + ph + 6);
-    // One way on: back to camp, the hero screen with this run's hero ready (the owner dropped TRY
-    // AGAIN). Before the count has landed a press only shows it all.
-    if (button(ctx, ui, 'camp', Math.round(W / 2 - 50), by, 100, 14, 'RETURN TO CAMP', { color: this.landed ? '#fee761' : '#8b9bb4' })) {
+    // Return to this hero or spend the spoils. Before the tally lands, a press only reveals it.
+    if (button(ctx, ui, 'camp', Math.round(W / 2 - 106), by, 100, 14, 'RETURN TO CAMP', { color: this.landed ? '#fee761' : '#8b9bb4' })) {
       if (this.landed) {
         app.choice.hero = res.hero;
         app.go('hero');
       } else this.skip();
     }
+    if (button(ctx, ui, 'upgrades', Math.round(W / 2 + 6), by, 100, 14, 'UPGRADES', { disabled: !this.landed || !this.reward || unsaved })) app.go('armory');
     ui.end();
     return null;
   }
