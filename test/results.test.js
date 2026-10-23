@@ -1,5 +1,5 @@
 // The results screen reports a run as it was played. Its difficulty goes with the report, so a
-// Normal run is paid and recorded as Normal (a report without one was taken for Veteran, ×1.5);
+// Veteran run is paid and recorded as Veteran (a report without one was taken for Elite, ×1.5);
 // the results screen leads back to camp only; and a run the store didn't take says so, rather
 // than counting up "+0 GOLD".
 import test from 'node:test';
@@ -81,7 +81,7 @@ function click(gs, id) {
   frame(gs);
 }
 
-test('a Normal run is reported as Normal, and paid ×1', async () => {
+test('a Veteran run is reported as Veteran, and paid ×1', async () => {
   const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
   const gs = await playToResults(app);
   assert.equal(gs.game.diffId, 'medium');
@@ -94,7 +94,7 @@ test('a Normal run is reported as Normal, and paid ×1', async () => {
   assert.equal(reward.total, 120 + reward.wage, 'and the wage for its time (shared/progress.js)');
   assert.ok(!reward.unsaved);
   assert.equal(app.store.profile.gold, reward.total);
-  // And a Veteran one as Veteran.
+  // And an Elite one as Elite.
   const vet = makeApp({ hero: 'knight', mode: 's15', diff: 'hard' });
   const vs = await playToResults(vet);
   assert.equal(vet.sent[0].diff, 'hard');

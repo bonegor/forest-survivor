@@ -6,7 +6,7 @@ import { SPR } from '../public/js/engine/sprites.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
-import { VETERAN } from '../public/js/data/difficulty.js';
+import { ELITE } from '../public/js/data/difficulty.js';
 
 const step = (g, n = 1) => { for (let i = 0; i < n; i++) g.update(1 / 60); };
 
@@ -53,7 +53,7 @@ test('a crypt is ten rooms or so, its lords boss-sized Skeleton Archers, each in
   for (const lord of lords) {
     assert.equal(lord.type, 'skeletonarcher');
     assert.ok(lord.lord && lord.elite && lord.sleeping && lord.name);
-    assert.equal(lord.maxHp, 600 * VETERAN.health, "its own 600, and the owner's +20% of 20 October 2026");
+    assert.equal(lord.maxHp, 600 * ELITE.health, "its own 600, and the owner's +20% of 20 October 2026");
     assert.notEqual(lord.mod.id, 'stone', 'never Stoneskin');
     assert.equal(lord.scale, 1, 'drawn at its own size');
     const guard = g.enemies.filter((e) => e.dormant && e.pack === lord.pack);
@@ -72,7 +72,7 @@ test('a crypt is ten rooms or so, its lords boss-sized Skeleton Archers, each in
 }));
 
 // Eight strikes at its own 600; the owner's +20% to every monster's health (20 October 2026)
-// makes it 720 on Veteran, about ten.
+// makes it 720 on Elite, about ten.
 test('it lasts about ten strikes of a fully grown sword', () => gameCase((g, p) => {
   enterStartCrypt(g, p);
   const w = g.mainWeapon(), lord = g.world.guardian;

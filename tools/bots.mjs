@@ -34,8 +34,8 @@ const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options
   --relics=N    relic slots, 0 to 6 (default: 6)
   --buff=X      a test buff in percent on top of the Armory: damage, life, regen, xp, speed,
                 e.g. damage:10,life:20,regen:50 or all:15 (default: none)
-  --diff=X      normal or veteran (default: veteran, the game as it was tuned)
-  --nightmare   three times the monsters, on top of Veteran (not Normal, not Ranked; default: off)
+  --diff=X      normal, veteran or elite (default: elite, the game as it was tuned)
+  --nightmare   three times the monsters, on top of Elite (not Normal, not Veteran, not Ranked; default: off)
   --jobs=N      games played in parallel (default: one per core, less one)
   --each        print a line per game
   --json=FILE   write every game's result to FILE
@@ -80,9 +80,9 @@ async function main(argv) {
   if (slots !== undefined && !(Number.isInteger(slots) && slots >= 1 && slots <= 6)) fail('--slots must be 1 to 6');
   const relics = opts.relics === undefined ? undefined : Number(opts.relics);
   if (relics !== undefined && !(Number.isInteger(relics) && relics >= 0 && relics <= 6)) fail('--relics must be 0 to 6');
-  const diff = { normal: 'medium', veteran: 'hard' }[opts.diff ?? 'veteran'] ?? fail('--diff must be normal or veteran');
+  const diff = { normal: 'easy', veteran: 'medium', elite: 'hard' }[opts.diff ?? 'elite'] ?? fail('--diff must be normal, veteran or elite');
   const nightmare = opts.nightmare === undefined ? false : opts.nightmare === true || fail('--nightmare takes no value');
-  if (nightmare && diff !== 'hard') fail('--nightmare is a Veteran modifier: it needs --diff=veteran');
+  if (nightmare && diff !== 'hard') fail('--nightmare is an Elite modifier: it needs --diff=elite');
   if (opts.json === true) fail('--json needs a file name: --json=tools/out/bots.json');
   // Catch a bad strategy or parameter here rather than in every worker.
   for (const spec of bots) {
@@ -116,7 +116,7 @@ async function main(argv) {
   const seeds = runs > 1 ? `seeds ${seed0}-${seed0 + runs - 1}` : `seed ${seed0}`;
   const arm = Object.keys(armory).length ? 'armory ' + Object.entries(armory).map(([k, r]) => k + ':' + r).join(',') : 'no armory';
   const buffs = Object.keys(buff).length ? ['buff ' + Object.entries(buff).map(([k, x]) => `${k} +${x}%`).join(', ')] : [];
-  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, ...buffs, ...(slots ? [`${slots} weapon slot${slots > 1 ? 's' : ''}`] : []), ...(relics !== undefined ? [`${relics} relic slot${relics === 1 ? '' : 's'}`] : []), diff === 'medium' ? 'Normal' : 'Veteran', ...(nightmare ? ['Nightmare'] : [])].join(' · ')}`);
+  console.log(`\nBot play-test · ${[...same, `${runs} run${runs > 1 ? 's' : ''} each (${seeds})`, `${hz} Hz`, `cap ${fmtTime(max)}`, arm, ...buffs, ...(slots ? [`${slots} weapon slot${slots > 1 ? 's' : ''}`] : []), ...(relics !== undefined ? [`${relics} relic slot${relics === 1 ? '' : 's'}`] : []), { easy: 'Normal', medium: 'Veteran', hard: 'Elite' }[diff], ...(nightmare ? ['Nightmare'] : [])].join(' · ')}`);
   console.log(`${jobs.length} game${jobs.length > 1 ? 's' : ''} on ${workers} worker${workers > 1 ? 's' : ''} in ${secs.toFixed(1)} s\n`);
 
   const rows = combos.map((c) => ({ c, s: summarize(results.filter((r) => dims.every((k) => r[k] === c[k]))) }));

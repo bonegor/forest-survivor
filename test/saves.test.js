@@ -192,7 +192,7 @@ test('a forged run report is held to what its mode allows', () => {
   assert.ok(r.ok);
   // Two hours at most for the night with its crypts, and a crypt every 45 seconds at most, each
   // with four lords at most, each of them dropping one find at most.
-  // And the wage for the night's 15 minutes on the clock (shared/progress.js), at Veteran's rate.
+  // And the wage for the night's 15 minutes on the clock (shared/progress.js), at Elite's rate.
   const cap = Math.round((100 + 7200 * 12 + 4 * (7200 / 45 + 1) * 750) * 1.5) + 500 + Math.round(900 * P.PROGRESS.wage * 1.5);
   assert.ok(r.reward.total <= cap, `paid ${r.reward.total}, at most ${cap}`);
   assert.equal(P.sanitizeRun({ ...forged, mode: 'dungeon' }).found, 0, 'the Dungeon has no crypts, so nothing is found in it');

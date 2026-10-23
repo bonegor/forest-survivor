@@ -38,7 +38,7 @@ buildSprites();
 
 // Plays one game until it ends or `max` seconds of game time pass, and
 // returns how it went. bot: a spec ('circle:r=60') or a strategy object;
-// armory: Armory ranks, e.g. { might: 5, armor: 3 }; diff: 'medium' (Normal) or 'hard' (Veteran);
+// armory: Armory ranks, e.g. { might: 5, armor: 3 }; diff: 'easy' (Normal), 'medium' (Veteran) or 'hard' (Elite);
 // nightmare: three times the monsters (data/difficulty.js NIGHTMARE; never in Ranked);
 // buff: a test buff in percent on top of the Armory, e.g. { damage: 10, life: 20, regen: 50, xp: 25, speed: 5 };
 // slots, relics: fewer weapon and relic slots than the game's six (or than the profile's);

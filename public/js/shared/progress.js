@@ -42,7 +42,7 @@ export const PROGRESS = {
   //   bosses: bosses (and crypt lords) slain in one run (Game.stats.bosses)
   //   wins:   nights won (Survival victories), on any difficulty
   //   deaths: runs that ended with the hero fallen (not quit, not won), over all runs together
-  //   veteran: nights won on Veteran
+  //   veteran: nights won on Elite (the old Veteran, 'hard'; the key kept from then)
   //   dungeon: Dungeon Runs won, on any difficulty
   //   heroes:  heroes who have won a night
   //   evolution: 1 once a run has evolved the weapon `of` (an evolution's id) with any hero; `what` names it
@@ -114,7 +114,7 @@ export function needText(lock) {
     case 'wins': return n === 1 ? 'Win a night' : `Win ${n} nights`;
     case 'evolve':
     case 'evolution': return `Evolve ${lock.what}`;
-    case 'veteran': return n === 1 ? 'Win a night on Veteran' : `Win ${n} nights on Veteran`;
+    case 'veteran': return n === 1 ? 'Win a night on Elite' : `Win ${n} nights on Elite`;
     case 'dungeon': return n === 1 ? 'Win a Dungeon Run' : `Win ${n} Dungeon Runs`;
     case 'heroes': return `Win a night with ${n} heroes`;
     case 'deaths': return n === 1 ? 'Fall once' : `Fall ${n} times`;

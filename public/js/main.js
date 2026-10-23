@@ -4,6 +4,7 @@ import { initView, view, presentUI } from './engine/view.js';
 import { initInput, input } from './engine/input.js';
 import { buildSprites } from './engine/sprites.js';
 import { store, loadSettings, saveSettings, DEBUG } from './engine/storage.js';
+import { RELEASE } from './engine/build.js';
 import { initAudio, setVolumes } from './engine/audio.js';
 import { drawText } from './engine/font.js';
 import { makeCanvas } from './engine/util.js';
@@ -61,9 +62,9 @@ const app = {
   },
 };
 
-// Normal or Veteran, and Nightmare or not, as the player last chose (the trial screen saves them
-// with the settings).
-app.choice.diff = app.settings.diff === 'hard' ? 'hard' : 'medium';
+// Normal, Veteran or Elite, and Nightmare or not, as the player last chose (the trial screen saves
+// them with the settings); a new player starts on Normal.
+app.choice.diff = ['easy', 'medium', 'hard'].includes(app.settings.diff) ? app.settings.diff : 'easy';
 app.choice.nightmare = app.settings.nightmare === true;
 
 // Scanline overlay for the optional CRT look.
@@ -147,9 +148,11 @@ async function boot() {
   // where developer mode is on (the server's --dev or DEV_KEY, or the static game on this
   // machine), and at the debug address wherever it is served, GitHub Pages too, its DEV button
   // there from the start (a phone has no `). The debug game keeps a save of its own, a client
-  // cookie (storage.js DEBUG), so what the panel does there never reaches a player's.
+  // save (storage.js DEBUG), so what the panel does there never reaches a player's. A release
+  // (engine/build.js RELEASE) has no panel: the zip leaves it out.
   let devPanel = null;
   const openDev = async () => {
+    if (RELEASE) return null;
     if (!devPanel && !DEBUG && !(await store.devStatus()).enabled) return null;
     devPanel = devPanel || (await import('./dev/panel.js')).createDevPanel(app);
     return devPanel;

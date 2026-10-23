@@ -266,7 +266,7 @@ export function createDevPanel(app) {
     });
     body.append(el('h3', { textContent: 'Heroes and achievements' }), el('table', {}, head, rows));
 
-    // Wins per difficulty in the save: Normal's as medium, Veteran's as hard (easy: old saves).
+    // Wins per difficulty in the save: Normal's as easy, Veteran's as medium, Elite's as hard.
     body.append(el('h3', { textContent: 'Victories' }), el('table', {},
       el('tr', {}, el('th', { textContent: 'Trial' }), P.DIFFICULTIES.map((x) => el('th', { textContent: x }))),
       P.WIN_MODES.map((m) => el('tr', {}, el('td', { textContent: `${MODES[m].name} ${MODES[m].sub}` }), [0, 1, 2].map((i) => el('td', {}, num(() => d.wins[m][i], (v) => { d.wins[m][i] = v; }, { width: '60px' }))))),

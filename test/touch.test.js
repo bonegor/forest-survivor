@@ -36,7 +36,7 @@ const centre = (gs, id) => {
   return [it.x + it.w / 2, it.y + it.h / 2];
 };
 
-// A Normal run on a game screen of its own, as the trial screen starts one.
+// A Veteran run on a game screen of its own, as the trial screen starts one.
 function run(fn) {
   const random = Math.random, bot = input.bot;
   Math.random = mulberry32(3);

@@ -10,7 +10,7 @@ import { HEROES, HERO_ORDER, HERO_LINE, startWeapons, heroLook } from '../data/h
 import { rimRing, silhouette, hexPack } from '../engine/pixels.js';
 import { trialScene, SCENE, heroCrop, portraitBackdrop, pixelEllipse, mix, PORTRAIT } from './scenes.js';
 import { WEAPONS } from '../data/weapons.js';
-import { MODES, NORMAL, VETERAN, NIGHTMARE } from '../data/difficulty.js';
+import { MODES, NORMAL, VETERAN, ELITE, NIGHTMARE } from '../data/difficulty.js';
 import { UPGRADES, upgradeCost, upgradeOpen, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from '../shared/progress.js';
@@ -518,20 +518,21 @@ export class ModeScreen {
       drawText(ctx, line, W / 2, ty, { align: 'center', color: lockedFocus ? '#feae34' : '#c0cbdc' });
       ty += 9;
     }
-    // Normal or Veteran (data/difficulty.js), and under Veteran, hung from it as its modifier, the
-    // Nightmare box (three times the monsters): open only on Veteran (the owner's, 21 October 2026). All
-    // remembered with the settings. Ranked keeps one best per hero, so it is always Veteran and
-    // never a Nightmare: there the box isn't shown.
+    // Normal, Veteran or Elite (data/difficulty.js), and under Elite, hung from it as its modifier,
+    // the Nightmare box (three times the monsters): open only on Elite (the owner's, 21 October 2026,
+    // of it as Veteran). All remembered with the settings. Ranked keeps one best per hero, so it is
+    // always Elite and never a Nightmare: there the box isn't shown.
     ty += 5;
     if (mode === 'ranked') {
-      for (const line of wrapText(`Ranked is always played as Veteran, never as a ${NIGHTMARE.name}`, W - 20)) {
+      for (const line of wrapText(`Ranked is always played as Elite, never as a ${NIGHTMARE.name}`, W - 20)) {
         drawText(ctx, line, W / 2, ty, { align: 'center', color: '#8b9bb4' });
         ty += 9;
       }
     } else {
-      const veteran = app.choice.diff === VETERAN.id, nightmare = veteran && app.choice.nightmare === true;
-      const bw = 64, gap = 8, bx = Math.round(W / 2 - (2 * bw + gap) / 2);
-      [NORMAL, VETERAN].forEach((d, i) => {
+      const elite = app.choice.diff === ELITE.id, nightmare = elite && app.choice.nightmare === true;
+      const DIFF_ROW = [NORMAL, VETERAN, ELITE];
+      const bw = 64, gap = 8, bx = Math.round(W / 2 - (DIFF_ROW.length * bw + (DIFF_ROW.length - 1) * gap) / 2);
+      DIFF_ROW.forEach((d, i) => {
         const dx = bx + i * (bw + gap), on = app.choice.diff === d.id;
         if (button(ctx, ui, 'd_' + d.id, dx, ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4', on })) {
           app.choice.diff = app.settings.diff = d.id;
@@ -539,31 +540,31 @@ export class ModeScreen {
           sfx('select');
         }
       });
-      // The bracket from under Veteran to its box, lit when it is on.
-      const vx = bx + bw + gap + 8, ny = ty + 16;
-      ctx.fillStyle = nightmare ? '#f6757a' : veteran ? '#9e5b47' : '#4a3540';
+      // The bracket from under Elite to its box, lit when it is on.
+      const vx = bx + DIFF_ROW.indexOf(ELITE) * (bw + gap) + 8, ny = ty + 16;
+      ctx.fillStyle = nightmare ? '#f6757a' : elite ? '#9e5b47' : '#4a3540';
       ctx.fillRect(vx, ty + 13, 1, 9);
       ctx.fillRect(vx, ny + 6, 5, 1);
       const label = NIGHTMARE.name.toUpperCase();
-      if (checkbox(ctx, ui, 'nightmare', vx + 3, ny, label, nightmare, { color: '#f6757a', disabled: !veteran })) {
+      if (checkbox(ctx, ui, 'nightmare', vx + 3, ny, label, nightmare, { color: '#f6757a', disabled: !elite })) {
         app.choice.nightmare = app.settings.nightmare = !nightmare;
         saveSettings(app.settings);
       }
-      // Why it is shut on Normal: beside it where there is room, else under the description.
-      const hintX = vx + 3 + checkboxWidth(label) + 4, hintBeside = hintX + textWidth('VETERAN ONLY') <= W - 4;
-      if (!veteran && hintBeside) drawText(ctx, 'VETERAN ONLY', hintX, ny + 3, { color: '#5d4a52' });
+      // Why it is shut on Normal and Veteran: beside it where there is room, else under the description.
+      const hintX = vx + 3 + checkboxWidth(label) + 4, hintBeside = hintX + textWidth('ELITE ONLY') <= W - 4;
+      if (!elite && hintBeside) drawText(ctx, 'ELITE ONLY', hintX, ny + 3, { color: '#5d4a52' });
       ty += 35;
-      const d = app.choice.diff === VETERAN.id ? VETERAN : NORMAL;
+      const d = DIFF_ROW.find((x) => x.id === app.choice.diff) || NORMAL;
       for (const line of wrapText(d.desc, W - 20)) {
         drawText(ctx, line, W / 2, ty, { align: 'center', color: '#8b9bb4' });
         ty += 9;
       }
-      if (!veteran && !hintBeside) {
-        drawText(ctx, `${NIGHTMARE.name}: Veteran only`, W / 2, ty, { align: 'center', color: '#5d4a52' });
+      if (!elite && !hintBeside) {
+        drawText(ctx, `${NIGHTMARE.name}: Elite only`, W / 2, ty, { align: 'center', color: '#5d4a52' });
         ty += 9;
       }
       // As it is now, ticked this frame or not, so what follows stays put.
-      if (veteran && app.choice.nightmare === true) {
+      if (elite && app.choice.nightmare === true) {
         for (const line of wrapText(NIGHTMARE.desc, W - 20)) {
           drawText(ctx, line, W / 2, ty, { align: 'center', color: '#f6757a' });
           ty += 9;

@@ -12,7 +12,7 @@ test('a seeded bot game replays exactly and reports its stats', () => {
   // Five times his health (a test buff), so a bare Knight outlives the 45 s (data/heroes.js: he loses early now).
   const play = (seed) => strip(playGame({ bot: 'kite', hero: 'knight', mode: 's15', seed, max: 45, buff: { life: 400 } }));
   // Seed 3 (3, then 8, then 2, until the weapons, the quicker sword, the crowd's push and the
-  // emptier boxes of 22 October 2026 changed what the level-ups draw and when he cuts): with two thirds of the old horde on Veteran (data/difficulty.js VETERAN_CROWD), some seeds
+  // emptier boxes of 22 October 2026 changed what the level-ups draw and when he cuts): with two thirds of the old horde on Elite (data/difficulty.js ELITE_CROWD), some seeds
   // keep the kiting Knight clear of the monsters all 45 s; this one fights.
   const a = play(3);
   assert.deepEqual(play(3), a);

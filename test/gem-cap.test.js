@@ -19,7 +19,7 @@ const sum = (gems) => gems.reduce((s, pk) => s + pk.value, 0);
 // The gem sizes of pickups.js: gold from 100 XP, red from 25, green from 5.
 const rankOf = (v) => (v >= 100 ? 3 : v >= 25 ? 2 : v >= 5 ? 1 : 0);
 
-// A seeded run, on Normal unless o.diff says ('hard', Veteran: a Nightmare needs it); `xp` counts
+// A seeded run, on Veteran unless o.diff says ('hard', Elite: a Nightmare needs it); `xp` counts
 // what the gems dropped and what the hero picked up.
 function play(o, fn) {
   const oldRandom = Math.random, oldBot = input.bot;
@@ -85,10 +85,10 @@ test("past the cap, the farthest gem's XP drops where the hero fights", () =>
 // the balance. The hero can't fall (devGod), so only the gems are on trial.
 test('four minutes of a Nightmare past the cap: no XP lost, never over 380 gems lying, no gem hoarding', () => {
   for (const o of [{ hero: 'knight', bot: 'autopilot', seed: 2 }, { hero: 'necromancer', bot: 'gems', seed: 1 }]) {
-    // The Armory full, so the hero kills fast enough on Veteran to fill the ground with gems.
+    // The Armory full, so the hero kills fast enough on Elite to fill the ground with gems.
     const up = Object.fromEntries(P.UPGRADES.map((u) => [u.id, u.max]));
     play({ ...o, diff: 'hard', nightmare: true, up }, (g, p, xp, d) => {
-      assert.equal(g.nightmare, true, 'a Nightmare (Veteran only)');
+      assert.equal(g.nightmare, true, 'a Nightmare (Elite only)');
       p.devGod = true;
       let folds = 0, most = 0, richest = 0;
       const drop = g.dropGem;

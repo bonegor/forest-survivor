@@ -42,7 +42,7 @@ const HELP = `Usage: node tools/campaign.mjs [options]
   --hero=LIST   ${Object.keys(HEROES).join(', ')}, or all (default: knight); a hero later
                 in the ladder is given to the fresh save
   --bot=LIST    strategies (default: gems); gems and autopilot play best
-  --diff=X      normal or veteran (default: normal)
+  --diff=X      normal, veteran or elite (default: veteran)
   --runs=N      most runs in a campaign (default: 60); it stops at its first night won
   --campaigns=N independent campaigns for each hero and bot, on other seeds (default: 3)
   --seed=N      first seed (default: 1); campaign c plays seed + 1000c + i on its run i
@@ -136,7 +136,7 @@ async function main(argv) {
   for (const h of heroes) if (!HEROES[h]) fail(`Unknown hero "${h}" (${Object.keys(HEROES).join(', ')}, or all)`);
   const bots = list('bot', BOTS, 'gems');
   for (const b of bots) botFrom(b); // a bad strategy fails here, not in every worker
-  const diff = { normal: 'medium', veteran: 'hard' }[opts.diff ?? 'normal'] ?? fail('--diff must be normal or veteran');
+  const diff = { normal: 'easy', veteran: 'medium', elite: 'hard' }[opts.diff ?? 'veteran'] ?? fail('--diff must be normal, veteran or elite');
   const runs = posInt(opts.runs ?? 60, 'runs');
   if (runs > 1000) fail('--runs must be at most 1000');
   const campaigns = posInt(opts.campaigns ?? 3, 'campaigns');
@@ -162,7 +162,7 @@ async function main(argv) {
   const secs = (performance.now() - t0) / 1000;
 
   const orderName = ORDERS[opts.order ?? 'survival'] ? opts.order ?? 'survival' : 'custom';
-  console.log(`\nBot campaigns · ${diff === 'medium' ? 'Normal' : 'Veteran'} · ${campaigns} campaign${campaigns > 1 ? 's' : ''} each of up to ${runs} runs (seeds from ${seed0}) · cap ${fmtTime(max)} · buying ${orderName}`);
+  console.log(`\nBot campaigns · ${{ easy: 'Normal', medium: 'Veteran', hard: 'Elite' }[diff]} · ${campaigns} campaign${campaigns > 1 ? 's' : ''} each of up to ${runs} runs (seeds from ${seed0}) · cap ${fmtTime(max)} · buying ${orderName}`);
   console.log(`  order: ${order.map((t) => t.join(',')).join(' / ')}`);
   console.log(`${played} runs on ${workers} worker${workers > 1 ? 's' : ''} in ${secs.toFixed(1)} s`);
 

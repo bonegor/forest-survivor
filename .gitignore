@@ -6,6 +6,8 @@ tools/out/
 
 # Generated output and staging folders (hundreds of MB each)
 output/
+# The itch.io release (tools/build-itch.mjs)
+dist/
 tools/knight-variants/
 tools/mapgen/out/
 

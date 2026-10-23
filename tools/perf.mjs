@@ -137,7 +137,7 @@ const inWindow = gcs.filter((e) => e.startTime >= mStart && e.startTime <= mEnd)
 const minor = inWindow.filter((e) => (e.detail?.kind ?? e.kind) === 1);
 const f2 = (v) => v.toFixed(2).padStart(7);
 
-console.log(`${hero} · Normal · ${bot} · seed ${seed} · ${frames.length} frames timed from ${Math.floor(from / 60)}:${String(from % 60).padStart(2, '0')} (warm-up ${(warm / 1000).toFixed(1)} s)`);
+console.log(`${hero} · Veteran · ${bot} · seed ${seed} · ${frames.length} frames timed from ${Math.floor(from / 60)}:${String(from % 60).padStart(2, '0')} (warm-up ${(warm / 1000).toFixed(1)} s)`);
 console.log(`monsters alive ${Math.round(mean(col('live')))} (max ${Math.max(...col('live'))}) · pickups ${Math.round(mean(col('pickups')))}`);
 console.log('phase       mean ms   p50 ms   p95 ms   garbage KB/frame');
 for (const [name, t, a] of [['update', 'upd', 'aStep'], ['world draw', 'draw', 'aDraw'], ['HUD', 'hud', 'aHud']]) {

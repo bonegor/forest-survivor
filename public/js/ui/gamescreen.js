@@ -29,8 +29,8 @@ export class GameScreen {
     this.game = new Game({
       hero,
       mode,
-      diff: app.choice.diff || 'medium', // Normal or Veteran: Normal unless chosen, as the trial screen shows
-      nightmare: app.choice.nightmare === true, // three times the monsters, if ticked there (Veteran only, never on Ranked)
+      diff: app.choice.diff || 'easy', // Normal, Veteran or Elite: Normal unless chosen, as the trial screen shows
+      nightmare: app.choice.nightmare === true, // three times the monsters, if ticked there (Elite only, never on Ranked)
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       // The records a run can break as it goes (Game.checkRecords), as they stand now.
       records: { kills: app.store.profile.best.kills, level: app.store.profile.best.level, time: mode === 's15' ? app.store.profile.best.s15 : 0 },

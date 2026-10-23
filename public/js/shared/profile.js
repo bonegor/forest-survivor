@@ -16,9 +16,10 @@
 // The four after the Necromancer (20 October 2026) are extras beside the ladder: once the
 // Dungeon is open they may go down at once, and nothing waits on their clears.
 //
-// Two difficulties (data/difficulty.js): Normal is recorded as the old Medium,
-// Veteran as the old Hard, so saves keep their shape and old Easy wins stay on record.
-// A Nightmare (three times the monsters, on Veteran) is recorded as its difficulty, and pays a
+// Three difficulties (data/difficulty.js): Normal is recorded as the old Easy, Veteran as the old
+// Medium, Elite as the old Hard, so saves keep their shape (since 23 October 2026, when Normal
+// became Veteran and Veteran Elite, old Easy wins count as Normal's).
+// A Nightmare (three times the monsters, on Elite) is recorded as its difficulty, and pays a
 // little more gold (NIGHTMARE_GOLD).
 
 // Progression (21 October 2026, shared/progress.js): weapons, relics and each hero's ultimate open
@@ -458,9 +459,9 @@ export function nextHeroUnlock(profile) {
 export function sanitizeRun(raw) {
   if (!raw || typeof raw !== 'object') return null;
   if (!MODES.includes(raw.mode)) return null;
-  // Normal ('medium') or Veteran ('hard'); Ranked is always Veteran. Veteran pays half as much
-  // again, so only a run that says it was one is paid as one: anything else is Normal.
-  const diff = raw.mode === 'ranked' || raw.diff === 'hard' ? 'hard' : 'medium';
+  // Normal ('easy'), Veteran ('medium') or Elite ('hard'); Ranked is always Elite. A run that names
+  // none of them is Veteran's.
+  const diff = raw.mode === 'ranked' ? 'hard' : DIFFICULTIES.includes(raw.diff) ? raw.diff : 'medium';
   const time = int(raw.time, 0, MAX_TIME[raw.mode]);
   // The night's clock stands still in a crypt, so a run can last longer than its time.
   const realTime = int(raw.realTime, time, MAX_REAL_TIME[raw.mode]);
@@ -470,7 +471,7 @@ export function sanitizeRun(raw) {
   const victory = raw.mode !== 'ranked' && raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
   // A Nightmare (data/difficulty.js), three times the monsters, only as a run says it was, and never on
   // Ranked. A win still counts as its difficulty's.
-  // Veteran's modifier (data/difficulty.js nightmareFor): a Normal run is never one.
+  // Elite's modifier (data/difficulty.js nightmareFor): a Normal or Veteran run is never one.
   const nightmare = raw.mode !== 'ranked' && diff === 'hard' && raw.nightmare === true;
   return {
     mode: raw.mode,

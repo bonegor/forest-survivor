@@ -1,8 +1,8 @@
-// Normal and Veteran, and armor. The user: "Armor upgrade - make them somehow more effective ...
+// Veteran and Elite, and armor. The user: "Armor upgrade - make them somehow more effective ...
 // It should never go to completely zero ideally", then "add both, but make it so that it has a
 // much bigger effect than right now, especially against late game units. Maybe 10% + min 1
 // damage (but just denote that as armor +1). There should be some decay as well to how far armor
-// can go. Like it can only stop 95% damage?", and "let us have veteran + normal. Veteran is the current setup and normal is that all the monsters have
+// can go. Like it can only stop 95% damage?", and "let us have veteran + normal. Elite is the current setup and normal is that all the monsters have
 // their damage cause reduced by 50% and the number of ranged monsters spawn + wolver + any other
 // monsters that lunges is reduced to 1/3 ... And ALL current damage effects vs heroes are halved."
 import test from 'node:test';
@@ -11,7 +11,7 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { isFew, minuteMore, WAVE, waveAt } from '../public/js/game/spawner.js';
 import { armored, BASE_SPEED } from '../public/js/game/player.js';
-import { NORMAL, VETERAN, GAME_SPEED, HARDER, CROWD, NORMAL_CROWD, VETERAN_CROWD, moveFor } from '../public/js/data/difficulty.js';
+import { NORMAL, VETERAN, ELITE, GAME_SPEED, HARDER, CROWD, VETERAN_CROWD, ELITE_CROWD, moveFor } from '../public/js/data/difficulty.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { targetCount } from '../public/js/data/waves.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
@@ -28,15 +28,15 @@ function game(o = {}, seed = 7) {
   }
 }
 
-test('a run plays the rules chosen for it; Ranked and the bots Veteran', () => {
-  assert.equal(game({ diff: 'medium' }).diff, NORMAL);
-  assert.equal(game({ diff: 'hard' }).diff, VETERAN);
-  assert.equal(game().diff, VETERAN, 'no choice: the game as it was tuned');
-  assert.equal(game({ mode: 'ranked', diff: 'medium' }).diff, VETERAN);
+test('a run plays the rules chosen for it; Ranked and the bots Elite', () => {
+  assert.equal(game({ diff: 'medium' }).diff, VETERAN);
+  assert.equal(game({ diff: 'hard' }).diff, ELITE);
+  assert.equal(game().diff, ELITE, 'no choice: the game as it was tuned');
+  assert.equal(game({ mode: 'ranked', diff: 'medium' }).diff, ELITE);
   assert.equal(game({ diff: 'medium' }).diffId, 'medium', 'what the run reports');
 });
 
-test('on Normal every blow the hero takes is half what Veteran deals, armor and all', () => {
+test('on Veteran every blow the hero takes is half what Elite deals, armor and all', () => {
   for (const [armor, amount] of [[0, 10], [0, 3], [3, 7], [12, 40], [0, 0.2]]) {
     const taken = {};
     for (const diff of ['hard', 'medium']) {
@@ -44,15 +44,15 @@ test('on Normal every blow the hero takes is half what Veteran deals, armor and 
       p.armor = armor;
       taken[diff] = p.hurt(amount);
     }
-    const vet = armored(amount * VETERAN.dmg, armor);
-    assert.equal(taken.hard, Math.max(1, Math.round(vet)), `Veteran, ${amount} against ${armor} armor`);
-    assert.equal(taken.medium, Math.max(1, Math.round(vet / 2)), `Normal, ${amount} against ${armor} armor`);
+    const vet = armored(amount * ELITE.dmg, armor);
+    assert.equal(taken.hard, Math.max(1, Math.round(vet)), `Elite, ${amount} against ${armor} armor`);
+    assert.equal(taken.medium, Math.max(1, Math.round(vet / 2)), `Veteran, ${amount} against ${armor} armor`);
   }
   // What a monster, its shots and a boss's blasts do all goes through Player.hurt.
   const g = game({ diff: 'medium' }), p = g.player, foe = g.spawnEnemy('skeleton', p.x + 3, p.y, { instant: true });
   const before = p.hp;
   for (let i = 0; i < 20 && p.hp === before; i++) g.update(1 / 60);
-  assert.equal(before - p.hp, Math.round((foe.dmg * g.dmgScale * VETERAN.dmg) / 2), 'a skeleton\'s blow, halved');
+  assert.equal(before - p.hp, Math.round((foe.dmg * g.dmgScale * ELITE.dmg) / 2), 'a skeleton\'s blow, halved');
 });
 
 test('each point of armor takes a tenth off what is left of a blow, or 1 if that is more, never past 95%', () => {
@@ -66,11 +66,11 @@ test('each point of armor takes a tenth off what is left of a blow, or 1 if that
   near(armored(13, 10), 3, 'a small blow against much armor: a point each');
   near(armored(100, 40), 5, 'never more than 95% of a blow');
   near(armored(13, 20), 13 * 0.05, 'nor of a small one');
-  // In play: what is left is rounded, never below 1, and halved again on Normal.
+  // In play: what is left is rounded, never below 1, and halved again on Veteran.
   const g = game(), p = g.player;
   p.maxHp = p.hp = 500; // enough to take both blows
   p.armor = 5;
-  assert.equal(p.hurt(30), Math.round(30 * VETERAN.dmg * 0.9 ** 5), 'a late blow loses 41% to five points');
+  assert.equal(p.hurt(30), Math.round(30 * ELITE.dmg * 0.9 ** 5), 'a late blow loses 41% to five points');
   p.invuln = 0;
   p.buffs.set('protection', { t: 9, max: 9 });
   p.ult = { type: 'whirlwind', t: 3 };
@@ -86,7 +86,7 @@ test('an Armory rank of Armor shows as +1 armor, and is one point of it', () => 
   }
 });
 
-test('on Normal a third as many of the monsters that shoot or lunge come, in a horde half the size of Veteran\'s', () => {
+test('on Veteran a third as many of the monsters that shoot or lunge come, in a horde half the size of Elite\'s', () => {
   assert.deepEqual(['cultist', 'wolf', 'orc', 'hellhound', 'skeleton', 'imp', 'spider', 'bat'].filter(isFew), ['cultist', 'wolf', 'orc', 'hellhound']);
   const share = (diff, phase) => {
     const g = game({ diff });
@@ -104,11 +104,11 @@ test('on Normal a third as many of the monsters that shoot or lunge come, in a h
   // Minutes 4½, 9½, 12½ and 20 (the night's phase runs 1.4 to the minute until 15, then 0.9).
   for (const phase of [6.3, 13.3, 17.5, 25.5]) {
     const vet = share('hard', phase), normal = share('medium', phase);
-    assert.ok(vet > 0.1, `phase ${phase}: some come on Veteran (${vet})`);
-    assert.ok(Math.abs(normal / vet - 1 / 3) < 0.03, `phase ${phase}: a third as many on Normal (${normal} against ${vet})`);
+    assert.ok(vet > 0.1, `phase ${phase}: some come on Elite (${vet})`);
+    assert.ok(Math.abs(normal / vet - 1 / 3) < 0.03, `phase ${phase}: a third as many on Veteran (${normal} against ${vet})`);
   }
-  // The packs of them too: the wolves at 9½ minutes, the hellhounds at 22½, a third of Normal's
-  // half-size pack. Swarms of others are just Normal's half. (Fired at phase 10, both grown by the
+  // The packs of them too: the wolves at 9½ minutes, the hellhounds at 22½, a third of Veteran's
+  // half-size pack. Swarms of others are just Veteran's half. (Fired at phase 10, both grown by the
   // same minute's 5%s, minuteMore.)
   for (const [ev, few] of [[{ type: 'pack', enemy: 'wolf', count: 8 }, true], [{ type: 'pack', enemy: 'hellhound', count: 10 }, true], [{ type: 'pack', enemy: 'goblin', count: 18 }, false]]) {
     const n = {};
@@ -119,9 +119,9 @@ test('on Normal a third as many of the monsters that shoot or lunge come, in a h
       g.spawner.fire(ev, 10);
       n[diff] = k;
     }
-    assert.equal(n.hard, Math.round(ev.count * VETERAN.horde * minuteMore(10)));
-    assert.equal(n.medium, Math.round(ev.count * NORMAL.horde * (few ? 1 / 3 : 1) * minuteMore(10)),`${ev.enemy}: ${n.medium} against ${n.hard}`);
-    assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 1 / 2) < 1e-9, 'Normal\'s swarms, rings and packs half Veteran\'s');
+    assert.equal(n.hard, Math.round(ev.count * ELITE.horde * minuteMore(10)));
+    assert.equal(n.medium, Math.round(ev.count * VETERAN.horde * (few ? 1 / 3 : 1) * minuteMore(10)),`${ev.enemy}: ${n.medium} against ${n.hard}`);
+    assert.ok(Math.abs(VETERAN.horde / ELITE.horde - 1 / 2) < 1e-9, 'Veteran\'s swarms, rings and packs half Elite\'s');
   }
 });
 
@@ -160,14 +160,14 @@ function healths(diff, less = 1) {
   return hp;
 }
 
-// The user (16 October 2026): "Normal: monster health -70%".
-test('on Normal every monster has 70% less health than on Veteran: the horde, champions, the thief, bosses and the crypts\' lords', () => {
-  const tenth = (n, v, what) => assert.ok(Math.abs(n / v - 0.3) < 1e-9, `${what}: ${n} on Normal, ${v} on Veteran`);
+// The user (16 October 2026): "Veteran: monster health -70%".
+test('on Veteran every monster has 70% less health than on Elite: the horde, champions, the thief, bosses and the crypts\' lords', () => {
+  const tenth = (n, v, what) => assert.ok(Math.abs(n / v - 0.3) < 1e-9, `${what}: ${n} on Veteran, ${v} on Elite`);
   const hp = { hard: healths('hard'), medium: healths('medium') };
   for (const k of Object.keys(hp.hard)) tenth(hp.medium[k], hp.hard[k], k);
   assert.equal(hp.hard.floor, game({ mode: 'dungeon' }).world.guardian.maxHp, 'a floor\'s own guardian as counted');
-  assert.equal(hp.hard.lord, 600 * HARDER, 'a lord on Veteran: its own 600, and the last round\'s +20%');
-  assert.ok(Math.abs(NORMAL.health / VETERAN.health - 0.3) < 1e-12);
+  assert.equal(hp.hard.lord, 600 * HARDER, 'a lord on Elite: its own 600, and the last round\'s +20%');
+  assert.ok(Math.abs(VETERAN.health / ELITE.health - 0.3) < 1e-12);
 });
 
 // The owner (20 October 2026): "difficulty is too easy. Increase monster health and damage by 20%."
@@ -175,10 +175,10 @@ test('the round of 20 October 2026: every monster on both difficulties has 20% m
   const near = (a, b, what) => assert.ok(Math.abs(a / b - 1) < 1e-9, `${what}: ${a} against ${b}`);
   assert.equal(HARDER, 1.2);
   // On top of the rounds before it (difficulty.js TOUGHER, DEADLIER).
-  near(VETERAN.hp, 1.9 * 1.1 ** 3 * 1.2 * 1.1 ** 2 * 1.2, 'Veteran\'s health');
-  near(VETERAN.dmg, 1.65 * 1.1 ** 2 * 1.2 * 1.1 * 1.2 * 1.1 ** 2 * 1.2, 'Veteran\'s damage');
-  near(NORMAL.hp, VETERAN.hp * 0.3, 'Normal\'s health: Veteran\'s, 70% less');
-  assert.equal(NORMAL.dmg, VETERAN.dmg, 'Normal\'s damage: Veteran\'s (halved after armor: hurt)');
+  near(ELITE.hp, 1.9 * 1.1 ** 3 * 1.2 * 1.1 ** 2 * 1.2, 'Elite\'s health');
+  near(ELITE.dmg, 1.65 * 1.1 ** 2 * 1.2 * 1.1 * 1.2 * 1.1 ** 2 * 1.2, 'Elite\'s damage');
+  near(VETERAN.hp, ELITE.hp * 0.3, 'Veteran\'s health: Elite\'s, 70% less');
+  assert.equal(VETERAN.dmg, ELITE.dmg, 'Veteran\'s damage: Elite\'s (halved after armor: hurt)');
   // However a monster comes, its health takes it.
   for (const diff of ['hard', 'medium']) {
     const now = healths(diff), before = healths(diff, HARDER);
@@ -196,8 +196,8 @@ test('the round of 20 October 2026: every monster on both difficulties has 20% m
 });
 
 // The user: "in the last 6 minutes 30% more of the same monsters, but they each have 70% less health".
-test('on Normal 30% more monsters come from minute 9 of the night on, not before, and never on Veteran', () => {
-  // Normal's horde is half Veteran's (difficulty.js NORMAL_CROWD), so against Veteran it is a half
+test('on Veteran 30% more monsters come from minute 9 of the night on, not before, and never on Elite', () => {
+  // Veteran's horde is half Elite's (difficulty.js VETERAN_CROWD), so against Elite it is a half
   // until 9:00 and 1.3 halves after.
   const phaseAt = (secs) => (secs / 60) * 1.4; // the 15-minute night's clock
   const before = phaseAt(8 * 60 + 59), after = phaseAt(9 * 60 + 1);
@@ -208,24 +208,24 @@ test('on Normal 30% more monsters come from minute 9 of the night on, not before
     assert.ok(Math.abs(ratio(phaseAt(secs)) - 0.5 * 1.3) < 1e-9, `30% more at ${secs} s: ${ratio(phaseAt(secs))}`);
   }
   for (const phase of [before, after, 20]) {
-    assert.ok(Math.abs(vet.spawner.target(phase) - targetCount(phase) * VETERAN.spawn * minuteMore(phase)) < 1e-9, 'Veteran as it was, but for the minute\'s growth');
+    assert.ok(Math.abs(vet.spawner.target(phase) - targetCount(phase) * ELITE.spawn * minuteMore(phase)) < 1e-9, 'Elite as it was, but for the minute\'s growth');
   }
   // The timed swarms, rings and packs too.
   const pack = (g, phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
-  assert.equal(pack(normal, before), Math.round(18 * NORMAL.horde * minuteMore(before)));
-  assert.equal(pack(vet, after), Math.round(18 * VETERAN.horde * minuteMore(after)));
-  assert.equal(pack(normal, after), Math.round(18 * NORMAL.horde * 1.3 * minuteMore(after)));
+  assert.equal(pack(normal, before), Math.round(18 * VETERAN.horde * minuteMore(before)));
+  assert.equal(pack(vet, after), Math.round(18 * ELITE.horde * minuteMore(after)));
+  assert.equal(pack(normal, after), Math.round(18 * VETERAN.horde * 1.3 * minuteMore(after)));
   // A Dungeon Run floor's clock maps onto the night's: the Infernal Depths are all past minute 9.
   const dn = game({ diff: 'medium', mode: 'dungeon' }), dv = game({ diff: 'hard', mode: 'dungeon' });
-  assert.ok(Math.abs(ratio(5, dn, dv) - 0.5) < 1e-9, 'the first floor half Veteran\'s');
+  assert.ok(Math.abs(ratio(5, dn, dv) - 0.5) < 1e-9, 'the first floor half Elite\'s');
   assert.ok(Math.abs(ratio(17, dn, dv) - 0.5 * 1.3) < 1e-9, 'the third 30% more');
-  assert.equal(game({ diff: 'medium', mode: 'ranked' }).diff.late, null, 'Ranked is Veteran');
+  assert.equal(game({ diff: 'medium', mode: 'ranked' }).diff.late, null, 'Ranked is Elite');
 });
 
 // A Holy Relic purges the horde on screen, but bosses, crypt lords and champions only take a
-// heavy blow. On Normal they have 70% less health, so the blow is 70% lighter too: a flat 200
+// heavy blow. On Veteran they have 70% less health, so the blow is 70% lighter too: a flat 200
 // would all but fell a crypt lord (216), there and in every crypt with a relic among its boxes.
-test('a Holy Relic leaves a crypt lord standing, the same share of it gone on Normal as on Veteran', () => {
+test('a Holy Relic leaves a crypt lord standing, the same share of it gone on Veteran as on Elite', () => {
   const share = {};
   for (const diff of ['medium', 'hard']) {
     const g = game({ diff }), p = g.player;
@@ -242,13 +242,13 @@ test('a Holy Relic leaves a crypt lord standing, the same share of it gone on No
     assert.ok(!lord.dead && lord.hp > 0, `${diff}: the lord stands (${lord.hp} of ${lord.maxHp})`);
     share[diff] = 1 - lord.hp / lord.maxHp;
   }
-  assert.ok(share.hard > 0.25, `a heavy blow on Veteran as before: ${share.hard}`);
+  assert.ok(share.hard > 0.25, `a heavy blow on Elite as before: ${share.hard}`);
   // (A blow lands as a whole number, so the shares differ by the rounding alone.)
-  assert.ok(Math.abs(share.medium - share.hard) < 0.01, `the same share on Normal: ${share.medium} against ${share.hard}`);
+  assert.ok(Math.abs(share.medium - share.hard) < 0.01, `the same share on Veteran: ${share.medium} against ${share.hard}`);
 });
 
 test('the gold a difficulty pays is the profile\'s alone, and its card says so', () => {
-  for (const d of [NORMAL, VETERAN]) {
+  for (const d of [VETERAN, ELITE]) {
     assert.equal(d.gold, undefined, `${d.name} keeps no gold of its own`);
     assert.ok(d.desc.endsWith(`Gold x${DIFF_GOLD[d.id]}.`), d.desc);
     const run = { mode: 's15', diff: d.id, victory: false, gold: 100 };
@@ -269,7 +269,7 @@ test('the night is 15:00 of real time; the hero and the monsters walk about 52% 
   assert.ok(Math.abs(g.time - t0 - 1) < 1e-9, `${g.time - t0} s on the clock`);
   assert.equal(g.duration, 15 * 60, 'the 15-minute night is 15 minutes');
   assert.equal(fmtTime(HERO_UNLOCK_TIME), '05:00', 'the next hero at 5:00 of real time');
-  // Only walking is faster: the hero's speed is his base times GAME_SPEED on Veteran.
+  // Only walking is faster: the hero's speed is his base times GAME_SPEED on Elite.
   assert.equal(g.move, GAME_SPEED);
   const p = g.player;
   assert.ok(Math.abs(p.moveSpeed - BASE_SPEED * p.speedMul * GAME_SPEED) < 1e-9, `the hero walks ${p.moveSpeed.toFixed(1)} px/s`);
@@ -277,16 +277,16 @@ test('the night is 15:00 of real time; the hero and the monsters walk about 52% 
 
 // The owner (21 October 2026): "reduce the speed on normal by 20%" ("just the normal"): how fast
 // the hero and the monsters move, the clock as it is.
-test('on Normal the hero and the monsters walk 20% slower than on Veteran; Veteran and Ranked at the game\'s speed', () => {
+test('on Veteran the hero and the monsters walk 20% slower than on Elite; Elite and Ranked at the game\'s speed', () => {
   assert.equal(moveFor('s15', 'hard'), GAME_SPEED);
   assert.equal(moveFor('dungeon', 'hard'), GAME_SPEED);
   assert.ok(Math.abs(moveFor('s15', 'medium') - GAME_SPEED * 0.8) < 1e-12);
   assert.ok(Math.abs(moveFor('dungeon', 'medium') - GAME_SPEED * 0.8) < 1e-12);
-  assert.equal(moveFor('ranked', 'medium'), GAME_SPEED, 'Ranked is always Veteran');
+  assert.equal(moveFor('ranked', 'medium'), GAME_SPEED, 'Ranked is always Elite');
   const n = game({ diff: 'medium' }), v = game({ diff: 'hard' });
   assert.ok(Math.abs(n.move - GAME_SPEED * 0.8) < 1e-12 && v.move === GAME_SPEED, 'a run walks at its difficulty\'s speed');
-  assert.ok(Math.abs(n.player.moveSpeed / v.player.moveSpeed - 0.8) < 1e-9, 'the same hero 20% slower on Normal');
-  assert.equal(n.pace, 1, 'a Normal night keeps real time too');
+  assert.ok(Math.abs(n.player.moveSpeed / v.player.moveSpeed - 0.8) < 1e-9, 'the same hero 20% slower on Veteran');
+  assert.equal(n.pace, 1, 'a Veteran night keeps real time too');
   assert.equal(game({ mode: 'ranked', diff: 'medium' }).move, GAME_SPEED);
 });
 
@@ -294,11 +294,11 @@ test('on Normal the hero and the monsters walk 20% slower than on Veteran; Veter
 // Then again: "double the number of monsters on all difficulties". Then (21 October 2026): "Reduce
 // the numbers of monsters on normal by 3 times what it is rn. Then veteran is double". Then, the
 // same day: "Double the amount of monsters on all difficulties".
-test('the horde is two thirds of those four times on Normal and four thirds on Veteran: the steady horde and the swarms, rings and packs', () => {
+test('the horde is two thirds of those four times on Veteran and four thirds on Elite: the steady horde and the swarms, rings and packs', () => {
   assert.equal(CROWD, 4);
-  assert.ok(Math.abs(NORMAL_CROWD - 2 / 3) < 1e-12 && Math.abs(VETERAN_CROWD - 4 / 3) < 1e-12);
+  assert.ok(Math.abs(VETERAN_CROWD - 2 / 3) < 1e-12 && Math.abs(ELITE_CROWD - 4 / 3) < 1e-12);
   const MORE = 1.1 * 1.1 * 1.2;
-  for (const [d, share] of [[VETERAN, 4 / 3], [NORMAL, 2 / 3]]) {
+  for (const [d, share] of [[ELITE, 4 / 3], [VETERAN, 2 / 3]]) {
     assert.ok(Math.abs(d.spawn - 1.15 * MORE * 4 * share) < 1e-9, `${d.name}'s steady horde`);
     assert.ok(Math.abs(d.horde - MORE * 4 * share) < 1e-9, `${d.name}'s swarms, rings and packs`);
   }
@@ -313,10 +313,10 @@ test('the horde grows by 5% of its first size every minute of the night: the ste
   const g = game({ diff: 'hard' });
   for (const secs of [0, 5 * 60, 10 * 60, 15 * 60]) {
     const ph = phaseAt(secs);
-    assert.ok(Math.abs(g.spawner.target(ph) - targetCount(ph) * VETERAN.spawn * minuteMore(ph)) < 1e-9, `the steady horde at ${secs} s`);
+    assert.ok(Math.abs(g.spawner.target(ph) - targetCount(ph) * ELITE.spawn * minuteMore(ph)) < 1e-9, `the steady horde at ${secs} s`);
   }
   const pack = (phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
-  assert.equal(pack(phaseAt(10 * 60)), Math.round(18 * VETERAN.horde * 1.5), 'a pack at 10:00 half again as big');
+  assert.equal(pack(phaseAt(10 * 60)), Math.round(18 * ELITE.horde * 1.5), 'a pack at 10:00 half again as big');
 });
 
 // "make it more wave like, the generation of monsters, like it is too constant", then "not full on
@@ -358,9 +358,9 @@ test('the steady horde keeps its size, and every so often a wave swells it for a
 });
 
 // The owner (21 October 2026): "on normal, reduce the speed of monsters by 10%".
-test('on Normal every monster walks 10% slower than the same monster on a run at the monsters\' full pace; Veteran unchanged', () => {
-  assert.equal(NORMAL.foePace, 0.9);
-  assert.ok(VETERAN.foePace === undefined || VETERAN.foePace === 1, 'Veteran at full pace');
+test('on Veteran every monster walks 10% slower than the same monster on a run at the monsters\' full pace; Elite unchanged', () => {
+  assert.equal(VETERAN.foePace, 0.9);
+  assert.ok(ELITE.foePace === undefined || ELITE.foePace === 1, 'Elite at full pace');
   for (const diff of ['medium', 'hard']) {
     for (const type of ['skeleton', 'bat', 'boneking']) {
       const step = (foePace) => {
@@ -390,7 +390,7 @@ test('on Normal every monster walks 10% slower than the same monster on a run at
 });
 
 // The owner (20 October 2026): four classes of speed; bats and rats as fast as a Knight with no
-// upgrades on Normal; on a Nightmare the fastest 5% past a Knight with every rank of Swiftness.
+// upgrades on Veteran; on a Nightmare the fastest 5% past a Knight with every rank of Swiftness.
 test('the horde walks in four classes: the swift at the bare Knight’s pace, a Nightmare’s 5% past a fully swift Knight', async () => {
   const { hordePace, PACE_OF, NIGHTMARE_PACE } = await import('../public/js/game/enemies.js');
   const { ENEMIES } = await import('../public/js/data/enemies.js');
@@ -406,5 +406,20 @@ test('the horde walks in four classes: the swift at the bare Knight’s pace, a 
   }
   for (const id of ['boneking', 'lich', 'thief']) assert.equal(hordePace(id), ENEMIES[id].spd);
   assert.equal(hordePace('skeletonarcher', { lord: true }), ENEMIES.skeletonarcher.spd);
-  assert.ok(hordePace('thief') * VETERAN.speed <= 0.8 * 70 + 1e-9, 'the thief a fifth slower than the slowest hero');
+  assert.ok(hordePace('thief') * ELITE.speed <= 0.8 * 70 + 1e-9, 'the thief a fifth slower than the slowest hero');
+});
+
+// The owner (23 October 2026): Veteran becomes Elite, Normal becomes Veteran, "and there's a new,
+// easier mode called normal ... half as many monsters as we do right now ... running 30% slower".
+test('Normal is Veteran with half the horde, everyone walking 30% slower', () => {
+  assert.equal(game({ diff: 'easy' }).diff, NORMAL);
+  assert.ok(Math.abs(NORMAL.spawn / VETERAN.spawn - 0.5) < 1e-12, 'half the steady horde');
+  assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 0.5) < 1e-12, 'half the swarms, rings and packs');
+  for (const k of ['hp', 'dmg', 'hurt', 'few', 'health', 'late', 'foePace', 'speed']) assert.equal(NORMAL[k], VETERAN[k], k);
+  assert.ok(Math.abs(moveFor('s15', 'easy') - moveFor('s15', 'medium') * 0.7) < 1e-12);
+  const n = game({ diff: 'easy' }), v = game({ diff: 'medium' });
+  assert.ok(Math.abs(n.player.moveSpeed / v.player.moveSpeed - 0.7) < 1e-9, 'the same hero 30% slower');
+  assert.equal(n.pace, 1, 'the clock in real time');
+  assert.equal(moveFor('ranked', 'easy'), GAME_SPEED, 'Ranked is always Elite');
+  assert.deepEqual([NORMAL.name, VETERAN.name, ELITE.name], ['Normal', 'Veteran', 'Elite']);
 });

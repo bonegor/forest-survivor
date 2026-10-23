@@ -9,6 +9,7 @@
     "dev": "node --watch server.js --dev",
     "lab": "node gms/3001/serve.mjs",
     "bots": "node tools/bots.mjs",
+    "itch": "node tools/build-itch.mjs",
     "test": "node --test \"test/*.test.js\""
   },
   "engines": {

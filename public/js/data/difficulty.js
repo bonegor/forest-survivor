@@ -22,26 +22,28 @@ export const CROWD = 4;
 // (NORMAL_CROWD), Veteran twice Normal's (VETERAN_CROWD: two thirds), a Nightmare three times
 // Veteran's (NIGHTMARE.more). The steady horde and the timed swarms, rings and packs alike.
 // Then, the same day: "Double the amount of monsters on all difficulties": both twice that.
-export const NORMAL_CROWD = 2 / 3, VETERAN_CROWD = 2 * NORMAL_CROWD;
+// (Since 23 October 2026 that Normal is Veteran and that Veteran Elite: the names below.)
+export const VETERAN_CROWD = 2 / 3, ELITE_CROWD = 2 * VETERAN_CROWD;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
-// Veteran: the old Hard, made harder as above. Multipliers on the base monster
+// Elite (Veteran until 23 October 2026, the owner's: "the veteran difficulty will become elite"):
+// the old Hard, made harder as above. Multipliers on the base monster
 // stats, the size of the steady horde (spawn) and of the timed swarms, rings and
 // packs (horde). hurt scales every blow the hero takes, after his armor, and few
 // how many of the monsters that shoot or lunge come (spawner.js isFew). health is
 // what this difficulty does to a monster whose health is its own, a crypt's lord (hp has
-// it in already): the last round's +20% (HARDER), and on Normal 70% less on top. late
+// it in already): the last round's +20% (HARDER), and on Veteran and Normal 70% less on top. late
 // sends more of the night's monsters from a minute of it on (spawner.js lateMore). The id
 // stays 'hard' so saves and run reports keep their shape.
 // The gold a run brings home is the profile's to weigh (shared/profile.js DIFF_GOLD).
-export const VETERAN = {
+export const ELITE = {
   id: 'hard',
-  name: 'Veteran',
+  name: 'Elite',
   hp: 1.9 * TOUGHER,
   dmg: 1.65 * DEADLIER,
-  spawn: 1.15 * MORE * CROWD * VETERAN_CROWD,
-  horde: MORE * CROWD * VETERAN_CROWD,
+  spawn: 1.15 * MORE * CROWD * ELITE_CROWD,
+  horde: MORE * CROWD * ELITE_CROWD,
   speed: 1.12,
   elite: 1.35,
   hurt: 1,
@@ -51,48 +53,64 @@ export const VETERAN = {
   desc: `The night at full strength. Gold x${DIFF_GOLD.hard}.`,
 };
 
-// Normal's monsters, the user's (16 October 2026): "monster health -70%", and "in the last 6
+// Veteran (Normal until 23 October 2026, the owner's: "the current normal difficulty will actually
+// be veteran"). Its monsters, the user's (16 October 2026): "monster health -70%", and "in the last 6
 // minutes 30% more of the same monsters, but they each have 70% less health". From minute 9 of
 // the night (a Dungeon Run floor's own clock maps onto it: waves.js minuteOf) the steady horde
 // and the timed swarms, rings and packs are 30% bigger.
-const NORMAL_HEALTH = 0.3;
-const NORMAL_LATE = { from: 9, more: 1.3 };
+const VETERAN_HEALTH = 0.3;
+const VETERAN_LATE = { from: 9, more: 1.3 };
 
-// Normal (the user's: "all the monsters have their damage cause reduced by 50% and the number
-// of ranged monsters spawn + wolver + any other monsters that lunges is reduced to 1/3"): Veteran
-// with every blow the hero takes halved, and a third as many monsters that shoot or lunge. It
+// Veteran (the user's, of it as Normal: "all the monsters have their damage cause reduced by 50% and
+// the number of ranged monsters spawn + wolver + any other monsters that lunges is reduced to 1/3"):
+// Elite with every blow the hero takes halved, and a third as many monsters that shoot or lunge. It
 // pays gold as the old Medium did. The id is the old Medium's, which the saves already know.
 // Every monster has 70% less health, and late in the night 30% more come (above).
-export const NORMAL = {
-  ...VETERAN,
+export const VETERAN = {
+  ...ELITE,
   id: 'medium',
-  name: 'Normal',
-  hp: VETERAN.hp * NORMAL_HEALTH,
+  name: 'Veteran',
+  hp: ELITE.hp * VETERAN_HEALTH,
   hurt: 0.5,
   few: 1 / 3,
-  health: VETERAN.health * NORMAL_HEALTH,
-  late: NORMAL_LATE,
-  // Half Veteran's numbers: a third of what both difficulties sent before (NORMAL_CROWD).
-  spawn: VETERAN.spawn * (NORMAL_CROWD / VETERAN_CROWD),
-  horde: VETERAN.horde * (NORMAL_CROWD / VETERAN_CROWD),
-  // The owner's (21 October 2026): "reduce the speed on normal by 20%". On Normal the hero and the
+  health: ELITE.health * VETERAN_HEALTH,
+  late: VETERAN_LATE,
+  // Half Elite's numbers: a third of what both difficulties sent before (VETERAN_CROWD).
+  spawn: ELITE.spawn * (VETERAN_CROWD / ELITE_CROWD),
+  horde: ELITE.horde * (VETERAN_CROWD / ELITE_CROWD),
+  // The owner's (21 October 2026): "reduce the speed on normal by 20%". On Veteran the hero and the
   // monsters move at 0.8 of the game's speed (GAME_SPEED, moveFor); the clock is real time anyway.
   pace: 0.8,
   // "on normal, reduce the speed of monsters by 10%" (21 October 2026): every monster, bosses too,
-  // walks 10% slower on Normal (Enemy.update); the hero as before.
+  // walks 10% slower on Veteran (Enemy.update); the hero as before.
   foePace: 0.9,
   desc: `Monsters have 70% less health and hit half as hard; fewer shoot or charge, more come late. Gold x${DIFF_GOLD.medium}.`,
 };
 
-// By id, as a run report and the profile's wins keep it.
-export const DIFFS = { medium: NORMAL, hard: VETERAN };
+// Normal, the easiest, the owner's (23 October 2026): "there's going to be an easier difficulty
+// that's going to be normal. And it's going to have half as many monsters as we do right now. And
+// additionally, it's going to be running 30% slower". Veteran with half its steady horde and timed
+// swarms, rings and packs, and the hero and the monsters moving 30% slower (pace; the clock keeps
+// real time). The id is the old Easy's, which the saves already know; it pays gold as that did.
+export const NORMAL = {
+  ...VETERAN,
+  id: 'easy',
+  name: 'Normal',
+  spawn: VETERAN.spawn * 0.5,
+  horde: VETERAN.horde * 0.5,
+  pace: VETERAN.pace * 0.7,
+  desc: `Veteran with half the monsters, everyone moving 30% slower. Gold x${DIFF_GOLD.easy}.`,
+};
 
-// Ranked keeps one best time per hero, so it is always Veteran; a run without a choice (bots,
+// By id, as a run report and the profile's wins keep it.
+export const DIFFS = { easy: NORMAL, medium: VETERAN, hard: ELITE };
+
+// Ranked keeps one best time per hero, so it is always Elite; a run without a choice (bots,
 // tests, older saves) plays it too: the game as it was tuned.
-export const diffFor = (mode, id) => (mode === 'ranked' ? VETERAN : DIFFS[id] || VETERAN);
+export const diffFor = (mode, id) => (mode === 'ranked' ? ELITE : DIFFS[id] || ELITE);
 
 // Nightmare, the user's (16 October 2026): a box to tick on the trial screen that multiplies the
-// number of monsters, Veteran's only (nightmareFor): three times as many of the night's monsters
+// number of monsters, Elite's only (nightmareFor): three times as many of the night's monsters
 // (the owner's, 21 October 2026; twice before) come, in
 // the steady horde and the timed swarms, rings and packs alike (spawner.js hordeMore), each as
 // strong as ever. Not on Ranked, which keeps one best time per hero. The gold it brings home is
@@ -100,12 +118,12 @@ export const diffFor = (mode, id) => (mode === 'ranked' ? VETERAN : DIFFS[id] ||
 export const NIGHTMARE = {
   name: 'Nightmare',
   more: 3,
-  desc: `Nightmare: three times as many monsters. Gold x${NIGHTMARE_GOLD} on top of Veteran's.`,
+  desc: `Nightmare: three times as many monsters. Gold x${NIGHTMARE_GOLD} on top of Elite's.`,
 };
 
-// Whether a run is a Nightmare: only as chosen, only on Veteran (the owner's, 21 October 2026: a
-// Veteran's modifier, not a difficulty of its own), and never on Ranked.
-export const nightmareFor = (mode, on, diff) => mode !== 'ranked' && diff === VETERAN.id && on === true;
+// Whether a run is a Nightmare: only as chosen, only on Elite (the owner's, 21 October 2026: a
+// modifier of what is now Elite, not a difficulty of its own), and never on Ranked.
+export const nightmareFor = (mode, on, diff) => mode !== 'ranked' && diff === ELITE.id && on === true;
 
 // The hero and the monsters move this much faster than they were drawn to: 1.1, then 20% up (16
 // October 2026), then the owner's "let the game be 15% faster" (20 October). Only how fast they
@@ -115,7 +133,7 @@ export const nightmareFor = (mode, on, diff) => mode !== 'ranked' && diff === VE
 export const GAME_SPEED = 1.1 * 1.2 * 1.15;
 
 // How fast the hero and the monsters move in a run of this mode and difficulty: GAME_SPEED, times
-// the difficulty's own pace (Normal's 0.8; Veteran and Ranked as they are).
+// the difficulty's own pace (Veteran's 0.8, Normal's 0.56; Elite and Ranked as they are).
 export const moveFor = (mode, id) => GAME_SPEED * (diffFor(mode, id).pace ?? 1);
 
 export const MODES = {

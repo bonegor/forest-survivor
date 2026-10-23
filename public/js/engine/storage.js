@@ -2,19 +2,23 @@
 //
 // Preferred: the Node server keeps the profile in an encrypted, HttpOnly
 // cookie and exposes /api/*. If the game is served from static hosting (no
-// API), it falls back to a plain client-side cookie with the same rules.
+// API), it falls back to the browser's own storage with the same rules (saveBox).
 // Either way, a save that exists but can't be read is flagged in
 // store.unreadable so the title screen can offer a fresh start.
-// Settings always live in a small client cookie. A run is never saved: progress
+// Settings always live in the browser's storage too. A run is never saved: progress
 // is kept only when it ends (death, Quit Run, or victory), through submitRun.
+// A release build (build.js RELEASE, the itch.io zip) is static hosting only: it never asks for
+// the server.
 //
 // The debug address (?DEBUG_FLAG, an unlisted token; an unlisted folder forwards there) opens every hero and mode, in a save of its
-// own (a client cookie even where the server is), so nothing played there touches the real one.
+// own (in the browser even where the server is), so nothing played there touches the real one.
+// Never in a release.
 
 import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
+import { RELEASE } from './build.js';
 
-export const DEBUG = !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
+export const DEBUG = !RELEASE && !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
 const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
 // The game once kept a run to pick up again in these (the server's own, fs_run, it deletes
 // itself); one a player still has is deleted when the game loads, so nothing lingers.
@@ -33,15 +37,63 @@ const SETTINGS = 'fs_settings';
 const MAX_AGE = 60 * 60 * 24 * 400;
 
 function readCookie(name) {
+  if (!globalThis.document) return null;
   const m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
   return m ? m[1] : null;
 }
 
 function writeCookie(name, value) {
+  if (!globalThis.document) return;
   const secure = globalThis.location?.protocol === 'https:' ? '; Secure' : '';
   if (value == null) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
   else document.cookie = `${name}=${value}; Path=/; Max-Age=${MAX_AGE}; SameSite=Lax${secure}`;
 }
+
+// The save without the server, and the settings: in localStorage where the browser lets the page
+// use it, else in a cookie as before. On itch.io the game plays in a frame of another site's
+// (itch.zone inside itch.io), where browsers block or partition such a frame's cookies, and a save
+// kept in one could be gone on the next visit; localStorage keeps. A save or settings still in a
+// cookie from before move across the first time they are read.
+function browserStore() {
+  try {
+    const s = globalThis.localStorage;
+    return s && typeof s.getItem === 'function' ? s : null;
+  } catch {
+    return null; // storage switched off for the site: reading it throws
+  }
+}
+
+export const saveBox = {
+  read(name) {
+    const s = browserStore();
+    if (s) {
+      try {
+        const v = s.getItem(name);
+        if (v != null) return v;
+      } catch {}
+    }
+    const c = readCookie(name);
+    if (c != null && s) {
+      try {
+        s.setItem(name, c);
+        writeCookie(name, null);
+      } catch {} // full, or refused: it stays in its cookie
+    }
+    return c;
+  },
+  write(name, value) {
+    const s = browserStore();
+    if (s) {
+      try {
+        if (value == null) s.removeItem(name);
+        else s.setItem(name, value);
+        if (value == null && readCookie(name) != null) writeCookie(name, null);
+        return;
+      } catch {}
+    }
+    writeCookie(name, value);
+  },
+};
 
 async function api(path, body) {
   const res = await fetch('/api/' + path, body === undefined
@@ -69,7 +121,7 @@ export const store = {
 
   async init() {
     for (const name of STALE_RUNS) if (readCookie(name) != null) writeCookie(name, null);
-    for (let attempt = 0; !DEBUG; attempt++) {
+    for (let attempt = 0; !DEBUG && !RELEASE; attempt++) {
       try {
         const data = await api('state');
         if (!data.server) throw new Error('not our server');
@@ -89,10 +141,10 @@ export const store = {
         await sleep(600 * 2 ** attempt);
       }
     }
-    // Static hosting: the save is a plain client cookie.
+    // Static hosting: the save is the browser's (saveBox).
     this.mode = 'local';
     this.offline = false;
-    const rawProfile = readCookie(LOCAL_PROFILE);
+    const rawProfile = saveBox.read(LOCAL_PROFILE);
     const profile = rawProfile ? P.decodeState(rawProfile) : null;
     this.profile = P.sanitizeProfile(profile);
     if (DEBUG) unlockEverything(this.profile);
@@ -108,7 +160,7 @@ export const store = {
   },
 
   saveLocal() {
-    writeCookie(LOCAL_PROFILE, P.encodeState(P.packProfile(this.profile)));
+    saveBox.write(LOCAL_PROFILE, P.encodeState(P.packProfile(this.profile)));
   },
 
   // The run's reward. When the server doesn't take the run nothing changes, and the reward
@@ -191,10 +243,11 @@ export const store = {
 
   // ------------------------------------------------------ developer mode --
   // On the server these need a developer session (see server.js). With plain
-  // static hosting the save is a client cookie anyway, so they just work, but
-  // only on this machine: the published game has no developer mode.
+  // static hosting the save is the browser's anyway, so they just work, but
+  // only on this machine: the published game has no developer mode, nor has a release.
 
   async devStatus() {
+    if (RELEASE) return { enabled: false, open: false, authed: false, local: true };
     if (this.mode !== 'server') {
       const here = onThisMachine();
       return { enabled: here, open: here, authed: here, local: true };
@@ -234,18 +287,18 @@ export const store = {
     }
     this.profile = P.defaultProfile();
     if (DEBUG) unlockEverything(this.profile);
-    writeCookie(LOCAL_PROFILE, null);
+    saveBox.write(LOCAL_PROFILE, null);
   },
 };
 
-// diff: Normal ('medium') or Veteran ('hard'), and nightmare: its box ticked or not, as last
-// chosen on the trial screen.
+// diff: Normal ('easy'), Veteran ('medium') or Elite ('hard'), and nightmare: its box ticked or not,
+// as last chosen on the trial screen.
 // skins: each hero's look as chosen on the hero screen (data/heroes.js heroLook), hero -> skin id.
-const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, crt: false, fps: false, diff: 'medium', nightmare: false, skins: {} };
+const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {} };
 
 export function loadSettings() {
   try {
-    const raw = readCookie(SETTINGS);
+    const raw = saveBox.read(SETTINGS);
     const s = raw ? JSON.parse(decodeURIComponent(raw)) : {};
     return { ...DEFAULT_SETTINGS, ...s };
   } catch {
@@ -254,5 +307,5 @@ export function loadSettings() {
 }
 
 export function saveSettings(s) {
-  writeCookie(SETTINGS, encodeURIComponent(JSON.stringify(s)));
+  saveBox.write(SETTINGS, encodeURIComponent(JSON.stringify(s)));
 }

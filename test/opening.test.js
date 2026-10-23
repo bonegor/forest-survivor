@@ -17,7 +17,7 @@ import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
 
-// A seeded Knight on Normal, unkillable: the clock in real time, he walks at Normal's speed (moveFor).
+// A seeded Knight on Veteran, unkillable: the clock in real time, he walks at Veteran's speed (moveFor).
 function game(fn, seed = 4) {
   const random = Math.random, bot = input.bot;
   Math.random = mulberry32(seed);

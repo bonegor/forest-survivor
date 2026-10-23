@@ -17,7 +17,7 @@ const { input } = await mod('public/js/engine/input.js');
 const { mulberry32 } = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
 
-// A Knight on Normal, standing still, with no spawner: only what a test puts there.
+// A Knight on Veteran, standing still, with no spawner: only what a test puts there.
 function game(fn, o = {}) {
   const oldRandom = Math.random, oldBot = input.bot;
   Math.random = mulberry32(3);
@@ -106,7 +106,7 @@ test('a boss struck down to half its health gives about half an orb; the ultimat
 test('the hero losing half his health gets two fifths of the orb; nothing under god mode', () => {
   game((g, p) => {
     p.armor = 0;
-    const raw = p.maxHp / 2 / g.diff.dmg / g.diff.hurt; // what lands as half his health on Normal
+    const raw = p.maxHp / 2 / g.diff.dmg / g.diff.hurt; // what lands as half his health on Veteran
     const dmg = p.hurt(raw);
     near(dmg, p.maxHp / 2, 1, 'half his health');
     near(p.fury, (FURY.hurt * dmg) / p.maxHp, 1e-9, 'its share');

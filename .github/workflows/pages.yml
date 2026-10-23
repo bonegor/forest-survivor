@@ -1,6 +1,8 @@
 # Publishes the game (public/) on GitHub Pages whenever a push to main changes it, once the
-# tests pass. Only public/ goes out; on Pages there is no game server, so the game keeps its
-# save in browser cookies (see "Publishing on GitHub Pages" in README.md). One-time setup:
+# tests pass, and at an unlisted address (the owner's link list) the itch.io release built from it
+# (tools/build-itch.mjs), to play what ships before it is uploaded. Only those go out; on Pages
+# there is no game server, so the game keeps its save in the browser (see "Publish it on GitHub
+# Pages" in README.md). One-time setup:
 # Settings → Pages → Source: GitHub Actions; the custom domain is set there too.
 name: Publish the game
 
@@ -10,6 +12,7 @@ on:
     paths:
       - 'public/**'
       - '.github/workflows/pages.yml'
+      - 'tools/build-itch.mjs'
   workflow_dispatch:
 
 # Nothing unless a job asks for it.
@@ -36,9 +39,11 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm test
+      - run: mkdir _site && cp -R public/. _site/
+      - run: node tools/build-itch.mjs --out=_site/mlb9mtn1d033 --no-zip --noindex
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: public
+          path: _site
 
   deploy:
     needs: build

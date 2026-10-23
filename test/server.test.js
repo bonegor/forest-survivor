@@ -166,7 +166,7 @@ test('profile lives in an encrypted cookie and survives round trips', async () =
     res = await c.post('/api/run', { mode: 's15', diff: 'hard', victory: true, time: 900, gold: 300, kills: 2000, level: 35 });
     data = await res.json();
     assert.equal(res.status, 200);
-    // Veteran's gold rate and victory bonus, and the wage for 15 minutes at its rate (shared/progress.js).
+    // Elite's gold rate and victory bonus, and the wage for 15 minutes at its rate (shared/progress.js).
     assert.equal(data.profile.gold, 300 * 1.5 + 200 * 2.5 + 900 * PROGRESS.wage * 1.5);
     assert.deepEqual(Object.keys(c.jar), ['fs_profile'], 'the profile is the one cookie');
     assert.ok(c.jar.fs_profile, 'profile cookie set');
@@ -253,19 +253,19 @@ test('old signed cookies are accepted once and re-issued encrypted', async () =>
   });
 });
 
-test('a run report is paid at its difficulty\'s rate, Normal when it names none', async () => {
+test('a run report is paid at its difficulty\'s rate, Veteran when it names none', async () => {
   await withServer(async (base) => {
     const c = client(base);
     // A Dungeon run is refused while the Dungeon is locked, and leaves the save alone.
     assert.equal((await c.post('/api/run', { mode: 'dungeon', diff: 'hard', victory: false, time: 500, floor: 2 })).status, 400);
     assert.equal(c.jar.fs_profile, undefined);
-    // No diff: Normal, gold as found and Normal's victory bonus (Veteran pays ×1.5 and ×2.5).
+    // No diff: Veteran, gold as found and Veteran's victory bonus (Elite pays ×1.5 and ×2.5).
     let data = await (await c.post('/api/run', { mode: 's15', victory: true, time: 900, gold: 300, kills: 2000, level: 35 })).json();
     assert.deepEqual([data.reward.collected, data.reward.bonus, data.reward.multiplier], [300, 200 * 1.5, 1]);
     // And the wage for the time on the clock (shared/progress.js), at the same rate.
     const wage = (secs, rate) => Math.round(secs * PROGRESS.wage * rate);
     assert.equal(data.profile.gold, 600 + wage(900, 1));
-    assert.equal(data.profile.wins.s15[1], 1, 'a Normal win');
+    assert.equal(data.profile.wins.s15[1], 1, 'a Veteran win');
     data = await (await c.post('/api/run', { mode: 's15', diff: 'medium', victory: false, time: 500, gold: 100 })).json();
     assert.equal(data.reward.total, 100 + wage(500, 1));
     data = await (await c.post('/api/run', { mode: 's15', diff: 'hard', victory: false, time: 500, gold: 100 })).json();

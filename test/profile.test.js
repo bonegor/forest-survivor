@@ -148,38 +148,49 @@ test('dungeon runs record the deepest floor', () => {
   assert.equal(p.best.dungeon, 2);
   p = P.applyRun(p, { mode: 'dungeon', diff: 'medium', victory: true, time: 1200, floor: 3 }).profile;
   assert.equal(p.best.dungeon, 4);
-  assert.equal(p.wins.dungeon[1], 1, 'a Normal win');
+  assert.equal(p.wins.dungeon[1], 1, 'a Veteran win');
 });
 
-// The user: "let us have veteran + normal. Veteran is the current setup and normal is that all
+// The user: "let us have veteran + normal. Elite is the current setup and normal is that all
 // the monsters have their damage cause reduced by 50% and the number of ranged monsters spawn +
 // wolver + any other monsters that lunges is reduced to 1/3".
-test('a Normal run pays gold as the old Medium, a Veteran one as the old Hard; Ranked is always Veteran', () => {
+test('a Veteran run pays gold as the old Medium, an Elite one as the old Hard; Ranked is always Elite', () => {
   const p = veteran();
   const normal = P.applyRun(p, { mode: 's15', diff: 'medium', victory: true, time: 900, gold: 100 });
   assert.equal(normal.run.diff, 'medium');
   assert.deepEqual([normal.reward.collected, normal.reward.bonus, normal.reward.multiplier], [100, 300, 1]);
   assert.equal(normal.profile.wins.s15[1], 1);
-  assert.ok(P.hasFeat(normal.profile, 'knight', P.FEAT.survivalHard), 'a night survived on Normal counts on the ladder');
+  assert.ok(P.hasFeat(normal.profile, 'knight', P.FEAT.survivalHard), 'a night survived on Veteran counts on the ladder');
   const vet = P.applyRun(p, { mode: 's15', diff: 'hard', victory: true, time: 900, gold: 100 });
   assert.deepEqual([vet.reward.collected, vet.reward.bonus, vet.reward.multiplier], [150, 500, 1.5]);
   assert.equal(vet.profile.wins.s15[2], 1);
   p.feats.necromancer |= P.FEAT.dungeon; // Ranked open
   const ranked = P.applyRun(p, { mode: 'ranked', diff: 'medium', hero: 'knight', time: 300, gold: 10 });
   assert.equal(ranked.ok, true);
-  assert.equal(ranked.run.diff, 'hard', 'Ranked keeps one best per hero, so it is always Veteran');
+  assert.equal(ranked.run.diff, 'hard', 'Ranked keeps one best per hero, so it is always Elite');
   assert.equal(P.applyRun(p, { mode: 'ranked', hero: 'knight', time: 300 }).run.diff, 'hard');
 });
 
-// Veteran pays half as much again, so a report that doesn't say it was one is never paid as one.
-test('a run that names no difficulty, or one the game no longer has, is paid as Normal', () => {
+// Elite pays half as much again, so a report that doesn't say it was one is never paid as one.
+test('a run that names no difficulty, or one the game no longer has, is paid as Veteran', () => {
   const p = veteran();
-  for (const diff of [undefined, null, 'easy', 'HARD', 7]) {
+  for (const diff of [undefined, null, 'EASY', 'HARD', 7]) {
     const r = P.applyRun(p, { mode: 's15', diff, victory: true, time: 900, gold: 100 });
     assert.equal(r.run.diff, 'medium', String(diff));
     assert.deepEqual([r.reward.collected, r.reward.bonus, r.reward.multiplier], [100, 300, 1], String(diff));
-    assert.equal(r.profile.wins.s15[1], 1, 'a Normal win');
+    assert.equal(r.profile.wins.s15[1], 1, 'a Veteran win');
   }
+});
+
+// The owner's (23 October 2026): a new, easier Normal under Veteran and Elite. It is recorded as the
+// old Easy, paid as that was (x0.75, a victory bonus of x1), and Ranked is still Elite.
+test('a Normal run is recorded as the old Easy and paid as it was', () => {
+  const r = P.applyRun(veteran(), { mode: 's15', diff: 'easy', victory: true, time: 900, gold: 100 });
+  assert.equal(r.run.diff, 'easy');
+  assert.deepEqual([r.reward.collected, r.reward.bonus, r.reward.multiplier], [75, 200, P.DIFF_GOLD.easy]);
+  assert.equal(r.profile.wins.s15[0], 1, 'a Normal win');
+  assert.equal(P.sanitizeRun({ mode: 'ranked', diff: 'easy' }).diff, 'hard', 'Ranked is always Elite');
+  assert.equal(P.sanitizeRun({ mode: 's15', diff: 'easy', nightmare: true }).nightmare, false, 'never a Nightmare');
 });
 
 test('buying and refunding upgrades', () => {

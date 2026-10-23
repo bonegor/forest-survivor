@@ -8,6 +8,7 @@
 // Pieces that play once instead of looping.
 const ONCE = new Set(['victory', 'gameover']);
 import { DEBUG_FLAG } from './debugflag.js';
+import { RELEASE } from './build.js';
 
 const MUSIC_DIR = 'audio/music/';
 // Recorded music is mastered loud; this keeps it level with the sound effects.
@@ -57,7 +58,7 @@ if (typeof fetch === 'function' && typeof document !== 'undefined' && typeof Aud
 // It keeps the choice in localStorage as { file, gain }.
 function menuOverride() {
   try {
-    if (!new URLSearchParams(location.search).has(DEBUG_FLAG)) return;
+    if (RELEASE || !new URLSearchParams(location.search).has(DEBUG_FLAG)) return;
     const pick = JSON.parse(localStorage.getItem('fs_menu_music') || 'null');
     if (!pick || !/^(found\/)?[\w.-]+\.(ogg|mp3|wav)$/.test(pick.file)) return;
     A.files.title = { file: 'menu/' + pick.file, gain: pick.gain > 0 ? pick.gain : 1 };
