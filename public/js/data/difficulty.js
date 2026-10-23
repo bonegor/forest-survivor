@@ -92,14 +92,18 @@ export const VETERAN = {
 // additionally, it's going to be running 30% slower". Veteran with half its steady horde and timed
 // swarms, rings and packs, and the hero and the monsters moving 30% slower (pace; the clock keeps
 // real time). The id is the old Easy's, which the saves already know; it pays gold as that did.
+// Then, the same day: "on the easy (normal and normal only), reduce the number of monsters by half
+// and slow down the monsters slightly more, by 10%": a quarter of Veteran's horde, and every
+// monster 10% slower again than Veteran's (foePace; the hero as before).
 export const NORMAL = {
   ...VETERAN,
   id: 'easy',
   name: 'Normal',
-  spawn: VETERAN.spawn * 0.5,
-  horde: VETERAN.horde * 0.5,
+  spawn: VETERAN.spawn * 0.25,
+  horde: VETERAN.horde * 0.25,
   pace: VETERAN.pace * 0.7,
-  desc: `Veteran with half the monsters, everyone moving 30% slower. Gold x${DIFF_GOLD.easy}.`,
+  foePace: VETERAN.foePace * 0.9,
+  desc: `A quarter of Veteran's monsters; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
 };
 
 // By id, as a run report and the profile's wins keep it.

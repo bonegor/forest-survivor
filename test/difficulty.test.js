@@ -411,11 +411,13 @@ test('the horde walks in four classes: the swift at the bare Knight’s pace, a 
 
 // The owner (23 October 2026): Veteran becomes Elite, Normal becomes Veteran, "and there's a new,
 // easier mode called normal ... half as many monsters as we do right now ... running 30% slower".
-test('Normal is Veteran with half the horde, everyone walking 30% slower', () => {
+// Then: "reduce the number of monsters by half and slow down the monsters slightly more, by 10%".
+test('Normal is Veteran with a quarter of the horde, everyone walking 30% slower and the monsters 10% slower again', () => {
   assert.equal(game({ diff: 'easy' }).diff, NORMAL);
-  assert.ok(Math.abs(NORMAL.spawn / VETERAN.spawn - 0.5) < 1e-12, 'half the steady horde');
-  assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 0.5) < 1e-12, 'half the swarms, rings and packs');
-  for (const k of ['hp', 'dmg', 'hurt', 'few', 'health', 'late', 'foePace', 'speed']) assert.equal(NORMAL[k], VETERAN[k], k);
+  assert.ok(Math.abs(NORMAL.spawn / VETERAN.spawn - 0.25) < 1e-12, 'a quarter of the steady horde');
+  assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 0.25) < 1e-12, 'a quarter of the swarms, rings and packs');
+  assert.ok(Math.abs(NORMAL.foePace / VETERAN.foePace - 0.9) < 1e-12, 'the monsters 10% slower again');
+  for (const k of ['hp', 'dmg', 'hurt', 'few', 'health', 'late', 'speed']) assert.equal(NORMAL[k], VETERAN[k], k);
   assert.ok(Math.abs(moveFor('s15', 'easy') - moveFor('s15', 'medium') * 0.7) < 1e-12);
   const n = game({ diff: 'easy' }), v = game({ diff: 'medium' });
   assert.ok(Math.abs(n.player.moveSpeed / v.player.moveSpeed - 0.7) < 1e-9, 'the same hero 30% slower');

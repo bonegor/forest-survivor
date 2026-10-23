@@ -164,15 +164,16 @@ export class Weapon {
   }
 
   // One blow struck by hand (Game.strike), its first slash landing or first shot leaving delay
-  // seconds on (update): a sword swings toward ang; a bow, a fireball or daggers fire at the foe
-  // struck at, if any (aim); anything else fires as it would by itself.
+  // seconds on (update): a sword swings out to the side he faces, turned to the foe (sideways); a
+  // bow, a fireball or daggers fire at the foe struck at, if any (aim); anything else fires as it
+  // would by itself.
   strike(ang, delay, target = null) {
     this.cd = this.s.cd;
     this.handAt = this.g.clock + delay;
     this.handTarget = target;
     const K = KINDS[this.def.kind];
     if (this.def.kind === 'sword') {
-      this.aimAng = ang;
+      this.aimAng = sideways(this.g.player);
       this.burst(this.s.amount, 0.11);
     } else if (K.shoot) {
       this.hand = true;
@@ -287,23 +288,31 @@ function chops(w) {
   }
 }
 
+// A sword's swing: straight out to the side the hero's sprite faces (face: -1 left, 1 right), its
+// cut 45° across in all (the owner's, 23 October 2026: "make it like only 45 degrees in total";
+// 2.4 radians, some 137°, before).
+export const sideways = (p) => (p.face < 0 ? Math.PI : 0);
+export const SWORD_ARC = Math.PI / 4;
+
 export const KINDS = {
   ...KINDS_LIGHT, // the Lantern, Runestone, Scythe and Starfall (weapons-light.js)
   sword: {
     fire(w) {
-      // Swing in front of him, the way he last moved, seeking no foe: one on the other side
-      // takes his turning round (the owner's, 21 October 2026). A blow struck by hand in a crypt
-      // still swings at the foe it is struck at (strike).
-      w.aimAng = w.g.player.aim;
+      // Swing straight out to the side his sprite faces, seeking no foe: one on the other side
+      // takes his turning round (the owner's, 21 October 2026). The owner's (23 October 2026):
+      // "The sword should not point to where the hero is moving, but only towards right or left,
+      // depending on which way the sprite is painted". A blow struck by hand in a crypt too, once
+      // he has turned to the foe it is struck at (Weapon.strike).
+      w.aimAng = sideways(w.g.player);
       w.burst(w.s.amount, 0.11);
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
-      let ang = w.aimAng ?? p.aim;
+      let ang = w.aimAng ?? sideways(p);
       if (i % 2 === 1) ang += Math.PI;
       if (i >= 2) ang += i % 4 < 2 ? 0.55 : -0.55;
       const holy = !!w.s.wave;
-      g.effects.push(new Slash(g, w, ang, 30 * w.s.area, 2.4, w.s.dmg, holy));
+      g.effects.push(new Slash(g, w, ang, 30 * w.s.area, SWORD_ARC, w.s.dmg, holy));
       // No slash turns him, not even one at a foe behind him (facing.js).
       p.swing(ang);
       if (holy) {

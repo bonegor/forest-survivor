@@ -9,16 +9,17 @@ import * as P from '../public/js/shared/profile.js';
 const strip = (c) => ({ ...c, runs: c.runs.map(({ ms, ...r }) => r) }); // wall time is all that may differ
 
 test('a campaign plays from a fresh save, banks its runs and buys in the Armory, the same for a seed', () => {
-  const a = playCampaign({ hero: 'knight', bot: 'gems', diff: 'medium', runs: 3, seed: 1 }, playGame);
-  assert.equal(a.runs.length, 3);
+  // Four runs: with the 45° sword (23 October 2026) three bank too little for a rank.
+  const a = playCampaign({ hero: 'knight', bot: 'gems', diff: 'medium', runs: 4, seed: 1 }, playGame);
+  assert.equal(a.runs.length, 4);
   assert.equal(a.won, 0, 'a bare Knight does not win his first nights');
   for (const r of a.runs) assert.ok(r.banked > 0 && r.wage > 0 && r.banked === r.collected + r.wage + r.bonus, `run ${r.run} banks`);
   // The gold banked is the gold spent plus the gold left: every rank at the game's price.
   const spent = Object.entries(a.profile.up).reduce((s, [id, n]) => s + Array.from({ length: n }, (_, k) => P.upgradeCost(id, k)).reduce((x, y) => x + y, 0), 0);
   assert.ok(spent > 0, 'it bought a rank');
   assert.equal(a.runs.reduce((s, r) => s + r.banked, 0), spent + a.profile.gold);
-  assert.equal(a.profile.runs, 3);
-  assert.deepEqual(strip(playCampaign({ hero: 'knight', bot: 'gems', diff: 'medium', runs: 3, seed: 1 }, playGame)), strip(a));
+  assert.equal(a.profile.runs, 4);
+  assert.deepEqual(strip(playCampaign({ hero: 'knight', bot: 'gems', diff: 'medium', runs: 4, seed: 1 }, playGame)), strip(a));
 });
 
 test('the Armory is bought by tiers, cheapest first, saving for the tier', () => {

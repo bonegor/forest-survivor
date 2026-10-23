@@ -137,7 +137,8 @@ test('a swing at nothing leaves a standing hero facing as he was', () => gameCas
   flips.push(displayedFlip(g));
   w.update(.11);
   flips.push(displayedFlip(g));
-  assert.deepEqual(g.effects.slice(-2).map(s => s.ang), [0, Math.PI], 'both slashes still swing');
+  // Out to the side he faces, not the way he walked (23 October 2026), and the second behind him.
+  assert.deepEqual(g.effects.slice(-2).map(s => s.ang), [Math.PI, 2 * Math.PI], 'both slashes still swing');
   assert.equal(p.face, -1);
   assert.deepEqual(flips, [true, true], 'he never turns, not even for one slash');
 }));
