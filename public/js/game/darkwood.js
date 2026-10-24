@@ -454,10 +454,10 @@ export const cacheSizes = () => ({ roads: roadCache.size, places: placeCache.siz
 const TC = 22; // trees are candidates on a 22 px jittered grid
 const TREE_GAP = 30;
 // The props whose feet stand in chunk (cx, cy), the shrines too, and the fields that paintChunk needs.
-export function layoutChunk(cx, cy) {
+export function layoutChunk(cx, cy, scene = null) {
   const x0 = cx * CHUNK, y0 = cy * CHUNK, x1 = x0 + CHUNK, y1 = y0 + CHUNK;
   const gx0 = x0 - MARGIN, gy0 = y0 - MARGIN, gx1 = gx0 + GN * CELL, gy1 = gy0 + GN * CELL;
-  const F = features(gx0 - RMAX, gy0 - RMAX, gx1 + RMAX, gy1 + RMAX);
+  const F = scene || features(gx0 - RMAX, gy0 - RMAX, gx1 + RMAX, gy1 + RMAX);
 
   // The paths as flat arrays, and how far each field cell is from the nearest path's edge.
   const PX = [], PY = [], PW = [], PID = [], AV = [], paths = [];
@@ -560,11 +560,12 @@ export function layoutChunk(cx, cy) {
   // trees never crowd or double up along a seam.
   function treeDensity(x, y) {
     const c = cellOf(x, y), d = dist[c], open = 1 - clearF[c];
-    const roadF = ss(55, 165, d); // the roads and their verges stay open to fight on
+    const roadF = scene ? ss(20, 75, d) : ss(55, 165, d); // the prologue's narrower woodland trail
     const zoneMul = 1 + pineF[c] * 0.2 - cursedF[c] * 0.45;
     const k = nearP[c];
     const avenue = k >= 0 && AV[k] && d > 36 && d < 52 ? 0.55 : 0;
-    return clamp((groveF[c] * 0.62 * roadF * open * zoneMul + 0.005 * roadF * open) * DARKWOOD.trees * 1.3 + avenue * open, 0, 1);
+    const grove = scene ? Math.max(0.7, groveF[c]) : groveF[c];
+    return clamp((grove * 0.62 * roadF * open * zoneMul + 0.005 * roadF * open) * DARKWOOD.trees * 1.3 + avenue * open, 0, 1);
   }
   const cands = new Map();
   const ckey = (i, j) => i * 1048576 + j;
@@ -680,6 +681,12 @@ export const GRASS = {
   cursed: ['#202528', '#272c2d', '#2f3431', '#383c36', '#41443b'].map(H),
 };
 export const ROAD = ['#2c2420', '#3a2e28', '#463629', '#53412f', '#5f4b36'].map(H);
+const DAY_GRASS = [
+  ['#49643a', '#536f40', '#5e7b46', '#6b8950', '#789758'],
+  ['#3e5d3c', '#486844', '#53754b', '#5f8253', '#6c905c'],
+  ['#536044', '#5d6c4d', '#687956', '#74855f', '#809368'],
+].map((colors) => colors.map(H));
+const DAY_ROAD = ['#70563b', '#806345', '#92734e', '#a6875c', '#b49769'].map(H);
 const TUFT = { oak: ['#3a6a44', '#4a7d4e', '#2f5a3a'].map(H), pine: ['#2f5a46', '#3a6a52', '#264c3c'].map(H), cursed: ['#4a5048', '#575c52', '#3c4140'].map(H) };
 const LEAF = { oak: ['#7a4a2a', '#8f5a2e', '#5e3a24', '#a0642c'].map(H), pine: ['#4a3a2a', '#5a4632', '#3a3024'].map(H), cursed: ['#5a4e4a', '#6a5e56', '#4a4040'].map(H) };
 const FLOWER = ['#e8e8d0', '#feae34', '#f6757a', '#8fb8ff', '#c49bd9'].map(H);
@@ -704,7 +711,8 @@ export function paintChunk(cd, px) {
     return (a[c] + (a[c + 1] - a[c]) * tx) * (1 - ty) + (a[c + N] + (a[c + N + 1] - a[c + N]) * tx) * ty;
   };
   const zoneAt = (x, y, t) => (at(cursedG, x, y) > t ? 'cursed' : at(pineG, x, y) > t ? 'pine' : 'oak');
-  const { nearP, PX, PY, PW, PID, paths } = cd, ZONES = [GRASS.oak, GRASS.pine, GRASS.cursed], m = MARGIN / CELL;
+  const { nearP, PX, PY, PW, PID, paths } = cd, ZONES = cd.daylight ? DAY_GRASS : [GRASS.oak, GRASS.pine, GRASS.cursed], m = MARGIN / CELL;
+  const roadColors = cd.daylight ? DAY_ROAD : ROAD;
   for (let y = 0; y < CHUNK; y++) {
     const j = y >> 3, ty = (y & 7) / 8;
     for (let x = 0; x < CHUNK; x++) {
@@ -730,7 +738,7 @@ export function paintChunk(cd, px) {
         const u = clamp(-d / 13, 0, 1); // 0 at the edge, 1 in the middle
         let t = 0.18 + u * 0.75 + b * 0.35 + n * 0.25;
         if (Math.abs(u - 0.55) < 0.08 + b * 0.05 && hash2(wx >> 2, wy >> 2, SEED + 3) > 0.45 && u < 0.9) t = 0.22; // cart ruts
-        col = ROAD[clamp(Math.floor(t * ROAD.length), 0, ROAD.length - 1)];
+        col = roadColors[clamp(Math.floor(t * roadColors.length), 0, roadColors.length - 1)];
       } else {
         const zt = 0.5 + b * 0.9 + n * 0.3, z = lerp4(cursedG, c, N, w00, w10, w01, w11) > zt ? 2 : lerp4(pineG, c, N, w00, w10, w01, w11) > zt ? 1 : 0;
         let t = lerp4(patchG, c, N, w00, w10, w01, w11) * 1.25 - 0.12 + b * 0.22 + n * 0.12 - lerp4(groveG, c, N, w00, w10, w01, w11) * 0.26 + lerp4(clearG, c, N, w00, w10, w01, w11) * 0.1;

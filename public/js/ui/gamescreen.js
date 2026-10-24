@@ -23,7 +23,7 @@ import { OptionsScreen } from './screens.js';
 import { saveSettings } from '../engine/storage.js';
 
 export class GameScreen {
-  enter(app) {
+  enter(app, params = {}) {
     this.app = app;
     const { hero, mode } = app.choice;
     this.game = new Game({
@@ -42,6 +42,7 @@ export class GameScreen {
       hints: true,
       saveSettings: () => saveSettings(app.settings),
     });
+    this.game.gold = this.game.stats.gold = params.prologueGold || 0;
     // Nothing of the run is saved while it lasts: its results reach the save when it ends
     // (ResultsOverlay), by death, Quit Run or victory.
     this.overlay = null;

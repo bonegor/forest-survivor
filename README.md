@@ -61,6 +61,21 @@ The **fury orb** (bottom right) fills toward the ultimate, which fires only when
 
 **Quit Run** in the pause menu ends the run there and then, and you keep the gold you found. A run is never saved to come back to: progress (gold, wins, records, unlocks, the gear worn) is saved only when the run ends, by death, by Quit Run, or by victory and back to the menu. Close the game mid-run and that run is gone, with nothing of it kept.
 
+### The road to Darkwood
+
+A new player's **Begin Adventure** starts with the Knight at a daylight camp. A woodland road
+leads east: about 60 seconds of walking to the Darkwood, with room to explore above and below it.
+The woods behind camp close the western boundary. A few rats guard the road, dropping gold and
+occasional healing potions; there is no experience or levelling. After eight seconds without
+progress along the road, a gentle arrow and **Follow the path** point the player back toward it.
+
+At the destination a brief story transition starts the Knight's first night on Normal, at level
+1 and full health. Collected gold goes into that night and is saved with its results. **Skip Intro**
+also starts the night. Completion or skipping is remembered in settings; existing players go
+straight to the usual hero selection. **Replay Intro** on the main menu visits the road again
+without changing progress or awarding gold. Keyboard, gamepad and touch movement all work, and
+the pause button stops the journey and its reminder.
+
 ### Heroes
 
 | Hero | Unlock | Starts with | Perk | Ultimate |

@@ -12,6 +12,7 @@ import { UI } from './ui/ui.js';
 import { MenuScene } from './ui/background.js';
 import { TitleScreen, HeroScreen, ModeScreen, ArmoryScreen, CodexScreen, RecordsScreen, OptionsScreen } from './ui/screens.js';
 import { GameScreen } from './ui/gamescreen.js';
+import { PrologueScreen } from './ui/prologue.js';
 
 const SCREENS = {
   title: TitleScreen,
@@ -22,6 +23,7 @@ const SCREENS = {
   records: RecordsScreen,
   options: OptionsScreen,
   game: GameScreen,
+  prologue: PrologueScreen,
 };
 
 const app = {

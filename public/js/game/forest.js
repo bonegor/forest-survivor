@@ -130,11 +130,15 @@ export class Forest {
     }
   }
 
+  layout(cx, cy) {
+    return layoutChunk(cx, cy);
+  }
+
   generate(cx, cy) {
     const c = makeCanvas(CH, CH);
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(CH, CH);
-    const lay = layoutChunk(cx, cy);
+    const lay = this.layout(cx, cy);
     // Headless, the layout (trees, props, colliders) is all that matters.
     if (!this.g.headless) {
       paintChunk(lay, new Uint32Array(img.data.buffer));

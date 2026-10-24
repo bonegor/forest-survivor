@@ -2335,7 +2335,7 @@ export class Game {
     if (this.heroCovered) this.drawHeroOver(ctx, c);
 
     // Screen-space post effects.
-    ctx.drawImage(vignette(256, 144, '8,6,16', 0.7), 0, 0, c.pxW, c.pxH);
+    ctx.drawImage(vignette(256, 144, '8,6,16', this.world.daylight ? 0.18 : 0.7), 0, 0, c.pxW, c.pxH);
     if (p.dead && this.deathT !== undefined) this.drawFallen(ctx, c);
     const low = p.hp / p.maxHp;
     if (this.hurtFlash > 0 || (low < 0.3 && !p.dead)) {

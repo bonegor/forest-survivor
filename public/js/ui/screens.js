@@ -21,6 +21,7 @@ import { MenuDialog } from './menu-dialog.js';
 import { codexSummary, codexDescription, evolutionRecipe, shortNeed, HERO_SUMMARY } from './menu-copy.js';
 import { openFor, metaBonuses, exclusionState } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, itemName, itemLines, RARITIES } from '../shared/items.js';
+import { needsPrologue } from '../game/prologue.js';
 
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
@@ -125,7 +126,9 @@ export class TitleScreen {
 
     // No Continue: a run is never saved to come back to, only its results when it ends.
     ui.begin(dt);
-    const items = [['play', 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
+    const firstJourney = needsPrologue(app.store.profile, app.settings);
+    const items = [['play', firstJourney ? 'BEGIN ADVENTURE' : 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
+    if (!firstJourney) items.push(['prologue', 'REPLAY INTRO']);
     const bw = 104, bh = 15, gap = 4;
     let y = Math.round(Math.max(my + 20, H * 0.5 - (items.length * (bh + gap)) / 2 + 6));
     // A pool of shadow under the buttons, so the trees behind don't fight them.
@@ -220,7 +223,8 @@ export class TitleScreen {
 
   pick(id) {
     const app = this.app;
-    if (id === 'play') app.go('hero');
+    if (id === 'play') app.go(needsPrologue(app.store.profile, app.settings) ? 'prologue' : 'hero');
+    else if (id === 'prologue') app.go('prologue', { replay: true });
     else if (id === 'armory') app.go('armory');
     else if (id === 'codex') app.go('codex');
     else if (id === 'records') app.go('records');
