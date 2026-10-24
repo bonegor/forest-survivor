@@ -28,6 +28,8 @@ export const PROGRESS = {
   firstRank: 0.5,
   // A hero's ultimate opens once a run with him lasts this long on the clock (any mode).
   ultTime: 2 * 60,
+  // Each lifetime kill milestone grants one more weapon exclusion: 10, 20, 40, ...
+  exclusionFirst: 10,
   // Open from the first run; every hero's signature weapon(s) always are too (data/heroes.js unique).
   // The owner's (22 October 2026): five to start with, the hero's own among them (the boomerang and
   // the spikes too), Frost Nova a run away (1:00), Consecration after ten falls, then the ladder;
@@ -106,11 +108,11 @@ const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 export function needText(lock) {
   const n = lock.at;
   switch (lock.need) {
-    case 'time': return `Survive ${clock(n)} in a run`;
-    case 'kills': return `Slay ${thousands(n)} foes in all`;
-    case 'level': return `Reach level ${n} in a run`;
+    case 'time': return `Survive ${clock(n)} in one run`;
+    case 'kills': return `Slay ${thousands(n)} monsters in total`;
+    case 'level': return `Reach level ${n}`;
     case 'gold': return `Pick up ${thousands(n)} gold in a run`;
-    case 'bosses': return n === 1 ? 'Slay a boss in a run' : `Slay ${n} bosses in a run`;
+    case 'bosses': return n === 1 ? 'Slay 1 boss' : `Slay ${n} bosses in one run`;
     case 'wins': return n === 1 ? 'Win a night' : `Win ${n} nights`;
     case 'evolve':
     case 'evolution': return `Evolve ${lock.what}`;

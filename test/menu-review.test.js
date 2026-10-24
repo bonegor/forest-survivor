@@ -18,7 +18,7 @@ function draw(screen, a, W = 480, H = 270) {
 function activate(screen, a, id) { a.ui.focusId = id;input.justDown.add('Enter');draw(screen, a); }
 
 test('Codex browsing never changes the weapon pool; a separate action does', async () => {
-  const a = app();let calls = 0;a.store.setHome = async () => { calls++;return true; };
+  const a = app({ ...defaultProfile(), kills: 10 });let calls = 0;a.store.setHome = async () => { calls++;return true; };
   const s = new CodexScreen();s.enter(a);draw(s,a);
   activate(s,a,'cx_weapon_axe');assert.ok(s.detail);assert.equal(calls,0);
   draw(s,a);activate(s,a,'detail_pool');await Promise.resolve();assert.equal(calls,1);

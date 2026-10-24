@@ -5,7 +5,7 @@
 import { HEROES } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
-import { HERO_ORDER, FEAT, hasFeat, modeUnlocked, progressList } from '../shared/profile.js';
+import { HERO_ORDER, FEAT, hasFeat, modeUnlocked, progressList, exclusionEntry } from '../shared/profile.js';
 import { PROGRESS } from '../shared/progress.js';
 import { SPR } from '../engine/sprites.js';
 import { fmtTime, fmtNum } from '../engine/util.js';
@@ -72,6 +72,7 @@ function cap(s) {
 
 // What an entry is called: the weapon's or relic's name, the hero's ultimate's.
 export function codexName(e) {
+  if (e.type === 'feature') return 'Weapon Exclusions';
   if (e.hidden) return '???';
   if (e.type === 'weapon') return WEAPONS[e.id]?.name || e.id;
   if (e.type === 'relic') return PASSIVES[e.id]?.name || e.id;
@@ -82,6 +83,7 @@ export function codexName(e) {
 // '412 slain'); '' where there is nothing to tell. An ultimate's is his Ranked best, the only time
 // kept for each hero, so none is told until there is one.
 export function codexRecord(e) {
+  if (e.type === 'feature') return `${e.level} exclusion slot${e.level === 1 ? '' : 's'} unlocked`;
   if (e.open || e.start) return '';
   const lock = e.type === 'ult' ? { need: 'time', at: PROGRESS.ultTime } : PROGRESS.locks.find((l) => l.type === e.type && l.id === e.id);
   if (!lock) return '';
@@ -113,7 +115,7 @@ export function codexIcon(ctx, e, x, y, shut = !e.open) {
       ctx.drawImage(fr.c, sx, sy, w, h, x + Math.floor((16 - w) / 2), y, w, h);
     }
   } else {
-    const icon = (e.type === 'weapon' ? WEAPONS : PASSIVES)[e.id]?.icon;
+    const icon = e.type === 'feature' ? 'i_reroll' : (e.type === 'weapon' ? WEAPONS : PASSIVES)[e.id]?.icon;
     if (SPR[icon]) ctx.drawImage(SPR[icon].frames[0].c, x, y);
   }
   ctx.globalAlpha = 1;
@@ -126,7 +128,7 @@ export function codexIcon(ctx, e, x, y, shut = !e.open) {
 // 2026), whatever its place in the lock table (whose order the saves' bits keep).
 export const CODEX_SOON = ['aura'];
 export function codexEntries(p) {
-  const all = progressList(p).filter((e) => e.type !== 'ult' || p.heroes?.includes(e.id));
+  const all = [exclusionEntry(p), ...progressList(p).filter((e) => e.type !== 'ult' || p.heroes?.includes(e.id))];
   const soon = all.filter((e) => !e.start && CODEX_SOON.includes(e.id));
   const rest = all.filter((e) => !soon.includes(e));
   for (const e of soon) {

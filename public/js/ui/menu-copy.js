@@ -14,10 +14,10 @@ const WEAPON_SUMMARY = {
   scythe: 'Executes wounded foes', starfall: 'Falling stars',
 };
 const RELIC_SUMMARY = {
-  might: '+10% damage', armor: '+1 armor', vitality: '+15% health', regen: '+0.3 health/sec',
+  might: '+10% damage', armor: '+1 armor', vitality: '+15% health', regen: '+0.3 health each second',
   cooldown: '-7% cooldowns', area: '+10% area', projspeed: '+12% projectile speed',
   duration: '+12% duration', movespeed: '+8% move speed', magnet: '+30% pickup range',
-  luck: '+10% luck, +2% crit', hunter: '+8% boss/elite damage', torc: 'Low-health damage bonus',
+  luck: '+10% luck, +2% crit', hunter: '+8% boss and elite damage', torc: 'Low-health damage bonus',
   thornmail: '8 retaliation damage', cloak: '4% dodge chance', ember: '5% burn chance',
   ramhorn: '+15% knockback', fang: '0.4% damage as healing', rime: 'Freeze foes when hit',
   amount: '+1 projectile', growth: '+7% experience', phoenix: 'Revive + evolution aid',
@@ -36,22 +36,21 @@ export const HERO_SUMMARY = {
 };
 
 export function shortNeed(text = '') {
-  return text.replace(/^Slay ([\d,]+) foes in all$/, '$1 total kills')
-    .replace(' in a run with this hero', ' with this hero')
-    .replace(' in a run', ' / run')
-    .replace('Pick up ', 'Collect ').replace('Reach level ', 'Level ')
-    .replace('Slay a boss', 'Defeat 1 boss').replace('Slay ', 'Defeat ')
+  return text.replace('Slay a boss in a run', 'Slay 1 boss')
+    .replace('Pick up ', 'Collect ')
     .replace('Win a night to learn more', 'Win a night to reveal');
 }
 
 export function codexSummary(e) {
+  if (e.type === 'feature') return e.need;
   if (!e.open) return shortNeed(e.need);
   if (e.type === 'weapon') return WEAPON_SUMMARY[e.id] || WEAPONS[e.id].desc;
   if (e.type === 'relic') return RELIC_SUMMARY[e.id] || PASSIVES[e.id].desc.replace(/[{}]/g, '');
-  return `${HEROES[e.id].title}'s ultimate`;
+  return HERO_SUMMARY[e.id][1];
 }
 
 export function codexDescription(e) {
+  if (e.type === 'feature') return 'Each level lets you exclude one more shared weapon from future runs. Select a weapon in the Codex to exclude it or include it again. Your hero always keeps their signature weapon.';
   if (e.hidden) return 'Win your first night to reveal this weapon.';
   return e.type === 'weapon' ? WEAPONS[e.id].desc : e.type === 'relic' ? PASSIVES[e.id].desc : HEROES[e.id].ultDesc;
 }

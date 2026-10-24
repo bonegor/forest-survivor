@@ -19,7 +19,7 @@ import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, 
 import { flank } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
 import { codexSummary, codexDescription, evolutionRecipe, shortNeed, HERO_SUMMARY } from './menu-copy.js';
-import { openFor, metaBonuses } from '../shared/profile.js';
+import { openFor, metaBonuses, exclusionState } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, itemName, itemLines, RARITIES } from '../shared/items.js';
 
 const UP_ICONS = {
@@ -712,24 +712,19 @@ export class ArmoryScreen {
 
 // ------------------------------------------------------------------ codex --
 
-// The Codex: every weapon and relic and each of the player's heroes' ultimates, in a tab each:
-// those open in colour, those still shut dimmed under a padlock with what opens them and how far
-// the records have come (shared/progress.js, profile.js progressList). A tab's tiles that don't
-// fit the screen scroll (the owner's, 22 October 2026: "scrollable, not paged"): the mouse wheel a
-// row a notch, a drag of the mouse or a finger, and the focus moved by the keys or a pad brings
-// its tile into view.
-const CODEX_TABS = [['weapon', 'WEAPONS'], ['relic', 'RELICS'], ['ult', 'ULTIMATES']];
-export const CODEX_TILE = { min: 136, max: 190, h: 38, gap: 4, top: 46, foot: 46 };
+// One collection: exclusions, weapons, relics and owned heroes' ultimates. Wheel, touch drag,
+// keyboard and gamepad all move through the same scrolling grid.
+export const CODEX_TILE = { min: 150, max: 210, h: 48, gap: 5, top: 42, foot: 46 };
 
 export function menuEntries(profile) {
   const entries = codexEntries(profile), hidden = entries.filter(e => e.hidden);
   // One discovery card replaces a wall of identical mystery requirements.
-  return entries.filter(e => !e.hidden || e === hidden[0]).map(e => e === hidden[0] ? { ...e, hiddenCount: hidden.length } : e);
+  const visible = entries.filter(e => !e.hidden || e === hidden[0]).map(e => e === hidden[0] ? { ...e, hiddenCount: hidden.length } : e);
+  return ['feature', 'weapon', 'relic', 'ult'].flatMap(type => visible.filter(e => e.type === type));
 }
 
 // The tiles' grid for n of them on a W x H screen: as many columns as fit CODEX_TILE.min wide
-// (at most four), in a view from the tabs down to the foot (two lines of the focused tile's
-// detail and BACK), `rows` of them in sight; `most` how far the grid scrolls (0: it all fits).
+// (at most three), below the heading and above the status and BACK controls.
 export function codexLayout(W, H, n) {
   const C = CODEX_TILE;
   const width = Math.min(480, W - 24);
@@ -747,13 +742,12 @@ export class CodexScreen {
   enter(app, params = {}) {
     this.app = app;
     this.back = params.back || 'title';
-    this.tab = 'weapon';
     this.scroll = 0; // px the grid is scrolled, easing to want
     this.want = 0;
     this.drag = null; // a press in the grid: where it began, and whether it has become a drag
     this.seen = null; // the focus last frame: a new one by the keys is scrolled into view
     app.ui.lock(0.2);
-    app.ui.focusId = 'cx_weapon';
+    app.ui.focusId = 'cx_feature_exclusions';
   }
 
   draw(ctx, W, H, dt) {
@@ -772,22 +766,8 @@ export class CodexScreen {
       return;
     }
     ui.begin(dt);
-    const all = codexEntries(prof);
-    // The tabs, each with how many of its kind are open: a row of choices, moving along it opens the
-    // tab in focus, and up from the tiles comes back to the open one (ui.js group). Enter goes down
-    // to its first tile.
-    const tw = Math.min(100, Math.floor((W - 16 - 8) / 3)), tx0 = Math.round(W / 2 - (3 * tw + 8) / 2);
-    CODEX_TABS.forEach(([type, label], i) => {
-      const list = all.filter((e) => e.type === type), open = list.filter((e) => e.open).length;
-      const text = textWidth(`${label} ${open}/${list.length}`) <= tw - 14 ? `${label} ${open}/${list.length}` : label;
-      const id = 'cx_' + type, on = this.tab === type;
-      if (button(ctx, ui, id, tx0 + i * (tw + 4), 25, tw, 13, text, { on, color: on ? '#fee761' : '#8b9bb4', group: 'tabs', home: on }) && list.length) ui.focus(`cx_${type}_${list[0].id}`);
-      if (ui.focused(id) && !on) {
-        this.tab = type;
-        this.scroll = this.want = 0;
-      }
-    });
-    const list = menuEntries(prof).filter((e) => e.type === this.tab);
+    drawText(ctx, 'Weapons · Relics · Ultimates · Unlocks', W / 2, 27, { align: 'center', color: '#8b9bb4' });
+    const list = menuEntries(prof);
     const L = codexLayout(W, H, list.length);
     this.scrollGrid(L, dt);
     // The focus moved onto a tile by the keys or a pad: brought into view.
@@ -813,11 +793,22 @@ export class CodexScreen {
       if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out })) {
         const recipe = evolutionRecipe(e);
         const lines = [codexDescription(e)];
-        if (!e.open) lines.push({ text: e.need, color: '#feae34' }, codexRecord(e));
+        if (e.type === 'feature') {
+          lines.push({ text: `${e.level} exclusion slot${e.level === 1 ? '' : 's'} unlocked`, color: '#fee761' });
+          lines.push(`${fmtNum(prof.kills)} monsters slain across all runs`);
+          if (e.next) lines.push({ text: `Next level: ${e.need.toLowerCase()}`, color: '#feae34' });
+          lines.push('Milestones: 10, 20, 40, 80, 160, 320 monsters, then keep doubling.');
+        } else if (!e.open) lines.push({ text: shortNeed(e.need), color: '#feae34' }, codexRecord(e));
         if (e.type === 'relic' && e.open) lines.push(`${PASSIVES[e.id].max} ranks · bonuses apply during a run`);
         if (recipe) lines.push({ text: recipe, color: '#fee761' });
-        if (e.type === 'weapon' && e.open) lines.push(e.home ? 'Excluded from level-up offers.' : 'Included in level-up offers.');
-        this.detail = new MenuDialog(codexName(e), lines.filter(Boolean), e.type === 'weapon' && e.open ? [{ id: 'pool', label: e.home ? 'INCLUDE IN RUNS' : 'EXCLUDE FROM RUNS' }] : []);
+        const capacity = exclusionState(prof), used = prof.home?.length || 0;
+        const canExclude = used < capacity.level;
+        if (e.type === 'weapon' && e.open) {
+          lines.push(e.home ? 'Excluded from future runs.' : 'Included in future runs.');
+          lines.push(`${used} of ${capacity.level} exclusion slot${capacity.level === 1 ? '' : 's'} used`);
+          if (!e.home && !canExclude && capacity.next) lines.push(`Slay ${fmtNum(capacity.next)} monsters in total to unlock another slot.`);
+        }
+        this.detail = new MenuDialog(codexName(e), lines.filter(Boolean), e.type === 'weapon' && e.open ? [{ id: 'pool', label: e.home ? 'INCLUDE IN RUNS' : canExclude ? 'EXCLUDE FROM RUNS' : 'NO EXCLUSION SLOTS AVAILABLE', disabled: !e.home && !canExclude }] : []);
         this.detailKey = `${e.type}_${e.id}`;ui.focus('detail_close');ui.lock(0.2);
       }
       const f = ui.focused(fid);
@@ -878,7 +869,9 @@ export class CodexScreen {
     const lines = wrapText(e.home ? 'Excluded from runs' : codexSummary(e), room);
     if (lines.length > 2) lines[1] = fitLine(lines.slice(1).join(' '), room);
     lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 14 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
-    if (!open) codexBar(ctx, tx, y + h - 5, room, e.progress, '#feae34');
+    const kind = { weapon: 'WEAPON', relic: 'RELIC', ult: 'ULTIMATE', feature: `LEVEL ${e.level}` }[e.type];
+    drawText(ctx, kind, tx, y + h - 13, { color: '#8b9bb4' });
+    if (!open || (e.type === 'feature' && e.next)) codexBar(ctx, tx, y + h - 4, room, e.progress, '#feae34');
   }
 }
 

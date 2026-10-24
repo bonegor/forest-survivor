@@ -43,8 +43,8 @@ test('the table covers every shared weapon and relic exactly once, and fits its 
   assert.deepEqual([...relics].sort(), [...PASSIVE_IDS].sort());
   assert.ok(LOCKS.length <= 50, 'the save keeps them as the bits of one number, safe to 53');
   for (const l of LOCKS) if (!l.retired) assert.ok(P.needText(l), l.id);
-  assert.equal(P.needText(LOCKS[0]), 'Survive 1:00 in a run');
-  assert.equal(P.needText(LOCKS[1]), 'Slay 1,000 foes in all');
+  assert.equal(P.needText(LOCKS[0]), 'Survive 1:00 in one run');
+  assert.equal(P.needText(LOCKS[1]), 'Slay 1,000 monsters in total');
 });
 
 test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the starters open and no ultimate', () => {
@@ -112,7 +112,7 @@ test('the server keeps the milestones a run reached, and the ultimate of the her
   };
   try {
     let data = await post('/api/run', { ...RUN, time: 59, level: 15 });
-    assert.deepEqual(data.reward.unlocked, [{ type: 'weapon', id: 'flask', need: 'Reach level 15 in a run' }]);
+    assert.deepEqual(data.reward.unlocked, [{ type: 'weapon', id: 'flask', need: 'Reach level 15' }]);
     data = await post('/api/run', { ...RUN, time: 119, kills: 100 });
     assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['weapon:frost']);
     assert.equal(P.openFor(data.profile, 'knight').ult, false, '1:59 is not enough');
@@ -280,7 +280,7 @@ test('progressList measures how far each lock is', () => {
 });
 
 test('a weapon left at home is never offered, and comes along again when asked', () => {
-  let p = P.defaultProfile();
+  let p = { ...P.defaultProfile(), kills: 10 };
   p = P.setHome(p, 'axe', true).profile;
   assert.deepEqual(P.openFor(p, 'knight').weapons, ['blades', 'glaive', 'caltrops']);
   assert.equal(P.progressList(p).find((l) => l.id === 'axe').home, true);

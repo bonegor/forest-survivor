@@ -159,7 +159,7 @@ export function sanitizeProfile(raw) {
   }
   p.ul = int(raw.ul, 0, ALL_LOCKS);
   if (Array.isArray(raw.ev)) p.ev = EVO_IDS.filter((id) => raw.ev.includes(id));
-  if (Array.isArray(raw.home)) p.home = SHARED_IDS.filter((id) => raw.home.includes(id));
+  if (Array.isArray(raw.home)) p.home = SHARED_IDS.filter((id) => raw.home.includes(id)).slice(0, exclusionState(p).level);
   p.uu = int(raw.uu, 0, ALL_ULTS);
   if (Array.isArray(raw.heroes)) {
     for (const h of raw.heroes) if (HERO_ORDER.includes(h) && !p.heroes.includes(h)) p.heroes.push(h);
@@ -296,7 +296,7 @@ export function openFor(profile, hero) {
     if (lockUsable(p, i)) (l.type === 'weapon' ? weapons : relics).push(l.id);
   });
   // Those left at home stay there (setHome).
-  const home = Array.isArray(p.home) ? p.home : [];
+  const home = Array.isArray(p.home) ? p.home.filter(id => SHARED_IDS.includes(id)).slice(0, exclusionState(p).level) : [];
   return { weapons: weapons.filter((id) => !home.includes(id)), relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0 };
 }
 
@@ -414,9 +414,33 @@ export function upgradeOpen(profile, u) {
 
 // A shared weapon left at home (on: true) or taken along again: one left at home is never offered
 // in a run, at a level-up or in a chest. A hero's own signature is never one of them.
+export function exclusionState(profile) {
+  const kills = Math.max(0, Number(profile?.kills) || 0);
+  let level = 0, next = PROGRESS.exclusionFirst;
+  while (level < SHARED_IDS.length && kills >= next) {
+    level++;
+    next *= 2;
+  }
+  return { level, max: SHARED_IDS.length, next: level < SHARED_IDS.length ? next : null };
+}
+
+// Repeatable progression is separate from the one-time weapon and relic milestones.
+export function exclusionEntry(profile) {
+  const p = sanitizeProfile(profile), state = exclusionState(p);
+  return {
+    type: 'feature', id: 'exclusions', open: state.level > 0,
+    need: state.next ? `Slay ${state.next.toLocaleString('en-US')} monsters in total` : 'All exclusion slots unlocked',
+    progress: state.next ? Math.min(1, p.kills / state.next) : 1,
+    ...state,
+  };
+}
+
 export function setHome(profile, id, on) {
   const p = sanitizeProfile(profile);
   if (!SHARED_IDS.includes(id)) return { ok: false, profile: p, error: 'Unknown weapon' };
+  if (on && !p.home.includes(id) && p.home.length >= exclusionState(p).level) {
+    return { ok: false, profile: p, error: 'Unlock more exclusion slots by slaying monsters' };
+  }
   p.home = p.home.filter((x) => x !== id);
   if (on) p.home.push(id);
   return { ok: true, profile: p };
