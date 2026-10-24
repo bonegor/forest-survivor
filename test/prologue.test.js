@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { Prologue, ROAD, needsPrologue } from '../public/js/game/prologue.js';
+import { Prologue, ROAD, roadY, needsPrologue } from '../public/js/game/prologue.js';
 import { PrologueScreen } from '../public/js/ui/prologue.js';
 import { GameScreen } from '../public/js/ui/gamescreen.js';
 import { TitleScreen } from '../public/js/ui/screens.js';
@@ -26,12 +26,25 @@ function makeApp() {
   };
 }
 
-test('a direct walk reaches the end in about 60 seconds, with only rats and no levels', () => withGame((g) => {
-  input.bot = { x: 1, y: 0 };
-  step(g, 59);
-  assert.equal(g.reached, false, 'not a shorter timer disguised as a road');
-  step(g, 2);
+test('following the crooked road takes about 40 seconds, with more rats and no levels', () => withGame((g) => {
+  const seen = new Set(), spawnYs = [];
+  let elapsed = 0;
+  while (!g.reached && elapsed < 44) {
+    const x = Math.min(ROAD.length + 10, g.player.x + 40), y = roadY(x);
+    const dx = x - g.player.x, dy = y - g.player.y, distance = Math.hypot(dx, dy) || 1;
+    input.bot = { x: dx / distance, y: dy / distance };
+    g.update(1 / 60);
+    elapsed += 1 / 60;
+    for (const e of g.enemies) if (!seen.has(e.id)) {
+      seen.add(e.id);
+      spawnYs.push(e.y);
+      assert.ok(Math.abs(e.y - roadY(e.x)) < 35, 'mice spawn beside the curved road');
+    }
+  }
   assert.equal(g.reached, true);
+  assert.ok(elapsed >= 39 && elapsed <= 43, `${elapsed.toFixed(2)} seconds along the bends`);
+  assert.equal(seen.size, 16, 'six small packs, up from the original eleven mice');
+  assert.ok(spawnYs.some((y) => y < -60) && spawnYs.some((y) => y > 60), 'encounters follow both turns');
   assert.equal(g.player.dead, false, 'the starter Knight can walk the road');
   assert.equal(g.encounters.size, ROAD.encounters.length);
   assert.ok(g.kills > 0, 'the actual automatic sword fought the road encounters');
@@ -45,6 +58,19 @@ test('a direct walk reaches the end in about 60 seconds, with only rats and no l
   assert.equal(g.boss, null);
   assert.equal(g.player.ultLocked, true);
 }));
+
+test('the guide returns a wandering player to the curved path on either side of its turns', () => {
+  for (const [fraction, offset] of [[0.34, 130], [0.66, -130]]) withGame((g) => {
+    g.player.x = ROAD.length * fraction;
+    g.player.y = roadY(g.player.x) + offset;
+    input.bot = { x: 0, y: 0 };
+    step(g, 10);
+    assert.ok(g.guideAlpha > 0.9);
+    const target = g.guideTarget();
+    assert.equal(target.y, roadY(target.x));
+    assert.ok((target.y - g.player.y) * offset < 0, 'the reminder points back toward the actual road');
+  });
+});
 
 test('waiting does not finish the journey, and the guide fades in then out on progress', () => withGame((g) => {
   input.bot = { x: 0, y: 0 };

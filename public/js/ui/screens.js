@@ -2,25 +2,22 @@
 
 import { input } from '../engine/input.js';
 import { sfx, playMusic, setVolumes, initAudio } from '../engine/audio.js';
-import { SPR, walkFrame } from '../engine/sprites.js';
+import { SPR } from '../engine/sprites.js';
 import { saveSettings, DEBUG } from '../engine/storage.js';
 import { presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp } from '../engine/util.js';
-import { HEROES, HERO_ORDER, HERO_LINE, startWeapons, heroLook } from '../data/heroes.js';
-import { rimRing, silhouette, hexPack } from '../engine/pixels.js';
-import { trialScene, SCENE, heroCrop, portraitBackdrop, pixelEllipse, mix, PORTRAIT } from './scenes.js';
-import { WEAPONS } from '../data/weapons.js';
+import { HEROES, HERO_ORDER } from '../data/heroes.js';
+import { trialScene, SCENE, heroCrop, PORTRAIT } from './scenes.js';
 import { MODES, NORMAL, VETERAN, ELITE, NIGHTMARE } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, upgradeOpen, totalWins, HERO_UNLOCK_TIME, nextHeroUnlock, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
+import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from '../shared/progress.js';
 import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon } from './ladder.js';
 import { flank } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
-import { codexSummary, codexDescription, evolutionRecipe, shortNeed, HERO_SUMMARY } from './menu-copy.js';
-import { openFor, metaBonuses, exclusionState } from '../shared/profile.js';
-import { SLOTS, SLOT_NAMES, itemName, itemLines, RARITIES } from '../shared/items.js';
+import { codexSummary, codexDescription, evolutionRecipe, shortNeed } from './menu-copy.js';
+import { metaBonuses, exclusionState } from '../shared/profile.js';
 import { needsPrologue } from '../game/prologue.js';
 
 const UP_ICONS = {
@@ -234,15 +231,6 @@ export class TitleScreen {
 
 // ------------------------------------------------------------------- hero --
 
-// A hero's light line round a frame drawn at (dx, dy) at scale s, for a hero with one (the Shadow,
-// heroes.js line): one faint pixel. None in play (game.js HERO_MARK).
-function heroLine(ctx, h, fr, dx, dy, s, a) {
-  if (!h.line) return;
-  ctx.globalAlpha = a;
-  ctx.drawImage(fr.variant(`heroline${HERO_LINE}:1`, (b) => rimRing(b, HERO_LINE, 1)), dx - s, dy - s, (fr.w + 2) * s, (fr.h + 2) * s);
-  ctx.globalAlpha = 1;
-}
-
 // The hero screen's cards and portrait draw every hero at one whole-number scale, from the largest
 // crop of any hero's idle frames (heroCrop), so they all stand alike.
 function heroesCrop() {
@@ -281,223 +269,7 @@ export function heroCards(W, H, n) {
   return { cols, rows, cw: wide(cols), ch: rows > 1 ? Math.max(C.low, Math.min(C.h, room(rows))) : C.h };
 }
 
-export class HeroScreen {
-  enter(app) {
-    this.app = app;
-    this.t = 0;
-    app.ui.lock(0.2);
-    app.ui.focusId = 'h_' + (app.choice.hero || 'knight');
-  }
-
-  draw(ctx, W, H, dt) {
-    const app = this.app, ui = app.ui;
-    this.t += dt;
-    app.scene.draw(ctx, W, H, dt, { campfire: false });
-    dim(ctx, W, H, 0.45);
-    header(ctx, W, 'Choose your Hero');
-    if (this.dialog) {
-      if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null; ui.focus('h_' + this.lastHero); ui.lock(0.2); }
-      return;
-    }
-    goldTag(ctx, app, W - 6, 9);
-    ui.begin(dt);
-    const prof = app.store.profile;
-    const next = nextHeroUnlock(prof);
-    const { cols, cw, ch } = heroCards(W, H, HERO_ORDER.length), gap = HERO_CARD.gap;
-    const cs = cardScale(cw, ch); // every hero at one scale
-    const y0 = 32;
-    let x = 0, y = y0;
-    let focusHero = null;
-    HERO_ORDER.forEach((id, i) => {
-      // Row by row, each row centred (the last may be shorter).
-      if (i % cols === 0) {
-        const k = Math.min(cols, HERO_ORDER.length - i);
-        x = Math.round(W / 2 - (k * cw + (k - 1) * gap) / 2);
-        y = y0 + (i / cols) * (ch + gap);
-      }
-      const h = heroLook(id, app.settings.skins);
-      const locked = !prof.heroes.includes(id);
-      const fid = 'h_' + id;
-      // A locked hero can't be bought: five minutes with the one before bring them in. Up from below
-      // comes back to the hero shown in the panel.
-      if (ui.item(fid, x, y, cw, ch, { group: 'heroes', home: id === (this.lastHero || app.choice.hero) }) && !locked) {
-        app.choice.hero = id;
-        this.lastHero = id;
-        ui.focus('hero_continue');
-      }
-      const f = ui.focused(fid);
-      if (f) focusHero = id;
-      panel(ctx, x, y, cw, ch, { trim: f ? ['#fee761', '#be4a2f'] : ['#5a6988', '#3a4466'], rivets: f });
-      const spr = SPR[h.sprite];
-      const fr = spr && (f && !locked ? walkFrame(spr, Math.floor(this.t * 6 * spr.motionRate)) : spr.frames[0]);
-      if (fr) {
-        const img = locked ? fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff1b141d : 0)) })) : fr.c;
-        // At the cards' one scale, every hero standing on the same line just above the name, centred
-        // on what he covers.
-        const crop = heroCrop(spr);
-        const dx = Math.round(x + cw / 2 - (crop.x + crop.w / 2) * cs), dy = y + ch - 14 - (spr.anchorY + 1) * cs;
-        ctx.drawImage(img, dx, dy, img.width * cs, img.height * cs);
-        if (!locked) heroLine(ctx, h, fr, dx, dy, cs, f ? 0.7 : 0.45);
-      }
-      if (locked) {
-        // The next one shows what it takes; the rest wait their turn.
-        drawText(ctx, id === next ? `${HERO_UNLOCK_TIME / 60} MIN` : 'LOCKED', x + cw / 2, y + ch - 12, { align: 'center', color: id === next ? '#feae34' : '#5a6988' });
-      } else {
-        // The title, or its short form where the card is too narrow for it (labels never run together).
-        const label = textWidth(h.title.toUpperCase()) <= cw - 8 ? h.title.toUpperCase() : h.short.toUpperCase();
-        drawText(ctx, label, x + cw / 2, y + ch - 12, { align: 'center', color: f ? '#fee761' : '#c0cbdc' });
-        // Achievement stars: night survived, Dungeon beaten.
-        let sx = x + cw - 8;
-        for (const [, col, got] of featStars(prof, id).reverse()) {
-          if (got) drawText(ctx, '★', sx, y + 4, { color: col });
-          sx -= 7;
-        }
-      }
-      x += cw + gap;
-    });
-    // The hero last focused stays in the panel while its LOOK button is (detail).
-    focusHero = focusHero || this.lastHero || 'knight';
-    this.lastHero = focusHero;
-    // Clear of the cards: the panel's name plate stands 8 px over its top edge.
-    const bottom = this.detail(ctx, W, H, focusHero, y + ch + 14, !prof.heroes.includes(focusHero));
-    let gy = bottom + 6;
-    for (const line of wrapText('NEXT: ' + goalText(nextGoal(prof)), W - 24)) {
-      if (gy > H - 56) break;
-      drawText(ctx, line, W / 2, gy, { align: 'center', color: '#feae34' });
-      gy += 9;
-    }
-    if (button(ctx, ui, 'back', 8, H - 20, 44, 13, 'BACK', { fallback: true })) app.go('title');
-    const owned = prof.heroes.includes(focusHero);
-    if (button(ctx, ui, 'equipment', 58, H - 20, 54, 13, 'GEAR', { disabled: !owned })) {
-      const gear = prof.gear[focusHero] || {};
-      const lines = [{ text: `${HEROES[focusHero].title}'s equipment · kept between runs`, color: '#fee761' }];
-      for (const slot of SLOTS) {
-        const it = gear[slot];
-        lines.push({ text: it ? itemName(it) : `${SLOT_NAMES[slot]} · empty`, color: it ? RARITIES[it.rarity].color : '#8b9bb4' });
-        if (it) lines.push(...itemLines(it));
-      }
-      lines.push('Find equipment in forest crypts. Each hero keeps their own gear.');
-      this.dialog = new MenuDialog('Equipment', lines);ui.focus('detail_close');ui.lock(0.2);
-    }
-    if (button(ctx, ui, 'journey', 118, H - 20, 68, 13, 'JOURNEY')) {
-      this.dialog = new MenuDialog('Your journey', [
-        { text: goalText(nextGoal(prof)), color: '#fee761' },
-        `${prof.heroes.length}/${HERO_ORDER.length} heroes recruited. Survive 5 minutes with a hero to recruit the next.`,
-        'Survive the night with the Necromancer to open the Dungeon for the Knight.',
-        'Clear the Dungeon with Knight, Ranger, Sorcerer, Shadow, then Necromancer to open Ranked. The other heroes may enter once the Dungeon opens.',
-        'Ranked: endless runs, personal bests and rank titles.',
-        'Weapons and relics unlock through milestones in the Codex. Permanent upgrades are bought in the Armory.',
-      ]);ui.focus('detail_close');ui.lock(0.2);
-    }
-    if (button(ctx, ui, 'abilities', 192, H - 20, 80, 13, 'ABILITIES')) {
-      const h = HEROES[focusHero], ult = openFor(prof, focusHero).ult;
-      this.dialog = new MenuDialog(h.title, [h.perk, `Starts with ${startWeapons(h).map(id => WEAPONS[id].name).join(' + ')}`, { text: h.ultName, color: '#fee761' }, h.ultDesc, ult ? 'Ultimate unlocked' : `Unlock: survive ${fmtTime(PROGRESS.ultTime)} with this hero`]);ui.focus('detail_close');ui.lock(0.2);
-    }
-    const playY = Math.min(H - 43, Math.max(bottom + 34, gy + 8));
-    if (button(ctx, ui, 'hero_continue', Math.round(W / 2 - 70), playY, 140, 16, owned ? `PLAY ${HEROES[focusHero].title.toUpperCase()}` : 'HERO LOCKED', { disabled: !owned, color: '#fee761' })) {
-      app.choice.hero = focusHero;app.go('mode');
-    }
-    ui.end();
-    if (input.pressed('back') && ui.lockT <= 0) app.go('title');
-  }
-
-  // The portrait frame: every hero's own sprite (the Knight's painted portrait gave way to it, so
-  // they all match) at one whole-number scale for all of them, in a box: a glow in his colour, a
-  // floor, his shadow, a rim light from the top left and his light line where he has one (the
-  // Shadow). Returns the frame's width.
-  portrait(ctx, h, fx, fy, fh, maxW, locked) {
-    const { s, foot } = portraitFit(fh, maxW), footY = fy + foot;
-    const fw = Math.max(90, heroesCrop().w * s + 2 * Math.max(8, 3 * s));
-    const spr = SPR[h.sprite], crop = heroCrop(spr);
-    const fr = crop.list[Math.floor(this.t * (SPR[h.pose]?.fps || 6)) % crop.list.length];
-    ctx.fillStyle = '#0d0b14';
-    ctx.fillRect(fx - 2, fy - 2, fw + 4, fh + 4);
-    ctx.fillStyle = locked ? '#3a4466' : mix(h.color, '#c0cbdc', 0.25);
-    ctx.fillRect(fx - 1, fy - 1, fw + 2, fh + 2);
-    ctx.drawImage(portraitBackdrop(fw, fh, h.color, locked), fx, fy);
-    pixelEllipse(ctx, fx + fw / 2, footY, Math.round(crop.w * s * 0.4), Math.max(2, Math.round(s * 1.5)), 'rgba(5,4,10,0.5)');
-    const dx = Math.round(fx + fw / 2 - (crop.x + crop.w / 2) * s), dy = footY - (crop.y + crop.h - 1) * s;
-    const W1 = fr.w * s, H1 = fr.h * s, rim = mix(h.color, '#ffffff', 0.7);
-    ctx.globalAlpha = locked ? 0.35 : 0.9;
-    ctx.drawImage(fr.variant('rim' + rim, (b) => silhouette(b, hexPack(rim))), dx - s, dy - s, W1, H1);
-    ctx.globalAlpha = 1;
-    ctx.drawImage(locked ? fr.variant('shadow', (b) => ({ ...b, d: b.d.map((c) => (c >>> 24 ? 0xff1b141d : 0)) })) : fr.c, dx, dy, W1, H1);
-    if (!locked) heroLine(ctx, h, fr, dx, dy, s, 0.55);
-    return fw;
-  }
-
-  detail(ctx, W, H, id, y, locked) {
-    const h = heroLook(id, this.app.settings.skins);
-    const pw = Math.min(W - 16, 400), ph = Math.min(H - y - 72, 140);
-    const x = Math.round(W / 2 - pw / 2);
-    panel(ctx, x, y, pw, ph, { title: `${h.name.toUpperCase()} — ${h.title.toUpperCase()}` });
-    // The portrait frame, as tall as the panel allows over the line of stars under it.
-    const artW = this.portrait(ctx, h, x + 10, y + 12, ph - 27, Math.round(pw * 0.42), locked);
-    const tx = x + 10 + artW + 10;
-    const tw = pw - (tx - x) - 8;
-    let ty = y + 9;
-    const stat = (label, v, max, col) => {
-      drawText(ctx, label, tx, ty, { color: '#8b9bb4' });
-      drawText(ctx, label === 'SPEED' ? `${Math.round(v * 100)}%` : String(v), tx + tw, ty, { align: 'right', color: col });
-      ty += 9;
-    };
-    stat('BASE HP', h.stats.maxHp, 300, '#e43b44');
-    stat('SPEED', h.stats.speed || 1, 1.25, '#2ce8f5');
-    // What he starts with: one weapon, or the Necromancer's two side by side.
-    const start = startWeapons(h).map((id) => WEAPONS[id]);
-    start.forEach((w, i) => ctx.drawImage(SPR[w.icon].frames[0].c, tx - 1 + i * 17, ty - 1));
-    const nx = tx + 17 * start.length;
-    const names = wrapText(start.map((w) => w.name).join(' + '), tx + tw - nx);
-    names.forEach((ln, i) => drawText(ctx, ln, nx, ty + 3 + i * 9 - (names.length - 1) * 4, { color: '#fee761' }));
-    ty += 17;
-    for (const line of wrapText(HERO_SUMMARY[id][0], tw)) {
-      if (ty > y + ph - 38) break;
-      drawText(ctx, line, tx, ty, { color: '#c0cbdc' });
-      ty += 9;
-    }
-    ty += 2;
-    const ultimateOpen = openFor(this.app.store.profile, id).ult;
-    drawText(ctx, fitLine('ULT · ' + h.ultName, tw), tx, ty, { color: ultimateOpen ? '#f6757a' : '#8b9bb4' });
-    ty += 9;
-    for (const line of wrapText(ultimateOpen ? HERO_SUMMARY[id][1] : `Locked · survive ${fmtTime(PROGRESS.ultTime)} with this hero`, tw)) {
-      if (ty > y + ph - (locked || ph >= 125 ? 24 : 10)) break;
-      drawText(ctx, line, tx, ty, { color: '#8b9bb4' });
-      ty += 9;
-    }
-    const prof = this.app.store.profile;
-    if (locked) {
-    const next = nextHeroUnlock(prof);
-      const prev = HERO_ORDER[HERO_ORDER.indexOf(id) - 1];
-      const msg = next !== id ? `UNLOCK THE ${HEROES[next].title.toUpperCase()} FIRST`
-        : `SURVIVE ${HERO_UNLOCK_TIME / 60} MINUTES WITH THE ${HEROES[prev].title.toUpperCase()}`;
-      drawText(ctx, msg, x + pw / 2, y + ph - 11, { align: 'center', color: next === id ? '#feae34' : '#8b9bb4' });
-    } else if (ph >= 125) {
-      // Which trials this hero has conquered.
-      const stars = featStars(prof, id);
-      const parts = stars.map(([label]) => `★ ${label}`);
-      const widths = parts.map((s) => textWidth(s));
-      let sx = Math.round(x + pw / 2 - (widths.reduce((a, b) => a + b, 0) + 10 * (parts.length - 1)) / 2);
-      stars.forEach(([, col, got], i) => {
-        drawText(ctx, parts[i], sx, y + ph - 11, { color: got ? col : '#3a4466' });
-        sx += widths[i] + 10;
-      });
-    }
-    // His looks (data/heroes.js skins), left and right through them, remembered with the settings.
-    const skins = HEROES[id].skins;
-    if (skins && !locked) {
-      const app = this.app, cur = skins.find((k) => k.id === app.settings.skins?.[id]) || skins[0];
-      const d = stepper(ctx, app.ui, 'look', Math.round(W / 2 - 80), y + ph + 4, 160, 'LOOK', cur.name.toUpperCase());
-      if (d) {
-        const next = skins[(skins.indexOf(cur) + d + skins.length) % skins.length];
-        app.settings.skins = { ...app.settings.skins, [id]: next.id };
-        saveSettings(app.settings);
-        sfx('select');
-      }
-      return y + ph + 19;
-    }
-    return y + ph;
-  }
-}
+export { HeroScreen } from './hero-selection.js';
 
 // ------------------------------------------------------------------- mode --
 

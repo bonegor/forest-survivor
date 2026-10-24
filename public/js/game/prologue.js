@@ -10,13 +10,26 @@ import { clamp, damp, hash2 } from '../engine/util.js';
 import { playMusic } from '../engine/audio.js';
 
 export const ROAD = {
-  seconds: 60,
-  length: BASE_SPEED * HEROES.knight.stats.speed * 60,
+  seconds: 40,
+  length: BASE_SPEED * HEROES.knight.stats.speed * 40,
   left: -64,
   halfWidth: 21,
   guideAfter: 8,
-  encounters: [[300, 1], [950, 2], [1750, 2], [2650, 3], [3650, 3]],
+  encounters: [[200, 2], [650, 2], [1150, 3], [1675, 3], [2210, 3], [2750, 3]],
+  bends: [[0, 0], [0.14, 0], [0.27, -90], [0.42, -90], [0.58, 95], [0.75, 95], [0.9, 0], [1, 0]],
 };
+
+// A few soft turns, always heading east. The camps keep a straight approach.
+export function roadY(x) {
+  const u = clamp(x / ROAD.length, 0, 1);
+  for (let i = 1; i < ROAD.bends.length; i++) {
+    const [b, by] = ROAD.bends[i];
+    if (u > b) continue;
+    const [a, ay] = ROAD.bends[i - 1], t = (u - a) / (b - a);
+    return ay + (by - ay) * t * t * (3 - 2 * t);
+  }
+  return 0;
+}
 
 export function needsPrologue(profile, settings) {
   return !settings.prologueDone && profile.runs === 0;
@@ -25,7 +38,7 @@ export function needsPrologue(profile, settings) {
 function roadScene() {
   const xs = [], ys = [], hw = [], av = [];
   for (let x = -64; x <= ROAD.length + 300; x += 4) {
-    xs.push(x); ys.push(0); hw.push(ROAD.halfWidth); av.push(0);
+    xs.push(x); ys.push(roadY(x)); hw.push(ROAD.halfWidth); av.push(0);
   }
   const camp = (x) => ({
     clear: { x, y: 0, r: 100 },
@@ -126,12 +139,13 @@ export class Prologue extends Game {
 
   spawnRoad() {
     const p = this.player;
-    if (Math.abs(p.y) > 100) return;
+    if (Math.abs(p.y - roadY(p.x)) > 100) return;
     ROAD.encounters.forEach(([x, count], i) => {
       if (this.encounters.has(i) || p.x < x - 100) return;
       this.encounters.add(i);
       for (let j = 0; j < count; j++) {
-        const e = this.spawnEnemy('rat', x + j * 19, (j % 2 ? -1 : 1) * (9 + j * 5), { instant: true, spdMul: 0.55, dmgMul: 0.15 });
+        const sx = x + j * 19;
+        const e = this.spawnEnemy('rat', sx, roadY(sx) + (j % 2 ? -1 : 1) * (9 + j * 5), { instant: true, spdMul: 0.55, dmgMul: 0.15 });
         e.hp = e.maxHp = 8;
         e.xp = 0;
       }
@@ -151,14 +165,15 @@ export class Prologue extends Game {
     super.update(dt);
     if (!wasPlaying || this.state !== 'play' || this.reached) return;
     const p = this.player;
-    const headingRight = p.x - x > dt * 4 && Math.abs(p.y) < 70 && p.x < ROAD.length;
+    const headingRight = p.x - x > dt * 4 && Math.abs(p.y - roadY(p.x)) < 70 && p.x < ROAD.length;
     this.guideIdle = headingRight ? 0 : this.guideIdle + dt;
     this.guideAlpha = damp(this.guideAlpha, this.guideIdle >= ROAD.guideAfter ? 1 : 0, 2, dt);
-    if (p.x >= ROAD.length && Math.abs(p.y) <= 42) this.reached = true;
+    if (p.x >= ROAD.length && Math.abs(p.y - roadY(ROAD.length)) <= 42) this.reached = true;
   }
 
   guideTarget() {
     const p = this.player;
-    return { x: clamp(p.x + (Math.abs(p.y) > 70 ? 25 : 130), 0, ROAD.length), y: 0 };
+    const x = clamp(p.x + (Math.abs(p.y - roadY(p.x)) > 70 ? 25 : 130), 0, ROAD.length);
+    return { x, y: roadY(x) };
   }
 }

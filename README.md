@@ -64,7 +64,8 @@ The **fury orb** (bottom right) fills toward the ultimate, which fires only when
 ### The road to Darkwood
 
 A new player's **Begin Adventure** starts with the Knight at a daylight camp. A woodland road
-leads east: about 60 seconds of walking to the Darkwood, with room to explore above and below it.
+leads east through a few gentle bends: roughly 40 seconds of walking to the Darkwood, with room
+to explore above and below it. Six small encounters send 16 rats along the way.
 The woods behind camp close the western boundary. A few rats guard the road, dropping gold and
 occasional healing potions; there is no experience or levelling. After eight seconds without
 progress along the road, a gentle arrow and **Follow the path** point the player back toward it.
