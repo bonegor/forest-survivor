@@ -15,6 +15,8 @@ import KNIGHT_D from '../../assets/heroes/knight_d.js';
 import KNIGHT_E from '../../assets/heroes/knight_e.js';
 import KNIGHT_F from '../../assets/heroes/knight_f.js';
 import KNIGHT_G from '../../assets/heroes/knight_g.js';
+import ARCHER_B from '../../assets/heroes/archer_b.js';
+import ARCHER_C from '../../assets/heroes/archer_c.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -108,3 +110,9 @@ export const KNIGHT_F_SHEET = sheet(KNIGHT_F);
 export const KNIGHT_F_POSE = pose(KNIGHT_F_SHEET);
 export const KNIGHT_G_SHEET = sheet(KNIGHT_G);
 export const KNIGHT_G_POSE = pose(KNIGHT_G_SHEET);
+// The Ranger's looks in the plumed Knight's style (26 October 2026, src/ranger-knightstyle): A drawn
+// in code, B with claude-pxl. Each carries her bow's release and shots on the move, as hers do.
+export const ARCHER_B_SHEET = sheet(ARCHER_B);
+export const ARCHER_B_POSE = pose(ARCHER_B_SHEET);
+export const ARCHER_C_SHEET = sheet(ARCHER_C);
+export const ARCHER_C_POSE = pose(ARCHER_C_SHEET);

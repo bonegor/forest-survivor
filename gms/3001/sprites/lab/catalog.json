@@ -10981,6 +10981,308 @@
     "#5f9aee",
     "#f4fdff"
    ]
+  },
+  {
+   "cls": "archer",
+   "kind": "proposal",
+   "id": "knightstyle-a",
+   "name": "Ranger · Knight style A",
+   "description": "Lyra redrawn in the plumed Knight's style: no black outline (every edge is the darkest shade of its own material), about three heads tall, a pixel shorter and visibly slimmer than the Knight, shaded with 7-step hue-shifted ramps (green leaning teal in shadow and moss-gold in light, silver hair leaning purple and pink). Forest green hooded cloak and tunic over a leather jerkin, silver high ponytail, long elf ear, pale yew longbow, amber accents and a moonstone clasp. She breathes as the cloak stirs and the tail sways; walks leaning into a planted stride, the cloak streaming and the tail trailing; and shoots: lifts, nocks, draws to the chin, holds, looses with the string snapping and a white swoosh, follows through and lowers, standing or on the move.",
+   "creator": null,
+   "source": "drawn in code (no plugin)",
+   "licence": "made for Forest Survivor",
+   "colour": null,
+   "w": 48,
+   "h": 48,
+   "frames": 88,
+   "collection": "Ranger · Knight style",
+   "origin": "gms/3001/sprites/lab/src/ranger-knightstyle/a/ranger-a.mjs",
+   "made": "2026-10-26T14:31:51.756Z",
+   "walk": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "idle": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+   ],
+   "attackFps": 14,
+   "attackRelease": 5,
+   "attackWalk": [
+    [
+     24,
+     25,
+     26,
+     27,
+     28,
+     29,
+     30,
+     31
+    ],
+    [
+     32,
+     33,
+     34,
+     35,
+     36,
+     37,
+     38,
+     39
+    ],
+    [
+     40,
+     41,
+     42,
+     43,
+     44,
+     45,
+     46,
+     47
+    ],
+    [
+     48,
+     49,
+     50,
+     51,
+     52,
+     53,
+     54,
+     55
+    ],
+    [
+     56,
+     57,
+     58,
+     59,
+     60,
+     61,
+     62,
+     63
+    ],
+    [
+     64,
+     65,
+     66,
+     67,
+     68,
+     69,
+     70,
+     71
+    ],
+    [
+     72,
+     73,
+     74,
+     75,
+     76,
+     77,
+     78,
+     79
+    ],
+    [
+     80,
+     81,
+     82,
+     83,
+     84,
+     85,
+     86,
+     87
+    ]
+   ],
+   "walkFps": null,
+   "idleFps": null,
+   "motionRate": 1.064773735581189,
+   "idleRate": 3.75,
+   "anchorY": 40,
+   "selfBob": true,
+   "floating": false,
+   "fitW": 36,
+   "fitH": 34,
+   "outline": false,
+   "sheet": "sheets/archer-knightstyle-a.png",
+   "rows": [
+    "right",
+    "glow",
+    "glowLeft"
+   ],
+   "emissive": null,
+   "glow": [
+    "#b4ffd6"
+   ]
+  },
+  {
+   "cls": "archer",
+   "kind": "proposal",
+   "id": "knightstyle-b",
+   "name": "Ranger · Knight style B",
+   "description": "Lyra redrawn in the plumed Knight's manner: no black outline (every edge a dark shade of its own material), hue-shifted ramps (silver hair that shades violet and lights pink, forest green from blue-black to yellow-green, violet-brown leather), about 3 heads tall and a touch shorter and slimmer than the Knight. A high silver ponytail tied in gold and a green cape flow behind her: they ripple in her breathing idle, stream back on her planted, bobbing walk and are flung back by the shot. She lifts the bow, nocks, draws to the chin with the elbow out behind, holds (the arrowhead glints), looses with the string snapping forward and a white crescent and streak flying out, follows through and lowers, standing or on the move. The moonstone in the grip and the arrowhead glow.",
+   "creator": null,
+   "source": "drawn with claude-pxl (MIT)",
+   "licence": "made for Forest Survivor",
+   "colour": null,
+   "w": 48,
+   "h": 48,
+   "frames": 88,
+   "collection": "Ranger · Knight style",
+   "origin": "gms/3001/sprites/lab/src/ranger-knightstyle/b/ranger-b.px.js",
+   "made": "2026-10-26T14:44:05.616Z",
+   "walk": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "idle": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "attack": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+   ],
+   "attackFps": 14,
+   "attackRelease": 5,
+   "attackWalk": [
+    [
+     24,
+     25,
+     26,
+     27,
+     28,
+     29,
+     30,
+     31
+    ],
+    [
+     32,
+     33,
+     34,
+     35,
+     36,
+     37,
+     38,
+     39
+    ],
+    [
+     40,
+     41,
+     42,
+     43,
+     44,
+     45,
+     46,
+     47
+    ],
+    [
+     48,
+     49,
+     50,
+     51,
+     52,
+     53,
+     54,
+     55
+    ],
+    [
+     56,
+     57,
+     58,
+     59,
+     60,
+     61,
+     62,
+     63
+    ],
+    [
+     64,
+     65,
+     66,
+     67,
+     68,
+     69,
+     70,
+     71
+    ],
+    [
+     72,
+     73,
+     74,
+     75,
+     76,
+     77,
+     78,
+     79
+    ],
+    [
+     80,
+     81,
+     82,
+     83,
+     84,
+     85,
+     86,
+     87
+    ]
+   ],
+   "walkFps": null,
+   "idleFps": null,
+   "motionRate": 1.064773735581189,
+   "idleRate": 3.75,
+   "anchorY": 40,
+   "selfBob": true,
+   "floating": false,
+   "fitW": 36,
+   "fitH": 34,
+   "outline": false,
+   "sheet": "sheets/archer-knightstyle-b.png",
+   "rows": [
+    "right",
+    "glow",
+    "glowLeft"
+   ],
+   "emissive": null,
+   "glow": [
+    "#b6ffdc"
+   ]
   }
  ]
 }

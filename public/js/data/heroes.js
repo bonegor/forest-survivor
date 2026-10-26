@@ -48,6 +48,13 @@ export const HEROES = {
     title: 'Ranger',
     sprite: 'archer',
     pose: 'archer_pose',
+    // Her looks (heroLook): her own, then two in the plumed Knight's style (26 October 2026),
+    // slighter than he is: A drawn in code, B with claude-pxl.
+    skins: [
+      { id: 'a', name: 'Silverleaf', sprite: 'archer', pose: 'archer_pose' },
+      { id: 'b', name: 'Style A', sprite: 'archer_b', pose: 'archer_b_pose' },
+      { id: 'c', name: 'Style B', sprite: 'archer_c', pose: 'archer_c_pose' },
+    ],
     weapon: 'bow',
     unique: ['bow'],
     color: '#63c74d',
