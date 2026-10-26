@@ -54,6 +54,10 @@ export const HEROES = {
       { id: 'a', name: 'Silverleaf', sprite: 'archer', pose: 'archer_pose' },
       { id: 'b', name: 'Style A', sprite: 'archer_b', pose: 'archer_b_pose' },
       { id: 'c', name: 'Style B', sprite: 'archer_c', pose: 'archer_c_pose' },
+      // Three more drawn from B (26 October 2026): hooded, a bit more Pokémon-like, and both.
+      { id: 'd', name: 'Style C', sprite: 'archer_d', pose: 'archer_d_pose' },
+      { id: 'e', name: 'Style D', sprite: 'archer_e', pose: 'archer_e_pose' },
+      { id: 'f', name: 'Style E', sprite: 'archer_f', pose: 'archer_f_pose' },
     ],
     weapon: 'bow',
     unique: ['bow'],

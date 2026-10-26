@@ -1,0 +1,151 @@
+{
+ "cls": "archer",
+ "kind": "proposal",
+ "id": "knightstyle-d",
+ "name": "Ranger · Knight style D (Pokémon)",
+ "description": "Style B shifted a bit toward a Gen 4-5 Pokémon trainer sprite, still in the plumed Knight's manner (no black outline: every edge the darkest tone of its own material). A slightly larger, rounder head with the silver fringe swept off a readable face: a big eye (dark lid, a white glint, teal iris), the far eye on the face's edge, a light nose and a small smile, and a pointed elf ear laid back past the hair. Clean, bright colour blocks in 3-4 flat tones per material (29 colours): a bright green tunic against a darker green cape and cowl, lavender-silver hair, warm leather, gold accents. A big high ponytail tied in gold arcs back like the Knight's plume and, with the cape, ripples in her breathing idle, streams back on her bobbing walk and is flung back by the shot. She lifts the bow, nocks, draws with her elbow up behind and her gloved hand at the jaw, holds (the arrowhead glints), looses with the string snapping forward and a white crescent and streak flying out, follows through and lowers, standing or on the move. The moonstone in the grip and the arrowhead glow.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 88,
+ "collection": "Ranger · Knight style",
+ "origin": "gms/3001/sprites/lab/src/ranger-knightstyle/d/ranger-d.px.js",
+ "made": "2026-10-26T16:02:04.022Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23
+ ],
+ "attackFps": 14,
+ "attackRelease": 5,
+ "attackWalk": [
+  [
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30,
+   31
+  ],
+  [
+   32,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39
+  ],
+  [
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47
+  ],
+  [
+   48,
+   49,
+   50,
+   51,
+   52,
+   53,
+   54,
+   55
+  ],
+  [
+   56,
+   57,
+   58,
+   59,
+   60,
+   61,
+   62,
+   63
+  ],
+  [
+   64,
+   65,
+   66,
+   67,
+   68,
+   69,
+   70,
+   71
+  ],
+  [
+   72,
+   73,
+   74,
+   75,
+   76,
+   77,
+   78,
+   79
+  ],
+  [
+   80,
+   81,
+   82,
+   83,
+   84,
+   85,
+   86,
+   87
+  ]
+ ],
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.064773735581189,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/archer-knightstyle-d.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#b6ffdc"
+ ]
+}

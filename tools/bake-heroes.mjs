@@ -41,6 +41,10 @@ const BAKE = {
   // The Ranger's two looks in the plumed Knight's style (26 October 2026): A drawn in code, B with claude-pxl.
   archer_b: 'archer/knightstyle-a',
   archer_c: 'archer/knightstyle-b',
+  // Three more from B: hooded, a bit more Pokémon-like, and both (its C, D and E).
+  archer_d: 'archer/knightstyle-c',
+  archer_e: 'archer/knightstyle-d',
+  archer_f: 'archer/knightstyle-e',
 };
 const OURS = new Set(['made for Forest Survivor', "the game's own"]);
 

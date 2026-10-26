@@ -17,6 +17,9 @@ import KNIGHT_F from '../../assets/heroes/knight_f.js';
 import KNIGHT_G from '../../assets/heroes/knight_g.js';
 import ARCHER_B from '../../assets/heroes/archer_b.js';
 import ARCHER_C from '../../assets/heroes/archer_c.js';
+import ARCHER_D from '../../assets/heroes/archer_d.js';
+import ARCHER_E from '../../assets/heroes/archer_e.js';
+import ARCHER_F from '../../assets/heroes/archer_f.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -116,3 +119,10 @@ export const ARCHER_B_SHEET = sheet(ARCHER_B);
 export const ARCHER_B_POSE = pose(ARCHER_B_SHEET);
 export const ARCHER_C_SHEET = sheet(ARCHER_C);
 export const ARCHER_C_POSE = pose(ARCHER_C_SHEET);
+// Three more drawn from B with claude-pxl: hooded (lab C), a bit more Pokémon-like (D), both (E).
+export const ARCHER_D_SHEET = sheet(ARCHER_D);
+export const ARCHER_D_POSE = pose(ARCHER_D_SHEET);
+export const ARCHER_E_SHEET = sheet(ARCHER_E);
+export const ARCHER_E_POSE = pose(ARCHER_E_SHEET);
+export const ARCHER_F_SHEET = sheet(ARCHER_F);
+export const ARCHER_F_POSE = pose(ARCHER_F_SHEET);
