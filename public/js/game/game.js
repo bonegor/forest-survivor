@@ -1554,9 +1554,9 @@ export class Game {
   rimeFreeze(x, y, R, t) {
     sfx('freeze');
     this.particles.burst(x, y - 6, 10, 10, [PC.w, PC.c, PC.U], 70, 0.5, 1, P.GLOW | P.FADE, {});
-    for (const e of this.grid.query(x, y, R + 10, tmp)) {
+    for (const e of this.grid.foes(x, y, R, tmp)) {
       if (e.dead || e.prop || e.sealed || e.sleeping || e.dormant) continue;
-      if (Math.hypot(e.x - x, e.y - y) > R + e.r) continue;
+      if (Math.hypot(e.x - x, e.y - y) > R + e.hr) continue;
       if (e.boss || e.lord || e.elite) {
         e.slowT = Math.max(e.slowT, t);
         e.slowF = Math.max(e.slowF, 0.6);

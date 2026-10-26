@@ -18,6 +18,7 @@ import { EnemyShot } from './projectiles.js';
 import { BOSS_AI } from './bosses.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { shotName } from './names.js';
+import { spriteExtent } from './hitbox.js';
 
 // Hit cooldown channels a foe keeps (hitT): one for each weapon the hero holds (Game.freeSrc).
 const N_SRC = 24;
@@ -101,12 +102,20 @@ export function hordePace(type, o = {}) {
 
 export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast: 25, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.3, near: 60 };
 
+// A flyer is drawn up off the ground, bobbing a little (draw, body).
+const HOVER = { up: 6, bob: 2 };
+
 export class Enemy {
   constructor() {
     this.hitT = new Float32Array(N_SRC);
     // Where it was last drawn, [X, Y, w, h, flip (1 or 0)]: one array for its whole life, which
     // _rect points at once it has been drawn (draw, drawEmissive).
     this._r = [0, 0, 0, 0, 0];
+    // Its body as drawn, [x0, y0, x1, y1] in the world (body), and how far of it to each side of
+    // its feet (hr) and anywhere from them (reach) any frame is drawn (init; hitbox.js).
+    this._box = [0, 0, 0, 0];
+    this.hr = 0;
+    this.reach = 0;
     // Its shadow and the width it was made for (drawShadow).
     this._sh = null;
     this._shW = 0;
@@ -140,6 +149,10 @@ export class Enemy {
     this.prop = !!def.prop;
     this.scale = o.scale ?? (def.scale || 1) * (this.elite ? 1.35 : 1);
     this.r = def.r * (this.elite ? 1.3 : 1);
+    // A boss's width on the ground is its body's (spr.body), not the reach of its swings.
+    const ext = spriteExtent(this.spr), hover = def.fly ? HOVER.up + HOVER.bob : 0;
+    this.hr = Math.max(this.r, (this.spr.body ? this.spr.body[0] / 2 : ext.side) * this.scale + 1);
+    this.reach = Math.hypot(ext.side * this.scale, ext.up * this.scale + hover) + 2; // body's spare pixel
     this.maxHp = this.hp = Math.max(1, def.hp * (o.hpMul ?? 1));
     this.spd = hordePace(type, o) * (o.spdMul ?? 1);
     this.paced = isPaced(def, o) && !!PACE_OF[type]; // one of the horde, walking its class's speed (hordePace)
@@ -669,6 +682,20 @@ export class Enemy {
     return s.walk ? s.walk[Math.floor(this.anim * s.motionRate) % s.walk.length] : Math.floor(this.anim) % s.frames.length;
   }
 
+  // Its body as drawn this frame (hitbox.js), [x0, y0, x1, y1] in the world: the opaque pixels of
+  // the frame draw shows, where it puts them (mirrored as it faces, a flyer up off the ground with
+  // the whole of its bob), and a pixel to spare all round. One array, rewritten each call.
+  body() {
+    const fr = this.spr.frames[this.frameIndex()], b = fr.box, sc = this.scale, half = fr.w / 2, out = this._box;
+    const flip = this.face < 0, l = flip ? half - b[2] : b[0] - half, r = flip ? half - b[0] : b[2] - half;
+    const top = this.y + 1 + (this.spr.below - fr.h) * sc - (this.def.fly ? HOVER.up : 0), bob = this.def.fly ? HOVER.bob : 0;
+    out[0] = this.x + l * sc - 1;
+    out[1] = top + b[1] * sc - bob - 1;
+    out[2] = this.x + r * sc + 1;
+    out[3] = top + b[3] * sc + bob + 1;
+    return out;
+  }
+
   drawShadow(ctx, cam) {
     const S = cam.S;
     const sw = Math.max(6, (this.spr.body ? this.spr.body[0] : this.spr.w) * 0.7 * this.scale);
@@ -727,10 +754,10 @@ export class Enemy {
     const Y = (this.y - cam.y) * S - h + S + this.spr.below * S * sy;
     if (this.shake) X += (Math.random() - 0.5) * S * 2;
     if (this.def.fly) {
-      const bob = Math.sin(this.life * 6 + this.wob) * 2 * S;
+      const bob = Math.sin(this.life * 6 + this.wob) * HOVER.bob * S;
       this._bob = bob;
     } else this._bob = 0;
-    const by = Y - this._bob - (this.def.fly ? 6 * S : 0);
+    const by = Y - this._bob - (this.def.fly ? HOVER.up * S : 0);
     const r = this._r;
     r[0] = X;
     r[1] = by;

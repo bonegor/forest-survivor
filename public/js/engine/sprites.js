@@ -49,6 +49,46 @@ export class Frame {
     this.variants = new Map();
     this._pixels = null;
     this._rot = new Map();
+    this._box = null;
+    this._radius = -1;
+  }
+
+  // The box its opaque pixels fill, [x0, y0, x1, y1] (x1, y1 one past the last), as the hitboxes
+  // go by (game/hitbox.js); the whole frame if it has none.
+  get box() {
+    if (!this._box) {
+      const { w, h, d } = this.buf;
+      let x0 = w, y0 = h, x1 = 0, y1 = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (!(d[y * w + x] >>> 24)) continue;
+          if (x < x0) x0 = x;
+          if (x >= x1) x1 = x + 1;
+          if (y < y0) y0 = y;
+          if (y >= y1) y1 = y + 1;
+        }
+      }
+      this._box = x1 > x0 ? [x0, y0, x1, y1] : [0, 0, w, h];
+    }
+    return this._box;
+  }
+
+  // How far from its centre its farthest opaque pixel reaches (to that pixel's far corner): the
+  // disc it sweeps turning, or drawn at any turn (game/hitbox.js).
+  get radius() {
+    if (this._radius < 0) {
+      const { w, h, d } = this.buf;
+      let r2 = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (!(d[y * w + x] >>> 24)) continue;
+          const dx = Math.max(Math.abs(x - w / 2), Math.abs(x + 1 - w / 2)), dy = Math.max(Math.abs(y - h / 2), Math.abs(y + 1 - h / 2));
+          if (dx * dx + dy * dy > r2) r2 = dx * dx + dy * dy;
+        }
+      }
+      this._radius = Math.sqrt(r2);
+    }
+    return this._radius;
   }
 
   get(flip) {

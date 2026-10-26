@@ -10,6 +10,7 @@ import { rand, TAU, clamp, angleDiff, ease, pick } from '../engine/util.js';
 import { glow, glint } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { Ring, brandFoe } from './effects.js';
+import { reachesFeet, reachesBody } from './hitbox.js';
 
 const toScreen = (cam, x, y) => [(x - cam.x) * cam.S, (y - cam.y) * cam.S];
 const panOf = (g, x) => clamp((x - g.player.x) / 200, -1, 1);
@@ -53,13 +54,13 @@ export class Lantern {
     if (this.tickT > 0) return true;
     this.tickT = s.tick;
     const R = this.reach, half = this.half, n = Math.round(s.amount);
-    const cands = g.grid.query(p.x, p.y, R + 14);
+    const cands = g.grid.foes(p.x, p.y, R);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
       if (e.dead) continue;
       const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
-      if (d > R + e.r) continue;
-      const a = Math.atan2(dy, dx), slack = half + e.r / Math.max(d, e.r);
+      if (d > R + e.hr) continue;
+      const a = Math.atan2(dy, dx), slack = half + e.hr / Math.max(d, e.hr);
       let lit = false;
       for (let k = 0; k < n && !lit; k++) lit = Math.abs(angleDiff(a, this.ang + (k / n) * TAU)) <= slack;
       if (!lit) continue;
@@ -147,10 +148,13 @@ export class Rune {
       g.particles.burst(this.x, this.y, 4, 4, [PC.y, PC.Y, PC.w], 50, 0.3, 1, P.GLOW | P.FADE, {});
       if (++this.bounces === 1 && s.split && !this.kid) this.splitUp();
     }
-    const cands = g.grid.query(this.x, this.y, this.r + 16);
+    // Struck at its feet, or on its body where the stone, drawn on the ground turning, crosses it
+    // (hitbox.js): a square r either side, as wide as its corners turned.
+    const cands = g.grid.foes(this.x, this.y, this.r * Math.SQRT2);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
-      if (e.dead || Math.hypot(e.x - this.x, e.y - this.y) > this.r + e.r) continue;
+      if (e.dead) continue;
+      if (!reachesFeet(e, this.x, this.y, this.x, this.y, this.r) && !reachesBody(e, this.x, this.y, this.x, this.y, this.r * Math.SQRT2)) continue;
       const last = this.seen.get(e);
       if (last !== undefined && this.t - last < RUNE.again) continue;
       this.seen.set(e, this.t);
@@ -250,18 +254,18 @@ export class Sweep {
     const v = Math.min(1, this.t / this.dur);
     this.u = v * 0.4 + ease.inOutSine(v) * 0.6;
     const R = this.R, thr = this.threshold;
-    const cands = g.grid.query(p.x, p.y, R + 14);
+    const cands = g.grid.foes(p.x, p.y, R);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
       if (e.dead || this.struck.has(e)) continue;
       const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
-      if (d > R + e.r) continue;
+      if (d > R + e.hr) continue;
       // Where in its share of the circuit a blade meets it, with a little for its body.
       let f = (((Math.atan2(dy, dx) - this.a0) * this.dir) / TAU) * n;
       f -= Math.floor(f);
-      const pad = ((e.r / Math.max(d, e.r)) / TAU + SCYTHE.pad) * n;
+      const pad = ((e.hr / Math.max(d, e.hr)) / TAU + SCYTHE.pad) * n;
       if (f > 1 - pad) f -= 1;
-      if (!(f >= prev - pad && f <= this.u + pad) && d > e.r + 4) continue;
+      if (!(f >= prev - pad && f <= this.u + pad) && d > e.hr + 4) continue;
       this.struck.add(e);
       g.hitEnemy(e, s.dmg, { w, type: 'dark', kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
       if (!e.dead && mortal(e) && e.hp <= e.maxHp * thr) {
@@ -426,12 +430,12 @@ export class Star {
     if (!this.struck && this.t >= STAR.fall) {
       this.struck = true;
       const R = this.R;
-      const cands = g.grid.query(this.x, this.y, R + 14);
+      const cands = g.grid.foes(this.x, this.y, R);
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
         if (e.dead) continue;
         const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy);
-        if (d > R + e.r) continue;
+        if (d > R + e.hr) continue;
         g.hitEnemy(e, s.dmg, { w, type: 'holy', kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
       }
       g.particles.burst(this.x, this.y, this.big ? 10 : 6, 8, [PC.w, PC.G, PC.j], R * 4, 0.4, 1, P.GLOW | P.FADE, { flat: 0.6, vz: 50 });

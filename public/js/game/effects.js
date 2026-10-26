@@ -11,6 +11,7 @@ import { PC, P } from './particles.js';
 import { WEAPON_SPRITES, BRAND_TIME } from '../data/weapons.js';
 import { danceBlade, spawnProjectile } from './projectiles.js';
 import { fxBurst, poolFlames, flameSeed } from './fxart.js';
+import { reachesFeet, reachesBody, spriteRadius } from './hitbox.js';
 
 function blitCentered(ctx, img, sx, sy, scale) {
   const w = img.width * scale, h = img.height * scale;
@@ -60,11 +61,11 @@ export class Slash {
   // into the swing is struck too, each once.
   strike() {
     const g = this.g, p = g.player, w = this.w, R = this.R, cx = p.x, cy = p.y - 7;
-    const cands = g.grid.query(cx, cy, R + 24);
+    const cands = g.grid.foes(cx, cy, R);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
       if (e.dead || this.hit.has(e)) continue;
-      const body = Math.max(e.r, (e.h || 0) * 0.3);
+      const body = Math.max(e.hr, (e.h || 0) * 0.3);
       const dx = e.x - cx, dy = e.y - (e.h || 0) * 0.5 - cy;
       const d = Math.hypot(dx, dy);
       if (d > R + body + SLASH_HIT.reach) continue;
@@ -126,13 +127,13 @@ const EXPLO = {
 export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
   const st = EXPLO[style] || EXPLO.fire;
   if (dmg > 0) {
-    const cands = g.grid.query(x, y, R + 14);
+    const cands = g.grid.foes(x, y, R);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
       if (e.dead) continue;
       const dx = e.x - x, dy = e.y - y;
       const d = Math.hypot(dx, dy);
-      if (d > R + e.r) continue;
+      if (d > R + e.hr) continue;
       g.hitEnemy(e, dmg, { w, type: st.num, kb: opts.kb ?? 1.4, kx: dx / (d || 1), ky: dy / (d || 1), ult: opts.ult });
     }
   }
@@ -472,13 +473,13 @@ export class Pool {
     this.tickT -= dt;
     if (this.tickT <= 0) {
       this.tickT = this.tick;
-      const cands = g.grid.query(this.x, this.y, R + 12);
+      const cands = g.grid.foes(this.x, this.y, R);
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
         // By the game's clock, which runs on in a crypt where the night's stands still.
         if (e.dead || e.hitT[this.src] > g.clock) continue;
         const d = Math.hypot(e.x - this.x, e.y - this.y);
-        if (d > R + e.r) continue;
+        if (d > R + e.hr) continue;
         e.hitT[this.src] = g.clock + this.tick * 0.9;
         g.hitEnemy(e, this.dmg, { w: this.w, type: this.look.num, kb: this.kb, kx: 0, ky: 0, slow: this.slow, slowT: this.slowT, critDmg: this.critDmg });
         if (this.dot && this.look.dot) e.addDot(this.look.dot, this.dot, 1.5, this.w);
@@ -583,6 +584,9 @@ export class Pool {
 // The sparks of an enemy missile a guardian blade shatters (Orbit.update).
 const BLOCK_SPARKS = [PC.y, PC.w];
 
+// How far up off the ground the orbiting blades are drawn (Orbit.draw), and strike.
+const ORBIT_UP = 6;
+
 export class Orbit {
   constructor(g, w) {
     this.g = g;
@@ -608,15 +612,16 @@ export class Orbit {
     }
     this.ang += dt * 3.3 * s.speed;
     const R = 34 * s.area, br = 7 * s.area;
+    // Each blade strikes as drawn too (hitbox.js): ORBIT_UP px up, as wide as it is drawn turned.
+    const bw = Math.max(br, spriteRadius(SPR[s.block ? 'goldblade' : 'blade']) * Math.min(1.3, s.area));
     for (let i = 0; i < this.n; i++) {
       const a = this.ang + (i / this.n) * TAU;
       const bx = p.x + Math.cos(a) * R, by = p.y + Math.sin(a) * R * 0.85;
-      const cands = g.grid.query(bx, by, br + 12);
+      const cands = g.grid.foes(bx, by, bw + ORBIT_UP);
       for (let k = 0; k < cands.length; k++) {
         const e = cands[k];
         if (e.dead || e.hitT[this.w.src] > g.clock) continue;
-        const rr = br + e.r;
-        if ((e.x - bx) ** 2 + (e.y - by) ** 2 > rr * rr) continue;
+        if (!reachesFeet(e, bx, by, bx, by, br) && !reachesBody(e, bx, by - ORBIT_UP, bx, by - ORBIT_UP, bw)) continue;
         e.hitT[this.w.src] = g.clock + s.tick;
         g.hitEnemy(e, s.dmg, { w: this.w, kb: s.kb, kx: Math.cos(a), ky: Math.sin(a) });
       }
@@ -646,7 +651,7 @@ export class Orbit {
     for (let i = 0; i < this.n; i++) {
       for (let ghost = 2; ghost >= 0; ghost--) {
         const a = this.ang + (i / this.n) * TAU - ghost * 0.16;
-        const wx = p.x + Math.cos(a) * R, wy = p.y - 6 + Math.sin(a) * R * 0.85;
+        const wx = p.x + Math.cos(a) * R, wy = p.y - ORBIT_UP + Math.sin(a) * R * 0.85;
         ctx.globalAlpha = this.alpha * (ghost ? 0.22 : 1);
         blitCentered(ctx, spr.rotated(a + Math.PI / 2, 32), (wx - cam.x) * S, (wy - cam.y) * S, S * Math.min(1.3, s.area));
       }
@@ -661,7 +666,7 @@ export class Orbit {
     ctx.globalAlpha = 0.45 * this.alpha;
     for (let i = 0; i < this.n; i++) {
       const a = this.ang + (i / this.n) * TAU;
-      const wx = p.x + Math.cos(a) * R, wy = p.y - 6 + Math.sin(a) * R * 0.85;
+      const wx = p.x + Math.cos(a) * R, wy = p.y - ORBIT_UP + Math.sin(a) * R * 0.85;
       const sx = (wx - cam.x) * cam.S, sy = (wy - cam.y) * cam.S;
       const sz = 22 * cam.S;
       ctx.drawImage(glow(col), sx - sz / 2, sy - sz / 2, sz, sz);
@@ -727,14 +732,14 @@ export class Aura {
     if (this.tickT <= 0) {
       this.tickT = s.tick;
       this.pulse = 1;
-      const cands = g.grid.query(p.x, p.y, R + 12);
+      const cands = g.grid.foes(p.x, p.y, R);
       let hits = 0;
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
         if (e.dead) continue;
         const dx = e.x - p.x, dy = e.y - p.y;
         const d = Math.hypot(dx, dy);
-        if (d > R + e.r) continue;
+        if (d > R + e.hr) continue;
         g.hitEnemy(e, s.dmg, { w: this.w, type: L.num, kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
         if (s.slow) {
           e.slowT = Math.max(e.slowT, 0.6);
@@ -1021,11 +1026,11 @@ export class Thorns {
       if (s.up || this.t < s.at) continue;
       s.up = true;
       const R = 8 * w.s.area;
-      const cands = g.grid.query(s.x, s.y, R + 16);
+      const cands = g.grid.foes(s.x, s.y, R);
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
         if (e.dead || this.hit.has(e.id)) continue;
-        if (Math.hypot(e.x - s.x, e.y - s.y) > R + e.r) continue;
+        if (Math.hypot(e.x - s.x, e.y - s.y) > R + e.hr) continue;
         this.hit.add(e.id);
         g.hitEnemy(e, w.s.dmg, { w, kb: w.s.kb, kx: this.kx, ky: this.ky, slow: w.s.slow, slowT: this.iron ? 2.4 : 1.6 });
       }
@@ -1201,12 +1206,12 @@ export class Whirl {
     const R = 46 * p.area;
     if (this.tickT <= 0) {
       this.tickT = 0.12;
-      const cands = g.grid.query(p.x, p.y, R + 12);
+      const cands = g.grid.foes(p.x, p.y, R);
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
         if (e.dead) continue;
         const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
-        if (d > R + e.r) continue;
+        if (d > R + e.hr) continue;
         g.hitEnemy(e, 22, { type: 'normal', kb: 1.6, kx: dx / (d || 1), ky: dy / (d || 1), ult: true });
       }
       sfx('slash', { pitch: rand(1.1, 1.4) });
@@ -1279,9 +1284,9 @@ export class ArrowRain {
       d.t += dt;
       if (d.t >= 0.22) {
         this.drops.splice(i, 1);
-        const cands = g.grid.query(d.x, d.y, 18);
+        const cands = g.grid.foes(d.x, d.y, 9);
         for (const e of cands) {
-          if (e.dead || Math.hypot(e.x - d.x, e.y - d.y) > 9 + e.r) continue;
+          if (e.dead || Math.hypot(e.x - d.x, e.y - d.y) > 9 + e.hr) continue;
           g.hitEnemy(e, 26, { type: 'normal', kb: 0.6, kx: 0, ky: 1, crit: 0.15, ult: true });
         }
         g.particles.burst(d.x, d.y, 1, 4, ARROW_SPLINTERS, 40, 0.3, 1, P.FADE | P.GROUND, ARROW_FALL);
@@ -1383,13 +1388,13 @@ export class Pillar {
       if (this.t < 0) return true;
       this.struck = true;
       const R = this.R;
-      const cands = g.grid.query(this.x, this.y, R + 14);
+      const cands = g.grid.foes(this.x, this.y, R);
       for (let i = 0; i < cands.length; i++) {
         const f = cands[i];
         if (f.dead) continue;
         const dx = f.x - this.x, dy = f.y - this.y, d = Math.hypot(dx, dy);
         const main = on && f === e;
-        if (!main && d > R + f.r) continue;
+        if (!main && d > R + f.hr) continue;
         g.hitEnemy(f, main ? s.dmg : s.dmg * SMITE.splash, { w, type: 'holy', kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
         brandFoe(f, s.brand);
       }
@@ -1499,11 +1504,11 @@ export class Grip {
     this.R = GRIP.R * s.area;
     this.dur = s.hold * g.player.duration;
     this.sc = clamp(s.area * 0.85, 1, 1.4);
-    const cands = g.grid.query(x, y, this.R + 14);
+    const cands = g.grid.foes(x, y, this.R);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
       if (e.dead) continue;
-      if (Math.hypot(e.x - x, e.y - y) > this.R + e.r) continue;
+      if (Math.hypot(e.x - x, e.y - y) > this.R + e.hr) continue;
       g.hitEnemy(e, s.dmg, { w, type: 'normal', kb: 0 });
       rootFoe(e, this.dur);
     }
@@ -1557,12 +1562,12 @@ export class Chop {
     this.t = 0;
     this.dur = 0.2;
     this.ai = Math.floor(rand(32));
-    const cands = g.grid.query(this.x, this.y, R + 14);
+    const cands = g.grid.foes(this.x, this.y, R);
     for (let i = 0; i < cands.length; i++) {
       const e = cands[i];
       if (e.dead) continue;
       const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy);
-      if (d > R + e.r) continue;
+      if (d > R + e.hr) continue;
       g.hitEnemy(e, dmg, { w, type: 'normal', kb: o.kb ?? (w ? w.s.kb : 1), kx: dx / (d || 1), ky: dy / (d || 1), ult: o.ult });
     }
     g.particles.burst(this.x, this.y, 5, 6, [PC.r, PC.R, PC.G], R * 3, 0.3, 1, P.FADE, { flat: 0.9, vz: 30 });
@@ -1608,10 +1613,10 @@ export class Sanctum {
     this.healT -= dt;
     if (this.tickT <= 0 && this.t < this.dur) {
       this.tickT = SANCTUM.tick;
-      const cands = g.grid.query(p.x, p.y, R + 12);
+      const cands = g.grid.foes(p.x, p.y, R);
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
-        if (e.dead || Math.hypot(e.x - p.x, e.y - p.y) > R + e.r) continue;
+        if (e.dead || Math.hypot(e.x - p.x, e.y - p.y) > R + e.hr) continue;
         stunFoe(e, SANCTUM.tick + 0.1);
         g.hitEnemy(e, SANCTUM.dmg, { type: 'holy', kb: 0, ult: true });
       }
@@ -1925,10 +1930,10 @@ export class Mushroom {
 // confused for its `dur` (Enemy.confuse), hurting the monsters they touch a third as much.
 export function sporePuff(g, w, x, y) {
   const R = MUSHROOM.puffR * w.s.area;
-  for (const e of g.grid.query(x, y, R + 14)) {
+  for (const e of g.grid.foes(x, y, R)) {
     if (e.dead || e.prop) continue;
     const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy);
-    if (d > R + e.r) continue;
+    if (d > R + e.hr) continue;
     g.hitEnemy(e, w.s.dmg, { w, type: 'poison', kb: 0.3, kx: dx / (d || 1), ky: dy / (d || 1), noCrit: true });
     if (!e.dead) e.confuse(w.s.dur, w.s.dmg * 0.35, w);
   }

@@ -1,6 +1,8 @@
 // Uniform spatial grid (linked lists in typed arrays) centred on the player.
 // Rebuilt every frame; anything outside the window is clamped to the border.
 
+import { FOE_REACH } from './hitbox.js';
+
 export class SpatialGrid {
   constructor(cell = 24, cols = 72, rows = 72) {
     this.cell = cell;
@@ -9,6 +11,7 @@ export class SpatialGrid {
     this.head = new Int32Array(cols * rows).fill(-1); // empty until the first rebuild
     this.next = new Int32Array(2048);
     this.items = [];
+    this.big = []; // foes drawn farther than FOE_REACH from their feet (foes)
     this.ox = 0;
     this.oy = 0;
   }
@@ -17,6 +20,7 @@ export class SpatialGrid {
     this.items = list;
     if (this.next.length < list.length) this.next = new Int32Array(list.length * 2);
     this.head.fill(-1);
+    this.big.length = 0;
     this.ox = Math.floor(cx / this.cell) - (this.cols >> 1);
     this.oy = Math.floor(cy / this.cell) - (this.rows >> 1);
     for (let i = 0; i < list.length; i++) {
@@ -25,6 +29,7 @@ export class SpatialGrid {
       e._cell = c;
       this.next[i] = this.head[c];
       this.head[c] = i;
+      if (e.reach > FOE_REACH) this.big.push(e);
     }
   }
 
@@ -55,6 +60,17 @@ export class SpatialGrid {
         for (let i = head[gy * this.cols + gx]; i !== -1; i = next[i]) out.push(items[i]);
       }
     }
+    return out;
+  }
+
+  // The foes a blow reaching R from (x, y) may strike anywhere on their bodies as drawn
+  // (hitbox.js): those standing within R + FOE_REACH, and every one drawn larger than that.
+  foes(x, y, R, out = []) {
+    this.query(x, y, R + FOE_REACH, out);
+    let n = 0;
+    for (let i = 0; i < out.length; i++) if (!(out[i].reach > FOE_REACH)) out[n++] = out[i];
+    out.length = n;
+    for (let i = 0; i < this.big.length; i++) out.push(this.big[i]);
     return out;
   }
 }

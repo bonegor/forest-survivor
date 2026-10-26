@@ -22,9 +22,9 @@ let blastId = 0;
 export function gustFoes(g, w) {
   const p = g.player, s = w.s, R = GALE_R * s.area, full = s.arc >= Math.PI;
   const out = [];
-  for (const e of g.grid.query(p.x, p.y, R + 14)) {
+  for (const e of g.grid.foes(p.x, p.y, R)) {
     if (e.dead || e.prop || e.spawnT > 0.3) continue;
-    if (Math.hypot(e.x - p.x, e.y - p.y) > R + e.r) continue;
+    if (Math.hypot(e.x - p.x, e.y - p.y) > R + e.hr) continue;
     if (!full && Math.abs(angleDiff(p.aim, Math.atan2(e.y - p.y, e.x - p.x))) > s.arc) continue;
     out.push(e);
   }
@@ -94,10 +94,10 @@ export class Hook {
     const g = this.g, w = this.w, s = w.s;
     const ax = p.x, ay = p.y, bx = this.x, by = this.y, dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
     const width = HOOK_W * Math.sqrt(s.area);
-    for (const e of g.grid.query((ax + bx) / 2, (ay + by) / 2, Math.sqrt(L2) / 2 + 16)) {
+    for (const e of g.grid.foes((ax + bx) / 2, (ay + by) / 2, Math.sqrt(L2) / 2 + width)) {
       if (e.dead) continue;
       const u = clamp(((e.x - ax) * dx + (e.y - ay) * dy) / L2, 0, 1);
-      if (Math.hypot(e.x - (ax + dx * u), e.y - (ay + dy * u)) > e.r + width) continue;
+      if (Math.hypot(e.x - (ax + dx * u), e.y - (ay + dy * u)) > e.hr + width) continue;
       g.hitEnemy(e, s.dmg, { w, type: 'normal', kb: 0 });
       if (e.dead) continue;
       // Bleeding already from another hook: the cut goes twice as deep.
@@ -227,7 +227,7 @@ export const BELL_R = 62;
 // The foes within the toll of weapon w.
 export function tollFoes(g, w) {
   const p = g.player, R = BELL_R * w.s.area;
-  return g.grid.query(p.x, p.y, R + 14).filter((e) => !e.dead && !e.prop && e.spawnT <= 0.3 && Math.hypot(e.x - p.x, e.y - p.y) <= R + e.r);
+  return g.grid.foes(p.x, p.y, R).filter((e) => !e.dead && !e.prop && e.spawnT <= 0.3 && Math.hypot(e.x - p.x, e.y - p.y) <= R + e.hr);
 }
 
 // A toll round the hero: every foe within it takes the light damage, and the horde alone is

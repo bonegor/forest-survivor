@@ -5,8 +5,9 @@ import { rand, TAU, lerp } from '../engine/util.js';
 import { shadowSprite, glow, crescentSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { explode } from './effects.js';
-import { fireballFrame } from './fxart.js';
+import { fireballFrame, fxFrames } from './fxart.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
+import { reachesFeet, reachesBody, spriteRadius } from './hitbox.js';
 
 const pool = [];
 
@@ -49,6 +50,11 @@ export function releaseProjectile(p) {
 const HIT_SPARKS = [PC.w, PC.G];
 const WISP_SPARKS = new Map();
 const wispSparks = (trail) => WISP_SPARKS.get(trail) || WISP_SPARKS.set(trail, [PC.w, trail]).get(trail);
+
+// Missiles drawn turning, or round, whatever way they fly (draw): struck with as a disc as wide as
+// they are drawn at any turn. Any other with a sprite points the way it flies, a bar as long and
+// as thick as it is drawn (Projectile.shape).
+const ROUND = new Set(['axe', 'spiral', 'glaive', 'flask', 'wisp']);
 
 const GLOWS = {
   fireball: ['#f77622', 30, 'fire', 46],
@@ -117,10 +123,29 @@ export class Projectile {
     this.glowSpec = o.glow || null;
     this.target = null;
     this.retarget = 0;
+    this.shape();
+  }
+
+  // Its shape as drawn (hitbox.js): hl either side of its centre along its flight and hw to
+  // either side of that, never less than its r on the ground. A crescent (wave) is drawn r wide.
+  shape() {
+    this.hl = 0;
+    this.hw = this.r;
+    if (this.kind === 'fireball') this.hw = Math.max(this.r, spriteRadius({ frames: fxFrames('fx_fireball') }));
+    else if (!this.sprite || this.kind === 'wave') return;
+    else if (ROUND.has(this.kind) || this.spin) this.hw = Math.max(this.r, spriteRadius(this.sprite) * this.scale);
+    else {
+      const b = this.sprite.frames[0].box;
+      this.hl = ((b[2] - b[0]) / 2) * this.scale;
+      this.hw = Math.max(this.r, ((b[3] - b[1]) / 2) * this.scale);
+    }
   }
 
   update(dt) {
     const g = this.g;
+    // Where it was (the hits sweep from there: hitbox.js), and whether it has flown into a wall.
+    const ox = this.x, oy = this.y, oz = this.z;
+    let wall = false;
     this.t += dt;
     this.life -= dt;
     switch (this.kind) {
@@ -206,10 +231,8 @@ export class Projectile {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         this.rot += this.spin * dt;
-        if (g.world.solid(this.x, this.y)) {
-          this.impact();
-          return false;
-        }
+        // Into a wall: it still strikes what it passed on the way (below), then breaks.
+        wall = g.world.solid(this.x, this.y);
     }
 
     // Trails.
@@ -230,15 +253,18 @@ export class Projectile {
       } else this.trailT = 1;
     }
 
-    // Collision with enemies.
+    // Collision with enemies (hitbox.js): every foe whose feet it passed over on its way here
+    // from (ox, oy), or whose body as drawn its own shape as drawn (z up) crossed on the way.
     if (this.dmg > 0) {
-      const cands = g.grid.query(this.x, this.y, this.r + 16);
+      const ux = Math.cos(this.ang) * this.hl, uy = Math.sin(this.ang) * this.hl;
+      const ax = ox - ux, ay = oy - oz - uy, bx = this.x + ux, by = this.y - this.z + uy;
+      const far = Math.hypot(this.x - ox, this.y - oy) / 2 + this.hl + this.hw + Math.max(this.z, oz);
+      const mx = (ox + this.x) / 2, my = (oy + this.y) / 2;
+      const cands = g.grid.foes(mx, my, far);
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
-        if (e.dead) continue;
-        const rr = this.r + e.r;
-        const dx = e.x - this.x, dy = e.y - this.y;
-        if (dx * dx + dy * dy > rr * rr) continue;
+        if (e.dead || (e.x - mx) ** 2 + (e.y - my) ** 2 > (far + e.reach) ** 2) continue;
+        if (!reachesFeet(e, ox, oy, this.x, this.y, this.r) && !reachesBody(e, ax, ay, bx, by, this.hw)) continue;
         if (this.hitCd) {
           // By the game's clock, which runs on in a crypt where the night's stands still.
           if (e.hitT[this.w.src] > g.clock) continue;
@@ -266,6 +292,10 @@ export class Projectile {
       }
     }
 
+    if (wall) {
+      this.impact();
+      return false;
+    }
     if (this.life <= 0) {
       if (this.kind === 'fireball') this.impact();
       return false;

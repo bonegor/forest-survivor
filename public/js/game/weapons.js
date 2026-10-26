@@ -10,6 +10,7 @@ import { KINDS_LIGHT } from './weapons-light.js';
 import { fxBurst } from './fxart.js';
 import { gust, gustFoes, GALE_R, Hook, Hollow, thickest, toll, tollFoes, BELL_R } from './crowdfx.js';
 import { PC, P } from './particles.js';
+import { reachesBody } from './hitbox.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
 const STAT_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
@@ -191,7 +192,9 @@ const panOf = (g, x) => Math.max(-1, Math.min(1, (x - g.player.x) / 200));
 const fan = (i, step) => Math.ceil(i / 2) * (i % 2 ? 1 : -1) * step;
 
 // An instant ray from (x, y) along ang, up to L px or the first wall: strikes every foe whose
-// body it crosses (but those in skip), drawn as a bright beam. Returns them, nearest first.
+// feet or body as drawn (hitbox.js) it crosses (but those in skip), drawn as a bright beam RAY_UP
+// px up. Returns them, nearest first.
+const RAY_UP = 6;
 function ray(g, w, x, y, ang, L, dmg, skip = null) {
   const dx = Math.cos(ang), dy = Math.sin(ang);
   let len = L;
@@ -202,16 +205,16 @@ function ray(g, w, x, y, ang, L, dmg, skip = null) {
     }
   }
   const width = 5 * Math.sqrt(w.s.area), hits = [];
-  for (const e of g.grid.query(x + (dx * len) / 2, y + (dy * len) / 2, len / 2 + 16)) {
+  for (const e of g.grid.foes(x + (dx * len) / 2, y + (dy * len) / 2, len / 2 + width + RAY_UP)) {
     if (e.dead || (skip && skip.has(e))) continue;
     const u = (e.x - x) * dx + (e.y - y) * dy;
-    if (u < -e.r || u > len + e.r) continue;
-    if (Math.abs((e.y - y) * dx - (e.x - x) * dy) > e.r + width) continue;
+    const feet = u >= -e.hr && u <= len + e.hr && Math.abs((e.y - y) * dx - (e.x - x) * dy) <= e.hr + width;
+    if (!feet && !reachesBody(e, x, y - RAY_UP, x + dx * len, y + dy * len - RAY_UP, width)) continue;
     hits.push([u, e]);
   }
   hits.sort((a, b) => a[0] - b[0]);
   for (const [, e] of hits) g.hitEnemy(e, dmg, { w, type: 'dark', kb: w.s.kb, kx: dx, ky: dy });
-  g.effects.push(new Bolt(g, [{ x, y: y - 6 }, { x: x + dx * len, y: y + dy * len - 6 }], 'ray', '#b55088'));
+  g.effects.push(new Bolt(g, [{ x, y: y - RAY_UP }, { x: x + dx * len, y: y + dy * len - RAY_UP }], 'ray', '#b55088'));
   return hits.map((h) => h[1]);
 }
 
@@ -489,8 +492,8 @@ export const KINDS = {
       g.hitEnemy(e, w.s.dmg, { w, type: 'shock', kb: w.s.kb, kx: rand(-1, 1), ky: rand(-1, 1) });
       stunFoe(e, w.s.stun);
       explode(g, e.x, e.y, 26 * w.s.area, w.s.dmg * 0.5, w, 'shock', { kb: w.s.kb });
-      for (const f of g.grid.query(e.x, e.y, 26 * w.s.area + 14)) {
-        if (f !== e && Math.hypot(f.x - e.x, f.y - e.y) <= 26 * w.s.area + f.r) stunFoe(f, w.s.stun * 0.6);
+      for (const f of g.grid.foes(e.x, e.y, 26 * w.s.area)) {
+        if (f !== e && Math.hypot(f.x - e.x, f.y - e.y) <= 26 * w.s.area + f.hr) stunFoe(f, w.s.stun * 0.6);
       }
       g.particles.burst(e.x, e.y, 8, 10, [PC.c, PC.w, PC.U], 90, 0.35, 1, P.GLOW | P.FADE, { vz: 50 });
       g.light(e.x, e.y, 90, 'white', 0.9);
