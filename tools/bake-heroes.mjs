@@ -45,6 +45,24 @@ const BAKE = {
   archer_d: 'archer/knightstyle-c',
   archer_e: 'archer/knightstyle-d',
   archer_f: 'archer/knightstyle-e',
+  // Round 3 (26 October 2026): two reworks of C, the user's favourite (its F and G), and two looks for
+  // every other hero in the plumed Knight's style, each drawn by its own artist with claude-pxl.
+  archer_g: 'archer/knightstyle-f',
+  archer_h: 'archer/knightstyle-g',
+  mage_b: 'mage/knightstyle-a',
+  mage_c: 'mage/knightstyle-b',
+  rogue_b: 'rogue/knightstyle-a',
+  rogue_c: 'rogue/knightstyle-b',
+  necromancer_b: 'necromancer/knightstyle-a',
+  necromancer_c: 'necromancer/knightstyle-b',
+  paladin_b: 'paladin/knightstyle-a',
+  paladin_c: 'paladin/knightstyle-b',
+  druid_b: 'druid/knightstyle-a',
+  druid_c: 'druid/knightstyle-b',
+  berserker_b: 'berserker/knightstyle-a',
+  berserker_c: 'berserker/knightstyle-b',
+  witchhunter_b: 'witchhunter/knightstyle-a',
+  witchhunter_c: 'witchhunter/knightstyle-b',
 };
 const OURS = new Set(['made for Forest Survivor', "the game's own"]);
 

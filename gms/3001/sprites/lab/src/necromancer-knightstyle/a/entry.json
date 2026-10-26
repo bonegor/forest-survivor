@@ -1,0 +1,71 @@
+{
+ "cls": "necromancer",
+ "kind": "proposal",
+ "id": "knightstyle-a",
+ "name": "Necromancer · Knight style A (Classic)",
+ "description": "A faithful redraw of Morvath in the plumed Knight’s style: a skull in 3/4 under a three-pointed gold crown with a green soul gem, both sockets lit by green soulfire, a navy capelet trimmed in gold with a clasp at the throat, a purple-navy robe with a gold-edged front and a ragged hem, bone feet stepping under it, and a long tattered mantle that ripples in his breathing idle and streams back on the walk. He carries a crooked dark staff whose hook cradles a flickering soulfire. As on the Knight there is no black outline (every edge a dark tone of its own material) and the ramps are hue-shifted (blue-black shadows, pink-violet lights). His cast: soulfire kindles and is drawn in, he raises the staff as it gathers into an orb, it bursts on the fourth frame into a big green flare (a white-hot core, rays and a ring) while the dead’s fire bursts from the ground ahead of him, then the ring flies apart into sparks, the wisps rise and he lowers the staff. The eyes, the crown gem, the staff’s soulfire and the cast glow.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/necromancer-knightstyle/a/necromancer-a.px.js",
+ "made": "2026-10-26T21:00:58.112Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/necromancer-knightstyle-a.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#46b947",
+  "#86e65a",
+  "#c4ff92",
+  "#f0ffe2"
+ ]
+}

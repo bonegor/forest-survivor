@@ -1,0 +1,72 @@
+{
+ "cls": "druid",
+ "kind": "proposal",
+ "id": "knightstyle-b",
+ "name": "Druid · Knight style B (Forest spirit)",
+ "description": "A freer, feral Bramwyn in the plumed Knight’s style: a lean druid wrapped in a moss-green cloak of leaves whose rim is cut into leaf points and whose cloth is laid in leaf scales; it ripples in his breathing idle, streams back on his prowling walk and tears off leaves that drift away, as the Knight’s cape and plume flow. He wears a deer skull over brow and nose, branching bone antlers rising from it and a gold eye glinting in its socket, an ash beard below, a hood of leaves behind, bark-wrapped legs. His gnarled living-wood staff cradles a glowing gold seed in a claw of twigs, the one warm accent. No black outline (every edge a dark tone of its own material) and hue-shifted ramps (teal shadows, yellow-green lights; violet-grey to cream bone). His strike: he sinks and grips the staff in both hands, heaves it up with the seed blazing, drives it down in streaks of light, and slams its foot into the ground ahead: a dome of green-gold light, a ring along the ground and rays burst up, then curling roots shoot up with leaf tips and sink back as motes drift. The seed, the eye and the strike’s light glow.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/druid-knightstyle/b/druid-b.px.js",
+ "made": "2026-10-26T20:57:03.941Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/druid-knightstyle-b.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#ffc93c",
+  "#fff19a",
+  "#ffffff",
+  "#e2f77a",
+  "#a8e05c"
+ ]
+}

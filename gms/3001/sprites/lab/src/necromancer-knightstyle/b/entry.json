@@ -1,0 +1,71 @@
+{
+ "cls": "necromancer",
+ "kind": "proposal",
+ "id": "knightstyle-b",
+ "name": "Necromancer · Knight style B (Grave lord)",
+ "description": "Morvath as a gaunt grave lord in the plumed Knight’s style: a deep black-violet hood ringed by a crown of bone tines with a green soul-gem, the skull face inside lit from below by the soul-gem clasp at his throat (two green eyes, cheekbones, teeth), leaning forward over his staff. A bone-spined mantle and a long tattered cloak torn into strips stream behind him and ripple in his breathing idle, trail level on the gliding walk and are flung back by the cast. His staff is black wood bound with bone, a small skull at its head with soulfire on it and a scythe blade curving forward. He draws the staff back as green sparks gather, thrusts it up and forward as the soulfire swells, bursts into a great green flare (frame 19) while soulfire and a bony hand break from the ground ahead, then the flare fades to sparks and the staff comes down. No black outline: every edge a dark tone of its own material, hue-shifted ramps. The soulfire greens glow at night.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/necromancer-knightstyle/b/necro-b.px.js",
+ "made": "2026-10-26T20:58:25.621Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/necromancer-knightstyle-b.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#35a83a",
+  "#6bd94a",
+  "#adff7a",
+  "#ecffd2"
+ ]
+}

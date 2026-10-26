@@ -1,0 +1,151 @@
+{
+ "cls": "archer",
+ "kind": "proposal",
+ "id": "knightstyle-f",
+ "name": "Ranger · Knight style F (C refined)",
+ "description": "Style C (hooded Lyra) refined to sit closer to the plumed Knight. Same design: the deep-green hood with its long flowing tail, the mantle and gold clasp, the slim build, the cape, silver fringe and a readable 3/4 face. Rendered the Knight’s way: long hue-shifted ramps (cloak from indigo-black through blue-teal to a warm yellow-green sheen, a lighter leaf-green tunic, leather from violet-brown to ochre), every silhouette pixel in its material’s darkest shade with no black line, 1 px detail on the bow (lit belly, wrapped grip, gold bands and nock caps), the leaf-shaped clasp, the fletched arrow with its steel head, and the face (navy lid, white, teal iris, a nose a pixel proud). She leans a pixel forward; folds ripple down the cape, its inner lobe falls over the far leg, and the hood tail sways a beat behind, so the outline changes frame to frame. The loose throws a long white crescent of light (24 px, 6-7 px deep at its belly, fading to lilac) out of the frame with the string’s snap, as big as the Knight’s sword swoosh. The moonstone in the grip and the arrowhead glow.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 88,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/ranger-knightstyle/f/ranger-f.px.js",
+ "made": "2026-10-26T20:58:43.784Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23
+ ],
+ "attackFps": 14,
+ "attackRelease": 5,
+ "attackWalk": [
+  [
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30,
+   31
+  ],
+  [
+   32,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39
+  ],
+  [
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47
+  ],
+  [
+   48,
+   49,
+   50,
+   51,
+   52,
+   53,
+   54,
+   55
+  ],
+  [
+   56,
+   57,
+   58,
+   59,
+   60,
+   61,
+   62,
+   63
+  ],
+  [
+   64,
+   65,
+   66,
+   67,
+   68,
+   69,
+   70,
+   71
+  ],
+  [
+   72,
+   73,
+   74,
+   75,
+   76,
+   77,
+   78,
+   79
+  ],
+  [
+   80,
+   81,
+   82,
+   83,
+   84,
+   85,
+   86,
+   87
+  ]
+ ],
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/archer-knightstyle-f.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#b6ffdc"
+ ]
+}

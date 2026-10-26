@@ -1,0 +1,72 @@
+{
+ "cls": "druid",
+ "kind": "proposal",
+ "id": "knightstyle-a",
+ "name": "Druid · Knight style A (Classic)",
+ "description": "Bramwyn redrawn in the plumed Knight's style: a bearded forest druid in a deep brown hood with pale antlers rising from a small wreath of rust and green leaves, a white-grey beard falling over brown robes, a rust collar and a long rust mantle flowing behind him, a green leaf skirt over linen-wrapped legs, and a gnarled staff whose claw holds a glowing golden seed. No black outline: every edge is a dark tone of its own material, with hue-shifted ramps (purple-brown shadows, warm ochre lights). He breathes in his idle while the mantle and the leaf hem ripple and the staff rocks; on the walk the staff is planted, then swung forward, and the mantle streams back. His attack lifts the staff, raises it high behind the antlers with the seed blazing, drives it down in a golden arc, and strikes the ground: a dome of green-gold light and rays bursts up and roots break from the earth, grow, and sink back as the light breaks into sparks. The seed's light, the arc and the burst glow at night.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/druid-knightstyle/a/druid-a.px.js",
+ "made": "2026-10-26T20:59:40.266Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/druid-knightstyle-a.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#f0bb36",
+  "#ffe27a",
+  "#fff8d6",
+  "#9ee05a",
+  "#d6ff8a"
+ ]
+}

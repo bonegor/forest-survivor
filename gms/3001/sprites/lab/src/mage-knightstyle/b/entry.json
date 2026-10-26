@@ -1,0 +1,72 @@
+{
+ "cls": "mage",
+ "kind": "proposal",
+ "id": "knightstyle-b",
+ "name": "Sorcerer · Knight style B (Battle mage)",
+ "description": "Eldrin redrawn as a leaner battle-sorcerer in the plumed Knight’s spirit: an old wizard with a white beard and brows, in a deep-indigo battle coat with a long back tail, a wide rakish brim on a swept-back pointed hat with a brass band, and a crimson scarf whose two long ends stream behind him the way the Knight’s plume and cape do. He leans into his stance with his casting hand held out, a flame licking on the palm; his staff, crowned with a clawed fire orb, rests slanted over his shoulder from the near hand at his hip. Fire is the one strong accent, one ramp from the scarf’s near-black red to the flame’s white core. His idle breathes (the scarf ripples, the coat tail lifts, the hat tip and beard lag a beat); on the walk the scarf and coat stream back and the flame leans away. The cast: he draws the flame in, raises it into a fireball over the brim while leaning back, then lunges and hurls it forward at the head of a blazing arc (frame 19), the ball flying on as a comet while the arc breaks into embers, and the flame rekindles in his palm. No black outline: every edge is a dark tone of its own material. The flames, the fireball, the arc and the orb glow.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/mage-knightstyle/b/mage-b.px.js",
+ "made": "2026-10-26T20:59:22.834Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/mage-knightstyle-b.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#e5561b",
+  "#f88323",
+  "#ffb03c",
+  "#ffdc72",
+  "#fff7d2"
+ ]
+}

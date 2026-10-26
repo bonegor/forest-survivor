@@ -1,0 +1,68 @@
+{
+ "cls": "witchhunter",
+ "kind": "proposal",
+ "id": "knightstyle-b",
+ "name": "Witch Hunter · Knight style B (Inquisitor)",
+ "description": "Mercy Crane as a grim inquisitor in the plumed Knight’s style: a tall-crowned slate hat with a crimson band and a silver buckle, its brim dipping over her eyes, a dark slate long coat whose split tails stream behind her like the Knight’s cape, and a crimson scarf whose long ends fly back from the nape like his plume (crimson is the one strong accent). Brown hair tied back, a small grim face in profile, a leather baldric with silver buckles, tall black boots. She carries a heavy ornate silver crossbow at the hip (a three-pixel recurved silver prod, a silver-railed walnut stock with inlay and a crimson stone). As on the Knight there is no black outline (every edge a dark tone of its own material) and the ramps are hue-shifted. Her idle breathes while the scarf and coat tails ripple; on the walk they stream back. Attack: she swings the crossbow up, shoulders it and leans in, the bolt head glints, then the bolt leaves on attack index 3 as a bright silver streak with a white flash off the snapping prod while the recoil kicks the nose up and the scarf is flung back; the streak breaks up and she lowers the crossbow to span it again. The silver bolt head glows at night.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/witchhunter-knightstyle/b/witchhunter-b.px.js",
+ "made": "2026-10-26T21:06:50.223Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/witchhunter-knightstyle-b.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#dff6ff"
+ ]
+}

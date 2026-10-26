@@ -26,7 +26,7 @@ test('heroLook swaps the sprite and pose for a chosen look, and leaves the hero 
   assert.equal(heroLook('knight', {}), HEROES.knight);
   assert.equal(heroLook('knight', { knight: 'a' }), HEROES.knight);
   assert.equal(heroLook('knight', { knight: 'nope' }), HEROES.knight);
-  assert.equal(heroLook('mage', { mage: 'b' }), HEROES.mage, 'a hero with no looks');
+  assert.equal(heroLook('mage', { mage: 'nope' }), HEROES.mage, 'a look he does not have');
   const b = heroLook('knight', { knight: 'b' });
   assert.equal(b.sprite, 'knight_b');
   assert.equal(b.pose, 'knight_b_pose');

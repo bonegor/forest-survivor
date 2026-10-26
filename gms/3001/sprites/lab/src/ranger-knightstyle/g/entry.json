@@ -1,0 +1,151 @@
+{
+ "cls": "archer",
+ "kind": "proposal",
+ "id": "knightstyle-g",
+ "name": "Ranger · Knight style G (C with an accent)",
+ "description": "Style C given the plumed Knight’s colour logic: one main material (the forest-green hood, mantle and cape, now with near-black teal shadows and a bright moss light for higher contrast on dark grass) and ONE strong saturated accent, a crimson scarf in a deep wine-to-hot-red ramp. It is wound at her throat under the chin, pinned with a gold clasp, and its two long ends stream back over the cape the way his plume and cape do: rippling in the breathing idle, streaming level on the walk and flung back by the loose. The same crimson lines the hood’s brim beside her face, fletches the arrow and wraps the bow grip. She leans a pixel forward with a wider stance, for his dynamic posture. Everything C is liked for stays: the hood with its flowing pointed tail, the readable face under silver strands, the slim build, the cape and the big white release. No black outline (each edge a dark shade of its own material), hue-shifted ramps. The moonstone in the grip and the arrowhead glow.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 88,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/ranger-knightstyle/g/ranger-g.px.js",
+ "made": "2026-10-26T20:52:28.957Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23
+ ],
+ "attackFps": 14,
+ "attackRelease": 5,
+ "attackWalk": [
+  [
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30,
+   31
+  ],
+  [
+   32,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39
+  ],
+  [
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47
+  ],
+  [
+   48,
+   49,
+   50,
+   51,
+   52,
+   53,
+   54,
+   55
+  ],
+  [
+   56,
+   57,
+   58,
+   59,
+   60,
+   61,
+   62,
+   63
+  ],
+  [
+   64,
+   65,
+   66,
+   67,
+   68,
+   69,
+   70,
+   71
+  ],
+  [
+   72,
+   73,
+   74,
+   75,
+   76,
+   77,
+   78,
+   79
+  ],
+  [
+   80,
+   81,
+   82,
+   83,
+   84,
+   85,
+   86,
+   87
+  ]
+ ],
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/archer-knightstyle-g.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#b6ffdc"
+ ]
+}

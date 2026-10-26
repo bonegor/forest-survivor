@@ -1,0 +1,69 @@
+{
+ "cls": "rogue",
+ "kind": "proposal",
+ "id": "knightstyle-b",
+ "name": "Shadow · Knight style B (Wraith)",
+ "description": "Kael as a wraith in the plumed Knight’s style: a slim assassin in a deep violet cowl and a long cloak whose hem tears into tongues that thin, dissolve and shed drifting flecks, with a scarf wound to the chin whose two tails stream back from his nape like the Knight’s plume, rippling and fraying at their ends. In the hood’s shadow a pale bone mask with one glowing moon-lilac eye. He walks on slim slate legs (no floating), a dagger forward in his near hand, another held low behind. As on the Knight there is no black outline (every edge a dark tone of its own material) and the ramps are hue-shifted: indigo shadows, magenta-pink lights on the violet. The attack is a double throw: a crouch with the blades crossed, both arms cocked back over the shoulder, a pale-violet crescent swoosh over his head as they whip forward, then (frame 19) two daggers fly out with long glowing streaks, he spins back inside a ring of light and draws new blades. The eye, the blade edges and points and the streaks glow at night.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/rogue-knightstyle/b/rogue-b.px.js",
+ "made": "2026-10-26T20:57:02.000Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/rogue-knightstyle-b.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#a9b2ff",
+  "#e6f0ff"
+ ]
+}

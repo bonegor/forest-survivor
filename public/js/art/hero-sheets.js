@@ -20,6 +20,22 @@ import ARCHER_C from '../../assets/heroes/archer_c.js';
 import ARCHER_D from '../../assets/heroes/archer_d.js';
 import ARCHER_E from '../../assets/heroes/archer_e.js';
 import ARCHER_F from '../../assets/heroes/archer_f.js';
+import ARCHER_G from '../../assets/heroes/archer_g.js';
+import ARCHER_H from '../../assets/heroes/archer_h.js';
+import MAGE_B from '../../assets/heroes/mage_b.js';
+import MAGE_C from '../../assets/heroes/mage_c.js';
+import ROGUE_B from '../../assets/heroes/rogue_b.js';
+import ROGUE_C from '../../assets/heroes/rogue_c.js';
+import NECROMANCER_B from '../../assets/heroes/necromancer_b.js';
+import NECROMANCER_C from '../../assets/heroes/necromancer_c.js';
+import PALADIN_B from '../../assets/heroes/paladin_b.js';
+import PALADIN_C from '../../assets/heroes/paladin_c.js';
+import DRUID_B from '../../assets/heroes/druid_b.js';
+import DRUID_C from '../../assets/heroes/druid_c.js';
+import BERSERKER_B from '../../assets/heroes/berserker_b.js';
+import BERSERKER_C from '../../assets/heroes/berserker_c.js';
+import WITCHHUNTER_B from '../../assets/heroes/witchhunter_b.js';
+import WITCHHUNTER_C from '../../assets/heroes/witchhunter_c.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -126,3 +142,24 @@ export const ARCHER_E_SHEET = sheet(ARCHER_E);
 export const ARCHER_E_POSE = pose(ARCHER_E_SHEET);
 export const ARCHER_F_SHEET = sheet(ARCHER_F);
 export const ARCHER_F_POSE = pose(ARCHER_F_SHEET);
+// Round 3 (26 October 2026, src/<hero>-knightstyle and ranger-knightstyle/f, g): two reworks of the
+// Ranger's C and two looks for every other hero in the plumed Knight's style, each drawn with
+// claude-pxl by its own artist. By sprite name, each with its menu pose (<name>_pose).
+export const KNIGHTSTYLE_LOOKS = Object.fromEntries(Object.entries({
+  archer_g: ARCHER_G,
+  archer_h: ARCHER_H,
+  mage_b: MAGE_B,
+  mage_c: MAGE_C,
+  rogue_b: ROGUE_B,
+  rogue_c: ROGUE_C,
+  necromancer_b: NECROMANCER_B,
+  necromancer_c: NECROMANCER_C,
+  paladin_b: PALADIN_B,
+  paladin_c: PALADIN_C,
+  druid_b: DRUID_B,
+  druid_c: DRUID_C,
+  berserker_b: BERSERKER_B,
+  berserker_c: BERSERKER_C,
+  witchhunter_b: WITCHHUNTER_B,
+  witchhunter_c: WITCHHUNTER_C,
+}).flatMap(([name, data]) => { const s = sheet(data); return [[name, s], [name + '_pose', pose(s)]]; }));

@@ -1,0 +1,63 @@
+{
+ "cls": "berserker",
+ "kind": "proposal",
+ "id": "knightstyle-b",
+ "name": "Berserker · Knight style B (Raider)",
+ "description": "Ulfric as a Norse raider in the plumed Knight’s style: bare-headed, with long red hair that streams back off his crown and a thin braid with an iron bead, a braided red beard down his chest, and a band of blue-grey war paint across his eyes and round his bare, muscled upper arms. A heavy fur cape and a fur mantle over the shoulders, a brown leather jerkin with an iron band and an iron belt, fur-wrapped boots, a savage forward lean, and a bearded axe in each fist (one raised forward, one trailing behind). As on the Knight there is no black outline (every edge a dark shade of its own material) and the ramps are hue-shifted, cool purple in the shadows and warm in the light; the red hair and paint are the one accent. His hair, braid and cape sway in a heavy breathing idle and stream back on the walk. The attack is a two-axe overhead chop: he rears back with both axes up, swings them over the top, crashes them down in front on the release frame with a wide white crescent, bites the ground in a spray of chips and recovers.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/berserker-knightstyle/b/berserker-b.px.js",
+ "made": "2026-10-26T20:58:06.330Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/berserker-knightstyle-b.png",
+ "rows": [
+  "right"
+ ],
+ "emissive": null
+}
