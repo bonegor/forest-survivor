@@ -426,9 +426,9 @@ test('Arrow Storm drops its arrows on the foes on screen, and each strikes what 
           n++;
           assert.ok(onScreen.some((e) => Math.abs(d.x - e.x) <= 4 && Math.abs(d.y - e.y) <= 4), 'on a foe on screen');
         }
-        // Each one that lands strikes every foe it lands on, and nothing else.
+        // Each one that lands strikes every foe it lands on, as wide as that foe is drawn (hitbox.js), and nothing else.
         const landed = before.filter((d) => !fx.drops.includes(d));
-        const under = new Set(landed.flatMap((d) => g.enemies.filter((e) => !e.dead && !e.prop && Math.hypot(e.x - d.x, e.y - d.y) <= 9 + e.r)));
+        const under = new Set(landed.flatMap((d) => g.enemies.filter((e) => !e.dead && !e.prop && Math.hypot(e.x - d.x, e.y - d.y) <= 9 + e.hr)));
         assert.deepEqual(new Set(struck), under);
         hits += struck.length;
         const { ctx, calls } = recorder();
