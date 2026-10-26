@@ -95,15 +95,17 @@ export const VETERAN = {
 // Then, the same day: "on the easy (normal and normal only), reduce the number of monsters by half
 // and slow down the monsters slightly more, by 10%": a quarter of Veteran's horde, and every
 // monster 10% slower again than Veteran's (foePace; the hero as before).
+// The owner's (26 October 2026): "On the normal difficulty, drop the number of monsters by half
+// again": an eighth of Veteran's horde.
 export const NORMAL = {
   ...VETERAN,
   id: 'easy',
   name: 'Normal',
-  spawn: VETERAN.spawn * 0.25,
-  horde: VETERAN.horde * 0.25,
+  spawn: VETERAN.spawn * 0.125,
+  horde: VETERAN.horde * 0.125,
   pace: VETERAN.pace * 0.7,
   foePace: VETERAN.foePace * 0.9,
-  desc: `A quarter of Veteran's monsters; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
+  desc: `An eighth of Veteran's monsters; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
 };
 
 // By id, as a run report and the profile's wins keep it.

@@ -42,6 +42,17 @@ export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phas
 // clumped up", 22 October 2026; it was 120 x 20).
 export const SWARM_SPREAD = { wide: 170, deep: 70 };
 
+// A ring, "more intense ... 3 times as many monsters in it" (the owner's, 26 October 2026): its
+// count RING.more times the rules', in RING.layers circles RING.gap px apart, each turned half a
+// step so they don't line up.
+export const RING = { more: 3, layers: 3, gap: 26 };
+
+// Jolts (the owner's, 26 October 2026): "random jolts of monsters ... every 30 - 90 seconds ... the
+// computer quickly checks where the hero is currently headed" and sends a stream at him from ahead,
+// close to his way but not on it (up to JOLT.spread radians off), JOLT.count of one kind as the
+// difficulty and the night weigh it. No warning: that's the jolt.
+export const JOLT = { every: [30, 90], count: 6, spread: 0.45 };
+
 export const WAVE = { first: 45, every: 75, length: 15, peak: 0.6 };
 export function waveAt(t) {
   const s = t - WAVE.first;
@@ -59,6 +70,7 @@ export class Spawner {
     this.thiefT = rand(140, 220);
     this.propT = 4;
     this.shrineT = 45;
+    this.joltT = rand(...JOLT.every);
     this.bossIdx = 0;
     this.loopAt = 0; // Ranked: next looping event, in phase minutes (put in events when near)
     this.warnIdx = 0; // the next of events to announce (warn)
@@ -202,6 +214,13 @@ export class Spawner {
       this.warned.delete(i);
     }
 
+    // Jolts, from where the hero is headed.
+    this.joltT -= dt;
+    if (this.joltT <= 0) {
+      this.joltT = rand(...JOLT.every);
+      this.jolt(phase);
+    }
+
     // Champions.
     this.eliteT -= dt * g.diff.elite;
     if (this.eliteT <= 0) {
@@ -262,14 +281,14 @@ export class Spawner {
     const cam = g.cam;
     switch (ev.type) {
       case 'ring': {
-        const R = Math.hypot(cam.W, cam.H) * 0.5 + 10;
-        let placed = 0;
-        for (let i = 0; i < ev.count; i++) {
-          const a = (i / ev.count) * TAU;
+        const R0 = Math.hypot(cam.W, cam.H) * 0.5 + 10;
+        const count = ev.count * RING.more, per = Math.ceil(count / RING.layers);
+        for (let i = 0; i < count; i++) {
+          const layer = Math.floor(i / per), R = R0 + layer * RING.gap;
+          const a = ((i % per) + (layer % 2) * 0.5) / per * TAU;
           const spot = g.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
           if (!spot) continue;
           g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true });
-          placed++;
         }
         // (Its banner came with its warning.)
         break;
@@ -300,6 +319,15 @@ export class Spawner {
       default:
         break;
     }
+  }
+
+  // A jolt (JOLT): a swarm of one kind of tonight's monsters coming at the hero from the way he is
+  // headed (his last step's, Player.aim), a little off it.
+  jolt(phase) {
+    const g = this.g;
+    // dir is the way the swarm moves, so back at him; fire weighs its count as a timed swarm's.
+    const dir = g.player.aim + Math.PI + rand(-JOLT.spread, JOLT.spread);
+    this.fire({ type: 'swarm', enemy: this.pickType(phase), dir, count: JOLT.count }, phase);
   }
 
   spawnElite(phase) {
