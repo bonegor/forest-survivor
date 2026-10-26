@@ -29,7 +29,8 @@ const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
 // Elite (Veteran until 23 October 2026, the owner's: "the veteran difficulty will become elite"):
 // the old Hard, made harder as above. Multipliers on the base monster
-// stats, the size of the steady horde (spawn) and of the timed swarms, rings and
+// stats, the rate of the steady horde (spawn; spawner.js Spawner.rate, its size until 26 October
+// 2026) and the size of the timed swarms, rings and
 // packs (horde). hurt scales every blow the hero takes, after his armor, and few
 // how many of the monsters that shoot or lunge come (spawner.js isFew). health is
 // what this difficulty does to a monster whose health is its own, a crypt's lord (hp has

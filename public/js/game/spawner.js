@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { EVENTS, SWARM_BATCH, batchEvents, targetCount, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { EVENTS, SWARM_BATCH, batchEvents, HORDE_RATE, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
@@ -30,14 +30,18 @@ export const minuteMore = (phase) => 1 + PER_MINUTE * minuteOf(phase);
 // All the more the run sends: a minute's growth (minuteMore), Normal's late horde (lateMore) and,
 // on a Nightmare, three times as many again (difficulty.js NIGHTMARE), on Veteran only. Never on
 // Ranked (Game.nightmare).
-export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0));
+export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * runMore(g);
+// The run's own part of it: a Nightmare's triple and a quarter more for each Cursed Skull.
+export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0));
 
 // "make it more wave like, the generation of monsters ... it is too constant", then "not full on
 // waves, just occasionally ... base line, + wave every once in a while" (21 October 2026): the
-// steady horde keeps its size, and every WAVE.every seconds of the night (the first at WAVE.first)
-// a wave swells it for WAVE.length seconds, up to 1 + WAVE.peak times at its height, then lets it
-// go back down. A wave fills the field fast; once it passes, nothing more comes until the hero has
-// thinned it back to its size.
+// steady horde comes at its rate, and every WAVE.every seconds of the night (the first at
+// WAVE.first) a wave swells that rate for WAVE.length seconds, up to 1 + WAVE.peak times at its
+// height, then lets it go back down. Since the horde comes at a rate (26 October 2026; it kept a
+// number standing, a wave 1.6 times it) the peak is 1.5, not 0.6: a wave brings about 14 seconds'
+// worth more over its 15, about what the old one poured in at once at minute 5, and what it brings
+// stays for the hero to deal with.
 // A timed swarm's stream: how wide across its way and how deep along it (the owner's "slightly less
 // clumped up", 22 October 2026; it was 120 x 20).
 export const SWARM_SPREAD = { wide: 170, deep: 70 };
@@ -53,7 +57,7 @@ export const RING = { more: 3, layers: 3, gap: 26 };
 // difficulty and the night weigh it. No warning: that's the jolt.
 export const JOLT = { every: [30, 90], count: 6, spread: 0.45 };
 
-export const WAVE = { first: 45, every: 75, length: 15, peak: 0.6 };
+export const WAVE = { first: 45, every: 75, length: 15, peak: 1.5 };
 export function waveAt(t) {
   const s = t - WAVE.first;
   if (s < 0) return 1;
@@ -64,7 +68,8 @@ export function waveAt(t) {
 export class Spawner {
   constructor(g) {
     this.g = g;
-    this.acc = 0.6;
+    this.acc = 0.6; // how long yet before the steady horde starts coming
+    this.owed = null; // the steady horde's monsters due and not yet come (null: its head start yet to come)
     this.eventIdx = 0;
     this.eliteT = 95;
     this.thiefT = rand(140, 220);
@@ -130,6 +135,7 @@ export class Spawner {
     this.eliteT = 60;
     this.thiefT = rand(90, 170);
     this.acc = 1.5;
+    this.owed = null; // a new floor gets its head start (HORDE_RATE.head, .headLate)
     this.rewarn();
   }
 
@@ -152,16 +158,23 @@ export class Spawner {
     return { hpMul: monsterHp(phase, this.g.mode) * d.hp, dmgMul: 1 };
   }
 
-  // How many foes the steady horde keeps up at a phase: the rules' numbers, a tenth fewer on a
-  // dungeon floor, and Normal's late horde and a Nightmare's triple on top (hordeMore).
-  target(phase) {
-    const g = this.g;
-    return targetCount(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * hordeMore(g, phase);
+  // How many monsters a second the steady horde sends at a phase (data/waves.js hordeRate), however
+  // many stand: the rules' rate times the difficulty's spawn, a tenth fewer on a dungeon floor, the
+  // minute's growth and Veteran's late horde, bent under HORDE_RATE.knee (x / (1 + x / knee): half
+  // the knee asked comes as a third of it, the knee as half, ever closer to it past that; the knee
+  // grows with the minute, so Ranked's never stops growing), then a Nightmare's triple and the
+  // Cursed Skulls on top, whole (runMore). Unbent, Veteran asked 115 a second at 10:00 and Elite
+  // 330 at 15:00, far past any hero's killing: the cap would have held the field full all night,
+  // the standing horde again.
+  rate(phase) {
+    const g = this.g, grow = minuteMore(phase), knee = HORDE_RATE.knee * grow;
+    const x = hordeRate(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * grow * lateMore(g.diff, phase);
+    return (x / (1 + x / knee)) * runMore(g);
   }
 
-  // What it keeps up right now: target, and more while a wave is on (waveAt).
-  waveTarget(phase) {
-    return this.target(phase) * waveAt(this.g.time);
+  // The rate right now: rate, and more while a wave is on (waveAt).
+  waveRate(phase) {
+    return this.rate(phase) * waveAt(this.g.time);
   }
 
   update(dt) {
@@ -169,23 +182,31 @@ export class Spawner {
     if (g.calm > 0 || g.inCrypt) return; // e.g. dawn, descending, a crypt
     const phase = g.phase;
 
-    // Steady horde, in waves.
-    const target = this.waveTarget(phase);
-    this.acc -= dt;
-    if (this.acc <= 0) {
-      const alive = g.hostileCount;
-      const deficit = target - alive;
-      this.acc = deficit > target * 0.5 ? 0.18 : deficit > 0 ? 0.4 : 1.2;
-      if (deficit > 0) {
-        const n = Math.min(Math.ceil(deficit), 3 + Math.floor(phase * 0.7));
-        const st = this.stats(phase);
-        for (let i = 0; i < n; i++) {
-          const type = this.pickType(phase);
-          const pt = g.world.spawnPoint(g);
-          if (!pt) break;
-          const pack = type === 'goblin' ? 3 : 1;
-          for (let k = 0; k < pack; k++) g.spawnEnemy(type, pt.x + rand(-8, 8), pt.y + rand(-8, 8), st);
+    // Steady horde, in waves: waveRate a second, never minding how many stand (the owner's of 26
+    // October 2026, data/waves.js HORDE_RATE). Due monsters gather in owed, fractions too; each
+    // whole one comes at a spawn point at the screen's edge (a Goblin with two more, all three
+    // counted). The night's or floor's first comes with HORDE_RATE.head seconds' worth (.headLate
+    // on a floor starting later in the night).
+    if (this.acc > 0) this.acc -= dt;
+    else {
+      const R = HORDE_RATE, rate = this.waveRate(phase);
+      if (this.owed === null) this.owed = this.rate(phase) * (phase < 1 ? R.head : R.headLate);
+      // At most `carry` seconds' worth wait (a head start may be more, and only runs down).
+      this.owed = Math.min(this.owed + rate * dt, Math.max(this.owed, 1 + rate * R.carry));
+      const st = this.owed >= 1 ? { ...this.stats(phase), steady: true } : null;
+      for (let i = 0; i < R.perFrame && this.owed >= 1; i++) {
+        const type = this.pickType(phase);
+        const pt = g.world.spawnPoint(g);
+        if (!pt) break;
+        const pack = type === 'goblin' ? 3 : 1;
+        let came = 0;
+        for (let k = 0; k < pack; k++) if (g.spawnEnemy(type, pt.x + rand(-8, 8), pt.y + rand(-8, 8), st)) came++;
+        // At the cap with no room (Game.recycleFar): what was due now doesn't come at all.
+        if (!came) {
+          this.owed = 0;
+          break;
         }
+        this.owed -= pack;
       }
     }
 

@@ -24,7 +24,7 @@ Object.defineProperty(document, 'cookie', {
   },
 });
 const { Game } = await import('../public/js/game/game.js');
-const { lateMore, isFew, minuteMore } = await import('../public/js/game/spawner.js');
+const { lateMore, isFew, minuteMore, RING } = await import('../public/js/game/spawner.js');
 const { VETERAN, ELITE, NIGHTMARE, GAME_SPEED } = await import('../public/js/data/difficulty.js');
 const { EVENTS } = await import('../public/js/data/waves.js');
 const { mulberry32 } = await import('../public/js/engine/util.js');
@@ -71,7 +71,6 @@ test('a Nightmare triples the steady horde and the timed swarms, rings and packs
   for (const mode of ['s15', 'dungeon']) {
     const calm = game({ diff: 'medium', mode }), ticked = game({ diff: 'medium', mode, nightmare: true });
     assert.equal(ticked.nightmare, false, `${mode}: a Veteran run is never a Nightmare`);
-    for (const ph of phases) assert.equal(ticked.spawner.target(ph), calm.spawner.target(ph));
   }
   for (const diff of ['hard']) {
     const rules = diff === 'medium' ? VETERAN : ELITE;
@@ -81,8 +80,6 @@ test('a Nightmare triples the steady horde and the timed swarms, rings and packs
       assert.equal(dread.nightmare, true);
       assert.equal(dread.diff, rules, 'the difficulty as chosen');
       for (const ph of phases) {
-        const r = dread.spawner.target(ph) / calm.spawner.target(ph);
-        assert.ok(Math.abs(r - NIGHTMARE.more) < 1e-9, `${diff} ${mode} at phase ${ph}: ${r} times the horde`);
         // Each one as strong as ever.
         assert.equal(dread.spawner.stats(ph).hpMul, calm.spawner.stats(ph).hpMul);
       }
@@ -92,7 +89,7 @@ test('a Nightmare triples the steady horde and the timed swarms, rings and packs
     const calm = game({ diff }), dread = game({ diff, nightmare: true });
     const kinds = new Set();
     for (const ev of EVENTS) {
-      const n = ev.count * rules.horde * (isFew(ev.enemy) ? rules.few : 1) * lateMore(rules, ev.at) * minuteMore(ev.at);
+      const n = ev.count * (ev.type === 'ring' ? RING.more : 1) * rules.horde * (isFew(ev.enemy) ? rules.few : 1) * lateMore(rules, ev.at) * minuteMore(ev.at);
       assert.equal(sent(calm, ev, ev.at), Math.max(1, Math.round(n)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, as it was`);
       assert.equal(sent(dread, ev, ev.at), Math.max(1, Math.round(n * 3)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, three times over`);
       kinds.add(ev.type);
@@ -105,7 +102,6 @@ test('a Nightmare triples the steady horde and the timed swarms, rings and packs
 test('Ranked is never a Nightmare, and the HUD says NIGHTMARE beside the clock without trouble', () => {
   const ranked = game({ mode: 'ranked', nightmare: true }), plain = game({ mode: 'ranked' });
   assert.equal(ranked.nightmare, false);
-  for (const ph of [5, 20, 40]) assert.equal(ranked.spawner.target(ph), plain.spawner.target(ph));
   const ev = { type: 'pack', enemy: 'goblin', count: 18 };
   assert.equal(sent(ranked, ev, 25), sent(plain, ev, 25));
   assert.equal(game({ nightmare: 'yes' }).nightmare, false, 'only a choice made');

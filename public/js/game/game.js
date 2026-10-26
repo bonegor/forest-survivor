@@ -2127,6 +2127,14 @@ export class Game {
     }
   }
 
+  // Foes left far behind (the world's tooFar). Since the steady horde comes at a rate rather than
+  // keeping a number standing (26 October 2026, data/waves.js HORDE_RATE), one of it the hero has
+  // left behind is let go: it simply vanishes, never seen (no drops, no kill, no XP), as at the cap
+  // (recycleFar). Moved back to the screen's edge, it was one more monster on top of the rate,
+  // coming again and again however far he ran. What was sent at him (a swarm, a ring, a pack, a
+  // champion, a boss's summons) is still brought back in, as before (on a Dungeon Run floor: one
+  // that can't reach him or is more than 30 tiles' walk off, Dungeon.tooFar, the steady horde's let
+  // go likewise); bosses, lords, the thief and sleeping packs are never touched.
   relocate() {
     const w = this.world;
     // In a crypt nothing is moved: its packs and lords come to the hero on their own feet, or not at
@@ -2139,6 +2147,10 @@ export class Game {
         // The forest's are put down about the hero as he goes, and fade behind him; a dungeon's
         // stand in the rooms they furnish until they are broken.
         if (w instanceof Forest) e.dead = true;
+        continue;
+      }
+      if (e.steady) {
+        e.dead = true;
         continue;
       }
       const pt = w.spawnPoint(this);

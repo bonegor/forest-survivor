@@ -32,9 +32,32 @@ export const POCKETS = [
 export const minuteOf = (phase) => (phase <= 21 ? phase / 1.4 : 15 + (phase - 21) / 0.9);
 export const pocketAt = (minute) => POCKETS.find((p) => minute >= p.minutes[0] && minute < p.minutes[1]) || POCKETS[POCKETS.length - 1];
 
-// Desired number of live enemies.
-export function targetCount(phase) {
-  return Math.min(480, 22 + phase * 13 + Math.max(0, phase - 8) * 10);
+// The steady horde comes at a rate, the owner's (26 October 2026): "not looking at how many monsters
+// are alive ... alive monsters are just alive and for the player to deal with and should not affect
+// new monster generation". It used to keep a number of foes standing (22 + 13 a phase, 10 more a
+// phase past 8, at most 480, times the difficulty's spawn), sending more whenever the hero thinned
+// them: what came was what he killed. Now hordeRate monsters a second come (before the difficulty,
+// the minute's growth and the waves: Spawner.rate) whatever stands, the old numbers spread over
+// HORDE_RATE.turn seconds: about what a decent hero cut through of the old standing horde, the walk
+// in from the screen's edge included. Over the night's first `settle` minutes it eases down from
+// `early`, the hero still weak (at 0:00 a level-1 hero kills a few a second). Late in the night
+// what the difficulty asks bends under `knee` a second (times the minute's growth, Spawner.rate),
+// so Veteran and Elite stay about what a strong hero can cut through rather than past anything
+// he could; past dawn Ranked keeps growing (the cap of 900 standing, HORDE_CAP, is the hardware's,
+// below).
+// (Without the old 480 at most: nothing here counts what stands.)
+// At the start of the night and of each Dungeon Run floor `head` seconds' worth come at once, so
+// dusk is never empty (30: at dusk as many as used to stand then, 12 on Normal, 96 on Veteran,
+// 184 on Elite), `headLate` seconds' worth on a floor that starts later in the night (a Dungeon
+// Run's second and third, whose rate is already high: 30 seconds of it would be the cap at once);
+// what comes a frame is `perFrame` spawn points at most (a Goblin brings three),
+// and what can't come (at the cap, nowhere to stand) isn't owed: no more than `carry` seconds'
+// worth wait at a time, so a stall never pours out all at once.
+export const HORDE_RATE = { turn: 20, early: 30, settle: 4, knee: 100, head: 30, headLate: 8, carry: 1, perFrame: 6 };
+export function hordeRate(phase) {
+  const R = HORDE_RATE, m = minuteOf(phase);
+  const turn = R.turn + (R.early - R.turn) * Math.max(0, 1 - m / R.settle);
+  return (22 + phase * 13 + Math.max(0, phase - 8) * 10) / turn;
 }
 
 // Extra health multiplier as the night goes on.
@@ -125,12 +148,14 @@ export const PROP_SITES = { every: [16 / 3, 26 / 3], most: 45, room: [1, 1], cry
 // diagonals from him or more. 0.6 of one (413 world px on a 1080p screen's 600×338) is beyond any
 // corner of the screen and farther than anywhere the horde comes in (Forest.spawnPoint: the
 // screen's edge, 374 px at most), yet nearer than where the forest moves its stragglers back in
-// (Forest.tooFar, 510 px a side), so that in the forest some do stand that far: those a hero on
-// the move leaves behind. In 45 s at the cap on a Veteran Nightmare at 11:00, a Knight standing
+// (Forest.tooFar, 510 px a side, where the steady horde's stragglers are let go since 26 October
+// 2026, Game.relocate), so that in the forest some do stand that far: those a hero on the move
+// leaves behind. In 45 s at the cap on a Veteran Nightmare at 11:00, a Knight standing
 // still had none past 380 px (nothing recycled, the spawns refused), one kiting about a hundred
 // recycled, one running straight on some fourteen hundred. A lower `far` would recycle monsters
 // just come in at the screen's edge; past 0.74 the forest's moving them back would always come
-// first. Boxes don't count and come all the same (Game.spawnProp). The steady horde makes room
+// first. (Those counts were measured when the horde kept a number standing, before HORDE_RATE.)
+// Boxes don't count and come all the same (Game.spawnProp). The steady horde makes room
 // for `perFrame` a frame at most, so a burst can't churn it; what is sent at the hero (a ring, a
 // swarm, a pack, a champion, the thief, a boss's summons) comes in full: it may take any foe off
 // the screen, `edge` px or more beyond its border (the tallest monster's height), as many as it

@@ -365,7 +365,8 @@ export class Forest {
     return { x: x0, y: y0 + h - t };
   }
 
-  // Enemies left far behind are moved back into play.
+  // Enemies left far behind: the steady horde's are let go, what was sent at the hero is moved
+  // back into play (Game.relocate).
   tooFar(e, cam) {
     const p = this.g.player;
     const lim = Math.max(cam.W, cam.H) * 0.85;

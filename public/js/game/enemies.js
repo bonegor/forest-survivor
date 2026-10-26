@@ -218,6 +218,7 @@ export class Enemy {
     this.lord = !!o.lord; // one of a crypt's named bosses, each asleep in a room of its own
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
     this.summoned = !!o.summoned; // called up round the hero by a boss (Game.summonRing)
+    this.steady = !!o.steady; // the steady horde's (Spawner.update): let go when left far behind (Game.relocate)
     // Whether it knows where the hero is. In a crypt one doesn't until it has seen him or been
     // hit (update); what is sent at him (o.aware: a ring, a swarm, a pack), a boss, one that
     // wakes by its own rule (sleeping) and the thief always do. In the forest and on a Dungeon Run

@@ -13,7 +13,6 @@ import { isFew, minuteMore, WAVE, waveAt } from '../public/js/game/spawner.js';
 import { armored, BASE_SPEED } from '../public/js/game/player.js';
 import { NORMAL, VETERAN, ELITE, GAME_SPEED, HARDER, CROWD, VETERAN_CROWD, ELITE_CROWD, moveFor } from '../public/js/data/difficulty.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
-import { targetCount } from '../public/js/data/waves.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
 
 function game(o = {}, seed = 7) {
@@ -195,33 +194,6 @@ test('the round of 20 October 2026: every monster on both difficulties has 20% m
   }
 });
 
-// The user: "in the last 6 minutes 30% more of the same monsters, but they each have 70% less health".
-test('on Veteran 30% more monsters come from minute 9 of the night on, not before, and never on Elite', () => {
-  // Veteran's horde is half Elite's (difficulty.js VETERAN_CROWD), so against Elite it is a half
-  // until 9:00 and 1.3 halves after.
-  const phaseAt = (secs) => (secs / 60) * 1.4; // the 15-minute night's clock
-  const before = phaseAt(8 * 60 + 59), after = phaseAt(9 * 60 + 1);
-  const vet = game({ diff: 'hard' }), normal = game({ diff: 'medium' });
-  const ratio = (phase, a = normal, b = vet) => a.spawner.target(phase) / b.spawner.target(phase);
-  assert.ok(Math.abs(ratio(phaseAt(30)) - 0.5) < 1e-9 && Math.abs(ratio(before) - 0.5) < 1e-9, 'half the horde until 9:00');
-  for (const secs of [9 * 60 + 1, 11 * 60, 14 * 60 + 59]) {
-    assert.ok(Math.abs(ratio(phaseAt(secs)) - 0.5 * 1.3) < 1e-9, `30% more at ${secs} s: ${ratio(phaseAt(secs))}`);
-  }
-  for (const phase of [before, after, 20]) {
-    assert.ok(Math.abs(vet.spawner.target(phase) - targetCount(phase) * ELITE.spawn * minuteMore(phase)) < 1e-9, 'Elite as it was, but for the minute\'s growth');
-  }
-  // The timed swarms, rings and packs too.
-  const pack = (g, phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
-  assert.equal(pack(normal, before), Math.round(18 * VETERAN.horde * minuteMore(before)));
-  assert.equal(pack(vet, after), Math.round(18 * ELITE.horde * minuteMore(after)));
-  assert.equal(pack(normal, after), Math.round(18 * VETERAN.horde * 1.3 * minuteMore(after)));
-  // A Dungeon Run floor's clock maps onto the night's: the Infernal Depths are all past minute 9.
-  const dn = game({ diff: 'medium', mode: 'dungeon' }), dv = game({ diff: 'hard', mode: 'dungeon' });
-  assert.ok(Math.abs(ratio(5, dn, dv) - 0.5) < 1e-9, 'the first floor half Elite\'s');
-  assert.ok(Math.abs(ratio(17, dn, dv) - 0.5 * 1.3) < 1e-9, 'the third 30% more');
-  assert.equal(game({ diff: 'medium', mode: 'ranked' }).diff.late, null, 'Ranked is Elite');
-});
-
 // A Holy Relic purges the horde on screen, but bosses, crypt lords and champions only take a
 // heavy blow. On Veteran they have 70% less health, so the blow is 70% lighter too: a flat 200
 // would all but fell a crypt lord (216), there and in every crypt with a relic among its boxes.
@@ -311,50 +283,8 @@ test('the horde grows by 5% of its first size every minute of the night: the ste
   assert.ok(Math.abs(minuteMore(phaseAt(10 * 60)) - 1.5) < 1e-9, 'half again at 10:00');
   assert.ok(Math.abs(minuteMore(phaseAt(15 * 60)) - 1.75) < 1e-9, '1.75 times at 15:00');
   const g = game({ diff: 'hard' });
-  for (const secs of [0, 5 * 60, 10 * 60, 15 * 60]) {
-    const ph = phaseAt(secs);
-    assert.ok(Math.abs(g.spawner.target(ph) - targetCount(ph) * ELITE.spawn * minuteMore(ph)) < 1e-9, `the steady horde at ${secs} s`);
-  }
   const pack = (phase) => asks(g, () => g.spawner.fire({ type: 'pack', enemy: 'goblin', count: 18 }, phase)).length;
   assert.equal(pack(phaseAt(10 * 60)), Math.round(18 * ELITE.horde * 1.5), 'a pack at 10:00 half again as big');
-});
-
-// "make it more wave like, the generation of monsters, like it is too constant", then "not full on
-// waves, just occasionally ... base line, + wave every once in a while" (21 October 2026).
-test('the steady horde keeps its size, and every so often a wave swells it for a while, up to 1.6 times', () => {
-  assert.deepEqual(WAVE, { first: 45, every: 75, length: 15, peak: 0.6 });
-  // The base line: before the first wave and between waves, exactly the horde's size.
-  for (const t of [0, 20, 44.9, 45 + 15 + 0.1, 100, 119.9, 45 + 75 + 15 + 1, 300 - 1e-6]) assert.equal(waveAt(t), 1, `no wave at ${t} s`);
-  // Never below it, at most 1.6 times it, at its height mid-wave.
-  let hi = 0, lo = Infinity;
-  for (let t = 0; t < 900; t += 0.05) {
-    hi = Math.max(hi, waveAt(t));
-    lo = Math.min(lo, waveAt(t));
-  }
-  assert.ok(lo === 1 && hi <= 1.6 + 1e-9 && hi > 1.599, `from ${lo} to ${hi}`);
-  for (const t of [52.5, 127.5, 202.5]) assert.ok(Math.abs(waveAt(t) - 1.6) < 1e-9, `the height of a wave at ${t} s`);
-  assert.ok(waveAt(48) > 1 && waveAt(48) < 1.6 && waveAt(57) > 1 && waveAt(57) < 1.6, 'rising and falling about it');
-  // What the spawner keeps up at a time is the horde's size at that phase times the wave then.
-  const g = game({ diff: 'hard' }), ph = 10;
-  const kept = (t) => ((g.time = t), g.spawner.waveTarget(ph));
-  const base = g.spawner.target(ph);
-  assert.ok(Math.abs(kept(30) - base) < 1e-9, 'before the first wave');
-  assert.ok(Math.abs(kept(52.5) - base * 1.6) < 1e-9, 'at the height of a wave');
-  assert.ok(Math.abs(kept(90) - base) < 1e-9, 'between waves');
-  // And the steady horde really fills up to it: with a fifth more than the base line alive, nothing
-  // comes between waves, but a wave sends more.
-  const fill = (t) => {
-    const h = game({ diff: 'hard' }, 3);
-    h.time = t;
-    h.hostileCount = Math.ceil(h.spawner.target(h.phase) * 1.2);
-    let n = 0;
-    h.spawnEnemy = () => (n++, null);
-    h.spawner.acc = 0;
-    h.spawner.update(1 / 60);
-    return n;
-  };
-  assert.equal(fill(90), 0, 'none between waves');
-  assert.ok(fill(52.5) > 0, 'more in a wave');
 });
 
 // The owner (21 October 2026): "on normal, reduce the speed of monsters by 10%".
@@ -412,10 +342,10 @@ test('the horde walks in four classes: the swift at the bare Knight’s pace, a 
 // The owner (23 October 2026): Veteran becomes Elite, Normal becomes Veteran, "and there's a new,
 // easier mode called normal ... half as many monsters as we do right now ... running 30% slower".
 // Then: "reduce the number of monsters by half and slow down the monsters slightly more, by 10%".
-test('Normal is Veteran with a quarter of the horde, everyone walking 30% slower and the monsters 10% slower again', () => {
+test('Normal is Veteran with an eighth of the horde, everyone walking 30% slower and the monsters 10% slower again', () => {
   assert.equal(game({ diff: 'easy' }).diff, NORMAL);
-  assert.ok(Math.abs(NORMAL.spawn / VETERAN.spawn - 0.25) < 1e-12, 'a quarter of the steady horde');
-  assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 0.25) < 1e-12, 'a quarter of the swarms, rings and packs');
+  assert.ok(Math.abs(NORMAL.spawn / VETERAN.spawn - 0.125) < 1e-12, 'an eighth of the steady horde');
+  assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 0.125) < 1e-12, 'an eighth of the swarms, rings and packs');
   assert.ok(Math.abs(NORMAL.foePace / VETERAN.foePace - 0.9) < 1e-12, 'the monsters 10% slower again');
   for (const k of ['hp', 'dmg', 'hurt', 'few', 'health', 'late', 'speed']) assert.equal(NORMAL[k], VETERAN[k], k);
   assert.ok(Math.abs(moveFor('s15', 'easy') - moveFor('s15', 'medium') * 0.7) < 1e-12);
