@@ -17,11 +17,15 @@ function draw(screen, a, W = 480, H = 270) {
 }
 function activate(screen, a, id) { a.ui.focusId = id;input.justDown.add('Enter');draw(screen, a); }
 
-test('Codex browsing never changes the weapon pool; a separate action does', async () => {
-  const a = app({ ...defaultProfile(), kills: 10 });let calls = 0;a.store.setHome = async () => { calls++;return true; };
+test('Codex: browsing never changes the weapon pool; Enter on an open weapon switches it, nothing else; Escape goes back onto CODEX', async () => {
+  const a = app({ ...defaultProfile(), kills: 10 });const calls = [];a.store.setHome = async (id, on) => { calls.push([id, on]);return true; };
+  let went = null;a.go = (name, params) => { went = [name, params]; };
   const s = new CodexScreen();s.enter(a);draw(s,a);
-  activate(s,a,'cx_weapon_axe');assert.ok(s.detail);assert.equal(calls,0);
-  draw(s,a);activate(s,a,'detail_pool');await Promise.resolve();assert.equal(calls,1);
+  a.ui.focusId = 'cx_weapon_axe';draw(s,a);assert.equal(s.shown,'cx_weapon_axe','the panel tells of the tile in focus');assert.equal(calls.length,0);
+  activate(s,a,'cx_weapon_axe');await Promise.resolve();assert.deepEqual(calls,[['axe',true]],'one press, one switch');
+  activate(s,a,'cx_feature_exclusions');await Promise.resolve();assert.equal(calls.length,1,'nothing to switch on another tile');
+  input.justDown.add('Escape');s.draw(ctx,480,270,0.3);input.justDown.clear();
+  assert.deepEqual(went,['title',{ focus: 'codex' }]);
 });
 
 test('Armory inspection does not buy; affordable purchase is explicit and single', async () => {

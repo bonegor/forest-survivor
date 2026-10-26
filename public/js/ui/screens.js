@@ -12,7 +12,7 @@ import { MODES, NORMAL, VETERAN, ELITE, NIGHTMARE } from '../data/difficulty.js'
 import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from '../shared/progress.js';
-import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
+import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
 import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon } from './ladder.js';
 import { flank } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
@@ -60,11 +60,13 @@ function keysHint(ctx, W, H, text = 'ARROWS move · ENTER select · ESC back') {
 // ------------------------------------------------------------------ title --
 
 export class TitleScreen {
-  enter(app) {
+  enter(app, params = {}) {
     this.app = app;
     this.t = 0;
     this.ready = app.audioUnlocked;
     if (this.ready) playMusic('title');
+    // Back from a menu: on the button that opened it (params.focus), not on START RUN.
+    if (params.focus) app.ui.focusId = params.focus;
     app.ui.lock(0.3);
   }
 
@@ -488,9 +490,12 @@ export class ArmoryScreen {
 
 // ------------------------------------------------------------------ codex --
 
-// One collection: exclusions, weapons, relics and owned heroes' ultimates. Wheel, touch drag,
-// keyboard and gamepad all move through the same scrolling grid.
-export const CODEX_TILE = { min: 150, max: 210, h: 48, gap: 5, top: 42, foot: 46 };
+// One collection: exclusions, weapons, relics and owned heroes' ultimates, all within reach of the
+// keys (the owner's, 26 October 2026): the arrows walk the grid and it scrolls to follow, Page Up
+// and Page Down a screenful at a time; the tile in focus is told in full in the panel under the
+// grid, no window to open; Enter on an open weapon is a switch, out of runs or back in; Escape goes
+// back to the title, onto CODEX. The wheel and a touch drag scroll it too.
+export const CODEX_TILE = { min: 150, max: 210, h: 48, gap: 5, top: 42, foot: 30, detail: 66 };
 
 export function menuEntries(profile) {
   const entries = codexEntries(profile), hidden = entries.filter(e => e.hidden);
@@ -500,18 +505,54 @@ export function menuEntries(profile) {
 }
 
 // The tiles' grid for n of them on a W x H screen: as many columns as fit CODEX_TILE.min wide
-// (at most three), below the heading and above the status and BACK controls.
+// (at most three), below the heading and above the detail panel (taller on a narrow screen, whose
+// lines wrap more), the BACK button and the keys' line.
 export function codexLayout(W, H, n) {
   const C = CODEX_TILE;
   const width = Math.min(480, W - 24);
   const cols = clamp(Math.floor((width + C.gap) / (C.min + C.gap)), 1, 3);
   const cw = Math.min(C.max, Math.floor((width - (cols - 1) * C.gap) / cols));
-  const step = C.h + C.gap, room = H - C.top - C.foot;
-  // Whole rows only, never one cut in half at the foot.
+  const detail = width < 360 ? C.detail + 27 : C.detail;
+  // 11: room over the panel for the plate with its name.
+  const step = C.h + C.gap, room = H - C.top - C.foot - detail - 11;
+  // Whole rows only, never one cut in half over the panel.
   const rows = Math.max(1, Math.floor((room + C.gap) / step)), total = Math.ceil(n / cols);
   const view = Math.min(room, rows * step - C.gap);
   const most = Math.max(0, total * step - C.gap - view);
-  return { cols, rows, total, cw, ch: C.h, step, view, most, x0: Math.round(W / 2 - (cols * cw + (cols - 1) * C.gap) / 2), y0: C.top };
+  const gw = cols * cw + (cols - 1) * C.gap;
+  return { cols, rows, total, cw, ch: C.h, step, view, most, gw, detail, x0: Math.round(W / 2 - gw / 2), y0: C.top };
+}
+
+const tileName = (e) => e.hiddenCount ? `${e.hiddenCount} hidden weapons` : codexName(e);
+const slotsText = (used, level) => `${used} of ${level} exclusion slot${level === 1 ? '' : 's'} in use`;
+
+// Whether Enter (or a click) on an entry switches it: an open weapon, back into runs, or out of
+// them while an exclusion slot is free.
+export function codexSwitchable(e, prof) {
+  return e.type === 'weapon' && e.open && (e.home || (prof.home?.length || 0) < exclusionState(prof).level);
+}
+
+// What the panel under the grid tells of an entry: what it does; shut, what opens it and how far
+// along; an open weapon, whether runs offer it and the exclusion slots.
+export function codexDetail(e, prof) {
+  const lines = [codexDescription(e)];
+  const slots = exclusionState(prof), used = prof.home?.length || 0;
+  if (e.type === 'feature') {
+    lines.push({ text: `${slotsText(used, slots.level)} · ${fmtNum(prof.kills)} monsters slain`, color: '#fee761' });
+    if (e.next) lines.push({ text: `Next slot: ${e.need.toLowerCase()}`, color: '#feae34' });
+  } else if (!e.open && !e.hidden) lines.push({ text: [shortNeed(e.need), codexRecord(e)].filter(Boolean).join(' · '), color: '#feae34' });
+  const recipe = evolutionRecipe(e);
+  if (recipe) lines.push({ text: recipe, color: '#fee761' });
+  if (e.type === 'relic' && e.open) lines.push(`${PASSIVES[e.id].max} ranks · bonuses apply during a run`);
+  if (e.type === 'weapon' && e.open) {
+    if (e.home) lines.push({ text: `Excluded: never offered in runs · ${slotsText(used, slots.level)}`, color: '#f6757a' });
+    else if (used < slots.level) lines.push({ text: `Offered in runs · ${slotsText(used, slots.level)}`, color: '#9ee562' });
+    else {
+      const more = slots.next ? ` · slay ${fmtNum(slots.next)} monsters in total for ${slots.level ? 'another' : 'one'}` : '';
+      lines.push({ text: `Offered in runs · ${slots.level ? 'every exclusion slot in use' : 'no exclusion slot yet'}${more}`, color: '#feae34' });
+    }
+  }
+  return lines;
 }
 
 export class CodexScreen {
@@ -522,6 +563,7 @@ export class CodexScreen {
     this.want = 0;
     this.drag = null; // a press in the grid: where it began, and whether it has become a drag
     this.seen = null; // the focus last frame: a new one by the keys is scrolled into view
+    this.shown = null; // the tile the panel tells of: the last in focus, kept while BACK has it
     app.ui.lock(0.2);
     app.ui.focusId = 'cx_feature_exclusions';
   }
@@ -531,88 +573,98 @@ export class CodexScreen {
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.6);
     header(ctx, W, 'The Codex');
-    if (this.detail) {
-      const e = codexEntries(prof).find(e => `${e.type}_${e.id}` === this.detailKey);
-      const action = this.detail.draw(ctx, ui, W, H, dt);
-      if (action === 'pool' && e?.open && e.type === 'weapon' && !this.busy) {
-        this.busy = true;
-        app.store.setHome(e.id, !e.home).then(ok => { if (ok) sfx('select'); }).catch(() => { this.message = 'Could not save weapon choice. Try again.'; }).finally(() => { this.busy = false; });
-      }
-      if (action) { this.detail = null; ui.focus('cx_' + this.detailKey); ui.lock(0.2); }
-      return;
-    }
     ui.begin(dt);
     drawText(ctx, 'Weapons · Relics · Ultimates · Unlocks', W / 2, 27, { align: 'center', color: '#8b9bb4' });
     const list = menuEntries(prof);
     const L = codexLayout(W, H, list.length);
+    this.page(list, L);
     this.scrollGrid(L, dt);
     // The focus moved onto a tile by the keys or a pad: brought into view.
     const at = list.findIndex((e) => ui.focusId === `cx_${e.type}_${e.id}`);
+    if (ui.focusId !== this.seen) this.message = null;
     if (at >= 0 && ui.focusId !== this.seen) {
       const top = Math.floor(at / L.cols) * L.step;
       if (top < this.want) this.want = top;
       else if (top + L.ch > this.want + L.view) this.want = top + L.ch - L.view;
       this.want = clamp(this.want, 0, L.most);
     }
-    let focused = null;
     const m = input.mouse, out = m.y < L.y0 || m.y >= L.y0 + L.view || !!this.drag?.moved;
-    // The rows in sight, and one more each side, so the keys can step onto the next.
+    // The rows in sight, and one more each side, so the keys can step onto the next; and the focused
+    // tile's, however far a page has sent it, so it keeps the focus while the grid scrolls to it.
     const r0 = Math.max(0, Math.floor(this.scroll / L.step) - 1), r1 = Math.min(L.total - 1, Math.floor((this.scroll + L.view) / L.step) + 1);
+    const fr = at >= 0 ? Math.floor(at / L.cols) : -1;
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, L.y0, W, L.view);
     ctx.clip();
-    list.slice(r0 * L.cols, (r1 + 1) * L.cols).forEach((e, k) => {
-      const i = r0 * L.cols + k;
-      const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = Math.round(L.y0 + Math.floor(i / L.cols) * L.step - this.scroll);
+    list.forEach((e, i) => {
+      const row = Math.floor(i / L.cols);
+      if ((row < r0 || row > r1) && row !== fr) return;
+      const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = Math.round(L.y0 + row * L.step - this.scroll);
       const fid = `cx_${e.type}_${e.id}`;
-      if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out })) {
-        const recipe = evolutionRecipe(e);
-        const lines = [codexDescription(e)];
-        if (e.type === 'feature') {
-          lines.push({ text: `${e.level} exclusion slot${e.level === 1 ? '' : 's'} unlocked`, color: '#fee761' });
-          lines.push(`${fmtNum(prof.kills)} monsters slain across all runs`);
-          if (e.next) lines.push({ text: `Next level: ${e.need.toLowerCase()}`, color: '#feae34' });
-          lines.push('Milestones: 10, 20, 40, 80, 160, 320 monsters, then keep doubling.');
-        } else if (!e.open) lines.push({ text: shortNeed(e.need), color: '#feae34' }, codexRecord(e));
-        if (e.type === 'relic' && e.open) lines.push(`${PASSIVES[e.id].max} ranks · bonuses apply during a run`);
-        if (recipe) lines.push({ text: recipe, color: '#fee761' });
-        const capacity = exclusionState(prof), used = prof.home?.length || 0;
-        const canExclude = used < capacity.level;
-        if (e.type === 'weapon' && e.open) {
-          lines.push(e.home ? 'Excluded from future runs.' : 'Included in future runs.');
-          lines.push(`${used} of ${capacity.level} exclusion slot${capacity.level === 1 ? '' : 's'} used`);
-          if (!e.home && !canExclude && capacity.next) lines.push(`Slay ${fmtNum(capacity.next)} monsters in total to unlock another slot.`);
-        }
-        this.detail = new MenuDialog(codexName(e), lines.filter(Boolean), e.type === 'weapon' && e.open ? [{ id: 'pool', label: e.home ? 'INCLUDE IN RUNS' : canExclude ? 'EXCLUDE FROM RUNS' : 'NO EXCLUSION SLOTS AVAILABLE', disabled: !e.home && !canExclude }] : []);
-        this.detailKey = `${e.type}_${e.id}`;ui.focus('detail_close');ui.lock(0.2);
-      }
+      if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out, disabled: !codexSwitchable(e, prof) })) this.toggle(e);
       const f = ui.focused(fid);
-      if (f) focused = e;
+      if (f) this.shown = fid;
       this.tile(ctx, e, x, y, L.cw, L.ch, f);
     });
     ctx.restore();
     // The bar: where the view is in the whole grid.
     if (L.most > 0) {
-      const bx = Math.min(W - 4, L.x0 + L.cols * L.cw + (L.cols - 1) * CODEX_TILE.gap + 2), whole = L.view + L.most;
+      const bx = Math.min(W - 4, L.x0 + L.gw + 2), whole = L.view + L.most;
       const bh = Math.max(10, Math.round((L.view * L.view) / whole)), by = L.y0 + Math.round(((L.view - bh) * this.scroll) / L.most);
       ctx.fillStyle = '#262b44';
       ctx.fillRect(bx, L.y0, 2, L.view);
       ctx.fillStyle = '#8b9bb4';
       ctx.fillRect(bx, by, 2, bh);
     }
-    // The focused tile told in full: what it does once open, else what opens it and how far along.
-    if (focused) {
-      const status = focused.open ? (focused.home ? 'Excluded from runs' : 'Unlocked') : codexRecord(focused) || 'Locked';
-      drawText(ctx, this.message || `${status} · Select for details`, W / 2, H - 38, { align: 'center', color: '#8b9bb4' });
-    } else {
-      drawText(ctx, this.message || 'Select an entry to inspect it', W / 2, H - 38, { align: 'center', color: '#8b9bb4' });
-    }
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go(this.back);
-    keysHint(ctx, W, H);
+    const shown = list.find((e) => `cx_${e.type}_${e.id}` === this.shown) || list[0];
+    this.drawDetail(ctx, shown, L.x0, L.y0 + L.view + 11, L.gw, L.detail);
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) this.exit();
+    const weapon = at >= 0 && list[at].type === 'weapon' && list[at].open;
+    keysHint(ctx, W, H, weapon ? `ARROWS move · ENTER ${list[at].home ? 'include' : 'exclude'} · ESC back` : 'ARROWS move · ESC back');
     ui.end();
     this.seen = ui.focusId;
-    if (input.pressed('back')) app.go(this.back);
+    if (input.pressed('back')) this.exit();
+  }
+
+  exit() {
+    this.app.go(this.back, this.back === 'title' ? { focus: 'codex' } : {});
+  }
+
+  // Enter, Space or a click on an open weapon: out of runs, or back in (codexSwitchable; on any
+  // other tile the UI denies it).
+  toggle(e) {
+    if (this.busy) return;
+    this.busy = true;
+    const failed = () => { this.message = 'Could not save weapon choice. Try again.'; };
+    this.app.store.setHome(e.id, !e.home).then((ok) => { if (!ok) failed(); }).catch(failed).finally(() => { this.busy = false; });
+  }
+
+  // Page Up and Page Down: the focus a screenful of rows up or down the grid (the grid follows it).
+  page(list, L) {
+    const ui = this.app.ui, dir = input.pressed('pageDown') - input.pressed('pageUp');
+    if (!dir || ui.lockT > 0) return;
+    const at = list.findIndex((e) => ui.focusId === `cx_${e.type}_${e.id}`);
+    const to = clamp(at < 0 ? 0 : at + dir * L.rows * L.cols, 0, list.length - 1);
+    if (to === at) return;
+    ui.focusId = `cx_${list[to].type}_${list[to].id}`;
+    ui.focusSource = 'keys';
+    sfx('ui');
+  }
+
+  // The panel under the grid: the entry's name on its plate, then all codexDetail tells of it, the
+  // lines past its room cut short; a failed save first, in red.
+  drawDetail(ctx, e, x, y, w, h) {
+    panel(ctx, x, y, w, h, { title: tileName(e), fill: '#15131f', rivets: false });
+    const lines = codexDetail(e, this.app.store.profile);
+    if (this.message) lines.unshift({ text: this.message, color: '#f6757a' });
+    const rows = lines.flatMap((l) => {
+      const o = typeof l === 'string' ? { text: l } : l;
+      return wrapText(o.text, w - 20).map((text) => ({ text, color: o.color || '#c0cbdc' }));
+    });
+    const room = Math.floor((h - 16) / 9);
+    if (rows.length > room) rows[room - 1].text = fitLine(rows[room - 1].text + '…', w - 20);
+    rows.slice(0, room).forEach((r, i) => drawRich(ctx, r.text, x + 10, y + 11 + i * 9, { color: r.color, hi: '#fee761' }));
   }
 
   // The grid's scroll: the wheel a row a notch; a press in the grid that moves more than a few
@@ -635,20 +687,33 @@ export class CodexScreen {
   }
 
   // One entry's tile: its icon and name; under them, shut, what opens it and a bar of how far the
-  // records have come; open, what opened it (or that it always was).
+  // records have come; open, what it does. An open weapon has its switch: on while runs offer it.
   tile(ctx, e, x, y, w, h, f) {
     const open = e.open;
     panel(ctx, x, y, w, h, { trim: f ? ['#fee761', '#be4a2f'] : open ? ['#5a6988', '#3a4466'] : ['#3a4466', '#262b44'], rivets: false, fill: open ? '#15131f' : '#120e18' });
     codexIcon(ctx, e, x + 4, y + 4);
     const tx = x + 23, room = w - 27;
-    drawText(ctx, fitLine(e.hiddenCount ? `${e.hiddenCount} hidden weapons` : codexName(e), room), tx, y + 4, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
+    drawText(ctx, fitLine(tileName(e), room), tx, y + 4, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
     const lines = wrapText(e.home ? 'Excluded from runs' : codexSummary(e), room);
     if (lines.length > 2) lines[1] = fitLine(lines.slice(1).join(' '), room);
     lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 14 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
     const kind = { weapon: 'WEAPON', relic: 'RELIC', ult: 'ULTIMATE', feature: `LEVEL ${e.level}` }[e.type];
     drawText(ctx, kind, tx, y + h - 13, { color: '#8b9bb4' });
     if (!open || (e.type === 'feature' && e.next)) codexBar(ctx, tx, y + h - 4, room, e.progress, '#feae34');
+    if (e.type === 'weapon' && open) codexSwitch(ctx, x + w - 20, y + h - 12, !e.home);
   }
+}
+
+// An open weapon's switch, 14 x 7 at (x, y), its word beside it: green with the knob right while
+// runs offer the weapon, iron with the knob left while it is excluded.
+function codexSwitch(ctx, x, y, on) {
+  drawText(ctx, on ? 'ON' : 'OFF', x - 3, y - 1, { align: 'right', color: on ? '#9ee562' : '#f6757a' });
+  ctx.fillStyle = '#0d0b14';
+  ctx.fillRect(x, y, 14, 7);
+  ctx.fillStyle = on ? '#3e8948' : '#3a4466';
+  ctx.fillRect(x + 1, y + 1, 12, 5);
+  ctx.fillStyle = on ? '#9ee562' : '#8b9bb4';
+  ctx.fillRect(on ? x + 8 : x + 1, y + 1, 5, 5);
 }
 
 // A tile's bar, w wide at (x, y): k of it filled in col over an empty iron groove.

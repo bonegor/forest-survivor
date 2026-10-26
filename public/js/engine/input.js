@@ -7,6 +7,9 @@ const BIND = {
   down: { keys: ['KeyS', 'ArrowDown'], pad: [13] },
   left: { keys: ['KeyA', 'ArrowLeft'], pad: [14] },
   right: { keys: ['KeyD', 'ArrowRight'], pad: [15] },
+  // A page of a long list at a time (the Codex's grid).
+  pageUp: { keys: ['PageUp'], pad: [] },
+  pageDown: { keys: ['PageDown'], pad: [] },
   confirm: { keys: ['Enter', 'NumpadEnter', 'Space'], pad: [0] },
   // Confirm without Space, for choices that pop up mid-fight while Space is the ultimate.
   select: { keys: ['Enter', 'NumpadEnter'], pad: [0] },
@@ -32,7 +35,7 @@ const BIND = {
   fps: { keys: ['F3'], pad: [] },
   fullscreen: { keys: ['F11', 'KeyF'], pad: [] },
 };
-const PREVENT = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'Backspace', 'F3']);
+const PREVENT = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Space', 'Tab', 'Backspace', 'F3']);
 // Fingers down that act as a click when they lift, by touch id (initInput).
 const taps = new Map();
 
