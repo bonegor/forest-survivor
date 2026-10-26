@@ -88,18 +88,21 @@ export class Forest {
       this.shrineT = 0.5;
       this.syncShrines();
     }
-    // Fireflies and falling leaves.
+    // Fireflies and falling leaves: the fireflies hide from the rain, the wind tears more leaves
+    // down and blows them along (weather.js). The same draws of Math.random whatever the weather.
+    const w = g.weather ? g.weather.now : null, wind = w ? w.wind : 0, wet = w ? w.rain : 0;
     this.ffT -= dt;
     while (this.ffT <= 0) {
       this.ffT += 0.12;
       const x = cam.x + rand(-20, cam.W + 20), y = cam.y + rand(-20, cam.H + 20);
+      if (wet > 0 && g.weather.rng() < wet * 0.85) continue;
       g.particles.emit(x, y, rand(4, 20), rand(-8, 8), rand(-8, 8), rand(-3, 3), rand(2, 4), 1, Math.random() < 0.7 ? PC.l : PC.Y, P.GLOW | P.FADE, 0.2);
     }
     this.leafT -= dt;
     if (this.leafT <= 0) {
-      this.leafT = rand(0.3, 0.8);
-      const x = cam.x + rand(0, cam.W), y = cam.y + rand(-10, cam.H * 0.6);
-      g.particles.emit(x, y, 60, rand(10, 25), rand(5, 15), -18, 3.2, 1, pick([PC.d, PC.O, PC.b, PC.y]), P.FADE, 0.1);
+      this.leafT = rand(0.3, 0.8) / (1 + wind * 4);
+      const x = cam.x + rand(-wind * 120, cam.W), y = cam.y + rand(-10, cam.H * 0.6);
+      g.particles.emit(x, y, 60, rand(10, 25) + wind * 75, rand(5, 15), -18, 3.2, 1, pick([PC.d, PC.O, PC.b, PC.y]), P.FADE, 0.1);
     }
   }
 
@@ -233,6 +236,7 @@ export class Forest {
       const r = clamp((g.phase - 30) / 15, 0, 1) * 0.45;
       c = [lerp(c[0], 170, r), lerp(c[1], 70, r), lerp(c[2], 90, r)];
     }
+    if (g.weather) c = g.weather.tint(c);
     if (g.dawn > 0) {
       const d = clamp(g.dawn, 0, 1);
       c = [lerp(c[0], 255, d), lerp(c[1], 244, d), lerp(c[2], 228, d)];
@@ -241,13 +245,15 @@ export class Forest {
   }
 
   drawOverlay(ctx, cam, time) {
-    // Two drifting fog layers.
+    // Two drifting fog layers, carried downwind (to the east, as the leaves fall) faster as the
+    // wind rises (weather.js).
+    if (this.g.weather) time = this.g.weather.drift;
     const S = cam.S;
     const fog = this.fog;
     const scale = S * 3;
     const tw = fog.width * scale, th = fog.height * scale;
     for (let layer = 0; layer < 2; layer++) {
-      const ox = -(((cam.x * (layer ? 1.15 : 0.85) + time * (layer ? 6 : 3.5)) * S) % tw) - tw;
+      const ox = -((((cam.x * (layer ? 1.15 : 0.85) - time * (layer ? 6 : 3.5)) * S) % tw + tw) % tw) - tw;
       const oy = -(((cam.y * (layer ? 1.15 : 0.85) + time * (layer ? 1.5 : 0.8)) * S) % th) - th;
       ctx.globalAlpha = layer ? 0.06 : 0.09;
       for (let y = oy; y < cam.pxH; y += th) for (let x = ox; x < cam.pxW; x += tw) ctx.drawImage(fog, x, y, tw, th);

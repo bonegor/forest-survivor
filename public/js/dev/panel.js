@@ -15,6 +15,7 @@ import { FLOORS, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, minuteOf, po
 import { fmtTime } from '../engine/util.js';
 import { DEBUG } from '../engine/storage.js';
 import { xpFor } from '../game/player.js';
+import { SKIES } from '../game/weather.js';
 import { goalText } from '../ui/ladder.js';
 
 const BOSSES = Object.keys(ENEMIES).filter((id) => ENEMIES[id].boss);
@@ -456,7 +457,9 @@ export function createDevPanel(app) {
       live.textContent = `${MODES[g.mode].name}${g.mode === 'dungeon' ? ` · floor ${g.floor}` : ''}\n` +
         `time ${fmtTime(g.time)} · phase ${g.phase.toFixed(1)} · state ${g.state}\n` +
         `L${p.level} · HP ${Math.ceil(p.hp)}/${p.maxHp} · fury ${Math.floor(p.fury)} · blessings ${p.blessings}\n` +
-        `${g.enemies.filter((e) => !e.dead).length} foes · ${g.kills} kills · ${g.gold} gold${g.boss && !g.boss.dead ? ` · boss ${g.boss.def.name} ${Math.ceil(g.boss.hp)}` : ''}`;
+        `${g.enemies.filter((e) => !e.dead).length} foes · ${g.kills} kills · ${g.gold} gold${g.boss && !g.boss.dead ? ` · boss ${g.boss.def.name} ${Math.ceil(g.boss.hp)}` : ''}` +
+        (g.weather ? `
+weather ${g.weather.kind} · rain ${g.weather.now.rain.toFixed(2)} · wind ${g.weather.now.wind.toFixed(2)}` : '');
       brings.textContent = minuteText(g);
       if (kitSig(p) !== shown) fillKit();
     };
@@ -538,6 +541,11 @@ export function createDevPanel(app) {
           return 'Descending';
         }),
       ),
+      // The weather from now on (weather.js Weather.force): in over a few seconds, the forecast after it made again.
+      el('div', { class: 'row' }, ...(g.weather ? Object.keys(SKIES) : []).map((k) => act(`Weather: ${k}`, (g2) => {
+        g2.weather.force(k);
+        return `The weather turns to ${k}`;
+      }))),
       el('div', { class: 'row' }, bSel, act('Spawn boss', (g2, p) => {
         const pt = g2.world.spawnPoint(g2, 30) || { x: p.x + 90, y: p.y };
         g2.spawnBoss(bSel.value, pt.x, pt.y);

@@ -294,7 +294,7 @@ export const store = {
 // diff: Normal ('easy'), Veteran ('medium') or Elite ('hard'), and nightmare: its box ticked or not,
 // as last chosen on the trial screen.
 // skins: each hero's look as chosen on the hero screen (data/heroes.js heroLook), hero -> skin id.
-const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {} };
+const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {} };
 
 export function loadSettings() {
   try {

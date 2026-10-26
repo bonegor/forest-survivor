@@ -190,7 +190,7 @@ const LIMITS = {
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
   furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
-  rumble: [1, 1], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1],
+  rumble: [1, 1], thunder: [0.8, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
 };
 
@@ -413,6 +413,15 @@ const SFX = {
     noise(t, { filter: 'lowpass', f0: 120, f1: 420, dur: 1.6, vol: 0.32 * LEVEL.rumble, attack: 1.3, curve: 'lin' });
     tone(t, { type: 'sine', f0: 38, f1: 52, dur: 1.6, vol: 0.3 * LEVEL.rumble, attack: 1.2 });
   },
+  // Thunder (game/weather.js): size 1 close by, a crack and a heavy roll; less, far off, only a
+  // soft late rumble.
+  thunder: (t, o) => {
+    const k = o.size;
+    if (k > 0.6) noise(t, { filter: 'highpass', f0: 1800, f1: 500, dur: 0.3, vol: 0.22 * k, pan: o.pan });
+    noise(t + 0.02, { filter: 'lowpass', f0: 250 + 700 * k, f1: 50, dur: 2.2 + 1.2 * (1 - k), vol: 0.42 * k, attack: 0.03 + 0.5 * (1 - k), pan: o.pan });
+    tone(t, { type: 'sine', f0: 52, f1: 30, dur: 1.8, vol: 0.22 * k, attack: 0.05 + 0.4 * (1 - k) });
+    noise(t + 0.7, { filter: 'lowpass', f0: 320, f1: 60, dur: 2.6, vol: 0.18 * k, attack: 0.4, curve: 'lin', pan: -o.pan * 0.5 });
+  },
   // A crypt's lord waking: a short sting, two low stabs.
   lordsting: (t) => {
     tone(t, { type: 'sawtooth', f0: 147, dur: 0.18, vol: 0.12, lp: 1200 });
@@ -553,6 +562,62 @@ export function duckMusic(secs = DUCK.secs, db = DUCK.db) {
   g.linearRampToValueAtTime(low, now + DUCK.down);
   g.setValueAtTime(low, now + Math.max(DUCK.down, secs - DUCK.up));
   g.linearRampToValueAtTime(1, now + secs);
+}
+
+// The weather's beds (game/weather.js): rain, a hiss, and wind, a band of noise moving with the
+// gusts (gust 0..1), both under the sound effects' volume. Each call holds them where asked for a
+// moment; called no more (a pause, the menus, the run's end), they fade out by themselves.
+const BED = { rain: null, wind: null };
+function bed(make) {
+  const ctx = A.ctx, src = ctx.createBufferSource();
+  src.buffer = A.noiseBuf;
+  src.loop = true;
+  const f = make(ctx), g = ctx.createGain();
+  g.gain.value = 0;
+  src.connect(f[0]);
+  f[f.length - 1].connect(g);
+  g.connect(A.sfxBus);
+  src.start(0, Math.random());
+  return { g, f };
+}
+function hold(param, v, now) {
+  param.cancelScheduledValues(now);
+  param.setValueAtTime(param.value, now);
+  param.setTargetAtTime(v, now, 0.35);
+  param.setTargetAtTime(0, now + 0.6, 0.3);
+}
+export function weatherBed(rain, wind, gust = 0.5) {
+  if (!A.ctx || !A.noiseBuf) return;
+  try {
+    const now = A.ctx.currentTime;
+    if (!BED.rain && rain > 0) {
+      BED.rain = bed((ctx) => {
+        const hp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 700;
+        lp.type = 'lowpass';
+        lp.frequency.value = 5500;
+        hp.connect(lp);
+        return [hp, lp];
+      });
+    }
+    if (!BED.wind && wind > 0) {
+      BED.wind = bed((ctx) => {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.Q.value = 0.9;
+        bp.frequency.value = 400;
+        return [bp];
+      });
+    }
+    if (BED.rain) hold(BED.rain.g.gain, 0.1 * rain, now);
+    if (BED.wind) {
+      hold(BED.wind.g.gain, 0.13 * wind * (0.45 + 0.55 * gust), now);
+      BED.wind.f[0].frequency.setTargetAtTime(220 + 520 * gust * (0.5 + wind * 0.5), now, 0.5);
+    }
+  } catch {
+    /* audio graph errors should never break the game */
+  }
 }
 
 // The sounds' names, and those with a limit, for the tests.

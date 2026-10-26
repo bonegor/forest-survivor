@@ -748,7 +748,7 @@ export class OptionsScreen {
       sfx('hit');
     }
     y += 17;
-    for (const [key, label] of [['shake', 'SCREEN SHAKE'], ['numbers', 'DAMAGE NUMBERS'], ['crt', 'CRT SCANLINES'], ['fps', 'SHOW FPS']]) {
+    for (const [key, label] of [['shake', 'SCREEN SHAKE'], ['numbers', 'DAMAGE NUMBERS'], ['weather', 'WEATHER'], ['crt', 'CRT SCANLINES'], ['fps', 'SHOW FPS']]) {
       if (stepper(ctx, ui, 'o_' + key, x, y, w, label, s[key] ? 'ON' : 'OFF')) {
         s[key] = !s[key];
         changed();

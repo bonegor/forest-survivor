@@ -29,6 +29,7 @@ import { SpatialGrid } from './grid.js';
 import { jostle, CROWD } from './crowd.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
+import { Weather } from './weather.js';
 import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
@@ -304,6 +305,8 @@ export class Game {
     if (this.mode === 'dungeon') this.enterFloor(this.floor);
     else {
       this.world = new Forest(this, this.seed);
+      // The night's weather (weather.js): the forest's only, forecast from the run's seed.
+      this.weather = new Weather(this);
       this.player.x = this.world.start.x;
       this.player.y = this.world.start.y;
       playMusic('forest');
@@ -2004,6 +2007,7 @@ export class Game {
     }
 
     this.world.update(dt);
+    if (this.weather) this.weather.update(dt);
     // Sweep last frame's dead before indexing; the grid must match the array.
     const E = this.enemies;
     for (let i = E.length - 1; i >= 0; i--) {
@@ -2308,6 +2312,7 @@ export class Game {
 
     // Lighting.
     this.world.addLights(this);
+    if (this.weather) this.weather.addLights(this);
     for (const d of this.crypts) if (!d.sealed && onScreen(c, d.x, d.y, 80)) this.light(d.x, d.y - 8, 44 + 4 * Math.sin(d.t * 2), 'purple', 0.8);
     const flick = 0.94 + 0.06 * Math.sin(this.clock * 9) * Math.sin(this.clock * 5.3);
     this.light(p.x, p.y - 6, (this.mode === 'dungeon' ? 130 : 125) * flick, 'warm', 1);
@@ -2339,6 +2344,7 @@ export class Game {
     ctx.globalCompositeOperation = 'source-over';
 
     if (this.world.drawOverlay) this.world.drawOverlay(ctx, c, this.clock);
+    if (this.weather) this.weather.draw(ctx, c);
     // The foes' shots over everything, unlit: none can be lost behind a tree, in the horde or
     // in the dark.
     for (const s of this.eshots) s.draw(ctx, c);
