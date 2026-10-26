@@ -52,8 +52,11 @@ export const pocketAt = (minute) => POCKETS.find((p) => minute >= p.minutes[0] &
 // Run's second and third, whose rate is already high: 30 seconds of it would be the cap at once);
 // what comes a frame is `perFrame` spawn points at most (a Goblin brings three),
 // and what can't come (at the cap, nowhere to stand) isn't owed: no more than `carry` seconds'
-// worth wait at a time, so a stall never pours out all at once.
-export const HORDE_RATE = { turn: 20, early: 30, settle: 4, knee: 100, head: 30, headLate: 8, carry: 1, perFrame: 6 };
+// worth wait at a time, so a stall never pours out all at once. The steady horde stops `room`
+// short of the cap (HORDE_CAP.most), what it would send then simply not coming: a wave on Elite
+// can fill the cap in seconds, and a swarm, ring or pack must still find room (they come in the
+// place of foes off the screen, and the steady horde's stand just past its edge).
+export const HORDE_RATE = { turn: 20, early: 30, settle: 4, knee: 100, head: 30, headLate: 8, carry: 1, perFrame: 6, room: 200 };
 export function hordeRate(phase) {
   const R = HORDE_RATE, m = minuteOf(phase);
   const turn = R.turn + (R.early - R.turn) * Math.max(0, 1 - m / R.settle);

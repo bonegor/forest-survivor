@@ -89,9 +89,10 @@ test('a Nightmare triples the steady horde and the timed swarms, rings and packs
     const calm = game({ diff }), dread = game({ diff, nightmare: true });
     const kinds = new Set();
     for (const ev of EVENTS) {
-      const n = ev.count * (ev.type === 'ring' ? RING.more : 1) * rules.horde * (isFew(ev.enemy) ? rules.few : 1) * lateMore(rules, ev.at) * minuteMore(ev.at);
-      assert.equal(sent(calm, ev, ev.at), Math.max(1, Math.round(n)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, as it was`);
-      assert.equal(sent(dread, ev, ev.at), Math.max(1, Math.round(n * 3)), `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, three times over`);
+      // A ring brings RING.more times its count (spawner.js RING), after the rounding.
+      const n = ev.count * rules.horde * (isFew(ev.enemy) ? rules.few : 1) * lateMore(rules, ev.at) * minuteMore(ev.at), k = ev.type === 'ring' ? RING.more : 1;
+      assert.equal(sent(calm, ev, ev.at), Math.max(1, Math.round(n)) * k, `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, as it was`);
+      assert.equal(sent(dread, ev, ev.at), Math.max(1, Math.round(n * 3)) * k, `${diff}: ${ev.type} of ${ev.enemy} at ${ev.at}, three times over`);
       kinds.add(ev.type);
     }
     assert.deepEqual([...kinds].sort(), ['pack', 'ring', 'swarm']);

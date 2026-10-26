@@ -181,7 +181,8 @@ test('a ring round the hero at the cap comes in full, in the place of foes off t
     if (e) came++;
     return e;
   };
-  g.spawner.fire({ type: 'ring', enemy: 'zombie', count: 40 }, 12);
+  // A ring brings three times its count since 26 October 2026 (spawner.js RING): 14 is about the old 40's.
+  g.spawner.fire({ type: 'ring', enemy: 'zombie', count: 14 }, 12);
   assert.ok(asked > HORDE_CAP.perFrame, `a ring bigger than a frame's room (${asked})`);
   assert.equal(came, asked, 'every one of the ring came');
   assert.ok(shown.every((e) => !e.dead), 'none on the screen made room');

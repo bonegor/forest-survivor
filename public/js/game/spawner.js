@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { EVENTS, SWARM_BATCH, batchEvents, HORDE_RATE, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { EVENTS, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
@@ -75,7 +75,7 @@ export class Spawner {
     this.thiefT = rand(140, 220);
     this.propT = 4;
     this.shrineT = 45;
-    this.joltT = rand(...JOLT.every);
+    this.joltT = null; // the next jolt, rolled at the first update (so a new Game draws no random number for it)
     this.bossIdx = 0;
     this.loopAt = 0; // Ranked: next looping event, in phase minutes (put in events when near)
     this.warnIdx = 0; // the next of events to announce (warn)
@@ -193,6 +193,8 @@ export class Spawner {
       if (this.owed === null) this.owed = this.rate(phase) * (phase < 1 ? R.head : R.headLate);
       // At most `carry` seconds' worth wait (a head start may be more, and only runs down).
       this.owed = Math.min(this.owed + rate * dt, Math.max(this.owed, 1 + rate * R.carry));
+      // Room kept for what is sent at the hero (HORDE_RATE.room): what was due doesn't come.
+      if (g.enemies.length - g.propCount >= HORDE_CAP.most - R.room) this.owed = Math.min(this.owed, 0);
       const st = this.owed >= 1 ? { ...this.stats(phase), steady: true } : null;
       for (let i = 0; i < R.perFrame && this.owed >= 1; i++) {
         const type = this.pickType(phase);
@@ -236,6 +238,7 @@ export class Spawner {
     }
 
     // Jolts, from where the hero is headed.
+    this.joltT ??= rand(...JOLT.every);
     this.joltT -= dt;
     if (this.joltT <= 0) {
       this.joltT = rand(...JOLT.every);
