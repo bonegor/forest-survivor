@@ -118,7 +118,9 @@ test('applyRun pays gold, records wins and clamps impossible reports', () => {
   assert.equal(r.profile.best.s15, 900);
 
   const cheat = P.applyRun(p, { mode: 's15', diff: 'easy', victory: false, time: 10, gold: 1e9, kills: 1e9 });
-  assert.ok(cheat.profile.gold < 1000, 'gold is capped by run time');
+  const tenSeconds = P.goldCap({ mode: 's15', time: 10, realTime: 10, found: 0 }, 1);
+  assert.ok(tenSeconds < 2000, `ten seconds could pick up ${tenSeconds}`);
+  assert.ok(cheat.profile.gold <= Math.round(tenSeconds * P.DIFF_GOLD.easy) + Math.round(10 * P.PROGRESS.wage * P.DIFF_GOLD.easy), 'gold is capped by run time');
   assert.ok(cheat.profile.kills <= 50 + 10 * 240);
   assert.equal(P.sanitizeRun({ mode: 's15', time: 900, realTime: 900, gold: 30000 }).gold, 30000, 'a greedy night keeps its gold');
   assert.equal(P.applyRun(P.defaultProfile(), { mode: 's15', diff: 'medium', time: 10, gold: 1e9 }).reward.gold, P.goldCap({ mode: 's15', time: 10, realTime: 10, found: 0 }, 1), 'the reward says what was credited');

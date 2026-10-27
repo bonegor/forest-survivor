@@ -119,6 +119,7 @@ export const store = {
   unreadable: null, // { profile: true } when a save exists but can't be read
   offline: false, // the game's server can't be reached: nothing can be loaded or saved
   watching: false, // another tab's saving is heard (init)
+  kept: true, // this tab's last save is what the browser now holds (saveLocal)
 
   async init() {
     for (const name of STALE_RUNS) if (readCookie(name) != null) writeCookie(name, null);
@@ -170,16 +171,23 @@ export const store = {
     if (bad) await this.reset();
   },
 
+  // Read back, as a write can fail and leave an older save to be read (a full localStorage, as on
+  // itch.io, where every game shares one: saveBox.write falls back to a cookie that read() never
+  // reaches while the older copy is there).
   saveLocal() {
-    saveBox.write(LOCAL_PROFILE, P.encodeState(P.packProfile(this.profile)));
+    const raw = P.encodeState(P.packProfile(this.profile));
+    saveBox.write(LOCAL_PROFILE, raw);
+    this.kept = saveBox.read(LOCAL_PROFILE) === raw;
   },
 
   // The browser's save as another tab of the game may have left it (local mode). Every change starts
   // from it, and another tab's saving is read at once (init), so two tabs never write over each
   // other's gold, unlocks, gear or purchases (27 October 2026). A save that is gone or can't be read
-  // leaves the profile in hand (a browser that keeps nothing still keeps the session's progress).
+  // leaves the profile in hand (a browser that keeps nothing still keeps the session's progress),
+  // and so does one this tab could not write over (saveLocal kept): the older save would undo the
+  // runs and purchases since.
   reload() {
-    if (this.mode !== 'local') return;
+    if (this.mode !== 'local' || !this.kept) return;
     const raw = saveBox.read(LOCAL_PROFILE);
     const profile = raw ? P.decodeState(raw) : null;
     if (!profile) return;
@@ -319,6 +327,7 @@ export const store = {
     this.profile = P.defaultProfile();
     if (DEBUG) unlockEverything(this.profile);
     saveBox.write(LOCAL_PROFILE, null);
+    this.kept = saveBox.read(LOCAL_PROFILE) == null;
   },
 };
 

@@ -26,8 +26,9 @@
 // by milestones, kept as bits (ul: PROGRESS.locks in order; uu: HERO_ORDER in order); weapon and
 // relic slots are Armory ranks (Arsenal, Reliquary), as are all rerolls and banishes.
 
-import { RARITIES, LEGENDARY, MAX_LORDS, sanitizeGear, packGear, sameItem, itemPrice, statRange } from './items.js';
+import { RARITIES, LEGENDARY, MAX_LORDS, SLOTS, POOLS, sanitizeGear, packGear, sameItem, itemPrice, statRange } from './items.js';
 import { FLOORS } from '../data/waves.js';
+import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from './progress.js';
 
 export { PROGRESS, needText };
@@ -107,10 +108,21 @@ const SECS_PER_CRYPT = 45;
 const MAX_GOLD_PER_SEC = 12;
 // The most the hero's greed (Player.recompute) multiplies it beyond the Armory's: a legendary
 // ring's best roll of gold (one may be found and worn mid-run) and the Cursed Skulls, +50% each,
-// three at most (game/game.js MAX_SKULLS). Fortune, the Armory's luck, adds none: luck weights no
-// coin or gold pile; a Fortune shrine's doubled coins last moments, well inside the cap's room.
+// three at most (game/game.js MAX_SKULLS). A Fortune shrine's doubled coins last moments, well
+// inside the cap's room.
 const MOST_SKULLS = 3;
 const RUN_GREED = (1 + statRange('greed', LEGENDARY)[1] / 100) * (1 + 0.5 * MOST_SKULLS);
+// And the most the hero's luck (Player.recompute) multiplies it: luck multiplies the odds of the
+// horde's coin (Game.killEnemy) and of a chest's extra cards, gold among them when the run's
+// auto-pick is gold and nothing is left to raise (Game.rollChest), so it grows that gold by as much
+// as it is (27 October 2026: the cap once said luck weights no coin, and cut a lucky build's). A
+// box's coins and gold piles it only makes rarer (PROP_LOOT).
+// The most luck: the Rogue's (data/heroes.js, the luckiest hero), the Armory's Fortune at its top
+// rank, a full Lucky Clover and a legendary piece's best roll of luck in every slot that rolls it.
+const MOST_HERO_LUCK = 1.2;
+const RUN_LUCK = MOST_HERO_LUCK * (1 + 0.1 * UPGRADES.find((u) => u.id === 'fortune').max)
+  * (1 + PASSIVES.luck.max * PASSIVES.luck.stat.luck
+    + SLOTS.filter((s) => POOLS[s].includes('luck')).length * statRange('luck', LEGENDARY)[1] / 100);
 // The Armory's Greed at its top rank (metaBonuses), for a run checked without its save.
 const TOP_GREED = 1 + 0.1 * UPGRADES.find((u) => u.id === 'greed').max;
 
@@ -123,11 +135,11 @@ function phaseAt(mode, time) {
 }
 
 // The most gold a run could pick up (sanitizeRun): MAX_GOLD_PER_SEC for each second played, grown
-// as the filler purse grows with the phase (Game.filler, 1 + phase / 10) and by the most greed the
-// run could have, its Armory's (`armory`, metaBonuses greed) times RUN_GREED; and what selling a
-// crypt lord's gear could pay.
+// as the filler purse grows with the phase (Game.filler, 1 + phase / 10), by the most greed the
+// run could have, its Armory's (`armory`, metaBonuses greed) times RUN_GREED, and by the most luck
+// (RUN_LUCK); and what selling a crypt lord's gear could pay.
 export function goldCap(run, armory = TOP_GREED) {
-  const rate = MAX_GOLD_PER_SEC * (1 + phaseAt(run.mode, run.time) / 10) * armory * RUN_GREED;
+  const rate = MAX_GOLD_PER_SEC * (1 + phaseAt(run.mode, run.time) / 10) * armory * RUN_GREED * RUN_LUCK;
   return Math.floor(100 + run.realTime * rate + run.found * RARITIES[LEGENDARY].price);
 }
 const MIN_WIN_TIME = { s15: 15 * 60 - 5, dungeon: 4 * 60 };
