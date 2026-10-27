@@ -459,7 +459,7 @@ export function createDevPanel(app) {
         `L${p.level} · HP ${Math.ceil(p.hp)}/${p.maxHp} · fury ${Math.floor(p.fury)} · blessings ${p.blessings}\n` +
         `${g.enemies.filter((e) => !e.dead).length} foes · ${g.kills} kills · ${g.gold} gold${g.boss && !g.boss.dead ? ` · boss ${g.boss.def.name} ${Math.ceil(g.boss.hp)}` : ''}` +
         (g.weather ? `
-weather ${g.weather.kind} · rain ${g.weather.now.rain.toFixed(2)} · wind ${g.weather.now.wind.toFixed(2)}` : '');
+weather ${g.weather.kind} · rain ${g.weather.now.rain.toFixed(2)}` : '');
       brings.textContent = minuteText(g);
       if (kitSig(p) !== shown) fillKit();
     };

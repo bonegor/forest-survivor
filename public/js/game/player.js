@@ -325,6 +325,8 @@ export class Player {
       if (this.stepT <= 0) {
         this.stepT = 22;
         g.particles.emit(this.x + rand(-2, 2), this.y, 0, rand(-8, 8), rand(-4, 2), 6, 0.4, 1, g.world.dustColor ?? PC.N, P.FADE | P.GROUND, 3, 30);
+        // On ground the rain has wet, each step squelches (weather.js).
+        if (g.weather?.wet && !this.leap) sfx('wetstep');
       }
     }
 

@@ -88,9 +88,9 @@ export class Forest {
       this.shrineT = 0.5;
       this.syncShrines();
     }
-    // Fireflies and falling leaves: the fireflies hide from the rain, the wind tears more leaves
-    // down and blows them along (weather.js). The same draws of Math.random whatever the weather.
-    const w = g.weather ? g.weather.now : null, wind = w ? w.wind : 0, wet = w ? w.rain : 0;
+    // Fireflies and falling leaves: the fireflies hide from the rain (weather.js). The same draws
+    // of Math.random whatever the weather.
+    const wet = g.weather ? g.weather.now.rain : 0;
     this.ffT -= dt;
     while (this.ffT <= 0) {
       this.ffT += 0.12;
@@ -100,9 +100,9 @@ export class Forest {
     }
     this.leafT -= dt;
     if (this.leafT <= 0) {
-      this.leafT = rand(0.3, 0.8) / (1 + wind * 4);
-      const x = cam.x + rand(-wind * 120, cam.W), y = cam.y + rand(-10, cam.H * 0.6);
-      g.particles.emit(x, y, 60, rand(10, 25) + wind * 75, rand(5, 15), -18, 3.2, 1, pick([PC.d, PC.O, PC.b, PC.y]), P.FADE, 0.1);
+      this.leafT = rand(0.3, 0.8);
+      const x = cam.x + rand(0, cam.W), y = cam.y + rand(-10, cam.H * 0.6);
+      g.particles.emit(x, y, 60, rand(10, 25), rand(5, 15), -18, 3.2, 1, pick([PC.d, PC.O, PC.b, PC.y]), P.FADE, 0.1);
     }
   }
 
@@ -245,9 +245,7 @@ export class Forest {
   }
 
   drawOverlay(ctx, cam, time) {
-    // Two drifting fog layers, carried downwind (to the east, as the leaves fall) faster as the
-    // wind rises (weather.js).
-    if (this.g.weather) time = this.g.weather.drift;
+    // Two drifting fog layers, drifting east as the leaves fall.
     const S = cam.S;
     const fog = this.fog;
     const scale = S * 3;

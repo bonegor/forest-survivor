@@ -8,7 +8,8 @@
 //
 // What goes in (releaseFiles): the page and its icon, the game's code without the developer panel
 // (js/dev) and the bots (js/bots), the art (assets/), and of the music only the pieces
-// audio/music/tracks.json plays, with their credits and licences. Not the menu-music candidates,
+// audio/music/tracks.json plays, with their credits and licences, and the recorded sound effects
+// (audio/sfx/). Not the menu-music candidates,
 // the unlisted pages, nor anything else in public/. Every module the game imports must be in the
 // copy, or the build fails (checkImports).
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -47,6 +48,7 @@ export function releaseFiles(pub = PUBLIC) {
     MUSIC + 'CREDITS.md',
     ...walk(pub, MUSIC + 'licences'),
     ...music,
+    ...walk(pub, 'audio/sfx'),
   ];
   return [...new Set(files)].sort();
 }

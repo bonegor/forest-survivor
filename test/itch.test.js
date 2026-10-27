@@ -71,9 +71,9 @@ test('the release holds the game and its music, not the developer\'s tools, the 
   const files = releaseFiles();
   const tracks = JSON.parse(readFileSync(new URL('../public/audio/music/tracks.json', import.meta.url), 'utf8'));
   for (const e of Object.values(tracks)) assert.ok(files.includes('audio/music/' + (typeof e === 'string' ? e : e.file)), JSON.stringify(e));
-  for (const f of ['index.html', 'favicon.svg', 'js/main.js', 'js/engine/build.js', 'audio/music/CREDITS.md', 'assets/ui/CREDITS.md']) assert.ok(files.includes(f), f);
+  for (const f of ['index.html', 'favicon.svg', 'js/main.js', 'js/engine/build.js', 'audio/music/CREDITS.md', 'audio/sfx/CREDITS.md', 'audio/sfx/rain.ogg', 'assets/ui/CREDITS.md']) assert.ok(files.includes(f), f);
   for (const f of files) {
-    assert.ok(/^(index\.html|favicon\.svg|js\/|assets\/|audio\/music\/)/.test(f), `${f}: only the game's own folders`);
+    assert.ok(/^(index\.html|favicon\.svg|js\/|assets\/|audio\/(music|sfx)\/)/.test(f), `${f}: only the game's own folders`);
     assert.ok(!/^js\/(dev|bots)\//.test(f) && !/^audio\/music\/menu\//.test(f), `${f}: left out`);
   }
   assert.ok(files.length <= 1000, 'within itch.io\'s 1,000 files');

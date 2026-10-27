@@ -97,7 +97,78 @@ export function initAudio() {
   A.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
   const d = A.noiseBuf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  loadSamples();
   if (A.songName) startPiece(A.songName);
+}
+
+// ------------------------------------------------------------- samples --
+
+// The few recorded sounds (audio/sfx/, credited in its CREDITS.md): the weather's thunder and rain
+// and the hero's steps on wet ground. Fetched and decoded once the sound starts; until a file is
+// in, or if it never comes, its sound falls back to the synthesised one or stays quiet.
+const SFX_DIR = 'audio/sfx/';
+const SAMPLES = {
+  thunder: ['thunder-2.ogg', 'thunder-3.ogg', 'thunder-4.ogg', 'thunder-5.ogg', 'thunder-6.ogg'],
+  bigthunder: ['thunder-1.ogg'],
+  rain: ['rain.ogg'],
+  wetstep: ['step-wet-1.ogg', 'step-wet-2.ogg', 'step-wet-3.ogg', 'step-wet-4.ogg', 'step-wet-5.ogg', 'step-wet-6.ogg'],
+};
+const BUFS = new Map(); // file -> AudioBuffer
+
+function loadSamples() {
+  if (typeof fetch !== 'function') return;
+  for (const file of new Set(Object.values(SAMPLES).flat())) {
+    fetch(SFX_DIR + file)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(file))))
+      .then((data) => new Promise((ok, fail) => A.ctx.decodeAudioData(data, ok, fail)))
+      .then((buf) => BUFS.set(file, buf))
+      .catch(() => {});
+  }
+}
+
+// One of the sample's files, at random among those in.
+function sampleBuf(name) {
+  const bufs = (SAMPLES[name] || []).map((f) => BUFS.get(f)).filter(Boolean);
+  return bufs.length ? bufs[Math.floor(Math.random() * bufs.length)] : null;
+}
+
+// A sample played once: false if none of its files is in yet. `echo` sends it through a few
+// repeats, each softer and darker than the last, as off the hills around.
+function sample(t, name, o = {}) {
+  const buf = sampleBuf(name);
+  if (!buf) return false;
+  const ctx = A.ctx, src = ctx.createBufferSource(), g = ctx.createGain();
+  src.buffer = buf;
+  src.playbackRate.value = o.rate ?? 1;
+  g.gain.value = o.vol ?? 0.5;
+  src.connect(g);
+  const dest = out(o.pan);
+  g.connect(dest);
+  if (o.echo) {
+    const d = ctx.createDelay(2), fb = ctx.createGain(), lp = ctx.createBiquadFilter(), wet = ctx.createGain();
+    d.delayTime.value = o.echo.delay;
+    fb.gain.value = o.echo.feedback;
+    lp.type = 'lowpass';
+    lp.frequency.value = o.echo.lp;
+    wet.gain.value = o.echo.wet;
+    g.connect(d);
+    d.connect(lp);
+    lp.connect(fb);
+    fb.connect(d);
+    lp.connect(wet);
+    wet.connect(out(-(o.pan || 0) * 0.6));
+    // The loop dies away by itself; cut it once it has, so it holds nothing.
+    const left = buf.duration / (o.rate ?? 1) + o.echo.delay * 14;
+    setTimeout(() => {
+      try {
+        fb.disconnect();
+      } catch {
+        /* already gone */
+      }
+    }, left * 1000);
+  }
+  src.start(t);
+  return true;
 }
 
 export function setVolumes(music, sfx) {
@@ -190,7 +261,7 @@ const LIMITS = {
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
   furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
-  rumble: [1, 1], thunder: [0.8, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1],
+  rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
 };
 
@@ -199,6 +270,13 @@ const LIMITS = {
 // level-up, the boss's stir 3 dB under its fall; the swarm's and the pack's warnings within 3 dB
 // of the ring's.
 const LEVEL = { evolve: 1.6, chest3: 0.72, record: 1.8, rumble: 0.55, warnswarm: 5.5, warnpack: 4 };
+
+// The recorded weather's levels (the files are levelled to about -18 LUFS, the rain -20, the steps
+// peaking at -3 dBFS). The opening clap's echo: a repeat every `delay` seconds, each `feedback`
+// as loud as the last and darker (`lp`), all of them `wet` under the clap.
+const THUNDER = { vol: 0.5, big: 0.6, echo: { delay: 0.42, feedback: 0.42, lp: 1400, wet: 0.55 } };
+const RAIN_LEVEL = 0.4;
+const WET_STEP = 0.15;
 
 const SFX = {
   hit: (t, o) => {
@@ -413,15 +491,23 @@ const SFX = {
     noise(t, { filter: 'lowpass', f0: 120, f1: 420, dur: 1.6, vol: 0.32 * LEVEL.rumble, attack: 1.3, curve: 'lin' });
     tone(t, { type: 'sine', f0: 38, f1: 52, dur: 1.6, vol: 0.3 * LEVEL.rumble, attack: 1.2 });
   },
-  // Thunder (game/weather.js): size 1 close by, a crack and a heavy roll; less, far off, only a
+  // Thunder (game/weather.js): a recorded clap and roll, softer the smaller `size` (far off). Until
+  // the recordings are in, synthesised: size 1 close by, a crack and a heavy roll; less, only a
   // soft late rumble.
   thunder: (t, o) => {
     const k = o.size;
+    if (sample(t, 'thunder', { vol: THUNDER.vol * k, pan: o.pan, rate: 0.94 + Math.random() * 0.12 })) return;
     if (k > 0.6) noise(t, { filter: 'highpass', f0: 1800, f1: 500, dur: 0.3, vol: 0.22 * k, pan: o.pan });
     noise(t + 0.02, { filter: 'lowpass', f0: 250 + 700 * k, f1: 50, dur: 2.2 + 1.2 * (1 - k), vol: 0.42 * k, attack: 0.03 + 0.5 * (1 - k), pan: o.pan });
     tone(t, { type: 'sine', f0: 52, f1: 30, dur: 1.8, vol: 0.22 * k, attack: 0.05 + 0.4 * (1 - k) });
     noise(t + 0.7, { filter: 'lowpass', f0: 320, f1: 60, dur: 2.6, vol: 0.18 * k, attack: 0.4, curve: 'lin', pan: -o.pan * 0.5 });
   },
+  // The thunder that opens a spell of rain: the biggest clap, echoing off the hills.
+  bigthunder: (t, o) => {
+    if (!sample(t, 'bigthunder', { vol: THUNDER.big, pan: o.pan, echo: THUNDER.echo })) SFX.thunder(t, o);
+  },
+  // A step on wet ground (game/player.js, while it rains): a squelch in the mud.
+  wetstep: (t) => sample(t, 'wetstep', { vol: WET_STEP, rate: 0.9 + Math.random() * 0.2 }),
   // A crypt's lord waking: a short sting, two low stabs.
   lordsting: (t) => {
     tone(t, { type: 'sawtooth', f0: 147, dur: 0.18, vol: 0.12, lp: 1200 });
@@ -564,21 +650,23 @@ export function duckMusic(secs = DUCK.secs, db = DUCK.db) {
   g.linearRampToValueAtTime(1, now + secs);
 }
 
-// The weather's beds (game/weather.js): rain, a hiss, and wind, a band of noise moving with the
-// gusts (gust 0..1), both under the sound effects' volume. Each call holds them where asked for a
-// moment; called no more (a pause, the menus, the run's end), they fade out by themselves.
-const BED = { rain: null, wind: null };
-function bed(make) {
+// The weather's bed (game/weather.js): rain, the recorded shower looping under the sound effects'
+// volume (a filtered hiss until the recording is in). Each call holds it where asked for a moment;
+// called no more (a pause, the menus, the run's end), it fades out by itself.
+const BED = { rain: null };
+function bed(make, buf) {
   const ctx = A.ctx, src = ctx.createBufferSource();
-  src.buffer = A.noiseBuf;
+  src.buffer = buf || A.noiseBuf;
   src.loop = true;
-  const f = make(ctx), g = ctx.createGain();
+  const f = buf ? [] : make(ctx), g = ctx.createGain();
   g.gain.value = 0;
-  src.connect(f[0]);
-  f[f.length - 1].connect(g);
+  if (f.length) {
+    src.connect(f[0]);
+    f[f.length - 1].connect(g);
+  } else src.connect(g);
   g.connect(A.sfxBus);
-  src.start(0, Math.random());
-  return { g, f };
+  src.start(0, Math.random() * src.buffer.duration);
+  return { g, f, src, sampled: !!buf };
 }
 function hold(param, v, now) {
   param.cancelScheduledValues(now);
@@ -586,10 +674,16 @@ function hold(param, v, now) {
   param.setTargetAtTime(v, now, 0.35);
   param.setTargetAtTime(0, now + 0.6, 0.3);
 }
-export function weatherBed(rain, wind, gust = 0.5) {
+export function weatherBed(rain) {
   if (!A.ctx || !A.noiseBuf) return;
   try {
-    const now = A.ctx.currentTime;
+    const now = A.ctx.currentTime, shower = sampleBuf('rain');
+    // The hiss gives way to the recording once it is in.
+    if (BED.rain && !BED.rain.sampled && shower) {
+      BED.rain.g.gain.setTargetAtTime(0, now, 0.3);
+      BED.rain.src.stop(now + 2);
+      BED.rain = null;
+    }
     if (!BED.rain && rain > 0) {
       BED.rain = bed((ctx) => {
         const hp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter();
@@ -599,22 +693,9 @@ export function weatherBed(rain, wind, gust = 0.5) {
         lp.frequency.value = 5500;
         hp.connect(lp);
         return [hp, lp];
-      });
+      }, shower);
     }
-    if (!BED.wind && wind > 0) {
-      BED.wind = bed((ctx) => {
-        const bp = ctx.createBiquadFilter();
-        bp.type = 'bandpass';
-        bp.Q.value = 0.9;
-        bp.frequency.value = 400;
-        return [bp];
-      });
-    }
-    if (BED.rain) hold(BED.rain.g.gain, 0.1 * rain, now);
-    if (BED.wind) {
-      hold(BED.wind.g.gain, 0.13 * wind * (0.45 + 0.55 * gust), now);
-      BED.wind.f[0].frequency.setTargetAtTime(220 + 520 * gust * (0.5 + wind * 0.5), now, 0.5);
-    }
+    if (BED.rain) hold(BED.rain.g.gain, (BED.rain.sampled ? RAIN_LEVEL : 0.1) * rain, now);
   } catch {
     /* audio graph errors should never break the game */
   }
