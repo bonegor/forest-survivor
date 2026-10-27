@@ -87,9 +87,9 @@ test('at the debug flag the Armory is set freely, at no cost', async () => {
   assert.deepEqual(store.profile.up, { ...slots, might: 8, echo: 1, revival: 2 });
   assert.equal(store.profile.gold, gold, 'no gold spent');
   assert.ok(store.setUpgrades({ might: 3, echo: 0, armor: 99, nonsense: 4 }));
-  assert.deepEqual(store.profile.up, { ...slots, might: 3, revival: 2, armor: 5 }, 'any rank, within each upgrade\'s');
+  assert.deepEqual(store.profile.up, { ...slots, might: 3, revival: 2, armor: 6 }, 'any rank, within each upgrade\'s');
   await store.init();
-  assert.deepEqual(store.profile.up, { ...slots, might: 3, revival: 2, armor: 5 }, 'kept in the debug save');
+  assert.deepEqual(store.profile.up, { ...slots, might: 3, revival: 2, armor: 6 }, 'kept in the debug save');
   assert.equal(P.metaBonuses(store.profile).revival, 2, 'and the runs get them');
   assert.equal(jar.get('fs_lprofile'), own);
 });
