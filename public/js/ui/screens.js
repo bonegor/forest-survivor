@@ -853,6 +853,13 @@ export class OptionsScreen {
     ui.begin(dt);
     const w = Math.min(220, W - 30), x = Math.round(W / 2 - w / 2);
     let y = 36;
+    // Nine rows 17 apart, and RESET PROGRESS below them, run into CONTROLS and CREDITS at H - 44 on
+    // a short window (27 October 2026: an 854x480 itch.io embed is 240 high), so a short screen
+    // packs the rows down to 14 apart and then narrows the spacer before RESET PROGRESS, and the
+    // column ends two pixels above the footer buttons.
+    const foot = H - 46, rows = 9;
+    const step = clamp(Math.floor((foot - y - 13 - (embedded ? 0 : 8)) / (embedded ? rows - 1 : rows)), 14, 17);
+    const gap = clamp(foot - y - 13 - rows * step, 2, 8);
     const changed = () => {
       saveSettings(s);
       setVolumes(s.music, s.sfx);
@@ -863,37 +870,37 @@ export class OptionsScreen {
       s.music = clamp(Math.round(s.music * 10 + d) / 10, 0, 1);
       changed();
     }
-    y += 17;
+    y += step;
     d = stepper(ctx, ui, 'o_sfx', x, y, w, 'SOUND EFFECTS', `${Math.round(s.sfx * 100)}%`);
     if (d) {
       s.sfx = clamp(Math.round(s.sfx * 10 + d) / 10, 0, 1);
       changed();
       sfx('hit');
     }
-    y += 17;
+    y += step;
     // FLASHES: FULL, or SOFT for eyes that want less (27 October 2026): white flashes held to
     // FLASH_SOFT, crits in steady gold, no white pulse on a boss's bar.
     if (stepper(ctx, ui, 'o_flash', x, y, w, 'FLASHES', s.softFlash ? 'SOFT' : 'FULL')) {
       s.softFlash = !s.softFlash;
       changed();
     }
-    y += 17;
+    y += step;
     for (const [key, label] of [['shake', 'SCREEN SHAKE'], ['numbers', 'DAMAGE NUMBERS'], ['weather', 'WEATHER'], ['crt', 'CRT SCANLINES'], ['fps', 'SHOW FPS']]) {
       if (stepper(ctx, ui, 'o_' + key, x, y, w, label, s[key] ? 'ON' : 'OFF')) {
         s[key] = !s[key];
         changed();
       }
-      y += 17;
+      y += step;
     }
     if (button(ctx, ui, 'o_full', x, y, w, 13, document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN')) app.toggleFullscreen();
-    y += 17;
+    y += step;
     // Erasing everything stands apart from the rest, so a press too many down the list can't land on it.
-    y += 8;
+    y += gap;
     if (!embedded) {
       if (button(ctx, ui, 'o_reset', x, y, w, 13, 'RESET PROGRESS', { color: '#f6757a' })) {
         this.dialog = new MenuDialog('Erase progress?', ['This deletes your gold, heroes, equipment, upgrades and records.', 'This cannot be undone.'], [{ id: 'reset', label: 'ERASE ALL PROGRESS', color: '#f6757a' }]);ui.focus('detail_close');ui.lock(0.2);
       }
-      y += 17;
+      y += step;
     }
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true }) || input.pressed('back')) {
       if (embedded) return 'close';
