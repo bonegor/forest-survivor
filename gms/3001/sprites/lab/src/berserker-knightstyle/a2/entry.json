@@ -1,0 +1,63 @@
+{
+ "cls": "berserker",
+ "kind": "proposal",
+ "id": "knightstyle-a2",
+ "name": "Berserker · Knight style A (both eyes)",
+ "description": "A faithful redraw of Ulfric in the plumed Knight’s style. He wears a grey-brown wolf’s head as a hood (ears up, the snout and fangs over his brow, an amber wolf’s eye), and its pelt runs on down his back into a two-lobed fur cape with the wolf’s pale-tipped tail swinging beneath it. Under the snout: a shadowed brow, two fierce eyes and a big red beard braided through a gold ring, the one strong accent. Bare, heavy arms in sun-browned skin with leather bracers, a dark leather jerkin with a strap and gold stud, a belt and a kilt of leather strips, fur-wrapped shins. Broader and heavier than the Knight at the Knight’s height. He holds two bearded axes up and out, ready; their steel heads carry a 1 px bright edge. Idle: a heavy breath with the cape rippling and the tail swaying a beat behind. Walk: a planted stride, the axes swinging against the legs, cape and tail streaming. Attack: he gathers, raises both axes overhead, cocks them back behind his head, then crashes them down on frame 19 inside a wide white crescent, the axes biting the ground and throwing up chips, and recovers. No black outline: every edge is a dark tone of its own material, all ramps hue-shifted. The head is turned a little toward the viewer, so both eyes show under the wolf’s snout (near eye, a pixel of light skin at the bridge, far eye, the far cheek past it), with the nose just under them.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/berserker-knightstyle/a2/berserker-a2.px.js",
+ "made": "2026-10-27T16:44:25.352Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/berserker-knightstyle-a2.png",
+ "rows": [
+  "right"
+ ],
+ "emissive": null
+}

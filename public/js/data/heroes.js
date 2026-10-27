@@ -114,7 +114,8 @@ export const HEROES = {
     sprite: 'paladin',
     pose: 'paladin_pose',
     // Her two looks to pick from (27 October 2026), each with a cylindrical head set off the shoulders:
-    // Style C, a barrel helm (lab paladin/knightstyle-c), and Style D, a squared hood (knightstyle-d).
+    // Style C, a barrel helm (lab paladin/knightstyle-c2), and Style D, a squared hood (knightstyle-d2),
+    // both with her head turned so both eyes show.
     skins: [
       { id: 'c', name: 'Style C', sprite: 'paladin', pose: 'paladin_pose' },
       { id: 'd', name: 'Style D', sprite: 'paladin_d', pose: 'paladin_d_pose' },

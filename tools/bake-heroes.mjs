@@ -28,11 +28,13 @@ const BAKE = {
   rogue: 'rogue/eclipse-wraith-tweak-1',
   // Her two looks to pick from: Style B with a barrel helm (C), Style A with a squared hood (D),
   // each head made cylindrical and set off the shoulders.
-  paladin: 'paladin/knightstyle-c',
-  paladin_d: 'paladin/knightstyle-d',
-  druid: 'druid/knightstyle-a',
-  berserker: 'berserker/knightstyle-a',
-  witchhunter: 'witchhunter/knightstyle-a',
+  // These four heroes' heads, as the Sorcerer's, turned a little toward us so both eyes show (the
+  // owner's, 27 October 2026: "both eyes are visible like in case of ranger, necromancer").
+  paladin: 'paladin/knightstyle-c2',
+  paladin_d: 'paladin/knightstyle-d2',
+  druid: 'druid/knightstyle-a2',
+  berserker: 'berserker/knightstyle-a2',
+  witchhunter: 'witchhunter/knightstyle-a2',
   // Kept in the lab for villains, not baked: rogue/knightstyle-b (the Wraith) and
   // necromancer/knightstyle-b (the Grave lord).
 };

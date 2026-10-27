@@ -1,0 +1,68 @@
+{
+ "cls": "witchhunter",
+ "kind": "proposal",
+ "id": "knightstyle-a2",
+ "name": "Witch Hunter · Knight style A (both eyes)",
+ "description": "A faithful redraw of Mercy Crane in the plumed Knight’s style: a wide-brimmed grey felt hat with a red band and a brass buckle, brown hair falling to her shoulders, a long grey-blue frock coat buttoned in silver over a white falling-band collar, a belt with a brass buckle, charcoal breeches and tall leather boots, and a silver crossbow with a walnut stock. As on the Knight there is no black outline (every edge a dark shade of its own material) and the ramps are hue-shifted, cool violet in the shadows and warm grey-pink in the lights. Her head is turned a little toward the viewer, so both eyes show in the shade of the brim, with the bridge of her nose between them and her mouth turned in from the profile. The coat’s tails flap out behind her as his cape does and her hair sways, rippling in the breathing idle and streaming back on the walk. She raises the crossbow, aims it at the shoulder, holds while the bolt’s silver head glints, and looses on frame 19: a white flash bursts at the prod and a thick silver streak flies out of the frame, the recoil kicking the nose up, rocking her back and jolting her hat; the streak breaks into dashes and she spans the string again. The silver bolt head glows at night.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/witchhunter-knightstyle/a2/witchhunter-a2.px.js",
+ "made": "2026-10-27T16:43:52.146Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 12,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/witchhunter-knightstyle-a2.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#dff6ff"
+ ]
+}
