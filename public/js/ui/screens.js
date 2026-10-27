@@ -52,7 +52,7 @@ function header(ctx, W, title, y = 4) {
 // one; Enter takes it; Escape goes back. Not on a touch screen, nor where it would reach BACK.
 function keysHint(ctx, W, H, text = 'ARROWS move · ENTER select · ESC back') {
   if (input.device === 'touch') return;
-  if (input.device === 'pad') text = text.replace('ARROWS', 'D-PAD').replace('ENTER', 'A').replace('ESC', 'B');
+  if (input.device === 'pad') text = text.replace('ARROWS', 'D-PAD').replace('Q/E', 'LB/RB').replace('ENTER', 'A').replace('ESC', 'B');
   if (textWidth(text) > W - 2 * 76) return;
   drawText(ctx, text, W / 2, H - 16, { align: 'center', color: '#5a6988', outline: null });
 }
@@ -490,12 +490,17 @@ export class ArmoryScreen {
 
 // ------------------------------------------------------------------ codex --
 
-// One collection: exclusions, weapons, relics and owned heroes' ultimates, all within reach of the
-// keys (the owner's, 26 October 2026): the arrows walk the grid and it scrolls to follow, Page Up
-// and Page Down a screenful at a time; the tile in focus is told in full in the panel under the
-// grid, no window to open; Enter on an open weapon is a switch, out of runs or back in; Escape goes
-// back to the title, onto CODEX. The wheel and a touch drag scroll it too.
-export const CODEX_TILE = { min: 150, max: 210, h: 48, gap: 5, top: 42, foot: 30, detail: 66 };
+// The collection in three tabs, four tiles to a row and a short panel under them (the owner's, 27
+// October 2026: the screen filled, easy to find one's way about): WEAPONS, with the exclusion slots
+// last, RELICS and owned heroes' ULTIMATES, each tab telling how many are open. All within reach of
+// the keys: the arrows walk the grid and it scrolls to follow, up off its top row onto the tabs; Q
+// and E (a pad's shoulders) the tab before or after from anywhere; Page Up and Page Down a
+// screenful at a time; the tile in focus is told in full in the panel under the grid, no window to
+// open; Enter on an open weapon is a switch, out of runs or back in; Escape goes back to the title,
+// onto CODEX. The wheel and a touch drag scroll it too.
+export const CODEX_TILE = { min: 104, max: 170, cols: 4, h: 33, gap: 3, top: 43, foot: 30, detail: 44 };
+export const CODEX_TABS = [['weapon', 'WEAPONS'], ['relic', 'RELICS'], ['ult', 'ULTIMATES']];
+let codexLastTab = 'weapon'; // the tab the Codex opens on: the one last left
 
 export function menuEntries(profile) {
   const entries = codexEntries(profile), hidden = entries.filter(e => e.hidden);
@@ -504,22 +509,30 @@ export function menuEntries(profile) {
   return ['feature', 'weapon', 'relic', 'ult'].flatMap(type => visible.filter(e => e.type === type));
 }
 
+// One tab's tiles, in menuEntries' order: the weapons' with the exclusion slots after them.
+export function codexTab(profile, tab) {
+  const all = menuEntries(profile);
+  return [...all.filter((e) => e.type === tab), ...(tab === 'weapon' ? all.filter((e) => e.type === 'feature') : [])];
+}
+const tabOf = (e) => (e.type === 'feature' ? 'weapon' : e.type);
+const tileId = (e) => `cx_${e.type}_${e.id}`;
+
 // The tiles' grid for n of them on a W x H screen: as many columns as fit CODEX_TILE.min wide
-// (at most three), below the heading and above the detail panel (taller on a narrow screen, whose
+// (at most four), below the tabs and above the detail panel (taller on a narrow screen, whose
 // lines wrap more), the BACK button and the keys' line.
 export function codexLayout(W, H, n) {
   const C = CODEX_TILE;
-  const width = Math.min(480, W - 24);
-  const cols = clamp(Math.floor((width + C.gap) / (C.min + C.gap)), 1, 3);
+  const width = Math.min(C.cols * C.max + (C.cols - 1) * C.gap, W - 24);
+  const cols = clamp(Math.floor((width + C.gap) / (C.min + C.gap)), 1, C.cols);
   const cw = Math.min(C.max, Math.floor((width - (cols - 1) * C.gap) / cols));
-  const detail = width < 360 ? C.detail + 27 : C.detail;
+  const gw = cols * cw + (cols - 1) * C.gap;
+  const detail = gw < 360 ? C.detail + 27 : C.detail;
   // 11: room over the panel for the plate with its name.
   const step = C.h + C.gap, room = H - C.top - C.foot - detail - 11;
   // Whole rows only, never one cut in half over the panel.
   const rows = Math.max(1, Math.floor((room + C.gap) / step)), total = Math.ceil(n / cols);
   const view = Math.min(room, rows * step - C.gap);
   const most = Math.max(0, total * step - C.gap - view);
-  const gw = cols * cw + (cols - 1) * C.gap;
   return { cols, rows, total, cw, ch: C.h, step, view, most, gw, detail, x0: Math.round(W / 2 - gw / 2), y0: C.top };
 }
 
@@ -538,8 +551,8 @@ export function codexDetail(e, prof) {
   const lines = [codexDescription(e)];
   const slots = exclusionState(prof), used = prof.home?.length || 0;
   if (e.type === 'feature') {
-    lines.push({ text: `${slotsText(used, slots.level)} · ${fmtNum(prof.kills)} monsters slain`, color: '#fee761' });
-    if (e.next) lines.push({ text: `Next slot: ${e.need.toLowerCase()}`, color: '#feae34' });
+    const next = e.next ? ` · next slot: ${e.need.toLowerCase()}` : '';
+    lines.push({ text: `${slotsText(used, slots.level)} · ${fmtNum(prof.kills)} monsters slain${next}`, color: '#fee761' });
   } else if (!e.open && !e.hidden) lines.push({ text: [shortNeed(e.need), codexRecord(e)].filter(Boolean).join(' · '), color: '#feae34' });
   const recipe = evolutionRecipe(e);
   if (recipe) lines.push({ text: recipe, color: '#fee761' });
@@ -564,8 +577,9 @@ export class CodexScreen {
     this.drag = null; // a press in the grid: where it began, and whether it has become a drag
     this.seen = null; // the focus last frame: a new one by the keys is scrolled into view
     this.shown = null; // the tile the panel tells of: the last in focus, kept while BACK has it
+    this.tab = codexLastTab;
     app.ui.lock(0.2);
-    app.ui.focusId = 'cx_feature_exclusions';
+    app.ui.focusId = tileId(codexTab(app.store.profile, this.tab)[0]);
   }
 
   draw(ctx, W, H, dt) {
@@ -574,13 +588,17 @@ export class CodexScreen {
     dim(ctx, W, H, 0.6);
     header(ctx, W, 'The Codex');
     ui.begin(dt);
-    drawText(ctx, 'Weapons · Relics · Ultimates · Unlocks', W / 2, 27, { align: 'center', color: '#8b9bb4' });
-    const list = menuEntries(prof);
+    // A tile of another tab put in focus from outside: its tab shown.
+    const held = menuEntries(prof).find((e) => ui.focusId === tileId(e));
+    if (held) this.setTab(tabOf(held));
+    this.tabKeys(prof);
+    this.tabs(ctx, ui, W, prof);
+    const list = codexTab(prof, this.tab);
     const L = codexLayout(W, H, list.length);
     this.page(list, L);
     this.scrollGrid(L, dt);
     // The focus moved onto a tile by the keys or a pad: brought into view.
-    const at = list.findIndex((e) => ui.focusId === `cx_${e.type}_${e.id}`);
+    const at = list.findIndex((e) => ui.focusId === tileId(e));
     if (ui.focusId !== this.seen) this.message = null;
     if (at >= 0 && ui.focusId !== this.seen) {
       const top = Math.floor(at / L.cols) * L.step;
@@ -601,7 +619,7 @@ export class CodexScreen {
       const row = Math.floor(i / L.cols);
       if ((row < r0 || row > r1) && row !== fr) return;
       const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = Math.round(L.y0 + row * L.step - this.scroll);
-      const fid = `cx_${e.type}_${e.id}`;
+      const fid = tileId(e);
       if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out, disabled: !codexSwitchable(e, prof) })) this.toggle(e);
       const f = ui.focused(fid);
       if (f) this.shown = fid;
@@ -617,18 +635,56 @@ export class CodexScreen {
       ctx.fillStyle = '#8b9bb4';
       ctx.fillRect(bx, by, 2, bh);
     }
-    const shown = list.find((e) => `cx_${e.type}_${e.id}` === this.shown) || list[0];
-    this.drawDetail(ctx, shown, L.x0, L.y0 + L.view + 11, L.gw, L.detail);
+    const shown = list.find((e) => tileId(e) === this.shown) || list[0];
+    if (shown) this.drawDetail(ctx, shown, L.x0, L.y0 + L.view + 11, L.gw, L.detail);
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) this.exit();
     const weapon = at >= 0 && list[at].type === 'weapon' && list[at].open;
-    keysHint(ctx, W, H, weapon ? `ARROWS move · ENTER ${list[at].home ? 'include' : 'exclude'} · ESC back` : 'ARROWS move · ESC back');
+    keysHint(ctx, W, H, `ARROWS move · Q/E tabs · ${weapon ? `ENTER ${list[at].home ? 'include' : 'exclude'} · ` : ''}ESC back`);
     ui.end();
     this.seen = ui.focusId;
     if (input.pressed('back')) this.exit();
   }
 
   exit() {
+    codexLastTab = this.tab;
     this.app.go(this.back, this.back === 'title' ? { focus: 'codex' } : {});
+  }
+
+  // Another tab: its grid from the top, its panel on its first tile.
+  setTab(tab) {
+    if (tab === this.tab) return;
+    this.tab = tab;
+    this.scroll = this.want = 0;
+    this.shown = null;
+  }
+
+  // The tabs over the grid, each with how many of its kind are open (the hidden weapons among the
+  // shut). A click picks one; so does the focus brought onto one by the keys, and up or down into
+  // the row lands on the one shown.
+  tabs(ctx, ui, W, prof) {
+    const all = codexEntries(prof);
+    const tw = Math.min(104, Math.floor((W - 32) / 3)), tx = Math.round((W - 3 * tw - 8) / 2);
+    CODEX_TABS.forEach(([id, label], i) => {
+      const of = all.filter((e) => e.type === id), bid = `ct_${id}`, on = this.tab === id;
+      const text = `${label} ${of.filter((e) => e.open).length}/${of.length}`;
+      if (button(ctx, ui, bid, tx + i * (tw + 4), 25, tw, 14, text, { on, group: 'codex_tabs', home: on })) this.setTab(id);
+      if (ui.focused(bid) && ui.focusSource !== 'pointer') this.setTab(id);
+    });
+  }
+
+  // Q and E (a pad's shoulders): the tab before or after, round and round; the focus goes with it,
+  // onto the new tab's button from the tabs, onto its first tile from the grid.
+  tabKeys(prof) {
+    const ui = this.app.ui, dir = input.pressed('tabNext') - input.pressed('tabPrev');
+    if (!dir || ui.lockT > 0) return;
+    const i = CODEX_TABS.findIndex(([id]) => id === this.tab);
+    const to = CODEX_TABS[(i + dir + CODEX_TABS.length) % CODEX_TABS.length][0];
+    const first = codexTab(prof, to)[0];
+    const onTabs = ui.focusId?.startsWith('ct_') || !first;
+    this.setTab(to);
+    ui.focusId = onTabs ? `ct_${to}` : tileId(first);
+    ui.focusSource = 'keys';
+    sfx('ui');
   }
 
   // Enter, Space or a click on an open weapon: out of runs, or back in (codexSwitchable; on any
@@ -644,10 +700,10 @@ export class CodexScreen {
   page(list, L) {
     const ui = this.app.ui, dir = input.pressed('pageDown') - input.pressed('pageUp');
     if (!dir || ui.lockT > 0) return;
-    const at = list.findIndex((e) => ui.focusId === `cx_${e.type}_${e.id}`);
+    const at = list.findIndex((e) => ui.focusId === tileId(e));
     const to = clamp(at < 0 ? 0 : at + dir * L.rows * L.cols, 0, list.length - 1);
-    if (to === at) return;
-    ui.focusId = `cx_${list[to].type}_${list[to].id}`;
+    if (to === at || !list.length) return;
+    ui.focusId = tileId(list[to]);
     ui.focusSource = 'keys';
     sfx('ui');
   }
@@ -686,28 +742,26 @@ export class CodexScreen {
     if (Math.abs(this.want - this.scroll) < 0.5) this.scroll = this.want;
   }
 
-  // One entry's tile: its icon and name; under them, shut, what opens it and a bar of how far the
-  // records have come; open, what it does. An open weapon has its switch: on while runs offer it.
+  // One entry's tile: its icon and name; under them, in up to two lines, shut, what opens it over a
+  // bar of how far the records have come; open, what it does. An open weapon has its switch in the
+  // top corner: on while runs offer it.
   tile(ctx, e, x, y, w, h, f) {
-    const open = e.open;
+    const open = e.open, sw = e.type === 'weapon' && open;
     panel(ctx, x, y, w, h, { trim: f ? ['#fee761', '#be4a2f'] : open ? ['#5a6988', '#3a4466'] : ['#3a4466', '#262b44'], rivets: false, fill: open ? '#15131f' : '#120e18' });
-    codexIcon(ctx, e, x + 4, y + 4);
+    codexIcon(ctx, e, x + 4, y + Math.floor((h - 16) / 2));
     const tx = x + 23, room = w - 27;
-    drawText(ctx, fitLine(tileName(e), room), tx, y + 4, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
+    drawText(ctx, fitLine(tileName(e), sw ? room - 17 : room), tx, y + 3, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
     const lines = wrapText(e.home ? 'Excluded from runs' : codexSummary(e), room);
     if (lines.length > 2) lines[1] = fitLine(lines.slice(1).join(' '), room);
-    lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 14 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
-    const kind = { weapon: 'WEAPON', relic: 'RELIC', ult: 'ULTIMATE', feature: `LEVEL ${e.level}` }[e.type];
-    drawText(ctx, kind, tx, y + h - 13, { color: '#8b9bb4' });
+    lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 12 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
     if (!open || (e.type === 'feature' && e.next)) codexBar(ctx, tx, y + h - 4, room, e.progress, '#feae34');
-    if (e.type === 'weapon' && open) codexSwitch(ctx, x + w - 20, y + h - 12, !e.home);
+    if (sw) codexSwitch(ctx, x + w - 18, y + 4, !e.home);
   }
 }
 
-// An open weapon's switch, 14 x 7 at (x, y), its word beside it: green with the knob right while
-// runs offer the weapon, iron with the knob left while it is excluded.
+// An open weapon's switch, 14 x 7 at (x, y): green with the knob right while runs offer the
+// weapon, iron with the knob left while it is excluded.
 function codexSwitch(ctx, x, y, on) {
-  drawText(ctx, on ? 'ON' : 'OFF', x - 3, y - 1, { align: 'right', color: on ? '#9ee562' : '#f6757a' });
   ctx.fillStyle = '#0d0b14';
   ctx.fillRect(x, y, 14, 7);
   ctx.fillStyle = on ? '#3e8948' : '#3a4466';

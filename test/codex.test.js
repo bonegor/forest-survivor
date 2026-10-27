@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
-import { CodexScreen, codexLayout, CODEX_TILE, menuEntries } from '../public/js/ui/screens.js';
+import { CodexScreen, codexLayout, codexTab, CODEX_TILE, menuEntries } from '../public/js/ui/screens.js';
 import { chipRows } from '../public/js/ui/gamescreen.js';
 import { codexEntries, codexRecord, nearestLocks } from '../public/js/ui/ladder.js';
 import { UI } from '../public/js/ui/ui.js';
@@ -28,38 +28,43 @@ const everything = () => {
 };
 
 test('the Codex: every tab\'s tiles on the screen at every size, scrolling where they run over', () => {
-  const all = codexEntries(everything());
+  const prof = everything();
   for (const [W, H] of SIZES) {
     for (const type of ['weapon', 'relic', 'ult']) {
-      const n = all.filter((e) => e.type === type).length, L = codexLayout(W, H, n);
+      const n = codexTab(prof, type).length, L = codexLayout(W, H, n);
       assert.ok(L.x0 >= 4 && L.x0 + L.cols * L.cw + (L.cols - 1) * CODEX_TILE.gap <= W - 4, `${W}x${H} ${type}: within the sides`);
       assert.ok(L.y0 + L.view <= H - CODEX_TILE.foot, `${W}x${H} ${type}: above the foot`);
       assert.ok(L.total * L.step - CODEX_TILE.gap - L.most <= L.view, `${W}x${H} ${type}: scrolled to the end, the last row in sight`);
       assert.equal(L.most > 0, L.total > L.rows, `${W}x${H} ${type}: it scrolls only where it runs over`);
       assert.ok(L.cw >= CODEX_TILE.min || L.cols === 1, `${W}x${H} ${type}: tiles wide enough for their lines`);
+      if (W >= 480) assert.equal(L.cols, 4, `${W}x${H} ${type}: four to a row`);
     }
   }
 });
 
-test('one Codex list contains every category and stays on screen while scrolling', () => {
+test("the Codex's tabs hold every category; a tile of another tab in focus shows its tab, scrolled to it", () => {
   for (const prof of [defaultProfile(), everything()]) {
     for (const [W, H] of SIZES) {
       const app = { ui: new UI(), scene: { draw() {} }, store: { profile: prof }, go() {} };
       const s = new CodexScreen();
       s.enter(app);
       s.draw(ctx, W, H, 1 / 60);
-      const entries = menuEntries(prof), L = codexLayout(W, H, entries.length);
+      const entries = menuEntries(prof), ults = codexTab(prof, 'ult'), L = codexLayout(W, H, ults.length);
       assert.deepEqual([...new Set(entries.map(e => e.type))], ['feature', 'weapon', 'relic', 'ult']);
+      assert.equal(s.tab, 'weapon');
+      assert.equal(codexTab(prof, 'weapon').at(-1).id, 'exclusions', 'the exclusion slots after the weapons');
       assert.ok(app.ui.items.some(i => i.id === 'cx_feature_exclusions'));
-      assert.ok(!app.ui.items.some(i => ['cx_weapon', 'cx_relic', 'cx_ult', 'cx_next'].includes(i.id)));
+      assert.ok(['ct_weapon', 'ct_relic', 'ct_ult'].every(id => app.ui.items.some(i => i.id === id)), 'the three tabs');
+      assert.ok(!app.ui.items.some(i => i.id.startsWith('cx_relic_')), 'one tab at a time');
       assert.ok(app.ui.items.some(i => i.id === 'back'));
       for (const it of app.ui.items) {
         assert.ok(it.x >= 0 && it.x + it.w <= W);
         assert.ok(it.y >= 0 && (it.id.startsWith('cx_') ? it.y < H : it.y + it.h <= H));
       }
-      const last = entries.at(-1);
+      const last = ults.at(-1);
       app.ui.focusId = `cx_${last.type}_${last.id}`;
       for (let i = 0; i < 90; i++) s.draw(ctx, W, H, 1 / 60);
+      assert.equal(s.tab, 'ult');
       assert.equal(s.want, L.most);
       const tile = app.ui.items.find(i => i.id === `cx_${last.type}_${last.id}`);
       assert.ok(tile && tile.y >= L.y0 && tile.y + tile.h <= L.y0 + L.view);
@@ -126,13 +131,15 @@ test('the Codex scrolls: the wheel a row, the keys bring the focused tile into v
   const starts = weapons.filter((e) => e.start).length;
   assert.equal(starts, 4, "four open from the start: a line of four on a 1280-wide screen");
   assert.equal(weapons[starts].id, 'aura', 'Consecration first on the second line');
-  const [W, H] = [480, 270]; // 1920 x 1080: the weapons run over
+  const [W, H] = [480, 270]; // 1920 x 1080: the relics run over
   const app = { ui: new UI(), scene: { draw() {} }, store: { profile: prof }, go() {} };
   const s = new CodexScreen();
   s.enter(app);
   app.ui.lockT = 0;
-  const L = codexLayout(W, H, entries.length);
-  assert.ok(L.most > 0, 'every weapon is more than a screen');
+  const relics = codexTab(prof, 'relic');
+  app.ui.focusId = `cx_relic_${relics[0].id}`;
+  const L = codexLayout(W, H, relics.length);
+  assert.ok(L.most > 0, 'every relic is more than a screen');
   const frame = () => {
     s.draw(ctx, W, H, 1 / 60);
     input.mouse.wheel = 0;
@@ -143,7 +150,7 @@ test('the Codex scrolls: the wheel a row, the keys bring the focused tile into v
   for (let i = 0; i < 60; i++) frame();
   assert.equal(s.scroll, L.step, 'a notch, a row');
   // The last tile focused (as the keys would): scrolled to it.
-  const last = entries.at(-1);
+  const last = relics.at(-1);
   app.ui.focusId = `cx_${last.type}_${last.id}`;
   for (let i = 0; i < 60; i++) frame();
   assert.equal(s.scroll, L.most, 'down to the end');

@@ -10,6 +10,9 @@ const BIND = {
   // A page of a long list at a time (the Codex's grid).
   pageUp: { keys: ['PageUp'], pad: [] },
   pageDown: { keys: ['PageDown'], pad: [] },
+  // The tab before or after, wherever the focus is (the Codex's tabs): the shoulder buttons on a pad.
+  tabPrev: { keys: ['KeyQ'], pad: [4] },
+  tabNext: { keys: ['KeyE'], pad: [5] },
   confirm: { keys: ['Enter', 'NumpadEnter', 'Space'], pad: [0] },
   // Confirm without Space, for choices that pop up mid-fight while Space is the ultimate.
   select: { keys: ['Enter', 'NumpadEnter'], pad: [0] },

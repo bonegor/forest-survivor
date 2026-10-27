@@ -50,7 +50,7 @@ export function codexSummary(e) {
 }
 
 export function codexDescription(e) {
-  if (e.type === 'feature') return 'Each level gives one more exclusion slot: switch a weapon off below and no run offers it, until you switch it back on. Your hero always keeps their signature weapon.';
+  if (e.type === 'feature') return 'Each level gives one more exclusion slot: switch a weapon off here and no run offers it, until you switch it back on. Your hero always keeps their signature weapon.';
   if (e.hidden) return 'Win your first night to reveal this weapon.';
   return e.type === 'weapon' ? WEAPONS[e.id].desc : e.type === 'relic' ? PASSIVES[e.id].desc : HEROES[e.id].ultDesc;
 }
