@@ -100,13 +100,15 @@ test('four minutes of a Nightmare past the cap: no XP lost, never over 380 gems 
         d.run(t - g.time);
         const gems = liveGems(g);
         most = Math.max(most, gems.filter((pk) => !pk.pulled).length);
-        for (const pk of gems) richest = Math.max(richest, pk.value);
+        // Lying about: one already flying to him is XP he has as good as picked up (the 2,500 cap
+        // of 27 October 2026 lets a ring come whole, and a fold by him can grow big on its way in).
+        for (const pk of gems) if (!pk.pulled) richest = Math.max(richest, pk.value);
       }
       assert.ok(folds > 0, `${o.hero}: the cap was reached`);
       assert.ok(most <= 380, `${o.hero}: at most 380 gems lay about unpulled (${most})`);
       assert.ok(Math.abs(xp.collected + sum(liveGems(g)) - xp.dropped) < 1e-6 * xp.dropped, `${o.hero}: no XP is lost: picked up or still lying about`);
       // The oldest gem used to grow past 1 000 XP while he fought elsewhere.
-      assert.ok(richest <= 300, `${o.hero}: the richest gem held ${richest} XP`);
+      assert.ok(richest <= 300, `${o.hero}: the richest gem lying about held ${richest} XP`);
     });
   }
 });

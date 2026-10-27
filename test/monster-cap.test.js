@@ -58,7 +58,7 @@ test('the threshold is well off the screen: beyond its corners and where the hor
   const g = game();
   const half = Math.hypot(g.cam.W, g.cam.H) / 2;
   assert.ok(farOf(g) > half + HORDE_CAP.edge, 'farther than any corner of the screen');
-  assert.equal(HORDE_CAP.most, 900);
+  assert.equal(HORDE_CAP.most, 2500);
   assert.ok(HORDE_CAP.perFrame > 0 && HORDE_CAP.perFrame <= 20);
 });
 
@@ -132,7 +132,7 @@ test("a box comes at the cap all the same, and takes no monster's place", () => 
   assert.equal(g.horde ? g.horde.recycled : 0, 0, 'none recycled');
 });
 
-test('when all 900 stand within the threshold, the spawn is refused as before', () => {
+test('when the whole cap stands within the threshold, the spawn is refused as before', () => {
   const g = game(), p = g.player, F = farOf(g);
   // Off the screen all round, but nearer than the threshold.
   const off = [];
