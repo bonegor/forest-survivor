@@ -24,6 +24,9 @@ import { spriteExtent } from './hitbox.js';
 const N_SRC = 24;
 // How much of its speed a monster that hasn't seen the hero strolls at (Dungeon.wander).
 export const STROLL = 0.5;
+// How much of its speed a monster on a Dungeon Run floor keeps while its feet are in a wall, a
+// pillar or lava, which it goes straight through there (Dungeon.throughWalls): "slightly slower".
+export const WALL_PACE = 0.8;
 // Champions aren't pushed by blows: a blow stops one for HOLD seconds instead, and it
 // can't be stopped again until HOLD_EVERY seconds after that, so hits can't pin it.
 export const HOLD = 0.2, HOLD_EVERY = 0.6;
@@ -110,6 +113,14 @@ export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast:
 // A flyer is drawn up off the ground, bobbing a little (draw, body).
 const HOVER = { up: 6, bob: 2 };
 
+// A sealed guardian (dungeon.js) is iced over, the owner's (27 October 2026) "let it look like its
+// being defrosted": the frozen tint (TINTS.frozen, a frozen foe's) over it at `most` while its seal
+// holds whole, thinning to `least` as the seal breaks (thaw), when the last of it bursts off
+// (Dungeon.thawBurst). Its outline burns in `rim` for as much as the ice is on it, its own colour
+// coming back as it thaws, and a cold sheen at `sheen` of the ice glows round it; its ward glows at
+// `ward`, fading to `wardLeast` of that as the seal breaks.
+export const FROST = { most: 1, least: 0.3, rim: '#9ee7ff', sheen: 0.2, ward: 0.5, wardLeast: 0.3 };
+
 export class Enemy {
   constructor() {
     this.hitT = new Float32Array(N_SRC);
@@ -136,6 +147,7 @@ export class Enemy {
     this._mOn = undefined;
     this.shatterOnDeath = undefined; // Game.hitEnemy
     this.sealed = undefined; // dungeon.js, a guardian
+    this.thaw = undefined; // dungeon.js, a sealed guardian: how far its seal is broken (0-1)
   }
 
   init(g, type, x, y, o = {}) {
@@ -233,6 +245,9 @@ export class Enemy {
     this.alpha = def.alpha || 1;
     this.squash = 0;
     this.sleeping = !!o.sleeping; // dungeon guardians wait for you
+    // A floor's guardian is sealed once spawned (Dungeon.populate); one back from the pool is not.
+    this.sealed = false;
+    this.thaw = 0;
     this.lord = !!o.lord; // one of a crypt's named bosses, each asleep in a room of its own
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
     this.summoned = !!o.summoned; // called up round the hero by a boss (Game.summonRing)
@@ -343,6 +358,10 @@ export class Enemy {
       this.holdT -= dt;
       sp = 0;
     }
+    // On a Dungeon Run floor it comes through walls, pillars and lava, slower while its feet are in
+    // one (WALL_PACE), whatever its heading; a flier goes over them and a Wraith through them anywhere,
+    // at their own pace.
+    if (g.world.throughWalls && !def.fly && def.ai !== 'phaser' && !g.world.free(this.x, this.y)) sp *= WALL_PACE;
 
     let dx = 0, dy = 0;
     if (this.lockT > 0) {
@@ -478,7 +497,7 @@ export class Enemy {
     const kd = Math.exp(-9 * dt);
     this.kx *= kd;
     this.ky *= kd;
-    if (!def.fly && def.ai !== 'phaser') g.world.collide(this);
+    if (this.walled) g.world.collide(this);
     if (this.blowT > 0) this.blowInto(dt);
     // It faces the way it goes (facing.js); held, frozen or winding up, it isn't going anywhere.
     if (sp > 0) this.face = faceAlong(this.face, dx, dy);
@@ -514,6 +533,16 @@ export class Enemy {
   // pull or fright moves him (22 October 2026: "the thief now seems to jump").
   get movable() {
     return !(this.dead || this.boss || this.lord || this.elite || this.prop || this.sealed || this.sleeping || this.dormant || this.spawnT > 0 || this.def.ai === 'flee');
+  }
+
+  // Whether walls hold it (Dungeon.collide, Game.separate): a walker's do in a crypt, and the Gilded
+  // Thief's anywhere (fled into a wall it couldn't be caught: the owner's rule that he can always
+  // catch it). A flier goes over them and a Wraith (ai 'phaser') through them anywhere, and on a
+  // Dungeon Run floor every other monster comes straight through them (Dungeon.throughWalls),
+  // slower while in one (WALL_PACE).
+  get walled() {
+    const d = this.def;
+    return !d.fly && d.ai !== 'phaser' && (!this.g.world.throughWalls || d.ai === 'flee');
   }
 
   // Afraid for t seconds (it runs from the hero); false for one that shrugs it off.
@@ -782,6 +811,19 @@ export class Enemy {
     if (alpha < 1) ctx.globalAlpha = alpha;
     ctx.drawImage(img, Math.round(X), Math.round(by), Math.round(w), Math.round(h));
     if (alpha < 1) ctx.globalAlpha = 1;
+    // A sealed guardian's ice over it (FROST), thinning as its seal breaks. The night's cut (_img)
+    // is the frame's own shape all the same.
+    if (this.sealed && this.flash <= 0) {
+      ctx.globalAlpha = alpha * this.frost();
+      ctx.drawImage(fr.variant('frozen', TINTS.frozen, flip), Math.round(X), Math.round(by), Math.round(w), Math.round(h));
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // How thick a sealed guardian's ice is drawn (FROST): `most` with its seal whole, `least` all
+  // but broken; 0 for any other foe.
+  frost() {
+    return this.sealed ? FROST.most - (FROST.most - FROST.least) * clamp(this.thaw || 0, 0, 1) : 0;
   }
 
   // Unlit layer: glowing eyes, embers, champion auras, and a boss's outline burning in its
@@ -798,10 +840,11 @@ export class Enemy {
     if (this.brandT > 0) this.drawBrand(ctx, cam, X, Y, w);
     if (this.curseT > 0 || this.confuseT > 0) this.drawMarks(ctx, cam, X, Y, w);
     if ((this.boss || this.lord) && this.flash <= 0) {
-      const col = this.rimColor();
-      ctx.globalAlpha = this.alpha * (0.7 + 0.3 * Math.sin(this.life * 6));
-      ctx.drawImage(fr.variant('rim' + col, (b) => rimBuf(b, col), flip), Math.round(X), Math.round(Y), Math.round(w), Math.round(h));
-      ctx.globalAlpha = 1;
+      // A sealed guardian's outline burns icy for as much as its ice is on it (FROST), in its own
+      // colour for the rest.
+      const a = this.alpha * (0.7 + 0.3 * Math.sin(this.life * 6)), ice = this.frost();
+      if (ice < 1) this.drawRim(ctx, fr, this.rimColor(), a * (1 - ice));
+      if (ice > 0) this.drawRim(ctx, fr, FROST.rim, a * ice);
     }
   }
 
@@ -855,15 +898,26 @@ export class Enemy {
     return this.boss ? this.def.color : this.mod ? this.mod.color : '#b55088';
   }
 
+  // Its outline in col (rimBuf), unlit at alpha a, where frame fr was last drawn (drawEmissive).
+  drawRim(ctx, fr, col, a) {
+    const r = this._rect;
+    ctx.globalAlpha = a;
+    ctx.drawImage(fr.variant('rim' + col, (b) => rimBuf(b, col), r[4]), Math.round(r[0]), Math.round(r[1]), Math.round(r[2]), Math.round(r[3]));
+    ctx.globalAlpha = 1;
+  }
+
   drawGlow(ctx, cam) {
     if (!this.elite && !this.boss) return;
     const S = cam.S;
     if (this.sealed) {
-      // A shimmering ward around a sealed guardian.
+      // A shimmering ward around a sealed guardian, fading as its seal breaks, and the cold of its
+      // ice about it (FROST).
       const sx = (this.x - cam.x) * S, sy = (this.y - this.h * 0.45 - cam.y) * S;
-      const s = this.h * 2.2 * S * (1 + 0.04 * Math.sin(this.life * 4));
-      ctx.globalAlpha = 0.5;
+      const s = this.h * 2.2 * S * (1 + 0.04 * Math.sin(this.life * 4)), c = this.h * 1.4 * S;
+      ctx.globalAlpha = FROST.ward * (1 - (1 - FROST.wardLeast) * clamp(this.thaw || 0, 0, 1));
       ctx.drawImage(glow('#b55088'), sx - s / 2, sy - s / 2, s, s);
+      ctx.globalAlpha = FROST.sheen * this.frost();
+      ctx.drawImage(glow(FROST.rim), sx - c / 2, sy - c / 2, c, c);
       ctx.globalAlpha = 1;
       return;
     }

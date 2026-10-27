@@ -859,14 +859,15 @@ export class Game {
   hitEnemy(e, dmg, o = {}) {
     // Once the hero has fallen nothing he left behind (a pool, a blade, a minion) fells anything more.
     if (e.dead || this.player.dead) return 0;
-    if (e.sealed) {
-      if (Math.random() < 0.1) this.particles.burst(e.x, e.y - e.h * 0.5, 4, 4, [PC.P, PC.i, PC.w], 50, 0.4, 1, P.GLOW | P.FADE, {});
-      return 0;
+    // A sealed guardian (dungeon.js) neither wakes to a blow nor loses health to it: what the blow
+    // would have dealt, worked out below as for any foe, thaws its seal instead (Dungeon.strikeSeal).
+    const sealed = e.sealed;
+    if (!sealed) {
+      if (e.sleeping) this.bossIntro(e);
+      if (e.dormant) this.wakePack(e);
+      // Hit, it knows where the hero is, in a crypt too (Enemy.aware).
+      e.aware = true;
     }
-    if (e.sleeping) this.bossIntro(e);
-    if (e.dormant) this.wakePack(e);
-    // Hit, it knows where the hero is, in a crypt too (Enemy.aware).
-    e.aware = true;
     const p = this.player;
     let d = dmg * p.might;
     if (p.buff('fury')) d *= 1.6;
@@ -891,6 +892,10 @@ export class Game {
     if (e.mod && e.mod.id === 'stone') d *= 0.65;
     if (e.freezeT > 0 && o.shatter) d *= 1.5;
     d = Math.max(1, Math.round(d));
+    if (sealed) {
+      this.world.strikeSeal(e, d);
+      return 0;
+    }
     // A blow on a boss, a lord or a champion charges the orb by the share of its health it takes
     // (FURY.hit); the ultimate's own blows don't (o.ult, or o.noFury for Shadow Dance's blades,
     // which keep their own strength).
@@ -1116,14 +1121,17 @@ export class Game {
     for (let i = 0; i < 6; i++) {
       this.effects.push(new Meteor(this, null, e.x + rand(-30, 30), e.y + rand(-24, 24), 20, 0, 0.1 + i * 0.12, { fall: 0.01 }));
     }
-    this.addPickup('chest', e.x, e.y, 0, { kind: 'boss' });
-    for (let i = 0; i < 18; i++) this.addPickup('coin', e.x, e.y, 2);
-    this.addPickup('goldpile', e.x, e.y, 60);
-    this.addPickup('elixir', e.x + rand(-10, 10), e.y + rand(-10, 10));
+    // Its loot and its stairs together on the open floor nearest where it fell: a Dungeon Run
+    // floor's guardian comes through the walls (Dungeon.throughWalls) and may fall deep in one.
+    const at = this.world.floorNear ? this.world.floorNear(e.x, e.y) : e;
+    this.addPickup('chest', at.x, at.y, 0, { kind: 'boss' });
+    for (let i = 0; i < 18; i++) this.addPickup('coin', at.x, at.y, 2);
+    this.addPickup('goldpile', at.x, at.y, 60);
+    this.addPickup('elixir', at.x + rand(-10, 10), at.y + rand(-10, 10));
     this.banner(`${e.def.name} is slain!`, e.def.title, '#fee761', 3.2);
     if (this.mode === 'dungeon') {
       if (this.floor < 3) {
-        this.world.openStairs(e.x, e.y);
+        this.world.openStairs(at.x, at.y);
         this.objective = 'Descend the stairs';
       } else {
         this.objective = '';
@@ -1460,12 +1468,10 @@ export class Game {
   }
 
   addPickup(kind, x, y, value = 1, opts = {}) {
-    // Never inside a wall: whatever falls there starts from the nearest open floor.
+    // Never inside a wall: whatever falls there starts from the nearest open floor, however deep in
+    // it (Dungeon.floorNear: on a Dungeon Run floor a foe falls in the walls it comes through).
     const w = this.world;
-    if (w.free && !w.free(x, y)) {
-      const s = w.freeSpot(x, y);
-      if (s) ({ x, y } = s);
-    }
+    if (w.free && !w.free(x, y)) ({ x, y } = w.floorNear(x, y));
     const pk = new Pickup(this, kind, x, y, value, opts);
     this.pickups.push(pk);
     return pk;
@@ -2125,8 +2131,8 @@ export class Game {
   // holds a horde up (the user's rule of 16 October). They ease apart from one another (crowd.js,
   // the owner's "monsters repel one another" of 22 October), and none can stand inside the hero:
   // last, so that easing one off another can't leave it in him. The foes on him ease him off them
-  // too, softly (CROWD.hero: never as fast as he walks), all but a boss or a lord. Dungeon walls stop the walkers and him
-  // (Dungeon.collide), after the easing too.
+  // too, softly (CROWD.hero: never as fast as he walks), all but a boss or a lord. Dungeon walls stop him, and in a crypt
+  // its walkers (Dungeon.collide, Enemy.walled: a Dungeon Run floor's horde goes through them), after the easing too.
   separate(dt) {
     const E = this.enemies, p = this.player;
     const live = this.state === 'play' || this.state === 'dying';
@@ -2136,7 +2142,7 @@ export class Game {
     for (let i = 0; i < E.length; i++) {
       const a = E[i];
       if (a.dead || a.prop) continue;
-      if (walls && !a.def.fly && a.def.ai !== 'phaser') this.world.collide(a);
+      if (walls && a.walled) this.world.collide(a);
       if (!a.def.fly) {
         const dx = a.x - p.x, dy = a.y - p.y, d2 = dx * dx + dy * dy, rr = a.r + p.r - 2;
         if (d2 < rr * rr && d2 > 0.01) {
@@ -2171,8 +2177,9 @@ export class Game {
   // (recycleFar). Moved back to the screen's edge, it was one more monster on top of the rate,
   // coming again and again however far he ran. What was sent at him (a swarm, a ring, a pack, a
   // champion, a boss's summons) is still brought back in, as before (on a Dungeon Run floor: one
-  // that can't reach him or is more than 30 tiles' walk off, Dungeon.tooFar, the steady horde's let
-  // go likewise); bosses, lords, the thief and sleeping packs are never touched.
+  // more than 30 tiles off as the crow flies, Dungeon.tooFar, in a wall or not, as it comes
+  // straight through them; the steady horde's let go likewise); bosses, lords, the thief and
+  // sleeping packs are never touched.
   relocate() {
     const w = this.world;
     // In a crypt nothing is moved: its packs and lords come to the hero on their own feet, or not at

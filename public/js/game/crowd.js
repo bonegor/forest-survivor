@@ -3,7 +3,8 @@
 // press of them still squeezes together. The owner's (22 October 2026): "monsters repel one
 // another", then "increase how much monsters repel a bit. Also, the monsters should repel the hero
 // too" (CROWD.hero, Game.separate). Only foes push foes: they still pass through props and trees
-// (the rule of 16 October), and dungeon walls still hold the walkers. The lighter foe gives the more (def.mass; a champion
+// (the rule of 16 October), and a crypt's walls still hold its walkers (a Dungeon Run floor's horde
+// goes through them, Enemy.walled). The lighter foe gives the more (def.mass; a champion
 // weighs three times its kind); a boss, a lord or a prop doesn't budge, and a Wraith (ai 'phaser')
 // drifts through everything.
 

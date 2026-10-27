@@ -162,7 +162,8 @@ export class Hollow {
       if (d > this.R || d < 3) continue;
       const step = Math.min(d - 2, s.pull * dt * (1.15 - 0.5 * (d / this.R)));
       const nx = e.x + (dx / d) * step, ny = e.y + (dy / d) * step;
-      if (!g.world.free || g.world.free(nx, ny)) {
+      // Never into a crypt's wall; a Dungeon Run floor's horde goes through them (Enemy.walled).
+      if (!g.world.free || g.world.throughWalls || g.world.free(nx, ny)) {
         e.x = nx;
         e.y = ny;
       }

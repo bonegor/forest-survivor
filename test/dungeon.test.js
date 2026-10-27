@@ -159,6 +159,61 @@ test('a Dungeon guardian felled against a wall drops nothing into it', () => gam
   assert.ok(w.stairs, 'the stairs down open');
 }, 'dungeon'));
 
+// A Dungeon Run floor's guardian comes through the walls (Dungeon.throughWalls) and may fall deep in
+// one, farther from open floor than freeSpot looks (4 tiles): its loot and its stairs still land
+// on open floor the hero can walk to (Dungeon.floorNear).
+test('a Dungeon guardian felled deep in a wall leaves its loot and its stairs on open floor', () => gameCase((g) => {
+  const w = g.world, p = g.player, gd = w.guardian, W = w.W, H = w.H;
+  w.sealed = false;
+  gd.sealed = false;
+  p.x = w.start.x; p.y = w.start.y;
+  // Each tile's rings (as freeSpot counts them) out to the nearest open floor; the deepest wall tile.
+  const depth = new Int16Array(W * H).fill(-1), q = [];
+  for (let i = 0; i < W * H; i++) if (!w.blocked(i % W, Math.floor(i / W))) { depth[i] = 0; q.push(i); }
+  for (let k = 0; k < q.length; k++) {
+    const x = q[k] % W, y = Math.floor(q[k] / W);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H || depth[ny * W + nx] >= 0) continue;
+      depth[ny * W + nx] = depth[q[k]] + 1;
+      q.push(ny * W + nx);
+    }
+  }
+  const deep = depth.indexOf(Math.max(...depth));
+  assert.ok(depth[deep] > 4, `deeper in the wall than freeSpot looks (${depth[deep]} tiles)`);
+  gd.x = (deep % W) * T + T / 2;
+  gd.y = Math.floor(deep / W) * T + T / 2;
+  g.hitEnemy(gd, 1e9, {});
+  step(g, 150);
+  assert.ok(g.pickups.some(pk => !pk.dead && pk.kind === 'chest'), 'its chest dropped');
+  allReachable(g);
+  assert.ok(w.stairs, 'the stairs down open');
+  const s = Math.floor(w.stairs.y / T) * W + Math.floor(w.stairs.x / T);
+  assert.ok(w.free(w.stairs.x, w.stairs.y) && w.flow[s] >= 0, 'on open floor the hero can walk to');
+}, 'dungeon'));
+
+// The owner's (27 October 2026) "the heroes if they damage the sprite of the bad guy in the crypt,
+// let the percentage drop quicker": a blow on a floor's sealed guardian thaws its seal by what it
+// would have dealt (Dungeon.strikeSeal), on every floor, and takes none of its health.
+test("blows on a sealed guardian raise the seal's percentage and leave its health untouched", () => gameCase((g) => {
+  const pct = () => Number(/\((\d+)%\)$/.exec(g.objective)[1]);
+  for (const floor of [1, 2, 3]) {
+    if (floor > 1) g.enterFloor(floor);
+    const w = g.world, p = g.player, gd = w.guardian;
+    p.invuln = 999;
+    step(g, 2);
+    assert.match(g.objective, /^Break the seal: slay foes, strike it \(\d+%\)$/, `floor ${floor}: what breaks it`);
+    const before = pct();
+    // Five blows of a tenth of its health each after might: at least 0.9 of that, more on a crit.
+    for (let i = 0; i < 5; i++) assert.equal(g.hitEnemy(gd, (gd.maxHp * 0.1) / p.might, {}), 0, 'a blow deals it nothing');
+    step(g, 1);
+    assert.ok(pct() >= before + 20, `floor ${floor}: the seal broke further, ${before}% to ${pct()}%`);
+    assert.equal(gd.hp, gd.maxHp, `floor ${floor}: its health untouched`);
+    assert.ok(gd.sealed && w.sealed && gd.sleeping && g.boss !== gd, `floor ${floor}: still sealed and asleep`);
+    assert.equal(gd.thaw, pct() / 100, `floor ${floor}: its ice thaws as the seal breaks`);
+  }
+}, 'dungeon'));
+
 // How many tiles' walk from (x, y) to (x2, y2) in a crypt.
 const walk = (w, x, y, x2, y2) => w.bfs(Math.floor(x / T), Math.floor(y / T), new Int16Array(w.W * w.H))[Math.floor(y2 / T) * w.W + Math.floor(x2 / T)];
 

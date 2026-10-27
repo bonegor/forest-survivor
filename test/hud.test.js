@@ -143,7 +143,7 @@ test('in a dungeon they keep below its floor and seal lines and the boss, and of
   game((g, p) => {
     const W = 480, H = 270;
     g.spawnBoss('butcher', p.x + 900, p.y + 40);
-    g.objective = 'Break the seal: slay foes (42%)';
+    g.objective = 'Break the seal: slay foes, strike it (42%)';
     p.ult = { t: 1 };
     g.pickups.length = 0;
     chestsAround(g, W, H);

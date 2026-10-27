@@ -1,6 +1,7 @@
 // Dungeon floors: generated rooms and corridors, baked pixel-art tiles,
-// collision, a BFS flow field so the horde can path around walls, fog of war,
-// a minimap, and the guardian whose death opens the stairs down.
+// collision, a BFS flow field so a crypt's monsters can path around walls (a
+// Dungeon Run floor's come straight through them), fog of war, a minimap, and
+// the guardian whose death opens the stairs down.
 //
 // The same builds the crypts off the forest roads: ten rooms or so, with no horde and no
 // seal. Packs of the night's foes sleep in the rooms, and two to four lords (named Skeleton
@@ -39,6 +40,12 @@ const CRYPT_W = 70, CRYPT_H = 56, CRYPT_ROOMS = 12;
 export const cryptLords = (minute, depth = 1) => Math.min(MAX_LORDS, 2 + Math.floor(minute / 5) + (depth >= 3 ? 1 : 0));
 // A lord's guard: the pack in its room, this much of what a room that size holds.
 const GUARD = 0.6;
+// How far off (tiles) a foe is left behind (tooFar): by the walk in a crypt, as the crow flies on a
+// Dungeon Run floor, where the horde comes straight through the walls (throughWalls).
+const TOO_FAR = 30;
+// Where the horde comes in (updateFlow, spawnPoint): between SPAWN_RING's two tiles off, or, with no
+// floor there, out to SPAWN_FAR; by the walk in a crypt, as the crow flies on a Dungeon Run floor.
+const SPAWN_RING = [11, 22], SPAWN_FAR = 34;
 // What steer() and wander() return: the one pair, filled again by the next call.
 const HEADING = [0, 0];
 const heading = (x, y) => {
@@ -198,14 +205,35 @@ const pack = (hex, a = 255) => {
   return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
 };
 
+// A Dungeon Run floor's seal (update) holds until two shares are whole, the floor's kills
+// (sealGoal) and its time (sealTime), each half of the percentage shown. The owner's (27 October
+// 2026) "the heroes if they damage the sprite of the bad guy in the crypt, let the percentage drop
+// quicker and let it look like its being defrosted" adds a third, the thaw: what the blows struck
+// on the sealed guardian would have dealt (strikeSeal), over `hp` of its health. It counts up to
+// `most`, as much as either of the others, so with it whole the kills and the time need make up
+// only half: a hero who keeps at it breaks the seal in about half the time. A guardian's health is
+// what the hero is reckoned to fell by then (Game.spawnBoss's floor multipliers), so a fight's
+// worth of blows (hp 1) thaws it all, well inside that half for one who goes to it early.
+// Each blow knocks `chips` chips of ice off it and a drop of meltwater; near the hero it drips
+// `drip` drops a second at a seal all but broken (fewer the less it is); when the seal breaks
+// the ice bursts off in `shards` shards and `melt` drops.
+const THAW = { hp: 1, most: 1, chips: 3, drip: 6, shards: 24, melt: 14 };
+// The ice's colours, and its meltwater's (particles).
+const ICE = [PC.w, PC.X, PC.c], MELT = [PC.U, PC.c];
+
 export class Dungeon {
   // crypt: { name, theme } for a crypt off the forest road, else a Dungeon Run floor.
   constructor(g, floor, seed, crypt = null) {
     this.g = g;
     // In a crypt monsters chase the hero only once they have seen him (Enemy.aware, sees,
-    // wander). A Dungeon Run floor's horde hunts him from anywhere, by the flow field (the user's
-    // choice, 16 October 2026).
+    // wander), round the walls by the flow field. A Dungeon Run floor's horde hunts him from
+    // anywhere (the user's choice, 16 October 2026), and straight through the walls, pillars and
+    // lava, slower while in them (Enemy.update, WALL_PACE): the owner's (27 October 2026) "monsters
+    // should be able to go through walls, but with a slight speed reduction - just have them
+    // directly follow hero but be slightly slower through walls" (steer, Enemy.walled). The hero's
+    // way is still walled.
     this.vision = !!crypt;
+    this.throughWalls = !crypt;
     this.floor = floor;
     this.crypt = crypt;
     this.info = crypt ? { name: crypt.name, theme: crypt.theme, guardian: null } : FLOORS[floor - 1];
@@ -224,6 +252,7 @@ export class Dungeon {
     this.sealGoal = [900, 1400, 1900][floor - 1];
     this.sealTime = [4, 4.5, 5][floor - 1] * 60; // and enough time to grow stronger
     this.sealStart = g.kills;
+    this.sealThaw = 0; // and the blows struck on it while sealed (THAW, strikeSeal)
     this.sealed = !crypt;
     this.exit = null;
     this.way = null; // a crypt's lit way out, once its last lord has fallen: { path: [{ x, y, d }], at, t }
@@ -906,6 +935,34 @@ export class Dungeon {
     this.updateFlow(true);
   }
 
+  // ------------------------------------------------------------ the seal --
+
+  // A blow on the sealed guardian e (Game.hitEnemy), d what it would have dealt: it thaws the seal
+  // (THAW) and knocks a few chips of ice off it, and a drop of meltwater runs down.
+  strikeSeal(e, d) {
+    const g = this.g;
+    this.sealThaw = Math.min(THAW.most, this.sealThaw + d / (e.maxHp * THAW.hp));
+    g.particles.burst(e.x + rand(-3, 3), e.y, e.h * rand(0.35, 0.8), THAW.chips, ICE, 70, 0.45, 1, P.GLOW | P.FADE | P.GROUND, { vz: 50, grav: 300 });
+    this.drip(e);
+    sfx('shard', { pitch: rand(1.2, 1.5), pan: clamp((e.x - g.player.x) / 200, -1, 1) });
+  }
+
+  // A drop of meltwater running off the sealed guardian e to the ground as its ice thaws.
+  drip(e) {
+    const s = e.hr * 0.8;
+    this.g.particles.emit(e.x + rand(-s, s), e.y + rand(-1, 1), e.h * rand(0.2, 0.75), 0, 0, 0, 0.7, 1, pick(MELT), P.GLOW | P.FADE | P.GROUND, 0, 160);
+  }
+
+  // The seal on e breaks: the last of its ice bursts off in shards and meltwater, with a crack and a
+  // white flash.
+  thawBurst(e) {
+    const g = this.g, z = e.h * 0.5;
+    g.particles.burst(e.x, e.y, z, THAW.shards, ICE, 150, 0.8, 1, P.GLOW | P.FADE | P.GROUND, { vz: 100, grav: 320, jitter: e.hr * 0.5 });
+    g.particles.burst(e.x, e.y, z, THAW.melt, MELT, 45, 1, 1, P.GLOW | P.FADE | P.GROUND, { vz: 20, grav: 200, jitter: e.hr });
+    e.flash = 0.12;
+    sfx('shard', { pitch: 0.6 });
+  }
+
   // ------------------------------------------------------------ update --
 
   update(dt) {
@@ -920,16 +977,22 @@ export class Dungeon {
     const gd = this.guardian;
     if (this.sealed && gd && !gd.dead) {
       const n = g.kills - this.sealStart;
-      const k = Math.min(1, n / this.sealGoal), t = Math.min(1, g.floorTime / this.sealTime);
-      const pct = Math.floor((k + t) * 50);
-      g.objective = k < 1 ? `Break the seal: slay foes (${pct}%)` : `The seal weakens... (${pct}%)`;
+      const k = Math.min(1, n / this.sealGoal), t = Math.min(1, g.floorTime / this.sealTime), h = this.sealThaw;
+      const pct = Math.floor((k + t + h) * 50);
+      // How far the seal is broken, which the guardian's ice shows thawing (Enemy.frost).
+      gd.thaw = Math.min(1, pct / 100);
+      // What is left to do: foes to slay while the kills fall short, the guardian to strike while
+      // its thaw does (THAW). With both whole the seal is broken already, whatever the time.
+      const ask = k < 1 ? (h < THAW.most ? 'slay foes, strike it' : 'slay foes') : 'strike it';
+      g.objective = `Break the seal: ${ask} (${pct}%)`;
       if (pct >= 100 || g.floorTime > 7 * 60) {
         this.sealed = false;
         gd.sealed = false;
         g.objective = `Slay ${gd.def.name}`;
         g.banner('The seal is broken!', `${gd.def.name} stirs in the depths`, '#f6757a', 3);
         g.shake(0.4);
-      }
+        this.thawBurst(gd);
+      } else if (Math.abs(gd.x - p.x) < 260 && Math.abs(gd.y - p.y) < 200 && Math.random() < THAW.drip * gd.thaw * dt) this.drip(gd);
     }
     // Wake the guardian when the hero comes close, or let it hunt them. A crypt's lords keep to
     // their rooms until he comes (wakeLords).
@@ -977,15 +1040,18 @@ export class Dungeon {
     this.lastPT = idx;
     this.flowT = 0.12;
     this.bfs(tx, ty, this.flow);
-    // Candidate spawn tiles: a walk of 11-22 tiles away.
+    // Candidate spawn tiles: a walk of 11-22 tiles away (SPAWN_RING). On a Dungeon Run floor the
+    // horde comes straight at him through the walls, so open floor that far as the crow flies: by
+    // the walk, a room behind a thin wall would loose them on him from a tile or two off.
     const c = (this.spawnCands = this.spawnCands || []);
     c.length = 0;
     const far = (this.farCands = this.farCands || []);
     far.length = 0;
+    const W = this.W, near = SPAWN_RING[0], out = SPAWN_RING[1];
     for (let i = 0; i < this.flow.length; i++) {
-      const d = this.flow[i];
-      if (d >= 11 && d <= 22) c.push(i);
-      else if (d > 22 && d <= 34) far.push(i);
+      const d = !this.throughWalls ? this.flow[i] : this.grid[i] === FLOOR ? Math.hypot((i % W) - tx, ((i / W) | 0) - ty) : -1;
+      if (d >= near && d <= out) c.push(i);
+      else if (d > out && d <= SPAWN_FAR) far.push(i);
     }
   }
 
@@ -1015,7 +1081,8 @@ export class Dungeon {
     if (changed) this.fogDirty = true;
   }
 
-  // A floor's guardian has fallen: the stairs down open where it fell.
+  // A floor's guardian has fallen: the stairs down open where it fell, or as near as open floor
+  // allows (Game.bossDefeated brings a fall in a wall out to the nearest floor first, floorNear).
   openStairs(x, y) {
     const tx = Math.floor(x / T), ty = Math.floor(y / T);
     let best = null;
@@ -1029,7 +1096,12 @@ export class Dungeon {
         }
       }
     }
-    if (!best) best = [tx, ty];
+    // With no such stretch near, the nearest open floor: never a wall, whose stairs the hero could
+    // not step onto.
+    if (!best) {
+      const f = this.floorNear(x, y);
+      best = [Math.floor(f.x / T), Math.floor(f.y / T)];
+    }
     this.stairs = { x: best[0] * T + T / 2, y: best[1] * T + 2, t: 0 };
     this.g.banner('The way down is open', 'Find the stairs', '#63c74d', 2.5);
   }
@@ -1299,13 +1371,14 @@ export class Dungeon {
     return l < 1 ? heading(0, 0) : heading(dx / l, dy / l);
   }
 
-  // Monster e's heading toward target, [dx, dy]: toward the hero, down the flow field round the
-  // walls. The returned pair is reused by the next call: read it at once, don't keep it.
+  // Monster e's heading toward target, [dx, dy]: toward the hero in a crypt, down the flow field
+  // round the walls; on a Dungeon Run floor straight at him, through them (throughWalls), as at
+  // anything else. The returned pair is reused by the next call: read it at once, don't keep it.
   steer(e, target) {
     const dx = target.x - e.x, dy = target.y - e.y;
     const l = Math.hypot(dx, dy) || 1;
     const p = this.g.player;
-    if (target !== p) return heading(dx / l, dy / l);
+    if (target !== p || this.throughWalls) return heading(dx / l, dy / l);
     const tx = Math.floor(e.x / T), ty = Math.floor(e.y / T);
     const W = this.W;
     const d0 = this.flow[ty * W + tx];
@@ -1348,6 +1421,30 @@ export class Dungeon {
     return null;
   }
 
+  // The open floor nearest world point (x, y), however far off: the point itself on open floor,
+  // else the middle of the nearest floor tile, ring by ring out (freeSpot looks 4 tiles off at
+  // most). On a Dungeon Run floor a foe can fall deep in a wall it was coming through
+  // (throughWalls): its loot (Game.addPickup) and a guardian's stairs (Game.bossDefeated,
+  // openStairs) land here, where the hero can walk to them.
+  floorNear(x, y) {
+    const tx = Math.floor(x / T), ty = Math.floor(y / T);
+    if (this.tile(tx, ty) === FLOOR) return { x, y };
+    for (let r = 1, R = Math.max(this.W, this.H); r <= R; r++) {
+      let best = null, bd = Infinity;
+      for (let dy = -r; dy <= r; dy++) {
+        // The ring's edge only: all of its top and bottom rows, the two ends of the rest.
+        for (let dx = -r; dx <= r; dx += dy === -r || dy === r ? 1 : 2 * r) {
+          const d = dx * dx + dy * dy;
+          if (d >= bd || this.tile(tx + dx, ty + dy) !== FLOOR) continue;
+          bd = d;
+          best = { x: (tx + dx) * T + T / 2, y: (ty + dy) * T + T / 2 };
+        }
+      }
+      if (best) return best;
+    }
+    return { x, y };
+  }
+
   spawnPoint(g) {
     const cam = g.cam;
     const list = this.spawnCands && this.spawnCands.length ? this.spawnCands : this.farCands;
@@ -1361,10 +1458,17 @@ export class Dungeon {
     return null;
   }
 
+  // Whether foe e is left far behind (Game.relocate lets it go or brings it back in). On a Dungeon
+  // Run floor, where the horde comes straight through the walls (throughWalls), more than TOO_FAR
+  // tiles off as the crow flies, wherever it stands: one in a wall is only on its way through. Else
+  // more than TOO_FAR tiles' walk, or, off the walk (the flow field reads -1 in a wall), a walker
+  // 200 px off, which the walls hold.
   tooFar(e) {
+    const p = this.g.player;
+    if (this.throughWalls) return (e.x - p.x) ** 2 + (e.y - p.y) ** 2 > (TOO_FAR * T) ** 2;
     const i = Math.floor(e.y / T) * this.W + Math.floor(e.x / T);
     const d = this.flow[i];
-    return d < 0 ? !e.def.fly && e.def.ai !== 'phaser' && Math.hypot(e.x - this.g.player.x, e.y - this.g.player.y) > 200 : d > 30;
+    return d < 0 ? !e.def.fly && e.def.ai !== 'phaser' && Math.hypot(e.x - p.x, e.y - p.y) > 200 : d > TOO_FAR;
   }
 
   // ------------------------------------------------------------- render --
@@ -1569,9 +1673,10 @@ export class Dungeon {
     }
     if (this.entrance) dot(this.entrance.x, this.entrance.y, '#2ce8f5', big ? 5 : 3);
     if (this.exit && this.exit.hole) dot(this.exit.x, this.exit.y - T, '#2ce8f5', big ? 5 : 3);
-    // The guardian, or each of a crypt's lords still standing, once seen.
+    // The guardian, or each of a crypt's lords still standing, once seen; a Dungeon Run floor's
+    // guardian always once it hunts the hero, through walls whose insides he has never seen.
     for (const gd of this.crypt ? this.lordsLeft() : [this.guardian]) {
-      if (gd && !gd.dead && this.seen[Math.floor(gd.y / T) * this.W + Math.floor(gd.x / T)]) dot(gd.x, gd.y, '#e43b44', big ? 5 : 3);
+      if (gd && !gd.dead && (this.seen[Math.floor(gd.y / T) * this.W + Math.floor(gd.x / T)] || (this.throughWalls && !gd.sleeping))) dot(gd.x, gd.y, '#e43b44', big ? 5 : 3);
     }
     for (const s of this.g.shrines) if (!s.used && this.seen[Math.floor(s.y / T) * this.W + Math.floor(s.x / T)]) dot(s.x, s.y, '#feae34', big ? 4 : 2);
     dot(p.x, p.y, Math.floor(this.g.clock * 4) % 2 ? '#ffffff' : '#2ce8f5', big ? 4 : 2);
