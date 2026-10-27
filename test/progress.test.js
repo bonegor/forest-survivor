@@ -14,6 +14,7 @@ import { mulberry32 } from '../public/js/engine/util.js';
 import { unlockEverything } from '../public/js/engine/storage.js';
 import { createServer } from '../server.js';
 import * as P from '../public/js/shared/profile.js';
+import { DIFFS, VETERAN, NIGHTMARE } from '../public/js/data/difficulty.js';
 
 const { PROGRESS } = P;
 const LOCKS = PROGRESS.locks;
@@ -281,7 +282,7 @@ test('progressList measures how far each lock is', () => {
 });
 
 test('a weapon left at home is never offered, and comes along again when asked', () => {
-  let p = { ...P.defaultProfile(), kills: 10 };
+  let p = { ...P.defaultProfile(), effort: 10 };
   p = P.setHome(p, 'axe', true).profile;
   assert.deepEqual(P.openFor(p, 'knight').weapons, ['blades', 'glaive', 'caltrops']);
   assert.equal(P.progressList(p).find((l) => l.id === 'axe').home, true);
@@ -346,4 +347,11 @@ test('Consecration opens on the tenth fall: a run quit or won is no fall', () =>
   const r = P.applyRun(p, { ...RUN, died: true });
   assert.deepEqual(r.reward.unlocked.map((u) => u.id), ['aura']);
   assert.ok(P.openFor(r.profile, 'knight').weapons.includes('aura'));
+});
+
+// shared/progress.js imports nothing, so a kill's worth as Veteran's is copied there from
+// data/difficulty.js: Veteran's horde over each difficulty's, and a Nightmare's three times it.
+test("a kill counts as Veteran's horde over its difficulty's, as difficulty.js has the hordes", () => {
+  for (const [id, d] of Object.entries(DIFFS)) assert.ok(Math.abs(PROGRESS.effort[id] - VETERAN.spawn / d.spawn) < 1e-9, id);
+  assert.equal(PROGRESS.nightmareEffort, 1 / NIGHTMARE.more);
 });

@@ -134,8 +134,13 @@ export class HeroScreen {
         saveSettings(app.settings);sfx('select');
       }
     } else {
+      // Every star he has earned, each in its colour (ladder.js featStars: the wins, then their marks).
       const earned = featStars(app.store.profile, h.id).filter(s => s[2]);
-      drawText(ctx, locked ? 'NOT YET RECRUITED' : earned.length ? earned.map(s => '★').join(' ') : 'READY FOR THE DARKWOOD', box.x + box.w / 2, box.y + box.h - 12, { align: 'center', color: locked ? '#8b9bb4' : '#c28569' });
+      if (locked || !earned.length) drawText(ctx, locked ? 'NOT YET RECRUITED' : 'READY FOR THE DARKWOOD', box.x + box.w / 2, box.y + box.h - 12, { align: 'center', color: locked ? '#8b9bb4' : '#c28569' });
+      else {
+        const x0 = Math.round(box.x + box.w / 2 - (earned.length * 7 - 2) / 2);
+        earned.forEach(([, col], i) => drawText(ctx, '★', x0 + i * 7, box.y + box.h - 12, { color: col }));
+      }
     }
   }
 

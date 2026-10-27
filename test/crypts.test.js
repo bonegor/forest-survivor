@@ -350,6 +350,8 @@ test('a crypt of four lords, every one dropping gear: the run report keeps all f
   assert.equal(P.applyRun(P.defaultProfile(), {...short, gear:more, found:5}).profile.gear.knight, undefined);
   // The next crypt's time, four more.
   assert.equal(P.sanitizeRun({...short, realTime:45, found:99}).found, 2 * I.MAX_LORDS);
+  // The Dungeon has no crypts, but a piece from each of its three guardians (27 October 2026).
+  assert.equal(P.sanitizeRun({mode:'dungeon', time:600, realTime:600, found:9}).found, 3, 'a piece from each guardian at most');
 }));
 
 // A lord felled against a wall, or in a corner, leaves its gear and its chest apart, both on

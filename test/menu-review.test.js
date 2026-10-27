@@ -19,7 +19,7 @@ function draw(screen, a, W = 480, H = 270) {
 function activate(screen, a, id) { a.ui.focusId = id;input.justDown.add('Enter');draw(screen, a); }
 
 test('Codex: browsing never changes the weapon pool; Enter on an open weapon switches it, nothing else; Escape goes back onto CODEX', async () => {
-  const a = app({ ...defaultProfile(), kills: 10 });const calls = [];a.store.setHome = async (id, on) => { calls.push([id, on]);return true; };
+  const a = app({ ...defaultProfile(), effort: 10 });const calls = [];a.store.setHome = async (id, on) => { calls.push([id, on]);return true; };
   let went = null;a.go = (name, params) => { went = [name, params]; };
   const s = new CodexScreen();s.enter(a);draw(s,a);
   a.ui.focusId = 'cx_weapon_axe';draw(s,a);assert.equal(s.shown,'cx_weapon_axe','the panel tells of the tile in focus');assert.equal(calls.length,0);

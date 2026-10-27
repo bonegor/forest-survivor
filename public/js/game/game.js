@@ -48,6 +48,11 @@ export const KNOCKBACK = 25;
 // How long each big beat holds every screen back, in real seconds (Game.moment): a boss's fall
 // (its 1.1 s slow motion and flash), a crypt lord's (0.8 s), a revive's.
 export const MOMENT = { boss: 1.3, lord: 1, revive: 1.1, levelup: 0.25 };
+// A Dungeon Run floor's guardian leaves one piece of gear, always (27 October 2026: the Dungeon
+// gave none, so a hero was better built in Survival). It rolls as a crypt lord's would at this
+// minute and depth, floor by floor: the first as by the start at 5:00, the last floor's as three
+// crypts out at dawn. Luck plays no part (shared/items.js rarityOdds), as with the lords.
+export const GUARDIAN_GEAR = [{ minute: 5, depth: 1 }, { minute: 10, depth: 2 }, { minute: 15, depth: 3 }];
 // The levels whose level-up is a milestone, with a stamp and a stinger of its own (LevelUpOverlay).
 export const MILESTONES = [10, 25, 50, 100];
 // The most banners on screen at once.
@@ -227,7 +232,9 @@ export class Game {
     this.bossPower = 1;
     this.kills = 0;
     this.gold = 0;
-    this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0, minHp: 1, fromBoss: 0, fromMobs: 0, fromShots: 0, bossLog: [], killedBy: null };
+    this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0, minHp: 1, fromBoss: 0, fromMobs: 0, fromShots: 0, bossLog: [], killedBy: null, wounds: {} };
+    // wounds: the damage taken by who dealt it, a foe by its kind, a boss by his name, a shot as its
+    // shooter's (Player.hurt), for the results' wounds line (ui/gamescreen.js woundLines).
     this.cam = { x: 0, y: 0, S: 4, W: 480, H: 270, pxW: 1920, pxH: 1080 };
     this.trauma = 0;
     this.hurtFlash = 0;
@@ -288,6 +295,7 @@ export class Game {
     this.gear = sanitizeGear(o.gear);
     this.itemQueue = [];
     this.itemsFound = 0; // pieces of gear dropped this run; the server keeps no more new ones than this
+    this.gearThenWin = false; // the Dungeon's last guardian is down: the victory waits for his gear's screen (bossDefeated)
     this.crypts = [];
     this.cleared = new Set();
     this.lost = new Set(); // crypts the hero left before their last lord fell, or fainted in: shut to him
@@ -1243,14 +1251,24 @@ export class Game {
     for (let i = 0; i < 18; i++) this.addPickup('coin', at.x, at.y, 2);
     this.addPickup('goldpile', at.x, at.y, 60);
     this.addPickup('elixir', at.x + rand(-10, 10), at.y + rand(-10, 10));
-    this.banner(`${e.def.name} is slain!`, e.def.title, '#fee761', 3.2);
+    // A Dungeon Run guardian's piece of gear (GUARDIAN_GEAR): straight to its screen, which opens
+    // once the moment has played out, rather than on the ground.
+    let gear = null;
+    if (this.mode === 'dungeon') {
+      gear = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), GUARDIAN_GEAR[this.floor - 1]);
+      this.itemsFound++;
+      this.itemQueue.push(gear);
+    }
+    const R = gear && RARITIES[gear.rarity];
+    this.banner(`${e.def.name} is slain!`, gear ? `${R.name} ${SLOT_NAMES[gear.slot].toLowerCase()} won` : e.def.title, gear ? R.color : '#fee761', 3.2);
     if (this.mode === 'dungeon') {
       if (this.floor < 3) {
         this.world.openStairs(at.x, at.y);
         this.objective = 'Descend the stairs';
       } else {
+        // The victory waits for his gear's screen to close (update).
         this.objective = '';
-        this.victory('dungeon');
+        this.gearThenWin = true;
       }
     }
     if (next) return;
@@ -2272,6 +2290,13 @@ export class Game {
     if (Math.abs(c.y - ty) > c.H) c.y = ty;
 
     if (this.state === 'play' && this.mode !== 'dungeon' && this.time >= this.duration) this.victory('survival');
+    // The last guardian's gear is chosen before the dawn, and nothing fells the hero meanwhile.
+    if (this.gearThenWin) {
+      if (this.state === 'play' && !this.itemQueue.length) {
+        this.gearThenWin = false;
+        this.victory('dungeon');
+      } else this.player.invuln = Math.max(this.player.invuln, 0.2);
+    }
     if (this.state === 'play' && this.mode === 'ranked') this.rankedMilestones();
     if (this.state === 'play') this.heroMilestone();
     if (this.hints) this.hints.update();

@@ -185,6 +185,7 @@ export class Pickup {
     switch (this.kind) {
       case 'gem': {
         p.addXp(this.value);
+        if (g.hints) g.hints.gemTaken = true; // the first gem's hint (hints.js)
         g.gemCombo = g.gemComboT > 0 ? Math.min(g.gemCombo + 1, 24) : 0;
         g.gemComboT = 0.35;
         sfx('gem', { pitch: 1 + g.gemCombo * 0.035 });

@@ -51,7 +51,16 @@ export const HERO_UNLOCK_TIME = 5 * 60;
 // Per-hero achievements, stored as bit flags. survivalHard is any night won
 // (once only Hard counted); dungeonHard (4) lingers in old saves, unused.
 // evolved: his signature weapon evolved in a run (the Knight's opens the Phoenix Heart, shared/progress.js).
-export const FEAT = { survivalHard: 1, dungeon: 2, dungeonHard: 4, evolved: 8 };
+// The rest are the marks of a win by difficulty (27 October 2026), for the hero and trial cards
+// only (ui/ladder.js featStars): a night or a Dungeon Run won on Veteran, on Elite, in a Nightmare.
+// A Nightmare's win marks Elite too; a Normal one only the any-win bit. They open nothing.
+export const FEAT = { survivalHard: 1, dungeon: 2, dungeonHard: 4, evolved: 8, nightVeteran: 16, nightElite: 32, nightNightmare: 64, dungeonVeteran: 128, dungeonElite: 256, dungeonNightmare: 512 };
+const ALL_FEATS = Object.values(FEAT).reduce((a, b) => a | b, 0);
+// The marks a win sets, by mode and difficulty (applyRun).
+const WIN_MARKS = {
+  s15: { medium: FEAT.nightVeteran, hard: FEAT.nightElite, nightmare: FEAT.nightNightmare },
+  dungeon: { medium: FEAT.dungeonVeteran, hard: FEAT.dungeonElite, nightmare: FEAT.dungeonNightmare },
+};
 // Ranked titles by minutes survived.
 export const RANKS = [
   [0, 'Peasant'], [5, 'Squire'], [10, 'Knight'], [15, 'Champion'], [20, 'Paladin'],
@@ -102,6 +111,9 @@ const MAX_REAL_TIME = { s15: 2 * 60 * 60, dungeon: MAX_TIME.dungeon, ranked: MAX
 // minute's walk on. So a run finds no more than MAX_LORDS pieces for each crypt it could have
 // reached: the one by the start, and one more every SECS_PER_CRYPT of its time.
 const SECS_PER_CRYPT = 45;
+// A Dungeon Run has no crypts, but each of its three floors' guardians leaves a piece of gear
+// (Game.bossDefeated, 27 October 2026).
+const DUNGEON_GEAR = 3;
 // The gold a run picks up in a second at the night's start with no greed, at most: 12 since the
 // first commit. goldCap grows it as a run's gold can grow (27 October 2026: the flat 12 cut real
 // gold from greedy builds and long Ranked runs).
@@ -157,6 +169,7 @@ export function defaultProfile() {
     wins: { s15: [0, 0, 0], dungeon: [0, 0, 0] },
     runs: 0,
     kills: 0,
+    effort: 0, // kills counted as Veteran's (PROGRESS.effort): the 'kills' milestones and the exclusion slots
     deaths: 0, // runs that ended with the hero fallen (milestones: shared/progress.js deaths)
     // time: the longest run on the clock in any mode; gold: the most gold picked up in a run;
     // bosses: the most bosses (and crypt lords) slain in a run. Milestones read them (earnedBits).
@@ -185,6 +198,8 @@ export function sanitizeProfile(raw) {
   }
   p.runs = int(raw.runs, 0, 1e7);
   p.kills = int(raw.kills, 0, 1e12);
+  // A save from before 27 October 2026 starts from its kills (before exclusionState reads it, below).
+  p.effort = raw.effort === undefined ? p.kills : int(raw.effort, 0, 1e12);
   p.deaths = int(raw.deaths, 0, 1e7);
   p.best.s15 = int(raw.best?.s15, 0, MAX_TIME.s15);
   p.best.dungeon = int(raw.best?.dungeon, 0, 4);
@@ -204,11 +219,13 @@ export function sanitizeProfile(raw) {
   p.ek = int(raw.ek, 0, ALL_EVOS);
   if (Array.isArray(raw.home)) p.home = SHARED_IDS.filter((id) => raw.home.includes(id)).slice(0, exclusionState(p).level);
   p.uu = int(raw.uu, 0, ALL_ULTS);
-  if (Array.isArray(raw.heroes)) {
-    for (const h of raw.heroes) if (HERO_ORDER.includes(h) && !p.heroes.includes(h)) p.heroes.push(h);
+  // A cookie keeps them as bits in HERO_ORDER's order (packProfile); one from before keeps a list.
+  const heroes = typeof raw.heroes === 'number' ? HERO_ORDER.filter((h) => (raw.heroes & heroBit(h)) !== 0) : raw.heroes;
+  if (Array.isArray(heroes)) {
+    for (const h of heroes) if (HERO_ORDER.includes(h) && !p.heroes.includes(h)) p.heroes.push(h);
   }
   for (const h of HERO_ORDER) {
-    const f = int(raw.feats?.[h], 0, 15);
+    const f = int(raw.feats?.[h], 0, ALL_FEATS);
     if (f) p.feats[h] = f;
     const t = int(raw.ranked?.[h], 0, MAX_TIME.ranked);
     if (t) p.ranked[h] = t;
@@ -261,7 +278,7 @@ const sum = (a) => a.reduce((s, x) => s + x, 0);
 // What the profile's records measure, for each kind of milestone (PROGRESS.locks need).
 function measures(p) {
   return {
-    time: p.best.time, kills: p.kills, level: p.best.level, gold: p.best.gold, bosses: p.best.bosses, wins: sum(p.wins.s15),
+    time: p.best.time, kills: p.effort, level: p.best.level, gold: p.best.gold, bosses: p.best.bosses, wins: sum(p.wins.s15),
     deaths: p.deaths, veteran: p.wins.s15[DIFFICULTIES.indexOf('hard')], dungeon: sum(p.wins.dungeon),
     heroes: HERO_ORDER.filter((h) => hasFeat(p, h, FEAT.survivalHard)).length,
   };
@@ -356,9 +373,18 @@ export function openFor(profile, hero) {
   LOCKS.forEach((l, i) => {
     if (lockUsable(p, i)) (l.type === 'weapon' ? weapons : relics).push(l.id);
   });
-  // Those left at home stay there (setHome).
+  // Those left at home stay there (setHome), but never all of them: a save that would leave every
+  // shared weapon at home keeps them all, and setHome refuses the last (27 October 2026).
   const home = Array.isArray(p.home) ? p.home.filter(id => SHARED_IDS.includes(id)).slice(0, exclusionState(p).level) : [];
-  return { weapons: weapons.filter((id) => !home.includes(id)), relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0, evos: knownEvos(p) };
+  const kept = weapons.filter((id) => !home.includes(id));
+  return { weapons: kept.length ? kept : weapons, relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0, evos: knownEvos(p) };
+}
+
+// Whether a shared weapon is the last a run could offer: that one never stays at home (setHome,
+// the Codex). Every hero is offered the same shared weapons.
+export function lastInPlay(profile, id) {
+  const w = openFor(profile, 'knight').weapons;
+  return w.length === 1 && w[0] === id;
 }
 
 // Every lock, for a codex: the open-from-the-start ones (start: true), the milestones with how
@@ -394,10 +420,11 @@ export function progressList(profile) {
 // item an array, reads back all the same (sanitizeGear takes both). The gift is one number.
 // Since every evolution is kept as a bit (ek, 27 October 2026) the list of those a lock waits on
 // (ev) is told by it and stays out, and so does an empty home: the worst case keeps its quarter
-// spare (test/profile.test.js). sanitizeProfile reads both back.
+// spare (test/profile.test.js). sanitizeProfile reads both back. The heroes are one number too, a
+// bit each in HERO_ORDER's order (27 October 2026, room for the effort and the win marks).
 export function packProfile(p) {
   const { ev, ...rest } = p;
-  const out = { ...rest, gift: packGift(p.gift), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
+  const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
   if (!out.home?.length) delete out.home;
   return out;
 }
@@ -481,14 +508,12 @@ export function upgradeOpen(profile, u) {
 
 // A shared weapon left at home (on: true) or taken along again: one left at home is never offered
 // in a run, at a level-up or in a chest. A hero's own signature is never one of them.
+// The slots open with the kills counted as Veteran's (effort), each at its own total in
+// PROGRESS.exclusionAt.
 export function exclusionState(profile) {
-  const kills = Math.max(0, Number(profile?.kills) || 0);
-  let level = 0, next = PROGRESS.exclusionFirst;
-  while (level < SHARED_IDS.length && kills >= next) {
-    level++;
-    next *= 2;
-  }
-  return { level, max: SHARED_IDS.length, next: level < SHARED_IDS.length ? next : null };
+  const effort = Math.max(0, Number(profile?.effort) || 0), at = PROGRESS.exclusionAt;
+  const level = at.filter((n) => effort >= n).length;
+  return { level, max: at.length, next: at[level] ?? null };
 }
 
 // Repeatable progression is separate from the one-time weapon and relic milestones.
@@ -497,7 +522,7 @@ export function exclusionEntry(profile) {
   return {
     type: 'feature', id: 'exclusions', open: state.level > 0,
     need: state.next ? `Slay ${state.next.toLocaleString('en-US')} monsters in total` : 'All exclusion slots unlocked',
-    progress: state.next ? Math.min(1, p.kills / state.next) : 1,
+    progress: state.next ? Math.min(1, p.effort / state.next) : 1,
     ...state,
   };
 }
@@ -508,6 +533,7 @@ export function setHome(profile, id, on) {
   if (on && !p.home.includes(id) && p.home.length >= exclusionState(p).level) {
     return { ok: false, profile: p, error: 'Unlock more exclusion slots by slaying monsters' };
   }
+  if (on && !p.home.includes(id) && lastInPlay(p, id)) return { ok: false, profile: p, error: "A run keeps one weapon besides the hero's own" };
   p.home = p.home.filter((x) => x !== id);
   if (on) p.home.push(id);
   return { ok: true, profile: p };
@@ -556,8 +582,9 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
   const time = int(raw.time, 0, MAX_TIME[raw.mode]);
   // The night's clock stands still in a crypt, so a run can last longer than its time.
   const realTime = int(raw.realTime, time, MAX_REAL_TIME[raw.mode]);
-  // At most one item from each crypt's lord, MAX_LORDS to a crypt, and the Dungeon has no crypts.
-  const found = raw.mode === 'dungeon' ? 0 : int(raw.found, 0, MAX_LORDS * (Math.floor(realTime / SECS_PER_CRYPT) + 1));
+  // At most one item from each crypt's lord, MAX_LORDS to a crypt; in the Dungeon, which has no
+  // crypts, one from each of its three guardians.
+  const found = raw.mode === 'dungeon' ? int(raw.found, 0, DUNGEON_GEAR) : int(raw.found, 0, MAX_LORDS * (Math.floor(realTime / SECS_PER_CRYPT) + 1));
   // A win only counts if the run lasted long enough to be one. Ranked never ends in victory.
   const victory = raw.mode !== 'ranked' && raw.victory === true && time >= MIN_WIN_TIME[raw.mode];
   // A Nightmare (data/difficulty.js), three times the monsters, only as a run says it was, and never on
@@ -608,6 +635,10 @@ export function runReward(run) {
   return { gold: run.gold, collected, wage, bonus, total: collected + wage + bonus, multiplier };
 }
 
+// What one of a run's kills counts as, in Veteran's (PROGRESS.effort): the difficulty's, and a
+// Nightmare's divided again by its three times the horde.
+const effortOf = (run) => PROGRESS.effort[run.diff] * (run.nightmare ? PROGRESS.nightmareEffort : 1);
+
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
   const run = sanitizeRun(rawRun, metaBonuses(p).greed); // the cap at this save's own Armory Greed
@@ -635,6 +666,7 @@ export function applyRun(profile, rawRun) {
   p.gold = int(p.gold + reward.total, 0, 1e9);
   p.runs = int(p.runs + 1, 0, 1e7);
   p.kills = int(p.kills + run.kills, 0, 1e12);
+  p.effort = int(p.effort + Math.round(run.kills * effortOf(run)), 0, 1e12);
   if (run.died) p.deaths = int(p.deaths + 1, 0, 1e7);
   let personalBest = false;
   if (run.victory) {
@@ -642,6 +674,8 @@ export function applyRun(profile, rawRun) {
     let f = p.feats[run.hero] || 0;
     if (run.mode === 's15') f |= FEAT.survivalHard;
     if (run.mode === 'dungeon') f |= FEAT.dungeon;
+    const marks = WIN_MARKS[run.mode];
+    f |= (marks[run.diff] || 0) | (run.nightmare ? marks.nightmare : 0);
     if (f) p.feats[run.hero] = f;
   }
   if (run.evolved) p.feats[run.hero] = (p.feats[run.hero] || 0) | FEAT.evolved;

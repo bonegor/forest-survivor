@@ -27,7 +27,7 @@ test('encode/decode round-trips and rejects junk', () => {
 // With runs never saved, this is the biggest cookie the game writes.
 test('every hero in six legendaries, and every record at its most, still fits the cookie', () => {
   const p = P.defaultProfile();
-  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, heroes: [...P.HERO_ORDER] });
+  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, heroes: [...P.HERO_ORDER] });
   p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999, time: 14400, gold: 1e9, bosses: 9999 };
   for (const m of P.WIN_MODES) p.wins[m] = [1e6, 1e6, 1e6];
   for (const u of P.UPGRADES) p.up[u.id] = u.max;
@@ -41,11 +41,12 @@ test('every hero in six legendaries, and every record at its most, still fits th
     return { slot, rarity: I.LEGENDARY, stats, power: 'undying', seed: 999999 };
   };
   for (const h of P.HERO_ORDER) {
-    p.feats[h] = 7;
+    p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
     p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
   }
   const clean = P.sanitizeProfile(p);
+  assert.equal(typeof P.packProfile(clean).heroes, 'number', 'the heroes kept as bits');
   assert.deepEqual(clean.gear, p.gear, 'all of it is valid');
   const json = JSON.stringify(P.packProfile(clean));
   // The server seals at most about 3 000 characters of JSON into a 4 096-character cookie.
@@ -344,4 +345,25 @@ test('metaBonuses reflect upgrade ranks', () => {
   assert.equal(m.armor, 1);
   assert.equal(m.revival, 1);
   assert.equal(m.cooldown, 1);
+});
+
+// The marks of a win by difficulty (27 October 2026), for the hero and trial cards only: a night or
+// a Dungeon Run won on Veteran, on Elite, in a Nightmare (which marks Elite too). Normal's win
+// keeps only the any-win star.
+test('a win marks its difficulty on the hero: Veteran, Elite, and a Nightmare as Elite too', () => {
+  const p = P.defaultProfile();
+  p.feats.necromancer = P.FEAT.survivalHard; // the Dungeon open, as a night won with him opens it
+  let r = P.applyRun(p, { mode: 's15', diff: 'hard', nightmare: true, hero: 'knight', victory: true, time: 900, gold: 0 });
+  assert.ok(r.ok);
+  const has = (bit, hero = 'knight') => P.hasFeat(r.profile, hero, bit);
+  assert.ok(has(P.FEAT.nightElite) && has(P.FEAT.nightNightmare), 'Elite and its Nightmare');
+  assert.ok(!has(P.FEAT.nightVeteran), 'not Veteran');
+  r = P.applyRun(r.profile, { mode: 'dungeon', diff: 'medium', hero: 'knight', victory: true, time: 1200, floor: 3, gold: 0 });
+  assert.ok(r.ok);
+  assert.ok(has(P.FEAT.dungeonVeteran) && has(P.FEAT.dungeon), 'the Dungeon on Veteran');
+  assert.ok(!has(P.FEAT.dungeonElite));
+  r = P.applyRun(r.profile, { mode: 's15', diff: 'easy', hero: 'archer', victory: true, time: 900, gold: 0 });
+  assert.ok(r.ok);
+  assert.equal(r.profile.feats.archer, P.FEAT.survivalHard, 'a Normal win: the any-win star alone');
+  assert.equal(P.sanitizeProfile({ feats: { knight: 1023 } }).feats.knight, 1023, 'every mark kept');
 });

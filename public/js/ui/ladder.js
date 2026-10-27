@@ -54,11 +54,19 @@ export function unlockText(key) {
   return '';
 }
 
-// Achievement stars for a hero: [label, colour, earned].
+// Achievement stars for a hero: [label, colour, earned, mode]. For each mode a star for any win,
+// then bronze, silver and red marks for a win on Veteran, on Elite and in a Nightmare (27 October
+// 2026, shared/profile.js FEAT).
 export function featStars(p, hero) {
   return [
-    ['Night survived', '#fee761', hasFeat(p, hero, FEAT.survivalHard)],
-    ['Dungeon', '#9ee562', hasFeat(p, hero, FEAT.dungeon)],
+    ['Night survived', '#fee761', hasFeat(p, hero, FEAT.survivalHard), 's15'],
+    ['Night won on Veteran', '#c28569', hasFeat(p, hero, FEAT.nightVeteran), 's15'],
+    ['Night won on Elite', '#c0cbdc', hasFeat(p, hero, FEAT.nightElite), 's15'],
+    ['Night won in a Nightmare', '#e43b44', hasFeat(p, hero, FEAT.nightNightmare), 's15'],
+    ['Dungeon', '#9ee562', hasFeat(p, hero, FEAT.dungeon), 'dungeon'],
+    ['Dungeon won on Veteran', '#c28569', hasFeat(p, hero, FEAT.dungeonVeteran), 'dungeon'],
+    ['Dungeon won on Elite', '#c0cbdc', hasFeat(p, hero, FEAT.dungeonElite), 'dungeon'],
+    ['Dungeon won in a Nightmare', '#e43b44', hasFeat(p, hero, FEAT.dungeonNightmare), 'dungeon'],
   ];
 }
 
@@ -91,7 +99,7 @@ export function codexRecord(e) {
   if (e.type === 'ult' && !v) return '';
   switch (lock.need) {
     case 'time': return `${fmtTime(v)} best`;
-    case 'kills': return `${fmtNum(v)} slain`;
+    case 'kills': return `${fmtNum(v)} counted`; // as Veteran's (shared/progress.js effort)
     case 'level': return `level ${v} best`;
     case 'gold': return `${fmtNum(v)} best`;
     case 'bosses': return `${v} best`;

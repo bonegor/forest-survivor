@@ -58,7 +58,8 @@ test('a first-run hint waits for a warning, the ultimate’s cut-in and a name c
     assert.ok(!said('move'), 'not while a warning is up');
     g.warnings.length = 0;
     run(g, 0.1);
-    assert.ok(said('move'), 'said once it has gone');
+    assert.ok(g.banners.some((b) => b.hint), 'shown once it has gone');
+    assert.ok(!said('move'), 'not counted until it has played out'); // hints.js, 27 October 2026
     const hint = g.banners.find((b) => b.hint);
     assert.ok(hint);
     const t0 = hint.t;
@@ -69,6 +70,9 @@ test('a first-run hint waits for a warning, the ultimate’s cut-in and a name c
     g.card = { name: 'X', title: 'Y', color: '#fff', t: 0, letterbox: true };
     run(g, 0.3);
     assert.equal(hint.t, t0, 'and under a name card');
+    g.card = null;
+    run(g, 5);
+    assert.ok(said('move'), 'counted once played in full');
   }, { hints: true, settings: { numbers: false, hints: {} } }));
 
 test('the chest’s things at 2× where five fit, today’s size where they don’t', () => {

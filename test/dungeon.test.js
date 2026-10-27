@@ -282,3 +282,28 @@ test('the lit way out follows the hero to the hole', () => gameCase((g) => {
   const k = path.map(pt => w.wayGlow(pt));
   assert.ok(Math.max(...k) > 0.9 && Math.min(...k) < 0.5, 'pulses of light run along it');
 }));
+
+// Each Dungeon Run guardian leaves a piece of gear, always (27 October 2026), rolled by its floor's
+// depth alone (Game GUARDIAN_GEAR): no luck, as with a crypt's lords. It waits for its screen, and
+// the last floor's dawn waits for that screen to close.
+test("a Dungeon guardian's fall gives one piece of gear by the floor alone, and the last one's dawn waits for it", () => {
+  const fell = (luck) => gameCase((g) => {
+    if (luck) g.player.luck = luck;
+    g.bossDefeated(g.world.guardian);
+    assert.equal(g.itemQueue.length, 1, 'a piece, to its screen');
+    assert.equal(g.itemsFound, 1, 'and counted as found');
+    return g.itemQueue[0];
+  }, 'dungeon');
+  assert.deepEqual(fell(5), fell(0), 'luck plays no part');
+  gameCase((g) => {
+    g.player.invuln = 999;
+    g.enterFloor(3);
+    g.bossDefeated(g.world.guardian);
+    step(g, 1);
+    assert.equal(g.state, 'play', 'no dawn while his gear waits');
+    assert.ok(g.gearThenWin);
+    g.itemQueue.length = 0; // its screen has closed
+    step(g, 1);
+    assert.equal(g.state, 'dawn');
+  }, 'dungeon');
+});

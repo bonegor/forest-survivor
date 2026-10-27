@@ -50,8 +50,12 @@ export function codexSummary(e) {
   return HERO_SUMMARY[e.id][1];
 }
 
+// How the kills that open things are counted (shared/progress.js effort, 27 October 2026), for the
+// Codex beside every count of them.
+export const EFFORT_NOTE = 'Kills count as on Veteran: a Normal kill as eight, an Elite one as half, a Nightmare one as a sixth';
+
 export function codexDescription(e) {
-  if (e.type === 'feature') return 'Each level gives one more exclusion slot: switch a weapon off here and no run offers it, until you switch it back on. Your hero always keeps their signature weapon.';
+  if (e.type === 'feature') return 'Each level gives one more exclusion slot, five in all: switch a weapon off here and no run offers it, until you switch it back on. Your hero always keeps their signature weapon.';
   if (e.hidden) return 'Win your first night to reveal this weapon.';
   return e.type === 'weapon' ? WEAPONS[e.id].desc : e.type === 'relic' ? PASSIVES[e.id].desc : HEROES[e.id].ultDesc;
 }

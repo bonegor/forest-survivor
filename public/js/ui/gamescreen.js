@@ -372,6 +372,9 @@ export class LevelUpOverlay {
     // Shift is the crypts' strike too: held as the screen opens, it isn't ALWAYS until it has been
     // let go and pressed again.
     this.heldAlways = input.down('always');
+    // The first level-up screen's footer tells what a card is (hints.js 'levelup'), until a card is
+    // taken from it.
+    this.teach = !!this.g.hints && !this.g.hints.said('levelup');
   }
 
   roll() {
@@ -416,6 +419,10 @@ export class LevelUpOverlay {
     const g = this.g, c = this.choices[i];
     if (always && this.fillersOnly) g.autoPick = c.type;
     g.applyChoice(c);
+    if (this.teach) {
+      g.hints.mark('levelup');
+      this.teach = false;
+    }
     g.pendingLevels = Math.max(0, g.pendingLevels - 1); // never below none (draw: levels taken elsewhere)
     sfx('pick');
     g.state = 'play';
@@ -810,7 +817,10 @@ export class LevelUpOverlay {
         color = '#e43b44';
       } else if (ui.focusId === 'banish') tip = fit(['BANISH: the card in focus is gone for the rest of the run', 'BANISH: gone for the run']);
       else if (ui.focusId === 'reroll') tip = fit(['REROLL: all new cards', 'REROLL']);
-      else if (touch) tip = fit(canB ? ['Tap a card to take it · hold a card to banish it', 'Tap: take · hold: banish'] : ['Tap a card to take it', 'Tap: take']);
+      else if (this.teach) {
+        tip = fit(['Your first level: take a card, a new weapon or relic or a rank of one you hold', 'Take a card: a new weapon or relic, or a rank of one held', 'Take a card']);
+        color = '#8fb8ff';
+      } else if (touch) tip = fit(canB ? ['Tap a card to take it · hold a card to banish it', 'Tap: take · hold: banish'] : ['Tap a card to take it', 'Tap: take']);
       else if (pad) tip = fit([`${padKey('A')} takes the card in focus`, `${padKey('A')}: take`]);
       else tip = fit([`Enter or 1-${n} takes a card`, `Enter/1-${n}: take`]);
       drawText(ctx, tip, W / 2, hasB || hasR ? tipY : rowY + 2, { align: 'center', color });
@@ -1568,6 +1578,25 @@ function nearLines(list, w) {
   return forms.map((f) => fitText(f[k], w));
 }
 
+// A fall's results tell what dealt the hero's wounds, the three that dealt most by their share of
+// all he took (Game.stats.wounds), and one tip for the worst kind of them (the review of 27 October
+// 2026: "slain by" names only the last blow, in a crowd often a rat). A win or a quit tells none.
+export const WOUND_TIPS = {
+  boss: 'Tip: a boss marks the ground before he strikes: step out of it',
+  mobs: "Tip: the Armory's Armor and Vitality hold the horde off longer",
+  shots: 'Tip: bolts and blasts are aimed where you stand: keep moving',
+};
+export function woundLines(res) {
+  const st = res.stats, all = st?.damageTaken;
+  if (!res.died || !all || !st.wounds) return [];
+  const top = Object.entries(st.wounds).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const worst = [['boss', st.fromBoss], ['mobs', st.fromMobs], ['shots', st.fromShots]].sort((a, b) => b[1] - a[1])[0][0];
+  return [
+    ['Wounds: ' + top.map(([who, d]) => `${who} ${Math.round((100 * d) / all)}%`).join(' · '), '#c0cbdc'],
+    [WOUND_TIPS[worst], '#8b9bb4'],
+  ];
+}
+
 class ResultsOverlay {
   constructor(gs) {
     this.gs = gs;
@@ -1578,6 +1607,7 @@ class ResultsOverlay {
     this.lockTime = 1;
     const res = this.g.result || (this.g.finish(false), this.g.result);
     this.res = res;
+    this.wounds = woundLines(res);
     // Quit Run: no win and no fall (Game.finish's died). Its own neutral title, and the title piece.
     this.quit = !res.victory && !res.died;
     // The records as they stood before this run: a row beating one is stamped NEW BEST.
@@ -1706,7 +1736,7 @@ class ResultsOverlay {
     drawText(ctx, fitText(sub, W - 8), W / 2, 12 + L.height * s, { align: 'center', color: res.victory ? '#feae34' : '#8b9bb4' });
     if (this.t < TALLY.rows - 0.2) return null;
     // Personal bests and anything this run unlocked, shown above the gold once it has landed.
-    const notes = [];
+    const notes = [...this.wounds];
     if (this.reward && this.landed) {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
@@ -1769,7 +1799,7 @@ class ResultsOverlay {
     });
     // The gold, counting up once the rows are in and the store has answered; then what next.
     const gy = y + ph - 51 - nNear * 10;
-    notes.forEach(([text, color], i) => drawText(ctx, text, W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
+    notes.forEach(([text, color], i) => drawText(ctx, fitText(text, pw - 12), W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
     if (this.landed && unH) {
       if (!this.announced) {
         this.announced = true;

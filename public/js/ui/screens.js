@@ -16,8 +16,8 @@ import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, d
 import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon } from './ladder.js';
 import { flank } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
-import { codexSummary, codexDescription, evolutionRecipe, shortNeed } from './menu-copy.js';
-import { metaBonuses, exclusionState } from '../shared/profile.js';
+import { codexSummary, codexDescription, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
+import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
 import { needsPrologue } from '../game/prologue.js';
 
 const UP_ICONS = {
@@ -337,7 +337,7 @@ export class ModeScreen {
         const best = prof.ranked[hero];
         if (best && open) drawText(ctx, (cw >= 90 ? 'BEST ' : '') + fmtTime(best), x + 6, y + 5, { color: '#feae34' });
       } else if (open) {
-        const stars = featStars(prof, hero).filter(([label]) => (m === 's15' ? label === 'Night survived' : label === 'Dungeon'));
+        const stars = featStars(prof, hero).filter((s) => s[3] === m); // any win, then Veteran, Elite, Nightmare
         let sx = x + 6;
         for (const [, col, got] of stars) {
           if (got) drawText(ctx, '★', sx, y + 5, { color: col });
@@ -544,9 +544,9 @@ const tileName = (e) => e.hiddenCount ? `${e.hiddenCount} hidden weapons` : code
 const slotsText = (used, level) => `${used} of ${level} exclusion slot${level === 1 ? '' : 's'} in use`;
 
 // Whether Enter (or a click) on an entry switches it: an open weapon, back into runs, or out of
-// them while an exclusion slot is free.
+// them while an exclusion slot is free and it is not the last a run would offer (lastInPlay).
 export function codexSwitchable(e, prof) {
-  return e.type === 'weapon' && e.open && (e.home || (prof.home?.length || 0) < exclusionState(prof).level);
+  return e.type === 'weapon' && e.open && (e.home || ((prof.home?.length || 0) < exclusionState(prof).level && !lastInPlay(prof, e.id)));
 }
 
 // What the panel under the grid tells of an entry: what it does; shut, what opens it and how far
@@ -556,13 +556,18 @@ export function codexDetail(e, prof) {
   const slots = exclusionState(prof), used = prof.home?.length || 0;
   if (e.type === 'feature') {
     const next = e.next ? ` · next slot: ${e.need.toLowerCase()}` : '';
-    lines.push({ text: `${slotsText(used, slots.level)} · ${fmtNum(prof.kills)} monsters slain${next}`, color: '#fee761' });
-  } else if (!e.open && !e.hidden) lines.push({ text: [shortNeed(e.need), codexRecord(e)].filter(Boolean).join(' · '), color: '#feae34' });
+    lines.push({ text: `${slotsText(used, slots.level)} · ${fmtNum(prof.effort || 0)} kills counted${next}`, color: '#fee761' });
+    lines.push({ text: EFFORT_NOTE, color: '#8b9bb4' });
+  } else if (!e.open && !e.hidden) {
+    lines.push({ text: [shortNeed(e.need), codexRecord(e)].filter(Boolean).join(' · '), color: '#feae34' });
+    if (PROGRESS.locks.find((l) => l.type === e.type && l.id === e.id)?.need === 'kills') lines.push({ text: EFFORT_NOTE, color: '#8b9bb4' });
+  }
   const recipe = evolutionRecipe(e, prof);
   if (recipe) lines.push({ text: recipe, color: '#fee761' });
   if (e.type === 'relic' && e.open) lines.push(`${PASSIVES[e.id].max} ranks · bonuses apply during a run`);
   if (e.type === 'weapon' && e.open) {
     if (e.home) lines.push({ text: `Excluded: never offered in runs · ${slotsText(used, slots.level)}`, color: '#f6757a' });
+    else if (lastInPlay(prof, e.id)) lines.push({ text: 'Offered in runs · the last weapon a run offers stays in', color: '#feae34' });
     else if (used < slots.level) lines.push({ text: `Offered in runs · ${slotsText(used, slots.level)}`, color: '#9ee562' });
     else {
       const more = slots.next ? ` · slay ${fmtNum(slots.next)} monsters in total for ${slots.level ? 'another' : 'one'}` : '';

@@ -334,7 +334,7 @@ test('a maximal save of all nine heroes fits the sealed cookie and reads back wh
   const I = await import('../public/js/shared/items.js');
   assert.equal(P.HERO_ORDER.length, 9);
   const p = P.defaultProfile();
-  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, heroes: [...P.HERO_ORDER] });
+  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, heroes: [...P.HERO_ORDER] });
   p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999 };
   for (const m of P.WIN_MODES) p.wins[m] = [1e6, 1e6, 1e6];
   for (const u of P.UPGRADES) p.up[u.id] = u.max;
@@ -344,7 +344,7 @@ test('a maximal save of all nine heroes fits the sealed cookie and reads back wh
     return { slot, rarity: I.LEGENDARY, stats, power: 'undying', seed: 999999 };
   };
   for (const h of P.HERO_ORDER) {
-    p.feats[h] = 7;
+    p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
     p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
   }

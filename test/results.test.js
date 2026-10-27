@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { GameScreen } from '../public/js/ui/gamescreen.js';
+import { GameScreen, woundLines, WOUND_TIPS } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
@@ -142,4 +142,13 @@ test('a run the store pays nothing for says it was not saved, and a run with not
   assert.ok(!gs.overlay.reward.unsaved);
   assert.equal(none.store.profile.runs, 1, 'recorded');
   gs.leave();
+});
+
+// A fall's results tell what dealt the hero's wounds, the three worst by their share, and one tip
+// for the worst kind (27 October 2026); a win or a quit tells none.
+test("a fall's results name what wounded the hero most, with a tip for the worst kind", () => {
+  const stats = { damageTaken: 100, fromBoss: 15, fromMobs: 22, fromShots: 63, wounds: { "Cultist's bolt": 63, Wolf: 22, 'Bone King': 15 } };
+  assert.deepEqual(woundLines({ died: true, stats }), [["Wounds: Cultist's bolt 63% · Wolf 22% · Bone King 15%", '#c0cbdc'], [WOUND_TIPS.shots, '#8b9bb4']]);
+  assert.deepEqual(woundLines({ died: false, victory: true, stats }), [], 'a win');
+  assert.deepEqual(woundLines({ died: false, stats }), [], 'a quit');
 });

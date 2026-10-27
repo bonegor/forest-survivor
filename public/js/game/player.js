@@ -455,6 +455,9 @@ export class Player {
     if (src && src.boss) g.stats.fromBoss += dmg;
     else if (src) g.stats.fromMobs += dmg;
     else g.stats.fromShots += dmg;
+    // And by who dealt it: a foe by its kind, a boss by his name, a shot as its shooter's (names.js).
+    const who = src ? src.def.name : by || 'Unknown';
+    g.stats.wounds[who] = (g.stats.wounds[who] || 0) + dmg;
     g.stats.minHp = Math.min(g.stats.minHp, Math.max(0, this.hp) / this.maxHp);
     g.numbers.add(this.x, this.y - 18, dmg, 'player');
     g.shake(0.35);

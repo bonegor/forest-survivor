@@ -28,8 +28,17 @@ export const PROGRESS = {
   firstRank: 0.5,
   // A hero's ultimate opens once a run with him lasts this long on the clock (any mode).
   ultTime: 2 * 60,
-  // Each lifetime kill milestone grants one more weapon exclusion: 10, 20, 40, ...
-  exclusionFirst: 10,
+  // Each weapon exclusion slot opens at its own total of kills counted as Veteran's (effort, below),
+  // five at most (the review of 27 October 2026: a slot at every doubling from 10 gave seven after
+  // one run, then asked 327,680 kills for the sixteenth).
+  exclusionAt: [10, 500, 3000, 10000, 30000],
+  // A kill counts toward the 'kills' milestones and the exclusion slots as one of Veteran's (27
+  // October 2026): a difficulty's as Veteran's horde over its own (data/difficulty.js VETERAN.spawn
+  // / spawn), so Normal's eighth of the horde opens as fast as Veteran's whole one, and a
+  // Nightmare's divided again by its NIGHTMARE.more. This file imports nothing, so the numbers are
+  // copied here; test/progress.test.js keeps them equal to difficulty.js.
+  effort: { easy: 8, medium: 1, hard: 0.5 },
+  nightmareEffort: 1 / 3,
   // Open from the first run; every hero's signature weapon(s) always are too (data/heroes.js unique).
   // The owner's (22 October 2026): five to start with, the hero's own among them (the boomerang and
   // the spikes too), Frost Nova a run away (1:00), Consecration after ten falls, then the ladder;
@@ -38,7 +47,7 @@ export const PROGRESS = {
   openRelics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'],
   // The rest, each opened for the whole account by a milestone. `need` is what is measured:
   //   time:   seconds on the clock in one run (any mode)
-  //   kills:  foes slain over all runs together
+  //   kills:  foes slain over all runs together, counted as Veteran's (effort)
   //   level:  the level reached in one run
   //   gold:   gold picked up in one run (as the run reports it, before the difficulty's rate)
   //   bosses: bosses (and crypt lords) slain in one run (Game.stats.bosses)
