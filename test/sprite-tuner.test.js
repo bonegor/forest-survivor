@@ -67,7 +67,8 @@ test('a tune moves the colours, never the pixels: the ink outlines the sprite, t
   });
   const eye = hexPack(T.shade(T.hexOfPacked(hexPack('#ff0044')), t));
   assert.ok(tuned.emissive.has(eye), 'its eyes glow in their tuned colour');
-  assert.ok(T.meanLuma(tuned.frames, new Set([INK, RIM])) > T.meanLuma(stock.frames, new Set([OUTLINE])) + 15, 'lifted: lighter');
+  // (+10: the spider redrawn in mid tones on 27 October 2026 has less dark left to lift, about +14.)
+  assert.ok(T.meanLuma(tuned.frames, new Set([INK, RIM])) > T.meanLuma(stock.frames, new Set([OUTLINE])) + 10, 'lifted: lighter');
 });
 
 test("a hero's sheet is tuned by its own colours: no ink to swap, the rim kept in the frame when it fits", () => {
