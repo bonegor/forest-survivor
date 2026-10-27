@@ -148,7 +148,12 @@ test("no hero's ultimate charges the orb by its blows on a boss", () => {
   for (const [hero, h] of Object.entries(HEROES)) {
     game((g, p) => {
       p.devGod = true;
-      for (const w of p.weapons) w.update = () => {};
+      // His weapons still, and what they left standing (Miasma's cloud round him) put out: a
+      // Butcher as big as the Bone King stands in it at 40 px.
+      for (const w of p.weapons) {
+        w.update = () => {};
+        if (w.fx) w.fx.dead = true;
+      }
       const boss = g.spawnBoss('butcher', p.x + 40, p.y);
       boss.update = () => true;
       boss.maxHp = boss.hp = boss.maxHp * 20;

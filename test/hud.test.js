@@ -267,6 +267,7 @@ test('only the three elites nearest the hero are named; a boss speaks over them 
     // The boss right at the top of the screen, saying something.
     const cam = g.cam, z = cam.S / view.S;
     const b = g.spawnBoss('butcher', p.x, cam.y + 30 / z);
+    b.y += b.h + 6; // his head, not his feet, 30 HUD px down: he is as tall as the Bone King
     b.speech = { text: 'YOU WILL FEED THE FOREST!', t: 2 };
     // And a chest off the top of the screen: its marker stands where the words may.
     g.addPickup('chest', p.x, p.y - 700);
