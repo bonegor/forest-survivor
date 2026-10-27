@@ -2281,11 +2281,12 @@ export class Game {
   // pack, a champion, the thief, a boss's summons) may take the farthest anywhere off the screen,
   // as many as it brings; the steady horde HORDE_CAP.perFrame a frame at most. Never a boss, a
   // crypt's lord, a champion, the thief, a boss's summons or a sleeping pack. The horde is counted
-  // and those off the screen listed once a frame, however many spawns ask. Returns whether there is
-  // room now: there may be already, with the foes killed this frame not yet swept away.
+  // and those off the screen listed (and sorted, the farthest first) once a frame, however many
+  // spawns ask. Returns whether there is room now: there may be already, with the foes killed this
+  // frame not yet swept away.
   recycleFar(sent) {
     const E = this.enemies;
-    const c = (this.horde ??= { frame: -1, of: null, live: 0, used: 0, far2: 0, list: [], ids: [], d2: [], recycled: 0 });
+    const c = (this.horde ??= { frame: -1, of: null, live: 0, used: 0, far2: 0, list: [], ids: [], d2: [], ord: [], at: 0, sorted: false, recycled: 0 });
     if (c.frame !== this.frame || c.of !== E) {
       const p = this.player, cam = this.cam, m = HORDE_CAP.edge;
       const far = Math.hypot(cam.W, cam.H) * HORDE_CAP.far;
@@ -2293,6 +2294,8 @@ export class Game {
       c.frame = this.frame;
       c.of = E;
       c.live = c.used = 0;
+      c.at = 0;
+      c.sorted = false;
       c.far2 = far * far;
       c.list.length = c.ids.length = c.d2.length = 0;
       for (const e of E) {
@@ -2308,15 +2311,29 @@ export class Game {
     }
     if (c.live <= HORDE_CAP.most) return true;
     if (!sent && c.used >= HORDE_CAP.perFrame) return false;
-    // The farthest still standing. One gone since (killed, or made room) is passed over, and one
-    // swept away and back from the pool as another foe has another id.
-    let best = -1;
-    for (let i = 0; i < c.list.length; i++) {
-      if (c.list[i].dead || c.list[i].id !== c.ids[i]) continue;
-      if (best < 0 || c.d2[i] > c.d2[best]) best = i;
+    // The farthest still standing: the list sorted farthest first once a frame, the first time room
+    // is asked for, and walked with a cursor (it was scanned whole for every spawn: at the cap an
+    // Elite Nightmare ring of some 4,600 cost about ten million steps in one frame, 27 October 2026).
+    // One gone since (killed, or made room) is passed over for good, and so is one swept away and
+    // back from the pool as another foe with another id. Past the end there is no one left to take.
+    // Turned away for standing too near (the steady horde), the cursor stays: a spawn sent at the
+    // hero this frame may still take that one.
+    if (!c.sorted) {
+      c.ord.length = c.list.length;
+      for (let i = 0; i < c.ord.length; i++) c.ord[i] = i;
+      c.ord.sort((a, b) => c.d2[b] - c.d2[a]);
+      c.sorted = true;
     }
-    if (best < 0 || (!sent && c.d2[best] < c.far2)) return false;
+    while (c.at < c.ord.length) {
+      const i = c.ord[c.at];
+      if (!c.list[i].dead && c.list[i].id === c.ids[i]) break;
+      c.at++;
+    }
+    if (c.at >= c.ord.length) return false;
+    const best = c.ord[c.at];
+    if (!sent && c.d2[best] < c.far2) return false;
     c.list[best].dead = true;
+    c.at++;
     c.live--;
     c.used++;
     c.recycled++;

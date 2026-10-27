@@ -1,6 +1,6 @@
 // The horde keeps a little room (crowd.js): foes that overlap ease apart, the lighter the more,
 // while a boss and the props never budge and foes still pass through props; a timed swarm comes
-// as a loose stream; and on the Endless Night a swarm comes back as a whole batch.
+// as a loose stream, a big one wider; and on the Endless Night a swarm comes back as a whole batch.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -86,6 +86,17 @@ test('a timed swarm comes as a loose stream, not one clump', () => game((g, p) =
   const across = Math.max(...ys) - Math.min(...ys), deep = Math.max(...xs) - Math.min(...xs);
   assert.ok(across >= SWARM_SPREAD.wide * 0.9, `across ${across.toFixed(0)} px`);
   assert.ok(deep >= SWARM_SPREAD.deep * 0.6, `deep ${deep.toFixed(0)} px`);
+}));
+
+// A big swarm comes wider across its way (spawner.js SWARM_SPREAD.base, .most), never deeper.
+test('a big swarm comes wider, not deeper', () => game((g, p) => {
+  g.spawner.fire({ type: 'swarm', enemy: 'bat', count: Math.round(1200 / g.diff.horde), dir: 0 }, g.phase);
+  const bats = g.enemies.filter((e) => !e.dead && e.type === 'bat');
+  assert.ok(bats.length >= 1000, `${bats.length} bats`);
+  const ys = bats.map((e) => e.y - p.y), xs = bats.map((e) => e.x - p.x);
+  const across = Math.max(...ys) - Math.min(...ys), deep = Math.max(...xs) - Math.min(...xs);
+  assert.ok(across >= SWARM_SPREAD.wide * SWARM_SPREAD.most * 0.95, `across ${across.toFixed(0)} px`);
+  assert.ok(deep <= SWARM_SPREAD.deep + 1, `deep ${deep.toFixed(0)} px`);
 }));
 
 test('on the Endless Night a looped swarm comes as a whole batch, each knowing its place', () => {

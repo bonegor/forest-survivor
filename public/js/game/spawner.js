@@ -44,8 +44,14 @@ export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (
 // worth more over its 15, about what the old one poured in at once at minute 5, and what it brings
 // stays for the hero to deal with.
 // A timed swarm's stream: how wide across its way and how deep along it (the owner's "slightly less
-// clumped up", 22 October 2026; it was 120 x 20).
-export const SWARM_SPREAD = { wide: 170, deep: 70 };
+// clumped up", 22 October 2026; it was 120 x 20). A swarm of more than `base` comes wider across its
+// way by the square root of how many times base it brings, up to `most` times (27 October 2026: the
+// swarms of 2,600-4,300 an Elite Nightmare sends landed almost whole in one 170 x 70 strip, and the
+// crowd's work in each crowded cell grows as its count squared). Never deeper: at the start of the
+// stream (0.55 screen diagonals off) a longer tail, or a wider stream than `most` times, would lie
+// past the forest's tooFar, and Game.relocate would put it back at the screen's edge. Its size
+// stays as the rules give it.
+export const SWARM_SPREAD = { wide: 170, deep: 70, base: 300, most: 1.8 };
 
 // A ring, "more intense ... 3 times as many monsters in it" (the owner's, 26 October 2026): its
 // count RING.more times the rules', in RING.layers circles RING.gap px apart, each turned half a
@@ -343,6 +349,10 @@ export class Spawner {
     ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) && !ev.picked ? g.diff.few : 1) * hordeMore(g, phase))) };
     const st = this.stats(phase);
     const cam = g.cam;
+    // At the cap a refused spawn means no one is left off the screen to make room (Game.recycleFar),
+    // so none of the rest would come this frame either: the event stops asking. Only at the cap, so
+    // a refusal for any other reason is passed over as before.
+    const shut = (e) => !e && g.enemies.length - g.propCount > HORDE_CAP.most;
     switch (ev.type) {
       case 'ring': {
         const R0 = Math.hypot(cam.W, cam.H) * 0.5 + 10;
@@ -352,22 +362,25 @@ export class Spawner {
           const a = ((i % per) + (layer % 2) * 0.5) / per * TAU;
           const spot = g.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
           if (!spot) continue;
-          g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true });
+          if (shut(g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true }))) break;
         }
         // (Its banner came with its warning.)
         break;
       }
       case 'swarm': {
         // A stream crossing the screen, from the side its warning showed: SWARM_SPREAD.wide px
-        // across and up to .deep px deep, so it comes loose rather than as one clump.
+        // across (more for a big one) and up to .deep px deep, so it comes loose rather than as one
+        // clump.
         const a = ev.dir ?? rand(TAU);
         const dx = Math.cos(a), dy = Math.sin(a);
         const R = Math.hypot(cam.W, cam.H) * 0.55;
         const sx = p.x - dx * R, sy = p.y - dy * R;
+        const wide = SWARM_SPREAD.wide * Math.min(SWARM_SPREAD.most, Math.sqrt(Math.max(1, ev.count / SWARM_SPREAD.base)));
         for (let i = 0; i < ev.count; i++) {
-          const off = (i / ev.count - 0.5) * SWARM_SPREAD.wide + rand(-8, 8), back = rand(SWARM_SPREAD.deep);
+          const off = (i / ev.count - 0.5) * wide + rand(-8, 8), back = rand(SWARM_SPREAD.deep);
           const x = sx - dy * off - dx * back, y = sy + dx * off - dy * back;
           const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6, aware: true, sent: true });
+          if (shut(e)) break;
           if (e) e.spd *= 1.2;
         }
         sfx('charge');
@@ -377,7 +390,7 @@ export class Spawner {
         // Where its warning pointed (as far from the hero as then), or a spawn point.
         const pt = ev.off ? g.world.freeSpot(p.x + ev.off[0], p.y + ev.off[1]) || g.world.spawnPoint(g, 30) : g.world.spawnPoint(g, 30);
         if (!pt) break;
-        for (let i = 0; i < ev.count; i++) g.spawnEnemy(ev.enemy, pt.x + rand(-20, 20), pt.y + rand(-20, 20), { ...st, aware: true, sent: true });
+        for (let i = 0; i < ev.count; i++) if (shut(g.spawnEnemy(ev.enemy, pt.x + rand(-20, 20), pt.y + rand(-20, 20), { ...st, aware: true, sent: true }))) break;
         break;
       }
       default:

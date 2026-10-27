@@ -1,11 +1,11 @@
 // The cap of monsters (the owner's, 16 October 2026: "recycle those far away, throw them out ...
-// if they are far offscreen it makes sense"). Past 900 a new monster comes in the place of the
-// farthest that stands well off-screen (data/waves.js HORDE_CAP.far screen diagonals from the
-// hero), which simply vanishes: no death, no drops, no kill, no XP. Never one on the screen, a
-// boss, a crypt's lord, a champion, the thief, a boss's summons or a sleeping pack; if none is
-// that far, the spawn is refused as before. The steady horde makes room for HORDE_CAP.perFrame a
-// frame; what is sent at the hero (a ring, a swarm...) comes in full, in the place of any foe off
-// the screen.
+// if they are far offscreen it makes sense"). Past HORDE_CAP.most (2,500 since 27 October 2026) a
+// new monster comes in the place of the farthest that stands well off-screen (data/waves.js
+// HORDE_CAP.far screen diagonals from the hero), which simply vanishes: no death, no drops, no
+// kill, no XP. Never one on the screen, a boss, a crypt's lord, a champion, the thief, a boss's
+// summons or a sleeping pack; if none is that far, the spawn is refused as before. The steady
+// horde makes room for HORDE_CAP.perFrame a frame; what is sent at the hero (a ring, a swarm...)
+// comes in full, in the place of any foe off the screen, and stops asking once none is left.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -193,4 +193,17 @@ test('a ring round the hero at the cap comes in full, in the place of foes off t
   g.summonRing('skeleton', 12, 72);
   assert.equal(came, 12);
   assert.ok(live(g) <= HORDE_CAP.most + 1);
+});
+
+test('a ring at the cap with no one off the screen to take stops asking at the first refusal', () => {
+  const g = game();
+  fill(g);
+  let asked = 0;
+  const spawn = g.spawnEnemy;
+  g.spawnEnemy = function (...a) {
+    asked++;
+    return spawn.apply(this, a);
+  };
+  g.spawner.fire({ type: 'ring', enemy: 'zombie', count: 14 }, 12);
+  assert.equal(asked, 1, 'one refused, the rest never asked');
 });
