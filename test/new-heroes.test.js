@@ -338,7 +338,7 @@ test('the Silver Crossbow aims at the wicked before the nearer horde, pierces, a
     step(g);
     const bolt = g.projectiles.find((pr) => pr.kind === 'bolt');
     assert.ok(bolt && Math.cos(bolt.ang) < -0.99, 'at the cultist, behind her');
-    assert.equal(bolt.pierce, 2);
+    assert.equal(bolt.pierce, w.s.pierce);
     // The bane: half as much again on the wicked.
     const r = Math.random;
     Math.random = () => 0.5;

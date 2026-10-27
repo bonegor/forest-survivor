@@ -75,6 +75,9 @@ export function armored(raw, armor) {
 export const KILL_HEAL = { most: 0.01 };
 // Vampire Fang's heal from damage dealt: at most this share of his health a second (Player.fangHeal).
 export const FANG_MOST = 0.012;
+// Heals that come in drops (Leech Chains, Vampire Fang, kills): what they mend adds up and shows as
+// one green number every `every` seconds, without the heal's sound (Player.trickle).
+export const TRICKLE = { every: 0.6 };
 // Rimeheart: foes within `r` px freeze for `base` + `per` per rank beyond the first, then it rests
 // `rest` s less `cut` per rank beyond the first (Player.hurt).
 export const RIME = { r: 50, base: 1, per: 0.2, rest: 7, cut: 0.6 };
@@ -133,6 +136,8 @@ export class Player {
     this.healPool = 0; // sanctuary heal accumulator
     this.leechLeft = 0; // what kills may heal him yet this second (leech)
     this.fangLeft = 0; // what Vampire Fang may heal yet this second (FANG_MOST)
+    this.trickled = 0; // what drops of healing mended since the last green number (TRICKLE)
+    this.trickleT = 0;
     this.rimeCd = 0; // Rimeheart's rest between freezes
     this.leap = null; // a leap of the Twin Axes under way (leapTo)
     this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
@@ -259,7 +264,16 @@ export class Player {
     const h = Math.min(v, this.leechLeft);
     if (h <= 0) return 0;
     this.leechLeft -= h;
-    return this.heal(h, true);
+    return this.trickle(h);
+  }
+
+  // A drop of healing (TRICKLE): mended at once, shown with the others in one green number.
+  trickle(amount) {
+    if (this.dead) return 0;
+    const before = this.hp;
+    this.hp = Math.min(this.maxHp, this.hp + amount * this.healMul);
+    this.trickled += this.hp - before;
+    return this.hp - before;
   }
 
   // Vampire Fang: a share of the health a blow took, as much as this second has left (FANG_MOST).
@@ -267,7 +281,7 @@ export class Player {
     const h = Math.min(took * this.fang, this.fangLeft);
     if (h <= 0) return 0;
     this.fangLeft -= h;
-    this.hp = Math.min(this.maxHp, this.hp + h * this.healMul);
+    this.trickle(h);
     return h;
   }
 
@@ -344,6 +358,14 @@ export class Player {
 
     this.leechLeft = Math.min(this.maxHp * KILL_HEAL.most, this.leechLeft + this.maxHp * KILL_HEAL.most * dt);
     this.fangLeft = Math.min(this.maxHp * FANG_MOST, this.fangLeft + this.maxHp * FANG_MOST * dt);
+    if ((this.trickleT -= dt) <= 0) {
+      this.trickleT = TRICKLE.every;
+      const n = Math.floor(this.trickled);
+      if (n >= 1) {
+        this.g.numbers.add(this.x, this.y - 18, n, 'heal');
+        this.trickled -= n;
+      }
+    }
     if (this.rimeCd > 0) this.rimeCd -= dt;
     // Grove Warden: is a tree near him (the forest's; a crypt or the Dungeon has none)?
     if (this.hero.stats.grove && (this.groveT -= dt) <= 0) {

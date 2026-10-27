@@ -1754,10 +1754,11 @@ export function boltTargets(g, x, y, R, n) {
   return [...near.filter(wicked), ...near.filter((e) => !wicked(e))].slice(0, n);
 }
 
-// The Purifier's bolts (and Purge's) burst in silver light round each foe they strike.
-export const SILVER_BURST = { R: 18, dmg: 0.4 };
+// The Purifier's bolts (and Purge's) burst in silver light round each foe they strike: dmg of
+// the bolt's damage for Purge's, evo for the Purifier's own (it fires three at once, so less each).
+export const SILVER_BURST = { R: 18, dmg: 0.4, evo: 0.2 };
 function silverBurst(pr, e) {
-  explode(pr.g, e.x, e.y - 2, SILVER_BURST.R, pr.dmg * SILVER_BURST.dmg, pr.w, 'silver', { kb: 0.6, ult: pr.ult });
+  explode(pr.g, e.x, e.y - 2, SILVER_BURST.R, pr.dmg * (pr.ult ? SILVER_BURST.dmg : SILVER_BURST.evo), pr.w, 'silver', { kb: 0.6, ult: pr.ult });
 }
 
 // One of her heavy silver bolts from (x, y) along ang (weapons.js KINDS.crossbow, Purge): o.dmg,
@@ -1855,6 +1856,7 @@ export class LeechChain {
     if (gone || snapped) {
       if (w.s.burst) explode(g, this.x, this.y, LEECH.burstR * w.s.area, w.s.dmg * 1.5, w, 'blood', { kb: 0.6 });
       else g.particles.burst(this.x, this.y - 6, 5, 6, [PC.r, PC.R], 40, 0.4, 1, P.GLOW | P.FADE, {});
+      this.done = true; // its weapon frees the slot (weapons.js leech)
       return false;
     }
     if (this.t >= this.dur) return false;
@@ -1862,7 +1864,7 @@ export class LeechChain {
     this.tickT -= dt;
     if (this.tickT <= 0) {
       this.tickT = w.s.tick;
-      if (g.hitEnemy(e, w.s.dmg, { w, type: 'dark', kb: 0, noCrit: true }) > 0) p.heal(p.maxHp * w.s.heal, true);
+      if (g.hitEnemy(e, w.s.dmg, { w, type: 'dark', kb: 0, noCrit: true }) > 0) p.trickle(p.maxHp * w.s.heal);
     }
     return true;
   }

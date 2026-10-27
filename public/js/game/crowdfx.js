@@ -31,7 +31,7 @@ export function gustFoes(g, w) {
   return out;
 }
 
-// A blast of the horn: every foe in the gust takes the light damage, and the horde alone is
+// A blast of the horn: every foe in the gust takes its damage, and the horde alone is
 // blown back (Enemy.blow), Tempest's slowed too. A foe thrown into another hurts them both once.
 export function gust(g, w, foes) {
   const p = g.player, s = w.s, id = ++blastId, full = s.arc >= Math.PI;
@@ -230,7 +230,7 @@ export function tollFoes(g, w) {
   return g.grid.foes(p.x, p.y, R).filter((e) => !e.dead && !e.prop && e.spawnT <= 0.3 && Math.hypot(e.x - p.x, e.y - p.y) <= R + e.hr);
 }
 
-// A toll round the hero: every foe within it takes the light damage, and the horde alone is
+// A toll round the hero: every foe within it takes its damage, and the horde alone is
 // frightened (Enemy.scare) for w.s.fear seconds. Death Knell's fleeing foes leave echoes.
 export function toll(g, w, foes) {
   const p = g.player, s = w.s, R = BELL_R * s.area, scared = [];

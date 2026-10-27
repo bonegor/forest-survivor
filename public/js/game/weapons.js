@@ -349,9 +349,12 @@ export const KINDS = {
       // arrow in a volley. This is visual state; projectile timing is unchanged.
       // No arrow turns him, not even one at a foe behind him (facing.js).
       if (p.id === 'archer') p.bowShot = { at: g.clock, ang };
+      // Drawn and struck with at a quarter over the outlined 14x5 sprite (17.5x6.25 px, the hit
+      // 8.75 px either side of its centre and 3.75 to either side of its line): still short of
+      // her bow, about 21 px tip to tip.
       const arrow = (a) =>
         spawnProjectile(g, {
-          kind: 'arrow', sprite: 'arrow', x: m.x, y: m.y, z: p.id === 'archer' ? 19 : 7, ang: a, speed: 270 * w.s.speed, life: 1.2, r: 3,
+          kind: 'arrow', sprite: 'arrow', x: m.x, y: m.y, z: p.id === 'archer' ? 19 : 7, ang: a, speed: 270 * w.s.speed, life: 1.2, r: 3.75, scale: 1.25,
           dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w, trail: w.evolved ? PC.c : PC.G,
         });
       arrow(ang);
@@ -590,7 +593,9 @@ export const KINDS = {
   leech: {
     fire(w) {
       const g = w.g, p = g.player;
-      w.chains = (w.chains || []).filter((c) => c.t < c.dur && !c.e.dead);
+      // A chain that snapped, or whose foe died (its body may since walk again as another foe), is
+      // out of the effects and its clock stopped: let it go, or it holds its slot for good.
+      w.chains = (w.chains || []).filter((c) => !c.done && c.t < c.dur && !c.e.dead && c.e.id === c.id);
       const want = w.s.amount - w.chains.length;
       if (want <= 0) return 0.4;
       const held = new Set(w.chains.map((c) => c.e));

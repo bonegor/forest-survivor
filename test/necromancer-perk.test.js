@@ -64,10 +64,10 @@ test('Grave Pact is a minions-only stat: the Necromancer’s effect duration sta
   });
 });
 
-test('a skeleton he raises lasts 9.1 s, not the base 7', () =>
+test('a skeleton he raises lasts 11.7 s, not the base 9', () =>
   game('necromancer', (g, p) => {
-    near(WEAPONS.raise.base.dur, 7, 'base');
-    near(firstSkeleton(g, p).maxLife, 9.1, 'the skeleton’s lifetime');
+    near(WEAPONS.raise.base.dur, 9, 'base');
+    near(firstSkeleton(g, p).maxLife, 11.7, 'the skeleton’s lifetime');
   }));
 
 test('his Army of the Dead stands 30% longer too', () =>

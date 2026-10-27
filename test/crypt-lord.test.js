@@ -71,9 +71,10 @@ test('a crypt is ten rooms or so, its lords boss-sized Skeleton Archers, each in
   assert.ok(!other.sleeping, 'and wakes with its guard');
 }));
 
-// Eight strikes at its own 600; the owner's +20% to every monster's health (20 October 2026)
-// makes it 720 on Elite, about ten.
-test('it lasts about ten strikes of a fully grown sword', () => gameCase((g, p) => {
+// About six strikes at its own 600; the owner's +20% to every monster's health
+// (20 October 2026) makes it 720 on Elite, about seven. (Ten before the signature weapons were
+// strengthened on 27 October 2026: the fully grown Longsword went from 37 damage to 51.)
+test('it lasts about seven strikes of a fully grown sword', () => gameCase((g, p) => {
   enterStartCrypt(g, p);
   const w = g.mainWeapon(), lord = g.world.guardian;
   while (w.level < 8) w.levelUp();
@@ -95,7 +96,7 @@ test('it lasts about ten strikes of a fully grown sword', () => gameCase((g, p) 
     }
   }
   assert.ok(lord.dead, 'it falls');
-  assert.ok(strikes >= 9 && strikes <= 11, `${strikes} strikes`);
+  assert.ok(strikes >= 6 && strikes <= 8, `${strikes} strikes`);
 }));
 
 test('awake, it draws its bow and shoots arrows at the hero', () => gameCase((g, p) => {
