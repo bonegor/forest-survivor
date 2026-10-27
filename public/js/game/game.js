@@ -21,6 +21,7 @@ import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
 import { Weapon, aimAt } from './weapons.js';
 import { Enemy, makeEnemyPool, drawNightEdge } from './enemies.js';
+import { maskHorde, maskBosses, keepHorde, putHorde } from './horde-over.js';
 import { Pickup } from './pickups.js';
 import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
@@ -2306,18 +2307,24 @@ export class Game {
         if (after && !covered && !o.prop && standsOver(o, p)) covered = true;
       } else this.world.drawProp(ctx, c, o, this.clock);
     }
+    // The weapons' shots and blasts over the trees and boxes, under the monsters (horde-over.js).
+    const armed = this.projectiles.length > 0 || this.effects.length > 0;
+    let horde = armed && maskHorde(c, list, p);
+    if (horde) keepHorde(ctx, c);
     for (const pr of this.projectiles) pr.draw(ctx, c);
     for (const e of this.effects) if (e.draw) e.draw(ctx, c);
+    if (horde) putHorde(ctx);
     this.particles.draw(ctx, c, false);
-    // Bosses and crypt lords over everything of the world (the trees, the horde, the hero, the
+    // Bosses and crypt lords over everything of the world but the hero (the trees, the horde, the
     // weapons' shots and blasts), each in a light of its own so the night can't hide it either:
-    // only the HUD and its own telegraphs, on the ground, go over one.
+    // only the hero, the HUD and its own telegraphs, on the ground, go over one.
     tops.sort((a, b) => a.y - b.y);
     for (const e of tops) {
       e.draw(ctx, c);
       this.light(e.x, e.y - e.h * 0.5, Math.max(56, e.h * 1.6), 'white', 0.85);
       if (!covered && standsOver(e, p)) covered = true;
     }
+    if (armed) horde = maskBosses(c, tops, horde);
 
     // Lighting.
     this.world.addLights(this);
@@ -2348,13 +2355,16 @@ export class Game {
     }
     for (const e of tops) e.drawEmissive(ctx, c);
     for (const pk of this.pickups) pk.drawEmissive(ctx);
+    // The weapons' glows under the monsters too, lit and lifted out of the dark by now.
+    if (horde) keepHorde(ctx, c);
     ctx.globalCompositeOperation = 'lighter';
+    for (const e of this.effects) if (e.drawGlow) e.drawGlow(ctx, c);
+    for (const pr of this.projectiles) pr.drawGlow(ctx, c);
+    if (horde) putHorde(ctx);
     for (const s of this.shrines) this.drawShrineGlow(ctx, c, s);
     for (const d of this.crypts) if (!d.sealed && onScreen(c, d.x, d.y, 60)) this.drawCryptGlow(ctx, c, d);
     for (const pk of this.pickups) pk.drawGlow(ctx, c);
     if (p.buff('ward') && !p.dead) this.drawWard(ctx, c);
-    for (const e of this.effects) if (e.drawGlow) e.drawGlow(ctx, c);
-    for (const pr of this.projectiles) pr.drawGlow(ctx, c);
     for (const s of this.eshots) s.drawGlow(ctx, c);
     for (const e of this.enemies) if (!e.dead && (e.elite || e.boss) && onScreen(c, e.x, e.y, 60)) e.drawGlow(ctx, c);
     for (const m of this.minions) if (onScreen(c, m.x, m.y, 40)) m.drawGlow(ctx, c);
