@@ -14,8 +14,9 @@ const angP = (e) => Math.atan2(e.g.player.y - e.y, e.g.player.x - e.x);
 const toward = (e) => e.g.world.steer(e, e.g.player);
 // The Butcher's charge: BUTCHER_DASH.spd px/s at the pace the night's monsters walk (Enemy.update: the
 // difficulty's speed, the run's walking speed, Normal's foePace) for BUTCHER_DASH.t s. Its red line is
-// as long as that and as wide as his touch reaches (e.r + p.r each side), so every charge can be
-// dodged by stepping out of the red (27 October 2026: it was a fixed 200 x 26).
+// as long as that and his touch beyond it (e.r + p.r past where the charge stops), and as wide as his
+// touch reaches (e.r + p.r each side), so every charge can be dodged by stepping out of the red
+// (27 October 2026: it was a fixed 200 x 26).
 const BUTCHER_DASH = { spd: 290, t: 0.7 };
 
 // A boss's telegraphed blow lands only while that same boss stands. Once it falls, its body
@@ -178,7 +179,7 @@ export const BOSS_AI = {
       e.lockX = Math.cos(a);
       e.lockY = Math.sin(a);
       e.face = faceAttack(e.face, false, e.lockX, e.lockY);
-      const len = BUTCHER_DASH.spd * g.diff.speed * g.move * (g.diff.foePace ?? 1) * BUTCHER_DASH.t;
+      const len = BUTCHER_DASH.spd * g.diff.speed * g.move * (g.diff.foePace ?? 1) * BUTCHER_DASH.t + e.r + p.r;
       g.effects.push(new Telegraph(g, { shape: 'line', x: e.x, y: e.y, ang: a, len, w: 2 * (e.r + p.r), dur: e.stateT }));
       if (Math.random() < 0.35) say(e, pick(['FRESH MEAT!', 'COME HERE!', 'MEAT FOR THE HOOKS!']), 1.6);
       return [0, 0, 0];

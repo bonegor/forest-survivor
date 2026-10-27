@@ -9,6 +9,7 @@ import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MOD
 import { rand, randi, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
 import { NIGHTMARE } from '../data/difficulty.js';
+import { PACE_OF } from './enemies.js';
 
 const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
 
@@ -54,12 +55,14 @@ export const RING = { more: 3, layers: 3, gap: 26 };
 // Jolts (the owner's, 26 October 2026): "random jolts of monsters ... every 30 - 90 seconds ... the
 // computer quickly checks where the hero is currently headed" and sends a stream at him from ahead,
 // close to his way but not on it (up to JOLT.spread radians off), JOLT.count of one kind as the
-// difficulty and the night weigh it. No warning: that's the jolt. Never one that shoots, nor the
-// heavy (JOLT.never): the night's count of Cultists, Ogres or Death Knights locked on him unwarned
-// was a wall of them (27 October 2026; Cultists are few, big and slow, the owner's).
-export const JOLT = { every: [30, 90], count: 6, spread: 0.45, never: ['ogre', 'deathknight'] };
-// What a jolt never is: the shooters (Cultists, Skeleton Archers) and JOLT.never.
-const JOLT_NOT = Object.keys(ENEMIES).filter((type) => ENEMIES[type].shot || JOLT.never.includes(type));
+// difficulty and the night weigh it. No warning: that's the jolt. So it comes only of the night's
+// swift and quick kinds (JOLT.pace, enemies.js PACE_OF: bats, rats, imps, hellhounds, wolves, spiders,
+// goblins, slimelets) and never one that shoots: the night's count of Cultists, Orcs, Ogres or Death
+// Knights locked on him unwarned was a wall of the heavy and slow (27 October 2026; Cultists are few,
+// big and slow, the owner's). Every pocket of the night has one of them (the first, rats and bats).
+export const JOLT = { every: [30, 90], count: 6, spread: 0.45, pace: ['swift', 'quick'] };
+// What a jolt never is: the shooters (Cultists, Skeleton Archers) and any kind not of JOLT.pace.
+const JOLT_NOT = Object.keys(ENEMIES).filter((type) => ENEMIES[type].shot || !JOLT.pace.includes(PACE_OF[type]));
 
 export const WAVE = { first: 45, every: 75, length: 15, peak: 1.5 };
 export function waveAt(t) {
@@ -382,8 +385,8 @@ export class Spawner {
     }
   }
 
-  // A jolt (JOLT): a swarm of one kind of tonight's monsters that neither shoots nor is one of the
-  // heavy (JOLT_NOT), coming at the hero from the way he is headed (his last step's, Player.aim), a little off it.
+  // A jolt (JOLT): a swarm of one kind of tonight's swift or quick monsters that doesn't shoot
+  // (JOLT_NOT), coming at the hero from the way he is headed (his last step's, Player.aim), a little off it.
   jolt(phase) {
     const g = this.g;
     // dir is the way the swarm moves, so back at him; fire weighs its count as a timed swarm's, but
