@@ -1755,10 +1755,15 @@ export class Frenzy {
 // The wicked, whom the Witch Hunter's bolts seek out first and bite deeper into (bane).
 export const wicked = (e) => !!(e.boss || e.lord || e.elite || e.type === 'cultist');
 
-// Up to n foes for her bolts: the wicked within R, nearest first, then the rest.
+// Up to n foes for her bolts: the wicked within R, nearest first, then the rest. On a Dungeon Run
+// floor (throughWalls) those in the open come before any in the rock, wicked or not, as for all
+// his aim (Game.nearestEnemies, IN_ROCK): her bolts break on a wall's face (27 October 2026).
 export function boltTargets(g, x, y, R, n) {
-  const near = g.nearestEnemies(x, y, 40, R);
-  return [...near.filter(wicked), ...near.filter((e) => !wicked(e))].slice(0, n);
+  const near = g.nearestEnemies(x, y, 40, R), rock = g.world.throughWalls ? g.world : null;
+  const inRock = (e) => !!rock && rock.solid(e.x, e.y);
+  const open = near.filter((e) => !inRock(e)), walled = near.filter(inRock);
+  const wickedFirst = (list) => [...list.filter(wicked), ...list.filter((e) => !wicked(e))];
+  return [...wickedFirst(open), ...wickedFirst(walled)].slice(0, n);
 }
 
 // The Purifier's bolts (and Purge's) burst in silver light round each foe they strike: dmg of

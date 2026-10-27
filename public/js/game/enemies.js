@@ -684,7 +684,12 @@ export class Enemy {
       }
       return aim(0, 0, 0);
     }
-    if (this.cdT <= 0 && dist < s.range && g.world.lineOfSight(this.x, this.y, p.x, p.y)) {
+    // On a Dungeon Run floor (throughWalls) one standing in the rock neither takes aim (its shot
+    // would break on the rock it stands in: EnemyShot.update) nor counts as seeing him: sight is
+    // sampled from 6 px along the line (Dungeon.lineOfSight), so one just inside a wall's face
+    // would "see" him from there (27 October 2026).
+    const open = !g.world.throughWalls || !g.world.solid(this.x, this.y);
+    if (this.cdT <= 0 && dist < s.range && open && g.world.lineOfSight(this.x, this.y, p.x, p.y)) {
       this.state = 'wind';
       this.stateT = s.wind;
       // A shot wound up standing still: it turns toward the hero first (facing.js).
@@ -693,8 +698,13 @@ export class Enemy {
     }
     // It keeps its distance, but on a Dungeon Run floor, where it comes on through the rock
     // (throughWalls, the owner's 27 October 2026), only once it sees him: one holding off inside a
-    // wall would never see him to shoot, nor come out.
-    if (dist < s.range * 0.6 && (!g.world.throughWalls || g.world.lineOfSight(this.x, this.y, p.x, p.y))) return aim(-dx / dist, -dy / dist, 0.8);
+    // wall would never see him to shoot, nor come out. Out on open floor it backs off no further
+    // than the wall's face: a step back into the rock would take it out of the fight again, so
+    // there it stands its ground.
+    if (dist < s.range * 0.6 && (!g.world.throughWalls || (open && g.world.lineOfSight(this.x, this.y, p.x, p.y)))) {
+      if (g.world.throughWalls && g.world.solid(this.x - (dx / dist) * 8, this.y - (dy / dist) * 8)) return aim(0, 0, 0);
+      return aim(-dx / dist, -dy / dist, 0.8);
+    }
     const d = g.world.steer(this, p);
     return aim(d[0], d[1], 1);
   }

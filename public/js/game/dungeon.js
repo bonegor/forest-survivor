@@ -415,6 +415,16 @@ export class Dungeon {
     return picked;
   }
 
+  // Whether a solid piece on open tile (x, y) would cut some floor beside it off from the start
+  // room's middle (populate's furniture). The grid is left as it was.
+  cutsOff(x, y) {
+    const { W, grid } = this, i = y * W + x;
+    grid[i] = PROP;
+    const dist = this.bfs(this.startRoom.cx, this.startRoom.cy, this.reach || (this.reach = new Int16Array(W * this.H)));
+    grid[i] = FLOOR;
+    return STEPS.slice(0, 4).some(([dx, dy]) => this.tile(x + dx, y + dy) === FLOOR && dist[(y + dy) * W + x + dx] === -1);
+  }
+
   bfs(sx, sy, out) {
     const { W, H, grid } = this;
     const dist = out || new Int16Array(W * H);
@@ -901,6 +911,11 @@ export class Dungeon {
         if (this.tile(x, y) === FLOOR && Math.abs(x - r.cx) + Math.abs(y - r.cy) > 2) {
           const name = rng.pick(this.info.theme === 'inferno' ? ['brazier', 'statue'] : ['brazier', 'statue', 'sarcophagus', 'candles']);
           const solid = name !== 'candles';
+          // A solid piece goes only where it walls off no floor: by a lava pool it could stand on
+          // the one tile a pocket sealPool left open leads out by (27 October 2026), and a shrine,
+          // a chest or a fallen foe's loot could then lie where the hero can't reach. The pools'
+          // tiles are baked by now, so the piece makes way rather than the pocket going under.
+          if (solid && this.cutsOff(x, y)) continue;
           if (solid) this.grid[y * this.W + x] = PROP;
           this.props.push({
             spr: SPR[name], x: x * T + T / 2, y: y * T + T - 1, anim: name === 'brazier' ? 8 : name === 'candles' ? 3 : 0, t: rng() * 10,

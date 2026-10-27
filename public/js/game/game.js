@@ -1404,7 +1404,8 @@ export class Game {
       if (pk.kind === 'gem') {
         if (xp) p.addXp(pk.value);
       } else if (pk.kind === 'coin' || pk.kind === 'goldpile') {
-        const v = Math.max(1, Math.round(pk.value * p.greed));
+        // Fortune's double too, as walking over it would give (Pickup.collect).
+        const v = Math.max(1, Math.round(pk.value * p.greed * (p.buff('fortune') ? 2 : 1)));
         this.gold += v;
         this.stats.gold += v;
       } else if (pk.kind === 'item') this.itemQueue.push(pk.opts.item);

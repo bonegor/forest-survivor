@@ -673,7 +673,11 @@ export const KINDS = {
     reach: 190,
     fire(w) {
       const g = w.g, p = g.player;
+      // By true distance: its chain cuts through walls, so a foe in the rock is no worse a mark,
+      // and the nearer-first of the open ones (nearestEnemies, IN_ROCK) would leave one in a
+      // wall last, taken as the "farthest" (27 October 2026).
       const foes = g.nearestEnemies(p.x, p.y, 999, w.reach * w.s.area);
+      foes.sort((a, b) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2 - ((b.x - p.x) ** 2 + (b.y - p.y) ** 2));
       if (!foes.length) return false;
       foes.slice(-w.s.amount).reverse().forEach((t, i) => g.effects.push(new Hook(g, w, t, i)));
       sfx('axe', { pitch: 0.5 });
