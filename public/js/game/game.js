@@ -75,12 +75,13 @@ export function cryptName(key) {
 export const isFiller = (c) => FILLER_IDS.includes(c.type);
 
 // The hero is always found: a ring on the ground in his own colour (HEROES color), softly
-// pulsing, turning red under a third of his health; and when something stands in front of him (a
-// foe, a minion, a boss, a big number), his ring and a ghost of him (ghost) over the whole scene
-// (Game.drawHeroOver). No line round him: the owner's (20 October 2026) "hero has an outline
-// that is too bright. Undo that bright outline, we dont need it because the hero is visible since
-// its always in center".
-export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44', ghost: 0.5 };
+// pulsing, turning red under a third of his health, drawn again over the scene when something
+// stands in front of him (a foe, a minion, a boss); and he himself is drawn last, over everything
+// of the world (Game.drawHero): the owner's (27 October 2026) "Some attacks, like lighthouse seem
+// to cover the hero. Hero must always be on top of everything". No line round him: the owner's
+// (20 October 2026) "hero has an outline that is too bright. Undo that bright outline, we dont
+// need it because the hero is visible since its always in center".
+export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44' };
 
 
 // A foe the hero's weapons may pick out, to aim, cast or chain at (nearestEnemy, nearestEnemies,
@@ -298,7 +299,7 @@ export class Game {
     // The numbers keep clear of the hero and of the bosses' bodies (numbers.js).
     this.numbers.hero = this.player;
     this.numbers.bodies = this.topList;
-    this.heroCovered = false; // something stands in front of him this frame (drawHeroOver)
+    this.heroCovered = false; // something stands in front of him this frame (drawHero)
     this.freeSrc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
     this.spawner = new Spawner(this);
 
@@ -2288,11 +2289,13 @@ export class Game {
     for (const m of this.minions) if (onScreen(c, m.x, m.y, 60)) list.push(m);
     list.push(p);
     list.sort((a, b) => a.y - b.y);
-    // Whether a foe, a minion or a boss stands in front of the hero (drawn after him, over him).
+    // The hero keeps his place in the sort, for what stands in front of him and the night's cut,
+    // but is drawn only at the end, over everything (drawHero).
+    if (!p.dead) this.placePlayer(c);
+    // Whether a foe, a minion or a boss stands in front of the hero (his ring goes over it).
     let covered = false, after = false;
     for (const o of list) {
       if (o === p) {
-        this.drawPlayer(ctx, c);
         after = true;
         continue;
       }
@@ -2339,7 +2342,7 @@ export class Game {
     // Unlit / additive layers.
     for (const o of list) {
       if (o.def || o.minion) o.drawEmissive(ctx, c);
-      else if (o === p) this.drawPlayerEmissive(ctx, c);
+      else if (o === p) continue; // with him, last (drawHero)
       else if (o.crypt) this.drawCryptEmissive(ctx, o);
       else if (!o.shrine && this.world.drawPropEmissive) this.world.drawPropEmissive(ctx, o);
     }
@@ -2363,8 +2366,10 @@ export class Game {
     // in the dark.
     for (const s of this.eshots) s.draw(ctx, c);
     this.numbers.draw(ctx, c);
-    this.heroCovered = covered || this.numbers.over(p);
-    if (this.heroCovered) this.drawHeroOver(ctx, c);
+    // The hero over all of it: trees, the horde, bosses, every weapon's blast and glow, the foes'
+    // shots and the numbers. Only the screen's own effects (a flash, a fade) go over him.
+    this.heroCovered = covered;
+    this.drawHero(ctx, c);
 
     // Screen-space post effects.
     if (this.world.daylight) ctx.drawImage(vig, 0, 0, c.pxW, c.pxH);
@@ -2423,6 +2428,17 @@ export class Game {
   drawPlayer(ctx, c) {
     const p = this.player;
     if (p.dead) return; // fallen: drawn after the world has drained (drawFallen)
+    this.placePlayer(c);
+    const [X, Y, w, h, , , img, alpha] = p._rect;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, X, Y, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  // Where the hero stands on the screen this frame and in which picture, unless he has fallen:
+  // p._rect, [X, Y, w, h, frame, flip, picture, alpha].
+  placePlayer(c) {
+    const p = this.player;
     const S = c.S;
     const spr = SPR[p.hero.sprite];
     const moving = p.moving;
@@ -2449,10 +2465,7 @@ export class Game {
     let alpha = 1;
     if (p.invuln > 0 && !(p.ult && p.ult.type === 'shadowdance') && Math.floor(p.invuln * 18) % 2 === 0) alpha = 0.45;
     if (p.ult && p.ult.type === 'shadowdance') alpha = 0.35 + 0.15 * Math.sin(this.clock * 20);
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(img, X, Y, w, h);
-    ctx.globalAlpha = 1;
-    p._rect = [X, Y, w, h, fr, flip];
+    p._rect = [X, Y, w, h, fr, flip, img, alpha];
   }
 
   // The hero fallen (DEATH): the world drains to grey and darkens round him, and he, still in
@@ -2487,7 +2500,7 @@ export class Game {
   }
 
   // The ring on the ground under the hero (HERO_MARK): his colour, pulsing; red when he is low.
-  // k: how strongly (drawHeroOver draws it again over the crowd).
+  // k: how strongly (drawHero draws it again over the crowd).
   drawHeroRing(ctx, c, k = 1) {
     const p = this.player, M = HERO_MARK, S = c.S;
     const low = p.hp / p.maxHp < M.low;
@@ -2497,16 +2510,18 @@ export class Game {
     ctx.globalAlpha = 1;
   }
 
-  // Something stands in front of the hero: his ring and a ghost of him go over the whole scene
-  // (under the HUD), so he is never lost in the crowd.
-  drawHeroOver(ctx) {
+  // The hero, last of the world (HERO_MARK): over everything but the screen's own effects and the
+  // HUD, unlit, as his own light shows him in full anyway; and when something stands in front of
+  // him, his ring over it first, so it is never lost in the crowd.
+  drawHero(ctx, c) {
     const p = this.player;
-    if (p.dead || !p._rect || (p.ult && p.ult.type === 'shadowdance')) return;
-    const [X, Y, w, h, fr, flip] = p._rect;
-    this.drawHeroRing(ctx, this.cam, 0.8);
-    ctx.globalAlpha = HERO_MARK.ghost;
-    ctx.drawImage(fr.get(flip), X, Y, w, h);
+    if (p.dead || !p._rect) return;
+    const [X, Y, w, h, , , img, alpha] = p._rect;
+    if (this.heroCovered && !(p.ult && p.ult.type === 'shadowdance')) this.drawHeroRing(ctx, c, 0.8);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, X, Y, w, h);
     ctx.globalAlpha = 1;
+    this.drawPlayerEmissive(ctx);
   }
 
   drawShrine(ctx, c, s) {

@@ -129,12 +129,6 @@ export class Numbers {
     if (target) target._num = n;
   }
 
-  // Whether a number alive now is drawn over the hero (the hero's outline then goes over it).
-  over(p) {
-    for (const n of this.list) if (Math.abs(n.x - p.x) < 10 && n.y - n.z > p.y - 26 && n.y - n.z < p.y + 2) return true;
-    return false;
-  }
-
   // Within the clear zone round the hero's middle.
   nearHero(x, y) {
     const p = this.hero;
