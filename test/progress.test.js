@@ -89,7 +89,7 @@ test('each milestone opens from a run report: just short of it nothing, at it th
   assert.ok(!night.reward.unlocked.some((u) => u.id === 'phoenix'));
   assert.ok(!P.applyRun(P.defaultProfile(), { ...RUN, hero: 'knight', time: 119, evolved: true }).reward.unlocked.some((u) => u.id === 'phoenix'));
   const evolved = P.applyRun(P.defaultProfile(), { ...RUN, time: 300, realTime: 300, evolved: true });
-  assert.deepEqual(evolved.reward.unlocked.filter((u) => u.id === 'phoenix'), [{ type: 'relic', id: 'phoenix', need: "Evolve the Knight's Longsword" }]);
+  assert.deepEqual(evolved.reward.unlocked.filter((u) => u.id === 'phoenix'), [{ type: 'relic', id: 'phoenix', need: "Evolve the Knight's Longsword", buy: true }]);
   let ph = { ...evolved.profile, gold: 5000 };
   assert.ok(!P.openFor(ph, 'archer').relics.includes('phoenix'), 'not until bought');
   assert.equal(P.progressList(ph).find((l) => l.id === 'phoenix').need, 'For sale in the Armory');

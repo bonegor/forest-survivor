@@ -54,6 +54,7 @@ const app = {
     if (this.screen && this.screen.game) {
       this.screen.game.settings = this.settings;
       this.screen.game.numbers.enabled = this.settings.numbers !== false;
+      this.screen.game.numbers.steady = this.settings.softFlash === true;
     }
   },
 
@@ -97,7 +98,9 @@ function loop(now) {
     fpsFrames = 0;
   }
   input.update();
-  if (input.pressed('fullscreen')) app.toggleFullscreen();
+  // F11 at any time; F only off the battlefield (27 October 2026): mid-fight a stray F left the
+  // window with nothing paused.
+  if (input.pressed('fullscreen') && (input.justDown.has('F11') || app.screen?.game?.state !== 'play')) app.toggleFullscreen();
   const s = app.screen;
   try {
     if (s.frame) s.frame(dt);

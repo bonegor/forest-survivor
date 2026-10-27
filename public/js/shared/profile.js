@@ -640,7 +640,7 @@ export function applyRun(profile, rawRun) {
   if (run.time >= PROGRESS.ultTime) p.uu |= heroBit(run.hero);
   reward.unlocked = [];
   LOCKS.forEach((l, i) => {
-    if (lockOpen(p, i) && !hasBit(ul0, i)) reward.unlocked.push({ type: l.type, id: l.id, need: needText(l) });
+    if (lockOpen(p, i) && !hasBit(ul0, i)) reward.unlocked.push({ type: l.type, id: l.id, need: needText(l), ...(l.buy ? { buy: true } : {}) }); // buy: only put up for sale (the results say so)
   });
   if ((p.uu & ~uu0) !== 0) reward.unlocked.push({ type: 'ult', id: run.hero, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero' });
   if (run.mode === 'ranked') reward.ranked = { time: run.time, best: p.ranked[run.hero] || 0, personalBest, title: rankTitle(run.time) };

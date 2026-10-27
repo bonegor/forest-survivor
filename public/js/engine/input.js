@@ -51,7 +51,7 @@ export const input = {
   joystickEnabled: false,
   touchRegions: null, // (x, y) => action | null, set by the active screen
   device: 'kb',
-  pad: { index: -1, buttons: [], prev: [], ax: 0, ay: 0, navPrev: 0 },
+  pad: { index: -1, buttons: [], prev: [], ax: 0, ay: 0, navPrev: 0, ps: false },
   anyKey: false,
   typed: [],
   // The game was left this frame (initInput): its window lost the focus or its tab was hidden.
@@ -129,6 +129,8 @@ export const input = {
       pad.buttons = gp.buttons.map((b) => b.pressed || b.value > 0.5);
       pad.ax = gp.axes[0] || 0;
       pad.ay = gp.axes[1] || 0;
+      // A PlayStation pad (Sony's vendor id, or its name): the hints show its symbols (padKey).
+      pad.ps = /054c|playstation|dualshock|dualsense/i.test(gp.id || '');
       if (pad.buttons.some((b, i) => b && !pad.prev[i]) || Math.hypot(pad.ax, pad.ay) > 0.5) this.device = 'pad';
       // Stick-to-dpad edge for menu navigation.
       let dir = 0;
@@ -157,6 +159,11 @@ export const input = {
     this.away = false;
   },
 };
+
+// The standard mapping's buttons as the pad in hand names them: the same places, a PlayStation
+// pad's symbols for an Xbox pad's letters.
+const PS_KEYS = { A: '×', B: '○', X: '□', Y: '△', LB: 'L1', RB: 'R1', LS: 'L3' };
+export const padKey = (k) => (input.pad.ps ? PS_KEYS[k] || k : k);
 
 function toUI(clientX, clientY) {
   const r = view.canvas.getBoundingClientRect();

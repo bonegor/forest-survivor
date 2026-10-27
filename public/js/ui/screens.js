@@ -1,6 +1,6 @@
 // Menu screens: title, hero select, trial select, armory, records, options.
 
-import { input } from '../engine/input.js';
+import { input, padKey } from '../engine/input.js';
 import { sfx, playMusic, playAfterJingle, setVolumes, initAudio } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
 import { saveSettings, DEBUG } from '../engine/storage.js';
@@ -52,7 +52,7 @@ function header(ctx, W, title, y = 4) {
 // one; Enter takes it; Escape goes back. Not on a touch screen, nor where it would reach BACK.
 function keysHint(ctx, W, H, text = 'ARROWS move · ENTER select · ESC back') {
   if (input.device === 'touch') return;
-  if (input.device === 'pad') text = text.replace('ARROWS', 'D-PAD').replace('Q/E', 'LB/RB').replace('ENTER', 'A').replace('ESC', 'B');
+  if (input.device === 'pad') text = text.replace('ARROWS', 'D-PAD').replace('Q/E', `${padKey('LB')}/${padKey('RB')}`).replace('ENTER', padKey('A')).replace('ESC', padKey('B'));
   if (textWidth(text) > W - 2 * 76) return;
   drawText(ctx, text, W / 2, H - 16, { align: 'center', color: '#5a6988', outline: null });
 }
@@ -276,14 +276,16 @@ export { HeroScreen } from './hero-selection.js';
 // ------------------------------------------------------------------- mode --
 
 export class ModeScreen {
-  enter(app) {
+  enter(app, params = {}) {
     this.app = app;
     this.t = 0;
     playAfterJingle('title'); // as on the hero screen (HeroScreen.enter)
     app.ui.lock(0.2);
     // A trial this hero can't enter (yet) falls back to Survival.
-    if (!canPlay(app.store.profile, app.choice.mode, app.choice.hero)) app.choice.mode = 's15';
-    app.ui.focusId = 'm_' + app.choice.mode;
+    const kept = canPlay(app.store.profile, app.choice.mode, app.choice.hero);
+    if (!kept) app.choice.mode = 's15';
+    // Back from a run with the trial as it was (HeroScreen's again): the focus starts on BEGIN.
+    app.ui.focusId = params.again && kept ? 'begin' : 'm_' + app.choice.mode;
   }
 
   draw(ctx, W, H, dt) {
@@ -869,6 +871,13 @@ export class OptionsScreen {
       sfx('hit');
     }
     y += 17;
+    // FLASHES: FULL, or SOFT for eyes that want less (27 October 2026): white flashes held to
+    // FLASH_SOFT, crits in steady gold, no white pulse on a boss's bar.
+    if (stepper(ctx, ui, 'o_flash', x, y, w, 'FLASHES', s.softFlash ? 'SOFT' : 'FULL')) {
+      s.softFlash = !s.softFlash;
+      changed();
+    }
+    y += 17;
     for (const [key, label] of [['shake', 'SCREEN SHAKE'], ['numbers', 'DAMAGE NUMBERS'], ['weather', 'WEATHER'], ['crt', 'CRT SCANLINES'], ['fps', 'SHOW FPS']]) {
       if (stepper(ctx, ui, 'o_' + key, x, y, w, label, s[key] ? 'ON' : 'OFF')) {
         s[key] = !s[key];
@@ -891,7 +900,7 @@ export class OptionsScreen {
       app.go(this.back);
     }
     if (button(ctx, ui, 'controls', W / 2 - 104, H - 44, 100, 15, 'CONTROLS')) {
-      this.dialog = new MenuDialog('Controls', ['Move: WASD / arrows · gamepad stick / D-pad · drag on touch', 'Ultimate: Space / E / Q · gamepad X / triggers · tap fury orb', 'Crypt strike: X / Shift · shoulder buttons · second finger', 'Pause: Esc / P · Start · pause button', 'Map: Tab / M · gamepad Back', 'Menus: arrows to browse, Enter to choose, Escape to go back.', 'Level-up: 1–4 choose · R reroll · B banish']);ui.focus('detail_close');ui.lock(0.2);
+      this.dialog = new MenuDialog('Controls', ['Move: WASD / arrows · gamepad stick / D-pad · drag on touch', `Ultimate: Space / E / Q · gamepad ${padKey('X')} / triggers · tap fury orb`, 'Crypt strike: X / Shift · shoulder buttons · second finger', 'Pause: Esc / P · Start · pause button', 'Map: Tab / M · gamepad Back', 'Fullscreen: F11 · F outside a fight', 'Menus: arrows to browse, Enter to choose, Escape to go back.', 'Level-up: 1–4 choose · R reroll · B banish']);ui.focus('detail_close');ui.lock(0.2);
     }
     if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
       this.dialog = new MenuDialog('Credits', [

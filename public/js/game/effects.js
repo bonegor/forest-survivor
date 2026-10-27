@@ -934,6 +934,7 @@ export class Meteor {
     this.t = -delay;
     this.fall = opts.fall ?? 0.6;
     this.opts = opts;
+    this.ult = !!opts.ult; // Cataclysm's: the receipt waits for it to land
     this.sx = tx + 90;
     this.sy = ty - 210;
   }
@@ -1263,6 +1264,7 @@ export class ArrowRain {
     this.t = 0;
     this.spawnT = 0;
     this.drops = [];
+    this.ult = true; // the ultimate's own: its receipt waits for its last arrows (Game.ultReceipt)
   }
 
   update(dt) {

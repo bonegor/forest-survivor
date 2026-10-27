@@ -6,7 +6,7 @@
 // said and the settings cookie keeps that (nothing is written while a run lasts): a second run
 // shows none. The profile's shape doesn't change.
 
-import { input } from '../engine/input.js';
+import { input, padKey } from '../engine/input.js';
 
 export const HINT_IDS = ['move', 'weapons', 'fury', 'crypt'];
 const COLOR = '#8fb8ff';
@@ -20,7 +20,7 @@ function words(id, g) {
   }
   if (id === 'weapons') return ['Your weapons strike by themselves', 'Soul gems from the fallen make them grow'];
   if (id === 'fury') {
-    const key = dev === 'pad' ? 'X' : dev === 'touch' ? 'Tap the orb' : 'SPACE';
+    const key = dev === 'pad' ? padKey('X') : dev === 'touch' ? 'Tap the orb' : 'SPACE';
     return [`Fury full: ${key}`, `${p.hero.ultName}: ${p.hero.ultDesc}`];
   }
   return ['A crypt', 'Walk up its steps: below, time stands still and lords guard their gear'];

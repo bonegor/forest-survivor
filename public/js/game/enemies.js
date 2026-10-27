@@ -277,7 +277,11 @@ export class Enemy {
     this.life += dt;
     if (this.flash > 0) this.flash -= dt;
     if (this.squash > 0) this.squash = Math.max(0, this.squash - dt * 5);
-    if (this.prop) return;
+    // A prop does nothing but fade in, a forest site's (Game.spawnProp) as it comes in view.
+    if (this.prop) {
+      if (this.spawnT > 0) this.spawnT = Math.max(0, this.spawnT - dt);
+      return;
+    }
 
     // Frozen and slowed wear off whatever the foe is doing, asleep or not: a Frost Rune taken
     // while a pack sleeps in a crypt's next room would otherwise hold it frozen until it woke.

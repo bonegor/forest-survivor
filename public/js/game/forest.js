@@ -95,7 +95,7 @@ export class Forest {
     while (this.ffT <= 0) {
       this.ffT += 0.12;
       const x = cam.x + rand(-20, cam.W + 20), y = cam.y + rand(-20, cam.H + 20);
-      if (wet > 0 && g.weather.rng() < wet * 0.85) continue;
+      if (wet > 0 && g.weather.rng() < wet * 0.85 && g.weather.shown) continue; // drawn all the same: only rain that is seen hides them
       g.particles.emit(x, y, rand(4, 20), rand(-8, 8), rand(-8, 8), rand(-3, 3), rand(2, 4), 1, Math.random() < 0.7 ? PC.l : PC.Y, P.GLOW | P.FADE, 0.2);
     }
     this.leafT -= dt;

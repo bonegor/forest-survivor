@@ -1,4 +1,4 @@
-import { input } from '../engine/input.js';
+import { input, padKey } from '../engine/input.js';
 import { SPR, idleFrame } from '../engine/sprites.js';
 import { saveSettings } from '../engine/storage.js';
 import { sfx, playAfterJingle } from '../engine/audio.js';
@@ -50,7 +50,7 @@ const PERK_COPY = {
 };
 
 export class HeroScreen {
-  enter(app) {
+  enter(app, params = {}) {
     this.app = app;
     this.t = 0;
     this.lastHero = app.choice.hero || 'knight';
@@ -59,7 +59,10 @@ export class HeroScreen {
     // battle or boss music on into camp after Quit Run, nor silence after a death.
     playAfterJingle('title');
     app.ui.lock(0.2);
-    app.ui.focusId = 'h_' + this.lastHero;
+    // Back from a run (the results' RETURN TO CAMP): the hero is as he was, so the focus starts on
+    // PLAY, and the trial screen's on BEGIN. The way stays the owner's: every run starts here (db3987d).
+    this.again = params.again && app.store.profile.heroes.includes(this.lastHero) ? this.lastHero : null;
+    app.ui.focusId = this.again ? 'hero_continue' : 'h_' + this.lastHero;
   }
 
   draw(ctx, W, H, dt) {
@@ -105,7 +108,7 @@ export class HeroScreen {
     this.preview.draw(ctx, stage, locked, app.settings);
     if (ui.item('preview_attack', stage.x, stage.y, stage.w, stage.h, { disabled: locked })) this.preview.attack();
     if (ui.focused('preview_attack') && !locked) {
-      const hint = input.device === 'pad' ? 'A: ATTACK' : input.device === 'touch' ? 'TAP TO ATTACK' : ui.focusSource === 'pointer' ? 'CLICK TO ATTACK' : 'ENTER: ATTACK';
+      const hint = input.device === 'pad' ? `${padKey('A')}: ATTACK` : input.device === 'touch' ? 'TAP TO ATTACK' : ui.focusSource === 'pointer' ? 'CLICK TO ATTACK' : 'ENTER: ATTACK';
       drawText(ctx, hint, stage.x + stage.w / 2, stage.y + stage.h - 10, { align: 'center', color: '#fee761' });
     }
     this.appearance(ctx, ui, h, L.stage, locked);
@@ -115,7 +118,7 @@ export class HeroScreen {
     if (button(ctx, ui, 'equipment', L.x + 50, H - 21, 48, 15, 'GEAR', { disabled: locked })) this.equipment(id);
     if (button(ctx, ui, 'journey', L.x + 104, H - 21, 64, 15, 'JOURNEY')) this.journey();
     if (button(ctx, ui, 'hero_continue', L.play.x, L.play.y, L.play.w, L.play.h, locked ? 'HERO LOCKED' : `PLAY ${h.title.toUpperCase()}`, { disabled: locked, color: '#fee761' })) {
-      app.choice.hero = id;app.go('mode');
+      app.choice.hero = id;app.go('mode', { again: this.again === id }); // BEGIN first only for the same hero
     }
     ui.end();
     if (input.pressed('back') && ui.lockT <= 0) app.go('title');

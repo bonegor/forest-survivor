@@ -1,12 +1,12 @@
 // The in-game screen: runs a Game and layers the HUD and modal overlays
 // (level up, treasure chests, gear found, pause, results) on top.
 
-import { input } from '../engine/input.js';
-import { sfx, playAfterJingle, playJingle } from '../engine/audio.js';
+import { input, padKey } from '../engine/input.js';
+import { sfx, playAfterJingle, playJingle, playMusic } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
-import { Game, MILESTONES, isFiller } from '../game/game.js';
+import { Game, MILESTONES, isFiller, FLASH_SOFT } from '../game/game.js';
 import { tierOf, chestFrame, chestTease, revealOrder, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
 import { clockCountsDown, clockTime, heldBuild, revealOn } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
@@ -381,13 +381,19 @@ export class LevelUpOverlay {
     const pop = this.t < 0.25 ? 1.6 - 0.6 * ease.outBack(this.t / 0.25) : 1;
     const s = Math.min(1, (W - 40) / L.width) * pop;
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), Math.round(18 - (L.height * (s - 1)) / 2), Math.round(L.width * s), Math.round(L.height * s));
-    // The level, and what the levels themselves have given the hero by now (Player levelBonus).
-    const lb = levelBonus(lvl);
-    const pct = (v) => `+${Math.round((v - 1) * 100)}%`;
+    // The level, and what the levels themselves have given the hero by now (Player levelBonus):
+    // only the gains that aren't nought. Since the owner's "set change to 0" (21 October 2026)
+    // there are none, and "+0% damage · +0% health" told of a gain there isn't: then "choose one".
+    const lb = levelBonus(lvl), pct = (v) => Math.round((v - 1) * 100);
+    const gains = [], short = [];
+    if (pct(lb.might) > 0) gains.push(`+${pct(lb.might)}% damage`), short.push(`+${pct(lb.might)}% dmg`);
+    if (pct(lb.hp) > 0) gains.push(`+${pct(lb.hp)}% health`), short.push(`+${pct(lb.hp)}% hp`);
+    if (lb.armor) gains.push(`+${lb.armor} armor`), short.push(`+${lb.armor} arm`);
     let line = mile ? 'MILESTONE' : `LEVEL ${lvl}`;
-    if (lvl > 1) {
-      const long = `${line} · ${pct(lb.might)} damage · ${pct(lb.hp)} health${lb.armor ? ` · +${lb.armor} armor` : ''}`;
-      line = textWidth(long) <= W - 8 ? long : `${line} · ${pct(lb.might)} dmg · ${pct(lb.hp)} hp${lb.armor ? ` · +${lb.armor} arm` : ''}`;
+    if (!gains.length) line += ' · choose one';
+    else {
+      const long = [line, ...gains].join(' · ');
+      line = textWidth(long) <= W - 8 ? long : [line, ...short].join(' · ');
     }
     drawText(ctx, line, W / 2, 18 + L.height + 2, { align: 'center', color: mile ? '#feae34' : '#8b9bb4' });
     // Four cards: LUCKY!, stamped beside the title (where the screen is narrow, over its right end,
@@ -644,8 +650,8 @@ export class LevelUpOverlay {
       const bw = Math.min(96, Math.floor((W - 22) / 2)), bx = Math.round(W / 2 - (hasB && hasR ? bw + 3 : bw / 2));
       const canB = this.choices.some((c) => this.canBanish(c));
       const bl = this.banishing ? 'CANCEL' : `BANISH ×${p.banishes}`;
-      if (hasB && footButton(ctx, ui, 'banish', bx, rowY, bw, bl, { color: '#e43b44', held: busy, disabled: !canB && !this.banishing, key: kb ? 'B' : pad ? 'LS' : null })) this.toggleBanishing();
-      const rerolled = hasR && footButton(ctx, ui, 'reroll', hasB ? bx + bw + 6 : bx, rowY, bw, `REROLL ×${p.rerolls}`, { color: '#2ce8f5', held: busy, disabled: p.rerolls <= 0, key: kb ? 'R' : pad ? 'Y' : null });
+      if (hasB && footButton(ctx, ui, 'banish', bx, rowY, bw, bl, { color: '#e43b44', held: busy, disabled: !canB && !this.banishing, key: kb ? 'B' : pad ? padKey('LS') : null })) this.toggleBanishing();
+      const rerolled = hasR && footButton(ctx, ui, 'reroll', hasB ? bx + bw + 6 : bx, rowY, bw, `REROLL ×${p.rerolls}`, { color: '#2ce8f5', held: busy, disabled: p.rerolls <= 0, key: kb ? 'R' : pad ? padKey('Y') : null });
       if ((rerolled || input.pressed('reroll')) && !busy && p.rerolls > 0) {
         p.rerolls--;
         sfx('teleport');
@@ -659,7 +665,7 @@ export class LevelUpOverlay {
       } else if (ui.focusId === 'banish') tip = fit(['BANISH: the card in focus is gone for the rest of the run', 'BANISH: gone for the run']);
       else if (ui.focusId === 'reroll') tip = fit(['REROLL: all new cards', 'REROLL']);
       else if (touch) tip = fit(canB ? ['Tap a card to take it · hold a card to banish it', 'Tap: take · hold: banish'] : ['Tap a card to take it', 'Tap: take']);
-      else if (pad) tip = fit(['A takes the card in focus', 'A: take']);
+      else if (pad) tip = fit([`${padKey('A')} takes the card in focus`, `${padKey('A')}: take`]);
       else tip = fit([`Enter or 1-${n} takes a card`, `Enter/1-${n}: take`]);
       drawText(ctx, tip, W / 2, hasB || hasR ? tipY : rowY + 2, { align: 'center', color });
     }
@@ -759,6 +765,7 @@ export class ChestOverlay {
     this.coins = []; // the burst as the lid opens
     this.flyers = []; // coins on their way to the HUD's gold counter
     this.lockTime = 0.6;
+    this.noSpace = true; // as with level-ups and gear: Space mashed for the ultimate mustn't skip the reveal, nor collect
     sfx('chest', { size: this.kind === 'boss' ? 3 : this.kind === 'lord' ? 2 : 1 });
   }
 
@@ -907,7 +914,7 @@ export class ChestOverlay {
         g.hud.held = null;
         res = 'close';
       }
-    } else if (t > 0.3 && (input.pressed('confirm') || input.pressed('back') || input.mouse.clicked)) {
+    } else if (t > this.lockTime && (input.pressed('select') || input.pressed('back') || input.mouse.clicked)) {
       // A first press shows it all; the next collects.
       this.skip();
       ui.lock(0.2);
@@ -988,9 +995,9 @@ export class ChestOverlay {
       const c = textCanvas('SIGNATURE', ['#ffffff', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(cx - c.width), cy - 52, c.width * 2, c.height * 2);
     }
-    // One flash as it breaks (≤0.6), fading.
+    // One flash as it breaks (≤0.6, FLASHES: SOFT's FLASH_SOFT), fading.
     if (v < C.flash) {
-      ctx.globalAlpha = 0.6 * (1 - v / C.flash);
+      ctx.globalAlpha = (this.g.settings.softFlash ? FLASH_SOFT : 0.6) * (1 - v / C.flash);
       ctx.fillStyle = '#fff8e8';
       ctx.fillRect(0, 0, W, H);
       ctx.globalAlpha = 1;
@@ -1152,6 +1159,7 @@ class ItemOverlay {
       // The frame alone, climbing.
       const cw = Math.min(180, Math.floor((W - 22) / 2)), x0 = Math.round(W / 2 - cw - 3);
       panel(ctx, x0, top, cw, H - top - 6, { trim: [RS.color, '#262b44'] });
+      ui.begin(dt); // the lock (lockTime, from the moment it opens) runs down while the rarity climbs
       return null;
     }
     const gap = 6, cw = Math.min(180, Math.floor((W - 16 - gap) / 2));
@@ -1297,7 +1305,8 @@ export class PauseOverlay {
         ui.focusId = 'resume';
       }
     }
-    if (button(ctx, ui, 'resume', bx, row(0), bw, 13, 'RESUME') || (input.pressed('pause') && ui.lockT <= 0)) {
+    // Start, Esc or P, or a pad's B (back), as every other screen goes back.
+    if (button(ctx, ui, 'resume', bx, row(0), bw, 13, 'RESUME') || ((input.pressed('pause') || input.pressed('back')) && ui.lockT <= 0)) {
       g.state = 'play';
       return 'close';
     }
@@ -1348,11 +1357,14 @@ export function armoryLine(p) {
 // rows at most maxW wide, the first led by the word itself. Each chip { e, w } or { label, w }.
 const UNLOCK_ROW = 17;
 const UNLOCK_LABEL = 'UNLOCKED';
+// A chip's name. A milestone that only puts its relic up for sale in the Armory (a lock with
+// `buy`: the Phoenix Heart) says so, as it isn't the hero's yet.
+const chipName = (e) => (e.buy ? `${codexName(e)} · NOW FOR SALE` : codexName(e));
 export function chipRows(list, maxW) {
   const rows = [];
   let row = [{ label: UNLOCK_LABEL, w: textWidth(UNLOCK_LABEL) }], w = row[0].w;
   for (const e of list) {
-    const cw = Math.min(maxW, 19 + textWidth(codexName(e)));
+    const cw = Math.min(maxW, 19 + textWidth(chipName(e)));
     if (w + 10 + cw > maxW && row.length) {
       rows.push(row);
       row = [];
@@ -1380,7 +1392,7 @@ function drawChips(ctx, row, cx, y, more, maxW) {
     if (c.label) drawText(ctx, c.label, x, y + 4, { color: ['#ffffff', '#9ee562', '#63c74d'] });
     else {
       codexIcon(ctx, c.e, x, y, false);
-      drawText(ctx, fitText(codexName(c.e), c.w - 19), x + 19, y + 4, { color: '#fee761' });
+      drawText(ctx, fitText(chipName(c.e), c.w - 19), x + 19, y + 4, { color: '#fee761' });
     }
     x += c.w + 10;
   }
@@ -1409,6 +1421,8 @@ class ResultsOverlay {
     this.lockTime = 1;
     const res = this.g.result || (this.g.finish(false), this.g.result);
     this.res = res;
+    // Quit Run: no win and no fall (Game.finish's died). Its own neutral title, and the title piece.
+    this.quit = !res.victory && !res.died;
     // The records as they stood before this run: a row beating one is stamped NEW BEST.
     this.before = { ...gs.app.store.profile.best };
     this.rows = this.tally();
@@ -1416,9 +1430,11 @@ class ResultsOverlay {
     this.goldAt = null; // when the gold began to count (this.t)
     this.landed = false; // the count is done (or skipped): RETURN TO CAMP takes a press
     this.submit();
-    // A win's jingle is heard in full, the title piece after it; a fall's lament plays now.
+    // A win's jingle is heard in full, the title piece after it; a fall's lament plays now; a quit
+    // goes back to the title piece.
     if (res.victory) playAfterJingle('title');
     else if (this.g.player.dead) playJingle('gameover');
+    else playMusic('title'); // a quit: the run's forest or boss music would play on (stopMusic is the death's)
     gs.app.ui.focusId = 'camp';
   }
 
@@ -1520,8 +1536,8 @@ class ResultsOverlay {
       ui.lock(0.25);
     }
     this.backdrop(ctx, W, H);
-    const title = res.victory ? (res.mode === 'dungeon' ? 'VICTORY' : 'DAWN BREAKS') : 'YOU HAVE FALLEN';
-    const cols = res.victory ? ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f'] : ['#f6757a', '#e43b44', '#a22633', '#5c0f1c', '#3e2731'];
+    const title = res.victory ? (res.mode === 'dungeon' ? 'VICTORY' : 'DAWN BREAKS') : this.quit ? 'RUN ENDED' : 'YOU HAVE FALLEN';
+    const cols = res.victory ? ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f'] : this.quit ? ['#ffffff', '#e8eef6', '#c0cbdc', '#8b9bb4', '#5a6988'] : ['#f6757a', '#e43b44', '#a22633', '#5c0f1c', '#3e2731'];
     const L = logo(title, cols);
     const s = Math.min(1, (W - 20) / L.width);
     ctx.globalAlpha = clamp(this.t * 2, 0, 1);
@@ -1529,7 +1545,7 @@ class ResultsOverlay {
     ctx.globalAlpha = 1;
     const ranked = res.mode === 'ranked';
     let sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}`;
-    if (!res.victory && res.stats.killedBy) sub += ` · slain by ${res.stats.killedBy}`;
+    if (res.died && res.stats.killedBy) sub += ` · slain by ${res.stats.killedBy}`;
     drawText(ctx, fitText(sub, W - 8), W / 2, 12 + L.height * s, { align: 'center', color: res.victory ? '#feae34' : '#8b9bb4' });
     if (this.t < TALLY.rows - 0.2) return null;
     // Personal bests and anything this run unlocked, shown above the gold once it has landed.
@@ -1648,7 +1664,7 @@ class ResultsOverlay {
     if (button(ctx, ui, 'camp', Math.round(W / 2 - 106), by, 100, 14, 'RETURN TO CAMP', { color: this.landed ? '#fee761' : '#8b9bb4' })) {
       if (this.landed) {
         app.choice.hero = res.hero;
-        app.go('hero');
+        app.go('hero', { again: true });
       } else this.skip();
     }
     if (button(ctx, ui, 'upgrades', Math.round(W / 2 + 6), by, 100, 14, 'UPGRADES', { disabled: !this.landed || !this.reward || unsaved })) app.go('armory');

@@ -14,7 +14,7 @@ import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
 import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE } from './events.js';
 import { view } from '../engine/view.js';
-import { input } from '../engine/input.js';
+import { input, padKey } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
 import { Player, ULT_DURATION, FURY } from './player.js';
 import { rangerPose } from './ranger-animation.js';
@@ -56,6 +56,9 @@ export const BANNERS_MOST = 2;
 // world slows and drains to grey and dark over `drain`; he flashes white for `flash` and tips
 // over in `fall`, still in colour; "Slain by …" fades in from `name` (Hud); the results at `end`.
 export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
+// The options' FLASHES: SOFT (27 October 2026): no white flash over the screen or a boss's bar
+// brighter than this, crits in one steady gold, no white pulse.
+export const FLASH_SOFT = 0.2;
 // Going into a crypt is meant: the hero stands on its steps (CRYPT_STEPS: half as wide, how far
 // below the door) pushing up for CRYPT_PUSH seconds, half a second, while a prompt fills over the
 // door (Hud.drawCryptDoor); stepping off or letting go starts over.
@@ -302,6 +305,7 @@ export class Game {
     this.particles = new Particles(this.headless);
     this.numbers = new Numbers();
     this.numbers.enabled = this.settings.numbers !== false;
+    this.numbers.steady = this.settings.softFlash === true;
     this.lighting = new Lighting();
     this.grid = new SpatialGrid();
     this.enemyPool = makeEnemyPool();
@@ -807,7 +811,8 @@ export class Game {
   spawnProp(type, x, y) {
     const spot = this.world.freeSpot(x, y);
     if (!spot) return null;
-    return this.spawnEnemy(type, spot.x, spot.y, { instant: true, always: true });
+    // Not instant: it fades in over the usual 0.25 s (Enemy spawnT), so a site coming in view doesn't pop in.
+    return this.spawnEnemy(type, spot.x, spot.y, { always: true });
   }
 
   spawnBoss(id, x, y, o = {}) {
@@ -1320,7 +1325,7 @@ export class Game {
         w.fx = null;
         w.cd = Math.min(w.cd, 0.35);
       }
-      const keys = input.device === 'pad' ? 'RB' : input.device === 'touch' ? 'Tap a second finger' : 'X or Shift';
+      const keys = input.device === 'pad' ? padKey('RB') : input.device === 'touch' ? 'Tap a second finger' : 'X or Shift';
       this.banner(`Your ${main ? main.def.name : 'weapon'} alone`, `${keys} to ${STRIKE_VERB[main?.def.kind] || 'strike'}`, '#feae34', 4);
       playMusic('crypt');
     });
@@ -1807,10 +1812,11 @@ export class Game {
     }
   }
 
-  // The ultimate over (and, for the Army of the Dead, its last knight gone): its receipt, once.
+  // The ultimate over (and, for the Army of the Dead, its last knight gone; for Arrow Storm and
+  // Cataclysm, their last arrow or meteor down): its receipt, once.
   ultReceipt() {
     const r = this.ultRun;
-    if (!r || this.player.ult || this.minions.some((m) => m.ult)) return;
+    if (!r || this.player.ult || this.minions.some((m) => m.ult) || this.effects.some((f) => f.ult)) return;
     this.ultRun = null;
     const best = this.stats.bestUlt, beats = !best || r.kills > best.kills || (r.kills === best.kills && r.dmg > best.dmg);
     if (beats) this.stats.bestUlt = { kills: r.kills, dmg: Math.round(r.dmg) };
@@ -2508,7 +2514,7 @@ export class Game {
       ctx.globalAlpha = 1;
     }
     if (this.whiteFlash > 0) {
-      ctx.globalAlpha = Math.min(0.85, this.whiteFlash);
+      ctx.globalAlpha = Math.min(this.settings.softFlash ? FLASH_SOFT : 0.85, this.whiteFlash);
       ctx.fillStyle = '#fff8e8';
       ctx.fillRect(0, 0, c.pxW, c.pxH);
       ctx.globalAlpha = 1;

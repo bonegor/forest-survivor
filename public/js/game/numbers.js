@@ -64,6 +64,7 @@ export class Numbers {
     this.list = [];
     this.pool = [];
     this.enabled = true;
+    this.steady = false; // crits in one colour, not flashing (FLASHES: SOFT)
     this.count = [0, 0, 0]; // numbers alive in each tier
     this.hero = null; // the hero (Game): the clear zone round him
     this.bodies = null; // the bosses and lords drawn this frame (Game.topList): none is born on one
@@ -247,7 +248,7 @@ export class Numbers {
       const sx = (n.x - cam.x) * S;
       const sy = (n.y - n.z - cam.y) * S;
       if (sx < -200 || sy < -200 || sx > cam.pxW + 200 || sy > cam.pxH + 200) continue;
-      const color = st.cycle ? st.cycle[(Math.floor(t * 16) + n.seed) % st.cycle.length] : st.color;
+      const color = st.cycle ? (this.steady ? st.cycle[0] : st.cycle[(Math.floor(t * 16) + n.seed) % st.cycle.length]) : st.color;
       const c = textCanvas(n.str, color, '#181425', st.edge || null, n.font);
       const w = c.width * scale, h = c.height * scale;
       const spin = n.spin && t < 0.3;

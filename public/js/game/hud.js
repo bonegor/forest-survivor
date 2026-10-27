@@ -3,7 +3,7 @@
 import { drawText, textCanvas, textWidth, GLYPH_H } from '../engine/font.js';
 import { logo, padlock } from '../ui/ui.js';
 import { SPR, buildSprite } from '../engine/sprites.js';
-import { input } from '../engine/input.js';
+import { input, padKey } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
@@ -11,7 +11,7 @@ import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
-import { DEATH } from './game.js';
+import { DEATH, FLASH_SOFT } from './game.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { WARN } from './events.js';
@@ -215,6 +215,7 @@ const MARK_ART = {
   crypt: ['.NNNN.', 'NNppNN', 'NpPPpN', 'NpPPpN', 'NpPPpN', 'NNNNNN'],
   stairs: ['....GG', '....Gg', '..GGgg', '..Gggg', 'GGgggg', 'Gggggg'],
   shrine: ['..##..', '.#w##.', '..##..', '.GGgg.', '.Gggg.', 'GGgggg'],
+  warn: ['..oo..', '.okko.', '.okko.', 'ookkoo', 'oooooo', 'ookkoo'], // an event coming: a warning triangle
 };
 const SHRINE_GEMS = { fury: 'r', haste: 'c', fortune: 'y', wisdom: 'j', protection: 'L' };
 // What the world's own marker is, told by its colour (Dungeon.marker): the stairs down, a crypt's
@@ -660,7 +661,7 @@ export class Hud {
     } else if (p.ult) {
       drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: '#f6757a' });
     } else if (full) {
-      const key = input.device === 'pad' ? 'X' : input.device === 'touch' ? 'TAP' : 'SPACE';
+      const key = input.device === 'pad' ? padKey('X') : input.device === 'touch' ? 'TAP' : 'SPACE';
       const blink = Math.floor(t * 3) % 2 === 0;
       drawText(ctx, key, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: blink ? '#ffffff' : '#fee761' });
       drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: blink ? '#fee761' : '#f6757a' });
@@ -759,8 +760,10 @@ export class Hud {
     ctx.fillRect(x, y, Math.round(w * f), 1);
     barNotches(ctx, x, y, w);
     // Landed: a white flash. Nearly done (under LOW_HP): the bar pulses white with its heartbeat.
+    // (FLASHES: SOFT: the landing flash held to FLASH_SOFT, no pulse.)
     this.pulseT = (this.pulseT || 0) + dt;
-    const flash = since >= ARRIVAL.slam && since < ARRIVAL.slam + 0.12 ? 0.8 : f < LOW_HP ? 0.15 + 0.4 * (0.5 + 0.5 * Math.cos((this.pulseT * TAU) / ARRIVAL.beat)) : 0;
+    const soft = this.g.settings.softFlash === true;
+    const flash = since >= ARRIVAL.slam && since < ARRIVAL.slam + 0.12 ? (soft ? FLASH_SOFT : 0.8) : f < LOW_HP && !soft ? 0.15 + 0.4 * (0.5 + 0.5 * Math.cos((this.pulseT * TAU) / ARRIVAL.beat)) : 0;
     if (flash > 0) {
       ctx.globalAlpha = flash;
       ctx.fillStyle = '#ffffff';
@@ -1018,9 +1021,10 @@ export class Hud {
       const w = g.world.marker();
       if (w) this.pointer(ctx, W, H, t, w[0], w[1], w[2], m[w[3] || WORLD_MARKS[w[2]]]);
     }
-    // An event about to come: an arrow from its side (events.js).
+    // An event about to come: an orange arrow from its side, a warning's own icon (events.js), not
+    // the boss's red skull.
     const p = g.player;
-    for (const w of g.warnings) if (w.from) this.pointer(ctx, W, H, t, p.x + w.from[0], p.y + w.from[1], '#e43b44', m.boss);
+    for (const w of g.warnings) if (w.from) this.pointer(ctx, W, H, t, p.x + w.from[0], p.y + w.from[1], '#f77622', m.warn);
   }
 
   // A ring about to close: for its last WARN.ring s, a faint ring on the ground round the hero.
