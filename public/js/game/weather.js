@@ -176,16 +176,20 @@ export class Weather {
       if (shown) sfx(th.big ? 'bigthunder' : 'thunder', { size: th.size, pan: th.pan });
     }
 
-    // The rain heard: held where it is while this runs, fading by itself once it
-    // stops (a pause, the menus, the end). Muffled in a crypt.
-    if ((this.bedT -= dt) <= 0) {
-      this.bedT = 0.1;
-      const on = !g.headless && !g.world.daylight && g.settings.weather !== false, k = g.inCrypt ? 0.2 : 1;
-      if (on) weatherBed(this.heard(g.time, w) * k);
-    }
+    this.hear(dt);
 
     if (shown) this.rain(dt, w);
     else this.n = 0;
+  }
+
+  // The rain heard: held where it is while this runs, and under the level-up's cards, a chest and a
+  // find (Game.fadeReal: the owner's, 27 October 2026, "keep it going"); fading by itself once it
+  // stops (a pause, the menus, the end). Muffled in a crypt.
+  hear(dt) {
+    if ((this.bedT -= dt) > 0) return;
+    this.bedT = 0.1;
+    const g = this.g, on = !g.headless && !g.world.daylight && g.settings.weather !== false, k = g.inCrypt ? 0.2 : 1;
+    if (on) weatherBed(this.heard(g.time, this.now) * k);
   }
 
   // How loud the rain is heard at second t (RAIN_HEARD): the shower's hush through the first of

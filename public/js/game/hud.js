@@ -288,8 +288,9 @@ function placeMarker(sx, sy) {
 }
 
 // Whether a foe stands where the hero has seen: in a crypt or on a Dungeon Run floor, a tile of the
-// fog he has lit (Dungeon.seenAt); anywhere in the forest.
-const seenBy = (g, e) => !g.world.seenAt || g.world.seenAt(e.x, e.y);
+// fog he has lit (Dungeon.seenAt), and in a crypt with no wall between them now (Game.inView);
+// anywhere in the forest.
+const seenBy = (g, e) => (!g.world.seenAt || g.world.seenAt(e.x, e.y)) && g.inView(e);
 
 // The elites named this frame (the nearest the hero), and how far each is (squared).
 const NAMED = 3;

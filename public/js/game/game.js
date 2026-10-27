@@ -152,6 +152,9 @@ export function strikeClip(spr) {
 
 // What a hand-struck weapon is called on to do, for the crypt's banner (Game.enterCrypt).
 const STRIKE_VERB = { bow: 'shoot', fireball: 'cast', meteor: 'cast', daggers: 'throw', summon: 'raise the dead', smite: 'smite', roots: 'call the roots', leap: 'leap', crossbow: 'shoot' };
+// How near the hero a blow struck by hand breaks a box (Game.breakBoxes): px past the box's own
+// reach (Enemy.hr), so every box on the tiles round him, the corners too, and none two tiles off.
+const BOX_REACH = 20;
 
 // Crypt names, picked by the crossroads; the night's minute picks the stone.
 const CRYPT_KIND = ['Crypt', 'Barrow', 'Tomb', 'Ossuary', 'Sepulchre', 'Vault'];
@@ -263,6 +266,7 @@ export class Game {
     this.cleared = new Set();
     this.lost = new Set(); // crypts the hero left before their last lord fell, or fainted in: shut to him
     this.inCrypt = null; // the crypt the hero is in; the night's clock stands still meanwhile
+    this.boxBlowAt = null; // when the blow he last struck by hand lands on the boxes about him (breakBoxes)
     this.cryptsOpen = o.crypts !== false; // the balance bots keep to the forest unless asked
     this.cryptDoor = null; // the crypt door whose steps the hero stands on (update)
     this.evoReady = []; // the weapons the next chest opened will evolve (update: evolvable)
@@ -1212,9 +1216,31 @@ export class Game {
     const melee = w.def.kind === 'sword';
     const t = this.nearestEnemy(p.x, p.y, w.reach, melee && p.moving ? (e) => (e.x - p.x) * p.face >= 0 : null);
     const ang = aimAt(p, t, !melee ? p.aim : p.face < 0 ? Math.PI : 0);
+    const delay = strikeClip(SPR[p.hero.sprite])?.delay ?? 0;
     p.strike(ang, this.clock);
-    w.strike(ang, strikeClip(SPR[p.hero.sprite])?.delay ?? 0, t);
+    w.strike(ang, delay, t);
+    this.boxBlowAt = this.clock + delay;
     return true;
+  }
+
+  // The owner's (27 October 2026): a blow struck by hand breaks every box about the hero as it
+  // lands (BOX_REACH), all round him and whatever his weapon, so one beside him needs no aiming
+  // at. Never one through a wall.
+  breakBoxes() {
+    this.boxBlowAt = null;
+    const p = this.player;
+    if (p.dead) return;
+    for (const e of this.enemies) {
+      if (e.dead || !e.prop) continue;
+      const R = BOX_REACH + e.hr;
+      if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 <= R * R && this.world.lineOfSight(p.x, p.y, e.x, e.y)) this.killEnemy(e);
+    }
+  }
+
+  // Whether foe e shows (its body, shadow, glow, name and bar): in a crypt only while the hero sees
+  // it, with no wall between them (the owner's, 27 October 2026), a box always; anywhere else, all.
+  inView(e) {
+    return !this.inCrypt || e.prop || this.world.lineOfSight(this.player.x, this.player.y, e.x, e.y);
   }
 
   // The hero walks into a crypt: the forest is set aside exactly as it was, and the night's clock stops.
@@ -1356,6 +1382,7 @@ export class Game {
     this.eshots.length = 0;
     this.effects = this.effects.filter((e) => e.persistent);
     this.particles.clear();
+    this.boxBlowAt = null;
   }
 
   gatherMinions() {
@@ -1878,6 +1905,8 @@ export class Game {
     this.hurtFlash = Math.max(0, this.hurtFlash - rdt * 2);
     this.whiteFlash = Math.max(0, this.whiteFlash - rdt * 1.5);
     this.momentT = Math.max(0, this.momentT - rdt);
+    // The rain goes on under the cards, a chest and a find; only the pause lets it fade (Weather.hear).
+    if (this.weather && (this.state === 'levelup' || this.state === 'chest' || this.state === 'item')) this.weather.hear(rdt);
     if (this.stir) {
       this.stir.t += rdt;
       if (this.stir.done && (this.stir.after += rdt) >= ARRIVAL.stirOut) this.stir = null;
@@ -2022,8 +2051,10 @@ export class Game {
     this.grid.rebuild(E, p.x, p.y);
 
     if (this.state === 'play') {
-      if (this.caveStrike) this.mainWeapon()?.update(dt, true);
-      else for (const w of p.weapons) w.update(dt);
+      if (this.caveStrike) {
+        this.mainWeapon()?.update(dt, true);
+        if (this.boxBlowAt !== null && this.clock >= this.boxBlowAt - 1e-6) this.breakBoxes();
+      } else for (const w of p.weapons) w.update(dt);
       updateList(this.minions, dt);
     }
     updateList(this.projectiles, dt, releaseProjectile);
@@ -2268,7 +2299,7 @@ export class Game {
     // Shadows.
     const p = this.player;
     for (const e of this.enemies) {
-      if (!e.dead && onScreen(c, e.x, e.y, 40)) e.drawShadow(ctx, c);
+      if (!e.dead && onScreen(c, e.x, e.y, 40) && this.inView(e)) e.drawShadow(ctx, c);
     }
     for (const m of this.minions) if (onScreen(c, m.x, m.y, 40)) m.drawShadow(ctx, c);
     if (!p.dead) {
@@ -2280,13 +2311,14 @@ export class Game {
     }
 
     // Y-sorted actors and props. Bosses and crypt lords aren't among them: they stand over it all.
+    // In a crypt a foe behind a wall from the hero isn't drawn at all (inView), nor its night layer.
     const list = this.drawList, tops = this.topList;
     list.length = 0;
     tops.length = 0;
     this.world.collectProps(c, list);
     for (const s of this.shrines) list.push(s);
     for (const d of this.crypts) if (onScreen(c, d.x, d.y, 60)) list.push(d);
-    for (const e of this.enemies) if (!e.dead && onScreen(c, e.x, e.y, 60)) (e.boss || e.lord ? tops : list).push(e);
+    for (const e of this.enemies) if (!e.dead && onScreen(c, e.x, e.y, 60) && this.inView(e)) (e.boss || e.lord ? tops : list).push(e);
     for (const m of this.minions) if (onScreen(c, m.x, m.y, 60)) list.push(m);
     list.push(p);
     list.sort((a, b) => a.y - b.y);
@@ -2366,7 +2398,7 @@ export class Game {
     for (const pk of this.pickups) pk.drawGlow(ctx, c);
     if (p.buff('ward') && !p.dead) this.drawWard(ctx, c);
     for (const s of this.eshots) s.drawGlow(ctx, c);
-    for (const e of this.enemies) if (!e.dead && (e.elite || e.boss) && onScreen(c, e.x, e.y, 60)) e.drawGlow(ctx, c);
+    for (const e of this.enemies) if (!e.dead && (e.elite || e.boss) && onScreen(c, e.x, e.y, 60) && this.inView(e)) e.drawGlow(ctx, c);
     for (const m of this.minions) if (onScreen(c, m.x, m.y, 40)) m.drawGlow(ctx, c);
     this.particles.draw(ctx, c, true);
     ctx.globalCompositeOperation = 'source-over';
