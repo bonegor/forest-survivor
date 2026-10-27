@@ -1,0 +1,71 @@
+{
+ "cls": "paladin",
+ "kind": "proposal",
+ "id": "knightstyle-d",
+ "name": "Paladin · Knight style D (squared hood)",
+ "description": "Dame Seraphine redrawn in the plumed Knight’s style (Style A with a reworked head): a squared white hood with a gold circlet and a holy gem, its veil falling from behind it down her back, swaying in her breathing idle, streaming on the walk and flung back by the blow, as the Knight’s plume and cape do; silver plate with hue-shifted blue-violet shadows and warm cream lights, a white tabard with a gold sun, a gold belt and a tabard skirt that swings with the stride. Her head is a short upright cylinder with a flat crown, straight sides and 1 px cut corners, shaded as a cylinder and framing a small 3/4 face; it stands on a dark steel gorget neck above her collar and shoulders, so it reads as its own shape and not as a round lump on her body. She holds her warhammer upright at her side. Smite: she gathers light at her chest, heaves the hammer up behind her head, brings it over the top in a blazing gold-white arc and slams it down in front of her (frame 19): a flash, rays, a ground flare and a pillar of holy light to the sky, which thins into rising sparks as she lifts the hammer back. No black outline: every edge is a dark tone of its own material. The holy light, the circlet gem and the sun’s heart glow.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/paladin-knightstyle/d/paladin-d.px.js",
+ "made": "2026-10-27T11:59:18.584Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 13,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/paladin-knightstyle-d.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#f2a93b",
+  "#ffd45e",
+  "#fff0a6",
+  "#fffde8"
+ ]
+}

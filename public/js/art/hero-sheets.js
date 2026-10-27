@@ -9,33 +9,7 @@ import PALADIN from '../../assets/heroes/paladin.js';
 import DRUID from '../../assets/heroes/druid.js';
 import BERSERKER from '../../assets/heroes/berserker.js';
 import WITCHHUNTER from '../../assets/heroes/witchhunter.js';
-import KNIGHT_B from '../../assets/heroes/knight_b.js';
-import KNIGHT_C from '../../assets/heroes/knight_c.js';
-import KNIGHT_D from '../../assets/heroes/knight_d.js';
-import KNIGHT_E from '../../assets/heroes/knight_e.js';
-import KNIGHT_F from '../../assets/heroes/knight_f.js';
-import KNIGHT_G from '../../assets/heroes/knight_g.js';
-import ARCHER_B from '../../assets/heroes/archer_b.js';
-import ARCHER_C from '../../assets/heroes/archer_c.js';
-import ARCHER_D from '../../assets/heroes/archer_d.js';
-import ARCHER_E from '../../assets/heroes/archer_e.js';
-import ARCHER_F from '../../assets/heroes/archer_f.js';
-import ARCHER_G from '../../assets/heroes/archer_g.js';
-import ARCHER_H from '../../assets/heroes/archer_h.js';
-import MAGE_B from '../../assets/heroes/mage_b.js';
-import MAGE_C from '../../assets/heroes/mage_c.js';
-import ROGUE_B from '../../assets/heroes/rogue_b.js';
-import ROGUE_C from '../../assets/heroes/rogue_c.js';
-import NECROMANCER_B from '../../assets/heroes/necromancer_b.js';
-import NECROMANCER_C from '../../assets/heroes/necromancer_c.js';
-import PALADIN_B from '../../assets/heroes/paladin_b.js';
-import PALADIN_C from '../../assets/heroes/paladin_c.js';
-import DRUID_B from '../../assets/heroes/druid_b.js';
-import DRUID_C from '../../assets/heroes/druid_c.js';
-import BERSERKER_B from '../../assets/heroes/berserker_b.js';
-import BERSERKER_C from '../../assets/heroes/berserker_c.js';
-import WITCHHUNTER_B from '../../assets/heroes/witchhunter_b.js';
-import WITCHHUNTER_C from '../../assets/heroes/witchhunter_c.js';
+import PALADIN_D from '../../assets/heroes/paladin_d.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -90,76 +64,27 @@ function pose(def) {
   return { gen, fps: def.idleRate * 1.6, hires: 1.5, emissive: def.emissive, glow: def.glow, outline: false };
 }
 
-// Picked on the hero review page on 15 October 2026 and animated in the lab
-// (gms/3001/sprites/lab/src/animated-oct15), in the colours saved there:
-// Lyra as Silverleaf, her moonstone glowing; Eldrin as the Grand Archmage, his fire glowing;
-// Morvath as Soulflame, crowned, his eyes and the crown's gem glowing.
+// The user's picks of 27 October 2026 (tools/bake-heroes.mjs), all in the plumed Knight's style and
+// drawn with claude-pxl (gms/3001/sprites/lab/src/<hero>-knightstyle, ranger-knightstyle/b):
+// Lyra carries her bow's release and shots on the move; Eldrin turns his head toward us. Kael stays
+// the Eclipse Wraith, in the colours of its tweak.
 export const ARCHER_SHEET = sheet(ARCHER);
 export const MAGE_SHEET = sheet(MAGE);
 export const NECROMANCER_SHEET = sheet(NECROMANCER);
-// Kael as the Eclipse Wraith, in the colours of its tweak.
 export const ROGUE_SHEET = sheet(ROGUE);
+export const PALADIN_SHEET = sheet(PALADIN);
+export const DRUID_SHEET = sheet(DRUID);
+export const BERSERKER_SHEET = sheet(BERSERKER);
+export const WITCHHUNTER_SHEET = sheet(WITCHHUNTER);
+// Dame Seraphine's second look, until the user picks one (data/heroes.js skins).
+export const PALADIN_D_SHEET = sheet(PALADIN_D);
 
 export const ARCHER_POSE = pose(ARCHER_SHEET);
 export const MAGE_POSE = pose(MAGE_SHEET);
 export const NECROMANCER_POSE = pose(NECROMANCER_SHEET);
 export const ROGUE_POSE = pose(ROGUE_SHEET);
-
-// The four of 20 October 2026, drawn in the lab (src/newheroes-oct20): Dame Seraphine the
-// Paladin, Bramwyn the Druid, Ulfric the Berserker and Mercy Crane the Witch Hunter.
-export const PALADIN_SHEET = sheet(PALADIN);
-export const DRUID_SHEET = sheet(DRUID);
-export const BERSERKER_SHEET = sheet(BERSERKER);
-export const WITCHHUNTER_SHEET = sheet(WITCHHUNTER);
 export const PALADIN_POSE = pose(PALADIN_SHEET);
 export const DRUID_POSE = pose(DRUID_SHEET);
 export const BERSERKER_POSE = pose(BERSERKER_SHEET);
 export const WITCHHUNTER_POSE = pose(WITCHHUNTER_SHEET);
-// The Knight's second look (22 October 2026), drawn with claude-pxl (src/knight-b): a skin.
-export const KNIGHT_B_SHEET = sheet(KNIGHT_B);
-export const KNIGHT_B_POSE = pose(KNIGHT_B_SHEET);
-// And five more (src/knight-c .. knight-g).
-export const KNIGHT_C_SHEET = sheet(KNIGHT_C);
-export const KNIGHT_C_POSE = pose(KNIGHT_C_SHEET);
-export const KNIGHT_D_SHEET = sheet(KNIGHT_D);
-export const KNIGHT_D_POSE = pose(KNIGHT_D_SHEET);
-export const KNIGHT_E_SHEET = sheet(KNIGHT_E);
-export const KNIGHT_E_POSE = pose(KNIGHT_E_SHEET);
-export const KNIGHT_F_SHEET = sheet(KNIGHT_F);
-export const KNIGHT_F_POSE = pose(KNIGHT_F_SHEET);
-export const KNIGHT_G_SHEET = sheet(KNIGHT_G);
-export const KNIGHT_G_POSE = pose(KNIGHT_G_SHEET);
-// The Ranger's looks in the plumed Knight's style (26 October 2026, src/ranger-knightstyle): A drawn
-// in code, B with claude-pxl. Each carries her bow's release and shots on the move, as hers do.
-export const ARCHER_B_SHEET = sheet(ARCHER_B);
-export const ARCHER_B_POSE = pose(ARCHER_B_SHEET);
-export const ARCHER_C_SHEET = sheet(ARCHER_C);
-export const ARCHER_C_POSE = pose(ARCHER_C_SHEET);
-// Three more drawn from B with claude-pxl: hooded (lab C), a bit more Pokémon-like (D), both (E).
-export const ARCHER_D_SHEET = sheet(ARCHER_D);
-export const ARCHER_D_POSE = pose(ARCHER_D_SHEET);
-export const ARCHER_E_SHEET = sheet(ARCHER_E);
-export const ARCHER_E_POSE = pose(ARCHER_E_SHEET);
-export const ARCHER_F_SHEET = sheet(ARCHER_F);
-export const ARCHER_F_POSE = pose(ARCHER_F_SHEET);
-// Round 3 (26 October 2026, src/<hero>-knightstyle and ranger-knightstyle/f, g): two reworks of the
-// Ranger's C and two looks for every other hero in the plumed Knight's style, each drawn with
-// claude-pxl by its own artist. By sprite name, each with its menu pose (<name>_pose).
-export const KNIGHTSTYLE_LOOKS = Object.fromEntries(Object.entries({
-  archer_g: ARCHER_G,
-  archer_h: ARCHER_H,
-  mage_b: MAGE_B,
-  mage_c: MAGE_C,
-  rogue_b: ROGUE_B,
-  rogue_c: ROGUE_C,
-  necromancer_b: NECROMANCER_B,
-  necromancer_c: NECROMANCER_C,
-  paladin_b: PALADIN_B,
-  paladin_c: PALADIN_C,
-  druid_b: DRUID_B,
-  druid_c: DRUID_C,
-  berserker_b: BERSERKER_B,
-  berserker_c: BERSERKER_C,
-  witchhunter_b: WITCHHUNTER_B,
-  witchhunter_c: WITCHHUNTER_C,
-}).flatMap(([name, data]) => { const s = sheet(data); return [[name, s], [name + '_pose', pose(s)]]; }));
+export const PALADIN_D_POSE = pose(PALADIN_D_SHEET);

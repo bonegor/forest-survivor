@@ -17,52 +17,24 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const lab = join(root, 'gms/3001/sprites/lab');
 const assets = resolve(process.env.LAB_ASSETS || join(root, '../forest-survivor-assets'));
 
-// What ships, by the game's sprite name: the pick in the lab (role/id). The picks of 15 October
-// were tuned on the hero review page and animated in the lab (src/animated-oct15): each is already
-// in the colours the user saved there.
+// What ships, by the game's sprite name: the pick in the lab (role/id). The user's picks of
+// 27 October 2026, all in the plumed Knight's style and drawn with claude-pxl, except the Shadow,
+// who stays the Eclipse Wraith (tweaked in the lab). The Knight is his plumed self (knight-plumed.js).
 const BAKE = {
-  archer: 'archer/silverleaf-picked',
-  mage: 'mage/grand-archmage-picked',
-  necromancer: 'necromancer/soulflame-picked',
+  archer: 'archer/knightstyle-b',
+  // Style A with his head turned a little toward us, both eyes showing.
+  mage: 'mage/knightstyle-a2',
+  necromancer: 'necromancer/knightstyle-a',
   rogue: 'rogue/eclipse-wraith-tweak-1',
-  // The four of 20 October 2026, drawn in the lab (src/newheroes-oct20).
-  paladin: 'paladin/v1',
-  druid: 'druid/v1',
-  berserker: 'berserker/v1',
-  witchhunter: 'witchhunter/v1',
-  // The Knight's second look, drawn with claude-pxl (src/knight-b), a skin chosen on the hero screen.
-  knight_b: 'knight/b',
-  // Five more of 22 October 2026, each drawn with claude-pxl by its own artist and reviewer subagent.
-  knight_c: 'knight/c',
-  knight_d: 'knight/d',
-  knight_e: 'knight/e',
-  knight_f: 'knight/f',
-  knight_g: 'knight/g',
-  // The Ranger's two looks in the plumed Knight's style (26 October 2026): A drawn in code, B with claude-pxl.
-  archer_b: 'archer/knightstyle-a',
-  archer_c: 'archer/knightstyle-b',
-  // Three more from B: hooded, a bit more Pokémon-like, and both (its C, D and E).
-  archer_d: 'archer/knightstyle-c',
-  archer_e: 'archer/knightstyle-d',
-  archer_f: 'archer/knightstyle-e',
-  // Round 3 (26 October 2026): two reworks of C, the user's favourite (its F and G), and two looks for
-  // every other hero in the plumed Knight's style, each drawn by its own artist with claude-pxl.
-  archer_g: 'archer/knightstyle-f',
-  archer_h: 'archer/knightstyle-g',
-  mage_b: 'mage/knightstyle-a',
-  mage_c: 'mage/knightstyle-b',
-  rogue_b: 'rogue/knightstyle-a',
-  rogue_c: 'rogue/knightstyle-b',
-  necromancer_b: 'necromancer/knightstyle-a',
-  necromancer_c: 'necromancer/knightstyle-b',
-  paladin_b: 'paladin/knightstyle-a',
-  paladin_c: 'paladin/knightstyle-b',
-  druid_b: 'druid/knightstyle-a',
-  druid_c: 'druid/knightstyle-b',
-  berserker_b: 'berserker/knightstyle-a',
-  berserker_c: 'berserker/knightstyle-b',
-  witchhunter_b: 'witchhunter/knightstyle-a',
-  witchhunter_c: 'witchhunter/knightstyle-b',
+  // Her two looks to pick from: Style B with a barrel helm (C), Style A with a squared hood (D),
+  // each head made cylindrical and set off the shoulders.
+  paladin: 'paladin/knightstyle-c',
+  paladin_d: 'paladin/knightstyle-d',
+  druid: 'druid/knightstyle-a',
+  berserker: 'berserker/knightstyle-a',
+  witchhunter: 'witchhunter/knightstyle-a',
+  // Kept in the lab for villains, not baked: rogue/knightstyle-b (the Wraith) and
+  // necromancer/knightstyle-b (the Grave lord).
 };
 const OURS = new Set(['made for Forest Survivor', "the game's own"]);
 

@@ -19,17 +19,6 @@ export const HEROES = {
     title: 'Knight',
     sprite: 'knight',
     pose: 'knight_pose', // his painted pose on the in-run panels; the hero screen frames the in-game sprite, as for every hero
-    // His looks, chosen on the hero screen (heroLook): the first is his own. Knight B and the five
-    // after him drawn with claude-pxl (the owner's, 22 October 2026).
-    skins: [
-      { id: 'a', name: 'Plumed', sprite: 'knight', pose: 'knight_pose' },
-      { id: 'b', name: 'Knight B', sprite: 'knight_b', pose: 'knight_b_pose' },
-      { id: 'c', name: 'Ember', sprite: 'knight_c', pose: 'knight_c_pose' },
-      { id: 'd', name: 'Frost Warden', sprite: 'knight_d', pose: 'knight_d_pose' },
-      { id: 'e', name: 'Black Knight', sprite: 'knight_e', pose: 'knight_e_pose' },
-      { id: 'f', name: 'Thorn Knight', sprite: 'knight_f', pose: 'knight_f_pose' },
-      { id: 'g', name: 'Moon Knight', sprite: 'knight_g', pose: 'knight_g_pose' },
-    ],
     weapon: 'sword', // in the crypts each hero has his own weapon alone, struck by the player (Game.caveStrike)
     unique: ['sword'],
     color: '#0099db',
@@ -48,20 +37,6 @@ export const HEROES = {
     title: 'Ranger',
     sprite: 'archer',
     pose: 'archer_pose',
-    // Her looks (heroLook): her own, then two in the plumed Knight's style (26 October 2026),
-    // slighter than he is: A drawn in code, B with claude-pxl.
-    skins: [
-      { id: 'a', name: 'Silverleaf', sprite: 'archer', pose: 'archer_pose' },
-      { id: 'b', name: 'Style A', sprite: 'archer_b', pose: 'archer_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'archer_c', pose: 'archer_c_pose' },
-      // Three more drawn from B (26 October 2026): hooded, a bit more Pokémon-like, and both.
-      { id: 'd', name: 'Style C', sprite: 'archer_d', pose: 'archer_d_pose' },
-      { id: 'e', name: 'Style D', sprite: 'archer_e', pose: 'archer_e_pose' },
-      { id: 'f', name: 'Style E', sprite: 'archer_f', pose: 'archer_f_pose' },
-      // Round 3 (26 October 2026): two reworks of C, closer to the plumed Knight (lab F and G).
-      { id: 'g', name: 'Style F', sprite: 'archer_g', pose: 'archer_g_pose' },
-      { id: 'h', name: 'Style G', sprite: 'archer_h', pose: 'archer_h_pose' },
-    ],
     weapon: 'bow',
     unique: ['bow'],
     color: '#63c74d',
@@ -82,12 +57,6 @@ export const HEROES = {
     title: 'Sorcerer',
     sprite: 'mage',
     pose: 'mage_pose',
-    // His own, and two looks in the plumed Knight's style (26 October 2026, lab mage/knightstyle-a, b).
-    skins: [
-      { id: 'a', name: 'Grand Archmage', sprite: 'mage', pose: 'mage_pose' },
-      { id: 'b', name: 'Style A', sprite: 'mage_b', pose: 'mage_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'mage_c', pose: 'mage_c_pose' },
-    ],
     weapon: 'fireball',
     unique: ['fireball'],
     color: '#b55088',
@@ -104,12 +73,6 @@ export const HEROES = {
     title: 'Shadow',
     sprite: 'rogue',
     pose: 'rogue_pose',
-    // His own, and two looks in the plumed Knight's style (26 October 2026, lab rogue/knightstyle-a, b).
-    skins: [
-      { id: 'a', name: 'Eclipse Wraith', sprite: 'rogue', pose: 'rogue_pose' },
-      { id: 'b', name: 'Style A', sprite: 'rogue_b', pose: 'rogue_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'rogue_c', pose: 'rogue_c_pose' },
-    ],
     weapon: 'daggers',
     unique: ['daggers'],
     color: '#8f5bb0',
@@ -130,12 +93,6 @@ export const HEROES = {
     title: 'Necromancer',
     sprite: 'necromancer',
     pose: 'necromancer_pose',
-    // His own, and two looks in the plumed Knight's style (26 October 2026, lab necromancer/knightstyle-a, b).
-    skins: [
-      { id: 'a', name: 'Soulflame', sprite: 'necromancer', pose: 'necromancer_pose' },
-      { id: 'b', name: 'Style A', sprite: 'necromancer_b', pose: 'necromancer_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'necromancer_c', pose: 'necromancer_c_pose' },
-    ],
     weapon: 'raise', // the one struck by hand in the crypts; Miasma waits outside
     unique: ['raise', 'miasma'],
     start: ['raise', 'miasma'],
@@ -156,11 +113,11 @@ export const HEROES = {
     title: 'Paladin',
     sprite: 'paladin',
     pose: 'paladin_pose',
-    // Her own, and two looks in the plumed Knight's style (26 October 2026, lab paladin/knightstyle-a, b).
+    // Her two looks to pick from (27 October 2026), each with a cylindrical head set off the shoulders:
+    // Style C, a barrel helm (lab paladin/knightstyle-c), and Style D, a squared hood (knightstyle-d).
     skins: [
-      { id: 'a', name: 'Original', sprite: 'paladin', pose: 'paladin_pose' },
-      { id: 'b', name: 'Style A', sprite: 'paladin_b', pose: 'paladin_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'paladin_c', pose: 'paladin_c_pose' },
+      { id: 'c', name: 'Style C', sprite: 'paladin', pose: 'paladin_pose' },
+      { id: 'd', name: 'Style D', sprite: 'paladin_d', pose: 'paladin_d_pose' },
     ],
     weapon: 'smite',
     unique: ['smite'],
@@ -180,12 +137,6 @@ export const HEROES = {
     title: 'Druid',
     sprite: 'druid',
     pose: 'druid_pose',
-    // His own, and two looks in the plumed Knight's style (26 October 2026, lab druid/knightstyle-a, b).
-    skins: [
-      { id: 'a', name: 'Original', sprite: 'druid', pose: 'druid_pose' },
-      { id: 'b', name: 'Style A', sprite: 'druid_b', pose: 'druid_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'druid_c', pose: 'druid_c_pose' },
-    ],
     weapon: 'roots',
     unique: ['roots'],
     color: '#b86f50',
@@ -204,12 +155,6 @@ export const HEROES = {
     title: 'Berserker',
     sprite: 'berserker',
     pose: 'berserker_pose',
-    // His own, and two looks in the plumed Knight's style (26 October 2026, lab berserker/knightstyle-a, b).
-    skins: [
-      { id: 'a', name: 'Original', sprite: 'berserker', pose: 'berserker_pose' },
-      { id: 'b', name: 'Style A', sprite: 'berserker_b', pose: 'berserker_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'berserker_c', pose: 'berserker_c_pose' },
-    ],
     weapon: 'twinaxes',
     unique: ['twinaxes'],
     color: '#e43b44',
@@ -228,12 +173,6 @@ export const HEROES = {
     title: 'Witch Hunter',
     sprite: 'witchhunter',
     pose: 'witchhunter_pose',
-    // Her own, and two looks in the plumed Knight's style (26 October 2026, lab witchhunter/knightstyle-a, b).
-    skins: [
-      { id: 'a', name: 'Original', sprite: 'witchhunter', pose: 'witchhunter_pose' },
-      { id: 'b', name: 'Style A', sprite: 'witchhunter_b', pose: 'witchhunter_b_pose' },
-      { id: 'c', name: 'Style B', sprite: 'witchhunter_c', pose: 'witchhunter_c_pose' },
-    ],
     weapon: 'crossbow',
     unique: ['crossbow'],
     color: '#c0cbdc',

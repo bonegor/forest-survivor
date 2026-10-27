@@ -34,11 +34,11 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
   }
 });
 
-test('the ranger is Silverleaf as picked: her moonstone glows, her bow keeps its timing',()=>{
+test('the ranger is Style B as picked: her glow shows in every frame, her bow keeps its timing',()=>{
   const spr=SPR.archer;
   assert.deepEqual([spr.idle.length,spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[8,8,8,5,14]);
   assert.deepEqual(spr.attackWalk.map(r=>r.length),[8,8,8,8,8,8,8,8]);
-  assert.ok(spr.frames.every(f=>f.em),'the moonstone glows in every frame');
+  assert.ok(spr.frames.every(f=>f.em),'her glow shows in every frame');
 });
 
 test('the real ranger movement clock plays all eight phases at 12 fps',()=>run((g,p,w)=>{
