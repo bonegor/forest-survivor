@@ -10,7 +10,8 @@ import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, applyRun } from '../public/js/shared/profile.js';
+import { defaultProfile, applyRun, metaBonuses } from '../public/js/shared/profile.js';
+import { Game } from '../public/js/game/game.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
@@ -151,4 +152,30 @@ test("a fall's results name what wounded the hero most, with a tip for the worst
   assert.deepEqual(woundLines({ died: true, stats }), [["Wounds: Cultist's bolt 63% · Wolf 22% · Bone King 15%", '#c0cbdc'], [WOUND_TIPS.shots, '#8b9bb4']]);
   assert.deepEqual(woundLines({ died: false, victory: true, stats }), [], 'a win');
   assert.deepEqual(woundLines({ died: false, stats }), [], 'a quit');
+});
+
+// A boss's slams and shots count with his touch, under his name alone and as a boss's, so one boss
+// takes one place of the three and his tip comes for them (names.js bossOf, 27 October 2026).
+test("a boss's every blow is one line of the wounds, and counts as a boss's", () => {
+  const random = Math.random, bot = input.bot;
+  Math.random = mulberry32(4);
+  input.bot = { x: 0, y: 0 };
+  try {
+    const g = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, crypts: false });
+    g.spawner.update = () => {};
+    g.update(1 / 60);
+    const p = g.player;
+    p.maxHp = p.hp = 1e6;
+    Object.assign(g.stats, { damageTaken: 0, fromBoss: 0, fromMobs: 0, fromShots: 0, wounds: {} });
+    for (const [by, boss] of [['King Ossarian, The Bone King', 'King Ossarian'], ["King Ossarian's bone", 'King Ossarian'], ["Cultist's bolt", null]]) {
+      p.invuln = 0;
+      assert.ok(p.hurt(10, null, by, boss) > 0, by);
+    }
+    assert.deepEqual(Object.keys(g.stats.wounds).sort(), ["Cultist's bolt", 'King Ossarian'], 'his slam and his bone under his name');
+    assert.equal(g.stats.fromBoss, g.stats.wounds['King Ossarian'], "a boss's, both");
+    assert.equal(g.stats.fromShots, g.stats.wounds["Cultist's bolt"], "the horde's bolt a shot");
+  } finally {
+    Math.random = random;
+    input.bot = bot;
+  }
 });

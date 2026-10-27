@@ -7,7 +7,7 @@ import { EnemyShot } from './projectiles.js';
 import { Telegraph, Explosion, Ring } from './effects.js';
 import { PC, P } from './particles.js';
 import { faceAttack } from './facing.js';
-import { foeName, shotName } from './names.js';
+import { foeName, shotName, bossOf } from './names.js';
 
 const distP = (e) => Math.hypot(e.g.player.x - e.x, e.g.player.y - e.y);
 const angP = (e) => Math.atan2(e.g.player.y - e.y, e.g.player.x - e.x);
@@ -27,14 +27,15 @@ function say(e, text, dur = 2.2) {
   e.speech = { text, t: dur };
 }
 
-// by: who struck it, as the results name the blow that slew the hero (names.js).
-function blast(g, x, y, r, dmg, style, by) {
+// by: who struck it, as the results name the blow that slew the hero; boss: the boss's name alone,
+// for the results' wounds (names.js bossOf).
+function blast(g, x, y, r, dmg, style, by, boss = null) {
   g.effects.push(new Explosion(g, x, y, r, style));
   g.effects.push(new Ring(g, x, y, 4, r * 1.1, 0.4, style === 'fire' ? '#fee761' : '#f6757a'));
   const p = g.player;
   // As a boss's touch grows with the night (Enemy.update): 0.6 of the night's own growth (Game.dmgScale), so a
   // warned slam late in the night never hurts less than a stray bolt (27 October 2026).
-  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * (1 + (g.dmgScale - 1) * 0.6) * g.bossPower, null, by);
+  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * (1 + (g.dmgScale - 1) * 0.6) * g.bossPower, null, by, boss);
   g.shake(0.45);
   sfx('slam');
 }
@@ -43,7 +44,7 @@ function blast(g, x, y, r, dmg, style, by) {
 // opts.out px out from it along its own line.
 function shoot(g, e, ang, kind, speed, dmg, opts) {
   const out = (opts && opts.out) || 0;
-  g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 * e.scale + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, { ...opts, by: shotName(e, kind) }));
+  g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 * e.scale + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, { ...opts, by: shotName(e, kind), boss: bossOf(e) }));
 }
 
 function ring(g, e, n, kind, speed, dmg, off = 0, opts) {
@@ -58,12 +59,12 @@ function fan(g, e, n, spread, kind, speed, dmg, opts) {
 }
 
 function strike(g, e, x, y, r, dmg, delay, style = 'fire') {
-  const by = foeName(e), id = e.id;
+  const by = foeName(e), boss = bossOf(e), id = e.id;
   // Lands only while its caster stands (still): the Demon Lord's meteors fall no more once he has (27 October 2026).
   g.effects.push(new Telegraph(g, {
     shape: 'circle', x, y, r, dur: delay,
     onDone: () => {
-      if (still(e, id)) blast(g, x, y, r, dmg, style, by);
+      if (still(e, id)) blast(g, x, y, r, dmg, style, by, boss);
     },
   }));
 }
@@ -104,7 +105,7 @@ export const BOSS_AI = {
         shape: 'circle', x: e.x, y: e.y, r: R, dur: 1, follow: e,
         onDone: () => {
           if (!still(e, id)) return;
-          blast(g, e.x, e.y, R, 24, 'dark', foeName(e));
+          blast(g, e.x, e.y, R, 24, 'dark', foeName(e), bossOf(e));
           // Each bone sets off out along its own line, about 10 px from the next (19 px round
           // him, 25 for the ring of 15), so the ring never stacks on one point.
           ring(g, e, e.phase ? 15 : 11, 'bone', 85, 11, rand(TAU), { out: e.phase ? 25 : 19 });
@@ -191,7 +192,7 @@ export const BOSS_AI = {
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: 54, dur: 0.85, follow: e,
         onDone: () => {
-          if (still(e, id)) blast(g, e.x, e.y, 54, 30, 'blood', foeName(e));
+          if (still(e, id)) blast(g, e.x, e.y, 54, 30, 'blood', foeName(e), bossOf(e));
         },
       }));
       return [0, 0, 0];
@@ -287,7 +288,7 @@ export const BOSS_AI = {
         shape: 'circle', x: e.x, y: e.y, r: 84, dur: 0.9, follow: e,
         onDone: () => {
           if (!still(e, id)) return;
-          blast(g, e.x, e.y, 84, 32, 'fire', foeName(e));
+          blast(g, e.x, e.y, 84, 32, 'fire', foeName(e), bossOf(e));
           ring(g, e, 16, 'firebolt', 90, 12, rand(TAU));
         },
       }));

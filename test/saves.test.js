@@ -196,5 +196,5 @@ test('a forged run report is held to what its mode allows', () => {
   // And the wage for the night's 15 minutes on the clock (shared/progress.js), at Elite's rate.
   const cap = Math.round(P.goldCap({ mode: 's15', time: 900, realTime: 7200, found: 4 * (7200 / 45 + 1) }, 1) * 1.5) + 500 + Math.round(900 * P.PROGRESS.wage * 1.5);
   assert.ok(r.reward.total <= cap, `paid ${r.reward.total}, at most ${cap}`);
-  assert.equal(P.sanitizeRun({ ...forged, mode: 'dungeon' }).found, 0, 'the Dungeon has no crypts, so nothing is found in it');
+  assert.equal(P.sanitizeRun({ ...forged, mode: 'dungeon' }).found, 3, 'the Dungeon has no crypts, but a piece from each of its three guardians (27 October 2026)');
 });

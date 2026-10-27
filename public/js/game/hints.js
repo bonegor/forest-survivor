@@ -53,9 +53,12 @@ export class Hints {
     this.marked = true; // for done() to keep
   }
 
-  // Its banner, to be counted once it has played out (update).
+  // Its banner, to be counted once it has played out (update). Only into free room (Game.bannerRoom):
+  // a hint pushed off and said again must not push the game's own banners off in turn (27 October
+  // 2026: two hints up cut every new one within two frames). One that never finds room comes in a
+  // later run.
   say(id) {
-    if (this.said(id) || this.out.has(id)) return;
+    if (this.said(id) || this.out.has(id) || !this.g.bannerRoom) return;
     const [title, sub] = words(id, this.g);
     const b = this.g.banner(title, sub, COLOR, DUR);
     if (!b) return;

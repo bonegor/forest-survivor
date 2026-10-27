@@ -555,7 +555,7 @@ export function codexDetail(e, prof) {
   const lines = [codexDescription(e)];
   const slots = exclusionState(prof), used = prof.home?.length || 0;
   if (e.type === 'feature') {
-    const next = e.next ? ` · next slot: ${e.need.toLowerCase()}` : '';
+    const next = e.next ? ` · next slot at ${fmtNum(e.next)}` : '';
     lines.push({ text: `${slotsText(used, slots.level)} · ${fmtNum(prof.effort || 0)} kills counted${next}`, color: '#fee761' });
     lines.push({ text: EFFORT_NOTE, color: '#8b9bb4' });
   } else if (!e.open && !e.hidden) {
@@ -570,7 +570,7 @@ export function codexDetail(e, prof) {
     else if (lastInPlay(prof, e.id)) lines.push({ text: 'Offered in runs · the last weapon a run offers stays in', color: '#feae34' });
     else if (used < slots.level) lines.push({ text: `Offered in runs · ${slotsText(used, slots.level)}`, color: '#9ee562' });
     else {
-      const more = slots.next ? ` · slay ${fmtNum(slots.next)} monsters in total for ${slots.level ? 'another' : 'one'}` : '';
+      const more = slots.next ? ` · ${slots.level ? 'another' : 'one'} at ${fmtNum(slots.next)} kills counted as on Veteran` : '';
       lines.push({ text: `Offered in runs · ${slots.level ? 'every exclusion slot in use' : 'no exclusion slot yet'}${more}`, color: '#feae34' });
     }
   }
@@ -805,8 +805,12 @@ export class RecordsScreen {
     app.scene.draw(ctx, W, H, dt, { campfire: false });dim(ctx, W, H, 0.65);header(ctx, W, 'Records');
     if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('records_ranked');ui.lock(0.2); }return; }
     ui.begin(dt);
-    for (const [i, id] of ['overview', 'ranked'].entries()) if (button(ctx, ui, 'records_' + id, W / 2 - 104 + i * 108, 28, 100, 15, id.toUpperCase(), { on: this.tab === id })) this.tab = id;
-    const rows = this.tab === 'overview' ? [
+    // Three tabs side by side, narrower on a narrow screen.
+    const tabs = ['overview', 'heroes', 'ranked'], tw = Math.min(100, Math.floor((W - 24 - 8 * (tabs.length - 1)) / tabs.length));
+    const tx = Math.round(W / 2 - (tabs.length * tw + 8 * (tabs.length - 1)) / 2);
+    for (const [i, id] of tabs.entries()) if (button(ctx, ui, 'records_' + id, tx + i * (tw + 8), 28, tw, 15, id.toUpperCase(), { on: this.tab === id })) this.tab = id;
+    if (this.tab === 'heroes') this.drawHeroes(ctx, W, H, p);
+    const rows = this.tab === 'heroes' ? [] : this.tab === 'overview' ? [
       ['Nights won', String(p.wins.s15.reduce((a,b) => a+b, 0))],
       ['Dungeons cleared', String(p.wins.dungeon.reduce((a,b) => a+b, 0))],
       ['Runs played', fmtNum(p.runs)], ['Monsters slain', fmtNum(p.kills)],
@@ -814,8 +818,8 @@ export class RecordsScreen {
       ['Longest night', fmtTime(p.best.s15)], ['Deepest floor', p.best.dungeon >= 4 ? 'Conquered' : String(p.best.dungeon || '—')],
       ['Heroes recruited', `${p.heroes.length}/${HERO_ORDER.length}`],
     ] : HERO_ORDER.map(h => [HEROES[h].title, p.ranked[h] ? `${fmtTime(p.ranked[h])} · ${rankTitle(p.ranked[h])}` : 'No record']);
-    const w = Math.min(380, W - 24), x = Math.round((W - w) / 2), step = Math.min(22, Math.floor((H - 86) / rows.length));
-    panel(ctx, x, 54, w, rows.length * step + 12, { rivets: false, fill: '#15131f' });
+    const w = Math.min(380, W - 24), x = Math.round((W - w) / 2), step = Math.min(22, Math.floor((H - 86) / Math.max(1, rows.length)));
+    if (rows.length) panel(ctx, x, 54, w, rows.length * step + 12, { rivets: false, fill: '#15131f' });
     rows.forEach(([label, value], i) => {
       const y = 61 + i * step;
       if (this.tab === 'ranked' && ui.item('record_' + HERO_ORDER[i], x + 6, y - 2, w - 12, step)) {
@@ -828,6 +832,38 @@ export class RecordsScreen {
     });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
     ui.end();if (input.pressed('back')) app.go('title');
+  }
+
+  // HEROES: what each hero has won, by mode and difficulty (the review of 27 October 2026: the cards
+  // drew a win's marks as coloured stars and nothing said what they were, and the Records added
+  // every difficulty's wins together). A column for a night won, then one each for a night won on
+  // Veteran, on Elite and in a Nightmare, and the same four for the Dungeon (ladder.js featStars),
+  // each star in its colour, and what the colours are under them. The six-step mastery row the
+  // review asked for on the hero screen is not made yet.
+  drawHeroes(ctx, W, H, p) {
+    const n = HERO_ORDER.length, w = Math.min(380, W - 24), x = Math.round((W - w) / 2);
+    const step = Math.min(18, Math.floor((H - 112) / (n + 1))), cell = 14, right = x + w - 10;
+    // The centre of column j: the Dungeon's four at the right, two cells' gap, the night's before them.
+    const cx = (j) => Math.round(right - cell / 2 - (7 - j) * cell - (j < 4 ? cell : 0));
+    panel(ctx, x, 54, w, (n + 1) * step + 12, { rivets: false, fill: '#15131f' });
+    drawText(ctx, 'NIGHT', Math.round((cx(0) + cx(3)) / 2), 61, { align: 'center', color: '#8b9bb4' });
+    drawText(ctx, 'DUNGEON', Math.round((cx(4) + cx(7)) / 2), 61, { align: 'center', color: '#8b9bb4' });
+    HERO_ORDER.forEach((h, i) => {
+      const y = 61 + (i + 1) * step;
+      if (i % 2 === 0) { ctx.fillStyle = '#1d1b2a';ctx.fillRect(x + 3, y - 2, w - 6, step); }
+      drawText(ctx, HEROES[h].title, x + 10, y, { color: p.heroes.includes(h) ? '#c0cbdc' : '#5a6988' });
+      featStars(p, h).forEach(([, col, got], j) => drawText(ctx, got ? '★' : '·', cx(j), y, { align: 'center', color: got ? col : '#3a4466' }));
+    });
+    // The key: a win's star (gold for a night, green for the Dungeon), then the three marks.
+    const key = [[['#fee761', '#9ee562'], 'won'], [['#c28569'], 'Veteran'], [['#c0cbdc'], 'Elite'], [['#e43b44'], 'Nightmare']];
+    const star = textWidth('★') + 1, gap = 10, words = key.map(([cols, t]) => cols.length * star + textWidth(' ' + t));
+    let kx = Math.round(W / 2 - (words.reduce((s, v) => s + v, 0) + gap * (key.length - 1)) / 2);
+    const ky = 54 + (n + 1) * step + 18;
+    key.forEach(([cols, t], k) => {
+      cols.forEach((col, c) => drawText(ctx, '★', kx + c * star, ky, { color: col }));
+      drawText(ctx, ' ' + t, kx + cols.length * star, ky, { color: '#8b9bb4' });
+      kx += words[k] + gap;
+    });
   }
 }
 

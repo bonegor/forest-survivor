@@ -428,8 +428,9 @@ export class Player {
   }
 
   // A blow of amount from src (a foe, by contact) or by (who struck it from afar, as the results
-  // name it: names.js); the one that fells him is the run's stats.killedBy.
-  hurt(amount, src, by = null) {
+  // name it: names.js); the one that fells him is the run's stats.killedBy. boss: a boss's name
+  // alone when the blow from afar is his (names.js bossOf), for the wounds.
+  hurt(amount, src, by = null, boss = null) {
     const g = this.g;
     if (this.dead || this.untouchable || this.devGod || g.state === 'faint') return 0;
     // Shadow Cloak: a dodged blow costs nothing, and a breath of grace stops the next roll at once.
@@ -452,11 +453,14 @@ export class Player {
     this.flash = 0.12;
     this.addFury((FURY.hurt * dmg) / this.maxHp);
     g.stats.damageTaken += dmg;
-    if (src && src.boss) g.stats.fromBoss += dmg;
+    // A boss's slams and shots are his as much as his touch (27 October 2026: they counted as the
+    // horde's shots, and the results' tip for a boss came only when his touch had done the most).
+    if ((src && src.boss) || boss) g.stats.fromBoss += dmg;
     else if (src) g.stats.fromMobs += dmg;
     else g.stats.fromShots += dmg;
-    // And by who dealt it: a foe by its kind, a boss by his name, a shot as its shooter's (names.js).
-    const who = src ? src.def.name : by || 'Unknown';
+    // And by who dealt it: a foe by its kind, a boss by his name whatever the blow, a shot as its
+    // shooter's (names.js).
+    const who = src ? src.def.name : boss || by || 'Unknown';
     g.stats.wounds[who] = (g.stats.wounds[who] || 0) + dmg;
     g.stats.minHp = Math.min(g.stats.minHp, Math.max(0, this.hp) / this.maxHp);
     g.numbers.add(this.x, this.y - 18, dmg, 'player');

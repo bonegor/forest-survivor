@@ -180,13 +180,13 @@ Each hero has a **signature weapon** no other hero can find (the Necromancer has
 | Gale Horn: a gust ahead blows the horde back (never a boss, an elite or the hero); a foe blown into another hurts both | the night won | Swift Boots | Tempest: all round, and slowed |
 | Lighthouse Lantern: a beam sweeps slowly round, burning, and lights the ground | surviving 12:00 | Spellbook | Beacon: two beams, and lit foes take a quarter more |
 | Banshee Bell: a toll that sends the horde fleeing (bosses and elites stand) | 3 bosses in a run | Vitality Amulet | Death Knell: the fleeing leave cutting echoes |
-| Grappling Hook: a hook at the farthest foe that cuts its line twice and makes it bleed; it drags nothing | 25,000 foes in all | Plate Armor | Kraken Chains |
+| Grappling Hook: a hook at the farthest foe that cuts its line twice and makes it bleed; it drags nothing | 60,000 foes in all, counted as on Veteran | Plate Armor | Kraken Chains |
 | Starfall: stars fall on foes in sight | 1,500 gold in a run | Echo Rune | Comet Shower |
 | Runestone: a stone that bounces off the screen's edges, piercing | a night won on Elite | Eagle Feather | Runestorm: three, each splitting on its first bounce |
-| Leech Chains: chains drain the nearest foes and mend the hero a little | level 50 | Troll Blood | Blood Tether |
+| Leech Chains: chains drain the nearest foes and mend the hero a little | level 55 | Troll Blood | Blood Tether |
 | Grave Hollow: a pit in the thick of the horde draws it in, then caves in | a Dungeon Run won | Lodestone | Abyss: and drags in the gems |
 | Puffcap Spores: mushrooms where foes fall; their spores confuse what treads on them | 3 nights won | Lucky Clover | Fairy Ring |
-| Reaper's Scythe: a slow, wide reaper's sweep all round, far past a sword's reach; it reaps foes under 15% health | 60,000 foes in all | Scholar's Crown | Harvest Moon |
+| Reaper's Scythe: a slow, wide reaper's sweep all round, far past a sword's reach; it reaps foes under 15% health | 120,000 foes in all, counted as on Veteran | Scholar's Crown | Harvest Moon |
 | Hex Hourglass: curses the toughest; when it ends they take a share of all they suffered again | a night won with 3 heroes | Hourglass | Doom |
 
 **Weapons a new player has**: five, the hero's own and the Throwing Axe, Guardian Blades, Moonglaive and Caltrops; Frost Nova opens at 1:00 survived, Consecration once the hero has fallen 10 times (a run quit or won is no fall), and the rest of the shared ones by milestones (`public/js/shared/progress.js`). Any shared weapon open can be **left at home** in the Codex (Enter on its tile flips its switch to OFF; Enter again, back ON): it is never offered in a run until taken along again. Consecration stands first on the Codex's second line, right after the ones open from the start. The Codex is driven by the keys: the arrows move through the grid and it scrolls to follow, Page Up and Page Down go a screenful at a time, and Escape returns to the title with CODEX still selected (the mouse wheel and a drag with a finger scroll it too).

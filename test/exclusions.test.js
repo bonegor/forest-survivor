@@ -60,7 +60,7 @@ test('kills accumulate across runs; slot thresholds are totals, not extra kills'
   const entry = P.exclusionEntry(p);
   assert.equal(entry.next, 3000);
   assert.equal(entry.level, 2);
-  assert.equal(entry.need, 'Slay 3,000 monsters in total');
+  assert.equal(entry.need, 'Slay 3,000 monsters, counted as on Veteran');
 });
 
 // The review of 27 October 2026: Normal's eighth of the horde crawled to the kill milestones, and

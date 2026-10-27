@@ -71,6 +71,13 @@ test('a first-run hint waits for a warning, the ultimate’s cut-in and a name c
     run(g, 0.3);
     assert.equal(hint.t, t0, 'and under a name card');
     g.card = null;
+    // Nor under the cards or the pause, which hide it (27 October 2026: it ran out unseen there).
+    for (const state of ['levelup', 'paused']) {
+      g.state = state;
+      run(g, 0.3);
+      assert.equal(hint.t, t0, `held under ${state}`);
+    }
+    g.state = 'play';
     run(g, 5);
     assert.ok(said('move'), 'counted once played in full');
   }, { hints: true, settings: { numbers: false, hints: {} } }));

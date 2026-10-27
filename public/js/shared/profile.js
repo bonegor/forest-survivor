@@ -521,7 +521,8 @@ export function exclusionEntry(profile) {
   const p = sanitizeProfile(profile), state = exclusionState(p);
   return {
     type: 'feature', id: 'exclusions', open: state.level > 0,
-    need: state.next ? `Slay ${state.next.toLocaleString('en-US')} monsters in total` : 'All exclusion slots unlocked',
+    // Worded as the kill milestones are (needText): the kills counted as Veteran's.
+    need: state.next ? needText({ need: 'kills', at: state.next }) : 'All exclusion slots unlocked',
     progress: state.next ? Math.min(1, p.effort / state.next) : 1,
     ...state,
   };
@@ -638,6 +639,10 @@ export function runReward(run) {
 // What one of a run's kills counts as, in Veteran's (PROGRESS.effort): the difficulty's, and a
 // Nightmare's divided again by its three times the horde.
 const effortOf = (run) => PROGRESS.effort[run.diff] * (run.nightmare ? PROGRESS.nightmareEffort : 1);
+// And what a run's kills count as, at most what Veteran's horde could give in its time (sanitizeRun's
+// kills): a forged Normal report, held to the kills a run of its length could make, would count
+// eight times that (27 October 2026).
+const effortFor = (run) => Math.min(Math.round(run.kills * effortOf(run)), 50 + run.time * 240);
 
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
@@ -666,7 +671,7 @@ export function applyRun(profile, rawRun) {
   p.gold = int(p.gold + reward.total, 0, 1e9);
   p.runs = int(p.runs + 1, 0, 1e7);
   p.kills = int(p.kills + run.kills, 0, 1e12);
-  p.effort = int(p.effort + Math.round(run.kills * effortOf(run)), 0, 1e12);
+  p.effort = int(p.effort + effortFor(run), 0, 1e12);
   if (run.died) p.deaths = int(p.deaths + 1, 0, 1e7);
   let personalBest = false;
   if (run.victory) {

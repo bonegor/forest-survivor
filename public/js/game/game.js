@@ -1266,9 +1266,11 @@ export class Game {
         this.world.openStairs(at.x, at.y);
         this.objective = 'Descend the stairs';
       } else {
-        // The victory waits for his gear's screen to close (update).
+        // The victory waits for his gear's screen to close (update), and from this blow on nothing
+        // fells the hero: the shots and touches still to come this frame are spent on his grace.
         this.objective = '';
         this.gearThenWin = true;
+        this.player.invuln = Math.max(this.player.invuln, 0.2);
       }
     }
     if (next) return;
@@ -1717,10 +1719,19 @@ export class Game {
     return b;
   }
 
+  // Whether a banner can come up without pushing the oldest off (banner): a first-run hint waits
+  // for that (hints.js say).
+  get bannerRoom() {
+    return this.banners.length < BANNERS_MOST;
+  }
+
   // Whether a first-run hint must wait (hints.js): while an event's warning, the ultimate's cut-in, a
-  // boss's name card or the stir before him has the screen.
+  // boss's name card or the stir before him has the screen, and whenever the battlefield isn't what
+  // is shown (a level-up, a chest, a find, the pause, a fall, a crossing). It is neither drawn nor
+  // run down meanwhile (Game.fadeReal, Hud.drawBanners): 27 October 2026, a gem's hint ran out
+  // unseen under the first level-up's cards, which come a second or two after it, and counted as said.
   get hintsHeld() {
-    return this.warnings.length > 0 || !!this.ultLaunch || !!this.card || !!(this.stir && !this.stir.done);
+    return this.state !== 'play' || this.warnings.length > 0 || !!this.ultLaunch || !!this.card || !!(this.stir && !this.stir.done);
   }
 
   addDecal(kind, x, y, r) {
@@ -2100,7 +2111,8 @@ export class Game {
     for (const w of this.warnings) w.t += rdt;
     if (this.ultLaunch && this.ultLaunch.started && (this.ultLaunch.t += rdt) >= ULT_LAUNCH.dur) this.ultLaunch = null;
     // Banners too: one that came before the cards has had its say when they close. A boss's name
-    // card holds them back (they wait, unseen, and go on after it).
+    // card holds them back (they wait, unseen, and go on after it), and a first-run hint waits
+    // under the cards as well (hintsHeld), to be seen in full.
     for (let i = this.banners.length - 1; i >= 0; i--) {
       const b = this.banners[i];
       if (!this.card && !(b.hint && this.hintsHeld)) b.t += rdt;

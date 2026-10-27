@@ -46,7 +46,7 @@ test('the table covers every shared weapon and relic exactly once, and fits its 
   assert.ok(LOCKS.length <= 50, 'the save keeps them as the bits of one number, safe to 53');
   for (const l of LOCKS) if (!l.retired) assert.ok(P.needText(l), l.id);
   assert.equal(P.needText(LOCKS[0]), 'Survive 1:00 in one run');
-  assert.equal(P.needText(LOCKS[1]), 'Slay 1,000 monsters in total');
+  assert.equal(P.needText(LOCKS[1]), 'Slay 1,000 monsters, counted as on Veteran');
 });
 
 test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the starters open and no ultimate', () => {
@@ -113,8 +113,8 @@ test('the server keeps the milestones a run reached, and the ultimate of the her
     return res.json();
   };
   try {
-    let data = await post('/api/run', { ...RUN, time: 59, level: 15 });
-    assert.deepEqual(data.reward.unlocked, [{ type: 'weapon', id: 'flask', need: 'Reach level 15' }]);
+    let data = await post('/api/run', { ...RUN, time: 59, level: 10 });
+    assert.deepEqual(data.reward.unlocked, [{ type: 'weapon', id: 'flask', need: 'Reach level 10' }]);
     data = await post('/api/run', { ...RUN, time: 119, kills: 100 });
     assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['weapon:frost']);
     assert.equal(P.openFor(data.profile, 'knight').ult, false, '1:59 is not enough');
@@ -234,8 +234,9 @@ test('a save from before keeps everything: its records open what they imply, six
   assert.equal(P.progressList(p).find((l) => l.id === 'phoenix').forSale, true, 'a night won put the Phoenix Heart up for sale');
   assert.equal(P.openFor(p, 'mage').ult, false);
   const shut = P.progressList(p).filter((l) => !l.open && !LOCKS.find((x) => x.id === l.id)?.deep).map((l) => l.id);
-  // The night won is 15:00 and opens the run-long ones; level 35 is short of the Crown's 40.
-  assert.deepEqual(shut, ['growth', 'phoenix', 'chain', 'ember', 'aura', ...P.HERO_ORDER.slice(2)], 'the Phoenix Heart for sale; 6,000 slain is short of the Ember Heart');
+  // The night won is 15:00 and opens the run-long ones; level 35 is short of the Fang's 38 and the
+  // Crown's 45, and its 6,000 slain (counted as Veteran's) of Thornmail's 8,000 (27 October 2026).
+  assert.deepEqual(shut, ['thorns', 'growth', 'phoenix', 'chain', 'thornmail', 'fang', 'ember', 'aura', ...P.HERO_ORDER.slice(2)], 'the Phoenix Heart for sale; 6,000 slain is short of Thornmail');
   // Read again, as the cookie gives it back: nothing more given.
   const again = P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(p))));
   assert.deepEqual(again, p);

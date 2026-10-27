@@ -164,7 +164,7 @@ function evoHint(g, id) {
   const [word, line2, color, short] = {
     owned: ['owned', 'Partner owned', '#feae34'],
     open: ['missing', 'Partner missing', '#8b9bb4'],
-    locked: [need ? `locked: ${need.toLowerCase()}` : 'locked', need ? `Locked: ${need}` : 'Partner locked', '#f6757a', 'Partner locked'],
+    locked: [need ? `locked: ${need[0].toLowerCase()}${need.slice(1)}` : 'locked', need ? `Locked: ${need}` : 'Partner locked', '#f6757a', 'Partner locked'],
     banished: ['banished', 'Partner banished', '#f6757a'],
     full: ['no relic slot', 'No relic slot free', '#f6757a'],
   }[s.state];
@@ -810,7 +810,10 @@ export class LevelUpOverlay {
         sfx('teleport');
         this.roll();
       }
-      // The line of help over them: what the focused button does, the armed BANISH, else the keys.
+      // The line of help over them: what the focused button does, the armed BANISH, else the keys;
+      // the first level-up screen's teaching line keeps them too (27 October 2026: it took their
+      // place on the one screen a new player needs them most).
+      const take = touch ? ['Tap a card to take it', 'Tap: take'] : pad ? [`${padKey('A')} takes the card in focus`, `${padKey('A')}: take`] : [`Enter or 1-${n} takes a card`, `Enter/1-${n}: take`];
       let tip, color = '#5a6988';
       if (this.banishing) {
         tip = fit(['Choose a card to banish: it is gone for the rest of the run', 'Choose a card to banish', 'Banish which?']);
@@ -818,11 +821,15 @@ export class LevelUpOverlay {
       } else if (ui.focusId === 'banish') tip = fit(['BANISH: the card in focus is gone for the rest of the run', 'BANISH: gone for the run']);
       else if (ui.focusId === 'reroll') tip = fit(['REROLL: all new cards', 'REROLL']);
       else if (this.teach) {
-        tip = fit(['Your first level: take a card, a new weapon or relic or a rank of one you hold', 'Take a card: a new weapon or relic, or a rank of one held', 'Take a card']);
+        tip = fit([
+          `Your first level: a new weapon or relic, or a rank of one you hold · ${take[1]}`,
+          `A new weapon or relic, or a rank of one held · ${take[1]}`,
+          `Take a card · ${take[1]}`,
+          take[1],
+        ]);
         color = '#8fb8ff';
-      } else if (touch) tip = fit(canB ? ['Tap a card to take it · hold a card to banish it', 'Tap: take · hold: banish'] : ['Tap a card to take it', 'Tap: take']);
-      else if (pad) tip = fit([`${padKey('A')} takes the card in focus`, `${padKey('A')}: take`]);
-      else tip = fit([`Enter or 1-${n} takes a card`, `Enter/1-${n}: take`]);
+      } else if (touch) tip = fit(canB ? ['Tap a card to take it · hold a card to banish it', 'Tap: take · hold: banish'] : take);
+      else tip = fit(take);
       drawText(ctx, tip, W / 2, hasB || hasR ? tipY : rowY + 2, { align: 'center', color });
     }
     ui.end();
@@ -1581,8 +1588,9 @@ function nearLines(list, w) {
 // A fall's results tell what dealt the hero's wounds, the three that dealt most by their share of
 // all he took (Game.stats.wounds), and one tip for the worst kind of them (the review of 27 October
 // 2026: "slain by" names only the last blow, in a crowd often a rat). A win or a quit tells none.
+// A boss's share is all his blows, his touch, slams and shots (Player.hurt), and his tip is for both.
 export const WOUND_TIPS = {
-  boss: 'Tip: a boss marks the ground before he strikes: step out of it',
+  boss: "Tip: keep a boss at arm's length, out of the ground he marks",
   mobs: "Tip: the Armory's Armor and Vitality hold the horde off longer",
   shots: 'Tip: bolts and blasts are aimed where you stand: keep moving',
 };
@@ -1735,8 +1743,9 @@ class ResultsOverlay {
     if (res.died && res.stats.killedBy) sub += ` · slain by ${res.stats.killedBy}`;
     drawText(ctx, fitText(sub, W - 8), W / 2, 12 + L.height * s, { align: 'center', color: res.victory ? '#feae34' : '#8b9bb4' });
     if (this.t < TALLY.rows - 0.2) return null;
-    // Personal bests and anything this run unlocked, shown above the gold once it has landed.
-    const notes = [...this.wounds];
+    // Personal bests and anything this run unlocked, shown above the gold once it has landed; a
+    // fall's wounds over them, in what room is left (below).
+    const notes = [];
     if (this.reward && this.landed) {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
@@ -1757,11 +1766,18 @@ class ResultsOverlay {
     const saved = this.reward && !this.reward.unsaved;
     const unlocked = saved ? this.reward.unlocked || [] : [];
     const near = saved ? (this.near ??= nearestLocks(this.gs.app.store.profile, 2)) : [];
-    const base = 178 + notes.length * 10 + (side ? 0 : nw * 15 - 10), cap = H - 52 - L.height * s;
-    const tight = 16 + Math.max(this.rows.length * 10, side ? nw * 15 : 0) + (side ? 0 : nw * 15 + 4) + notes.length * 10 + 55;
+    const cap = H - 52 - L.height * s;
+    let tight = 16 + Math.max(this.rows.length * 10, side ? nw * 15 : 0) + (side ? 0 : nw * 15 + 4) + notes.length * 10 + 55;
     const chips = chipRows(unlocked, pw - 16);
     const nChips = Math.min(chips.length, Math.max(1, Math.floor((cap - tight) / UNLOCK_ROW)));
     const unH = unlocked.length ? nChips * UNLOCK_ROW : 0;
+    // A fall's wounds and their tip (woundLines) take the room the rest leaves, the tip giving way
+    // first, then the wounds, before the nearest locks do (27 October 2026: on a 480x270 screen
+    // they pushed a fall's unlocked down onto its sixth weapon).
+    const nWounds = clamp(Math.floor((cap - tight - unH) / 10), 0, this.wounds.length);
+    notes.unshift(...this.wounds.slice(0, nWounds));
+    tight += nWounds * 10;
+    const base = 178 + notes.length * 10 + (side ? 0 : nw * 15 - 10);
     const nNear = clamp(Math.floor((cap - tight - unH) / 10), 0, near.length);
     const ph = Math.min(cap, Math.max(base, tight + unH + nNear * 10));
     const x = Math.round(W / 2 - pw / 2), y = Math.round(24 + L.height * s);

@@ -427,6 +427,7 @@ export class EnemyShot {
     this.accel = opts.accel || 0;
     this.homing = opts.homing || 0;
     this.by = opts.by || null; // its shooter's, as the results name it (names.js shotName)
+    this.boss = opts.boss || null; // a boss's name alone, for the results' wounds (names.js bossOf)
   }
 
   update(dt) {
@@ -451,7 +452,7 @@ export class EnemyShot {
     this.rot += (this.look.spin || 0) * dt;
     if (g.world.solid(this.x, this.y) && this.kind !== 'skullbolt') this.dead = true;
     if (!this.dead && this.touches(p)) {
-      if (p.hurt(this.dmg, null, this.by) > 0 || !p.untouchable) this.dead = true;
+      if (p.hurt(this.dmg, null, this.by, this.boss) > 0 || !p.untouchable) this.dead = true;
     }
     if (this.dead || this.life <= 0) {
       g.particles.burst(this.x, this.y, this.z, 6, [PC.P, PC.i, PC.p], 40, 0.3, 1, P.FADE | P.GLOW, {});

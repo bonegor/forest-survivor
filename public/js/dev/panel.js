@@ -19,7 +19,12 @@ import { SKIES } from '../game/weather.js';
 import { goalText } from '../ui/ladder.js';
 
 const BOSSES = Object.keys(ENEMIES).filter((id) => ENEMIES[id].boss);
-const FEATS = [['survivalHard', 'Night survived'], ['dungeon', 'Dungeon']];
+// A night and a Dungeon Run won, each then on Veteran, on Elite and in a Nightmare (the marks of
+// 27 October 2026, shared/profile.js FEAT; they open nothing, the cards draw them as stars).
+const FEATS = [
+  ['survivalHard', 'Night won'], ['nightVeteran', 'N Vet'], ['nightElite', 'N Elite'], ['nightNightmare', 'N Nightm.'],
+  ['dungeon', 'Dungeon'], ['dungeonVeteran', 'D Vet'], ['dungeonElite', 'D Elite'], ['dungeonNightmare', 'D Nightm.'],
+];
 
 const CSS = `
 #fs-dev { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); z-index: 10; display: none; flex-direction: column;
@@ -282,6 +287,9 @@ export function createDevPanel(app) {
     body.append(el('h3', { textContent: 'Records' }), el('div', { class: 'grid' },
       el('span', { textContent: 'Runs played' }), num(() => d.runs, (v) => { d.runs = v; }),
       el('span', { textContent: 'Monsters slain' }), num(() => d.kills, (v) => { d.kills = v; }),
+      // What the kill milestones and the exclusion slots read: kills counted as Veteran's
+      // (shared/progress.js effort, 27 October 2026), not the slain above.
+      el('span', { textContent: "Kills counted (as Veteran's)" }), num(() => d.effort || 0, (v) => { d.effort = v; }),
       el('span', { textContent: 'Most kills in a run' }), num(() => d.best.kills, (v) => { d.best.kills = v; }),
       el('span', { textContent: 'Highest level' }), num(() => d.best.level, (v) => { d.best.level = v; }, { max: 999 }),
       el('span', { textContent: 'Longest 15-min night (s)' }), num(() => d.best.s15, (v) => { d.best.s15 = v; }, { max: 960 }),
