@@ -10,11 +10,12 @@ import { Game, MILESTONES, isFiller, FLASH_SOFT } from '../game/game.js';
 import { tierOf, chestFrame, chestTease, revealOrder, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
 import { clockCountsDown, clockTime, heldBuild, revealOn } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
+import { heroStats } from '../game/weapons.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
-import { PASSIVES, FILLERS } from '../data/passives.js';
+import { PASSIVES, FILLERS, BLESSING } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
-import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost } from '../shared/profile.js';
+import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, PROGRESS, needText } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
@@ -143,26 +144,129 @@ export class GameScreen {
 
 // --------------------------------------------------------------- level up --
 
+// What a relic's lock asks, in words ('Survive 4:00 in one run'), or ''.
+const relicNeed = (id) => {
+  const l = PROGRESS.locks.find((x) => x.type === 'relic' && x.id === id);
+  return l ? needText(l) : '';
+};
+
+// What a weapon card says of its evolution (Game.evoState), or null for one with none. The
+// owner's (27 October 2026): until a run before has made that evolution its relic is never named
+// ("Evolves with a relic yet unknown"); once known, whether the relic is owned, may still come
+// (missing), or is blocked this run: still locked (and what opens it), banished, or no relic slot
+// free. name and word: the stacked card's one line; line1 and line2: the tall card's two (short:
+// line2 where it doesn't fit).
+function evoHint(g, id) {
+  const s = g.evoState(id);
+  if (!s) return null;
+  if (s.state === 'unknown') return { unknown: true, name: 'A relic yet unknown', icon: null, word: 'unknown', line1: 'Evolves with a relic', line2: 'yet unknown', color: '#8b9bb4' };
+  const r = PASSIVES[s.relic], need = s.state === 'locked' ? relicNeed(s.relic) : '';
+  const [word, line2, color, short] = {
+    owned: ['owned', 'Partner owned', '#feae34'],
+    open: ['missing', 'Partner missing', '#8b9bb4'],
+    locked: [need ? `locked: ${need.toLowerCase()}` : 'locked', need ? `Locked: ${need}` : 'Partner locked', '#f6757a', 'Partner locked'],
+    banished: ['banished', 'Partner banished', '#f6757a'],
+    full: ['no relic slot', 'No relic slot free', '#f6757a'],
+  }[s.state];
+  return { name: r.name, icon: r.icon, owned: s.state === 'owned', word, line2, short, color };
+}
+
+// What a card tells of the evolution it completes (Game.completesEvolution), as its gold back and
+// its COMPLETES line: nothing for a new relic whose evolution isn't known yet, for that would name
+// the relic still unknown (Game.evoKnown). A Phoenix Heart, which evolves any, always tells.
+const toldCompletes = (g, c) => {
+  const into = g.completesEvolution(c);
+  return into && c.type === 'passive' && !PASSIVES[c.id].evolvesAny && !g.evoKnown(evolvedFrom(into)) ? null : into;
+};
+
+// A card's change in numbers, as this hero has it (cardChange): signed percent, a multiplier as
+// percent, a whole number.
+const pct = (v) => `${v < 0 ? '-' : '+'}${Math.round(Math.abs(v) * 100)}%`, mul = (v) => pct(v - 1), flat = (v) => `${Math.round(v)}`;
+// A weapon level's main stat, the first of these the level changes: [key, label, as this hero has
+// it, shown as]. Damage takes his might (Game.hitEnemy); the rest are his already (heroStats).
+const WEAPON_LINE = [
+  ['dmg', 'Damage', (v, p) => v * p.might, flat],
+  ['amount', 'Count', (v) => v, flat],
+  ['cd', 'Cooldown', (v) => v, (v) => `${v.toFixed(2)}s`],
+  ['area', 'Area', (v) => v, (v) => `${Math.round(v * 100)}%`],
+  ['pierce', 'Pierce', (v) => v, flat],
+  ['dur', 'Lasts', (v) => v, (v) => `${v.toFixed(1)}s`],
+  ['speed', 'Speed', (v) => v, (v) => `${Math.round(v * 100)}%`],
+];
+// A relic's stat (the first of its PASSIVES stat) as the hero's own total: [label, from
+// Player.derived, shown as]. His own multipliers are in it: the Knight's and the Paladin's
+// regeneration, the Ranger's might, the Witch Hunter's Inquisition, the Paladin's healing.
+const RELIC_LINE = {
+  might: ['Damage', (s) => s.might, mul],
+  armor: ['Armor', (s) => s.armor, flat],
+  maxHp: ['Max health', (s) => s.maxHp, flat],
+  regen: ['Health a second', (s) => s.regen, (v) => v.toFixed(1)],
+  cooldown: ['Cooldowns', (s) => s.cooldown, mul],
+  area: ['Area', (s) => s.area, mul],
+  projSpeed: ['Projectile speed', (s) => s.projSpeed, mul],
+  duration: ['Effects last', (s) => s.duration, mul],
+  speed: ['Move speed', (s) => s.speedMul, mul],
+  magnet: ['Pickup range', (s) => s.magnet, flat],
+  luck: ['Luck', (s) => s.luck, mul],
+  bane: ['Damage to the strong', (s, p) => (1 + (p.hero.stats.bane || 0)) * (1 + s.huntBane), mul],
+  torc: ['Low-health damage', (s) => s.torc, pct],
+  thorns: ['Damage back', (s) => s.thorns, flat],
+  dodge: ['Dodge', (s) => s.dodge, pct],
+  ember: ['Burn chance', (s) => s.ember, pct],
+  knock: ['Knockback', (s) => s.knock, pct],
+  fang: ['Heals', (s) => s.fang * s.healMul, (v) => `${(v * 100).toFixed(1)}%`],
+  amount: ['Extra projectiles', (s) => s.amount, flat],
+  growth: ['Experience', (s) => s.growth, mul],
+};
+// The owner's (27 October 2026): one before → after line on an upgrade card, as this hero has
+// it ("Damage 46 → 48 (+4%)", "Health a second 0.3 → 0.9"); null for a NEW weapon, a filler, or a
+// relic with nothing to measure (the Phoenix Heart, Rimeheart).
+export function cardChange(g, c) {
+  const p = g.player;
+  if (c.type === 'weapon') {
+    const def = WEAPONS[c.id], lv = !c.isNew && def.levels?.[c.level - 2];
+    const row = lv && WEAPON_LINE.find(([k]) => k in lv);
+    if (!row) return null;
+    const [k, label, as, fmt] = row;
+    const a = as(heroStats(def, c.level - 1, p)[k], p), b = as(heroStats(def, c.level, p)[k], p);
+    return `${label} ${fmt(a)} → {${fmt(b)}}${k === 'dmg' && a > 0 ? ` (+${Math.round((b / a - 1) * 100)}%)` : ''}`;
+  }
+  if (c.type === 'passive') {
+    const row = RELIC_LINE[Object.keys(PASSIVES[c.id].stat)[0]];
+    if (!row) return null;
+    const [label, of, fmt] = row;
+    const next = new Map(p.passives).set(c.id, (p.passives.get(c.id) || 0) + 1);
+    return `${label} ${fmt(of(p.derived(), p))} → {${fmt(of(p.derived(next), p))}}`;
+  }
+  return null;
+}
+
 // What a card shows: its name, icon and text; its tag (a NEW weapon or relic, or the level it
-// brings) and colour; what it evolves with; and how many levels it has, for its pips (max: 0 for
-// a filler).
+// brings) and colour; what it evolves with (evoHint); its change in numbers (cardChange); and how
+// many levels it has, for its pips (max: 0 for a filler).
 function choiceInfo(g, c) {
   const p = g.player;
   if (c.type === 'weapon') {
     const def = WEAPONS[c.id];
     const desc = c.isNew ? def.desc : def.levels[c.level - 2]?.text || def.desc;
-    let hint = null;
-    if (def.evo) hint = { text: 'Evolves with', name: PASSIVES[def.evo.with].name, icon: PASSIVES[def.evo.with].icon, owned: p.passives.has(def.evo.with) };
-    return { name: def.name, icon: def.icon, desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW WEAPON' : `LV ${c.level}`, color: c.isNew ? '#0099db' : '#c0cbdc', hint, max: MAX_WEAPON_LEVEL };
+    const hint = def.evo ? evoHint(g, c.id) : null;
+    return { name: def.name, icon: def.icon, desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW WEAPON' : `LV ${c.level}`, color: c.isNew ? '#0099db' : '#c0cbdc', hint, change: cardChange(g, c), max: MAX_WEAPON_LEVEL };
   }
   if (c.type === 'passive') {
     const def = PASSIVES[c.id];
     let hint = null;
-    for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id) hint = { text: 'Evolves', name: w.def.name, icon: w.def.icon, owned: true };
-    return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, max: def.max };
+    // The weapon it evolves, only once that evolution is known (Game.evoKnown).
+    for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id && g.evoKnown(w.id)) hint = { name: w.def.name, icon: w.def.icon, owned: true, word: 'evolves', line2: 'Evolves it', color: '#feae34' };
+    return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, change: cardChange(g, c), max: def.max };
   }
-  const { name, icon } = FILLERS[c.type];
-  if (c.type === 'bless') return { name, icon, desc: 'Might {+5%}, health {+2%}. Stacks.', tag: `x${p.blessings + 1}`, color: '#fee761', max: 0 };
+  const { name, icon } = FILLERS[c.type], B = BLESSING;
+  // The three Blessings (the owner's, 27 October 2026), each counted on its tag.
+  if (c.type === 'bless') return { name, icon, desc: `Might {+${B.might * 100}%}, health {+${B.maxHp * 100}%}. Stacks.`, tag: `x${p.blessings + 1}`, color: '#fee761', max: 0 };
+  if (c.type === 'haste') return { name, icon, desc: `Cooldowns {${B.cooldown * 100}%}. Stacks.`, tag: `x${p.hastes + 1}`, color: '#fee761', max: 0 };
+  if (c.type === 'reach') {
+    const desc = p.reaches < B.reachMost ? `Area {+${B.area * 100}%}. Stacks to {+${Math.round(B.area * B.reachMost * 100)}%}.` : 'Area at its most: {no more}.';
+    return { name, icon, desc, tag: `x${p.reaches + 1}`, color: '#fee761', max: 0 };
+  }
   if (c.type === 'gold') return { name, icon, desc: `Gain {${c.value}} gold.`, tag: '', color: '#feae34', max: 0 };
   return { name, icon, desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44', max: 0 };
 }
@@ -252,7 +356,7 @@ export class LevelUpOverlay {
   roll() {
     this.choices = this.g.levelChoices(this.g.choiceCount());
     // What each card completes (an evolution's name), its back, and when it flips up.
-    this.completes = this.choices.map((c) => this.g.completesEvolution(c));
+    this.completes = this.choices.map((c) => toldCompletes(this.g, c));
     this.backs = this.choices.map((c, i) => backOf(c, this.completes[i]));
     this.flips = this.choices.map((c, i) => flipAt(i));
     this.readyAt = cardsReadyAt(this.choices.length);
@@ -316,7 +420,7 @@ export class LevelUpOverlay {
     const next = g.redrawCard(this.choices.filter((x, j) => j !== i));
     if (next) {
       this.choices[i] = next;
-      this.completes[i] = g.completesEvolution(next);
+      this.completes[i] = toldCompletes(g, next);
       this.backs[i] = backOf(next, this.completes[i]);
       this.flips[i] = this.t + BANISH_GO;
     } else {
@@ -412,7 +516,8 @@ export class LevelUpOverlay {
 
     ui.begin(dt);
     const n = this.choices.length;
-    const vertical = W < 300;
+    // Stacked on a narrow screen, as on a phone held upright; a full build's five fillers already under 360.
+    const vertical = W < 300 || (n > 4 && W < 360);
     const always = this.fillersOnly; // each card has its ALWAYS toggle: under it, or beside it when stacked
     const touch = input.device === 'touch';
     let result = null, act = null; // act: a card to banish, once all are drawn
@@ -537,13 +642,20 @@ export class LevelUpOverlay {
         drawText(ctx, info.name, x + 44, y + lift + 6, { color: info.color });
         const tag = textWidth(info.name) + textWidth(info.tag) + 58 <= w ? info.tag : info.isNew ? 'NEW!' : info.tag;
         if (tag) drawText(ctx, tag, x + w - 6, y + lift + 6, { align: 'right', color: tagColor });
-        const lines = wrapText(info.desc, w - 52), room = gold || info.hint ? 3 : 4;
-        lines.slice(0, Math.min(room, Math.floor((h - 26) / 9))).forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + j * 9, { color: '#c0cbdc' }));
+        const lines = wrapText(info.desc, w - 52), room = Math.min(gold || info.hint ? 3 : 4, Math.floor((h - 26) / 9));
+        // Its change in numbers (cardChange), in green, on the lines the text leaves free.
+        const change = info.change ? wrapText(info.change, w - 52) : [];
+        const told = lines.slice(0, room), more = change.slice(0, room - told.length);
+        told.forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + j * 9, { color: '#c0cbdc' }));
+        more.forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + (told.length + j) * 9, { color: '#9ee562' }));
         if (gold) drawText(ctx, `COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, x + w - 6, y + lift + h - 14, { align: 'right', color: blink ? '#fee761' : '#feae34' });
         else if (info.hint && h >= 64) {
-          const hx = x + w - 6 - 16, hy = y + lift + h - 20;
-          drawText(ctx, fitText(`${info.hint.name} · ${info.hint.owned ? 'owned' : 'missing'}`, w - 50), hx - 3, hy + 4, { align: 'right', color: info.hint.owned ? '#feae34' : '#8b9bb4' });
-          ctx.drawImage(SPR[info.hint.icon].frames[0].c, hx, hy);
+          // Its evolution (evoHint): the relic and its state, or a relic yet unknown and a ?.
+          const hx = x + w - 6 - 16, hy = y + lift + h - 20, eh = info.hint;
+          const word = eh.short && textWidth(`${eh.name} · ${eh.word}`) > w - 50 ? 'locked' : eh.word;
+          drawText(ctx, fitText(eh.unknown ? eh.name : `${eh.name} · ${word}`, w - 50), hx - 3, hy + 4, { align: 'right', color: eh.color });
+          if (eh.icon) ctx.drawImage(SPR[eh.icon].frames[0].c, hx, hy);
+          else drawText(ctx, '?', hx + 6, hy + 4, { color: '#8b9bb4' });
         }
       } else {
         const big = smoothScaled(icon, 1);
@@ -567,14 +679,23 @@ export class LevelUpOverlay {
           drawRich(ctx, ln, x + w / 2, ty, { align: 'center', color: '#c0cbdc' });
           ty += 9;
         }
+        // Its change in numbers (cardChange), in green, clear of the evolution's lines at the foot.
+        const low = (gold || info.hint) && h > 120 ? 28 : 6;
+        if (info.change) for (const ln of wrapText(info.change, w - 12)) {
+          if (ty + 9 > y + lift + h - low) break;
+          drawRich(ctx, ln, x + w / 2, ty + 2, { align: 'center', color: '#9ee562' });
+          ty += 9;
+        }
         if (gold && h > 120) {
           // It completes an evolution: said in gold where the hint was.
           const lines = wrapText(`COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, w - 10);
           lines.forEach((ln, j) => drawText(ctx, ln, x + w / 2, y + lift + h - 17 - (lines.length - 1 - j) * 9, { align: 'center', color: blink ? '#fee761' : '#feae34' }));
         } else if (info.hint && h > 120) {
-          const hy = y + lift + h - 25;
-          drawText(ctx, fitText(info.hint.name, w - 12), x + w / 2, hy - 2, { align: 'center', color: '#c0cbdc' });
-          drawText(ctx, info.hint.owned ? 'Partner owned' : 'Partner missing', x + w / 2, hy + 8, { align: 'center', color: info.hint.owned ? '#feae34' : '#8b9bb4' });
+          // Its evolution (evoHint), on two lines: the relic (or "Evolves with a relic") and its state.
+          const hy = y + lift + h - 25, eh = info.hint;
+          const line2 = eh.short && textWidth(eh.line2) > w - 12 ? eh.short : eh.line2;
+          drawText(ctx, fitText(eh.unknown ? eh.line1 : eh.name, w - 12), x + w / 2, hy - 2, { align: 'center', color: '#c0cbdc' });
+          drawText(ctx, fitText(line2, w - 12), x + w / 2, hy + 8, { align: 'center', color: eh.color });
         }
       }
       if (!touch) drawText(ctx, String(i + 1), x + 7, y + lift + 6, { color: lit ? '#8b9bb4' : '#5a6988', outline: null });
@@ -683,7 +804,7 @@ export class LevelUpOverlay {
       }
     }
     if (!input.down('always')) this.heldAlways = false;
-    const keys = ['one', 'two', 'three', 'four'], shift = input.down('always') && !this.heldAlways;
+    const keys = ['one', 'two', 'three', 'four', 'five'], shift = input.down('always') && !this.heldAlways;
     for (let i = 0; i < n && !result && act === null && this.choices === shown; i++) {
       if (!input.pressed(keys[i]) || i >= this.choices.length) continue;
       if (this.heldCard(i)) {
@@ -1066,7 +1187,7 @@ function chestItemInfo(g, it) {
   }
   // A filler, once the whole build is maxed: the run's auto-pick, else a Blessing.
   const { icon, name, color } = choiceInfo(g, it);
-  return { icon, name, color, sub: it.type === 'bless' ? `x${it.level}` : it.type === 'gold' ? `+${it.value}` : `+${Math.round(it.value * 100)}%` };
+  return { icon, name, color, sub: FILLERS[it.type]?.count ? `x${it.level}` : it.type === 'gold' ? `+${it.value}` : `+${Math.round(it.value * 100)}%` };
 }
 
 // ------------------------------------------------------------------- gear --
@@ -1273,20 +1394,31 @@ export class PauseOverlay {
     const note = this.confirm ? 'Quitting ends the run. The gold you found is kept.' : stats;
     drawText(ctx, note, W / 2, y + 11, { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
     // The build in two columns, a rule between: weapons and their levels, relics and their ranks.
+    // The owner's (27 October 2026): after each weapon not yet evolved, its partner relic
+    // (Game.evoState): its icon full if owned, dimmed if it may still come, dimmed under a red ×
+    // if blocked this run; a ? while its evolution isn't known yet; and "LV n/8".
     const mid = x + Math.round(pw / 2), top = y + 26;
     const column = (cx, right, title, rows) => {
       drawText(ctx, title, cx, top, { color: '#8b9bb4' });
       let ry = top + 12;
       if (!rows.length) drawText(ctx, 'None yet', cx, ry + 1, { color: '#5a6988' });
-      for (const [icon, name, tag, color] of rows) {
+      for (const [icon, name, tag, color, mark] of rows) {
+        const mx = right - textWidth(tag) - 20;
         ctx.drawImage(SPR[icon].frames[0].c, cx, ry - 3);
-        drawText(ctx, name, cx + 18, ry + 1, { color });
+        drawText(ctx, fitText(name, (mark ? mx - 4 : right - textWidth(tag) - 4) - (cx + 18)), cx + 18, ry + 1, { color });
         drawText(ctx, tag, right, ry + 1, { align: 'right', color: '#8b9bb4' });
+        if (mark?.state === 'unknown') drawText(ctx, '?', mx + 6, ry + 1, { color: '#8b9bb4' });
+        else if (mark) {
+          ctx.globalAlpha = mark.state === 'owned' ? 1 : 0.35;
+          ctx.drawImage(SPR[PASSIVES[mark.relic].icon].frames[0].c, mx, ry - 3);
+          ctx.globalAlpha = 1;
+          if (mark.state === 'locked' || mark.state === 'banished' || mark.state === 'full') drawText(ctx, '×', mx + 6, ry + 1, { color: '#e43b44' });
+        }
         ry += 15;
       }
       return ry;
     };
-    const wy = column(x + 10, mid - 8, 'WEAPONS', p.weapons.map((w) => [w.def.icon, w.def.name, w.evolved ? 'MAX' : `LV ${w.level}`, w.evolved ? '#f77622' : '#c0cbdc']));
+    const wy = column(x + 10, mid - 8, 'WEAPONS', p.weapons.map((w) => [w.def.icon, w.def.name, w.evolved ? 'MAX' : `LV ${w.level}/${MAX_WEAPON_LEVEL}`, w.evolved ? '#f77622' : '#c0cbdc', w.evolved ? null : g.evoState(w.id)]));
     const ry = column(mid + 8, x + pw - 10, 'RELICS', [...p.passives].map(([id, r]) => [PASSIVES[id].icon, PASSIVES[id].name, `${r}`, '#c0cbdc']));
     ctx.fillStyle = '#3a4466';
     ctx.fillRect(mid, top, 1, Math.max(wy, ry) - top - 4);

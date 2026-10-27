@@ -2,6 +2,7 @@
 import { WEAPONS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
+import { knownEvos } from '../shared/profile.js';
 
 const WEAPON_SUMMARY = {
   axe: 'Arcing axes', blades: 'Orbiting swords', aura: 'Burns nearby foes',
@@ -55,8 +56,12 @@ export function codexDescription(e) {
   return e.type === 'weapon' ? WEAPONS[e.id].desc : e.type === 'relic' ? PASSIVES[e.id].desc : HEROES[e.id].ultDesc;
 }
 
-export function evolutionRecipe(e) {
+// A weapon's evolution as the Codex tells it, for this profile (prof): the owner's (27 October
+// 2026), its relic is not named until a run has made that evolution (knownEvos).
+export function evolutionRecipe(e, prof) {
   if (e.hidden || e.type !== 'weapon') return null;
   const evo = WEAPONS[e.id].evo;
-  return evo ? `Level 8 + ${PASSIVES[evo.with].name} + chest → ${WEAPONS[evo.into].name}` : null;
+  if (!evo) return null;
+  if (!knownEvos(prof).includes(evo.into)) return 'Evolves at level 8 with a relic yet unknown';
+  return `Level 8 + ${PASSIVES[evo.with].name} + chest → ${WEAPONS[evo.into].name}`;
 }

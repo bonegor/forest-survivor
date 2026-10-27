@@ -6,6 +6,7 @@ import { input } from '../public/js/engine/input.js';
 import { CodexScreen, ArmoryScreen, RecordsScreen, ModeScreen, menuEntries, upgradeEffect } from '../public/js/ui/screens.js';
 import { codexSummary, evolutionRecipe } from '../public/js/ui/menu-copy.js';
 import { defaultProfile, openEverything, HERO_ORDER } from '../public/js/shared/profile.js';
+import { PROGRESS } from '../public/js/shared/progress.js';
 const ctx = document.createElement('canvas').getContext('2d');
 function app(profile = defaultProfile()) {
   return { ui: new UI(), scene: { draw() {} }, store: { profile }, settings: {}, choice: { hero: 'knight', mode: 's15', diff: 'easy' }, go() {} };
@@ -61,7 +62,11 @@ test('mystery weapons share one discovery card and unlocked copy describes effec
   const entries=menuEntries(defaultProfile()),hidden=entries.filter(e=>e.hidden);
   assert.equal(hidden.length,1);assert.ok(hidden[0].hiddenCount>1);
   assert.equal(codexSummary(entries.find(e=>e.id==='axe')),'Arcing axes');
-  assert.match(evolutionRecipe(entries.find(e=>e.id==='axe')),/Level 8.*Giant.*Whirlwind/);
+  // The owner's (27 October 2026): a relic is not named until a run has made its evolution.
+  const axe=entries.find(e=>e.id==='axe');
+  assert.equal(evolutionRecipe(axe,defaultProfile()),'Evolves at level 8 with a relic yet unknown');
+  const known={...defaultProfile(),ek:2**PROGRESS.evolutions.indexOf('whirlwind')};
+  assert.match(evolutionRecipe(axe,known),/Level 8.*Giant.*Whirlwind/);
   assert.equal(upgradeEffect({up:{might:2}},'might'),'+10%');
   assert.equal(upgradeEffect({up:{arsenal:1}},'arsenal'),'4');
 });

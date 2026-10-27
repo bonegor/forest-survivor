@@ -8,6 +8,7 @@ import { playGame } from '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { HEROES, SHARED_WEAPONS } from '../public/js/data/heroes.js';
 import { PASSIVE_IDS } from '../public/js/data/passives.js';
+import { WEAPONS } from '../public/js/data/weapons.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { unlockEverything } from '../public/js/engine/storage.js';
@@ -313,6 +314,25 @@ test('Chain Lightning opens once a run has evolved Lightning Strike, with any he
   assert.deepEqual(r.profile.ev, ['thunderstorm'], 'only what a lock waits on is kept');
   assert.ok(P.openFor(r.profile, 'mage').weapons.includes('chain'));
   assert.deepEqual(P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(r.profile)))).ev, ['thunderstorm']);
+  // Every evolution held is known from then on (the owner's, 27 October 2026), in the table's order.
+  assert.deepEqual(P.knownEvos(r.profile), ['excalibur', 'thunderstorm']);
+  assert.deepEqual(P.knownEvos(P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(r.profile))))), ['excalibur', 'thunderstorm'], 'through the cookie');
+  assert.deepEqual(P.openFor(r.profile, 'mage').evos, ['excalibur', 'thunderstorm']);
+});
+
+test('every evolution has its bit, and a relic is told only once a run before has made its evolution', () => {
+  const evos = Object.values(WEAPONS).filter((d) => d.evo).map((d) => d.evo.into);
+  assert.deepEqual([...PROGRESS.evolutions].sort(), [...evos].sort(), 'every evolution once, none else');
+  assert.equal(new Set(PROGRESS.evolutions).size, PROGRESS.evolutions.length);
+  assert.ok(PROGRESS.evolutions.length <= 53, 'the bits of one number');
+  assert.deepEqual(P.knownEvos(P.defaultProfile()), [], 'a new player knows none');
+  assert.deepEqual(P.knownEvos(P.openEverything(P.defaultProfile())), PROGRESS.evolutions);
+  // A save from before kept Lightning Strike's in ev and a signature's in its feat: those are known;
+  // the Necromancer's two can't be told apart, so neither is.
+  const old = P.sanitizeProfile({ feats: { knight: 8, necromancer: 8 }, ev: ['thunderstorm'] });
+  assert.deepEqual(P.knownEvos(old), ['excalibur', 'thunderstorm']);
+  assert.deepEqual(P.knownEvos(P.sanitizeProfile(old)), ['excalibur', 'thunderstorm'], 'read again, the same');
+  assert.deepEqual(P.knownEvos(P.sanitizeProfile({ ek: -5 })), [], 'nothing absurd');
 });
 
 test('Consecration opens on the tenth fall: a run quit or won is no fall', () => {

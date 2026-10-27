@@ -3,7 +3,7 @@
 import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
-import { PASSIVES, PASSIVE_IDS, FILLER_IDS } from '../data/passives.js';
+import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, HORDE_CAP, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
@@ -74,9 +74,19 @@ export function cryptName(key) {
 }
 
 // Whether a card is one of the fillers a level-up falls back on once fewer upgrades are left than
-// it offers (data/passives.js FILLERS). With nothing else left a level-up shows just these three,
-// and the player may tick ALWAYS on one: the run's level-ups then take it unseen (Game.autoPick).
+// it offers (data/passives.js FILLERS). With nothing else left a level-up shows just these, and
+// the player may tick ALWAYS on one: the run's level-ups then take it unseen (Game.autoPick).
 export const isFiller = (c) => FILLER_IDS.includes(c.type);
+
+// What a card weighs in the pool a level-up and a chest draw from (Game.upgradePool): a weapon
+// he holds grows (held), a new weapon (fresh), the hero's own signature weapons, held or new
+// (signature: the owner's, 27 October 2026), a relic he holds grows (relic, times its own weight),
+// a new relic (freshRelic, likewise), and that new relic again if it is the partner of a weapon he
+// holds that hasn't evolved (partner: the owner's, 27 October 2026; silent, no card says so).
+export const CARD_WEIGHT = { held: 3, fresh: 1, signature: 6, relic: 2, freshRelic: 0.55, partner: 2.5 };
+// The owner's (27 October 2026): a level-up screen after SIGNATURE_PITY screens in a row without
+// one of the hero's own signature weapons offers one for certain (Game.sureSignature).
+export const SIGNATURE_PITY = 2;
 
 // The hero is always found: a ring on the ground in his own colour (HEROES color), softly
 // pulsing, turning red under a third of his health, drawn again over the scene when something
@@ -257,6 +267,9 @@ export class Game {
     // A relic's showings for certain (PASSIVES' `sure`) since it last became one to offer:
     // id -> { n: given, lvl: the level whose screen had the last } (Game.sureRelic).
     this.sureShown = new Map();
+    // Level-up screens in a row without a signature card (Game.sureSignature): n so far; before,
+    // as it stood when the screen of level lvl came (a reroll of it counts from there again).
+    this.sigMiss = { lvl: null, before: 0, n: 0 };
     this.banished = new Set(); // 'weapon:axe', 'passive:might': out of the run (the level-up's BANISH)
     this.chestQueue = [];
     this.showMap = false;
@@ -473,29 +486,35 @@ export class Game {
     return this.player.weapons.some((w) => w.id === id || (w.def.evolved && WEAPONS[id].evo && WEAPONS[id].evo.into === w.id));
   }
 
-  // Everything a level-up card or a chest can still give, each with its weight: a weapon he
-  // holds grows (3); a new weapon while a slot is free (1: the hero's own signature and those
-  // shared by all, never another class's, weaponsFor); a relic he holds grows (twice its
-  // weight); a new relic while a slot is free (about half its weight; the Phoenix Heart only
-  // when relicOffered says so). Empty once the whole build is maxed, and it stays so: an
-  // evolution adds nothing to choose. (Only a Phoenix Heart spent frees a slot again.) Nothing
-  // banished comes back (the level-up's BANISH), at a level-up or in a chest.
+  // Everything a level-up card or a chest can still give, each with its weight (CARD_WEIGHT): a
+  // weapon he holds grows (3); a new weapon while a slot is free (1: the hero's own signature and
+  // those shared by all, never another class's, weaponsFor); the hero's own signatures, held or
+  // new, 6; a relic he holds grows (twice its weight); a new relic while a slot is free (about
+  // half its weight, two and a half times that for the partner of a weapon he holds that hasn't
+  // evolved, silent: no card says so; the Phoenix Heart only when relicOffered says so). Empty
+  // once the whole build is maxed, and it stays so: an evolution adds nothing to choose. (Only a
+  // Phoenix Heart spent frees a slot again.) Nothing banished comes back (the level-up's BANISH),
+  // at a level-up or in a chest.
   upgradePool() {
     const p = this.player;
     const pool = [];
     const out = (type, id) => this.banished.has(type + ':' + id);
+    const sig = (id) => p.hero.unique.includes(id);
     for (const w of p.weapons) {
-      if (!w.maxed && !out('weapon', w.id)) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: 3 });
+      if (!w.maxed && !out('weapon', w.id)) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: sig(w.id) ? CARD_WEIGHT.signature : CARD_WEIGHT.held });
     }
     if (p.weapons.length < this.maxWeapons) {
-      for (const id of weaponsFor(p.hero)) if (this.weaponOpen(id) && !this.ownsWeapon(id) && !out('weapon', id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: 1 });
+      for (const id of weaponsFor(p.hero)) if (this.weaponOpen(id) && !this.ownsWeapon(id) && !out('weapon', id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: sig(id) ? CARD_WEIGHT.signature : CARD_WEIGHT.fresh });
     }
     for (const [id, rank] of p.passives) {
-      if (rank < PASSIVES[id].max && !out('passive', id)) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * 2 });
+      if (rank < PASSIVES[id].max && !out('passive', id)) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * CARD_WEIGHT.relic });
     }
     if (p.passives.size < this.maxRelics) {
+      const partner = (id) => p.weapons.some((w) => !w.evolved && w.def.evo?.with === id);
       for (const id of PASSIVE_IDS) {
-        if (!p.passives.has(id) && this.relicOpen(id) && this.relicOffered(id) && !out('passive', id)) pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * 0.55 });
+        if (!p.passives.has(id) && this.relicOpen(id) && this.relicOffered(id) && !out('passive', id)) {
+          pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * CARD_WEIGHT.freshRelic * (partner(id) ? CARD_WEIGHT.partner : 1) });
+        }
       }
     }
     return pool;
@@ -509,6 +528,30 @@ export class Game {
 
   relicOpen(id) {
     return !this.open || this.open.relics.includes(id);
+  }
+
+  // Whether the player knows what a weapon evolves with: the owner's (27 October 2026), not until
+  // a run before has made its evolution (the profile's open.evos, shared/profile.js knownEvos).
+  // With no profile's open (the tests, the bots) every evolution is known.
+  evoKnown(id) {
+    const evo = WEAPONS[id]?.evo;
+    return !!evo && (!this.open?.evos || this.open.evos.includes(evo.into));
+  }
+
+  // What a weapon's evolution waits on, as the cards and the pause screen tell it, or null for
+  // one with none: { state: 'unknown' } while evoKnown says no, else { relic, state }: 'owned'
+  // (held; a Phoenix Heart held, which evolves any, is owned for all), 'open' (it may still
+  // come), or blocked this run: 'locked' (the profile hasn't opened it), 'banished', or 'full'
+  // (no relic slot free).
+  evoState(id) {
+    const evo = WEAPONS[id]?.evo, p = this.player;
+    if (!evo) return null;
+    const any = [...p.passives.keys()].find((r) => PASSIVES[r].evolvesAny);
+    if (any && !p.passives.has(evo.with)) return { relic: any, state: 'owned' };
+    if (!this.evoKnown(id)) return { state: 'unknown' };
+    const r = evo.with;
+    const state = p.passives.has(r) ? 'owned' : !this.relicOpen(r) ? 'locked' : this.banished.has('passive:' + r) ? 'banished' : p.passives.size >= this.maxRelics ? 'full' : 'open';
+    return { relic: r, state };
   }
 
   // Whether a relic he doesn't hold may be offered. The Phoenix Heart (afterSignature) only once
@@ -550,14 +593,19 @@ export class Game {
     return out;
   }
 
-  // A level-up's cards: n drawn from the pool, the fillers after them while there is room. With
-  // nothing left to draw, the three fillers alone (a four-card level-up shows three, no copy).
-  // A relic due for certain (sureRelic: the Phoenix Heart) is one of the n, in a place of chance.
-  // (A chest draws from the plain pool by weight: the showings for certain are the cards'.)
+  // A level-up's cards: n drawn from the pool, the fillers after them while there is room (the
+  // first of them: Valor, the heal, the gold). With nothing left to draw, every filler, each with
+  // its ALWAYS, whatever n (the owner's, 27 October 2026: the Blessing comes in three kinds). A
+  // relic due for certain (sureRelic: the Phoenix Heart) and a signature due for certain
+  // (sureSignature) are among the n, each in a place of chance. (A chest draws from the plain
+  // pool by weight: the showings for certain are the cards'.)
   levelChoices(n) {
-    const pool = this.upgradePool(), sure = this.sureRelic(pool);
-    const out = this.drawUpgrades(sure ? n - 1 : n, sure ? pool.filter((c) => c !== sure) : pool);
-    if (sure) out.splice(Math.floor(Math.random() * (out.length + 1)), 0, sure);
+    const pool = this.upgradePool();
+    if (!pool.length) return FILLER_IDS.map((type) => this.filler(type));
+    const sure = [this.sureRelic(pool), this.sureSignature(pool)].filter(Boolean);
+    const out = this.drawUpgrades(n - sure.length, pool.filter((c) => !sure.includes(c)));
+    for (const c of sure) out.splice(Math.floor(Math.random() * (out.length + 1)), 0, c);
+    this.signatureSeen(pool, out);
     for (const type of FILLER_IDS) if (out.length < n) out.push(this.filler(type));
     return out;
   }
@@ -582,6 +630,27 @@ export class Game {
     return null;
   }
 
+  // A signature card due for certain (SIGNATURE_PITY screens in a row without one): drawn by
+  // weight among the hero's own in the pool, or null. The screen is told by its level, as
+  // sureRelic's: a reroll of it is the same screen. A maxed or banished signature isn't in the
+  // pool, so it is never forced.
+  sureSignature(pool) {
+    const lvl = this.player.level - this.pendingLevels + 1, s = this.sigMiss;
+    if (s.lvl !== lvl) {
+      s.lvl = lvl;
+      s.before = s.n;
+    }
+    const mine = pool.filter((c) => c.type === 'weapon' && this.player.hero.unique.includes(c.id));
+    return s.before >= SIGNATURE_PITY && mine.length ? weighted(mine, (x) => x.weight) : null;
+  }
+
+  // After a screen is drawn: its run of screens without a signature card ends, or grows (with
+  // none left to offer, none was missed).
+  signatureSeen(pool, out) {
+    const s = this.sigMiss, mine = (c) => c.type === 'weapon' && this.player.hero.unique.includes(c.id);
+    s.n = !pool.some(mine) || out.some(mine) ? 0 : s.before + 1;
+  }
+
   // BANISH: a weapon or relic out of the run for good, never offered again, at a level-up or in a
   // chest (upgradePool). A filler can't be banished. False when it wasn't.
   banish(c) {
@@ -600,12 +669,13 @@ export class Game {
     return null;
   }
 
-  // A filler card: the Blessing; a heal of 35%; gold that grows with the night and with the
-  // hero's greed, as every coin he picks up does.
+  // A filler card: a heal of 35%; gold that grows with the night and with the hero's greed, as
+  // every coin he picks up does; else a Blessing, of Valor, Haste or Reach (data/passives.js
+  // BLESSING), Valor for any other.
   filler(type) {
     if (type === 'heal') return { type, value: 0.35 };
     if (type === 'gold') return { type, value: Math.max(1, Math.round(30 * (1 + this.phase / 10) * this.player.greed)) };
-    return { type: 'bless' };
+    return { type: FILLERS[type]?.count ? type : 'bless' };
   }
 
   choiceCount() {
@@ -630,8 +700,8 @@ export class Game {
       if (!quiet) sfx('coin');
     } else if (c.type === 'heal') {
       p.heal(p.maxHp * c.value, quiet);
-    } else if (c.type === 'bless') {
-      p.blessings++;
+    } else if (FILLERS[c.type]?.count) {
+      p[FILLERS[c.type].count]++; // a Blessing, of Valor, Haste or Reach
       p.recompute();
     }
   }
@@ -641,7 +711,7 @@ export class Game {
   // that would open the level-up screen asks here first (the game screen, the screen itself for
   // the next waiting level, the bots, the developer panel). The levels' own sound and beam
   // played as they came (queueLevelUp); one line over the hero says what the lot gave
-  // ("Blessing ×17", "+35% health", "+41 gold"). True when no level-up is left waiting.
+  // ("Blessing ×17", "Haste ×4", "+35% health", "+41 gold"). True when no level-up is left waiting.
   resolveAutoLevels() {
     const n = this.pendingLevels;
     if (n <= 0) return true;
@@ -658,7 +728,7 @@ export class Game {
     const [text, style, sound] =
       this.autoPick === 'gold' ? [`+${gold} gold`, 'gold', 'coin']
       : this.autoPick === 'heal' ? [`+${Math.min(100, Math.round(heal * 100))}% health`, 'heal', 'heal']
-      : [`Blessing ×${p.blessings}`, 'holy', 'pick'];
+      : [`${FILLERS[this.autoPick].tally} ×${p[FILLERS[this.autoPick].count]}`, 'holy', 'pick'];
     this.numbers.text(p.x, p.y - 22, text, style);
     sfx(sound);
     // A milestone among the levels taken unseen: its banner and stinger (else the screen has them).
@@ -675,7 +745,7 @@ export class Game {
   }
 
   // Whether nothing is left to offer but the fillers: the whole build maxed, as it stays unless a
-  // Phoenix Heart is spent (its slot free again). A level-up then shows the three fillers alone,
+  // Phoenix Heart is spent (its slot free again). A level-up then shows every filler alone,
   // each with its ALWAYS (LevelUpOverlay).
   fillersOnly() {
     return !this.upgradePool().length;
@@ -760,7 +830,7 @@ export class Game {
       this.applyChoice(u, true);
       if (u.type === 'weapon') u.level = p.weapons.find((w) => w.id === u.id).level;
       else if (u.type === 'passive') u.level = p.passives.get(u.id);
-      else if (u.type === 'bless') u.level = p.blessings;
+      else if (FILLERS[u.type]?.count) u.level = p[FILLERS[u.type].count];
     }
     const gold = this.chestGold(kind);
     this.gold += gold;

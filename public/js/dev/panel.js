@@ -456,7 +456,7 @@ export function createDevPanel(app) {
       const p = g.player;
       live.textContent = `${MODES[g.mode].name}${g.mode === 'dungeon' ? ` · floor ${g.floor}` : ''}\n` +
         `time ${fmtTime(g.time)} · phase ${g.phase.toFixed(1)} · state ${g.state}\n` +
-        `L${p.level} · HP ${Math.ceil(p.hp)}/${p.maxHp} · fury ${Math.floor(p.fury)} · blessings ${p.blessings}\n` +
+        `L${p.level} · HP ${Math.ceil(p.hp)}/${p.maxHp} · fury ${Math.floor(p.fury)} · blessings ${p.blessings}, haste ${p.hastes}, reach ${p.reaches}\n` +
         `${g.enemies.filter((e) => !e.dead).length} foes · ${g.kills} kills · ${g.gold} gold${g.boss && !g.boss.dead ? ` · boss ${g.boss.def.name} ${Math.ceil(g.boss.hp)}` : ''}` +
         (g.weather ? `
 weather ${g.weather.kind} · rain ${g.weather.now.rain.toFixed(2)}` : '');

@@ -1,7 +1,7 @@
 // The hero: movement, stats, health, experience, fury and ultimates.
 
 import { HEROES, heroLook } from '../data/heroes.js';
-import { PASSIVES } from '../data/passives.js';
+import { PASSIVES, BLESSING } from '../data/passives.js';
 import { gearBonuses } from '../shared/items.js';
 import { input } from '../engine/input.js';
 import { sfx } from '../engine/audio.js';
@@ -112,6 +112,8 @@ export class Player {
     this.xpNext = xpFor(1);
     this.passives = new Map();
     this.blessings = 0; // stacking rewards once the build is complete
+    this.hastes = 0; // and the Blessings of Haste and Reach taken (data/passives.js BLESSING)
+    this.reaches = 0;
     this.weapons = [];
     this.strikeAt = null; // when the last blow struck by hand began (Game.strike)
     this.strikeAng = 0; // and which way it was struck
@@ -147,52 +149,62 @@ export class Player {
     this.hp = this.maxHp;
   }
 
-  passiveSum(key) {
+  passiveSum(key, passives = this.passives) {
     let v = 0;
-    for (const [id, rank] of this.passives) {
+    for (const [id, rank] of passives) {
       const s = PASSIVES[id].stat[key];
       if (s) v += s * rank;
     }
     return v;
   }
 
-  recompute() {
-    const h = this.hero.stats, m = this.meta;
+  // The hero's stats as his relics, worn gear (gearB, as recompute last took it), the Armory and
+  // his Blessings make them. `passives` in place of his own shows what a relic card would make of
+  // them, changing nothing (ui/gamescreen.js cardChange); recompute takes them for good.
+  derived(passives = this.passives) {
+    const h = this.hero.stats, m = this.meta, q = this.gearB;
     // Worn gear adds to the relics' sums.
-    const q = (this.gearB = gearBonuses(this.g.gear));
-    const bonus = (k) => this.passiveSum(k) + (q[k] || 0);
+    const bonus = (k) => this.passiveSum(k, passives) + (q[k] || 0);
+    const lv = levelBonus(this.level), regenMul = h.regenMul || 1, B = BLESSING;
+    return {
+      maxHp: Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * B.maxHp) * lv.hp),
+      armor: (h.armor || 0) + m.armor + bonus('armor') + lv.armor,
+      speedMul: (h.speed || 1) * m.speed * (1 + bonus('speed')),
+      might: (h.might || 1) * m.might * (1 + bonus('might') + this.blessings * B.might) * lv.might,
+      // The Blessings of Reach, counted up to B.reachMost, and of Haste, to the floor of 0.35.
+      area: (h.area || 1) * m.area * (1 + bonus('area') + Math.min(this.reaches, B.reachMost) * B.area),
+      cooldown: Math.max(0.35, (h.cooldown || 1) * m.cooldown * (1 + bonus('cooldown') + this.hastes * B.cooldown)),
+      amount: bonus('amount') + (m.amount || 0) + (this.buff('mirror') ? 1 : 0), // a Mirror Shard
+      duration: (m.duration || 1) * (1 + bonus('duration')),
+      summonDur: h.summonDur || 1, // the Necromancer's Grave Pact: his minions alone last longer
+      projSpeed: (h.projSpeed || 1) * (m.projSpeed || 1) * (1 + bonus('projSpeed')),
+      magnet: BASE_MAGNET * m.magnet * (1 + bonus('magnet')),
+      luck: (h.luck || 1) * m.luck * (1 + bonus('luck')),
+      growth: (h.growth || 1) * m.growth * (1 + bonus('growth')),
+      greed: m.greed * (1 + q.greed) * (1 + 0.5 * (this.g.skulls || 0)), // the Cursed Skulls (Game.cursedSkull)
+      regenMul,
+      healMul: h.healMul || 1, // the Paladin's Devotion: every heal does this much (heal)
+      // regenBoost: a bot's test buff (tools/headless.mjs), all its regeneration times this.
+      regen: ((h.regen || 0) + m.regen + bonus('regen')) * regenMul * (m.regenBoost || 1),
+      crit: 0.05 + (h.crit || 0) + bonus('crit'),
+      // The relics that bite (hitEnemy, hurt): Hunter's Mark, Berserker's Torc, Thornmail, Shadow
+      // Cloak, Ember Heart, Ram's Horn, Vampire Fang, Rimeheart.
+      huntBane: bonus('bane'),
+      torc: bonus('torc'),
+      thorns: bonus('thorns'),
+      dodge: Math.min(0.5, bonus('dodge')),
+      ember: bonus('ember'),
+      knock: bonus('knock'),
+      fang: bonus('fang'),
+      rime: bonus('rime'),
+      critMult: 2 + q.critMult,
+    };
+  }
+
+  recompute() {
+    this.gearB = gearBonuses(this.g.gear);
     const oldMax = this.maxHp || 0;
-    const lv = levelBonus(this.level);
-    this.maxHp = Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * 0.02) * lv.hp);
-    this.armor = (h.armor || 0) + m.armor + bonus('armor') + lv.armor;
-    this.speedMul = (h.speed || 1) * m.speed * (1 + bonus('speed'));
-    this.might = (h.might || 1) * m.might * (1 + bonus('might') + this.blessings * 0.05) * lv.might;
-    this.area = (h.area || 1) * m.area * (1 + bonus('area'));
-    this.cooldown = Math.max(0.35, (h.cooldown || 1) * m.cooldown * (1 + bonus('cooldown')));
-    this.amount = bonus('amount') + (m.amount || 0) + (this.buff('mirror') ? 1 : 0); // a Mirror Shard
-    this.duration = (m.duration || 1) * (1 + bonus('duration'));
-    this.summonDur = h.summonDur || 1; // the Necromancer's Grave Pact: his minions alone last longer
-    this.projSpeed = (h.projSpeed || 1) * (m.projSpeed || 1) * (1 + bonus('projSpeed'));
-    this.magnet = BASE_MAGNET * m.magnet * (1 + bonus('magnet'));
-    this.luck = (h.luck || 1) * m.luck * (1 + bonus('luck'));
-    this.growth = (h.growth || 1) * m.growth * (1 + bonus('growth'));
-    this.greed = m.greed * (1 + q.greed) * (1 + 0.5 * (this.g.skulls || 0)); // the Cursed Skulls (Game.cursedSkull)
-    this.regenMul = h.regenMul || 1;
-    this.healMul = h.healMul || 1; // the Paladin's Devotion: every heal does this much (heal)
-    // regenBoost: a bot's test buff (tools/headless.mjs), all its regeneration times this.
-    this.regen = ((h.regen || 0) + m.regen + bonus('regen')) * this.regenMul * (m.regenBoost || 1);
-    this.crit = 0.05 + (h.crit || 0) + bonus('crit');
-    // The relics that bite (hitEnemy, hurt): Hunter's Mark, Berserker's Torc, Thornmail, Shadow
-    // Cloak, Ember Heart, Ram's Horn, Vampire Fang, Rimeheart.
-    this.huntBane = bonus('bane');
-    this.torc = bonus('torc');
-    this.thorns = bonus('thorns');
-    this.dodge = Math.min(0.5, bonus('dodge'));
-    this.ember = bonus('ember');
-    this.knock = bonus('knock');
-    this.fang = bonus('fang');
-    this.rime = bonus('rime');
-    this.critMult = 2 + q.critMult;
+    Object.assign(this, this.derived());
     // More health to have brings the health with it; less (gear sold) caps it.
     if (oldMax && this.maxHp > oldMax) this.hp += this.maxHp - oldMax;
     if (this.hp > this.maxHp) this.hp = this.maxHp;

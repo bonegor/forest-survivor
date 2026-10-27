@@ -39,13 +39,23 @@ export const PASSIVES = {
 export const PASSIVE_IDS = Object.keys(PASSIVES);
 
 // The cards a level-up falls back on once fewer upgrades are left than it offers
-// (Game.levelChoices), in the order they come: a stacking Blessing of Valor, a heal, and a purse
-// of gold that grows with the night. name: on the card, and as a bot reads it; short: as the
-// pause menu names the one every level-up takes once the player ticked ALWAYS on it
-// (Game.autoPick).
+// (Game.levelChoices), in the order they come: a stacking Blessing of Valor, a heal, a purse of
+// gold that grows with the night, and the stacking Blessings of Haste and Reach. A screen with
+// upgrades still to offer has room for three of them at most (Valor, the heal, the gold); once
+// the whole build is full a level-up shows them all, the owner's (27 October 2026): one Blessing
+// for ever made every level the same, so it comes in three kinds (BLESSING). name: on the card,
+// and as a bot reads it; short: as the pause menu names the one every level-up takes once the
+// player ticked ALWAYS on it (Game.autoPick); count: a Blessing's Player counter; tally: its word
+// over the hero when level-ups take it unseen (Game.resolveAutoLevels).
 export const FILLERS = {
-  bless: { name: 'Blessing of Valor', short: 'Blessing of Valor', icon: 'i_might' },
+  bless: { name: 'Blessing of Valor', short: 'Blessing of Valor', icon: 'i_might', count: 'blessings', tally: 'Blessing' },
   heal: { name: 'Roast Chicken', short: 'Roast Chicken', icon: 'i_vitality' },
   gold: { name: 'Purse of Gold', short: 'Gold', icon: 'i_greed' },
+  haste: { name: 'Blessing of Haste', short: 'Blessing of Haste', icon: 'i_cooldown', count: 'hastes', tally: 'Haste' },
+  reach: { name: 'Blessing of Reach', short: 'Blessing of Reach', icon: 'i_area', count: 'reaches', tally: 'Reach' },
 };
 export const FILLER_IDS = Object.keys(FILLERS);
+// What each Blessing gives a time (Player.recompute): Valor's might and health; Haste's cooldowns,
+// down to the floor every cooldown has (0.35); Reach's area, counted up to reachMost times
+// (+100% at most).
+export const BLESSING = { might: 0.05, maxHp: 0.02, cooldown: -0.03, area: 0.05, reachMost: 20 };

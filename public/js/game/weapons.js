@@ -14,6 +14,21 @@ import { reachesBody } from './hitbox.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
 const STAT_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
+// A weapon's stats at a level as this hero (p) fires it: his area, cooldown, projectile speed,
+// duration and extra projectiles are in them (Weapon.recompute; a level-up card's before and
+// after, ui/gamescreen.js cardChange). Damage takes his might as it strikes (Game.hitEnemy).
+export function heroStats(def, level, p) {
+  const b = statsAt(def, level, STAT_DEFAULTS);
+  return {
+    ...b,
+    amount: Math.max(1, b.amount + (def.kind === 'aura' ? 0 : p.amount)),
+    area: b.area * p.area,
+    cd: Math.max(0.08, b.cd * p.cooldown),
+    speed: b.speed * p.projSpeed,
+    dur: b.dur * p.duration,
+    tick: Math.max(0.15, b.tick),
+  };
+}
 // How much sooner every weapon is ready again under a Shrine of Haste (Weapon.update; the ranger's
 // draw keeps time with it, ranger-animation.js). He walks faster too (Player.moveSpeed).
 export const HASTE = 1.35;
@@ -56,17 +71,7 @@ export class Weapon {
   }
 
   recompute() {
-    const b = statsAt(this.def, this.level, STAT_DEFAULTS);
-    const p = this.g.player;
-    this.s = {
-      ...b,
-      amount: Math.max(1, b.amount + (this.def.kind === 'aura' ? 0 : p.amount)),
-      area: b.area * p.area,
-      cd: Math.max(0.08, b.cd * p.cooldown),
-      speed: b.speed * p.projSpeed,
-      dur: b.dur * p.duration,
-      tick: Math.max(0.15, b.tick),
-    };
+    this.s = heroStats(this.def, this.level, this.g.player);
     if (this.fx && this.fx.refresh) this.fx.refresh();
   }
 

@@ -35,6 +35,7 @@ const BIND = {
   two: { keys: ['Digit2', 'Numpad2'], pad: [] },
   three: { keys: ['Digit3', 'Numpad3'], pad: [] },
   four: { keys: ['Digit4', 'Numpad4'], pad: [] },
+  five: { keys: ['Digit5', 'Numpad5'], pad: [] }, // a full build's fifth filler (Game.levelChoices)
   fps: { keys: ['F3'], pad: [] },
   fullscreen: { keys: ['F11', 'KeyF'], pad: [] },
 };

@@ -558,7 +558,7 @@ export function codexDetail(e, prof) {
     const next = e.next ? ` · next slot: ${e.need.toLowerCase()}` : '';
     lines.push({ text: `${slotsText(used, slots.level)} · ${fmtNum(prof.kills)} monsters slain${next}`, color: '#fee761' });
   } else if (!e.open && !e.hidden) lines.push({ text: [shortNeed(e.need), codexRecord(e)].filter(Boolean).join(' · '), color: '#feae34' });
-  const recipe = evolutionRecipe(e);
+  const recipe = evolutionRecipe(e, prof);
   if (recipe) lines.push({ text: recipe, color: '#fee761' });
   if (e.type === 'relic' && e.open) lines.push(`${PASSIVES[e.id].max} ranks · bonuses apply during a run`);
   if (e.type === 'weapon' && e.open) {

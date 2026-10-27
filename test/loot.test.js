@@ -112,7 +112,7 @@ test('a legendary power counts once, however many pieces worn carry it', async (
 
 test('a level-up always offers a full choice, filled with the Blessing, a heal and gold', async () => {
   const {MAX_WEAPON_LEVEL} = await mod('public/js/data/weapons.js');
-  const {PASSIVES, PASSIVE_IDS} = await mod('public/js/data/passives.js');
+  const {PASSIVES, PASSIVE_IDS, FILLER_IDS} = await mod('public/js/data/passives.js');
   const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
   const p = g.player;
   // All six slots full of his weapons: no new one can be offered.
@@ -124,7 +124,7 @@ test('a level-up always offers a full choice, filled with the Blessing, a heal a
   const cards = g.levelChoices(3);
   assert.deepEqual(cards.map(c => c.type), ['weapon', 'bless', 'heal'], 'one upgrade left, and two to fill');
   p.weapons[0].level = MAX_WEAPON_LEVEL;
-  assert.deepEqual(g.levelChoices(3).map(c => c.type), ['bless', 'heal', 'gold'], 'the whole build maxed');
+  assert.deepEqual(g.levelChoices(3).map(c => c.type), FILLER_IDS, 'the whole build maxed: every filler');
 });
 
 // The user: "Triple the current spawn" of pickup spots, and "the box sites have 2-5 boxes".

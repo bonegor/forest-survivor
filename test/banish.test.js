@@ -276,7 +276,7 @@ test('on touch a finger that has banished, slid onto another card, neither banis
 });
 
 test('B is BANISH and a pad\'s left-stick press arms it, and neither is anything else', () => {
-  const actions = ['up', 'down', 'left', 'right', 'confirm', 'select', 'back', 'pause', 'ult', 'strike', 'map', 'reroll', 'always', 'one', 'two', 'three', 'four', 'fps', 'fullscreen'];
+  const actions = ['up', 'down', 'left', 'right', 'confirm', 'select', 'back', 'pause', 'ult', 'strike', 'map', 'reroll', 'always', 'one', 'two', 'three', 'four', 'five', 'fps', 'fullscreen'];
   input.justDown.add('KeyB');
   assert.ok(input.pressed('banish'));
   assert.deepEqual([...actions, 'banishArm'].filter((a) => input.pressed(a)), []);

@@ -171,6 +171,7 @@ export function defaultProfile() {
     ranked: {}, // hero -> best Ranked time in seconds
     gear: {}, // hero -> slot -> the item that hero wears there (shared/items.js)
     ev: [], // the evolutions a lock waits on (need 'evolution') that a run has reached
+    ek: 0, // every evolution a run has made: bit i is PROGRESS.evolutions[i] (knownEvos)
     home: [], // the shared weapons left at home: never offered in a run (setHome, the Codex)
   };
 }
@@ -200,6 +201,7 @@ export function sanitizeProfile(raw) {
   }
   p.ul = int(raw.ul, 0, ALL_LOCKS);
   if (Array.isArray(raw.ev)) p.ev = EVO_IDS.filter((id) => raw.ev.includes(id));
+  p.ek = int(raw.ek, 0, ALL_EVOS);
   if (Array.isArray(raw.home)) p.home = SHARED_IDS.filter((id) => raw.home.includes(id)).slice(0, exclusionState(p).level);
   p.uu = int(raw.uu, 0, ALL_ULTS);
   if (Array.isArray(raw.heroes)) {
@@ -211,6 +213,12 @@ export function sanitizeProfile(raw) {
     const t = int(raw.ranked?.[h], 0, MAX_TIME.ranked);
     if (t) p.ranked[h] = t;
   }
+  // The evolutions a save from before 27 October 2026 already tells of are known (SIGNATURE_EVO);
+  // taken again every time, which changes nothing once they are in.
+  for (const id of p.ev) p.ek = withEvo(p.ek, id);
+  for (const [h, id] of Object.entries(SIGNATURE_EVO)) if (hasFeat(p, h, FEAT.evolved)) p.ek = withEvo(p.ek, id);
+  // And those a lock waits on are read back from ek, which the cookie keeps in their place (packProfile).
+  p.ev = EVO_IDS.filter((id) => hasBit(p.ek, EVOS.indexOf(id)));
   // A hero who has won a night, or lasted five minutes in Ranked, has brought in the next
   // (saves from when the next hero was bought with gold, after a night survived).
   for (const h of HERO_ORDER) {
@@ -271,6 +279,16 @@ const hiddenLock = (l, m) => !!l.deep && !m.wins;
 const SHARED_IDS = [...PROGRESS.openWeapons, ...PROGRESS.locks.filter((l) => l.type === 'weapon').map((l) => l.id)];
 // The evolutions a lock waits on (need 'evolution'), the only ones a profile keeps (p.ev).
 const EVO_IDS = PROGRESS.locks.filter((l) => l.need === 'evolution').map((l) => l.of);
+// Every evolution, each a bit of profile.ek (PROGRESS.evolutions); withEvo: one more of them known.
+const EVOS = PROGRESS.evolutions, ALL_EVOS = 2 ** EVOS.length - 1;
+const withEvo = (n, id) => (EVOS.includes(id) ? withBit(n, EVOS.indexOf(id)) : n || 0);
+// A save from before 27 October 2026 kept only that a hero's signature had evolved (FEAT.evolved):
+// that evolution is known. The Necromancer's two can't be told apart, so neither is.
+const SIGNATURE_EVO = { knight: 'excalibur', archer: 'stormstring', mage: 'meteor', rogue: 'shadowstrike', paladin: 'judgement', druid: 'worldroot', berserker: 'bloodstorm', witchhunter: 'purifier' };
+// The evolutions a run before has made, in PROGRESS.evolutions' order. The owner's (27 October
+// 2026): "we dont know the evolution relics unless we have already achieved that evolution in the
+// past": until then a card, the pause screen and the Codex never name a weapon's relic (Game.evoKnown).
+export const knownEvos = (p) => EVOS.filter((id, i) => hasBit(p?.ek, i));
 // Whether a lock's weapon or relic may be found: its milestone reached, and, one for sale, bought.
 const lockUsable = (p, i) => lockOpen(p, i) && (!LOCKS[i].buy || (p.up?.[LOCKS[i].id] || 0) > 0);
 
@@ -323,13 +341,15 @@ function fromBefore(p) {
 export function openEverything(p) {
   p.ul = ALL_LOCKS;
   p.uu = ALL_ULTS;
+  p.ek = ALL_EVOS;
   for (const id of ['arsenal', 'reliquary', 'phoenix']) p.up[id] = UPGRADES.find((u) => u.id === id).max;
   return p;
 }
 
 // What the hero may find in a run with this profile: the shared weapons and the relics open (his
-// own signature weapons always are: the game adds them, Game.weaponOpen), and whether his ultimate
-// is. The game takes it as its `open` option.
+// own signature weapons always are: the game adds them, Game.weaponOpen), whether his ultimate
+// is, and the evolutions a run before has made, whose relics the cards may name (knownEvos). The
+// game takes it as its `open` option.
 export function openFor(profile, hero) {
   const p = profile || {};
   const weapons = [...PROGRESS.openWeapons], relics = [...PROGRESS.openRelics];
@@ -338,7 +358,7 @@ export function openFor(profile, hero) {
   });
   // Those left at home stay there (setHome).
   const home = Array.isArray(p.home) ? p.home.filter(id => SHARED_IDS.includes(id)).slice(0, exclusionState(p).level) : [];
-  return { weapons: weapons.filter((id) => !home.includes(id)), relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0 };
+  return { weapons: weapons.filter((id) => !home.includes(id)), relics, ult: ((p.uu || 0) & heroBit(hero)) !== 0, evos: knownEvos(p) };
 }
 
 // Every lock, for a codex: the open-from-the-start ones (start: true), the milestones with how
@@ -372,8 +392,14 @@ export function progressList(profile) {
 // The profile as its cookie keeps it, every hero's gear packed into a string (shared/items.js
 // packGear): all nine heroes in six legendaries each still fit. A cookie written before, each
 // item an array, reads back all the same (sanitizeGear takes both). The gift is one number.
+// Since every evolution is kept as a bit (ek, 27 October 2026) the list of those a lock waits on
+// (ev) is told by it and stays out, and so does an empty home: the worst case keeps its quarter
+// spare (test/profile.test.js). sanitizeProfile reads both back.
 export function packProfile(p) {
-  return { ...p, gift: packGift(p.gift), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
+  const { ev, ...rest } = p;
+  const out = { ...rest, gift: packGift(p.gift), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
+  if (!out.home?.length) delete out.home;
+  return out;
 }
 
 // The Armory ranks a save from before may have been given (fromBefore), two bits each in a cookie.
@@ -561,8 +587,9 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
     // His signature evolved (Game.signatureEvolved): it takes eight levels and a relic, so not in
     // the first two minutes.
     evolved: raw.evolved === true && time >= 120,
-    // And the evolutions held at the end that a lock waits on (Game.result evos), likewise.
-    evos: time >= 120 && Array.isArray(raw.evos) ? EVO_IDS.filter((id) => raw.evos.includes(id)) : [],
+    // And every evolution held at the end (Game.result evos), likewise: known from then on
+    // (knownEvos), and those a lock waits on kept in p.ev too.
+    evos: time >= 120 && Array.isArray(raw.evos) ? EVOS.filter((id) => raw.evos.includes(id)) : [],
     realTime,
     found,
     // null keeps the gear on record (an older client sends none).
@@ -618,7 +645,10 @@ export function applyRun(profile, rawRun) {
     if (f) p.feats[run.hero] = f;
   }
   if (run.evolved) p.feats[run.hero] = (p.feats[run.hero] || 0) | FEAT.evolved;
-  for (const id of run.evos) if (!p.ev.includes(id)) p.ev.push(id);
+  for (const id of run.evos) {
+    p.ek = withEvo(p.ek, id);
+    if (EVO_IDS.includes(id) && !p.ev.includes(id)) p.ev.push(id);
+  }
   if (run.mode === 'dungeon') {
     const depth = run.victory ? 4 : run.floor;
     p.best.dungeon = Math.max(p.best.dungeon, depth);

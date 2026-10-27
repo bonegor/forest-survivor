@@ -382,4 +382,4 @@ export default {
 | `v.world` | `dungeon`, `solid(x, y)`, `path(x, y)` (next step of the shortest walkable path), `stairs`, `guardian` |
 | `v.rng()` | the bot's own seeded dice |
 
-Level-up cards are `{ type: 'weapon' | 'passive' | 'bless' | 'heal' | 'gold', id, name, level, isNew }`, and `pick` returns the index of one. The built-ins live in `public/js/bots/strategies.js` and `picks.js`; one added there also works in the browser, where `__fs.sim(60, { bot: 'kite' })` lets you watch it play.
+Level-up cards are `{ type: 'weapon' | 'passive' | 'bless' | 'haste' | 'reach' | 'heal' | 'gold', id, name, level, isNew }`, and `pick` returns the index of one. The built-ins live in `public/js/bots/strategies.js` and `picks.js`; one added there also works in the browser, where `__fs.sim(60, { bot: 'kite' })` lets you watch it play.

@@ -5,13 +5,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { Game, MILESTONES } from '../public/js/game/game.js';
-import { GameScreen, LevelUpOverlay, cardsReadyAt, LEVELUP_DELAY } from '../public/js/ui/gamescreen.js';
+import { Game, MILESTONES, CARD_WEIGHT, SIGNATURE_PITY } from '../public/js/game/game.js';
+import { GameScreen, LevelUpOverlay, PauseOverlay, cardsReadyAt, LEVELUP_DELAY, cardChange } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { sanitizeProfile, metaBonuses } from '../public/js/shared/profile.js';
+import { sanitizeProfile, metaBonuses, openFor } from '../public/js/shared/profile.js';
+import { PASSIVES } from '../public/js/data/passives.js';
 
 // A save from before progression (21 October 2026): six weapon and relic slots, two rerolls and
 // banishes, as these tests were written for.
@@ -20,12 +21,12 @@ const before = () => sanitizeProfile({ v: 3 });
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
 
-function screen(fn) {
+function screen(fn, o = {}) {
   const oldRandom = Math.random, oldBot = input.bot;
   Math.random = mulberry32(5);
   try {
     input.bot = { x: 0, y: 0 };
-    const g = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(before()), settings: { numbers: false } });
+    const g = new Game({ hero: 'knight', mode: 's15', meta: metaBonuses(before()), settings: { numbers: false }, ...o });
     g.player.devGod = true;
     const gs = new GameScreen();
     gs.app = { ui: new UI(), settings: {}, devHold: false, store: {} };
@@ -250,5 +251,101 @@ test('a milestone level (10, 25, 50, 100) has its stamp on the screen, once', ()
     assert.equal(g.milestoneDue(10), false, 'once: the stinger never plays again for it');
     assert.equal(g.milestoneDue(11), false, 'not a milestone');
     assert.equal(g.milestoneDue(25), true);
+  });
+});
+
+// The owner's (27 October 2026): a weapon's relic is not told until a run before has made its
+// evolution; then whether it is owned, may still come, or is blocked this run.
+const known = (evos) => ({ open: { ...openFor(before(), 'knight'), evos } });
+
+test('an evolution not yet made keeps its relic unknown: no name, and no gold back on its new relic', () => {
+  screen((g, gs, p) => {
+    assert.equal(g.evoKnown('sword'), false);
+    assert.deepEqual(g.evoState('sword'), { state: 'unknown' });
+    toLevel(sword(p), 8);
+    g.levelChoices = () => [relicCard('might'), levelCard('axe', 2)];
+    g.state = 'levelup';
+    g.pendingLevels = 1;
+    const lv = new LevelUpOverlay(gs);
+    assert.deepEqual(lv.completes, [null, null], 'a gold back would name the relic');
+    assert.deepEqual(lv.backs, ['relic', 'plain']);
+    lv.draw(ctx, 480, 270, 0.6); // its hint drawn as a relic yet unknown (no throw)
+    // A Phoenix Heart held evolves any: owned, known or not.
+    g.addPassive('phoenix', 1);
+    assert.deepEqual(g.evoState('sword'), { relic: 'phoenix', state: 'owned' });
+  }, known([]));
+  screen((g, gs, p) => {
+    toLevel(sword(p), 8);
+    g.levelChoices = () => [relicCard('might')];
+    g.state = 'levelup';
+    g.pendingLevels = 1;
+    assert.deepEqual(new LevelUpOverlay(gs).completes, ['excalibur'], 'once known, told');
+  }, known(['excalibur']));
+});
+
+test('a known evolution says its relic is owned, may come, or is blocked this run', () => {
+  screen((g, gs, p) => {
+    assert.deepEqual(g.evoState('sword'), { relic: 'might', state: 'open' });
+    g.addWeapon('axe');
+    assert.deepEqual(g.evoState('axe'), { relic: 'area', state: 'locked' }, "Giant's Belt not yet opened");
+    g.banish({ type: 'passive', id: 'might' });
+    assert.deepEqual(g.evoState('sword'), { relic: 'might', state: 'banished' });
+    g.banished.clear();
+    g.maxRelics = 1;
+    g.addPassive('armor', 1);
+    assert.deepEqual(g.evoState('sword'), { relic: 'might', state: 'full' });
+    g.maxRelics = 6;
+    g.addPassive('might', 1);
+    assert.deepEqual(g.evoState('sword'), { relic: 'might', state: 'owned' });
+    // The pause screen shows them after each weapon (no throw).
+    g.state = 'paused';
+    gs.app.ui.lockT = 0;
+    new PauseOverlay(gs).draw(ctx, 480, 270, 0.1);
+  }, known(['excalibur', 'whirlwind']));
+  // With no profile's open (the tests, the bots) every evolution is known.
+  screen((g) => assert.equal(g.evoKnown('sword'), true));
+});
+
+test('the hero\'s own signature weighs 6, and a new relic that partners a weapon he holds two and a half times its weight', () => {
+  screen((g, gs, p) => {
+    const pool = g.upgradePool(), of = (type, id) => pool.find((c) => c.type === type && c.id === id);
+    assert.equal(of('weapon', 'sword').weight, CARD_WEIGHT.signature);
+    assert.equal(of('weapon', 'axe').weight, CARD_WEIGHT.fresh);
+    assert.ok(Math.abs(of('passive', 'might').weight - (PASSIVES.might.weight || 1) * CARD_WEIGHT.freshRelic * CARD_WEIGHT.partner) < 1e-9, 'the Longsword\'s partner');
+    assert.ok(Math.abs(of('passive', 'regen').weight - (PASSIVES.regen.weight || 1) * CARD_WEIGHT.freshRelic) < 1e-9, 'a relic of no weapon he holds');
+    sword(p).evolve();
+    assert.ok(Math.abs(g.upgradePool().find((c) => c.id === 'might').weight - (PASSIVES.might.weight || 1) * CARD_WEIGHT.freshRelic) < 1e-9, 'evolved: no partner more');
+  });
+});
+
+test('after two level-up screens without his signature the next offers it, and a reroll is the same screen', () => {
+  screen((g, gs, p) => {
+    assert.equal(SIGNATURE_PITY, 2);
+    g.drawUpgrades = (n, pool) => pool.filter((c) => c.id !== 'sword').slice(0, n); // a draw that never takes it
+    const has = (cards) => cards.some((c) => c.id === 'sword');
+    g.pendingLevels = 1;
+    p.level = 2;
+    assert.ok(!has(g.levelChoices(3)));
+    p.level = 3;
+    assert.ok(!has(g.levelChoices(3)));
+    assert.ok(!has(g.levelChoices(3)), 'a reroll of the second screen is still the second');
+    p.level = 4;
+    const third = g.levelChoices(3);
+    assert.ok(has(third), 'the third screen offers it for certain');
+    assert.equal(third.length, 3);
+    assert.ok(has(g.levelChoices(3)), 'and its reroll too');
+    p.level = 5;
+    assert.ok(!has(g.levelChoices(3)), 'then the count starts over');
+  });
+});
+
+test('an upgrade card says its change in numbers, as this hero has it', () => {
+  screen((g, gs, p) => {
+    assert.equal(cardChange(g, levelCard('sword', 3)), 'Damage 42 → {44} (+5%)');
+    assert.equal(cardChange(g, relicCard('regen')), 'Health a second 0.3 → {0.9}', "the Knight's regeneration twice");
+    assert.equal(cardChange(g, relicCard('phoenix')), null, 'nothing to measure');
+    assert.equal(cardChange(g, { type: 'weapon', id: 'axe', level: 1, isNew: true }), null, 'a NEW weapon');
+    assert.equal(cardChange(g, g.filler('bless')), null, 'a filler');
+    assert.equal(p.passives.size, 0, 'and nothing is changed');
   });
 });

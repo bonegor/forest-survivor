@@ -99,6 +99,13 @@ export const PROGRESS = {
     // "consecration should be tied to 10 deaths of the hero" (22 October 2026).
     { type: 'weapon', id: 'aura', need: 'deaths', at: 10 },
   ],
+  // Every evolution, in the order the save keeps them (profile.ek: bit i is evolutions[i]). The
+  // owner's (27 October 2026): a weapon's relic is not told until a run before has made its
+  // evolution (shared/profile.js knownEvos). Add new ones at the end only (test/progress.test.js
+  // holds it to data/weapons.js).
+  evolutions: ['excalibur', 'whirlwind', 'aegis', 'sanctuary', 'stormstring', 'lodestar', 'briarheart', 'faelights', 'meteor', 'thunderstorm', 'stormlash',
+    'frozenheart', 'prismatic', 'shadowstrike', 'hellfire', 'razorfield', 'tether', 'fairyring', 'doom', 'tempest', 'kraken', 'abyss', 'knell', 'beacon',
+    'runestorm', 'harvest', 'comet', 'legion', 'pestilence', 'judgement', 'worldroot', 'bloodstorm', 'purifier'],
 };
 
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

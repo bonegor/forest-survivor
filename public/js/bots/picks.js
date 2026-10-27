@@ -3,7 +3,7 @@
 //
 //   PICKS.name = { about, pick(cards, view) -> index }
 //
-// cards: [{ type: 'weapon' | 'passive' | 'bless' | 'heal' | 'gold', id, name,
+// cards: [{ type: 'weapon' | 'passive' | 'bless' | 'haste' | 'reach' | 'heal' | 'gold', id, name,
 //           level, isNew, value }]
 
 import { WEAPONS } from '../data/weapons.js';

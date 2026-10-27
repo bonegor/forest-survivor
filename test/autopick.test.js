@@ -2,13 +2,13 @@
 // and has no choice, boxes should still give the remaining upgrades; additionally, for the
 // remaining upgrades the user should have an option to 'always pick' — e.g. either pick gold, or
 // select 'always pick gold' and that would make level-up seamless". Chests and level-ups draw from
-// one pool; with it empty a level-up shows the three fillers, each with an ALWAYS toggle, and a run
+// one pool; with it empty a level-up shows the fillers, each with an ALWAYS toggle, and a run
 // with an auto-pick levels up with no screen and no pause (the pause menu asks again).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, isFiller } from '../public/js/game/game.js';
-import { FILLER_IDS, PASSIVES } from '../public/js/data/passives.js';
+import { FILLER_IDS, PASSIVES, BLESSING } from '../public/js/data/passives.js';
 import { GameScreen, LevelUpOverlay, ChestOverlay, PauseOverlay, LEVELUP_DELAY } from '../public/js/ui/gamescreen.js';
 const PAST = LEVELUP_DELAY + 0.05; // a level-up screen past its first moments, when a card can be taken
 import { UI } from '../public/js/ui/ui.js';
@@ -85,15 +85,18 @@ function sayings(g) {
   return said;
 }
 
-test('a maxed build is offered the three fillers, even on a four-card level-up, and no reroll', () => {
+test('a maxed build is offered every filler, even on a four-card level-up, and no reroll', () => {
   screen((g, gs, p) => {
     maxOut(g);
-    assert.deepEqual(g.levelChoices(4).map((c) => c.type), FILLER_IDS, 'three cards, no copy for a fourth');
+    // The owner's (27 October 2026): the Blessing in three kinds, all of them on a full build's screen.
+    assert.deepEqual(FILLER_IDS, ['bless', 'heal', 'gold', 'haste', 'reach']);
+    assert.deepEqual(g.levelChoices(4).map((c) => c.type), FILLER_IDS, 'all five, whatever the count');
+    assert.deepEqual(g.levelChoices(3).map((c) => c.type), FILLER_IDS, 'all five, whatever the count');
     g.choiceCount = () => 4;
     g.state = 'levelup';
     g.pendingLevels = 1;
     const lv = new LevelUpOverlay(gs);
-    assert.equal(lv.choices.length, 3);
+    assert.equal(lv.choices.length, FILLER_IDS.length);
     assert.ok(lv.fillersOnly && lv.choices.every(isFiller));
     const rerolls = p.rerolls;
     assert.ok(rerolls > 0);
@@ -102,7 +105,7 @@ test('a maxed build is offered the three fillers, even on a four-card level-up, 
     lv.draw(ctx, 480, 270, 0.1);
     input.endFrame();
     assert.ok(!ids(gs).includes('reroll'), 'no reroll button');
-    assert.deepEqual(ids(gs).filter(isToggle), ['a0', 'a1', 'a2'], 'an ALWAYS under each card');
+    assert.deepEqual(ids(gs).filter(isToggle), FILLER_IDS.map((t, i) => 'a' + i), 'an ALWAYS under each card');
     assert.equal(p.rerolls, rerolls, 'R spends nothing on fillers');
   });
   // With upgrades left there is no ALWAYS, and the reroll is there.
@@ -118,7 +121,7 @@ test('a maxed build is offered the three fillers, even on a four-card level-up, 
 });
 
 test('ALWAYS on a filler sets the auto-pick, and the levels after it come with no screen', () => {
-  for (const [type, i] of [['bless', 0], ['heal', 1], ['gold', 2]]) {
+  for (const [type, i] of [['bless', 0], ['heal', 1], ['gold', 2], ['haste', 3], ['reach', 4]]) {
     screen((g, gs, p) => {
       maxOut(g);
       levelUp(p, 1);
@@ -134,14 +137,14 @@ test('ALWAYS on a filler sets the auto-pick, and the levels after it come with n
       gs.frame(1 / 60);
       input.endFrame();
       assert.equal(lv.always, i, 'ticked');
-      input.justDown.add(['Digit1', 'Digit2', 'Digit3'][i]);
+      input.justDown.add(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'][i]);
       gs.frame(1 / 60);
       input.endFrame();
       assert.equal(g.autoPick, type);
       assert.ok(gs.overlay === null);
       assert.equal(g.state, 'play');
       // Then, playing on: a burst of levels, and one more later. No screen, no pause.
-      const before = { bless: p.blessings, gold: g.gold, stats: g.stats.gold, level: p.level };
+      const before = { bless: p.blessings, haste: p.hastes, reach: p.reaches, gold: g.gold, stats: g.stats.gold, level: p.level };
       p.hp = 1;
       const states = new Set(), said = sayings(g);
       // One line over the hero for the burst of three, one for the level after (shown with
@@ -150,6 +153,8 @@ test('ALWAYS on a filler sets the auto-pick, and the levels after it come with n
         bless: [`Blessing ×${before.bless + 3}`, `Blessing ×${before.bless + 4}`],
         heal: ['+100% health', '+35% health'],
         gold: [/^\+\d+ gold$/, /^\+\d+ gold$/],
+        haste: [`Haste ×${before.haste + 3}`, `Haste ×${before.haste + 4}`],
+        reach: [`Reach ×${before.reach + 3}`, `Reach ×${before.reach + 4}`],
       }[type];
       levelUp(p, 3);
       for (let f = 0; f < 120; f++) {
@@ -170,6 +175,8 @@ test('ALWAYS on a filler sets the auto-pick, and the levels after it come with n
       assert.equal(p.level, before.level + 4);
       assert.equal(g.pendingLevels, 0);
       if (type === 'bless') assert.equal(p.blessings, before.bless + 4);
+      if (type === 'haste') assert.equal(p.hastes, before.haste + 4);
+      if (type === 'reach') assert.equal(p.reaches, before.reach + 4);
       if (type === 'heal') assert.ok(p.hp > p.maxHp * 0.5, `healed: ${p.hp} of ${p.maxHp}`);
       if (type === 'gold') {
         assert.ok(g.gold >= before.gold + 4 * 30, `gold: ${before.gold} → ${g.gold}`);
@@ -301,18 +308,19 @@ test('a chest draws from the level-up pool: never gold alone while upgrades rema
 });
 
 test('a chest on a maxed build gives the auto-pick, else Blessings, and its screen shows them', () => {
-  for (const auto of [null, 'bless', 'heal', 'gold']) {
+  for (const auto of [null, 'bless', 'heal', 'gold', 'haste']) {
     screen((g, gs, p) => {
       maxOut(g);
       for (const w of p.weapons) if (w.def.evo) w.evolve(); // nothing left to evolve either
       g.autoPick = auto;
-      const bless = p.blessings;
+      const bless = p.blessings, hastes = p.hastes;
       g.state = 'chest';
       const chest = new ChestOverlay(gs, 'boss');
       const items = chest.roll.items;
       assert.ok(items.length >= 3, 'a boss chest holds three or five');
       assert.deepEqual([...new Set(items.map((it) => it.type))], [auto || 'bless']);
       if (!auto || auto === 'bless') assert.equal(p.blessings, bless + items.length);
+      if (auto === 'haste') assert.equal(p.hastes, hastes + items.length, 'a Blessing of Haste each');
       for (let i = 0; i < 30; i++) chest.draw(ctx, 480, 270, 0.15);
       assert.equal(chest.revealed, items.length, 'every item shown');
     });
@@ -385,5 +393,25 @@ test('a chest\'s gold is the hero\'s once, opened on its screen or by a bot', ()
     d.detach();
     assert.ok(rolled && rolled.gold > 0);
     assert.equal(g.gold, before + rolled.gold);
+  });
+});
+
+// The owner's (27 October 2026): the Blessing in three kinds, Valor, Haste and Reach.
+test('the Blessings of Haste and Reach: cooldowns down to their floor, area up to +100%', () => {
+  screen((g, gs, p) => {
+    const cd = p.cooldown, area = p.area, might = p.might;
+    g.applyChoice(g.filler('haste'));
+    assert.equal(p.hastes, 1);
+    assert.ok(Math.abs(p.cooldown - cd * (1 + BLESSING.cooldown)) < 1e-9, `${cd} → ${p.cooldown}`);
+    assert.equal(p.might, might, 'Haste gives no might');
+    p.hastes = 1000;
+    p.recompute();
+    assert.equal(p.cooldown, 0.35, 'no lower than every cooldown\'s floor');
+    g.applyChoice(g.filler('reach'));
+    assert.ok(Math.abs(p.area - area * (1 + BLESSING.area)) < 1e-9);
+    p.reaches = BLESSING.reachMost + 7;
+    p.recompute();
+    assert.ok(Math.abs(p.area - area * (1 + BLESSING.area * BLESSING.reachMost)) < 1e-9, 'counted up to its most');
+    assert.ok(Math.abs(BLESSING.area * BLESSING.reachMost - 1) < 1e-9, '+100% at most');
   });
 });
