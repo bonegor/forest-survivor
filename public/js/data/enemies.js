@@ -57,14 +57,18 @@ export const ENEMIES = {
     name: 'King Ossarian', title: 'The Bone King', sprite: 'boneking', hp: 4000, spd: 60, dmg: 16, r: 12, xp: 120, ai: 'boss',
     mass: 40, anim: 3, death: 'bones', kbRes: 0.97, boss: true, color: '#feae34',
   },
+  // The owner's (27 October 2026): "the butcher as big as boneking". The King stands 57 px tall as
+  // drawn, the Butcher's art 26: drawn at 57/26 of it. His touch (r) is the King's already.
   butcher: {
-    name: 'Grimgut', title: 'The Butcher', sprite: 'butcher', hp: 6500, spd: 36, dmg: 20, r: 12, xp: 160, ai: 'boss',
+    name: 'Grimgut', title: 'The Butcher', sprite: 'butcher', hp: 6500, spd: 36, dmg: 20, r: 12, scale: 57 / 26, xp: 160, ai: 'boss',
     mass: 40, anim: 3.5, death: 'blood', kbRes: 0.97, boss: true, color: '#e43b44',
   },
-  // The owner's (20 October 2026): "Make the lich king bigger by 50%". Drawn at 1.5 times his
-  // sprite, and struck over as much more of him (r at that size, as the Cultist's).
+  // The owner's (20 October 2026): "Make the lich king bigger by 50%": drawn at 1.5 times his
+  // sprite, r 15 for 10. Then (27 October 2026) "make it as big as bone king": the King stands 57
+  // px tall as drawn, the Lich's art 25, so drawn at 57/25 of it. His r stays 15, more than the
+  // King's 12; weapons strike him wherever he is drawn anyway (hitbox.js).
   lich: {
-    name: 'Malgrath', title: 'The Lich', sprite: 'lich', hp: 4200, spd: 26, dmg: 14, r: 15, scale: 1.5, xp: 220, ai: 'boss',
+    name: 'Malgrath', title: 'The Lich', sprite: 'lich', hp: 4200, spd: 26, dmg: 14, r: 15, scale: 57 / 25, xp: 220, ai: 'boss',
     mass: 40, anim: 2, death: 'ecto', kbRes: 0.98, boss: true, color: '#9ee562', fly: true,
   },
   demonlord: {

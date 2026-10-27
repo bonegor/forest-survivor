@@ -185,28 +185,29 @@ test("a boss's blow costs the hero health but never shoves him", () => gameCase(
   assert.deepEqual([p.x, p.y], [x, y], 'the hero stays where he stood');
 }));
 
-// The owner (20 October 2026): "Make the lich king bigger by 50%".
-test('the Lich is drawn half again his size, struck over as much more of him, his shots and words where his body is', () => gameCase((g) => {
+// The owner (20 October 2026): "Make the lich king bigger by 50%"; then (27 October 2026) "make it
+// as big as bone king": the King's 57 px as drawn, from the Lich's 25.
+test('the Lich is drawn as big as the Bone King, his shots and words where his body is', () => gameCase((g) => {
   step(g, 2);
-  const p = g.player, S = g.cam.S;
+  const p = g.player, S = g.cam.S, k = 57 / 25;
   const lich = g.spawnBoss('lich', p.x + 80, p.y, {sleeping: true}), fr = lich.spr.frames[0];
-  assert.equal(lich.scale, 1.5);
-  assert.equal(lich.r, 15, 'his body to strike: the 10 it was, half again');
-  assert.equal(lich.h, fr.h * 1.5, 'as tall as he is drawn');
+  assert.equal(lich.scale, k);
+  assert.equal(lich.r, 15, 'his touch: the 10 it was, half again, as before');
+  assert.ok(Math.abs(lich.h - fr.h * k) < 1e-9, 'as tall as he is drawn');
   const ctx = document.createElement('canvas').getContext('2d');
   lich.draw(ctx, g.cam);
   const [, Y, w, h] = lich._rect;
-  assert.ok(Math.abs(w - fr.w * 1.5 * S) < 1e-9 && Math.abs(h - fr.h * 1.5 * S) < 1e-9, `drawn ${w / S} x ${h / S}, half again his frame's ${fr.w} x ${fr.h}`);
+  assert.ok(Math.abs(w - fr.w * k * S) < 1e-9 && Math.abs(h - fr.h * k * S) < 1e-9, `drawn ${w / S} x ${h / S}, ${k} times his frame's ${fr.w} x ${fr.h}`);
   // Over his head (his name, his words) is at the top of him as drawn, his flight and bob within 3 px.
   const top = Y / S + g.cam.y, over = lich.y - lich.h - 6;
   assert.ok(Math.abs(over - top) <= 3, `over his head at ${over.toFixed(1)}, his top at ${top.toFixed(1)}`);
-  // A ring of his skulls leaves his chest, as much higher as he is bigger: 15 px up, not 10.
-  const before = g.eshots.length;
+  // A ring of his skulls leaves his chest, as much higher as he is bigger: 10 px up times his size.
+  const before = g.eshots.length, chest = lich.y - 10 * k;
   lich.state = 'move';
   lich.cdT = 0;
   lich.ai(lich, 1/60);
   const shots = g.eshots.slice(before);
   assert.ok(shots.length >= 12, `${shots.length} skulls`);
-  assert.ok(shots.every((s) => Math.abs(s.y - (lich.y - 15)) < 1e-9 && Math.abs(s.x - lich.x) < 1e-9), 'from his chest');
-  assert.ok(lich.y - 15 > top && lich.y - 15 < lich.y, 'his chest within his drawn body');
+  assert.ok(shots.every((s) => Math.abs(s.y - chest) < 1e-9 && Math.abs(s.x - lich.x) < 1e-9), 'from his chest');
+  assert.ok(chest > top && chest < lich.y, 'his chest within his drawn body');
 }));
