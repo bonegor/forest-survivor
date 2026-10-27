@@ -776,12 +776,13 @@ export class Game {
 
   // ----------------------------------------------------------- enemies --
 
-  // Past 900 foes (HORDE_CAP.most) a new one comes only in the place of one far off-screen
+  // Past HORDE_CAP.most foes a new one comes only in the place of one far off-screen
   // (recycleFar), else not at all; a boss comes all the same (o.always). What is sent at the hero
-  // (o.sent, o.summoned) may take any off-screen. Props standing don't count (a dungeon floor's
+  // (o.sent, o.summoned) may take any off-screen, and so may the steady horde while the screen is
+  // all but empty (o.room, Spawner.update). Props standing don't count (a dungeon floor's
   // stand all floor long), and a new one comes whatever the count, taking no foe's place (spawnProp).
   spawnEnemy(type, x, y, o = {}) {
-    if (this.enemies.length - this.propCount > HORDE_CAP.most && !o.always && !this.recycleFar(o.sent || o.summoned)) return null;
+    if (this.enemies.length - this.propCount > HORDE_CAP.most && !o.always && !this.recycleFar(o.sent || o.summoned || o.room)) return null;
     const e = this.enemyPool.get().init(this, type, x, y, o);
     this.enemies.push(e);
     const cap = this.horde;

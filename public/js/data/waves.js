@@ -43,7 +43,7 @@ export const pocketAt = (minute) => POCKETS.find((p) => minute >= p.minutes[0] &
 // `early`, the hero still weak (at 0:00 a level-1 hero kills a few a second). Late in the night
 // what the difficulty asks bends under `knee` a second (times the minute's growth, Spawner.rate),
 // so Veteran and Elite stay about what a strong hero can cut through rather than past anything
-// he could; past dawn Ranked keeps growing (the cap of 900 standing, HORDE_CAP, is the hardware's,
+// he could; past dawn Ranked keeps growing (the cap of 2,500 standing, HORDE_CAP, is the hardware's,
 // below).
 // (Without the old 480 at most: nothing here counts what stands.)
 // At the start of the night and of each Dungeon Run floor `head` seconds' worth come at once, so
@@ -55,8 +55,12 @@ export const pocketAt = (minute) => POCKETS.find((p) => minute >= p.minutes[0] &
 // worth wait at a time, so a stall never pours out all at once. The steady horde stops `room`
 // short of the cap (HORDE_CAP.most), what it would send then simply not coming: a wave on Elite
 // can fill the cap in seconds, and a swarm, ring or pack must still find room (they come in the
-// place of foes off the screen, and the steady horde's stand just past its edge).
-export const HORDE_RATE = { turn: 20, early: 30, settle: 4, knee: 100, head: 30, headLate: 8, carry: 1, perFrame: 6, room: 200 };
+// place of foes off the screen, and the steady horde's stand just past its edge). Unless fewer than
+// `thin` stand on the screen: then the cap is full of foes out of sight (a ring's or a swarm's on
+// their way back), the screen empty for as long as they take, and the steady horde comes all the
+// same, each in the place of the farthest off the screen (the owner's of 27 October 2026, "it looks
+// like I am without monsters" at 10:00 on an Elite Nightmare).
+export const HORDE_RATE = { turn: 20, early: 30, settle: 4, knee: 100, head: 30, headLate: 8, carry: 1, perFrame: 6, room: 200, thin: 150 };
 export function hordeRate(phase) {
   const R = HORDE_RATE, m = minuteOf(phase);
   const turn = R.turn + (R.early - R.turn) * Math.max(0, 1 - m / R.settle);
@@ -163,7 +167,9 @@ export const PROP_SITES = { every: [16 / 3, 26 / 3], most: 45, room: [1, 1], cry
 // swarm, a pack, a champion, the thief, a boss's summons) comes in full: it may take any foe off
 // the screen, `edge` px or more beyond its border (the tallest monster's height), as many as it
 // brings.
-export const HORDE_CAP = { most: 900, far: 0.6, perFrame: 20, edge: 32 };
+// `most` was 900 until 27 October 2026, the owner's "the 900 cap, can we safely put that on like, a
+// few k instead?": an Elite Nightmare filled it by 8:00 and stood at it for the rest of the night.
+export const HORDE_CAP = { most: 2500, far: 0.6, perFrame: 20, edge: 32 };
 
 // Dungeon floors: theme, starting phase and the guardian waiting at the end.
 export const FLOORS = [

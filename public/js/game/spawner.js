@@ -193,9 +193,14 @@ export class Spawner {
       if (this.owed === null) this.owed = this.rate(phase) * (phase < 1 ? R.head : R.headLate);
       // At most `carry` seconds' worth wait (a head start may be more, and only runs down).
       this.owed = Math.min(this.owed + rate * dt, Math.max(this.owed, 1 + rate * R.carry));
-      // Room kept for what is sent at the hero (HORDE_RATE.room): what was due doesn't come.
-      if (g.enemies.length - g.propCount >= HORDE_CAP.most - R.room) this.owed = Math.min(this.owed, 0);
-      const st = this.owed >= 1 ? { ...this.stats(phase), steady: true } : null;
+      // Room kept for what is sent at the hero (HORDE_RATE.room): what was due doesn't come, unless
+      // fewer than HORDE_RATE.thin stand on the screen (shown). Then the field stands full out of
+      // sight (a ring's or a swarm's on its way back) and he'd be left alone (the owner's of 27
+      // October 2026), so it comes all the same, at the cap in the place of the farthest off the
+      // screen (room: Game.recycleFar as for what is sent).
+      const full = g.enemies.length - g.propCount >= HORDE_CAP.most - R.room;
+      if (full && this.shown() >= R.thin) this.owed = Math.min(this.owed, 0);
+      const st = this.owed >= 1 ? { ...this.stats(phase), steady: true, room: full } : null;
       for (let i = 0; i < R.perFrame && this.owed >= 1; i++) {
         const type = this.pickType(phase);
         const pt = g.world.spawnPoint(g);
@@ -264,6 +269,9 @@ export class Spawner {
       this.propT -= dt;
       if (this.propT <= 0) {
         this.propT = rand(...PROP_SITES.every);
+        // At PROP_SITES.most the farthest off the screen make way (letPropsGo), so boxes left
+        // standing where he fought never stop new ones coming ahead of him.
+        if (g.propCount >= PROP_SITES.most) g.propCount -= this.letPropsGo(g.propCount - PROP_SITES.most + PROP_SITES.boxes[1]);
         if (g.propCount < PROP_SITES.most) this.spawnProps();
       }
       this.shrineT -= dt;
@@ -293,6 +301,30 @@ export class Spawner {
         if (pt && g.spawnBoss(bosses[this.bossIdx].id, pt.x, pt.y)) this.bossIdx++;
       }
     }
+  }
+
+  // Whether (x, y) is on the screen or within HORDE_CAP.edge px of it.
+  inView(x, y) {
+    const c = this.g.cam, m = HORDE_CAP.edge;
+    return x > c.x - m && x < c.x + c.W + m && y > c.y - m && y < c.y + c.H + m;
+  }
+
+  // How many monsters stand on the screen (inView), props aside.
+  shown() {
+    let n = 0;
+    for (const e of this.g.enemies) if (!e.dead && !e.prop && this.inView(e.x, e.y)) n++;
+    return n;
+  }
+
+  // Up to n unbroken boxes off the screen, the farthest from the hero first, simply vanish, as
+  // those left far behind do (Game.relocate): no loot. Returns how many went.
+  letPropsGo(n) {
+    const p = this.g.player, d2 = (e) => (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+    const off = this.g.enemies.filter((e) => e.prop && !e.dead && !this.inView(e.x, e.y));
+    off.sort((a, b) => d2(b) - d2(a));
+    const gone = off.slice(0, Math.max(0, n));
+    for (const e of gone) e.dead = true;
+    return gone.length;
   }
 
   // A timed swarm, ring or pack. At the cap of monsters it comes in full all the same (sent:
