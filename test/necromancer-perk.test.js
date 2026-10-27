@@ -96,7 +96,7 @@ test('the Hourglass and Endurance still stack on his minions, and on his pools a
     p.passives.set('duration', 2);
     p.recompute();
     near(p.duration, more, 'his effects');
-    near(firstSkeleton(g, p).maxLife, 7 * 1.3 * more, 'a skeleton');
+    near(firstSkeleton(g, p).maxLife, WEAPONS.raise.base.dur * 1.3 * more, 'a skeleton');
   }, meta);
   game('necromancer', (g, p) => {
     p.passives.set('duration', 2);
