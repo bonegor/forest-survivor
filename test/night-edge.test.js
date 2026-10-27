@@ -1,7 +1,7 @@
 // The night edge (enemies.js NIGHT_EDGE): the owner's "monsters more visible against the night".
 // After the lighting each monster is drawn again unlit, in its colours lifted (since 20 October
 // 2026: "Make the monsters brighter"), at the floor's alpha, with a faint ring outside its ink
-// outline, all in one canvas cut by whatever stands in front, a hole round the hero; bosses and
+// outline and a fainter halo round that (27 October 2026: "an ever so slight glow"), all in one canvas cut by whatever stands in front, a hole round the hero; bosses and
 // crypt lords get none, the Necromancer's allies a green ring.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ await mod('tools/headless.mjs');
 const { Game } = await mod('public/js/game/game.js');
 const { NIGHT_EDGE, NIGHT_LOOKS, ALLY_LOOK, nightFloor, nightHoleBuf, drawNightEdge, nightLift } = await mod('public/js/game/enemies.js');
 const { Minion } = await mod('public/js/game/minions.js');
-const { SPR, nightBuf } = await mod('public/js/engine/sprites.js');
+const { SPR, nightBuf, NIGHT_PAD } = await mod('public/js/engine/sprites.js');
 const { hexPack } = await mod('public/js/engine/pixels.js');
 const { OUTLINE } = await mod('public/js/art/palette.js');
 const { input } = await mod('public/js/engine/input.js');
@@ -23,7 +23,7 @@ const P = await mod('public/js/shared/profile.js');
 
 view.pxW = 1920;
 view.pxH = 1080;
-const RING_A = Math.round(255 * NIGHT_EDGE.ringA);
+const RING_A = Math.round(255 * NIGHT_EDGE.ringA), HALO_A = Math.round(255 * NIGHT_EDGE.haloA);
 
 // An unkillable hero standing still, unarmed, with no spawner: only what a test puts there.
 function game(fn, hero = 'knight') {
@@ -64,36 +64,46 @@ function nightPass(g) {
 // The night variant canvases a frame has built.
 const nightCanvases = (fr, key) => fr.variants.get(key) || [];
 
-test('the night look is the frame, lifted, with a 1 px ring outside its outline: (w+2)×(h+2), the ring clear of the sprite', () => {
+test('the night look is the frame, lifted, with a 1 px ring outside its outline and a fainter halo round that: (w+4)×(h+4), both clear of the sprite', () => {
+  assert.equal(NIGHT_PAD, 2);
   for (const name of ['spider', 'bat', 'cultist', 'zombie']) {
     const b = SPR[name].frames[0].buf, look = NIGHT_LOOKS[0][1](b), lifted = nightLift(b);
-    assert.equal(look.w, b.w + 2, `${name}: a pixel wider each side`);
-    assert.equal(look.h, b.h + 2, `${name}: a pixel taller each side`);
-    const ring = hexPack(NIGHT_EDGE.ring, RING_A);
-    let rings = 0;
+    assert.equal(look.w, b.w + 4, `${name}: two pixels wider each side`);
+    assert.equal(look.h, b.h + 4, `${name}: two pixels taller each side`);
+    const ring = hexPack(NIGHT_EDGE.ring, RING_A), halo = hexPack(NIGHT_EDGE.ring, HALO_A);
+    const at = (x, y) => (x >= 0 && y >= 0 && x < look.w && y < look.h ? look.d[y * look.w + x] : 0);
+    let rings = 0, halos = 0;
     for (let y = 0; y < look.h; y++) {
       for (let x = 0; x < look.w; x++) {
-        const c = look.d[y * look.w + x], inside = x > 0 && y > 0 && x <= b.w && y <= b.h ? lifted.d[(y - 1) * b.w + x - 1] : 0;
+        const c = look.d[y * look.w + x], inside = x > 1 && y > 1 && x < b.w + 2 && y < b.h + 2 ? lifted.d[(y - 2) * b.w + x - 2] : 0;
         if (inside >>> 24) {
           assert.equal(c, inside, `${name}: the sprite in its night colours at ${x},${y}, no ring over it`);
           continue;
         }
         if (!c) continue;
-        assert.equal(c, ring, `${name}: only the ring outside the sprite, in its colour and alpha`);
+        if (c === halo) {
+          // Round the ring, its corners too: it touches the ring, never the sprite.
+          const near = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]].map(([dx, dy]) => at(x + dx, y + dy));
+          assert.ok(near.includes(ring), `${name}: the halo at ${x},${y} lies round the ring`);
+          halos++;
+          continue;
+        }
+        assert.equal(c, ring, `${name}: only the ring and its halo outside the sprite, in their colour and alpha`);
         rings++;
         // Outside the ink: it touches the outline, not the sprite's colours.
         const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => {
-          const xx = x + dx - 1, yy = y + dy - 1;
+          const xx = x + dx - 2, yy = y + dy - 2;
           return xx >= 0 && yy >= 0 && xx < b.w && yy < b.h ? b.d[yy * b.w + xx] : 0;
         }).filter((v) => v >>> 24);
         assert.ok(near.length && near.every((v) => v === (b.rim ?? b.ink ?? OUTLINE)), `${name}: the ring at ${x},${y} lies against the ink outline`);
       }
     }
     assert.ok(rings > 2 * (b.w + b.h) * 0.3, `${name}: ringed all round (${rings} px)`);
+    assert.ok(halos >= rings, `${name}: haloed all round the ring (${halos} px)`);
   }
-  // Unringed (a champion's): just the frame, a pixel in from each side.
+  // Unringed (a champion's): just the frame, two pixels in from each side.
   const b = SPR.skeleton.frames[0].buf, plain = nightBuf(b, 0);
-  assert.equal(plain.w, b.w + 2);
+  assert.equal(plain.w, b.w + 4);
   assert.equal(plain.d.filter((c) => c >>> 24).length, b.d.filter((c) => c >>> 24).length, 'no ring');
 });
 
@@ -143,13 +153,13 @@ test('at night a monster is in its own colours lifted: every one as light or lig
     }
     assert.ok(!dark || lifted === dark, `${name}: every dark colour lifted (${lifted} of ${dark} pixels)`);
   }
-  // Not a brighter edge: the ring round them, in its colour, shows no more than it did before (0.6
-  // of a layer drawn at a floor of 0.75), under any night.
+  // The owner (27 October 2026): "an ever so slight glow". The ring round them, in its colour,
+  // stays faint, under half the layer under any night, and its halo fainter still.
   assert.equal(NIGHT_EDGE.ring, '#8b9bb4');
-  const luma = (a) => (0.299 * a[0] + 0.587 * a[1] + 0.114 * a[2]) / 255;
+  assert.ok(NIGHT_EDGE.haloA > 0 && NIGHT_EDGE.haloA < NIGHT_EDGE.ringA, 'the halo fainter than the ring');
   for (const [where, amb] of [['forest at dusk', [150, 136, 186]], ['forest at midnight', [102, 110, 164]], ['crypt', [70, 70, 104]], ['catacombs', [74, 62, 70]]]) {
-    const m = luma(amb), was = (0.6 * (0.75 - m)) / (1 - m), now = NIGHT_EDGE.ringA * nightFloor(amb);
-    assert.ok(now <= was + 0.02, `${where}: the ring at ${now.toFixed(3)}, ${was.toFixed(3)} before`);
+    const now = NIGHT_EDGE.ringA * nightFloor(amb);
+    assert.ok(now > 0.3 && now < 0.5, `${where}: the ring at ${now.toFixed(3)}`);
   }
 });
 
@@ -160,8 +170,8 @@ test('a monster out in the dark is lifted, once, at the floor\'s alpha; at dawn 
     const fr = e.spr.frames[e.frameIndex()], look = nightCanvases(fr, 'night')[e.face < 0 ? 1 : 0];
     assert.ok(look, 'its night look built');
     const drawn = night.find((c) => c[0] === 'drawImage' && c[1] === look);
-    const [X, Y, w, h] = e._rect.slice(0, 4).map(Math.round), ux = w / fr.w, uy = h / fr.h;
-    assert.deepEqual(drawn.slice(2), [X - ux, Y - uy, w + 2 * ux, h + 2 * uy], 'over its body, a frame pixel bigger each side');
+    const [X, Y, w, h] = e._rect.slice(0, 4).map(Math.round), ux = (NIGHT_PAD * w) / fr.w, uy = (NIGHT_PAD * h) / fr.h;
+    assert.deepEqual(drawn.slice(2), [X - ux, Y - uy, w + 2 * ux, h + 2 * uy], 'over its body, two frame pixels bigger each side');
     const f = nightFloor(g.world.ambient());
     const i = main.findIndex((c) => c[0] === 'drawImage');
     assert.deepEqual(main.slice(i - 1, i + 2).map((c) => c.slice(0, 2)), [['=globalAlpha', f], ['drawImage', main[i][1]], ['=globalAlpha', 1]], 'the one canvas over the scene at f');

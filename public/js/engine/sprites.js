@@ -267,11 +267,16 @@ export const TINTS = {
 };
 
 // The night look of a frame (enemies.js NIGHT_EDGE, which lifts its colours first: nightLift):
-// its pixels and, with `ring` (packed, its alpha kept), a 1 px ring round its outline, none of
-// the ring where the frame is; without one, just the frame. Either way (w+2)×(h+2), the frame a
-// pixel in from each side, so a foe's night layer is one drawImage whatever it is ringed with.
-export function nightBuf(b, ring) {
-  return ring ? px.outline(b, ring) : px.pad(b, 1);
+// its pixels and, with `ring` (packed, its alpha kept), a 1 px ring round its outline, and with
+// `halo` as well a fainter pixel round the ring, its corners too, so the two fade out as a soft
+// glow; none of either where the frame is. Without a ring, just the frame. Either way
+// (w+4)×(h+4), the frame NIGHT_PAD pixels in from each side, so a foe's night layer is one
+// drawImage whatever it is ringed with.
+export const NIGHT_PAD = 2;
+export function nightBuf(b, ring, halo = 0) {
+  if (!ring) return px.pad(b, NIGHT_PAD);
+  const ringed = px.outline(b, ring);
+  return halo ? px.outline(ringed, halo, true) : px.pad(ringed, 1);
 }
 
 // Build a canvas from a raw pixel buffer (procedural textures).

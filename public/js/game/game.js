@@ -2225,6 +2225,12 @@ export class Game {
 
   // -------------------------------------------------------------- draw --
 
+  // The world's drifting overlay (the forest's fog) and the weather over it (draw).
+  drawSkies(ctx, c) {
+    if (this.world.drawOverlay) this.world.drawOverlay(ctx, c, this.clock);
+    if (this.weather) this.weather.draw(ctx, c);
+  }
+
   draw(ctx) {
     this.syncCam();
     const c = this.cam;
@@ -2318,6 +2324,15 @@ export class Game {
     this.light(p.x, p.y - 6, (this.mode === 'dungeon' ? 130 : 125) * flick, 'warm', 1);
     this.light(p.x, p.y - 8, 46, 'white', 0.7);
     this.lighting.render(ctx, c, this.world.ambient());
+    // By night the vignette darkens the scene, its fog and rain with it, before the horde is
+    // lifted out of it, so the far monsters at the screen's edge stand out of the dark as the
+    // near ones do (enemies.js NIGHT_EDGE); the glows, shots and numbers drawn after it go over it.
+    // By day the fog and weather and then the vignette go over everything, last.
+    const vig = vignette(256, 144, '8,6,16', this.world.daylight ? 0.18 : 0.7);
+    if (!this.world.daylight) {
+      this.drawSkies(ctx, c);
+      ctx.drawImage(vig, 0, 0, c.pxW, c.pxH);
+    }
     // The horde lifted out of the dark and edged in light (enemies.js NIGHT_EDGE).
     drawNightEdge(ctx, c, this);
 
@@ -2343,8 +2358,7 @@ export class Game {
     this.particles.draw(ctx, c, true);
     ctx.globalCompositeOperation = 'source-over';
 
-    if (this.world.drawOverlay) this.world.drawOverlay(ctx, c, this.clock);
-    if (this.weather) this.weather.draw(ctx, c);
+    if (this.world.daylight) this.drawSkies(ctx, c);
     // The foes' shots over everything, unlit: none can be lost behind a tree, in the horde or
     // in the dark.
     for (const s of this.eshots) s.draw(ctx, c);
@@ -2353,7 +2367,7 @@ export class Game {
     if (this.heroCovered) this.drawHeroOver(ctx, c);
 
     // Screen-space post effects.
-    ctx.drawImage(vignette(256, 144, '8,6,16', this.world.daylight ? 0.18 : 0.7), 0, 0, c.pxW, c.pxH);
+    if (this.world.daylight) ctx.drawImage(vig, 0, 0, c.pxW, c.pxH);
     if (p.dead && this.deathT !== undefined) this.drawFallen(ctx, c);
     const low = p.hp / p.maxHp;
     if (this.hurtFlash > 0 || (low < 0.3 && !p.dead)) {

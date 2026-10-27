@@ -6,7 +6,7 @@ import { WEAPON_SPRITES } from '../data/weapons.js';
 import { HEROES } from '../data/heroes.js';
 import { UPGRADES } from '../shared/profile.js';
 import { BASE_SPEED } from './player.js';
-import { SPR, TINTS, nightBuf, canvasFromBuf } from '../engine/sprites.js';
+import { SPR, TINTS, nightBuf, NIGHT_PAD, canvasFromBuf } from '../engine/sprites.js';
 import { hexPack, makeBuf, pack } from '../engine/pixels.js';
 import { OUTLINE } from '../art/palette.js';
 import { shade, hexOfPacked } from '../art/tune.js';
@@ -72,6 +72,11 @@ let nextId = 1;
 // Then (22 October 2026) "brighter, but like with contrast brighter, not just whiter, but more like
 // shiny and easy to see and stand out": their colours saturated (`sat`) and pulled apart (`contrast`),
 // on top of the lift (gamma 30 before), so they glow in their own hues instead of paling.
+// Then (27 October 2026) "they have to have a ever so slight glow so that the user can easily spot
+// them": the ring is a little stronger (`ringA` 0.4, 0.3 before) and a fainter pixel goes round it
+// (`haloA`), corners and all, so the edge fades out as a soft glow; and by night the vignette
+// darkens the scene under this layer, not over it (Game.draw), so a monster near the edge of the
+// screen is no darker for it than one by the hero.
 // The horde's speeds come in four classes (the owner's, 20 October 2026: "let us have a few
 // classes of speeds ... mice and bats should probably be equally fast and as fast as basic no
 // upgrade knight on normal. Then on nightmare they should be a little faster than basic knights
@@ -100,7 +105,7 @@ export function hordePace(type, o = {}) {
   return KNIGHT_PACE * PACE_CLASS[PACE_OF[type]] * (1 - (def.slower || 0));
 }
 
-export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast: 25, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.3, near: 60 };
+export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast: 25, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.4, haloA: 0.16, near: 60 };
 
 // A flyer is drawn up off the ground, bobbing a little (draw, body).
 const HOVER = { up: 6, bob: 2 };
@@ -937,7 +942,7 @@ export function drawNightEdge(ctx, cam, g, n = nightContext(cam)) {
     if (a < 0.02) continue;
     if (cut) n.globalCompositeOperation = 'source-over';
     cut = false;
-    const ux = w / fr.w, uy = h / fr.h;
+    const ux = (NIGHT_PAD * w) / fr.w, uy = (NIGHT_PAD * h) / fr.h;
     n.globalAlpha = a;
     n.drawImage(fr.variant(key, fn, flip), X - ux, Y - uy, w + 2 * ux, h + 2 * uy);
     any = true;
@@ -1000,9 +1005,10 @@ const nightHole = () => (holeC ??= canvasFromBuf(nightHoleBuf()));
 const NIGHT_RISE = 0.3;
 // A posed boss's idle, frames a second (frameIndex).
 const IDLE_FPS = 8;
-// A ring colour, at its share of the layer's alpha.
+// A ring colour, at its share of the layer's alpha; its halo, the fainter pixel round it.
 const ringOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.ringA));
-const RING = ringOf(NIGHT_EDGE.ring);
+const haloOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.haloA));
+const RING = ringOf(NIGHT_EDGE.ring), HALO = haloOf(NIGHT_EDGE.ring);
 // A frame in its night colours (NIGHT_EDGE lift, gamma, sat and contrast), each colour worked out once; its ink
 // outline (a tuned sprite's own: b.ink) and a rim of its own (b.rim) stay as they are.
 // Lifted first, then saturated and pulled apart: contrast before the lift would crush the darks
@@ -1034,17 +1040,17 @@ export function nightLift(b) {
 // unringed round its gold outline. Each is lifted first (nightLift), then tinted or outlined in
 // gold as drawn. [variant key, how it is built from the frame]
 export const NIGHT_LOOKS = [
-  ['night', (b) => nightBuf(nightLift(b), RING)],
-  ['night-frozen', (b) => nightBuf(TINTS.frozen(nightLift(b)), RING)],
-  ['night-burn', (b) => nightBuf(TINTS.burn(nightLift(b)), RING)],
+  ['night', (b) => nightBuf(nightLift(b), RING, HALO)],
+  ['night-frozen', (b) => nightBuf(TINTS.frozen(nightLift(b)), RING, HALO)],
+  ['night-burn', (b) => nightBuf(TINTS.burn(nightLift(b)), RING, HALO)],
   ['night-eliteo', (b) => nightBuf(eliteOutlineBuf(nightLift(b)), 0)],
   ['night-frozen-e', (b) => nightBuf(TINTS.frozen(nightLift(b)), 0)],
   ['night-burn-e', (b) => nightBuf(TINTS.burn(nightLift(b)), 0)],
 ];
 // An ally's, lifted as the horde's and ringed in green so that a skeleton of the hero's reads
 // apart from the horde's.
-const ALLY_RING = ringOf(NIGHT_EDGE.allyRing);
-export const ALLY_LOOK = ['night-ally', (b) => nightBuf(nightLift(b), ALLY_RING)];
+const ALLY_RING = ringOf(NIGHT_EDGE.allyRing), ALLY_HALO = haloOf(NIGHT_EDGE.allyRing);
+export const ALLY_LOOK = ['night-ally', (b) => nightBuf(nightLift(b), ALLY_RING, ALLY_HALO)];
 
 // Just a boss's outline, in its colour: drawn unlit over the boss.
 function rimBuf(b, color) {
