@@ -43,6 +43,7 @@ export class Weapon {
     this.since = g.time;
     this.fx = null;
     this.targets = [];
+    this.targetIds = []; // and the id each had when picked (setTargets): a fallen foe's body comes back from the pool as another
     this.recompute();
   }
 
@@ -190,6 +191,18 @@ const muzzle = (g) => ({ x: g.player.x, y: g.player.y - 1 });
 const panOf = (g, x) => Math.max(-1, Math.min(1, (x - g.player.x) / 200));
 // The i-th shot of a fan, step radians apart: straight on, then one side and the other.
 const fan = (i, step) => Math.ceil(i / 2) * (i % 2 ? 1 : -1) * step;
+// A burst's targets (Weapon.targets), kept with the id each had when picked: a fallen foe's body
+// goes back to the pool and comes out again as another monster, with a new id (as Telegraph and the
+// bosses' still() check), and a later shot of the burst would fly at that one (27 October 2026).
+function setTargets(w, list) {
+  w.targets = list;
+  w.targetIds = list.map((t) => (t ? t.id : -1));
+}
+// Target i of the burst, while it still stands as the foe it was picked as; else null.
+function stillTarget(w, i) {
+  const t = w.targets[i];
+  return t && !t.dead && t.id === w.targetIds[i] ? t : null;
+}
 
 // An instant ray from (x, y) along ang, up to L px or the first wall: strikes every foe whose
 // feet or body as drawn (hitbox.js) it crosses (but those in skip), drawn as a bright beam RAY_UP
@@ -370,16 +383,17 @@ export const KINDS = {
     fire(w) {
       const g = w.g, p = g.player;
       const near = g.nearestEnemies(p.x, p.y, 8, w.reach);
-      w.targets = [];
-      for (let i = 0; i < w.s.amount; i++) w.targets.push(near.length ? pick(near) : null);
+      const list = [];
+      for (let i = 0; i < w.s.amount; i++) list.push(near.length ? pick(near) : null);
+      setTargets(w, list);
       w.burst(w.s.amount, 0.13);
     },
     aim(w, t) {
-      w.targets = w.targets.map(() => t);
+      setTargets(w, w.targets.map(() => t));
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
-      const t = w.targets[i];
+      const t = stillTarget(w, i);
       const ang = t ? aimAt(p, t) : p.aim + rand(-0.4, 0.4);
       spawnProjectile(g, {
         kind: 'fireball', sprite: 'fireball', x: p.x, y: p.y, z: 8, ang, speed: 150 * w.s.speed, life: 1.6, r: 4,
@@ -744,7 +758,7 @@ export const KINDS = {
   glaive: {
     fire(w) {
       const g = w.g, p = g.player;
-      w.targets = g.nearestEnemies(p.x, p.y, w.s.amount, 120 * w.s.speed);
+      setTargets(w, g.nearestEnemies(p.x, p.y, w.s.amount, 120 * w.s.speed));
       w.baseAng = rand(TAU);
       // Lodestar throws the whole wheel at once.
       w.burst(w.s.amount, w.s.ring ? 0 : 0.12);
@@ -755,7 +769,7 @@ export const KINDS = {
       let ang;
       if (w.s.ring) ang = w.baseAng + (i / n) * TAU;
       else {
-        const t = w.targets.length ? w.targets[i % w.targets.length] : null;
+        const t = w.targets.length ? stillTarget(w, i % w.targets.length) : null;
         ang = t ? aimAt(p, t) + (i >= w.targets.length ? rand(-0.5, 0.5) : 0) : p.aim + rand(-0.6, 0.6);
       }
       spawnProjectile(g, {
@@ -919,21 +933,21 @@ export const KINDS = {
     reach: 230,
     fire(w) {
       const g = w.g, p = g.player;
-      w.targets = boltTargets(g, p.x, p.y, w.reach, w.s.amount);
+      setTargets(w, boltTargets(g, p.x, p.y, w.reach, w.s.amount));
       if (!w.targets.length && !w.hand) return false;
       w.baseAng = aimAt(p, w.targets[0], p.aim);
       w.burst(w.s.amount, w.s.nova ? 0.08 : 0.12);
     },
     aim(w, t) {
       if (t) {
-        w.targets = [t];
+        setTargets(w, [t]);
         w.baseAng = aimAt(w.g.player, t);
       }
     },
     shoot(w, i) {
       const g = w.g, p = g.player;
-      const t = w.targets.length ? w.targets[i % w.targets.length] : null;
-      const ang = t && !t.dead ? aimAt(p, t) : w.baseAng;
+      const t = w.targets.length ? stillTarget(w, i % w.targets.length) : null;
+      const ang = t ? aimAt(p, t) : w.baseAng;
       const purge = !!(p.ult && p.ult.type === 'purge');
       const o = { dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, speed: w.s.speed, bane: w.s.bane, nova: !!w.s.nova || purge, ult: purge };
       silverBolt(g, w, p.x, p.y, ang, o);

@@ -185,6 +185,7 @@ export class Enemy {
     this.slowT = 0;
     this.slowF = 0;
     this.freezeT = 0;
+    this.shatterOnDeath = false; // Frozen Heart's mark (Game.hitEnemy): a body back from the pool brings none with it
     // Branded by Smite (Game.hitEnemy: every blow does brandK more while brandT lasts) and held
     // by roots (rootT: it can't move, though it still strikes what touches it and still shoots);
     // stunned (stunT, Sanctum's: held, and what touches it is not struck).
@@ -310,14 +311,15 @@ export class Enemy {
     }
 
     // A curse ends: one blow of its share of all that was dealt under it. The recording already holds
-    // the hero's might, so it is taken out of the blow here (hitEnemy puts it back).
+    // all the blows' strength (the hero's might, crits, brand, his rage...), so it lands as it is
+    // (hitEnemy's o.raw; 27 October 2026).
     if (this.curseT > 0) {
       this.curseT -= dt;
       if (this.curseT <= 0) {
         const rec = this.curseRec * this.curseShare;
         this.curseRec = 0;
         g.particles.burst(this.x, this.y - this.h * 0.5, 6, 6, [PC.P, PC.p, PC.i], 50, 0.5, 1, P.GLOW | P.FADE, {});
-        if (rec >= 1) g.hitEnemy(this, rec / p.might, { w: this.curseW, type: 'dark', kb: 0, noCrit: true });
+        if (rec >= 1) g.hitEnemy(this, rec, { w: this.curseW, type: 'dark', kb: 0, noCrit: true, raw: true });
         if (this.dead) return;
       }
     }
@@ -669,6 +671,9 @@ export class Enemy {
   }
 
   caster(dt) {
+    // Frozen, it neither winds up nor looses a shot: a wind-up under way (and the red flash that
+    // warns of it, hidden under the ice tint: draw) waits for the thaw, and its cooldown with it (27 October 2026).
+    if (this.freezeT > 0) return aim(0, 0, 0);
     const g = this.g, p = g.player, s = this.def.shot;
     const dx = p.x - this.x, dy = p.y - this.y;
     const dist = Math.hypot(dx, dy) || 1;

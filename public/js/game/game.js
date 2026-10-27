@@ -883,28 +883,34 @@ export class Game {
       e.aware = true;
     }
     const p = this.player;
-    let d = dmg * p.might;
-    if (p.buff('fury')) d *= 1.6;
-    if (p.buff('wildcap')) d *= 2;
-    if (o.ult) d *= 1 + p.level * 0.04;
-    // Smite's brand on the foe; the Witch Hunter's Inquisition on the strong, the Berserker's
-    // Bloodrage, the Druid's Grove Warden.
-    if (e.brandT > 0) d *= 1 + e.brandK;
-    const hs = p.hero.stats;
-    if (hs.bane && (e.boss || e.lord || e.elite)) d *= 1 + hs.bane;
-    if (p.huntBane && (e.boss || e.lord || e.elite)) d *= 1 + p.huntBane; // Hunter's Mark
-    if (p.torc) d *= 1 + p.torc * (1 - clamp(p.hp / p.maxHp, 0, 1)); // Berserker's Torc
-    if (hs.rage) d *= 1 + hs.rage.might * p.rage;
-    if (hs.grove && p.inGrove) d *= 1 + hs.grove;
-    let crit = false;
-    // A tick of damage over time (Enemy.addDot) never crits.
-    if (!o.noCrit) {
-      crit = Math.random() < p.crit + (o.crit || 0);
-      if (crit) d *= p.critMult + (o.critDmg || 0);
+    let d = dmg, crit = false;
+    // A blow already reckoned in full (o.raw: a Hex curse's payoff, Enemy.update, a share of blows
+    // that each had the hero's strength, his crits and the foe's brand and stone in them) is dealt as
+    // it is: put through all that again it counted twice (27 October 2026).
+    if (!o.raw) {
+      d *= p.might;
+      if (p.buff('fury')) d *= 1.6;
+      if (p.buff('wildcap')) d *= 2;
+      // The ultimate's blows grow with nothing but its own strength: no 4% a level more, the
+      // owner's "Levelups do not make hero stronger" (21 October 2026; player.js LEVEL_MIGHT), 27 October 2026.
+      // Smite's brand on the foe; the Witch Hunter's Inquisition on the strong, the Berserker's
+      // Bloodrage, the Druid's Grove Warden.
+      if (e.brandT > 0) d *= 1 + e.brandK;
+      const hs = p.hero.stats;
+      if (hs.bane && (e.boss || e.lord || e.elite)) d *= 1 + hs.bane;
+      if (p.huntBane && (e.boss || e.lord || e.elite)) d *= 1 + p.huntBane; // Hunter's Mark
+      if (p.torc) d *= 1 + p.torc * (1 - clamp(p.hp / p.maxHp, 0, 1)); // Berserker's Torc
+      if (hs.rage) d *= 1 + hs.rage.might * p.rage;
+      if (hs.grove && p.inGrove) d *= 1 + hs.grove;
+      // A tick of damage over time (Enemy.addDot) never crits.
+      if (!o.noCrit) {
+        crit = Math.random() < p.crit + (o.crit || 0);
+        if (crit) d *= p.critMult + (o.critDmg || 0);
+      }
+      d *= rand(0.9, 1.1);
+      if (e.mod && e.mod.id === 'stone') d *= 0.65;
+      if (e.freezeT > 0 && o.shatter) d *= 1.5;
     }
-    d *= rand(0.9, 1.1);
-    if (e.mod && e.mod.id === 'stone') d *= 0.65;
-    if (e.freezeT > 0 && o.shatter) d *= 1.5;
     d = Math.max(1, Math.round(d));
     if (sealed) {
       this.world.strikeSeal(e, d);
@@ -943,8 +949,10 @@ export class Game {
     if (this.ultRun && ultBlow(o)) this.ultRun.dmg += took;
     this.stats.damage += took;
     if (p.fang > 0) p.fangHeal(took); // Vampire Fang
-    // Ember Heart: a blow (not a burn's own tick) may set the foe alight for 3 s at a quarter of it a second.
-    if (p.ember > 0 && !o.noCrit && !e.prop && Math.random() < p.ember) e.addDot('fire', d * 0.25, 3, o.w);
+    // Ember Heart: a blow (not a burn's own tick) may set the foe alight for 3 s at a quarter of the blow
+    // as the weapon struck it (dmg) a second: each tick puts the hero's strength in (hitEnemy), as for
+    // every other burn, so the blow's own is not in it twice (27 October 2026).
+    if (p.ember > 0 && !o.noCrit && !e.prop && Math.random() < p.ember) e.addDot('fire', dmg * 0.25, 3, o.w);
     const pan = clamp((e.x - p.x) / 200, -1, 1);
     if (crit) sfx('crit', { pitch: rand(0.9, 1.1), pan });
     else sfx('hit', { pitch: rand(0.8, 1.2), pan });

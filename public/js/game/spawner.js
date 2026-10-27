@@ -54,8 +54,12 @@ export const RING = { more: 3, layers: 3, gap: 26 };
 // Jolts (the owner's, 26 October 2026): "random jolts of monsters ... every 30 - 90 seconds ... the
 // computer quickly checks where the hero is currently headed" and sends a stream at him from ahead,
 // close to his way but not on it (up to JOLT.spread radians off), JOLT.count of one kind as the
-// difficulty and the night weigh it. No warning: that's the jolt.
-export const JOLT = { every: [30, 90], count: 6, spread: 0.45 };
+// difficulty and the night weigh it. No warning: that's the jolt. Never one that shoots, nor the
+// heavy (JOLT.never): the night's count of Cultists, Ogres or Death Knights locked on him unwarned
+// was a wall of them (27 October 2026; Cultists are few, big and slow, the owner's).
+export const JOLT = { every: [30, 90], count: 6, spread: 0.45, never: ['ogre', 'deathknight'] };
+// What a jolt never is: the shooters (Cultists, Skeleton Archers) and JOLT.never.
+const JOLT_NOT = Object.keys(ENEMIES).filter((type) => ENEMIES[type].shot || JOLT.never.includes(type));
 
 export const WAVE = { first: 45, every: 75, length: 15, peak: 1.5 };
 export function waveAt(t) {
@@ -332,7 +336,8 @@ export class Spawner {
   fire(ev, phase) {
     const g = this.g, p = g.player;
     g.warnings = g.warnings.filter((w) => w.ev !== ev);
-    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) ? g.diff.few : 1) * hordeMore(g, phase))) };
+    // A kind picked by pickType (a jolt: ev.picked) came that much more seldom already; cut again it was a ninth, not a third (27 October 2026).
+    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) && !ev.picked ? g.diff.few : 1) * hordeMore(g, phase))) };
     const st = this.stats(phase);
     const cam = g.cam;
     switch (ev.type) {
@@ -377,13 +382,14 @@ export class Spawner {
     }
   }
 
-  // A jolt (JOLT): a swarm of one kind of tonight's monsters coming at the hero from the way he is
-  // headed (his last step's, Player.aim), a little off it.
+  // A jolt (JOLT): a swarm of one kind of tonight's monsters that neither shoots nor is one of the
+  // heavy (JOLT_NOT), coming at the hero from the way he is headed (his last step's, Player.aim), a little off it.
   jolt(phase) {
     const g = this.g;
-    // dir is the way the swarm moves, so back at him; fire weighs its count as a timed swarm's.
+    // dir is the way the swarm moves, so back at him; fire weighs its count as a timed swarm's, but
+    // for the few cut pickType already made (picked).
     const dir = g.player.aim + Math.PI + rand(-JOLT.spread, JOLT.spread);
-    this.fire({ type: 'swarm', enemy: this.pickType(phase), dir, count: JOLT.count }, phase);
+    this.fire({ type: 'swarm', enemy: this.pickType(phase, JOLT_NOT), dir, count: JOLT.count, picked: true }, phase);
   }
 
   spawnElite(phase) {

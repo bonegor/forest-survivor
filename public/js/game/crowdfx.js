@@ -62,6 +62,7 @@ export class Hook {
     this.g = g;
     this.w = w;
     this.target = target;
+    this.targetId = target.id; // a fallen foe's body may come back from the pool as another (update; 27 October 2026)
     this.i = i;
     this.x = target.x;
     this.y = target.y;
@@ -73,7 +74,8 @@ export class Hook {
     const p = this.g.player;
     this.t += dt;
     if (!this.back) {
-      if (!this.target.dead) {
+      // Its foe fallen, the hook stays where it fell.
+      if (!this.target.dead && this.target.id === this.targetId) {
         this.x = this.target.x;
         this.y = this.target.y;
       }

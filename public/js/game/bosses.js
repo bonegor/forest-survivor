@@ -12,6 +12,11 @@ import { foeName, shotName } from './names.js';
 const distP = (e) => Math.hypot(e.g.player.x - e.x, e.g.player.y - e.y);
 const angP = (e) => Math.atan2(e.g.player.y - e.y, e.g.player.x - e.x);
 const toward = (e) => e.g.world.steer(e, e.g.player);
+// The Butcher's charge: BUTCHER_DASH.spd px/s at the pace the night's monsters walk (Enemy.update: the
+// difficulty's speed, the run's walking speed, Normal's foePace) for BUTCHER_DASH.t s. Its red line is
+// as long as that and as wide as his touch reaches (e.r + p.r each side), so every charge can be
+// dodged by stepping out of the red (27 October 2026: it was a fixed 200 x 26).
+const BUTCHER_DASH = { spd: 290, t: 0.7 };
 
 // A boss's telegraphed blow lands only while that same boss stands. Once it falls, its body
 // goes back to the pool and may come out again as another monster, with a new id.
@@ -26,7 +31,9 @@ function blast(g, x, y, r, dmg, style, by) {
   g.effects.push(new Explosion(g, x, y, r, style));
   g.effects.push(new Ring(g, x, y, 4, r * 1.1, 0.4, style === 'fire' ? '#fee761' : '#f6757a'));
   const p = g.player;
-  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * g.bossPower, null, by);
+  // As a boss's touch grows with the night (Enemy.update): 0.6 of the night's own growth (Game.dmgScale), so a
+  // warned slam late in the night never hurts less than a stray bolt (27 October 2026).
+  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * (1 + (g.dmgScale - 1) * 0.6) * g.bossPower, null, by);
   g.shake(0.45);
   sfx('slam');
 }
@@ -50,8 +57,14 @@ function fan(g, e, n, spread, kind, speed, dmg, opts) {
 }
 
 function strike(g, e, x, y, r, dmg, delay, style = 'fire') {
-  const by = foeName(e);
-  g.effects.push(new Telegraph(g, { shape: 'circle', x, y, r, dur: delay, onDone: () => blast(g, x, y, r, dmg, style, by) }));
+  const by = foeName(e), id = e.id;
+  // Lands only while its caster stands (still): the Demon Lord's meteors fall no more once he has (27 October 2026).
+  g.effects.push(new Telegraph(g, {
+    shape: 'circle', x, y, r, dur: delay,
+    onDone: () => {
+      if (still(e, id)) blast(g, x, y, r, dmg, style, by);
+    },
+  }));
 }
 
 // Stands casting for t s, in a pose of its sprite's if it has one (Enemy.frameIndex).
@@ -117,7 +130,7 @@ export const BOSS_AI = {
   },
 
   butcher(e, dt) {
-    const g = e.g;
+    const g = e.g, p = g.player;
     e.phase = e.hp / e.maxHp < 0.3 ? 1 : 0;
     if (e.phase && !e.data.enraged) {
       e.data.enraged = true;
@@ -132,7 +145,7 @@ export const BOSS_AI = {
         e.shake = 1;
         if (e.stateT <= 0) {
           e.state = 'dash';
-          e.stateT = 0.7;
+          e.stateT = BUTCHER_DASH.t;
           e.shake = 0;
           sfx('charge');
         }
@@ -145,7 +158,7 @@ export const BOSS_AI = {
           e.stateT = e.phase ? 0.3 : 0.6;
           g.shake(0.25);
         }
-        return [e.lockX, e.lockY, 290 / e.spd];
+        return [e.lockX, e.lockY, BUTCHER_DASH.spd / e.spd];
       case 'recover':
         e.stateT -= dt;
         if (e.stateT <= 0) e.state = 'move';
@@ -165,7 +178,8 @@ export const BOSS_AI = {
       e.lockX = Math.cos(a);
       e.lockY = Math.sin(a);
       e.face = faceAttack(e.face, false, e.lockX, e.lockY);
-      g.effects.push(new Telegraph(g, { shape: 'line', x: e.x, y: e.y, ang: a, len: 200, w: 26, dur: e.stateT }));
+      const len = BUTCHER_DASH.spd * g.diff.speed * g.move * (g.diff.foePace ?? 1) * BUTCHER_DASH.t;
+      g.effects.push(new Telegraph(g, { shape: 'line', x: e.x, y: e.y, ang: a, len, w: 2 * (e.r + p.r), dur: e.stateT }));
       if (Math.random() < 0.35) say(e, pick(['FRESH MEAT!', 'COME HERE!', 'MEAT FOR THE HOOKS!']), 1.6);
       return [0, 0, 0];
     }
