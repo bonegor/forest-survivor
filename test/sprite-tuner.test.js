@@ -70,15 +70,17 @@ test('a tune moves the colours, never the pixels: the ink outlines the sprite, t
   assert.ok(T.meanLuma(tuned.frames, new Set([INK, RIM])) > T.meanLuma(stock.frames, new Set([OUTLINE])) + 15, 'lifted: lighter');
 });
 
-test("a hero's sheet is tuned by its own colours: the outline swapped, the rim kept in the frame when it fits", () => {
-  const necro = ART.necromancer, slots = T.colourSlots(necro), ink = slots.find((s) => s.ink);
-  assert.equal(ink.key, '#000000', 'his outline: black');
-  const t = tune({ lift: 30, ink: '#2a2238', rim: T.RIM }), def = T.tunedDef(necro, t, slots);
-  assert.equal(def.palette['#000000'], '#2a2238');
+test("a hero's sheet is tuned by its own colours: no ink to swap, the rim kept in the frame when it fits", () => {
+  // Every hero outlines in dark shades of their own colours (the plumed Knight's style, 27 October
+  // 2026): there is no one ink to swap. The monsters' ink is swapped in the test above.
+  for (const id of ['archer', 'mage', 'necromancer', 'rogue', 'paladin', 'paladin_d', 'druid', 'berserker', 'witchhunter']) {
+    assert.equal(T.colourSlots(ART[id]).find((s) => s.ink), undefined, `${id}: no ink`);
+  }
+  const necro = ART.necromancer, slots = T.colourSlots(necro);
+  const t = tune({ lift: 30, ink: '#ff00ff', rim: T.RIM }), def = T.tunedDef(necro, t, slots);
   const stock = spriteBuffers(necro), tuned = spriteBuffers(def);
-  const blacks = (bs) => bs.reduce((n, b) => n + b.d.filter((c) => c === hexPack('#000000')).length, 0);
-  assert.equal(blacks(tuned.frames), 0);
-  assert.equal(tuned.frames.reduce((n, b) => n + b.d.filter((c) => c === hexPack('#2a2238')).length, 0), blacks(stock.frames));
+  assert.ok(!tuned.frames.some((b) => b.d.includes(hexPack('#ff00ff'))), 'no ink drawn');
+  assert.ok(tuned.frames[0].d.some((c) => c === hexPack(T.RIM)), 'the rim drawn');
   assert.equal(tuned.anchorY, necro.anchorY + (tuned.frames[0].w > stock.frames[0].w ? 1 : 0), 'the feet move with a grown frame');
   for (const c of necro.glow) assert.ok(tuned.emissive.has(hexPack(def.palette[T.hexOfPacked(c)] || T.hexOfPacked(c))), 'what glows still glows');
 
