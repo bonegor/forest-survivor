@@ -27,6 +27,7 @@ const LOOKS = {
 // picks (at 60 Hz), each one grid query of the foes within 130 px, as before.
 const SHARE = 40; // px a foe seems farther for each other minion on it
 const STICK = 10; // px nearer the foe it is on seems, so it doesn't dither between two
+const IN_ROCK = 1e6; // px a foe standing in the rock (a Dungeon Run floor's: throughWalls) seems farther, so a minion takes one only with none in the open
 const SPACE = 10; // px minions keep between them
 const PUSH = 50; // px/s a standing one edges away at most: slower than any of them walks
 const RING = 1; // px within reach a minion stands from its foe
@@ -178,9 +179,10 @@ export class Minion {
   best(cx, cy, r, leash) {
     const g = this.g, p = g.player;
     let best = null, bs = Infinity;
+    const rock = g.world.throughWalls ? g.world : null;
     for (const e of g.grid.query(cx, cy, r, near)) {
       if (e.dead || e.prop || (e.x - cx) ** 2 + (e.y - cy) ** 2 > r * r || (e.x - p.x) ** 2 + (e.y - p.y) ** 2 >= leash * leash) continue;
-      const s = Math.hypot(e.x - this.x, e.y - this.y) + claims(e) * SHARE - (e === this.target ? STICK : 0);
+      const s = Math.hypot(e.x - this.x, e.y - this.y) + claims(e) * SHARE - (e === this.target ? STICK : 0) + (rock && !rock.free(e.x, e.y) ? IN_ROCK : 0);
       if (s < bs) {
         bs = s;
         best = e;

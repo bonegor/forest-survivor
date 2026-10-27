@@ -173,7 +173,8 @@ export const BOTS = {
       // then walk the corridors to the guardian, and after it to the stairs.
       const w = v.world, st = w.stairs, gd = w.guardian;
       if (st || (gd && gd.sleeping && !gd.sealed)) {
-        const gx = st ? st.x : gd.x, gy = st ? st.y + 4 : gd.y, k = st ? 1.5 : 0.9;
+        // Stairs that opened under him take him down only once he has stepped off them (Dungeon armed): off first, then back on.
+        const gx = st ? st.x : gd.x, gy = st ? st.y + (st.armed ? 4 : 24) : gd.y, k = st ? 1.5 : 0.9;
         const step = w.path(gx, gy);
         if (step) {
           fx += step.x * k;

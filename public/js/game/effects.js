@@ -1188,11 +1188,15 @@ export class Beam {
 
 // -------------------------------------------------------------- ultimates --
 
+// The ultimates about the hero are persistent: through a crypt's door or down the stairs they go
+// with him (Game.clearTransient); those over the world end there (WORLD_ULTS).
+
 // Knight: a spinning storm of steel around the hero.
 export class Whirl {
   constructor(g, dur) {
     this.g = g;
     this.dur = dur;
+    this.persistent = true;
     this.t = 0;
     this.tickT = 0;
     this.ang = 0;
@@ -1315,6 +1319,7 @@ export class ShadowDance {
   constructor(g, dur) {
     this.g = g;
     this.dur = dur;
+    this.persistent = true;
     this.t = 0;
     this.k = 0;
   }
@@ -1593,6 +1598,7 @@ export class Sanctum {
   constructor(g, dur) {
     this.g = g;
     this.dur = dur;
+    this.persistent = true;
     this.t = 0;
     this.tickT = 0;
     this.healT = 0;
@@ -1720,6 +1726,7 @@ export class Frenzy {
   constructor(g, dur) {
     this.g = g;
     this.dur = dur;
+    this.persistent = true;
     this.t = 0;
     this.k = 0;
   }
@@ -1781,6 +1788,7 @@ export class Purge {
   constructor(g, dur) {
     this.g = g;
     this.dur = dur;
+    this.persistent = true;
     this.t = 0;
     this.k = 0;
     this.volT = 0; // the next volley of its own

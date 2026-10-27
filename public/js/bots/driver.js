@@ -315,7 +315,7 @@ class WorldView {
 
   get stairs() {
     const s = this.g.world.stairs;
-    return s ? { x: s.x, y: s.y } : null;
+    return s ? { x: s.x, y: s.y, armed: !!s.armed } : null;
   }
 
   get guardian() {

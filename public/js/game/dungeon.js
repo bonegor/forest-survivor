@@ -221,6 +221,30 @@ const THAW = { hp: 1, most: 1, chips: 3, drip: 6, shards: 24, melt: 14 };
 // The ice's colours, and its meltwater's (particles).
 const ICE = [PC.w, PC.X, PC.c], MELT = [PC.U, PC.c];
 
+// A lava pool's box (x0..x1, y0..y1 in tiles) once laid: an open tile in it from which no walk over
+// open floor (four ways: a body can't slip between two corners) leads out of the box goes under
+// too, so nothing (a shrine, a chest, a fallen foe's loot) can be set where the hero can't reach.
+function sealPool(grid, W, x0, y0, x1, y1) {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (grid[y * W + x] !== FLOOR) continue;
+    const seen = [y * W + x];
+    let out = false;
+    for (let k = 0; k < seen.length && !out; k++) {
+      const cx = seen[k] % W, cy = (seen[k] / W) | 0;
+      for (let s = 0; s < 4; s++) {
+        const nx = cx + STEPS[s][0], ny = cy + STEPS[s][1], i = ny * W + nx;
+        if (grid[i] !== FLOOR || seen.includes(i)) continue;
+        if (nx < x0 || nx > x1 || ny < y0 || ny > y1) {
+          out = true;
+          break;
+        }
+        seen.push(i);
+      }
+    }
+    if (!out) for (const i of seen) grid[i] = LAVA;
+  }
+}
+
 export class Dungeon {
   // crypt: { name, theme } for a crypt off the forest road, else a Dungeon Run floor.
   constructor(g, floor, seed, crypt = null) {
@@ -366,6 +390,7 @@ export class Dungeon {
       if (this.info.theme === 'inferno' && r.w >= 11 && r.h >= 9 && rng() < 0.6) {
         const lx = r.cx + rng.int(-2, 1), ly = r.cy + rng.int(-1, 1);
         for (let y = ly - 1; y <= ly + 1; y++) for (let x = lx - 2; x <= lx + 2; x++) if (rng() < 0.85) grid[y * W + x] = LAVA;
+        sealPool(grid, W, lx - 2, ly - 1, lx + 2, ly + 1);
       }
     }
   }
@@ -1005,13 +1030,16 @@ export class Dungeon {
         g.objective = `Slay ${gd.name || gd.def.name}`;
       }
     }
-    // The stairs down, once a floor's guardian has fallen.
+    // The stairs down, once a floor's guardian has fallen, armed as the crypt's below are.
     const onStairs = (s) => Math.abs(p.x - s.x) < 12 && p.y > s.y - 6 && p.y < s.y + 14;
     if (this.stairs && g.state === 'play') {
       const s = this.stairs;
       s.t += dt;
       if (Math.random() < 0.3) g.particles.emit(s.x + rand(-10, 10), s.y + rand(-4, 8), 0, 0, 0, rand(10, 30), 1, 1, PC.L, P.GLOW | P.FADE, 0);
-      if (onStairs(s)) g.descend();
+      // Armed once he is off them, as a crypt's stairs up are: stairs opening under his feet where
+      // the guardian fell don't take him down before he has seen what it left.
+      if (!onStairs(s)) s.armed = true;
+      else if (s.armed) g.descend();
     }
     // A crypt's stairs back up, by the door: open whenever the hero likes (the user's call, 16
     // October 2026: "player can always exit"), once he has stepped off them, walking up them as he
@@ -1102,7 +1130,7 @@ export class Dungeon {
       const f = this.floorNear(x, y);
       best = [Math.floor(f.x / T), Math.floor(f.y / T)];
     }
-    this.stairs = { x: best[0] * T + T / 2, y: best[1] * T + 2, t: 0 };
+    this.stairs = { x: best[0] * T + T / 2, y: best[1] * T + 2, t: 0, armed: false };
     this.g.banner('The way down is open', 'Find the stairs', '#63c74d', 2.5);
   }
 

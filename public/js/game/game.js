@@ -92,6 +92,16 @@ export const HERO_MARK = { rx: 9, ry: 4, low: 0.3, hurt: '#e43b44' };
 // quarter second and is never passed over. A blow that lands where one rises still hurts it.
 export const targetable = (e) => !e.dead && !e.prop && e.spawnT <= 0.3;
 
+// On a Dungeon Run floor a foe may stand in the rock (Dungeon.throughWalls), where the hero's shots
+// break on the wall's face (projectiles.js, Dungeon.solid): it seems this much farther (squared px)
+// to his weapons' aim, taken only when no foe on open ground is in reach.
+const IN_ROCK = 1e12;
+
+// The ultimates laid over the world rather than about the hero: Overgrowth's vines and the foes
+// they hold, the Arrow Rain's storm. A change of world (a crypt's door, the stairs, a faint) ends
+// them (Game.clearTransient); those about him (persistent effects) go with him.
+const WORLD_ULTS = new Set(['overgrowth', 'arrowstorm']);
+
 // Game.dropSpots: how far apart two drops lie, side by side or one above the other, and where the
 // second goes from the first when neither way is open (a tile on, any way).
 const DROP_GAP = 10;
@@ -361,20 +371,17 @@ export class Game {
 
   enterFloor(n) {
     const f = FLOORS[n - 1];
+    // What lies about the floor he leaves comes with him (sweepLoot) before the floor is cleared away.
+    this.sweepLoot();
     this.floor = n;
     this.floorName = f.name;
     this.floorTime = 0;
     for (const e of this.enemies) this.enemyPool.put(e);
     this.enemies.length = 0;
-    for (const p of this.projectiles) releaseProjectile(p);
-    this.projectiles.length = 0;
-    this.eshots.length = 0;
-    this.minions.length = 0;
+    this.clearTransient();
     this.pickups.length = 0;
     this.decals.length = 0;
     this.shrines.length = 0;
-    this.effects = this.effects.filter((e) => e.persistent);
-    this.particles.clear();
     this.boss = null;
     this.world = new Dungeon(this, n, (this.seed + n * 7919) >>> 0);
     const start = this.world.start;
@@ -382,6 +389,8 @@ export class Game {
     this.player.y = start.y;
     this.cam.x = start.x - this.cam.W / 2;
     this.cam.y = start.y - this.cam.H / 2;
+    // His raised dead and the Army of the Dead's knights come down with him, as into a crypt.
+    this.gatherMinions();
     this.spawner.resetForFloor(f.phase0);
     this.objective = `Slay ${ENEMIES[f.guardian].name}`;
     this.banner(`Floor ${n}`, f.name, n === 3 ? '#f77622' : '#c0cbdc', 3.2);
@@ -749,10 +758,15 @@ export class Game {
       else if (u.type === 'passive') u.level = p.passives.get(u.id);
       else if (u.type === 'bless') u.level = p.blessings;
     }
-    const gold = Math.round(rand(15, 40) * (1 + this.phase / 10) * (kind === 'boss' ? 3 : 1));
+    const gold = this.chestGold(kind);
     this.gold += gold;
     this.stats.gold += gold;
     return { items, gold };
+  }
+
+  // A chest's gold: more as the night goes on, three times as much in a boss's.
+  chestGold(kind) {
+    return Math.round(rand(15, 40) * (1 + this.phase / 10) * (kind === 'boss' ? 3 : 1));
   }
 
   openChest(opts = {}) {
@@ -1121,6 +1135,9 @@ export class Game {
     for (let i = 0; i < 6; i++) {
       this.effects.push(new Meteor(this, null, e.x + rand(-30, 30), e.y + rand(-24, 24), 20, 0, 0.1 + i * 0.12, { fall: 0.01 }));
     }
+    // A Dungeon Run floor's guardian is gone for good: its body goes back to the pool and walks
+    // again as another foe, which its minimap dot and marker would follow (Dungeon.drawMap, marker).
+    if (this.world.guardian === e) this.world.guardian = null;
     // Its loot and its stairs together on the open floor nearest where it fell: a Dungeon Run
     // floor's guardian comes through the walls (Dungeon.throughWalls) and may fall deep in one.
     const at = this.world.floorNear ? this.world.floorNear(e.x, e.y) : e;
@@ -1256,6 +1273,9 @@ export class Game {
   enterCrypt(d) {
     if (this.inCrypt || this.state !== 'play') return;
     this.stir = null;
+    // A boss's stir cut short comes again once he is back (Spawner: stirFor), the night's clock
+    // having stood still below.
+    this.stirFor = -1;
     this.travel(() => {
       const p = this.player;
       this.forestState = {
@@ -1303,8 +1323,10 @@ export class Game {
   // cleared once its last lord has fallen, else shut with its lords below (lost).
   leaveCrypt() {
     if (!this.inCrypt || this.state !== 'play') return;
-    this.sweepCrypt();
     this.travel(() => {
+      // What lies about comes along, a lord's loot too if a shot still in flight as he turned to go
+      // felled it during the fade (sweepLoot).
+      this.sweepLoot();
       const c = this.inCrypt, door = this.backToForest(), done = this.cleared.has(c.key);
       if (!done) this.lost.add(c.key);
       door.sealed = true;
@@ -1369,23 +1391,36 @@ export class Game {
     sfx('descend');
   }
 
-  // What lies about a crypt when the hero leaves it comes along: gems, gold, gear, chests.
-  sweepCrypt() {
+  // What lies about the world he leaves comes along: a crypt's on the way back up, a Dungeon Run
+  // floor's on the way down (its guardian's chest and elixir among it, by stairs that open where
+  // it fell), and the last floor's when the run is won (finish). Gems as XP (xp false: at the run's
+  // end, where they would raise only the level shown), gold as gold, gear and chests to wait their
+  // turn (itemQueue, chestQueue), a floor's elixir drunk; a crypt's stays below, a crypt being no
+  // place to heal. Nothing else (a potion, a scroll) comes.
+  sweepLoot(xp = true) {
     const p = this.player;
     for (const pk of this.pickups) {
       if (pk.dead) continue;
-      if (pk.kind === 'gem') p.addXp(pk.value);
-      else if (pk.kind === 'coin' || pk.kind === 'goldpile') {
+      if (pk.kind === 'gem') {
+        if (xp) p.addXp(pk.value);
+      } else if (pk.kind === 'coin' || pk.kind === 'goldpile') {
         const v = Math.max(1, Math.round(pk.value * p.greed));
         this.gold += v;
         this.stats.gold += v;
       } else if (pk.kind === 'item') this.itemQueue.push(pk.opts.item);
       else if (pk.kind === 'chest') this.openChest(pk.opts);
+      else if (pk.kind === 'elixir' && !this.inCrypt) p.heal(p.maxHp);
       pk.dead = true;
     }
   }
 
   clearTransient() {
+    const p = this.player;
+    // An ultimate over the world he leaves ends with it, its receipt next frame (ultReceipt).
+    if (p.ult && WORLD_ULTS.has(p.ult.type)) p.ult = null;
+    // Leech Chains' (Blood Tether's) hold on foes in the world he leaves: their effects go below,
+    // and a chain kept in w.chains would hold its slot until that foe died.
+    for (const w of p.weapons) if (w.chains) w.chains = [];
     for (const pr of this.projectiles) releaseProjectile(pr);
     this.projectiles.length = 0;
     this.eshots.length = 0;
@@ -1504,26 +1539,29 @@ export class Game {
 
   // Up to n foes within maxR of (x, y), nearest first. Like the two below, only targetable ones.
   nearestEnemies(x, y, n, maxR) {
-    const cands = this.grid.query(x, y, maxR, tmp);
+    const cands = this.grid.query(x, y, maxR, tmp), rock = this.world.throughWalls ? this.world : null;
     const list = [];
     for (const e of cands) {
       if (!targetable(e)) continue;
       const d = (e.x - x) ** 2 + (e.y - y) ** 2;
-      if (d <= maxR * maxR) list.push([d, e]);
+      if (d <= maxR * maxR) list.push([rock && rock.solid(e.x, e.y) ? d + IN_ROCK : d, e]);
     }
     list.sort((a, b) => a[0] - b[0]);
     return list.slice(0, n).map((v) => v[1]);
   }
 
-  // The nearest foe within maxR of (x, y) that filter (if any) takes, or null.
+  // The nearest foe within maxR of (x, y) that filter (if any) takes, or null; on a Dungeon Run
+  // floor one in the rock only if none stands in the open (IN_ROCK).
   nearestEnemy(x, y, maxR, filter) {
-    const cands = this.grid.query(x, y, maxR, tmp);
-    let best = null, bd = maxR * maxR;
+    const cands = this.grid.query(x, y, maxR, tmp), R2 = maxR * maxR, rock = this.world.throughWalls ? this.world : null;
+    let best = null, bd = Infinity;
     for (const e of cands) {
       if (!targetable(e) || (filter && !filter(e))) continue;
       const d = (e.x - x) ** 2 + (e.y - y) ** 2;
-      if (d < bd) {
-        bd = d;
+      if (d >= R2) continue;
+      const k = rock && rock.solid(e.x, e.y) ? d + IN_ROCK : d;
+      if (k < bd) {
+        bd = k;
         best = e;
       }
     }
@@ -1867,6 +1905,18 @@ export class Game {
     this.state = 'over';
     if (this.hints) this.hints.done();
     const p = this.player;
+    // The Dungeon Run won: the last floor's guardian falls as dawn comes, its chest and gold still
+    // lying where it fell, and they are his (sweepLoot). Then what still waits for its screen, which
+    // never opens now, pays all the same: a chest its gold (chestGold; its draws go unseen, so none
+    // is made), a piece of gear its price, as if sold.
+    if (victory && this.mode === 'dungeon') this.sweepLoot(false);
+    let paid = 0;
+    for (const kind of this.chestQueue) paid += this.chestGold(kind);
+    for (const it of this.itemQueue) paid += itemPrice(it);
+    this.chestQueue.length = 0;
+    this.itemQueue.length = 0;
+    this.gold += paid;
+    this.stats.gold += paid;
     this.result = {
       victory,
       died, // for the Consecration's milestone (shared/progress.js deaths)
