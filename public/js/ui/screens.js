@@ -894,9 +894,10 @@ export class OptionsScreen {
     if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
       this.dialog = new MenuDialog('Credits', [
         'Music: Askyel, Ian Alex Mac, Gundatsch, Muldjord, Alexandr Zhelanov, Lincoln Domina, 0 A.D. by Wildfire Games (CC BY / BY-SA), Juhani Junkala, HydroGene and others',
+        'Sound effects: 0 A.D. by Wildfire Games, Flare, UFO: Alien Invasion, MegaGlest, Ardentryst, HyperRogue (CC BY-SA); OpenClonk by K-Pone (CC BY); artisticdude, Ogrebane, Jan Schupke, Stendhal, Endless Sky, M.A.R.S. (CC0 / public domain)',
         'UI: Foozle Lucifer RPG UI and Kenney Fantasy UI Borders (CC0).',
         'Fonts: Pixtura12 by eishiya; Jacquard by Sarah Cadigan-Fried (SIL OFL).',
-        'Full track credits and licences are included with the game.',
+        'Full credits and licences for every track and sound are included with the game.',
       ]);ui.focus('detail_close');ui.lock(0.2);
     }
     keysHint(ctx, W, H, 'ARROWS adjust · ENTER select · ESC back');

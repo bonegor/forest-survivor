@@ -103,16 +103,37 @@ export function initAudio() {
 
 // ------------------------------------------------------------- samples --
 
-// The few recorded sounds (audio/sfx/, credited in its CREDITS.md): the weather's thunder and rain
-// and the hero's steps on wet ground. Fetched and decoded once the sound starts; until a file is
-// in, or if it never comes, its sound falls back to the synthesised one or stays quiet.
+// The recorded sounds (audio/sfx/, credited in its CREDITS.md): the weather's thunder and rain,
+// the hero's steps on wet ground, and the weapons' blows. Fetched and decoded once the sound
+// starts; until a file is in, or if it never comes, its sound falls back to the synthesised one or
+// stays quiet.
 const SFX_DIR = 'audio/sfx/';
 const SAMPLES = {
   thunder: ['thunder-2.ogg', 'thunder-3.ogg', 'thunder-4.ogg', 'thunder-5.ogg', 'thunder-6.ogg'],
   bigthunder: ['thunder-1.ogg'],
   rain: ['rain.ogg'],
   wetstep: ['step-wet-1.ogg', 'step-wet-2.ogg', 'step-wet-3.ogg', 'step-wet-4.ogg', 'step-wet-5.ogg', 'step-wet-6.ogg'],
+  slash: ['sword-slash.ogg'],
+  hit: ['hit.ogg'],
+  crit: ['crit.ogg'],
+  arrow: ['bow.ogg'],
+  axe: ['axe-throw.ogg'],
+  dagger: ['dagger.ogg'],
+  fireball: ['fireball.ogg'],
+  explode: ['explosion.ogg'],
+  zap: ['lightning.ogg'],
+  flask: ['flask.ogg'],
+  shard: ['frost.ogg'],
+  blade: ['blades.ogg'],
+  whoosh: ['scythe.ogg'],
+  wood: ['wood-snap.ogg'],
 };
+// The sounds whose recording, once in, plays instead of their synthesised self (the weapons'). The
+// files are levelled alike (peak 100 ms loudness, K-weighted, at -16 dB) and play at RECORDED.vol,
+// the level they were picked at. A recording follows the game's pitch at RECORDED.pitch of its
+// spread, so a high or low call doesn't turn it into a chipmunk or a growl, and a bigger blast
+// (`size`) plays deeper.
+const RECORDED = { names: new Set(['slash', 'hit', 'crit', 'arrow', 'axe', 'dagger', 'fireball', 'explode', 'zap', 'flask', 'shard', 'blade', 'whoosh', 'wood']), vol: 0.55, pitch: 0.4 };
 const BUFS = new Map(); // file -> AudioBuffer
 
 function loadSamples() {
@@ -631,7 +652,9 @@ export function sfx(name, opts = {}) {
   const fn = SFX[name];
   if (!fn) return;
   try {
-    fn(t + 0.005, { p: opts.pitch ?? 1, pan: opts.pan ?? 0, size: opts.size ?? 1 });
+    const o = { p: opts.pitch ?? 1, pan: opts.pan ?? 0, size: opts.size ?? 1 };
+    const rate = (1 + (o.p - 1) * RECORDED.pitch) / Math.pow(o.size, 0.25);
+    if (!(RECORDED.names.has(name) && sample(t + 0.005, name, { vol: RECORDED.vol, pan: o.pan, rate }))) fn(t + 0.005, o);
     if (DUCKED.has(name)) duckMusic();
   } catch {
     /* audio graph errors should never break the game */
