@@ -54,6 +54,8 @@ export const input = {
   pad: { index: -1, buttons: [], prev: [], ax: 0, ay: 0, navPrev: 0 },
   anyKey: false,
   typed: [],
+  // The game was left this frame (initInput): its window lost the focus or its tab was hidden.
+  away: false,
 
   // Lets go of every finger on the screen, for a screen that changes what a touch does (the game
   // screen as an overlay opens): the stick stops, and a finger already down neither steers nor
@@ -152,6 +154,7 @@ export const input = {
     this.mouse.wheel = 0;
     this.anyKey = false;
     this.typed.length = 0;
+    this.away = false;
   },
 };
 
@@ -177,7 +180,17 @@ export function initInput(canvas) {
     if (e.key && e.key.length === 1) input.typed.push(e.key);
   });
   window.addEventListener('keyup', (e) => input.held.delete(e.code));
-  window.addEventListener('blur', () => input.held.clear());
+  // The game left behind: a click on the page around its frame (itch.io), an alt-tab, another tab
+  // or app. Keys held let go, and the frame is marked away for the game screen to pause the run
+  // (GameScreen.pause). The tests' stand-in document may be missing or hear nothing, hence the ?.
+  const away = () => {
+    input.held.clear();
+    input.away = true;
+  };
+  window.addEventListener('blur', away);
+  globalThis.document?.addEventListener?.('visibilitychange', () => {
+    if (globalThis.document.hidden) away();
+  });
 
   canvas.addEventListener('mousemove', (e) => {
     const p = toUI(e.clientX, e.clientY);

@@ -1,7 +1,7 @@
 // Menu screens: title, hero select, trial select, armory, records, options.
 
 import { input } from '../engine/input.js';
-import { sfx, playMusic, setVolumes, initAudio } from '../engine/audio.js';
+import { sfx, playMusic, playAfterJingle, setVolumes, initAudio } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
 import { saveSettings, DEBUG } from '../engine/storage.js';
 import { presentBackdrop } from '../engine/view.js';
@@ -279,6 +279,7 @@ export class ModeScreen {
   enter(app) {
     this.app = app;
     this.t = 0;
+    playAfterJingle('title'); // as on the hero screen (HeroScreen.enter)
     app.ui.lock(0.2);
     // A trial this hero can't enter (yet) falls back to Survival.
     if (!canPlay(app.store.profile, app.choice.mode, app.choice.hero)) app.choice.mode = 's15';
@@ -441,7 +442,8 @@ export class ArmoryScreen {
       if (action === 'buy' && !this.busy) {
         const u = UPGRADES.find(u => u.id === this.selected), rank = p.up[u.id] || 0;
         this.busy = true;
-        Promise.resolve(DEBUG ? app.store.setUpgrades({ [u.id]: rank >= u.max ? 0 : rank + 1 }) : app.store.buy(u.id)).then(ok => { if (ok) sfx('chest'); }).catch(() => { this.message = 'Purchase failed. Please try again.'; }).finally(() => { this.busy = false; });
+        // Refused (no answer from the server, or the gold spent meanwhile in another tab): said so, no chest.
+        Promise.resolve(DEBUG ? app.store.setUpgrades({ [u.id]: rank >= u.max ? 0 : rank + 1 }) : app.store.buy(u.id)).then(ok => { if (ok) { sfx('chest'); this.message = null; } else this.message = 'Purchase failed. Please try again.'; }).catch(() => { this.message = 'Purchase failed. Please try again.'; }).finally(() => { this.busy = false; });
       }
       if (action === 'refund' && !this.busy) { this.busy = true;Promise.resolve(app.store.refund()).catch(() => { this.message = 'Refund failed. Please try again.'; }).finally(() => { this.busy = false; }); }
       if (action) { this.dialog = null;ui.focus('u_' + this.selected);ui.lock(0.2); }

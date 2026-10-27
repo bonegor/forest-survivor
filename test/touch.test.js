@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { GameScreen, LevelUpOverlay, LEVELUP_DELAY } from '../public/js/ui/gamescreen.js';
+import { GameScreen, LevelUpOverlay, PauseOverlay, LEVELUP_DELAY } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input, initInput } from '../public/js/engine/input.js';
@@ -169,5 +169,14 @@ test('fingers down as a screen opens let go: no steering on, and their lift is n
     frame(gs);
     assert.ok(gs.overlay === lv, 'no card taken');
     assert.equal(g.pendingLevels, 1);
+  });
+});
+
+test('a run left behind (focus lost, tab hidden) pauses under the PAUSED panel', () => {
+  run((gs, g) => {
+    input.away = true;
+    frame(gs);
+    assert.equal(g.state, 'paused');
+    assert.ok(gs.overlay instanceof PauseOverlay);
   });
 });

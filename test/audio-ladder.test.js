@@ -16,6 +16,8 @@ test('each beat has a stinger of its own, and each is limited', () => {
     assert.ok(limited(s), `${s} has its LIMITS`);
   }
   assert.ok(names.includes('ult'), 'the ultimate has its launch');
+  // The seal's crack and the banish, apart from the blows and the frost weapon's recording.
+  for (const s of ['thaw', 'banish']) assert.ok(names.includes(s) && limited(s), s);
 });
 
 test('the music ducks about 8 dB for about 1.2 s under every T4 and T5 stinger', () => {

@@ -99,6 +99,7 @@ export function initAudio() {
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   loadSamples();
   if (A.songName) startPiece(A.songName);
+  globalThis.document?.addEventListener?.('visibilitychange', wake);
 }
 
 // ------------------------------------------------------------- samples --
@@ -284,6 +285,7 @@ const LIMITS = {
   furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
   rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
+  thaw: [0.5, 1], banish: [0.1, 1],
 };
 
 // Level factors that keep the reward ladder in order as measured through the real chain (RMS over
@@ -359,6 +361,16 @@ const SFX = {
     for (let i = 0; i < 6; i++) tone(t + i * 0.03, { type: 'sine', f0: 1800 + i * 300, f1: 2400 + i * 200, dur: 0.3, vol: 0.05 });
     noise(t, { filter: 'highpass', f0: 4000, f1: 9000, dur: 0.5, vol: 0.12 });
   },
+  // The guardian's seal breaking (Dungeon.thawBurst): the synthesised ice shards over the synthesised
+  // wood's snap, a crack. A name of its own: the blow that broke it plays 'shard' in the same moment,
+  // and that sound's limit swallowed this one.
+  thaw: (t, o) => {
+    SFX.shard(t, o);
+    SFX.wood(t, o);
+  },
+  // A card banished at the level-up: the shards as they were synthesised, not the frost weapon's
+  // recording (the weapons keep the sounds the owner picked, 27 October 2026).
+  banish: (t, o) => SFX.shard(t, o),
   flask: (t, o) => {
     noise(t, { filter: 'highpass', f0: 3500, dur: 0.08, vol: 0.16, pan: o.pan });
     tone(t, { type: 'triangle', f0: 2600, f1: 3100, dur: 0.07, vol: 0.06, pan: o.pan });
@@ -759,7 +771,13 @@ function track(name) {
       }, 1000 * tries);
     });
     el.addEventListener('ended', () => {
-      if (!t.once) return;
+      // A loop's player that ran out before turnLoops caught its last moments (its timer held back
+      // in a background tab, a long frame; an ended player is paused, so turnLoops passes it by)
+      // hands on now, so the piece never falls silent.
+      if (!t.once) {
+        if (t.playing && t.voices[t.cur].el === el) handOff(t);
+        return;
+      }
       t.playing = false;
       // A piece waiting for this jingle to end starts now (playAfterJingle).
       if (A.after) {
@@ -780,21 +798,41 @@ function turnLoops() {
   if (!A.ctx) return;
   for (const t of A.tracks.values()) {
     if (!t.playing || t.once) continue;
-    const a = t.voices[t.cur], el = a.el;
+    const el = t.voices[t.cur].el;
     if (el.paused || !el.duration || el.currentTime < el.duration - XF - 0.03) continue;
-    const b = t.voices[1 - t.cur], now = A.ctx.currentTime;
-    b.el.currentTime = LEAD_IN;
-    b.el.play().catch(() => {});
-    b.g.gain.cancelScheduledValues(now);
-    b.g.gain.setValueAtTime(0, now);
-    b.g.gain.linearRampToValueAtTime(t.level, now + XF);
-    a.g.gain.cancelScheduledValues(now);
-    a.g.gain.setValueAtTime(t.level, now);
-    a.g.gain.linearRampToValueAtTime(0, now + XF);
-    setTimeout(() => {
-      if (t.voices[t.cur] !== a) a.el.pause();
-    }, XF * 1000 + 60);
-    t.cur = 1 - t.cur;
+    handOff(t);
+  }
+}
+
+// Hand a loop to its other player: it starts at LEAD_IN and comes in over XF as this one goes.
+function handOff(t) {
+  const a = t.voices[t.cur], b = t.voices[1 - t.cur], now = A.ctx.currentTime;
+  b.el.currentTime = LEAD_IN;
+  b.el.play().catch(() => {});
+  b.g.gain.cancelScheduledValues(now);
+  b.g.gain.setValueAtTime(0, now);
+  b.g.gain.linearRampToValueAtTime(t.level, now + XF);
+  a.g.gain.cancelScheduledValues(now);
+  a.g.gain.setValueAtTime(t.level, now);
+  a.g.gain.linearRampToValueAtTime(0, now + XF);
+  setTimeout(() => {
+    if (t.voices[t.cur] !== a) a.el.pause();
+  }, XF * 1000 + 60);
+  t.cur = 1 - t.cur;
+}
+
+// Back in sight (a phone's app switch, a tab shown again): the browser may have suspended the sound
+// or stopped a piece's player meanwhile. The context wakes, and each piece playing plays on, or
+// hands on if its player ran out.
+function wake() {
+  if (!A.ctx || globalThis.document?.hidden) return;
+  if (A.ctx.state === 'suspended') A.ctx.resume().catch(() => {});
+  for (const t of A.tracks.values()) {
+    if (!t.playing) continue;
+    const el = t.voices[t.cur].el;
+    if (el.ended) {
+      if (!t.once) handOff(t);
+    } else if (el.paused) el.play().catch(() => {});
   }
 }
 

@@ -1,7 +1,7 @@
 import { input } from '../engine/input.js';
 import { SPR, idleFrame } from '../engine/sprites.js';
 import { saveSettings } from '../engine/storage.js';
-import { sfx } from '../engine/audio.js';
+import { sfx, playAfterJingle } from '../engine/audio.js';
 import { clamp, fmtTime } from '../engine/util.js';
 import { HEROES, HERO_ORDER, heroLook, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
@@ -55,6 +55,9 @@ export class HeroScreen {
     this.t = 0;
     this.lastHero = app.choice.hero || 'knight';
     this.infoScroll = 0;
+    // The title piece, after a fall's lament if it still plays (27 October 2026): never a run's
+    // battle or boss music on into camp after Quit Run, nor silence after a death.
+    playAfterJingle('title');
     app.ui.lock(0.2);
     app.ui.focusId = 'h_' + this.lastHero;
   }

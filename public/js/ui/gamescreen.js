@@ -46,6 +46,7 @@ export class GameScreen {
     // Nothing of the run is saved while it lasts: its results reach the save when it ends
     // (ResultsOverlay), by death, Quit Run or victory.
     this.overlay = null;
+    this.away = false; // the game was left; the run pauses once it is back in play (frame)
     // The touch buttons in play: the pause button and the fury orb (touchFor).
     this.regions = (x, y) => {
       const W = view.W, H = view.H;
@@ -64,10 +65,23 @@ export class GameScreen {
   }
 
   open(overlay) {
+    this.away = false; // a screen up holds the run still: no pause waits behind it
     this.overlay = overlay;
     this.app.ui.lock(overlay.lockTime ?? 0.35);
     this.app.ui.noSpace = !!overlay.noSpace;
     this.touchFor(overlay);
+  }
+
+  // The run stands still under the PAUSED panel: by Esc, P, Start or the pause button, and quietly
+  // when the game is left behind (input.away), for on itch.io a click on the page around its frame
+  // left the horde hitting a hero who couldn't move, and quitting ends the run (no saved runs).
+  // Only in play: a screen already up holds the run still.
+  pause(quiet = false) {
+    if (this.overlay || this.game.state !== 'play') return false;
+    this.game.state = 'paused';
+    this.open(new PauseOverlay(this));
+    if (!quiet) sfx('back');
+    return true;
   }
 
   // What a touch does. In play a finger steers, a second one strikes, and the pause button and the
@@ -84,11 +98,10 @@ export class GameScreen {
     const app = this.app, g = this.game;
     this.touchFor(this.overlay); // however the overlay came or went
     if (!this.overlay) {
-      if (input.pressed('pause') && g.state === 'play') {
-        g.state = 'paused';
-        this.open(new PauseOverlay(this));
-        sfx('back');
-      }
+      // Left behind on a stairway, at a crypt door or in a faint: paused once the run is back in play.
+      this.away ||= input.away;
+      if (input.pressed('pause')) this.pause();
+      else if (this.away) this.pause(true);
       if (input.pressed('map') && (g.mode === 'dungeon' || g.inCrypt)) g.showMap = !g.showMap;
       if (input.pressed('fps')) app.settings.fps = !app.settings.fps;
       if (!app.devHold) g.update(dt); // the developer panel can freeze the action
@@ -298,7 +311,7 @@ export class LevelUpOverlay {
     }
     g.player.banishes--;
     this.banishing = false;
-    sfx('shard');
+    sfx('banish');
     this.gone = { info: choiceInfo(g, c), rect: this.rects?.[i], t: this.t };
     const next = g.redrawCard(this.choices.filter((x, j) => j !== i));
     if (next) {
@@ -1612,10 +1625,11 @@ class ResultsOverlay {
         if (k >= 1) this.land();
       }
       // The gold picked up, the wage for the time on the clock (shared/progress.js wage) and a
-      // win's bonus: in full where it fits.
-      const r = this.reward, bonus = (long) => (r.bonus ? ` + ${r.bonus} ${long ? 'victory bonus' : 'bonus'}` : '');
+      // win's bonus: in full where it fits. The gold as credited (runReward gold: within the cap,
+      // with gear sold), so the line adds up; an older server's reward says only what was picked up.
+      const r = this.reward, gold = r.gold ?? res.gold, bonus = (long) => (r.bonus ? ` + ${r.bonus} ${long ? 'victory bonus' : 'bonus'}` : '');
       const wage = (long) => (r.wage ? ` + ${r.wage} ${long ? `wage for ${fmtTime(res.time)}` : 'wage'}` : '');
-      const parts = [`Collected ${res.gold} × ${r.multiplier}${wage(true)}${bonus(true)}`, `Collected ${res.gold} × ${r.multiplier}${wage(false)}${bonus(true)}`, `Gold ${res.gold} × ${r.multiplier}${wage(false)}${bonus(false)}`];
+      const parts = [`Collected ${gold} × ${r.multiplier}${wage(true)}${bonus(true)}`, `Collected ${gold} × ${r.multiplier}${wage(false)}${bonus(true)}`, `Gold ${gold} × ${r.multiplier}${wage(false)}${bonus(false)}`];
       drawText(ctx, fitText(parts.find((t) => textWidth(t) <= pw - 12) || parts[2], pw - 12), W / 2, gy, { align: 'center', color: '#8b9bb4' });
       const c = textCanvas(`+${fmtNum(Math.floor(this.shown))} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(W / 2 - c.width), gy + 9, c.width * 2, c.height * 2);

@@ -129,3 +129,29 @@ test('the zip holds each file whole: deflated or stored, with its CRC', () => {
   assert.equal(got['noise.bin'].method, 0, 'what doesn\'t shrink stored');
   assert.deepEqual(Buffer.from(got['noise.bin'].data), noise);
 });
+
+test('two tabs share one save: each change starts from what the other left; no answer is no purchase', async () => {
+  jar.clear();
+  globalThis.localStorage = fakeStorage();
+  const { store } = await import('../public/js/engine/storage.js');
+  const P = await import('../public/js/shared/profile.js');
+  const fetch0 = globalThis.fetch;
+  try {
+    store.mode = 'local';
+    store.profile = P.sanitizeProfile({ ...P.defaultProfile(), gold: 1000 });
+    store.saveLocal();
+    saveBox.write('fs_lprofile', P.encodeState(P.packProfile({ ...P.defaultProfile(), gold: 5000 }))); // the other tab
+    assert.ok(await store.buy('might'));
+    assert.equal(store.profile.gold, 5000 - P.upgradeCost('might', 0));
+    store.mode = 'server';
+    globalThis.fetch = async () => {
+      throw new TypeError('Failed to fetch');
+    };
+    assert.equal(await store.buy('might'), false);
+    assert.equal(await store.setHome('bow', true), false);
+  } finally {
+    store.mode = 'local';
+    globalThis.fetch = fetch0;
+    delete globalThis.localStorage;
+  }
+});

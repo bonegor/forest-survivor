@@ -48,7 +48,9 @@ export class PrologueScreen {
 
   frame(dt) {
     const { app, game: g } = this, ui = app.ui;
-    if (input.pressed('pause') && ui.lockT <= 0 && this.arrival === null && (g.state === 'play' || this.paused)) {
+    // Left behind (input.away): paused, as Esc would.
+    const away = input.away && !this.paused && g.state === 'play' && this.arrival === null;
+    if (away || (input.pressed('pause') && ui.lockT <= 0 && this.arrival === null && (g.state === 'play' || this.paused))) {
       this.paused = !this.paused;
       g.state = this.paused ? 'paused' : 'play';
       input.releaseTouches();

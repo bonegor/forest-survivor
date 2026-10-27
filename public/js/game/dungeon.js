@@ -1000,7 +1000,7 @@ export class Dungeon {
     g.particles.burst(e.x, e.y, z, THAW.shards, ICE, 150, 0.8, 1, P.GLOW | P.FADE | P.GROUND, { vz: 100, grav: 320, jitter: e.hr * 0.5 });
     g.particles.burst(e.x, e.y, z, THAW.melt, MELT, 45, 1, 1, P.GLOW | P.FADE | P.GROUND, { vz: 20, grav: 200, jitter: e.hr });
     e.flash = 0.12;
-    sfx('shard', { pitch: 0.6 });
+    sfx('thaw', { pitch: 0.6 });
   }
 
   // ------------------------------------------------------------ update --

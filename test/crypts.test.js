@@ -561,7 +561,7 @@ test('the save keeps the gear worn at the end, never more new pieces than the ru
   r = P.applyRun(r.profile, {...run, hero:'archer', gold:50, gear:{helm}, found:1, realTime:420});
   assert.deepEqual(r.profile.gear, {knight:{ring}, archer:{helm}});
   // Sold on the way: the ring's price may be in the gold, beyond what the time allows.
-  const cap = 100 + 300 * 12;
+  const cap = P.goldCap({mode:'s15', time:300, realTime:300, found:0}, 1); // the cap at Armory Greed 0
   r = P.applyRun(r.profile, {...run, gold:cap + I.itemPrice(ring), gear:{}, found:0});
   assert.deepEqual(r.profile.gear, {archer:{helm}});
   assert.equal(r.reward.collected, Math.round((cap + I.itemPrice(ring)) * 1.5));

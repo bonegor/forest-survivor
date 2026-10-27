@@ -26,7 +26,8 @@
 // by milestones, kept as bits (ul: PROGRESS.locks in order; uu: HERO_ORDER in order); weapon and
 // relic slots are Armory ranks (Arsenal, Reliquary), as are all rerolls and banishes.
 
-import { RARITIES, LEGENDARY, MAX_LORDS, sanitizeGear, packGear, sameItem, itemPrice } from './items.js';
+import { RARITIES, LEGENDARY, MAX_LORDS, sanitizeGear, packGear, sameItem, itemPrice, statRange } from './items.js';
+import { FLOORS } from '../data/waves.js';
 import { PROGRESS, needText } from './progress.js';
 
 export { PROGRESS, needText };
@@ -100,7 +101,35 @@ const MAX_REAL_TIME = { s15: 2 * 60 * 60, dungeon: MAX_TIME.dungeon, ranked: MAX
 // minute's walk on. So a run finds no more than MAX_LORDS pieces for each crypt it could have
 // reached: the one by the start, and one more every SECS_PER_CRYPT of its time.
 const SECS_PER_CRYPT = 45;
+// The gold a run picks up in a second at the night's start with no greed, at most: 12 since the
+// first commit. goldCap grows it as a run's gold can grow (27 October 2026: the flat 12 cut real
+// gold from greedy builds and long Ranked runs).
 const MAX_GOLD_PER_SEC = 12;
+// The most the hero's greed (Player.recompute) multiplies it beyond the Armory's: a legendary
+// ring's best roll of gold (one may be found and worn mid-run) and the Cursed Skulls, +50% each,
+// three at most (game/game.js MAX_SKULLS). Fortune, the Armory's luck, adds none: luck weights no
+// coin or gold pile; a Fortune shrine's doubled coins last moments, well inside the cap's room.
+const MOST_SKULLS = 3;
+const RUN_GREED = (1 + statRange('greed', LEGENDARY)[1] / 100) * (1 + 0.5 * MOST_SKULLS);
+// The Armory's Greed at its top rank (metaBonuses), for a run checked without its save.
+const TOP_GREED = 1 + 0.1 * UPGRADES.find((u) => u.id === 'greed').max;
+
+// The night's phase at `time` on a run's clock, at most (Game.phase): 1.4 a minute, Ranked 0.9 a
+// minute past its fifteenth; below ground the deepest floor's cap.
+function phaseAt(mode, time) {
+  const m = time / 60;
+  if (mode === 'dungeon') return FLOORS[FLOORS.length - 1].cap;
+  return mode === 'ranked' && m > 15 ? 21 + (m - 15) * 0.9 : m * 1.4;
+}
+
+// The most gold a run could pick up (sanitizeRun): MAX_GOLD_PER_SEC for each second played, grown
+// as the filler purse grows with the phase (Game.filler, 1 + phase / 10) and by the most greed the
+// run could have, its Armory's (`armory`, metaBonuses greed) times RUN_GREED; and what selling a
+// crypt lord's gear could pay.
+export function goldCap(run, armory = TOP_GREED) {
+  const rate = MAX_GOLD_PER_SEC * (1 + phaseAt(run.mode, run.time) / 10) * armory * RUN_GREED;
+  return Math.floor(100 + run.realTime * rate + run.found * RARITIES[LEGENDARY].price);
+}
 const MIN_WIN_TIME = { s15: 15 * 60 - 5, dungeon: 4 * 60 };
 
 const int = (v, lo, hi) => {
@@ -480,7 +509,7 @@ export function nextHeroUnlock(profile) {
 
 // A finished run as reported by the client. Numbers are clamped to what a
 // real run of that length could plausibly produce.
-export function sanitizeRun(raw) {
+export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
   if (!raw || typeof raw !== 'object') return null;
   if (!MODES.includes(raw.mode)) return null;
   // Normal ('easy'), Veteran ('medium') or Elite ('hard'); Ranked is always Elite. A run that names
@@ -507,7 +536,7 @@ export function sanitizeRun(raw) {
     died: !victory && raw.died === true,
     time,
     // Selling what the crypts gave pays too; applyRun adds what selling worn gear paid.
-    gold: int(raw.gold, 0, 100 + realTime * MAX_GOLD_PER_SEC + found * RARITIES[LEGENDARY].price),
+    gold: int(raw.gold, 0, goldCap({ mode: raw.mode, time, realTime, found }, armoryGreed)),
     claim: int(raw.gold, 0, 1e9),
     // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD), and
     // kept so with Veteran's now two thirds of that (VETERAN_CROWD); a Nightmare three times that.
@@ -535,12 +564,14 @@ export function runReward(run) {
   // A wage for the time on the clock (PROGRESS.wage a second), at the same rate as the gold.
   const wage = Math.round(PROGRESS.wage * run.time * multiplier);
   const bonus = run.victory ? Math.round(VICTORY_BONUS[run.mode] * DIFF_BONUS[run.diff]) : 0;
-  return { collected, wage, bonus, total: collected + wage + bonus, multiplier };
+  // `gold`: the gold credited, as picked up after the cap (sanitizeRun) and with any gear sold
+  // (applyRun), for the results line to print what was paid for, not what was claimed.
+  return { gold: run.gold, collected, wage, bonus, total: collected + wage + bonus, multiplier };
 }
 
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
-  const run = sanitizeRun(rawRun);
+  const run = sanitizeRun(rawRun, metaBonuses(p).greed); // the cap at this save's own Armory Greed
   if (!run) return { ok: false, profile: p, error: 'Invalid run' };
   if (!canPlay(p, run.mode, run.hero)) return { ok: false, profile: p, error: 'That mode is locked for this hero' };
   const before = new Set(openings(p));

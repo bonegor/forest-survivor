@@ -118,6 +118,7 @@ export const store = {
   lastReward: null,
   unreadable: null, // { profile: true } when a save exists but can't be read
   offline: false, // the game's server can't be reached: nothing can be loaded or saved
+  watching: false, // another tab's saving is heard (init)
 
   async init() {
     for (const name of STALE_RUNS) if (readCookie(name) != null) writeCookie(name, null);
@@ -149,6 +150,16 @@ export const store = {
     this.profile = P.sanitizeProfile(profile);
     if (DEBUG) unlockEverything(this.profile);
     this.unreadable = rawProfile && !profile ? { profile: true } : null;
+    // Another tab saving: read at once; started afresh there, afresh here too.
+    if (!this.watching) {
+      this.watching = true;
+      globalThis.addEventListener?.('storage', (e) => {
+        if (this.mode !== 'local' || e.key !== LOCAL_PROFILE) return;
+        if (e.newValue != null) return this.reload();
+        this.profile = P.defaultProfile();
+        if (DEBUG) unlockEverything(this.profile);
+      });
+    }
     return this;
   },
 
@@ -161,6 +172,19 @@ export const store = {
 
   saveLocal() {
     saveBox.write(LOCAL_PROFILE, P.encodeState(P.packProfile(this.profile)));
+  },
+
+  // The browser's save as another tab of the game may have left it (local mode). Every change starts
+  // from it, and another tab's saving is read at once (init), so two tabs never write over each
+  // other's gold, unlocks, gear or purchases (27 October 2026). A save that is gone or can't be read
+  // leaves the profile in hand (a browser that keeps nothing still keeps the session's progress).
+  reload() {
+    if (this.mode !== 'local') return;
+    const raw = saveBox.read(LOCAL_PROFILE);
+    const profile = raw ? P.decodeState(raw) : null;
+    if (!profile) return;
+    this.profile = P.sanitizeProfile(profile);
+    if (DEBUG) unlockEverything(this.profile);
   },
 
   // The run's reward. When the server doesn't take the run nothing changes, and the reward
@@ -176,6 +200,7 @@ export const store = {
         return { collected: 0, bonus: 0, total: 0, multiplier: 1, unsaved: true, down: serverDown(e), error: e.message };
       }
     }
+    this.reload();
     const r = P.applyRun(this.profile, run);
     if (r.ok) {
       this.profile = r.profile;
@@ -188,10 +213,12 @@ export const store = {
 
   async buy(id) {
     if (this.mode === 'server') {
-      const data = await api('buy', { id }).catch((e) => e.data || {});
+      // No answer (a dropped connection, a 5xx) is a failure too, never a purchase.
+      const data = await api('buy', { id }).catch((e) => ({ ...e.data, error: e.data?.error || e.message || "The game server can't be reached" }));
       if (data.profile) this.profile = P.sanitizeProfile(data.profile);
       return !data.error;
     }
+    this.reload();
     const r = P.buyUpgrade(this.profile, id);
     if (r.ok) {
       this.profile = r.profile;
@@ -203,10 +230,12 @@ export const store = {
   // A shared weapon left at home (on) or taken along again (shared/profile.js setHome).
   async setHome(id, on) {
     if (this.mode === 'server') {
-      const data = await api('home', { id, on }).catch((e) => e.data || {});
+      // No answer (a dropped connection, a 5xx) is a failure too, never a change.
+      const data = await api('home', { id, on }).catch((e) => ({ ...e.data, error: e.data?.error || e.message || "The game server can't be reached" }));
       if (data.profile) this.profile = P.sanitizeProfile(data.profile);
       return !data.error;
     }
+    this.reload();
     const r = P.setHome(this.profile, id, on);
     if (r.ok) {
       this.profile = r.profile;
@@ -218,6 +247,7 @@ export const store = {
   // Debug only (the debug flag): upgrades set to any ranks, { id: rank }, at no cost.
   setUpgrades(ranks) {
     if (!DEBUG) return false;
+    this.reload();
     for (const [id, r] of Object.entries(ranks)) {
       const u = P.UPGRADES.find((x) => x.id === id);
       if (!u) continue;
@@ -235,6 +265,7 @@ export const store = {
       this.profile = P.sanitizeProfile(data.profile);
       return data.refunded;
     }
+    this.reload();
     const r = P.refundUpgrades(this.profile);
     this.profile = r.profile;
     this.saveLocal();
