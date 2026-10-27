@@ -27,8 +27,9 @@ const BAKE = {
   necromancer: 'necromancer/knightstyle-a',
   rogue: 'rogue/eclipse-wraith-tweak-1',
   // A holy crusader after Diablo 2's Paladin, made anew (the owner's, 27 October 2026: "Take for
-  // inspiration maybe what it looks like in Diablo 2"), in place of her Styles C and D.
-  paladin: 'paladin/knightstyle-e',
+  // inspiration maybe what it looks like in Diablo 2"), in place of her Styles C and D; then in a
+  // cylindrical great helm ("let the paladin have a helmet ... the cylindrical helmet").
+  paladin: 'paladin/knightstyle-e2',
   // These three heroes' heads, as the Sorcerer's, turned a little toward us so both eyes show (the
   // owner's, 27 October 2026: "both eyes are visible like in case of ranger, necromancer").
   druid: 'druid/knightstyle-a2',

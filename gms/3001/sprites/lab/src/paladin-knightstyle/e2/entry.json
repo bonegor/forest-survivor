@@ -1,0 +1,70 @@
+{
+ "cls": "paladin",
+ "kind": "proposal",
+ "id": "knightstyle-e2",
+ "name": "Paladin · Knight style E (holy crusader, great helm)",
+ "description": "Dame Seraphine as a holy crusader in the plumed Knight’s style (style E with a great helm), turned the same way as the Knight (facing right in 3/4, a leaning sturdy stance, about his height). She wears a crusader’s great helm: a short upright steel cylinder with a flat top in its own light tone over a dark seam, straight sides and square corners, shaded as a cylinder (a light vertical band left of centre falling off to the dark front, a darker lower rim), with a gold band at the brow and a gold strip down its front in a cross; the eye slit runs across its front and both blue eyes glint in it either side of the strip, with breathing holes below. It sits on a dark steel gorget between two big rounded steel pauldrons rimmed in gold, and her short chestnut tail peeks out below its back and sways. Heavy steel plate (gauntlets, cuisses, greaves with knee glints) under a deep crimson tabard with a gold cross, a leather belt with a gold buckle and a gold-hemmed skirt that swings, and a short crimson cape that ripples and streams behind her. On her far arm, held forward at her right side and seen a little angled, a tall kite shield of dark polished steel with a gold rim and a gold cross; in her near hand a straight knightly sword with a gold crossguard, held low with its point trailing back. Her smite raises the sword high behind her head, blazing with holy light, sweeps it forward in a gold smear, and on frame 19 lands in a broad gold-to-white crescent while a pillar of holy light falls on the foe ahead with a white flash, rays and a shock along the ground; the pillar then breaks into white-hot sparks and she recovers. No black outline (every edge a dark tone of its own material), hue-shifted ramps; only the holy light glows at night.",
+ "creator": null,
+ "source": "drawn with claude-pxl (MIT)",
+ "licence": "made for Forest Survivor",
+ "colour": null,
+ "w": 48,
+ "h": 48,
+ "frames": 22,
+ "collection": "Knight style · round 3",
+ "origin": "gms/3001/sprites/lab/src/paladin-knightstyle/e2/paladin-e2.px.js",
+ "made": "2026-10-27T17:44:15.915Z",
+ "walk": [
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15
+ ],
+ "idle": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "attack": [
+  16,
+  17,
+  18,
+  19,
+  20,
+  21
+ ],
+ "attackFps": 13,
+ "attackRelease": null,
+ "attackWalk": null,
+ "walkFps": null,
+ "idleFps": null,
+ "motionRate": 1.05,
+ "idleRate": 3.75,
+ "anchorY": 40,
+ "selfBob": true,
+ "floating": false,
+ "fitW": 36,
+ "fitH": 34,
+ "outline": false,
+ "sheet": "sheets/paladin-knightstyle-e2.png",
+ "rows": [
+  "right",
+  "glow",
+  "glowLeft"
+ ],
+ "emissive": null,
+ "glow": [
+  "#ffe48a",
+  "#fff6cf",
+  "#fffef6"
+ ]
+}
