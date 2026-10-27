@@ -241,9 +241,25 @@ export function cardChange(g, c) {
   return null;
 }
 
+// The review's D7 (27 October 2026): a card the hero's own perk makes count for more says so,
+// "Synergy: Bulwark" in his colour (the perk's name before its colon). Only where the perk
+// multiplies what the card gives: regeneration under a perk that multiplies it (the Knight's
+// Bulwark, the Paladin's Devotion); a heal under one that multiplies every heal (the Paladin's
+// Devotion: the Vampire Fang, the Roast Chicken); Hunter's Mark under the Witch Hunter's
+// Inquisition, whose bane it multiplies (Game.hitEnemy); the Berserker's Torc under the
+// Berserker's Bloodrage, both rising as his health falls. A hero's plain stat (the Ranger's might,
+// the Sorcerer's cooldowns) only starts higher, so a relic of it is no synergy. Null for any other.
+export function cardSynergy(g, c) {
+  const h = g.player.hero, s = h.stats;
+  const key = c.type === 'passive' ? Object.keys(PASSIVES[c.id].stat)[0] : c.type;
+  const on = key === 'regen' ? (s.regenMul || 1) > 1 : key === 'fang' || key === 'heal' ? (s.healMul || 1) > 1 : key === 'bane' ? !!s.bane : key === 'torc' ? !!s.rage : false;
+  return on && h.perk ? { text: `Synergy: ${h.perk.split(':')[0]}`, color: h.color } : null;
+}
+
 // What a card shows: its name, icon and text; its tag (a NEW weapon or relic, or the level it
-// brings) and colour; what it evolves with (evoHint); its change in numbers (cardChange); and how
-// many levels it has, for its pips (max: 0 for a filler).
+// brings) and colour; what it evolves with (evoHint); its change in numbers (cardChange); its
+// synergy with the hero's perk (cardSynergy); and how many levels it has, for its pips (max: 0
+// for a filler).
 function choiceInfo(g, c) {
   const p = g.player;
   if (c.type === 'weapon') {
@@ -257,18 +273,23 @@ function choiceInfo(g, c) {
     let hint = null;
     // The weapon it evolves, only once that evolution is known (Game.evoKnown).
     for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id && g.evoKnown(w.id)) hint = { name: w.def.name, icon: w.def.icon, owned: true, word: 'evolves', line2: 'Evolves it', color: '#feae34' };
-    return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, change: cardChange(g, c), max: def.max };
+    return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, change: cardChange(g, c), synergy: cardSynergy(g, c), max: def.max };
   }
   const { name, icon } = FILLERS[c.type], B = BLESSING;
   // The three Blessings (the owner's, 27 October 2026), each counted on its tag.
   if (c.type === 'bless') return { name, icon, desc: `Might {+${B.might * 100}%}, health {+${B.maxHp * 100}%}. Stacks.`, tag: `x${p.blessings + 1}`, color: '#fee761', max: 0 };
-  if (c.type === 'haste') return { name, icon, desc: `Cooldowns {${B.cooldown * 100}%}. Stacks.`, tag: `x${p.hastes + 1}`, color: '#fee761', max: 0 };
+  if (c.type === 'haste') {
+    // At the floor it says so, as Reach at its most (a capped one isn't offered: Game.blessingCapped).
+    const desc = g.blessingCapped('haste') ? 'Cooldowns at their floor: {no more}.' : `Cooldowns {${B.cooldown * 100}%}. Stacks.`;
+    return { name, icon, desc, tag: `x${p.hastes + 1}`, color: '#fee761', max: 0 };
+  }
   if (c.type === 'reach') {
     const desc = p.reaches < B.reachMost ? `Area {+${B.area * 100}%}. Stacks to {+${Math.round(B.area * B.reachMost * 100)}%}.` : 'Area at its most: {no more}.';
     return { name, icon, desc, tag: `x${p.reaches + 1}`, color: '#fee761', max: 0 };
   }
   if (c.type === 'gold') return { name, icon, desc: `Gain {${c.value}} gold.`, tag: '', color: '#feae34', max: 0 };
-  return { name, icon, desc: `Restore {${Math.round(c.value * 100)}%} health.`, tag: '', color: '#e43b44', max: 0 };
+  // The heal as this hero has it (Player.heal: the Paladin's Devotion, x1.5), full health at most.
+  return { name, icon, desc: `Restore {${Math.min(100, Math.round(c.value * p.healMul * 100))}%} health.`, tag: '', color: '#e43b44', synergy: cardSynergy(g, c), max: 0 };
 }
 
 // A card's levels as pips under its tag: those it has in gold, the one it brings blinking, those
@@ -648,6 +669,8 @@ export class LevelUpOverlay {
         const told = lines.slice(0, room), more = change.slice(0, room - told.length);
         told.forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + j * 9, { color: '#c0cbdc' }));
         more.forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + (told.length + j) * 9, { color: '#9ee562' }));
+        // Its synergy with the hero's perk (cardSynergy), in his colour, on a line still free.
+        if (info.synergy && told.length + more.length < room) drawText(ctx, fitText(info.synergy.text, w - 52), x + 44, y + lift + 17 + (told.length + more.length) * 9, { color: info.synergy.color });
         if (gold) drawText(ctx, `COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, x + w - 6, y + lift + h - 14, { align: 'right', color: blink ? '#fee761' : '#feae34' });
         else if (info.hint && h >= 64) {
           // Its evolution (evoHint): the relic and its state, or a relic yet unknown and a ?.
@@ -686,6 +709,8 @@ export class LevelUpOverlay {
           drawRich(ctx, ln, x + w / 2, ty + 2, { align: 'center', color: '#9ee562' });
           ty += 9;
         }
+        // Its synergy with the hero's perk (cardSynergy), in his colour, above the evolution's foot.
+        if (info.synergy && ty + 9 <= y + lift + h - low) drawText(ctx, fitText(info.synergy.text, w - 12), x + w / 2, ty + 3, { align: 'center', color: info.synergy.color });
         if (gold && h > 120) {
           // It completes an evolution: said in gold where the hint was.
           const lines = wrapText(`COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, w - 10);

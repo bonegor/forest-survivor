@@ -415,3 +415,39 @@ test('the Blessings of Haste and Reach: cooldowns down to their floor, area up t
     assert.ok(Math.abs(BLESSING.area * BLESSING.reachMost - 1) < 1e-9, '+100% at most');
   });
 });
+
+// A Blessing that would give nothing more (Game.blessingCapped, 27 October 2026): Haste with his
+// cooldowns at their floor, Reach taken its most times. It leaves a full build's screen, a
+// banished card's place and a chest, and an ALWAYS on it turns to Valor, no level spent on nothing.
+test('a Blessing at its cap is offered no more, and an ALWAYS on it turns to Valor', () => {
+  screen((g, gs, p) => {
+    maxOut(g);
+    assert.ok(!g.blessingCapped('haste') && !g.blessingCapped('reach') && !g.blessingCapped('bless'));
+    p.hastes = 1000;
+    p.reaches = BLESSING.reachMost;
+    p.recompute();
+    assert.ok(g.blessingCapped('haste') && g.blessingCapped('reach'));
+    assert.ok(!g.blessingCapped('bless') && !g.blessingCapped('heal') && !g.blessingCapped('gold'));
+    const shown = g.levelChoices(4);
+    assert.deepEqual(shown.map((c) => c.type), ['bless', 'heal', 'gold'], 'Haste and Reach no more');
+    assert.equal(g.filler('haste').type, 'bless');
+    assert.equal(g.filler('reach').type, 'bless');
+    assert.equal(g.redrawCard(shown), null, 'nothing capped in a banished card\'s place');
+    // ALWAYS on Haste at the floor: Valor from then on, as the line over the hero and the pause menu say.
+    g.autoPick = 'haste';
+    g.state = 'play';
+    const bless = p.blessings, hastes = p.hastes, said = sayings(g);
+    g.pendingLevels = 2;
+    assert.ok(g.resolveAutoLevels());
+    assert.equal(p.hastes, hastes);
+    assert.equal(p.blessings, bless + 2);
+    assert.equal(g.autoPick, 'bless');
+    assert.deepEqual(said, [`Blessing ×${bless + 2}`]);
+    // And a chest gives Valor in its place.
+    g.autoPick = 'reach';
+    const reaches = p.reaches;
+    const roll = g.rollChest('boss');
+    assert.ok(roll.items.every((it) => it.type === 'bless' || it.type === 'evolve'), JSON.stringify(roll.items.map((it) => it.type)));
+    assert.equal(p.reaches, reaches);
+  });
+});

@@ -12,6 +12,9 @@ import { foeName } from './names.js';
 
 export const BASE_SPEED = 70;
 export const BASE_MAGNET = 42;
+// The floor every cooldown multiplier has (derived), however many relics, Armory ranks and
+// Blessings of Haste press it down: past it a Blessing of Haste gives nothing (Game.blessingCapped).
+export const COOLDOWN_FLOOR = 0.35;
 // Armor, the user's: "10% + min 1 damage (but just denote that as armor +1) ... it can only stop
 // 95% damage". Each point takes ARMOR_CUT off what is left of a blow, or 1 if that is more, and
 // all of it together never more than ARMOR_MOST of the blow: every point adds a little less.
@@ -171,9 +174,10 @@ export class Player {
       armor: (h.armor || 0) + m.armor + bonus('armor') + lv.armor,
       speedMul: (h.speed || 1) * m.speed * (1 + bonus('speed')),
       might: (h.might || 1) * m.might * (1 + bonus('might') + this.blessings * B.might) * lv.might,
-      // The Blessings of Reach, counted up to B.reachMost, and of Haste, to the floor of 0.35.
+      // The Blessings of Reach, counted up to B.reachMost, and of Haste, to the floor of 0.35
+      // (COOLDOWN_FLOOR).
       area: (h.area || 1) * m.area * (1 + bonus('area') + Math.min(this.reaches, B.reachMost) * B.area),
-      cooldown: Math.max(0.35, (h.cooldown || 1) * m.cooldown * (1 + bonus('cooldown') + this.hastes * B.cooldown)),
+      cooldown: Math.max(COOLDOWN_FLOOR, (h.cooldown || 1) * m.cooldown * (1 + bonus('cooldown') + this.hastes * B.cooldown)),
       amount: bonus('amount') + (m.amount || 0) + (this.buff('mirror') ? 1 : 0), // a Mirror Shard
       duration: (m.duration || 1) * (1 + bonus('duration')),
       summonDur: h.summonDur || 1, // the Necromancer's Grave Pact: his minions alone last longer

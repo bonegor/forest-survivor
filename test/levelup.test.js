@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, MILESTONES, CARD_WEIGHT, SIGNATURE_PITY } from '../public/js/game/game.js';
-import { GameScreen, LevelUpOverlay, PauseOverlay, cardsReadyAt, LEVELUP_DELAY, cardChange } from '../public/js/ui/gamescreen.js';
+import { GameScreen, LevelUpOverlay, PauseOverlay, cardsReadyAt, LEVELUP_DELAY, cardChange, cardSynergy } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
@@ -348,4 +348,24 @@ test('an upgrade card says its change in numbers, as this hero has it', () => {
     assert.equal(cardChange(g, g.filler('bless')), null, 'a filler');
     assert.equal(p.passives.size, 0, 'and nothing is changed');
   });
+});
+
+// The review's D7 (27 October 2026): "Synergy: <perk>" in the hero's colour, only where his perk
+// multiplies what the card gives.
+test("a card the hero's perk makes count for more says so, in his colour", () => {
+  screen((g) => {
+    assert.deepEqual(cardSynergy(g, relicCard('regen')), { text: 'Synergy: Bulwark', color: g.player.hero.color }, "the Knight's regeneration doubled");
+    assert.equal(cardSynergy(g, relicCard('might')), null);
+    assert.equal(cardSynergy(g, relicCard('fang')), null, 'no heal of his own multiplied');
+    assert.equal(cardSynergy(g, g.filler('heal')), null);
+    assert.equal(cardSynergy(g, levelCard('sword', 3)), null, 'nor a weapon');
+  });
+  screen((g) => {
+    for (const c of [relicCard('regen'), relicCard('fang'), g.filler('heal')]) assert.equal(cardSynergy(g, c)?.text, 'Synergy: Devotion', c.id || c.type);
+    assert.equal(cardSynergy(g, relicCard('hunter')), null);
+  }, { hero: 'paladin' });
+  screen((g) => assert.equal(cardSynergy(g, relicCard('hunter'))?.text, 'Synergy: Inquisition'), { hero: 'witchhunter' });
+  screen((g) => assert.equal(cardSynergy(g, relicCard('torc'))?.text, 'Synergy: Bloodrage'), { hero: 'berserker' });
+  // A plain stat only starts higher: no synergy for the Ranger's might.
+  screen((g) => assert.equal(cardSynergy(g, relicCard('might')), null), { hero: 'archer' });
 });

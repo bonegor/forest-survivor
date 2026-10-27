@@ -3,7 +3,7 @@
 import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
-import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS } from '../data/passives.js';
+import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, HORDE_CAP, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
@@ -16,7 +16,7 @@ import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE } from './events.js';
 import { view } from '../engine/view.js';
 import { input, padKey } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
-import { Player, ULT_DURATION, FURY } from './player.js';
+import { Player, ULT_DURATION, FURY, COOLDOWN_FLOOR } from './player.js';
 import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
 import { Weapon, aimAt } from './weapons.js';
@@ -598,15 +598,16 @@ export class Game {
   // its ALWAYS, whatever n (the owner's, 27 October 2026: the Blessing comes in three kinds). A
   // relic due for certain (sureRelic: the Phoenix Heart) and a signature due for certain
   // (sureSignature) are among the n, each in a place of chance. (A chest draws from the plain
-  // pool by weight: the showings for certain are the cards'.)
+  // pool by weight: the showings for certain are the cards'.) A Blessing that would give nothing
+  // more (blessingCapped) is not among them.
   levelChoices(n) {
     const pool = this.upgradePool();
-    if (!pool.length) return FILLER_IDS.map((type) => this.filler(type));
+    if (!pool.length) return FILLER_IDS.filter((type) => !this.blessingCapped(type)).map((type) => this.filler(type));
     const sure = [this.sureRelic(pool), this.sureSignature(pool)].filter(Boolean);
     const out = this.drawUpgrades(n - sure.length, pool.filter((c) => !sure.includes(c)));
     for (const c of sure) out.splice(Math.floor(Math.random() * (out.length + 1)), 0, c);
     this.signatureSeen(pool, out);
-    for (const type of FILLER_IDS) if (out.length < n) out.push(this.filler(type));
+    for (const type of FILLER_IDS) if (out.length < n && !this.blessingCapped(type)) out.push(this.filler(type));
     return out;
   }
 
@@ -660,22 +661,33 @@ export class Game {
   }
 
   // A card in the place of one banished: drawn by weight from the pool, less the cards still on
-  // the screen (shown); else a filler not there yet; else none.
+  // the screen (shown); else a filler not there yet (and not a Blessing capped); else none.
   redrawCard(shown) {
     const on = (c) => shown.some((s) => s.type === c.type && s.id === c.id);
     const pool = this.upgradePool().filter((c) => !on(c));
     if (pool.length) return weighted(pool, (x) => x.weight);
-    for (const type of FILLER_IDS) if (!shown.some((s) => s.type === type)) return this.filler(type);
+    for (const type of FILLER_IDS) if (!shown.some((s) => s.type === type) && !this.blessingCapped(type)) return this.filler(type);
     return null;
   }
 
   // A filler card: a heal of 35%; gold that grows with the night and with the hero's greed, as
   // every coin he picks up does; else a Blessing, of Valor, Haste or Reach (data/passives.js
-  // BLESSING), Valor for any other.
+  // BLESSING), Valor for any other and for one that would give nothing more (blessingCapped).
   filler(type) {
     if (type === 'heal') return { type, value: 0.35 };
     if (type === 'gold') return { type, value: Math.max(1, Math.round(30 * (1 + this.phase / 10) * this.player.greed)) };
-    return { type: FILLERS[type]?.count ? type : 'bless' };
+    return { type: FILLERS[type]?.count && !this.blessingCapped(type) ? type : 'bless' };
+  }
+
+  // Whether a Blessing would give nothing more (27 October 2026): Haste once his cooldowns are at
+  // the floor every cooldown has (COOLDOWN_FLOOR), Reach once taken BLESSING.reachMost times.
+  // Valor, and any other card, never is. A capped one leaves the level-up's fillers and a
+  // chest's, and an ALWAYS on it turns to Valor (resolveAutoLevels), so no level is spent on it.
+  blessingCapped(type) {
+    const p = this.player;
+    if (type === 'haste') return p.cooldown <= COOLDOWN_FLOOR + 1e-9;
+    if (type === 'reach') return p.reaches >= BLESSING.reachMost;
+    return false;
   }
 
   choiceCount() {
@@ -719,10 +731,13 @@ export class Game {
     const p = this.player;
     let gold = 0, heal = 0;
     for (let i = 0; i < n; i++) {
+      // ALWAYS on a Blessing that gives nothing more is ALWAYS on Valor from then on, as the
+      // pause menu then names it (blessingCapped).
+      if (this.blessingCapped(this.autoPick)) this.autoPick = 'bless';
       const c = this.filler(this.autoPick);
       this.applyChoice(c, true);
       if (c.type === 'gold') gold += c.value;
-      else if (c.type === 'heal') heal += c.value;
+      else if (c.type === 'heal') heal += c.value * p.healMul; // as Player.heal gives it (the Paladin's Devotion)
     }
     this.pendingLevels = 0;
     const [text, style, sound] =
