@@ -9,7 +9,6 @@ import PALADIN from '../../assets/heroes/paladin.js';
 import DRUID from '../../assets/heroes/druid.js';
 import BERSERKER from '../../assets/heroes/berserker.js';
 import WITCHHUNTER from '../../assets/heroes/witchhunter.js';
-import PALADIN_D from '../../assets/heroes/paladin_d.js';
 
 function decode(data) {
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
@@ -76,8 +75,6 @@ export const PALADIN_SHEET = sheet(PALADIN);
 export const DRUID_SHEET = sheet(DRUID);
 export const BERSERKER_SHEET = sheet(BERSERKER);
 export const WITCHHUNTER_SHEET = sheet(WITCHHUNTER);
-// Dame Seraphine's second look, until the user picks one (data/heroes.js skins).
-export const PALADIN_D_SHEET = sheet(PALADIN_D);
 
 export const ARCHER_POSE = pose(ARCHER_SHEET);
 export const MAGE_POSE = pose(MAGE_SHEET);
@@ -87,4 +84,3 @@ export const PALADIN_POSE = pose(PALADIN_SHEET);
 export const DRUID_POSE = pose(DRUID_SHEET);
 export const BERSERKER_POSE = pose(BERSERKER_SHEET);
 export const WITCHHUNTER_POSE = pose(WITCHHUNTER_SHEET);
-export const PALADIN_D_POSE = pose(PALADIN_D_SHEET);

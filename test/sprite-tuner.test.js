@@ -74,7 +74,7 @@ test('a tune moves the colours, never the pixels: the ink outlines the sprite, t
 test("a hero's sheet is tuned by its own colours: no ink to swap, the rim kept in the frame when it fits", () => {
   // Every hero outlines in dark shades of their own colours (the plumed Knight's style, 27 October
   // 2026): there is no one ink to swap. The monsters' ink is swapped in the test above.
-  for (const id of ['archer', 'mage', 'necromancer', 'rogue', 'paladin', 'paladin_d', 'druid', 'berserker', 'witchhunter']) {
+  for (const id of ['archer', 'mage', 'necromancer', 'rogue', 'paladin', 'druid', 'berserker', 'witchhunter']) {
     assert.equal(T.colourSlots(ART[id]).find((s) => s.ink), undefined, `${id}: no ink`);
   }
   const necro = ART.necromancer, slots = T.colourSlots(necro);

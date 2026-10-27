@@ -1,6 +1,7 @@
 // A hero's looks (data/heroes.js skins), chosen on the hero screen and remembered with the
-// settings. Since 27 October 2026 only the Paladin has two (Style C and Style D) until the user
-// picks one; every other hero has one look and no LOOK button.
+// settings. Since 27 October 2026 every hero has one look and no LOOK button: the Paladin's two
+// (Style C and Style D) gave way to her holy crusader (lab paladin/knightstyle-e). The mechanism
+// stays for looks to come; a look a player once chose and that is gone plays as the hero's own.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -10,40 +11,30 @@ import { SPR } from '../public/js/engine/sprites.js';
 import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
-test('the Paladin has two looks, each a full sprite of its own, and no other hero has any', () => {
-  const skins = HEROES.paladin.skins;
-  assert.deepEqual(skins.map((s) => s.id), ['c', 'd']);
-  assert.equal(new Set(skins.map((s) => s.sprite)).size, skins.length, 'each its own sprite');
-  assert.equal(skins[0].sprite, HEROES.paladin.sprite, 'the first is her own');
-  for (const s of skins) {
-    const spr = SPR[s.sprite];
-    assert.ok(spr && spr.frames.length === 22 && spr.idle.length && spr.walk.length && spr.attack.length, s.id);
-    assert.ok(SPR[s.pose], `${s.id}: a pose`);
+test('every hero has one look, a full sprite and a pose of its own, and no LOOK to step through', () => {
+  for (const h of Object.values(HEROES)) {
+    assert.equal(h.skins, undefined, h.id);
+    assert.ok(SPR[h.sprite] && SPR[h.pose], `${h.id}: its sprite and pose`);
   }
-  for (const h of Object.values(HEROES)) if (h.id !== 'paladin') assert.equal(h.skins, undefined, h.id);
+  const p = SPR[HEROES.paladin.sprite];
+  assert.ok(p.frames.length === 22 && p.idle.length && p.walk.length && p.attack.length, 'the Paladin, idle, walk and attack');
+  assert.equal(SPR.paladin_d, undefined, 'her Style D is gone');
 });
 
-test('heroLook swaps the sprite and pose for a chosen look, and leaves the hero as she is otherwise', () => {
+test('heroLook leaves a hero as she is, whatever look the settings once chose', () => {
   assert.equal(heroLook('paladin', {}), HEROES.paladin);
   assert.equal(heroLook('paladin', { paladin: 'c' }), HEROES.paladin);
-  assert.equal(heroLook('paladin', { paladin: 'nope' }), HEROES.paladin);
-  assert.equal(heroLook('knight', { knight: 'b' }), HEROES.knight, 'a look he no longer has');
-  const d = heroLook('paladin', { paladin: 'd' });
-  assert.equal(d.sprite, 'paladin_d');
-  assert.equal(d.pose, 'paladin_d_pose');
-  assert.equal(d.name, HEROES.paladin.name);
-  assert.deepEqual(d.unique, HEROES.paladin.unique, 'the same hero, only her look');
+  assert.equal(heroLook('paladin', { paladin: 'd' }), HEROES.paladin, 'a look she no longer has');
+  assert.equal(heroLook('knight', { knight: 'b' }), HEROES.knight);
 });
 
-test('a run is played in the look the settings remember', () => {
+test('a run remembered in a look that is gone is played in the hero\'s own', () => {
   const oldBot = input.bot;
   input.bot = { x: 0, y: 0 };
   try {
     const meta = metaBonuses(defaultProfile());
-    const make = (skins) => new Game({ hero: 'paladin', mode: 's15', meta, settings: { numbers: false, skins }, crypts: false });
-    assert.equal(make({ paladin: 'd' }).player.hero.sprite, 'paladin_d');
-    assert.equal(make({}).player.hero.sprite, 'paladin');
-    const g = make({ paladin: 'd' });
+    const g = new Game({ hero: 'paladin', mode: 's15', meta, settings: { numbers: false, skins: { paladin: 'd' } }, crypts: false });
+    assert.equal(g.player.hero.sprite, 'paladin');
     for (let i = 0; i < 120; i++) g.update(1 / 60); // swings and walks in it without trouble
     assert.ok(!g.player.dead);
   } finally {

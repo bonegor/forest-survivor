@@ -2,8 +2,7 @@
 
 import { KNIGHT_PLUMED } from './knight-plumed.js';
 import { ARCHER_SHEET, ARCHER_POSE, MAGE_SHEET, MAGE_POSE, NECROMANCER_SHEET, NECROMANCER_POSE, ROGUE_SHEET, ROGUE_POSE,
-  PALADIN_SHEET, PALADIN_POSE, DRUID_SHEET, DRUID_POSE, BERSERKER_SHEET, BERSERKER_POSE, WITCHHUNTER_SHEET, WITCHHUNTER_POSE,
-  PALADIN_D_SHEET, PALADIN_D_POSE } from './hero-sheets.js';
+  PALADIN_SHEET, PALADIN_POSE, DRUID_SHEET, DRUID_POSE, BERSERKER_SHEET, BERSERKER_POSE, WITCHHUNTER_SHEET, WITCHHUNTER_POSE } from './hero-sheets.js';
 import { KNIGHT_PORTRAIT_V2 } from './knight-portrait-v2.js';
 
 export const HERO_ART = {
@@ -32,8 +31,4 @@ export const HERO_ART = {
   berserker_pose: BERSERKER_POSE,
   witchhunter: WITCHHUNTER_SHEET,
   witchhunter_pose: WITCHHUNTER_POSE,
-
-  // The Paladin's second look, chosen on the hero screen (data/heroes.js skins).
-  paladin_d: PALADIN_D_SHEET,
-  paladin_d_pose: PALADIN_D_POSE,
 };

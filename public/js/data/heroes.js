@@ -113,13 +113,8 @@ export const HEROES = {
     title: 'Paladin',
     sprite: 'paladin',
     pose: 'paladin_pose',
-    // Her two looks to pick from (27 October 2026), each with a cylindrical head set off the shoulders:
-    // Style C, a barrel helm (lab paladin/knightstyle-c2), and Style D, a squared hood (knightstyle-d2),
-    // both with her head turned so both eyes show.
-    skins: [
-      { id: 'c', name: 'Style C', sprite: 'paladin', pose: 'paladin_pose' },
-      { id: 'd', name: 'Style D', sprite: 'paladin_d', pose: 'paladin_d_pose' },
-    ],
+    // One look since 27 October 2026: a holy crusader after Diablo 2's Paladin (lab
+    // paladin/knightstyle-e), in place of her Styles C and D.
     weapon: 'smite',
     unique: ['smite'],
     color: '#fee761',

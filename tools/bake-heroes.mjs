@@ -26,12 +26,11 @@ const BAKE = {
   mage: 'mage/knightstyle-a2',
   necromancer: 'necromancer/knightstyle-a',
   rogue: 'rogue/eclipse-wraith-tweak-1',
-  // Her two looks to pick from: Style B with a barrel helm (C), Style A with a squared hood (D),
-  // each head made cylindrical and set off the shoulders.
-  // These four heroes' heads, as the Sorcerer's, turned a little toward us so both eyes show (the
+  // A holy crusader after Diablo 2's Paladin, made anew (the owner's, 27 October 2026: "Take for
+  // inspiration maybe what it looks like in Diablo 2"), in place of her Styles C and D.
+  paladin: 'paladin/knightstyle-e',
+  // These three heroes' heads, as the Sorcerer's, turned a little toward us so both eyes show (the
   // owner's, 27 October 2026: "both eyes are visible like in case of ranger, necromancer").
-  paladin: 'paladin/knightstyle-c2',
-  paladin_d: 'paladin/knightstyle-d2',
   druid: 'druid/knightstyle-a2',
   berserker: 'berserker/knightstyle-a2',
   witchhunter: 'witchhunter/knightstyle-a2',
