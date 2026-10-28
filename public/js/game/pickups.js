@@ -53,8 +53,8 @@ export const CHEST_SETTLE = 0.82;
 // s of the last a `step` up, at most `cap` steps, so a boss's fountain rings up the scale (28
 // October 2026). Sound only.
 export const COIN_COMBO = { window: 0.35, cap: 16, step: 0.04 };
-// A dropped chest landing (a champion's, the thief's, a lord's, a boss's): a thud by its tier and
-// a glint off its lid for `glint` seconds (drawGlow).
+// A champion's chest landing (the thief's too): a thud and a glint off its lid for `glint` seconds
+// (drawGlow), for its only cue was the fall all big monsters share (the 27 October 2026 review, C6).
 export const CHEST_LAND = { glint: 0.45 };
 
 // The shadows pickups cast: a chest's, a soul gem's and the rest's, made on first use.
@@ -154,12 +154,15 @@ export class Pickup {
           this.landed = true;
           sfx('gear', { size: this.opts.item.rarity, pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
         }
-        // A chest landing: a thud by its tier and a glint off its lid (CHEST_LAND). A Treasure
-        // Map's, or a crypt's, lies waiting (pop: false) and never lands.
-        if (this.kind === 'chest' && !this.landed) {
+        // A champion's chest landing, or the thief's: a thud and a glint off its lid (CHEST_LAND).
+        // A boss's and a crypt lord's land inside their own beat (its sting, flash and slow
+        // motion), a lord's beside its gear, whose landing rings out its rarity: no thud over
+        // those. A Treasure Map's, or a Dungeon Run floor's side-room chest, lies waiting (pop:
+        // false) and never lands.
+        if (this.kind === 'chest' && this.opts.kind === 'elite' && !this.landed) {
           this.landed = true;
           this.landedAt = this.age;
-          sfx('chestland', { size: this.opts.kind === 'boss' ? 3 : this.opts.kind === 'lord' ? 2 : 1, pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
+          sfx('chestland', { pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
         }
         if (this.vz < -40) this.vz = -this.vz * 0.35;
         else this.vz = 0;

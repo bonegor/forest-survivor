@@ -18,13 +18,14 @@ test('each beat has a stinger of its own, and each is limited', () => {
   assert.ok(names.includes('ult'), 'the ultimate has its launch');
   // The seal's crack and the banish, apart from the blows and the frost weapon's recording.
   for (const s of ['thaw', 'banish']) assert.ok(names.includes(s) && limited(s), s);
-  // A rare box find's chime, the rarest's sting and a chest landing (28 October 2026).
-  for (const s of ['find', 'treasure', 'chestland']) assert.ok(names.includes(s) && limited(s), s);
+  // A rare box find's chime, the rarest's sting, a chest landing and a chest's coins landing on
+  // the gold counter (28 October 2026).
+  for (const s of ['find', 'treasure', 'chestland', 'coinland']) assert.ok(names.includes(s) && limited(s), s);
 });
 
 test('the music ducks about 8 dB for about 1.2 s under every T4 and T5 stinger', () => {
   assert.equal(DUCK.db, -8);
   assert.ok(DUCK.secs >= 1 && DUCK.secs <= 1.5);
   for (const s of ['evolve', 'epic', 'legendary', 'bossslain', 'revive', 'record', 'unlock']) assert.ok(DUCKED.has(s), s);
-  for (const s of ['levelup', 'chest', 'coin', 'milestone', 'find', 'treasure', 'chestland', ...BEATS]) assert.ok(!DUCKED.has(s), `${s} is no jackpot`);
+  for (const s of ['levelup', 'chest', 'coin', 'milestone', 'find', 'treasure', 'chestland', 'coinland', ...BEATS]) assert.ok(!DUCKED.has(s), `${s} is no jackpot`);
 });

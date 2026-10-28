@@ -1,7 +1,7 @@
 // How the game's payouts tell themselves (28 October 2026), presentation only: a rare find out of a
 // broken box pops out in a beam of its own light with a chime, the rarest with a sting and its
-// name; a run of coins climbs in pitch as soul gems do; a dropped chest lands with a thud and a
-// glint. The odds and the amounts are untouched.
+// name; a run of coins climbs in pitch as soul gems do; a champion's chest lands with a thud and a
+// glint (a boss's and a lord's land inside their own beat). The odds and the amounts are untouched.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -89,13 +89,16 @@ test("a run of coins climbs in pitch to its cap, and starts again after a pause"
     assert.equal(g.coinCombo, 0, 'a pause: from the bottom again');
   }));
 
-test("a champion's chest lands, once, where it fell, and waits there", () =>
+test("a champion's chest lands, once, where it fell, and waits there; a boss's lands in its own beat", () =>
   game((g, p) => {
     const c = g.addPickup('chest', p.x + 80, p.y, 0, { kind: 'elite' });
+    const boss = g.addPickup('chest', p.x - 80, p.y, 0, { kind: 'boss' });
     for (let i = 0; i < 120 && !c.landed; i++) g.update(1 / 60);
     assert.ok(c.landed, 'it landed');
     assert.ok(!c.dead, 'and waits to be opened');
     const at = c.landedAt;
     for (let i = 0; i < 30; i++) g.update(1 / 60);
     assert.equal(c.landedAt, at, 'its bounce lands no second time');
+    for (let i = 0; i < 60; i++) g.update(1 / 60);
+    assert.ok(boss.z === 0 && !boss.landed, "a boss's chest is down, with no thud of its own over its beat");
   }));

@@ -318,11 +318,15 @@ function litK(lit, row, i) {
   for (const l of lit) if (l.row === row && l.i === i) k = Math.max(k, l.k);
   return k;
 }
+// How many of the slots' columns (18 px apart from x 3, a lit one's frame a pixel round it) stand
+// wholly left of x: those a chest's screen paints in full light beside EVOLUTION! (drawSlots' cols).
+export const slotsLeftOf = (x) => Math.max(0, Math.floor((x - 2) / 18));
 
 // One thing a chest gave (an item of Game.rollChest), now shown on a held build: an evolution, a
-// weapon or relic a level up or new, a filler's gold. (A Blessing or a heal shows in no slot.)
-// Returns the slot it changed, { row: 'w' (a weapon's) or 'r' (a relic's), i }, or null: the
-// chest's screen lights it up (drawSlots' lit).
+// weapon or relic a level up or new. (A filler shows in no slot: a Blessing, a heal, and a Purse
+// of Gold, whose gold the chest's screen counts with its own and its coins carry to the counter,
+// 28 October 2026.) Returns the slot it changed, { row: 'w' (a weapon's) or 'r' (a relic's), i },
+// or null: the chest's screen lights it up (drawSlots' lit).
 export function revealOn(held, it, g) {
   if (it.type === 'evolve') {
     const i = held.weapons.findIndex((x) => x.w === it.w);
@@ -344,7 +348,7 @@ export function revealOn(held, it, g) {
     if (i >= 0) held.relics[i][1] = it.level;
     else i = held.relics.push([it.id, it.level]) - 1;
     return { row: 'r', i };
-  } else if (it.type === 'gold') held.gold += it.value; // the counter pulses on its own
+  }
   return null;
 }
 
@@ -452,8 +456,10 @@ export class Hud {
   }
 
   // lit: the slots a chest has just raised (ChestOverlay), each { row: 'w' or 'r', i, k }, k its
-  // light running from 1 down to 0 (litMark); none on the HUD itself.
-  drawSlots(ctx, p, lit = null) {
+  // light running from 1 down to 0 (litMark); none on the HUD itself. cols: how many of the slots'
+  // columns to draw, from the left (slotsLeftOf: a chest's screen leaves those under EVOLUTION! to
+  // the HUD under its dim); all of them on the HUD itself.
+  drawSlots(ctx, p, lit = null, cols = MAX_WEAPONS) {
     let x = 3;
     const y = 9;
     // In a crypt, where he fights by hand with his own weapon alone, the others are dimmed.
@@ -462,7 +468,7 @@ export class Hud {
     // The run's slots open; those the Armory's Arsenal and Reliquary have yet to add, locked
     // (Game.maxWeapons, maxRelics).
     const { maxWeapons = MAX_WEAPONS, maxRelics = MAX_RELICS } = this.g;
-    for (let i = 0; i < MAX_WEAPONS; i++) {
+    for (let i = 0; i < Math.min(MAX_WEAPONS, cols); i++) {
       const h = held && held.weapons[i], w = held ? h && h.w : p.weapons[i];
       if (i >= maxWeapons && !h && !w) {
         this.lockedSlot(ctx, x, y);
@@ -472,15 +478,17 @@ export class Hud {
       if (main && w && w !== main) ctx.globalAlpha = 0.3;
       if (h) this.slot(ctx, x, y, SPR[h.icon], h.evolved ? -1 : h.level, MAX_WEAPON_LEVEL, h.evolved);
       else this.slot(ctx, x, y, w ? SPR[w.def.icon] : null, w ? (w.evolved ? -1 : w.level) : 0, MAX_WEAPON_LEVEL, w && w.evolved);
-      // EVOLVE READY: the next chest opened evolves it (Game.evolvable, kept as evoReady).
-      if (w && !held && this.g.evoReady.includes(w)) this.evoMark(ctx, x, y, this.g.clock);
+      // EVOLVE READY: the next chest opened evolves it (Game.evolvable, kept as evoReady). Not one
+      // evolved since evoReady was last taken: a chest's screen holds the run still, and Game.update
+      // with it, so the weapon it has just evolved would still be marked over the screen.
+      if (w && !held && !w.evolved && this.g.evoReady.includes(w)) this.evoMark(ctx, x, y, this.g.clock);
       ctx.globalAlpha = 1;
       if (lit) this.litMark(ctx, x, y, litK(lit, 'w', i));
       x += 18;
     }
     x = 3;
     const ps = held ? held.relics : [...p.passives.entries()];
-    for (let i = 0; i < MAX_RELICS; i++) {
+    for (let i = 0; i < Math.min(MAX_RELICS, cols); i++) {
       const e = ps[i];
       if (i >= maxRelics && !e) this.lockedSlot(ctx, x, y + 21, true);
       else this.slot(ctx, x, y + 21, e ? SPR[PASSIVES[e[0]].icon] : null, e ? e[1] : 0, e ? PASSIVES[e[0]].max : 5, false, true);
@@ -518,16 +526,18 @@ export class Hud {
   }
 
   // A slot a chest has just raised: a white frame round it, its pips too, and a white wash over
-  // it, fading as k runs down to 0 (SLOT_LIT).
+  // it, fading as k runs down to 0 (SLOT_LIT). (FLASHES: SOFT: no white pulse, so the frame in
+  // gold and the wash held to FLASH_SOFT; a boss's chest raises up to five in a row.)
   litMark(ctx, x, y, k) {
     if (k <= 0) return;
+    const soft = this.g.settings.softFlash === true;
     ctx.globalAlpha = k;
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = soft ? '#fee761' : '#ffffff';
     ctx.fillRect(x - 1, y - 1, 19, 1);
     ctx.fillRect(x - 1, y + 19, 19, 1);
     ctx.fillRect(x - 1, y, 1, 19);
     ctx.fillRect(x + 17, y, 1, 19);
-    ctx.globalAlpha = 0.45 * k;
+    ctx.globalAlpha = (soft ? FLASH_SOFT : 0.45) * k;
     ctx.fillRect(x + 1, y + 1, 15, 15);
     ctx.globalAlpha = 1;
   }

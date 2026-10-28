@@ -285,7 +285,7 @@ const LIMITS = {
   furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
   rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1], warnstand: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
-  thaw: [0.5, 1], banish: [0.1, 1], find: [0.12, 2], treasure: [0.5, 1], chestland: [0.15, 2],
+  thaw: [0.5, 1], banish: [0.1, 1], find: [0.12, 2], treasure: [0.5, 1], chestland: [0.15, 2], coinland: [0.02, 6],
 };
 
 // Level factors that keep the reward ladder in order as measured through the real chain (RMS over
@@ -387,6 +387,11 @@ const SFX = {
     tone(t, { type: 'square', f0: 988 * o.p, dur: 0.06, vol: 0.06 });
     tone(t + 0.06, { type: 'square', f0: 1319 * o.p, dur: 0.16, vol: 0.06 });
   },
+  // A chest's coin landing on the gold counter (ChestOverlay.drawFlyers), each a step higher: the
+  // coin's own chime, with a limit of its own (LIMITS) that lets all ten through, two or three
+  // frames apart at 60 Hz, where the coin's 0.04 s dropped those two frames after the last (28
+  // October 2026).
+  coinland: (t, o) => SFX.coin(t, o),
   // An evolution: the longest and brightest - a low swell, a rising major arpeggio over two octaves
   // and a shimmering high chord ringing out.
   evolve: (t) => {
@@ -459,11 +464,10 @@ const SFX = {
     tone(t + 0.22, { type: 'sine', f0: 2349 * o.p, dur: 0.9, vol: 0.04, attack: 0.005, pan: o.pan });
     noise(t + 0.15, { filter: 'highpass', f0: 6000, f1: 10000, dur: 0.5, vol: 0.035, attack: 0.05, pan: o.pan });
   },
-  // A dropped chest landing (o.size 1 a champion's or the thief's, 2 a lord's, 3 a boss's): a
-  // wooden thud, deeper the bigger, and a glint of struck bells off its lid.
+  // A champion's chest landing (the thief's too; Pickup.update): a wooden thud and a glint of
+  // struck bells off its lid.
   chestland: (t, o) => {
-    const n = Math.max(1, Math.min(3, o.size || 1));
-    tone(t, { type: 'sine', f0: 170 - 30 * n, f1: 45, dur: 0.2 + 0.08 * n, vol: 0.26, pan: o.pan });
+    tone(t, { type: 'sine', f0: 140, f1: 45, dur: 0.28, vol: 0.26, pan: o.pan });
     noise(t, { filter: 'lowpass', f0: 900, f1: 150, dur: 0.12, vol: 0.2, pan: o.pan });
     tone(t + 0.1, { type: 'sine', f0: 2637, dur: 0.25, vol: 0.035, attack: 0.003, pan: o.pan });
     tone(t + 0.15, { type: 'sine', f0: 3520, dur: 0.3, vol: 0.025, attack: 0.003, pan: o.pan });

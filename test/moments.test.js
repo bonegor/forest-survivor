@@ -175,6 +175,32 @@ test('the HUD shows the build as it was until the chest reveals each thing, the 
     }
     assert.ok(between, 'the counter takes the gold coin by coin');
     assert.equal(hud.held, null, 'the last coin in: the HUD shows the build as it is');
+    assert.ok(!g.evoReady.includes(sword), 'EVOLVE READY no longer marks the sword it evolved');
+  }));
+
+test("a chest's purses are counted with its gold and reach the counter on its coins, not before", () =>
+  run((gs, g) => {
+    frame(gs, 5);
+    const gold = g.gold;
+    // A full build's chest: two Purses of Gold and the chest's own 20, all given at once, as
+    // Game.rollChest gives them.
+    g.rollChest = () => {
+      g.gold += 50 + 30 + 20;
+      return { items: [{ type: 'gold', value: 50 }, { type: 'gold', value: 30 }], gold: 20 };
+    };
+    g.chestQueue.push('elite');
+    frame(gs);
+    const o = gs.overlay, hud = g.hud;
+    assert.equal(overlay(gs), 'ChestOverlay');
+    assert.deepEqual(o.slots, [[0, 1]], 'the purses share one place');
+    while (o.revealed < 2) frame(gs);
+    assert.equal(hud.held.gold, gold, 'both purses shown: their gold not yet on the counter');
+    while (!o.goldShown) frame(gs);
+    assert.equal(o.goldCount, 100, 'the gold line counts the purses with the chest\'s own');
+    assert.equal(hud.held.gold, gold, 'counted, its coins still on their way');
+    for (let i = 0; i < 120 && hud.held; i++) frame(gs);
+    assert.equal(hud.held, null, 'the last coin in');
+    assert.equal(g.gold, gold + 100, 'and the gold is what the chest gave, no more');
   }));
 
 test("a fallen boss's bar holds, flashes and breaks up before the next boss still fighting takes it", () =>
