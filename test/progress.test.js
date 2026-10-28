@@ -54,7 +54,7 @@ test('a fresh profile: three weapon and relic slots, no rerolls or banishes, the
   const m = P.metaBonuses(p);
   assert.deepEqual([m.weaponSlots, m.relicSlots, m.reroll, m.banish], [3, 3, 0, 0]);
   const open = P.openFor(p, 'knight');
-  assert.deepEqual(open, { weapons: ['axe', 'blades', 'glaive', 'caltrops'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false });
+  assert.deepEqual(open, { weapons: ['axe', 'blades', 'glaive', 'caltrops'], relics: ['might', 'armor', 'vitality', 'regen', 'magnet', 'movespeed'], ult: false, evos: [] }, 'and no evolution made yet, so no recipe known (the 27 October 2026 review, D3)');
   const list = P.progressList(p);
   assert.equal(list.filter((l) => l.open).length, 10, 'the ten starters');
   assert.ok(list.filter((l) => !l.start).every((l) => !l.open && l.progress === 0 && l.need));
