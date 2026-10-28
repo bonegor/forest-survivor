@@ -1,0 +1,97 @@
+{
+  "thorn-hunt": {
+    "title": "Thorn Hunt",
+    "bpm": 176.0,
+    "bars": 64,
+    "seconds": 87.272721,
+    "samples": 3848727,
+    "sample_rate": 44100,
+    "bytes": 1707402,
+    "master": {
+      "lufs": -16.0,
+      "true_peak_db": -2.3,
+      "limiting_db": -0.0
+    },
+    "encoded_lufs": -16.06,
+    "encoded_true_peak_db": -2.17,
+    "seam_step": 0.00825,
+    "ordinary_step_p999": 0.173876,
+    "silent_seconds": 0
+  },
+  "bone-procession": {
+    "title": "Bone Procession",
+    "bpm": 168.0,
+    "bars": 64,
+    "seconds": 91.428571,
+    "samples": 4032000,
+    "sample_rate": 44100,
+    "bytes": 1767908,
+    "master": {
+      "lufs": -16.04,
+      "true_peak_db": -2.0,
+      "limiting_db": -0.0
+    },
+    "encoded_lufs": -16.11,
+    "encoded_true_peak_db": -2.25,
+    "seam_step": 0.004588,
+    "ordinary_step_p999": 0.183792,
+    "silent_seconds": 0
+  },
+  "crown-of-cinders": {
+    "title": "Crown of Cinders",
+    "bpm": 192.0,
+    "bars": 64,
+    "seconds": 80.0,
+    "samples": 3528000,
+    "sample_rate": 44100,
+    "bytes": 1580597,
+    "master": {
+      "lufs": -16.0,
+      "true_peak_db": -2.34,
+      "limiting_db": -0.0
+    },
+    "encoded_lufs": -16.08,
+    "encoded_true_peak_db": -2.64,
+    "seam_step": 0.005184,
+    "ordinary_step_p999": 0.178532,
+    "silent_seconds": 0
+  },
+  "oath-at-the-gate": {
+    "title": "Oath at the Gate",
+    "bpm": 144.0,
+    "bars": 32,
+    "seconds": 53.333333,
+    "samples": 2352000,
+    "sample_rate": 44100,
+    "bytes": 980118,
+    "master": {
+      "lufs": -16.01,
+      "true_peak_db": -2.0,
+      "limiting_db": 0.19
+    },
+    "encoded_lufs": -15.98,
+    "encoded_true_peak_db": -2.02,
+    "seam_step": 0.002322,
+    "ordinary_step_p999": 0.045745,
+    "silent_seconds": 0
+  },
+  "embers-and-iron": {
+    "title": "Embers and Iron",
+    "bpm": 112.0,
+    "bars": 16,
+    "seconds": 34.285714,
+    "samples": 1512000,
+    "sample_rate": 44100,
+    "bytes": 565289,
+    "master": {
+      "lufs": -17.0,
+      "true_peak_db": -2.79,
+      "limiting_db": -0.0
+    },
+    "encoded_lufs": -16.97,
+    "encoded_true_peak_db": -2.85,
+    "seam_step": 0.000843,
+    "ordinary_step_p999": 0.027981,
+    "silent_seconds": 0
+  }
+}

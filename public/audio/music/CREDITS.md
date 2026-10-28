@@ -1,8 +1,32 @@
 # Music credits
 
-## Forest Survivor original soundtrack — 28 October 2026
+## Active soundtrack: Thorns and Iron — 28 October 2026
 
-The active soundtrack contains original instrumental compositions made for this project:
+Original instrumental dark-fantasy music composed for Forest Survivor. The combat score
+combines galloping, palm-muted metal guitars, driving bass and drums with minor-key melodies.
+Thorn Hunt uses a synthesized folk whistle; Bone Procession uses Phrygian tension and a
+guitar lead; Crown of Cinders uses harmonic-minor runs and denser double-kick percussion.
+The title and aftermath cues develop the same musical language with plucked guitar,
+folk whistle and marching percussion.
+
+| File | Title | Tempo | Game use |
+| --- | --- | --- | --- |
+| `thorn-hunt.ogg` | Thorn Hunt | 176 BPM | Forest and catacombs |
+| `bone-procession.ogg` | Bone Procession | 168 BPM | Crypt and dungeon crypt |
+| `crown-of-cinders.ogg` | Crown of Cinders | 192 BPM | Bosses and inferno |
+| `oath-at-the-gate.ogg` | Oath at the Gate | 144 BPM | Title and camp |
+| `embers-and-iron.ogg` | Embers and Iron | 112 BPM | Results, victory and death |
+
+Composition source, editable MIDI, note data, build instructions and measured audio checks
+are in `tools/music/combat/`. Instruments: Shreddage 3 Stratus FREE in Kontakt 8,
+Guitar Rig 7, Cakewalk SI-Bass Guitar and SI-Drum Kit, Ample Guitar M Lite, and the Music
+Studio synthesized tin whistle. Only rendered music is distributed, never sample libraries
+or captured plugin presets. Renders were made with DawDreamer, mixed and mastered in code,
+and encoded as stereo Ogg Vorbis. Release tails wrap into exact bar-length loops.
+
+## Previous original soundtrack — archived credits
+
+The previous soundtrack contained these original instrumental compositions:
 
 | File | Title | Game use |
 | --- | --- | --- |

@@ -1,12 +1,12 @@
 {
-  "title": { "file": "sunroom-circuit.ogg", "gapless": true },
-  "results": { "file": "stillwater-echo-guitar.ogg", "gapless": true },
-  "forest": { "file": "wildfire-run.ogg", "gapless": true },
-  "crypt": { "file": "stormlight-drive.ogg", "gain": 1.15, "gapless": true },
-  "boss": { "file": "ironwood-rising.ogg", "gain": 0.85, "gapless": true },
-  "victory": "stillwater-echo-guitar.ogg",
-  "gameover": "stillwater-echo-guitar.ogg",
-  "dungeon-crypt": { "file": "stormlight-drive.ogg", "gain": 1.15, "gapless": true },
-  "dungeon-catacombs": { "file": "wildfire-run.ogg", "gapless": true },
-  "dungeon-inferno": { "file": "ironwood-rising.ogg", "gain": 0.85, "gapless": true }
+  "title": { "file": "oath-at-the-gate.ogg", "gapless": true },
+  "results": { "file": "embers-and-iron.ogg", "gapless": true },
+  "forest": { "file": "thorn-hunt.ogg", "gapless": true },
+  "crypt": { "file": "bone-procession.ogg", "gapless": true },
+  "boss": { "file": "crown-of-cinders.ogg", "gapless": true },
+  "victory": { "file": "embers-and-iron.ogg", "gapless": true },
+  "gameover": { "file": "embers-and-iron.ogg", "gapless": true },
+  "dungeon-crypt": { "file": "bone-procession.ogg", "gapless": true },
+  "dungeon-catacombs": { "file": "thorn-hunt.ogg", "gapless": true },
+  "dungeon-inferno": { "file": "crown-of-cinders.ogg", "gapless": true }
 }
