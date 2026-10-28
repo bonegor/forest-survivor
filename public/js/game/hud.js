@@ -376,6 +376,7 @@ export class Hud {
     this.xpFlash = 0;
     this.comboScale = 1;
     this.tierShown = -1; // the combo's tier drawn last frame (drawCombo)
+    this.comboRun = g.comboRun; // which combo that was (Game.comboRun)
     this.comboWordT = Infinity; // since a new tier's word popped
     // While a chest shows what it gave (ChestOverlay), the build as it was before it, which the
     // slots and the gold counter show until each thing is revealed (heldBuild); null: as it is.
@@ -1200,13 +1201,19 @@ export class Hud {
   // dt: real seconds since the last frame (the pop settles by it: COMBO_POP).
   drawCombo(ctx, W, H, t, dt = this.lastDt ?? 1 / 60) {
     const g = this.g, tier = comboTier(g.comboTiers, g.combo);
+    // A combo the lull broke in a frame whose kills brought the next one up at once never showed
+    // below COMBO.show between them: the new one still comes up with its pop (Game.comboRun).
+    if (g.comboRun !== this.comboRun) {
+      this.comboRun = g.comboRun;
+      this.tierShown = -1;
+    }
     if (tier < 0) {
       this.tierShown = -1;
       return;
     }
     // It pops as it comes up and at each new tier, never at a kill that only counts (28 October
     // 2026, the review's C7: popping at every kill it sat at about 1.45 times late in a fight and
-    // told nothing); a new tier's word pops with it, its sting played (Game.killEnemy).
+    // told nothing); a new tier's word pops with it, its sting rung (Game.update).
     if (tier > this.tierShown) {
       this.comboScale = COMBO_POP.count;
       if (tier > 0) this.comboWordT = 0;

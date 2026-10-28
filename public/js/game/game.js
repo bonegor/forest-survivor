@@ -281,6 +281,8 @@ export class Game {
     this.comboT = 0;
     this.comboTier = -1; // the tier it has come to (comboTier), its sting played once each
     this.comboTiers = comboTiers(this.diff, this.nightmare);
+    this.comboSting = 0; // the highest tier come to since the last sting, rung at the frame's end (update)
+    this.comboRun = 0; // the combos a lull has broken, so the HUD pops the next as it comes up (Hud.drawCombo)
     // A boss's arrival (arrival.js): the stir before it, its name card, the heartbeat while it is
     // nearly done.
     this.stir = null; // { id, t, after }
@@ -1112,10 +1114,13 @@ export class Game {
     this.combo++;
     this.comboT = COMBO.hold;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
-    // A new tier: its sting, a step higher each (the HUD pops the count and the tier's word).
+    // A new tier: its sting, a step higher each (the HUD pops the count and the tier's word). It
+    // rings at the frame's end (update), once, for the highest tier the frame came to (28 October
+    // 2026): a Holy Relic or an ultimate taking the count past two tiers at once rang the lower's
+    // sting, the higher's dropped by its limit, while the HUD popped the higher's word.
     const tier = comboTier(this.comboTiers, this.combo);
     if (tier > this.comboTier) {
-      if (tier > 0) sfx('combo', { size: tier });
+      if (tier > 0) this.comboSting = tier;
       this.comboTier = tier;
     }
     p.furyKill(e);
@@ -2237,6 +2242,8 @@ export class Game {
       if (this.comboT <= 0) {
         this.combo = 0;
         this.comboTier = -1; // a combo begun again comes to its tiers again
+        this.comboSting = 0;
+        this.comboRun++;
       }
     }
     if (this.state === 'play') {
@@ -2401,6 +2408,12 @@ export class Game {
     if (this.state === 'play' && this.mode === 'ranked') this.rankedMilestones();
     if (this.state === 'play') this.heroMilestone();
     if (this.hints) this.hints.update();
+    // The frame came to a combo's new tier (killEnemy): one sting, the highest tier's, whatever
+    // the weapons, a relic or the ultimate felled in it.
+    if (this.comboSting > 0) {
+      sfx('combo', { size: this.comboSting });
+      this.comboSting = 0;
+    }
   }
 
   // Foes pass through props (barrels, crates...), and in the forest through the trees, so nothing

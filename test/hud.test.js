@@ -5,7 +5,8 @@
 // Only the three elites nearest the hero are named, and a boss's words come after the names and
 // the markers, below its own name at the top. Levels gained at once run the experience bar to its
 // end, flash it and start it again, one by one; the combo pops only as it comes up and at a new
-// tier, its tiers rising with the difficulty's horde (28 October 2026).
+// tier, its tiers rising with the difficulty's horde, a frame's new tiers ringing one sting, the
+// highest's (28 October 2026).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -250,6 +251,36 @@ test("the run comes to the combo's tiers one by one, and a lull starts it over",
     g.update(1 / 60);
     assert.equal(g.combo, 0, 'the lull broke it');
     assert.equal(g.comboTier, -1, 'and its tiers come again');
+  }));
+
+// 28 October 2026: a frame's kills taking the combo past two tiers at once (a Holy Relic, an
+// ultimate) rang the lower tier's sting, the higher's dropped by its limit, under the higher's word.
+test("a frame's kills past two tiers ring one sting, the higher tier's, at the frame's end", () =>
+  game((g, p) => {
+    const kill = () => g.killEnemy(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true }));
+    while (g.combo < g.comboTiers[0] - 1) kill();
+    assert.equal(g.comboSting, 0, 'no sting before the first named tier');
+    while (g.combo < g.comboTiers[1]) kill();
+    assert.equal(g.comboTier, 2);
+    assert.equal(g.comboSting, 2, "the second tier's sting, not the first's");
+    g.update(1 / 60);
+    assert.equal(g.comboSting, 0, "rung at the frame's end, once");
+  }));
+
+test('a combo brought up in the frame the lull broke the last one still pops as it comes up', () =>
+  game((g, p) => {
+    const { ctx } = recorder(), draw = (dt) => g.hud.drawCombo(ctx, 480, 270, 0.3, dt);
+    const kill = () => g.killEnemy(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true }));
+    while (g.combo < g.comboTiers[0]) kill();
+    draw(1 / 60);
+    draw(1); // settled
+    // The lull runs out, and that frame's blows bring the next combo up before the HUD is drawn.
+    g.comboT = 1e-6;
+    g.update(1 / 60);
+    assert.equal(g.combo, 0, 'the lull broke it');
+    while (g.combo < COMBO.show) kill();
+    draw(1 / 60);
+    assert.ok(g.hud.comboScale > 1.3, `the new one pops (${g.hud.comboScale})`);
   }));
 
 // 28 October 2026 (the 27 October review's C3): the bar no longer snaps down at a level gained.
