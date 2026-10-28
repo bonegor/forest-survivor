@@ -363,6 +363,11 @@ const BACKS = {
   gold: ['#be4a2f', '#fee761', '#feae34'],
 };
 const backOf = (c, completes) => (completes ? 'gold' : c.isNew ? (c.type === 'weapon' ? 'weapon' : 'relic') : 'plain');
+// A chain of levels gained at once (the 27 October 2026 review, C3; 28 October 2026): its first
+// screen stamped "×3" beside the title, the next "2 of 3", as a batch of swarms says which it is
+// (Game.eventWarning, the owner's "N of M"). Nothing for a level alone. ({ at, of }:
+// LevelUpOverlay.chain.)
+export const chainStamp = ({ at, of }) => (of <= 1 ? '' : at === 1 ? `×${of}` : `${at} of ${of}`);
 
 export class LevelUpOverlay {
   constructor(gs) {
@@ -383,6 +388,8 @@ export class LevelUpOverlay {
     // The first level-up screen's footer tells what a card is (hints.js 'levelup'), until a card is
     // taken from it.
     this.teach = !!this.g.hints && !this.g.hints.said('levelup');
+    // The screens of its chain already taken (chain): it stays up from one level to the next.
+    this.taken = 0;
   }
 
   roll() {
@@ -415,6 +422,14 @@ export class LevelUpOverlay {
     return this.t < this.readyAt || this.flips.some((f) => this.t < f + FLIP.dur);
   }
 
+  // Where this screen stands in its chain: { at, of }, `of` the screens taken and the levels still
+  // waiting, this one among them (Game.pendingLevels). A level the run's ALWAYS takes unseen never
+  // comes to a screen (Game.resolveAutoLevels, before it opens and after each card), so it is not
+  // counted; a chain ALWAYS cuts short simply closes.
+  chain() {
+    return { at: this.taken + 1, of: this.taken + Math.max(1, this.g.pendingLevels) };
+  }
+
   // Whether a card can be banished: one left this run, a weapon or relic (no filler), and not on
   // a maxed build's screen of fillers (it has ALWAYS).
   canBanish(c) {
@@ -432,6 +447,7 @@ export class LevelUpOverlay {
       this.teach = false;
     }
     g.pendingLevels = Math.max(0, g.pendingLevels - 1); // never below none (draw: levels taken elsewhere)
+    this.taken++;
     sfx('pick');
     g.state = 'play';
     if (g.hints) g.hints.levelClosed = true; // the first-run hint on weapons and gems comes next
@@ -546,6 +562,20 @@ export class LevelUpOverlay {
       ctx.save();
       ctx.translate(Math.round(cx), Math.round(cy));
       ctx.rotate(-0.12);
+      ctx.drawImage(c, Math.round(-cw / 2), Math.round(-ch / 2), Math.round(cw), Math.round(ch));
+      ctx.restore();
+    }
+    // A chain of levels (chainStamp): "×3", then "2 of 3", stamped left of the title as LUCKY! is
+    // right of it (where the screen is narrow, over its left end).
+    const stamp = chainStamp(this.chain());
+    if (stamp) {
+      const c = textCanvas(stamp, mile ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#c0f8ff', '#2ce8f5'], '#181425');
+      const k = this.t < 0.25 ? 2.2 - 1.2 * ease.outBack(this.t / 0.25) : 1, cw = c.width * 2 * k, ch = c.height * 2 * k;
+      const left = W / 2 - (L.width * s) / 2 - 6, fits = left - c.width * 2 >= 2;
+      const cx = fits ? left - cw / 2 : 4 + cw / 2, cy = fits ? 18 + L.height / 2 : 14;
+      ctx.save();
+      ctx.translate(Math.round(cx), Math.round(cy));
+      ctx.rotate(0.12);
       ctx.drawImage(c, Math.round(-cw / 2), Math.round(-ch / 2), Math.round(cw), Math.round(ch));
       ctx.restore();
     }

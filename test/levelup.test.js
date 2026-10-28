@@ -1,12 +1,13 @@
 // The level-up screen as a reward (order 2 item 5): a card that completes an evolution is told
 // (Game.completesEvolution, both ways it can), and the cards flip up before any can be taken. The
 // owner (2026-10-20): in its first moments (LEVELUP_DELAY) the focus moves but nothing is taken; a
-// press then is dropped, never kept for later.
+// press then is dropped, never kept for later. A chain of levels gained at once is stamped "×2",
+// then "2 of 2" (chainStamp, 28 October 2026), a reroll keeping its place.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, MILESTONES, CARD_WEIGHT, SIGNATURE_PITY } from '../public/js/game/game.js';
-import { GameScreen, LevelUpOverlay, PauseOverlay, cardsReadyAt, LEVELUP_DELAY, cardChange, cardSynergy, UNTOLD } from '../public/js/ui/gamescreen.js';
+import { GameScreen, LevelUpOverlay, PauseOverlay, cardsReadyAt, LEVELUP_DELAY, cardChange, cardSynergy, UNTOLD, chainStamp } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
@@ -190,10 +191,13 @@ test("the next screen of a chain, and a reroll, wait only for their flips: brows
     gainLevel(p);
     const lv = openScreen(gs), ui = gs.app.ui;
     assert.equal(g.pendingLevels, 2);
+    assert.equal(chainStamp(lv.chain()), '×2', 'its first screen is stamped ×2');
+    assert.equal(chainStamp({ at: 1, of: 1 }), '', 'a level alone has no stamp');
     while (lv.t < LEVELUP_DELAY + 0.05) gs.frame(1 / 60);
     press(gs, ['Digit1']);
     assert.equal(g.pendingLevels, 1, 'the first level taken');
     assert.ok(gs.overlay === lv, 'the next level on the same screen');
+    assert.equal(chainStamp(lv.chain()), '2 of 2', 'the next says 2 of 2');
     assert.ok(Math.abs(lv.readyAt - cardsReadyAt(lv.choices.length)) < 1e-9, 'held for its flips alone');
     assert.ok(lv.heldCard(0));
     press(gs, ['ArrowRight']);
@@ -204,6 +208,7 @@ test("the next screen of a chain, and a reroll, wait only for their flips: brows
     const rerolls = p.rerolls;
     press(gs, ['KeyR']);
     assert.equal(p.rerolls, rerolls - 1, 'R rerolls once it is up');
+    assert.equal(chainStamp(lv.chain()), '2 of 2', 'a reroll is the same screen');
     assert.ok(Math.abs(lv.readyAt - cardsReadyAt(lv.choices.length)) < 1e-9 && lv.t < lv.readyAt, 'the new cards held for their flips');
     press(gs, ['KeyR']);
     assert.equal(p.rerolls, rerolls - 1, 'R again during them is dropped');

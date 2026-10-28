@@ -286,6 +286,7 @@ const LIMITS = {
   rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1], warnstand: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
   thaw: [0.5, 1], banish: [0.1, 1], find: [0.12, 2], treasure: [0.5, 1], chestland: [0.15, 2], coinland: [0.02, 6],
+  combo: [0.3, 1],
 };
 
 // Level factors that keep the reward ladder in order as measured through the real chain (RMS over
@@ -513,6 +514,15 @@ const SFX = {
   pick: (t) => {
     tone(t, { type: 'square', f0: 784, dur: 0.06, vol: 0.06 });
     tone(t + 0.07, { type: 'square', f0: 1175, dur: 0.15, vol: 0.06 });
+  },
+  // A combo's new tier (Game.killEnemy, 28 October 2026): a rising sweep into a bright chord stab, a
+  // step up the chord each tier (o.size 1-4: root, third, fifth, octave) and a shimmer growing with
+  // it. Not the level-up's square arpeggio.
+  combo: (t, o) => {
+    const k = [1, 1.26, 1.5, 2][Math.max(0, Math.min(3, o.size - 1))];
+    tone(t, { type: 'sawtooth', f0: 220 * k, f1: 880 * k, dur: 0.16, vol: 0.05, lp: 2400, attack: 0.01 });
+    for (const f of [523, 784, 1046]) tone(t + 0.15, { type: 'square', f0: f * k, dur: 0.2 + 0.05 * o.size, vol: 0.03, lp: 3200 });
+    noise(t + 0.12, { filter: 'highpass', f0: 4000, f1: 9000, dur: 0.3, vol: 0.02 + 0.01 * o.size, attack: 0.02 });
   },
   // A chest coming up, by tier (o.size 1 champion's, 2 lord's, 3 boss's): one family rising in size,
   // a wooden knock and a glitter of struck bells falling then climbing; the lord's adds a low horn

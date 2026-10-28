@@ -1,6 +1,6 @@
 // A single run: owns every system and runs the update/draw loop.
 
-import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
+import { diffFor, nightmareFor, moveFor, VETERAN, NIGHTMARE } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
@@ -67,6 +67,29 @@ export const DAWN_BURN = { boss: 2.5 };
 // The options' FLASHES: SOFT (27 October 2026): no white flash over the screen or a boss's bar
 // brighter than this, crits in one steady gold, no white pulse.
 export const FLASH_SOFT = 0.2;
+// The combo (28 October 2026, the 27 October review's C7): kills with no lull of `hold` seconds of
+// the world's time between them (Game.update). The HUD shows it from `show` kills, on every
+// difficulty; its four named tiers (CARNAGE!, MASSACRE!, ANNIHILATION!, GODLIKE!) come at `tiers`
+// on Veteran, and on another difficulty at those times its horde over Veteran's (data/difficulty.js
+// spawn, a Nightmare's NIGHTMARE.more again) to the power `bend`: late in a thick night the combo
+// runs on unbroken (the casino review), so its tiers rise with the horde, but a thin one breaks
+// between kills, so not by as much (an estimate to tune). Presentation only: a combo pays no gold or
+// experience ("the grind is by design").
+export const COMBO = { hold: 2, show: 10, tiers: [50, 100, 200, 500], bend: 0.5 };
+// The tiers as a run of this difficulty has them, each rounded to 5 and clear of COMBO.show and of
+// the one below (Normal 20/35/70/175, Elite 70/140/285/705, an Elite Nightmare 120/245/490/1225).
+// The Cursed Skulls are left out: the tiers stay put through the run.
+export function comboTiers(diff, nightmare = false) {
+  const crowd = (diff.spawn / VETERAN.spawn) * (nightmare ? NIGHTMARE.more : 1);
+  return COMBO.tiers.map((n, i) => Math.max(COMBO.show + 5 * (i + 1), Math.round((n * crowd ** COMBO.bend) / 5) * 5));
+}
+// A combo of n's tier: -1 below COMBO.show (not shown), 0 shown (COMBO), 1-4 the named tiers.
+export function comboTier(tiers, n) {
+  if (n < COMBO.show) return -1;
+  let k = 0;
+  while (k < tiers.length && n >= tiers[k]) k++;
+  return k;
+}
 // Going into a crypt is meant: the hero stands on its steps (CRYPT_STEPS: half as wide, how far
 // below the door) pushing up for CRYPT_PUSH seconds, half a second, while a prompt fills over the
 // door (Hud.drawCryptDoor); stepping off or letting go starts over.
@@ -256,6 +279,8 @@ export class Game {
     this.skulls = 0; // Cursed Skulls taken this run (cursedSkull)
     this.combo = 0;
     this.comboT = 0;
+    this.comboTier = -1; // the tier it has come to (comboTier), its sting played once each
+    this.comboTiers = comboTiers(this.diff, this.nightmare);
     // A boss's arrival (arrival.js): the stir before it, its name card, the heartbeat while it is
     // nearly done.
     this.stir = null; // { id, t, after }
@@ -1085,8 +1110,14 @@ export class Game {
     this.kills++;
     if (this.ultRun && ultBlow(o)) this.ultRun.kills++;
     this.combo++;
-    this.comboT = 2;
+    this.comboT = COMBO.hold;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
+    // A new tier: its sting, a step higher each (the HUD pops the count and the tier's word).
+    const tier = comboTier(this.comboTiers, this.combo);
+    if (tier > this.comboTier) {
+      if (tier > 0) sfx('combo', { size: tier });
+      this.comboTier = tier;
+    }
     p.furyKill(e);
     // Kills that heal: the Paladin's Devotion (a little, KILL_HEAL), Red Frenzy's (FRENZY.heal each).
     if (p.hero.stats.killHeal) p.leech(p.hero.stats.killHeal);
@@ -2203,7 +2234,10 @@ export class Game {
     this.coinComboT -= dt;
     if (this.comboT > 0) {
       this.comboT -= dt;
-      if (this.comboT <= 0) this.combo = 0;
+      if (this.comboT <= 0) {
+        this.combo = 0;
+        this.comboTier = -1; // a combo begun again comes to its tiers again
+      }
     }
     if (this.state === 'play') {
       // A boss nearly done: its heart beats (and its bar pulses, Hud.drawBoss).

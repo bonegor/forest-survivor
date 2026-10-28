@@ -3,11 +3,15 @@
 // wherever the thing they point at is; each shows an icon of what it points at. The ultimate's
 // name stays on the screen, over the fury orb. The pause screen shows the clock the HUD showed.
 // Only the three elites nearest the hero are named, and a boss's words come after the names and
-// the markers, below its own name at the top.
+// the markers, below its own name at the top. Levels gained at once run the experience bar to its
+// end, flash it and start it again, one by one; the combo pops only as it comes up and at a new
+// tier, its tiers rising with the difficulty's horde (28 October 2026).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { Game } from '../public/js/game/game.js';
+import { Game, FLASH_SOFT, COMBO, comboTier, comboTiers } from '../public/js/game/game.js';
+import { XP_WRAP, COMBO_POP } from '../public/js/game/hud.js';
+import { NORMAL, VETERAN, ELITE } from '../public/js/data/difficulty.js';
 import { GameScreen, PauseOverlay } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { HEROES } from '../public/js/data/heroes.js';
@@ -163,7 +167,8 @@ test('with no boss up they still keep off the orbs', () =>
 // and its timer.
 function comboBoxes(g, W, H) {
   const { ctx, calls } = recorder();
-  g.hud.lastCombo = g.combo;
+  g.hud.tierShown = comboTier(g.comboTiers, g.combo);
+  g.hud.comboWordT = Infinity;
   g.hud.comboScale = 1;
   g.hud.drawCombo(ctx, W, H, 0.3);
   return calls
@@ -188,6 +193,99 @@ test('they keep off the combo at the right edge while it is up, and stand there 
       const bad = markers(g, W, H).boxes.find((b) => combo.some((r) => hit(b, r)));
       assert.ok(!bad, `a combo of ${n}: a marker at ${bad} is on it`);
     }
+  }));
+
+// The combo (28 October 2026, the 27 October review's C7): Veteran's tiers as they were, the others'
+// rising with the horde.
+test("the combo's tiers rise with the difficulty's horde, Veteran's as they were", () => {
+  const v = comboTiers(VETERAN), n = comboTiers(NORMAL), e = comboTiers(ELITE), m = comboTiers(ELITE, true);
+  assert.deepEqual(v, COMBO.tiers);
+  for (const [name, a] of Object.entries({ Normal: n, Veteran: v, Elite: e, 'an Elite Nightmare': m })) {
+    assert.ok(a[0] > COMBO.show, `${name}: its first tier after the count shows (${a})`);
+    for (let i = 1; i < a.length; i++) assert.ok(a[i] > a[i - 1], `${name}: each tier above the one below (${a})`);
+  }
+  for (let i = 0; i < COMBO.tiers.length; i++) assert.ok(n[i] < v[i] && v[i] < e[i] && e[i] < m[i], `tier ${i + 1}: ${n[i]} < ${v[i]} < ${e[i]} < ${m[i]}`);
+  assert.equal(comboTier(v, COMBO.show - 1), -1, 'not shown below COMBO.show');
+  assert.equal(comboTier(v, COMBO.show), 0, 'COMBO from it');
+  assert.equal(comboTier(v, v[0]), 1);
+  assert.equal(comboTier(v, v[3]), 4);
+});
+
+test('the combo pops as it comes up and at each new tier, not at a kill that only counts, and settles by the clock', () =>
+  game((g) => {
+    const { ctx } = recorder(), draw = (dt) => g.hud.drawCombo(ctx, 480, 270, 0.3, dt);
+    g.comboT = COMBO.hold;
+    g.combo = COMBO.show;
+    draw(1 / 60);
+    assert.ok(g.hud.comboScale > 1.3, `it pops as it comes up (${g.hud.comboScale})`);
+    draw(1); // settled
+    g.combo++;
+    assert.ok(g.combo < g.comboTiers[0]);
+    draw(1 / 60);
+    assert.ok(g.hud.comboScale < 1.01, `a kill alone does not pop it (${g.hud.comboScale})`);
+    assert.ok(g.hud.comboWordT > COMBO_POP.wordFor, 'nor its word');
+    g.combo = g.comboTiers[0];
+    draw(1 / 60);
+    assert.ok(g.hud.comboScale > 1.3, `a new tier pops it (${g.hud.comboScale})`);
+    assert.ok(g.hud.comboWordT < COMBO_POP.wordFor, "and the tier's word");
+    // The same time in two frames or in four: the same pop left.
+    g.hud.comboScale = 1.5;
+    draw(1 / 30);
+    draw(1 / 30);
+    const s1 = g.hud.comboScale;
+    g.hud.comboScale = 1.5;
+    for (let i = 0; i < 4; i++) draw(1 / 60);
+    assert.ok(Math.abs(s1 - g.hud.comboScale) < 1e-9, `${s1} and ${g.hud.comboScale}`);
+  }));
+
+test("the run comes to the combo's tiers one by one, and a lull starts it over", () =>
+  game((g, p) => {
+    const kill = () => g.killEnemy(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true }));
+    assert.equal(g.comboTier, -1);
+    while (g.combo < COMBO.show) kill();
+    assert.equal(g.comboTier, 0, 'shown');
+    while (g.combo < g.comboTiers[0]) kill();
+    assert.equal(g.comboTier, 1, 'the first named tier');
+    g.comboT = 1e-6;
+    g.update(1 / 60);
+    assert.equal(g.combo, 0, 'the lull broke it');
+    assert.equal(g.comboTier, -1, 'and its tiers come again');
+  }));
+
+// 28 October 2026 (the 27 October review's C3): the bar no longer snaps down at a level gained.
+test('levels gained at once run the experience bar to its end, flash it white and start it again, one by one', () =>
+  game((g, p) => {
+    const { ctx } = recorder();
+    g.hud.drawXp(ctx, 480, p, 1 / 60);
+    const before = g.hud.xpShown, from = p.level;
+    const gainLevel = () => p.addXp((p.xpNext - p.xp) / p.growth / 1.1 + 0.01);
+    gainLevel();
+    gainLevel();
+    assert.equal(p.level, from + 2);
+    let flashes = 0;
+    const frame = () => {
+      const was = g.hud.xpFlash;
+      g.hud.drawXp(ctx, 480, p, 1 / 60);
+      if (was <= 0 && g.hud.xpFlash > 0) flashes++;
+    };
+    frame();
+    assert.ok(g.hud.xpShown >= before, 'no snap down');
+    assert.equal(g.hud.xpLevel, from, 'it runs on to the end of the level it was at');
+    for (let f = 0; f < 120 && g.hud.xpLevel < p.level; f++) frame();
+    assert.equal(flashes, 2, 'a flash for each level');
+    assert.equal(g.hud.xpLevel, p.level);
+    // The flash: white, held to FLASH_SOFT with FLASHES: SOFT.
+    const flashAlpha = () => {
+      g.hud.xpFlash = XP_WRAP.flash;
+      const { ctx, calls } = recorder();
+      g.hud.drawXp(ctx, 480, p, 1 / 60);
+      const i = calls.findIndex((c, j) => c[0] === 'fillRect' && c.slice(1).join() === '1,1,478,5' && calls.slice(0, j).findLast((d) => d[0] === '=fillStyle')?.[1] === '#ffffff');
+      assert.ok(i > 0, 'the bar flashes white');
+      return calls.slice(0, i).findLast((c) => c[0] === '=globalAlpha')[1];
+    };
+    assert.ok(flashAlpha() > FLASH_SOFT, 'a bright flash');
+    g.settings.softFlash = true;
+    assert.ok(flashAlpha() <= FLASH_SOFT, 'a soft one with FLASHES: SOFT');
   }));
 
 test('each kind of marker has its own icon, so that colour is not all that tells them apart', () =>

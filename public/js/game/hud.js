@@ -11,7 +11,7 @@ import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
-import { DEATH, FLASH_SOFT } from './game.js';
+import { DEATH, FLASH_SOFT, COMBO, comboTier } from './game.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { WARN } from './events.js';
@@ -184,6 +184,17 @@ function heroHead(id) {
 const BAR_W = (W) => Math.min(220, W - 120);
 const BAR_NAME = ['#fee761', '#feae34', '#be4a2f'];
 export const BAR_FALL = { hold: 0.8, flash: 0.15, drop: 0.7, pieces: 22 };
+// The experience bar's wrap (28 October 2026, the 27 October review's C3: it snapped down to what
+// was left): levels gained at once run it to its end at `fill` bars a second, flash it white for
+// `flash` s (FLASHES: SOFT: FLASH_SOFT) and start it again from nought, one by one; within a level
+// it eases to the hero's at `ease` a second (it was a quarter a frame); of a burst of many (the
+// developer's +10) only the last `most` are run.
+export const XP_WRAP = { fill: 5, flash: 0.1, ease: 17, most: 3 };
+// The combo's pop (drawCombo), in real time: the count at `count` times its size as it comes up and
+// at each new tier, settling at `settle` a second (it was a fifth a frame); a new tier's word at
+// `word` times, settling over `wordFor` s, white for its first `white` s (not with FLASHES: SOFT).
+export const COMBO_POP = { count: 1.5, settle: 13, word: 1.5, wordFor: 0.35, white: 0.1 };
+const COMBO_WORDS = ['COMBO', 'CARNAGE!', 'MASSACRE!', 'ANNIHILATION!', 'GODLIKE!'];
 function barFrame(ctx, x, y, w) {
   ctx.fillStyle = '#181425';
   ctx.fillRect(x - 2, y - 2, w + 4, 10);
@@ -358,9 +369,14 @@ export class Hud {
     this.hp = new Orb(['#5c0f1c', '#a22633', '#e43b44', '#f6757a']);
     this.fury = new Orb(['#2a1438', '#68386c', '#b55088', '#f6757a']);
     this.furyFull = new Orb(['#3b2346', '#b55088', '#f6757a', '#ffffff']);
+    // The experience bar as shown (drawXp): how full, for which level (null until first drawn), and
+    // its flash at a level gained.
     this.xpShown = 0;
+    this.xpLevel = null;
+    this.xpFlash = 0;
     this.comboScale = 1;
-    this.lastCombo = 0;
+    this.tierShown = -1; // the combo's tier drawn last frame (drawCombo)
+    this.comboWordT = Infinity; // since a new tier's word popped
     // While a chest shows what it gave (ChestOverlay), the build as it was before it, which the
     // slots and the gold counter show until each thing is revealed (heldBuild); null: as it is.
     this.held = null;
@@ -405,7 +421,7 @@ export class Hud {
     this.lastDt = dt;
     this.drawRingWarnings(ctx, W, H, t);
     this.drawUltLaunch(ctx, W, H);
-    this.drawXp(ctx, W, p);
+    this.drawXp(ctx, W, p, dt);
     this.drawSlots(ctx, p);
     this.drawTop(ctx, W, t, dt);
     this.drawOrbs(ctx, W, H, p, t);
@@ -414,7 +430,7 @@ export class Hud {
     this.drawCryptDoor(ctx, W);
     this.drawIndicators(ctx, W, H, t);
     this.drawSpeech(ctx, W, H);
-    this.drawCombo(ctx, W, H, t);
+    this.drawCombo(ctx, W, H, t, dt);
     this.drawBanners(ctx, W, H);
     this.drawArrival(ctx, W, H);
     this.drawSlain(ctx, W, H);
@@ -422,10 +438,29 @@ export class Hud {
     if (input.device === 'touch') this.drawTouch(ctx, W, H, p);
   }
 
-  drawXp(ctx, W, p) {
+  // dt: real seconds since the last frame (the wrap runs on it, under the cards too: XP_WRAP).
+  drawXp(ctx, W, p, dt = 1 / 60) {
     const f = clamp(p.xp / p.xpNext, 0, 1);
-    this.xpShown += (f - this.xpShown) * 0.25;
-    if (f < this.xpShown) this.xpShown = f;
+    // A new run's bar, or a level taken back: as it stands.
+    if (this.xpLevel === null || p.level < this.xpLevel) {
+      this.xpLevel = p.level;
+      this.xpShown = f;
+      this.xpFlash = 0;
+    }
+    this.xpLevel = Math.max(this.xpLevel, p.level - XP_WRAP.most);
+    if (this.xpFlash > 0) {
+      this.xpFlash -= dt;
+      if (this.xpFlash <= 0) {
+        this.xpLevel++;
+        this.xpShown = 0;
+      }
+    } else if (this.xpLevel < p.level) {
+      this.xpShown = Math.min(1, this.xpShown + XP_WRAP.fill * dt);
+      if (this.xpShown >= 1) this.xpFlash = XP_WRAP.flash;
+    } else {
+      this.xpShown += (f - this.xpShown) * (1 - Math.exp(-dt * XP_WRAP.ease));
+      if (f < this.xpShown) this.xpShown = f;
+    }
     ctx.fillStyle = '#181425';
     ctx.fillRect(0, 0, W, 7);
     ctx.fillStyle = '#262b44';
@@ -441,8 +476,14 @@ export class Hud {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(w - 1, 1, 2, 5);
     }
-    // Nearly there (85%): a shine runs along the bar and it breathes brighter.
-    if (f >= 0.85) {
+    if (this.xpFlash > 0) {
+      // A level gained: the full bar flashes white (FLASHES: SOFT, held to FLASH_SOFT).
+      ctx.globalAlpha = this.g.settings.softFlash === true ? FLASH_SOFT : 0.9;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(1, 1, W - 2, 5);
+      ctx.globalAlpha = 1;
+    } else if (this.xpShown >= 0.85) {
+      // Nearly there (85%): a shine runs along the bar and it breathes brighter.
       const t = this.g.clock, at = ((t * 1.6) % 1) * w;
       ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 9);
       ctx.fillStyle = '#c0f8ff';
@@ -452,7 +493,8 @@ export class Hud {
       ctx.fillRect(Math.round(at), 1, 6, 5);
       ctx.globalAlpha = 1;
     }
-    drawText(ctx, `LV ${p.level}`, W - 3, 9, { align: 'right', color: ['#ffffff', '#fee761', '#feae34'] });
+    // The level as the bar has come to it, a step at each flash.
+    drawText(ctx, `LV ${this.xpLevel + (this.xpFlash > 0 ? 1 : 0)}`, W - 3, 9, { align: 'right', color: ['#ffffff', '#fee761', '#feae34'] });
   }
 
   // lit: the slots a chest has just raised (ChestOverlay), each { row: 'w' or 'r', i, k }, k its
@@ -1104,8 +1146,8 @@ export class Hud {
   // the top (a boss's bar and name, a dungeon's floor and seal lines), and what they keep off: the
   // slots, the orbs in the bottom corners with the phoenix feather and the ultimate's name over
   // them, a dungeon's minimap (Dungeon.drawMinimap) and the combo at the right edge (drawCombo:
-  // its count, its word under it and its timer over it, from 10 kills on; 69 x 37 at rest, up to
-  // 82 x 46 as a four-digit count swells).
+  // its count, its word under it and its timer over it, from COMBO.show kills on; 69 x 37 at rest,
+  // up to 82 x 46 as a four-digit count swells).
   markerBand(W, H) {
     const g = this.g, p = g.player;
     BAND.top = Math.max(52, this.topLines() + MARK_R);
@@ -1123,7 +1165,7 @@ export class Hud {
       keep(W - 5 - tw, H - ORB_S - 16, tw + 2, GLYPH_H + 2);
     }
     if (g.world.drawMinimap && !g.showMap) keep(W - g.world.W - 6, 34, g.world.W + 4, g.world.H + 4);
-    if (g.combo >= 10) keep(W - 88, Math.round(H * 0.42) - 20, 88, 48);
+    if (g.combo >= COMBO.show) keep(W - 88, Math.round(H * 0.42) - 20, 88, 48);
   }
 
   // One of those markers, toward world point (wx, wy), unless that is on screen: an arrow in its
@@ -1155,18 +1197,23 @@ export class Hud {
     if (icon) ctx.drawImage(icon, Math.round(x + IN_X[SPOT.edge] * MARK_IN - icon.width / 2), Math.round(y + IN_Y[SPOT.edge] * MARK_IN - icon.height / 2));
   }
 
-  drawCombo(ctx, W, H, t) {
-    const g = this.g;
-    if (g.combo < 10) {
-      this.lastCombo = g.combo;
+  // dt: real seconds since the last frame (the pop settles by it: COMBO_POP).
+  drawCombo(ctx, W, H, t, dt = this.lastDt ?? 1 / 60) {
+    const g = this.g, tier = comboTier(g.comboTiers, g.combo);
+    if (tier < 0) {
+      this.tierShown = -1;
       return;
     }
-    if (g.combo !== this.lastCombo) {
-      this.comboScale = 1.5;
-      this.lastCombo = g.combo;
+    // It pops as it comes up and at each new tier, never at a kill that only counts (28 October
+    // 2026, the review's C7: popping at every kill it sat at about 1.45 times late in a fight and
+    // told nothing); a new tier's word pops with it, its sting played (Game.killEnemy).
+    if (tier > this.tierShown) {
+      this.comboScale = COMBO_POP.count;
+      if (tier > 0) this.comboWordT = 0;
     }
-    this.comboScale += (1 - this.comboScale) * 0.2;
-    const tier = g.combo >= 500 ? 4 : g.combo >= 200 ? 3 : g.combo >= 100 ? 2 : g.combo >= 50 ? 1 : 0;
+    this.tierShown = tier;
+    this.comboScale = 1 + (this.comboScale - 1) * Math.exp(-dt * COMBO_POP.settle);
+    this.comboWordT += dt;
     const colors = [
       ['#ffffff', '#c0cbdc'],
       ['#fee761', '#feae34'],
@@ -1179,11 +1226,18 @@ export class Hud {
     const x = W - 6 - c.width * s, y = Math.round(H * 0.42 - (c.height * s) / 2);
     ctx.globalAlpha = clamp(g.comboT * 2, 0, 1);
     ctx.drawImage(c, Math.round(x), y, Math.round(c.width * s), Math.round(c.height * s));
-    const label = ['COMBO', 'CARNAGE!', 'MASSACRE!', 'ANNIHILATION!', 'GODLIKE!'][tier];
-    drawText(ctx, label, W - 6, y + Math.round(c.height * s) + 1, { align: 'right', color: colors[1] });
-    // Timer sliver.
+    // The tier's word under the count: popping in as the tier comes, white at first (FLASHES:
+    // SOFT: in its colour), then settled where it stays.
+    const word = COMBO_WORDS[tier], wy = y + Math.round(c.height * s) + 1, u = this.comboWordT / COMBO_POP.wordFor;
+    if (u < 1) {
+      const white = this.comboWordT < COMBO_POP.white && g.settings.softFlash !== true;
+      const wc = textCanvas(word, white ? '#ffffff' : colors[1], '#181425'), k = 1 + (COMBO_POP.word - 1) * (1 - ease.outCubic(u));
+      ctx.drawImage(wc, Math.round(W - 5 - wc.width * k), Math.round(wy - 1 - (wc.height * (k - 1)) / 2), Math.round(wc.width * k), Math.round(wc.height * k));
+    } else drawText(ctx, word, W - 6, wy, { align: 'right', color: colors[1] });
+    // Timer sliver: what is left of the lull a combo can take (COMBO.hold).
+    const left = clamp(g.comboT / COMBO.hold, 0, 1);
     ctx.fillStyle = colors[1];
-    ctx.fillRect(W - 6 - Math.round(40 * clamp(g.comboT / 2, 0, 1)), y - 3, Math.round(40 * clamp(g.comboT / 2, 0, 1)), 1);
+    ctx.fillRect(W - 6 - Math.round(40 * left), y - 3, Math.round(40 * left), 1);
     ctx.globalAlpha = 1;
   }
 
