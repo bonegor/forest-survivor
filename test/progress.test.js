@@ -380,3 +380,26 @@ test("a kill counts as Veteran's horde over its difficulty's, as difficulty.js h
   for (const [id, d] of Object.entries(DIFFS)) assert.ok(Math.abs(PROGRESS.effort[id] - VETERAN.spawn / d.spawn) < 1e-9, id);
   assert.equal(PROGRESS.nightmareEffort, 1 / NIGHTMARE.more);
 });
+
+// The 27 October 2026 review, C12 (28 October 2026): a run is told which locks it may open as it
+// goes, to banner each the moment it reaches it; never one only the end can tell (falls, wins), one
+// still hidden, another hero's evolution, nor one already open.
+test('a run is given the locks it may still open as it goes', () => {
+  const ids = (list, type) => list.filter((l) => !type || l.type === type).map((l) => l.id);
+  const fresh = P.runLocks(P.defaultProfile(), 'knight');
+  for (const id of ['frost', 'flask', 'arcane']) assert.ok(ids(fresh).includes(id), `${id} reachable in a run`);
+  assert.ok(!ids(fresh).includes('aura'), 'falls tell only as the run ends');
+  for (const l of fresh) {
+    if (l.type === 'ult') continue;
+    const lock = LOCKS.find((x) => x.type === l.type && x.id === l.id);
+    assert.ok(lock && !lock.deep, `${l.id}: none of the second circle before a night is won`);
+  }
+  assert.deepEqual(ids(fresh, 'ult'), ['knight'], 'his ultimate, still shut');
+  assert.equal(fresh.find((l) => l.id === 'phoenix')?.buy, true, 'the Phoenix Heart, for sale when it is reached');
+  assert.ok(!ids(P.runLocks(P.defaultProfile(), 'mage')).includes('phoenix'), "another hero's evolution");
+  const { profile } = P.applyRun(P.defaultProfile(), { ...RUN, time: 130, realTime: 130 });
+  const after = P.runLocks(profile, 'knight');
+  assert.ok(!ids(after).includes('frost'), 'one open is not told again');
+  assert.deepEqual(ids(after, 'ult'), [], 'nor his ultimate');
+  assert.equal(after.find((l) => l.need === 'kills').from, profile.effort, "the kills counted on top of the profile's");
+});

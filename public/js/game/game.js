@@ -6,13 +6,13 @@ import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weap
 import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, HORDE_CAP, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
-import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
+import { RANKS, HERO_UNLOCK_TIME, countedKills } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx, playMusic, playJingle, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
-import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE } from './events.js';
+import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE, LOCK_KIND, LOCK_GAP } from './events.js';
 import { view } from '../engine/view.js';
 import { input, padKey } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
@@ -20,7 +20,7 @@ import { Player, ULT_DURATION, FURY, COOLDOWN_FLOOR } from './player.js';
 import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
 import { Weapon, aimAt } from './weapons.js';
-import { Enemy, makeEnemyPool, drawNightEdge } from './enemies.js';
+import { Enemy, makeEnemyPool, drawNightEdge, THIEF_LOOT } from './enemies.js';
 import { maskHorde, maskBosses, keepHorde, putHorde } from './horde-over.js';
 import { Pickup } from './pickups.js';
 import { Particles, PC, P } from './particles.js';
@@ -298,6 +298,10 @@ export class Game {
     // The profile's records as they stood when the run began, and those this run has broken.
     this.records = o.records || {};
     this.recordsBroken = new Set();
+    // The Codex's locks this run may open as it goes (shared/profile.js runLocks, named by the game
+    // screen), each told once as it is reached (checkLocks); none given, none told (the tests, the bots).
+    this.locks = o.locks ? [...o.locks] : [];
+    this.lockGapT = 0; // till the next may be told (LOCK_GAP); lockT is a foe's and the ui's
     this.stats.bestUlt = null; // { kills, dmg } the run's best ultimate
     this.gemCombo = 0;
     this.gemComboT = 0;
@@ -1138,9 +1142,11 @@ export class Game {
     if (e.xp > 0) this.dropGem(e.x, e.y, e.xp);
     const luck = p.luck;
     if (e.type === 'thief') {
-      for (let i = 0; i < 26; i++) this.addPickup('coin', e.x, e.y, 2);
-      this.addPickup('goldpile', e.x, e.y, 40);
-      if (chance(0.5)) this.addPickup('chest', e.x, e.y, 0, { kind: 'elite' });
+      // Its gold, and the chest it was given as it came (Enemy.init) if it carries one.
+      const L = THIEF_LOOT;
+      for (let i = 0; i < L.coins; i++) this.addPickup('coin', e.x, e.y, L.coin);
+      this.addPickup('goldpile', e.x, e.y, L.pile);
+      if (e.chest) this.addPickup('chest', e.x, e.y, 0, { kind: 'elite' });
       this.banner('Thief slain!', 'Its stolen gold is yours', '#feae34', 1.8);
     } else if (e.boss) {
       this.bossDefeated(e);
@@ -1669,11 +1675,21 @@ export class Game {
     sfx('coin');
   }
 
+  // A thief gone at its time's end (Enemy.update). What got away is told in its own numbers (the
+  // 27 October 2026 review, C10): its gold as he would have had it (thiefGold), and its chest if it
+  // carried one; the default 2.4 s, not 1.6, so the line can be read.
   escape(e) {
     e.dead = true;
     this.particles.burst(e.x, e.y - 6, 4, 20, [PC.Y, PC.y, PC.w], 60, 0.8, 1, P.GLOW | P.FADE, { vz: 60 });
-    this.banner('The thief escaped...', '', '#8b9bb4', 1.6);
+    this.banner('The thief escaped...', `${this.thiefGold()} gold${e.chest ? ' and a chest' : ''} got away`, '#8b9bb4', 2.4);
     sfx('teleport');
+  }
+
+  // The gold a thief's coins and pile come to as the hero would pick them up now (Pickup.collect:
+  // his greed, before a Shrine of Fortune's passing double).
+  thiefGold() {
+    const k = this.player.greed, L = THIEF_LOOT;
+    return L.coins * Math.max(1, Math.round(L.coin * k)) + Math.max(1, Math.round(L.pile * k));
   }
 
   // ----------------------------------------------------------- pickups --
@@ -2087,6 +2103,56 @@ export class Game {
     }
   }
 
+  // Whether this run has reached a lock's deed (shared/profile.js runLocks), measured as the run will
+  // report it (finish; sanitizeRun): the clock, his level, the gold picked up, the bosses and lords
+  // slain, the kills counted as Veteran's on top of the profile's, an evolution held (never before
+  // l.after on the clock). A plain loop for an evolution, so nothing is made each frame.
+  lockReached(l) {
+    const p = this.player, t = Math.floor(this.time);
+    if (t < l.after) return false;
+    switch (l.need) {
+      case 'time':
+        return t >= l.at;
+      case 'level':
+        return p.level >= l.at;
+      case 'gold':
+        return this.gold >= l.at;
+      case 'bosses':
+        return this.stats.bosses >= l.at;
+      case 'kills':
+        return l.from + countedKills(this.kills, t, this.diffId, this.nightmare) >= l.at;
+      case 'evolution':
+        for (const w of p.weapons) if (w.evolved && w.id === l.of) return true;
+        return false;
+      case 'evolve':
+        return this.signatureEvolved();
+      default:
+        return false;
+    }
+  }
+
+  // A lock of the Codex this run has reached (the 27 October 2026 review, C12: a milestone crossed
+  // mid-run said nothing until the results): its name over what it is and "yours when this run
+  // ends", one at a time (LOCK_GAP apart), each once, with the unlock's sting. Never in the first
+  // minute (RECORD_GRACE), and never over a big beat (a boss's or a lord's fall, a revive: moment), a
+  // boss's coming (his stir, his name card) or the ultimate's cut-in, which it waits out; nor into a
+  // full banner place, where it would push one off (bannerRoom). Display only: the profile opens it
+  // when the run ends, whether he wins, falls or quits (applyRun), as with the next hero (heroMilestone).
+  checkLocks(rdt) {
+    if (this.lockGapT > 0) this.lockGapT -= rdt;
+    if (!this.locks.length || this.time < RECORD_GRACE || this.lockGapT > 0) return;
+    if (this.momentRunning || this.card || (this.stir && !this.stir.done) || this.ultLaunch || !this.bannerRoom) return;
+    for (let i = 0; i < this.locks.length; i++) {
+      const l = this.locks[i];
+      if (!this.lockReached(l)) continue;
+      this.locks.splice(i, 1);
+      this.lockGapT = LOCK_GAP;
+      this.banner(l.name, `${LOCK_KIND[l.type]} · ${l.buy ? 'for sale in the Armory when this run ends' : 'yours when this run ends'}`, '#fee761', 3);
+      sfx('unlock');
+      return;
+    }
+  }
+
   victory(kind) {
     if (this.state === 'dawn' || this.state === 'over') return;
     this.state = 'dawn';
@@ -2260,6 +2326,7 @@ export class Game {
       p.update(pdt);
       this.spawner.update(dt);
       this.checkRecords();
+      this.checkLocks(rdt);
     } else if (this.state === 'dying') {
       this.deathT += rdt;
       if (this.deathT > DEATH.end) this.finish(false);

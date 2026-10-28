@@ -15,7 +15,7 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, FILLERS, BLESSING } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
-import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText } from '../shared/profile.js';
+import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText, runLocks } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
@@ -35,6 +35,10 @@ export class GameScreen {
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       // The records a run can break as it goes (Game.checkRecords), as they stand now.
       records: { kills: app.store.profile.best.kills, level: app.store.profile.best.level, time: mode === 's15' ? app.store.profile.best.s15 : 0 },
+      // The Codex's locks the run may open as it goes, named as the Codex names them, for the game to
+      // tell each the moment it is reached (Game.checkLocks); the profile still opens them when the
+      // run ends. None hidden is given (runLocks), so no name is '???'.
+      locks: runLocks(app.store.profile, hero).map((l) => ({ ...l, name: codexName(l) })),
       meta: metaBonuses(app.store.profile),
       open: openFor(app.store.profile, hero), // the weapons, relics and ultimate opened so far
       gear: app.store.profile.gear[hero], // this hero's own

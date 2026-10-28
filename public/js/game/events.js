@@ -36,3 +36,7 @@ export function eventWords(ev, side = '') {
 // The records a run can break as it goes (Game.checkRecords): the profile's, as they stood when it began.
 export const RECORDS = { kills: 'KILLS', level: 'LEVEL', time: 'TIME' };
 export const RECORD_GRACE = 60; // never in the first minute
+// A lock of the Codex reached mid-run (Game.checkLocks): what it is, over "yours when this run
+// ends", and how many real seconds apart two are told, so they come one by one.
+export const LOCK_KIND = { weapon: 'Weapon', relic: 'Relic', ult: 'Ultimate' };
+export const LOCK_GAP = 2.5;

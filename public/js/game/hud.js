@@ -17,6 +17,7 @@ import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { WARN, RECORD_GRACE } from './events.js';
 import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { HEROES } from '../data/heroes.js';
+import { THIEF } from './enemies.js';
 
 // Beside the clock on a Nightmare (three times the monsters; never Ranked).
 const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
@@ -1062,9 +1063,20 @@ export class Hud {
       } else if (e.type === 'thief') {
         const w = 22, f = clamp(e.hp / e.maxHp, 0, 1);
         ctx.fillStyle = '#181425';
-        ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 4);
+        ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 6);
         ctx.fillStyle = '#feae34';
         ctx.fillRect(Math.round(x - w / 2), Math.round(y + 2), Math.round(w * f), 2);
+        // Its escape clock (THIEF.time): a sliver under its health that runs down, red its last
+        // THIEF.warn seconds (the 27 October 2026 review, C10: the near miss shown as it is). A
+        // steady colour, never a blink, so FLASHES has nothing to hold back.
+        const left = clamp(THIEF.time - e.life, 0, THIEF.time);
+        ctx.fillStyle = left < THIEF.warn ? '#e43b44' : '#c0cbdc';
+        ctx.fillRect(Math.round(x - w / 2), Math.round(y + 5), Math.round((w * left) / THIEF.time), 1);
+        // What it carries besides its gold: a chest (Enemy.init), the edge marker's chest icon over its bar.
+        if (e.chest) {
+          const c = marks().chest;
+          ctx.drawImage(c, Math.round(x - c.width / 2), Math.round(y - c.height));
+        }
       }
     }
     // Player health bar (classic survivors style).

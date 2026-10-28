@@ -118,6 +118,36 @@ test('no record to beat (a fresh profile): nothing told', () =>
     assert.equal(g.banners.filter((b) => b.title.startsWith('NEW RECORD')).length, 0);
   }, { records: { kills: 0, level: 0, time: 0 } }));
 
+// The 27 October 2026 review, C12 (28 October 2026): a lock of the Codex the run reaches is told as it
+// is reached, "yours when this run ends", once each and one at a time; never in the first minute, and
+// never over a big beat (a boss's fall, a revive), which it waits out.
+test('a lock reached mid-run is told once each, one at a time, never in the first minute nor over a big beat', () =>
+  game((g, p) => {
+    g.spawner.update = () => {};
+    const told = [], banner = g.banner.bind(g);
+    g.banner = (title, ...rest) => {
+      if (title === 'Frost Nova' || title === 'Belt') told.push([title, rest[0]]);
+      return banner(title, ...rest);
+    };
+    p.level = 15;
+    g.update(1 / 60);
+    assert.deepEqual(told, [], 'not in the first minute');
+    g.setTime(61);
+    g.banners.length = 0;
+    g.momentT = 5;
+    g.update(1 / 60);
+    assert.deepEqual(told, [], 'not over a big beat');
+    g.momentT = 0;
+    g.update(1 / 60);
+    assert.equal(told.length, 1, 'the first of them');
+    assert.match(told[0][1], /yours when this run ends/);
+    for (let f = 0; f < 10; f++) g.update(1 / 60);
+    assert.equal(told.length, 1, 'one at a time');
+    for (let f = 0; f < 5 * 60 && told.length < 2; f++) g.update(1 / 60);
+    assert.deepEqual(told.map(([t]) => t).sort(), ['Belt', 'Frost Nova'], 'the next in its turn, each once');
+    assert.equal(g.locks.length, 0, 'none left to tell');
+  }, { locks: [{ type: 'weapon', id: 'frost', need: 'time', at: 60, from: 0, after: 0, name: 'Frost Nova' }, { type: 'relic', id: 'area', need: 'level', at: 15, from: 0, after: 0, name: 'Belt' }] }));
+
 // The review's C8(c) (28 October 2026): past 85% of the most kills a run has made, the HUD shows
 // that record, dim, beside the count, and NEW BEST once the banner has told it passed; never in the
 // first minute, nor before there is a record.

@@ -11,7 +11,7 @@ import { hexPack, makeBuf, pack } from '../engine/pixels.js';
 import { OUTLINE } from '../art/palette.js';
 import { shade, hexOfPacked } from '../art/tune.js';
 import { sfx } from '../engine/audio.js';
-import { rand, TAU, clamp, pick, makeCanvas } from '../engine/util.js';
+import { rand, TAU, clamp, pick, makeCanvas, chance } from '../engine/util.js';
 import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { EnemyShot } from './projectiles.js';
@@ -34,8 +34,15 @@ export const HOLD = 0.2, HOLD_EVERY = 0.6;
 // base pace (his class's, at the run's walking speed, before the Armory or a relic quickens him)
 // once he comes within THIEF.near of it, and keeps running until it is THIEF.safe away; then it
 // wanders, a new random way every THIEF.turn seconds, at THIEF.walk of that pace, until he comes
-// near again. It escapes when its 20 seconds are up.
-export const THIEF = { run: 0.8, walk: 0.35, near: 140, safe: 220, turn: [1.5, 3] };
+// near again. It escapes when its THIEF.time seconds are up; its bar shows them run down, red for
+// the last THIEF.warn (Hud.drawNames; the 27 October 2026 review, C10).
+export const THIEF = { run: 0.8, walk: 0.35, near: 140, safe: 220, turn: [1.5, 3], time: 20, warn: 5 };
+// What a Gilded Thief carries (Game.killEnemy): THIEF_LOOT.coins coins of THIEF_LOOT.coin gold and
+// a pile of THIEF_LOOT.pile, 92 before the hero's greed, and a chest one time in THIEF_LOOT.chest's
+// two. Since 28 October 2026 the chest is rolled when it comes (Enemy.init), not when it falls,
+// with the same odds, so its bar can show it and its escape can say what got away (the 27 October
+// 2026 review, C10).
+export const THIEF_LOOT = { coins: 26, coin: 2, pile: 40, chest: 0.5 };
 // The hero's base pace a thief measures itself by (px/s).
 export const heroPace = (g) => BASE_SPEED * (g.player.hero.stats.speed || 1) * g.move;
 // How often a confused foe's touch hurts the monsters about it, in seconds.
@@ -274,6 +281,8 @@ export class Enemy {
     this.data = {};
     if (this.mod && this.mod.id === 'swift') this.spd *= 1.45;
     if (this.mod && this.mod.id === 'brutal') this.dmg *= 1.5;
+    // A thief's chest, rolled as it comes (THIEF_LOOT), last so nothing else here draws other dice.
+    this.chest = def.ai === 'flee' && chance(THIEF_LOOT.chest);
     return this;
   }
 
@@ -490,7 +499,7 @@ export class Enemy {
           // Its own speed, slows and holds as they are, made the share of the hero's pace it runs or walks at.
           sp *= ((this.fleeing ? THIEF.run : THIEF.walk) * heroPace(g)) / Math.max(1, this.spd * g.diff.speed * g.move);
           if (Math.random() < 0.2) g.particles.emit(this.x + rand(-4, 4), this.y - rand(4, 12), 0, 0, 0, rand(5, 15), 0.6, 1, PC.Y, P.GLOW | P.FADE, 0);
-          if (this.life > 20) {
+          if (this.life > THIEF.time) {
             g.escape(this);
             return;
           }

@@ -155,6 +155,9 @@ export function goldCap(run, armory = TOP_GREED) {
   return Math.floor(100 + run.realTime * rate + run.found * RARITIES[LEGENDARY].price);
 }
 const MIN_WIN_TIME = { s15: 15 * 60 - 5, dungeon: 4 * 60 };
+// An evolution reported from a run shorter than this isn't believed (sanitizeRun): it takes eight
+// levels and a relic. Game.lockReached waits for it likewise (runLocks after).
+const EVO_AFTER = 120;
 
 const int = (v, lo, hi) => {
   v = Math.floor(Number(v));
@@ -426,6 +429,31 @@ export function progressList(profile) {
   return out;
 }
 
+// The needs one run's own numbers can reach as it goes (Game.lockReached): its clock, level, gold
+// and bosses, the kills counted on top of the profile's, an evolution. Wins, falls, a Dungeon won
+// and the heroes who have won tell only as the run ends (the results).
+const RUN_NEEDS = ['time', 'level', 'gold', 'bosses', 'kills', 'evolution', 'evolve'];
+// The locks a run with this hero may still open as it goes, for the game to tell the moment it
+// reaches one (Game.checkLocks; the 27 October 2026 review, C12: "Reach level 15", "Slay 1 boss"
+// or "Pick up 500 gold" crossed mid-run said nothing until the results). These are every milestone
+// still shut whose need is one of RUN_NEEDS, leaving out one of the second circle before a night is
+// won (hidden, and shut whatever the records say) and another hero's evolution, plus his ultimate
+// if it is still shut. One for sale whose milestone is reached but not yet bought is left out too
+// (lockOpen, not lockUsable): it has been told. from: the kills counted so far, which the run's add
+// to. after: the clock before which sanitizeRun doesn't believe an evolution. Display only:
+// applyRun opens them when the run ends.
+//   [{ type: 'weapon' | 'relic' | 'ult', id, need, at, from, after, of?, buy? }]
+export function runLocks(profile, hero) {
+  const p = sanitizeProfile(profile), m = measures(p), out = [];
+  LOCKS.forEach((l, i) => {
+    if (l.retired || lockOpen(p, i) || !RUN_NEEDS.includes(l.need) || hiddenLock(l, m) || (l.need === 'evolve' && l.hero !== hero)) return;
+    const evo = l.need === 'evolution' || l.need === 'evolve';
+    out.push({ type: l.type, id: l.id, need: l.need, at: l.at, from: l.need === 'kills' ? p.effort : 0, after: evo ? EVO_AFTER : 0, ...(l.of && { of: l.of }), ...(l.buy && { buy: true }) });
+  });
+  if ((p.uu & heroBit(hero)) === 0) out.push({ type: 'ult', id: hero, need: 'time', at: PROGRESS.ultTime, from: 0, after: 0 });
+  return out;
+}
+
 // The profile as its cookie keeps it, every hero's gear packed into a string (shared/items.js
 // packGear): all nine heroes in six legendaries each still fit. A cookie written before, each
 // item an array, reads back all the same (sanitizeGear takes both). The gift is one number.
@@ -646,10 +674,10 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
     floor: int(raw.floor, 1, 3),
     // His signature evolved (Game.signatureEvolved): it takes eight levels and a relic, so not in
     // the first two minutes.
-    evolved: raw.evolved === true && time >= 120,
+    evolved: raw.evolved === true && time >= EVO_AFTER,
     // And every evolution held at the end (Game.result evos), likewise: known from then on
     // (knownEvos), and those a lock waits on kept in p.ev too.
-    evos: time >= 120 && Array.isArray(raw.evos) ? EVOS.filter((id) => raw.evos.includes(id)) : [],
+    evos: time >= EVO_AFTER && Array.isArray(raw.evos) ? EVOS.filter((id) => raw.evos.includes(id)) : [],
     realTime,
     found,
     // null keeps the gear on record (an older client sends none).
@@ -668,13 +696,13 @@ export function runReward(run) {
   return { gold: run.gold, collected, wage, bonus, total: collected + wage + bonus, multiplier };
 }
 
-// What one of a run's kills counts as, in Veteran's (PROGRESS.effort): the difficulty's, and a
-// Nightmare's divided again by its three times the horde.
-const effortOf = (run) => PROGRESS.effort[run.diff] * (run.nightmare ? PROGRESS.nightmareEffort : 1);
-// And what a run's kills count as, at most what Veteran's horde could give in its time (sanitizeRun's
-// kills): a forged Normal report, held to the kills a run of its length could make, would count
-// eight times that (27 October 2026).
-const effortFor = (run) => Math.min(Math.round(run.kills * effortOf(run)), 50 + run.time * 240);
+// What a run's kills count as, in Veteran's (PROGRESS.effort): each the difficulty's, a Nightmare's
+// divided again by its three times the horde; and all of them at most what Veteran's horde could
+// give in its time (sanitizeRun's kills): a forged Normal report, held to the kills a run of its
+// length could make, would count eight times that (27 October 2026). From the plain numbers, so the
+// game measures a lock's kills as it goes (Game.lockReached) with no object made each frame.
+export const countedKills = (kills, time, diff, nightmare) => Math.min(Math.round(kills * PROGRESS.effort[diff] * (nightmare ? PROGRESS.nightmareEffort : 1)), 50 + time * 240);
+const effortFor = (run) => countedKills(run.kills, run.time, run.diff, run.nightmare);
 
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
