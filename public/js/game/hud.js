@@ -310,22 +310,42 @@ export function heldBuild(g) {
   };
 }
 
+// How long a slot a chest has just raised stays lit (ChestOverlay): seconds.
+export const SLOT_LIT = 0.3;
+// How lit one slot (row 'w' or 'r', i) is in drawSlots' lit: the brightest light on it, 0 for none.
+function litK(lit, row, i) {
+  let k = 0;
+  for (const l of lit) if (l.row === row && l.i === i) k = Math.max(k, l.k);
+  return k;
+}
+
 // One thing a chest gave (an item of Game.rollChest), now shown on a held build: an evolution, a
 // weapon or relic a level up or new, a filler's gold. (A Blessing or a heal shows in no slot.)
+// Returns the slot it changed, { row: 'w' (a weapon's) or 'r' (a relic's), i }, or null: the
+// chest's screen lights it up (drawSlots' lit).
 export function revealOn(held, it, g) {
   if (it.type === 'evolve') {
-    const h = held.weapons.find((x) => x.w === it.w);
-    if (h) Object.assign(h, { icon: WEAPONS[it.id].icon, level: MAX_WEAPON_LEVEL, evolved: true });
+    const i = held.weapons.findIndex((x) => x.w === it.w);
+    if (i >= 0) {
+      Object.assign(held.weapons[i], { icon: WEAPONS[it.id].icon, level: MAX_WEAPON_LEVEL, evolved: true });
+      return { row: 'w', i };
+    }
   } else if (it.type === 'weapon') {
-    const h = held.weapons.find((x) => x.w.id === it.id);
-    const w = h ? h.w : g.player.weapons.find((x) => x.id === it.id);
-    if (h) h.level = it.level;
-    else if (w) held.weapons.push({ w, icon: w.def.icon, level: it.level, evolved: false });
+    let i = held.weapons.findIndex((x) => x.w.id === it.id);
+    if (i >= 0) held.weapons[i].level = it.level;
+    else {
+      const w = g.player.weapons.find((x) => x.id === it.id);
+      if (!w) return null;
+      i = held.weapons.push({ w, icon: w.def.icon, level: it.level, evolved: false }) - 1;
+    }
+    return { row: 'w', i };
   } else if (it.type === 'passive') {
-    const r = held.relics.find(([id]) => id === it.id);
-    if (r) r[1] = it.level;
-    else held.relics.push([it.id, it.level]);
-  } else if (it.type === 'gold') held.gold += it.value;
+    let i = held.relics.findIndex(([id]) => id === it.id);
+    if (i >= 0) held.relics[i][1] = it.level;
+    else i = held.relics.push([it.id, it.level]) - 1;
+    return { row: 'r', i };
+  } else if (it.type === 'gold') held.gold += it.value; // the counter pulses on its own
+  return null;
 }
 
 export class Hud {
@@ -431,7 +451,9 @@ export class Hud {
     drawText(ctx, `LV ${p.level}`, W - 3, 9, { align: 'right', color: ['#ffffff', '#fee761', '#feae34'] });
   }
 
-  drawSlots(ctx, p) {
+  // lit: the slots a chest has just raised (ChestOverlay), each { row: 'w' or 'r', i, k }, k its
+  // light running from 1 down to 0 (litMark); none on the HUD itself.
+  drawSlots(ctx, p, lit = null) {
     let x = 3;
     const y = 9;
     // In a crypt, where he fights by hand with his own weapon alone, the others are dimmed.
@@ -453,6 +475,7 @@ export class Hud {
       // EVOLVE READY: the next chest opened evolves it (Game.evolvable, kept as evoReady).
       if (w && !held && this.g.evoReady.includes(w)) this.evoMark(ctx, x, y, this.g.clock);
       ctx.globalAlpha = 1;
+      if (lit) this.litMark(ctx, x, y, litK(lit, 'w', i));
       x += 18;
     }
     x = 3;
@@ -461,6 +484,7 @@ export class Hud {
       const e = ps[i];
       if (i >= maxRelics && !e) this.lockedSlot(ctx, x, y + 21, true);
       else this.slot(ctx, x, y + 21, e ? SPR[PASSIVES[e[0]].icon] : null, e ? e[1] : 0, e ? PASSIVES[e[0]].max : 5, false, true);
+      if (lit) this.litMark(ctx, x, y + 21, litK(lit, 'r', i));
       x += 18;
     }
     // Shrine buffs.
@@ -491,6 +515,21 @@ export class Hud {
     ctx.fillRect(x + 17, y, 1, 17);
     ctx.globalAlpha = 1;
     drawText(ctx, 'EVO', x + 9, y + 19, { align: 'center', color: '#f77622' });
+  }
+
+  // A slot a chest has just raised: a white frame round it, its pips too, and a white wash over
+  // it, fading as k runs down to 0 (SLOT_LIT).
+  litMark(ctx, x, y, k) {
+    if (k <= 0) return;
+    ctx.globalAlpha = k;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x - 1, y - 1, 19, 1);
+    ctx.fillRect(x - 1, y + 19, 19, 1);
+    ctx.fillRect(x - 1, y, 1, 19);
+    ctx.fillRect(x + 17, y, 1, 19);
+    ctx.globalAlpha = 0.45 * k;
+    ctx.fillRect(x + 1, y + 1, 15, 15);
+    ctx.globalAlpha = 1;
   }
 
   // A slot this run doesn't have: a dim frame round a quiet padlock.
@@ -596,10 +635,16 @@ export class Hud {
       if (Math.floor(this.goldRoll) > before) this.goldPulse = 0.18;
     }
     this.goldPulse = Math.max(0, this.goldPulse - dt);
-    const gd = fmtNum(Math.floor(this.goldRoll));
+    this.drawGold(ctx, W);
+    this.drawFlung(ctx, right - 6, y + 24, dt);
+  }
+
+  // The gold counter as it stands (drawTop rolls it up, once a frame). Also painted over a chest's
+  // dim (ChestOverlay), where the chest's coins land on it; it changes nothing.
+  drawGold(ctx, W) {
+    const right = W - 4, y = 10, gd = fmtNum(Math.floor(this.goldRoll));
     drawText(ctx, gd, right, y + 21, { align: 'right', color: this.goldPulse > 0.09 ? '#ffffff' : '#fee761' });
     ctx.drawImage(SPR.h_coin.frames[0].c, right - textWidth(gd) - 10, y + 21 - (this.goldPulse > 0 ? 1 : 0));
-    this.drawFlung(ctx, right - 6, y + 24, dt);
   }
 
   // Coins flung from gold piles, arcing to the gold counter at (tx, ty).

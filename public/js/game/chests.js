@@ -8,6 +8,7 @@ import { SPR } from '../engine/sprites.js';
 import { hexPack } from '../engine/pixels.js';
 import { PAL } from '../art/palette.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, statsAt } from '../data/weapons.js';
+import { FILLER_IDS } from '../data/passives.js';
 
 // The chest sprite's own colours (art/items.js) and what each tier paints them.
 const OWN = { dark: PAL.b, wood: PAL.B, band: PAL.y, shine: PAL.Y, lock: PAL.o };
@@ -54,6 +55,25 @@ export function revealOrder(items) {
     return { it, rank, i };
   });
   return keyed.sort((a, b) => a.rank - b.rank || a.i - b.i).map((k) => k.it);
+}
+
+// The places a chest's things take on its screen, in the order shown (revealOrder): each its own,
+// but fillers of one kind (a maxed build's Blessings, heals or purses) share one, whose count
+// climbs as each is shown (28 October 2026), so a boss's chest on a full build no longer shows
+// five Blessings alike side by side. Each place: the indices in `items` of its things. What is
+// drawn, and when each is shown, doesn't change.
+export function chestSlots(items) {
+  const slots = [], byType = new Map();
+  items.forEach((it, i) => {
+    const filler = FILLER_IDS.includes(it.type), s = filler ? byType.get(it.type) : null;
+    if (s) s.push(i);
+    else {
+      const ns = [i];
+      slots.push(ns);
+      if (filler) byType.set(it.type, ns);
+    }
+  });
+  return slots;
 }
 
 // How a chest's screen runs, in seconds (real time): shake sets, the lid, the things one by one

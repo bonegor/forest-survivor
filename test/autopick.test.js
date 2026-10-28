@@ -323,6 +323,7 @@ test('a chest on a maxed build gives the auto-pick, else Blessings, and its scre
       if (auto === 'haste') assert.equal(p.hastes, hastes + items.length, 'a Blessing of Haste each');
       for (let i = 0; i < 30; i++) chest.draw(ctx, 480, 270, 0.15);
       assert.equal(chest.revealed, items.length, 'every item shown');
+      assert.equal(chest.slots.length, 1, 'alike, they share one place on the screen');
     });
   }
 });

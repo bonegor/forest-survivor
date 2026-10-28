@@ -146,22 +146,30 @@ export const PROP_HOLD = 0.2;
 // he stands), and waits there to be walked over: the magnet doesn't pull it (Pickup opts.box).
 export const PROP_DROP = { empty: 0.5, toss: 26 };
 
+// find (1 a rare find, 2 the rarest) is only how a box tells what it held as it pops out
+// (BOX_FIND, Game.boxFind), never the odds: those are the weights alone.
 export const PROP_LOOT = [
   { kind: 'potion', w: 1 / 3 },
   { kind: 'fury', w: 1 / 3 },
   { kind: 'magnet', w: 1 / 10, lucky: true },
   { kind: 'coins', w: 0.08 },
   { kind: 'goldpile', w: 0.08 },
-  { kind: 'elixir', w: 1 / 75, lucky: true },
-  { kind: 'frostrune', w: 1 / 75, lucky: true },
-  { kind: 'relic', w: 1 / 150, lucky: true },
+  { kind: 'elixir', w: 1 / 75, lucky: true, find: 2 },
+  { kind: 'frostrune', w: 1 / 75, lucky: true, find: 1 },
+  { kind: 'relic', w: 1 / 150, lucky: true, find: 2 },
   // The timed finds (takePowerUp): a hundredth each; the Treasure Map and the Cursed Skull half as often.
-  { kind: 'wildcap', w: 1 / 100, lucky: true },
-  { kind: 'ward', w: 1 / 100, lucky: true },
-  { kind: 'mirror', w: 1 / 100, lucky: true },
-  { kind: 'map', w: 1 / 200, lucky: true },
-  { kind: 'skull', w: 1 / 200, lucky: true },
+  { kind: 'wildcap', w: 1 / 100, lucky: true, find: 1 },
+  { kind: 'ward', w: 1 / 100, lucky: true, find: 1 },
+  { kind: 'mirror', w: 1 / 100, lucky: true, find: 1 },
+  { kind: 'map', w: 1 / 200, lucky: true, find: 2 },
+  { kind: 'skull', w: 1 / 200, lucky: true, find: 2 },
 ];
+// How a rare find out of a broken box tells itself as it pops out (Game.boxFind), by its
+// PROP_LOOT find (28 October 2026): 1, a bright two-note chime and a short beam of its own light;
+// 2, the rarest, a stronger sting, a taller beam and its name over where it lands (Numbers.text,
+// 1.6 s), which shows a Cursed Skull for what it is before he walks onto it. Presentation only.
+export const BOX_FIND = [null, { sound: 'find', beam: 0.4, h: 70, tag: false }, { sound: 'treasure', beam: 0.6, h: 110, tag: true }];
+const BOX_FIND_NAMES = { elixir: 'Elixir', relic: 'Holy Relic', map: 'Treasure Map', skull: 'Cursed Skull' };
 
 // The timed finds (Game.takePowerUp): [name, what it does, colour, seconds].
 export const POWER_UPS = {
@@ -266,6 +274,9 @@ export class Game {
     this.stats.bestUlt = null; // { kills, dmg } the run's best ultimate
     this.gemCombo = 0;
     this.gemComboT = 0;
+    // A run of coins, as of gems: its pitch climbs (Pickup.collect, COIN_COMBO).
+    this.coinCombo = 0;
+    this.coinComboT = 0;
     this.banners = [];
     this.boss = null;
     this.result = null;
@@ -1104,6 +1115,7 @@ export class Game {
       // from what the hero breaks (PROP_LOOT).
       this.addPickup('chest', e.x, e.y, 0, { kind: 'elite' });
       this.addPickup('goldpile', e.x + rand(-8, 8), e.y, Math.round(rand(10, 20)));
+      this.effects.push(new Ring(this, e.x, e.y, 4, 34, 0.45, '#fee761', false, 2)); // a gold ring where it fell, its chest on the way
     } else {
       // The horde leaves its soul gems and, now and then, a coin or a fury orb: nothing else.
       const r = Math.random();
@@ -1195,16 +1207,33 @@ export class Game {
     this.addDecal('wood', e.x, e.y, 3);
     if (chance(PROP_DROP.empty)) return;
     const p = this.player, luck = p.luck;
-    const { kind } = weighted(PROP_LOOT, (d) => (d.lucky ? d.w * luck : d.w));
+    const { kind, find } = weighted(PROP_LOOT, (d) => (d.lucky ? d.w * luck : d.w));
     // The owner's (22 October 2026): what a box held pops out a moment after it breaks (PROP_HOLD),
     // not under the hero's feet the instant he walks into it, and to one side (PROP_DROP).
     const [tx, ty] = this.propToss(e);
-    const drop = (k, value, spread = 0) => this.addPickup(k, e.x, e.y, value, { hold: PROP_HOLD, box: true, toss: [tx + rand(-spread, spread), ty + rand(-spread, spread)] });
+    // A rare find tells itself as it pops out (find, boxFind); no more dice for it.
+    const drop = (k, value, spread = 0) => this.addPickup(k, e.x, e.y, value, { hold: PROP_HOLD, box: true, find, toss: [tx + rand(-spread, spread), ty + rand(-spread, spread)] });
     if (kind === 'coins') {
       const n = Math.floor(rand(1, 4));
       for (let i = 0; i < n; i++) drop('coin', 1, 5);
     } else if (kind === 'goldpile') drop('goldpile', Math.round(rand(5, 12)));
     else if (kind) drop(kind, 1);
+  }
+
+  // A rare find out of a box, just popped out (Pickup.update, PROP_HOLD after the break): a beam of
+  // its own light where the box stood and its sound; the rarest also its name over where it lands,
+  // the Cursed Skull's in red and its sting lower. The odds are PROP_LOOT's as ever.
+  boxFind(pk) {
+    const F = BOX_FIND[pk.opts.find];
+    if (!F) return;
+    this.effects.push(new Beam(this, pk.x, pk.y, pk.glowColor, F.beam, F.h, pk.lightKey || 'holy'));
+    const skull = pk.kind === 'skull';
+    sfx(F.sound, { pan: clamp((pk.x - this.player.x) / 200, -1, 1), pitch: skull ? 0.75 : 1 });
+    const name = BOX_FIND_NAMES[pk.kind];
+    if (F.tag && name) {
+      const [dx, dy] = pk.opts.toss || [0, 0];
+      this.numbers.text(pk.x + dx, pk.y + dy - 14, name, skull ? 'bleed' : 'holy');
+    }
   }
 
   // Where a broken box's loot lands, from the box: PROP_DROP.toss px across the way the hero walks,
@@ -2171,6 +2200,7 @@ export class Game {
     }
     this.magnetAll = Math.max(0, this.magnetAll - dt);
     this.gemComboT -= dt;
+    this.coinComboT -= dt;
     if (this.comboT > 0) {
       this.comboT -= dt;
       if (this.comboT <= 0) this.combo = 0;

@@ -285,7 +285,7 @@ const LIMITS = {
   furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
   rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1], warnstand: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
-  thaw: [0.5, 1], banish: [0.1, 1],
+  thaw: [0.5, 1], banish: [0.1, 1], find: [0.12, 2], treasure: [0.5, 1], chestland: [0.15, 2],
 };
 
 // Level factors that keep the reward ladder in order as measured through the real chain (RMS over
@@ -443,6 +443,30 @@ const SFX = {
   reveal: (t, o) => {
     tone(t, { type: 'triangle', f0: 784 * o.p, dur: 0.22, vol: 0.09 });
     tone(t + 0.02, { type: 'square', f0: 1568 * o.p, dur: 0.12, vol: 0.03 });
+  },
+  // A rare find popping out of a broken box (Game.boxFind): a bright two-note chime, a fifth up,
+  // synthesised (28 October 2026), the box's own recorded break under it as ever.
+  find: (t, o) => {
+    tone(t, { type: 'triangle', f0: 1319 * o.p, dur: 0.22, vol: 0.08, pan: o.pan });
+    tone(t + 0.09, { type: 'triangle', f0: 1976 * o.p, dur: 0.45, vol: 0.07, pan: o.pan });
+    tone(t + 0.09, { type: 'sine', f0: 3951 * o.p, dur: 0.3, vol: 0.02, pan: o.pan });
+  },
+  // The rarest find (an elixir, a Holy Relic, a Treasure Map; a Cursed Skull lower): a soft thump
+  // under a rising four-note run, a bell ringing on and a shimmer, well under a chest's opening.
+  treasure: (t, o) => {
+    tone(t, { type: 'sine', f0: 196 * o.p, f1: 98 * o.p, dur: 0.3, vol: 0.18, pan: o.pan });
+    arp(t + 0.02, [784, 988, 1175, 1568].map((f) => f * o.p), 0.06, { type: 'triangle', dur: 0.4, vol: 0.07, pan: o.pan });
+    tone(t + 0.22, { type: 'sine', f0: 2349 * o.p, dur: 0.9, vol: 0.04, attack: 0.005, pan: o.pan });
+    noise(t + 0.15, { filter: 'highpass', f0: 6000, f1: 10000, dur: 0.5, vol: 0.035, attack: 0.05, pan: o.pan });
+  },
+  // A dropped chest landing (o.size 1 a champion's or the thief's, 2 a lord's, 3 a boss's): a
+  // wooden thud, deeper the bigger, and a glint of struck bells off its lid.
+  chestland: (t, o) => {
+    const n = Math.max(1, Math.min(3, o.size || 1));
+    tone(t, { type: 'sine', f0: 170 - 30 * n, f1: 45, dur: 0.2 + 0.08 * n, vol: 0.26, pan: o.pan });
+    noise(t, { filter: 'lowpass', f0: 900, f1: 150, dur: 0.12, vol: 0.2, pan: o.pan });
+    tone(t + 0.1, { type: 'sine', f0: 2637, dur: 0.25, vol: 0.035, attack: 0.003, pan: o.pan });
+    tone(t + 0.15, { type: 'sine', f0: 3520, dur: 0.3, vol: 0.025, attack: 0.003, pan: o.pan });
   },
   // A results row ticking in: a soft wooden click.
   tally: (t, o) => {

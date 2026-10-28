@@ -7,8 +7,8 @@ import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
 import { Game, MILESTONES, isFiller, FLASH_SOFT } from '../game/game.js';
-import { tierOf, chestFrame, chestTease, revealOrder, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
-import { clockCountsDown, clockTime, heldBuild, revealOn } from '../game/hud.js';
+import { tierOf, chestFrame, chestTease, revealOrder, chestSlots, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
+import { clockCountsDown, clockTime, heldBuild, revealOn, SLOT_LIT } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
 import { heroStats } from '../game/weapons.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
@@ -917,6 +917,7 @@ export class ChestOverlay {
     this.g.hud.held = heldBuild(this.g);
     this.roll = this.g.rollChest(kind);
     this.items = revealOrder(this.roll.items); // least first, an evolution last
+    this.slots = chestSlots(this.items); // the places they take on the screen: fillers alike share one
     this.tease = chestTease(this.roll.items);
     this.tl = chestTimeline(kind, this.items.length);
     // An evolution, shown last, has its ceremony (drawCeremony): the gold waits for it.
@@ -934,7 +935,9 @@ export class ChestOverlay {
     this.goldShown = false; // the gold has landed (counted, its coins sent to the HUD)
     this.goldCount = 0;
     this.coins = []; // the burst as the lid opens
-    this.flyers = []; // coins on their way to the HUD's gold counter
+    this.flyers = []; // coins on their way to the HUD's gold counter, each with its share of the gold
+    this.coinsIn = 0; // of them, landed
+    this.lit = []; // the build's slots the things shown have raised, each { row, i, at } (drawSlots' lit)
     this.lockTime = 0.6;
     this.noSpace = true; // as with level-ups and gear: Space mashed for the ultimate mustn't skip the reveal, nor collect
     sfx('chest', { size: this.kind === 'boss' ? 3 : this.kind === 'lord' ? 2 : 1 });
@@ -950,7 +953,7 @@ export class ChestOverlay {
     this.t += dt;
     const t = this.t;
     dim(ctx, W, H, 0.7);
-    const lay = chestLayout(W, H, this.items.length, T.scale), cx = W / 2, cy = lay.cy;
+    const lay = chestLayout(W, H, this.slots.length, T.scale), cx = W / 2, cy = lay.cy;
     const opened = t >= tl.open;
     const k = opened ? clamp((t - tl.open) / 0.4, 0, 1) : 0;
     // The room lit in the tier's colour once it is open, its rays turning slowly.
@@ -976,6 +979,17 @@ export class ChestOverlay {
       ctx.restore();
       ctx.globalAlpha = 1;
     }
+    // The build's slots and the gold counter again, over the dim (28 October 2026): under it the
+    // HUD shows them at a third of their light, so what the chest gives now lands on them in full
+    // light, each slot it raises lit for a moment (SLOT_LIT), its gold coming in coin by coin
+    // (drawFlyers). An evolution's ceremony dims them again with all the rest.
+    const lit = [];
+    for (const l of this.lit) {
+      const u = (t - l.at) / SLOT_LIT;
+      if (u >= 0 && u < 1) lit.push({ row: l.row, i: l.i, k: 1 - u });
+    }
+    g.hud.drawSlots(ctx, g.player, lit);
+    g.hud.drawGold(ctx, W);
     // Shut, it shakes in sets (a champion's one, a lord's two, a boss's three), each stronger and a
     // step higher, light leaking from the crack: a beam for each thing inside, one orange for an
     // evolution (chestTease: always true).
@@ -1030,27 +1044,41 @@ export class ChestOverlay {
     const iy = lay.iy;
     while (this.revealed < items.length && t >= tl.at[this.revealed]) {
       const it = items[this.revealed++];
-      if (g.hud.held) revealOn(g.hud.held, it, g);
+      const raised = g.hud.held ? revealOn(g.hud.held, it, g) : null;
+      // The slot it raised lights up; an evolution's once its ceremony is over.
+      if (raised) this.lit.push({ ...raised, at: it.type === 'evolve' ? Math.max(t, this.evoAt + CEREMONY.dur) : t });
       // An evolution's sound and flash are its ceremony's.
       if (it.type !== 'evolve') sfx('reveal', { pitch: SCALE[Math.min(SCALE.length - 1, this.revealed - 1)] });
     }
     const ceremony = this.evo && t >= this.evoAt && t < this.evoAt + CEREMONY.dur;
     if (ceremony) this.drawCeremony(ctx, W, H, t - this.evoAt);
     else if (opened) {
-      // At twice the size where they fit (chestLayout), today's where they don't (phones).
-      const k = lay.k;
-      const slot = Math.min(84 * k, Math.floor((W - 16) / Math.max(1, items.length)));
-      const rowW = slot * items.length;
-      items.slice(0, this.revealed).forEach((it, i) => {
-        const x = Math.round(W / 2 - rowW / 2 + (i + 0.5) * slot);
-        const { icon, name, sub, color } = chestItemInfo(g, it);
-        const pop = t - tl.at[i] < 0.12 ? 1.3 : 1;
+      // At twice the size where they fit (chestLayout), today's where they don't (phones). Each
+      // place (chestSlots) shows its last thing shown; fillers alike share one, whose count climbs.
+      const k = lay.k, slots = this.slots;
+      const slot = Math.min(84 * k, Math.floor((W - 16) / Math.max(1, slots.length)));
+      const rowW = slot * slots.length;
+      slots.forEach((ix, si) => {
+        const n = ix.filter((j) => j < this.revealed).length; // shown so far (they are shown in order)
+        if (!n) return;
+        const last = ix[n - 1], it = items[last];
+        const x = Math.round(W / 2 - rowW / 2 + (si + 0.5) * slot);
+        const info = chestItemInfo(g, it);
+        // Purses together: their gold added up (each went to the HUD's counter as it was shown).
+        if (it.type === 'gold' && n > 1) info.sub = `+${ix.slice(0, n).reduce((sum, j) => sum + items[j].value, 0)}`;
+        const { icon, name, sub, color } = info;
+        const pop = t - tl.at[last] < 0.12 ? 1.3 : 1; // and again at each one shown in a shared place
         const big = smoothScaled(SPR[icon].frames[0], 1), bw = big.width * k * pop, bh = big.height * k * pop;
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(big, Math.round(x - bw / 2), Math.round(iy - (bh - big.height * k) / 2), Math.round(bw), Math.round(bh));
         const lines = wrapText(name, Math.floor((slot - 6) / k));
         lines.forEach((ln, j) => drawScaled(ctx, ln, x, iy + 34 * k + j * 9 * k, k, color));
         drawScaled(ctx, sub, x, iy + 34 * k + lines.length * 9 * k, k, it.type === 'evolve' || it.isNew ? '#fee761' : '#8b9bb4');
+        // A shared place: how many of them so far, on the icon's lower right.
+        if (ix.length > 1) {
+          const c = textCanvas(`×${n}`, ['#ffffff', '#fee761', '#feae34'], '#181425'), s2 = k * pop;
+          ctx.drawImage(c, Math.round(x + (big.width * k) / 2 - c.width * s2 * 0.75), Math.round(iy + big.height * k - c.height * s2 * 0.75), Math.round(c.width * s2), Math.round(c.height * s2));
+        }
       });
       if (items.some((it) => it.type === 'evolve') && this.revealed === items.length) {
         const L = logo('EVOLUTION!', ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f']);
@@ -1059,7 +1087,8 @@ export class ChestOverlay {
       }
     }
     // The gold last: counted up, coins ticking up the scale, a thunk as it lands, and a stream of
-    // coins flies to the HUD's gold counter, which rolls up as they arrive.
+    // coins carries it to the HUD's gold counter, which takes each one's share as it lands
+    // (drawFlyers); the last one in, the HUD shows the build and the gold as they are.
     const gold = this.roll.gold;
     if (t >= tl.gold && !ceremony) {
       const kg = clamp((t - tl.gold) / CHEST_TIME.gold, 0, 1), before = this.goldCount;
@@ -1068,9 +1097,11 @@ export class ChestOverlay {
       if (!this.goldShown && Math.floor(this.goldCount / step) > Math.floor(before / step)) sfx('coin', { pitch: 1 + 0.5 * kg });
       if (kg >= 1 && !this.goldShown) {
         this.goldShown = true;
-        g.hud.held = null; // all of it shown: the HUD rolls up to the build and gold as they are
         sfx('thunk');
-        for (let i = 0; i < 10; i++) this.flyers.push({ x: cx + rand(-12, 12), y: lay.goldY + 2, t: -i * 0.04 });
+        // The gold the counter still owes (the chest's own: a purse's went in as it was shown), in
+        // ten shares as even as whole coins make them. How much gold is unchanged: it is Game.gold's.
+        const owed = g.hud.held ? Math.max(0, g.gold - g.hud.held.gold) : 0, n = 10;
+        for (let i = 0; i < n; i++) this.flyers.push({ x: cx + rand(-12, 12), y: lay.goldY + 2, t: -i * 0.04, gold: Math.round((owed * (i + 1)) / n) - Math.round((owed * i) / n) });
       }
       const c = textCanvas(`+${this.goldCount} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(W / 2 - c.width), lay.goldY, c.width * 2, c.height * 2);
@@ -1175,7 +1206,8 @@ export class ChestOverlay {
     }
   }
 
-  // Coins flying from the chest to the HUD's gold counter (top right), arcing up.
+  // Coins flying from the chest to the HUD's gold counter (top right), arcing up. Each one landing
+  // puts its share on the counter with a tick a step higher than the last.
   drawFlyers(ctx, W, dt) {
     const tx = W - 12, ty = 32;
     for (let i = this.flyers.length - 1; i >= 0; i--) {
@@ -1185,6 +1217,11 @@ export class ChestOverlay {
       const k = f.t / 0.5;
       if (k >= 1) {
         this.flyers.splice(i, 1);
+        const held = this.g.hud.held;
+        if (held) held.gold += f.gold;
+        this.coinsIn++;
+        sfx('coin', { pitch: 1.5 + 0.05 * this.coinsIn }); // on up from where the count ended
+        if (!this.flyers.length) this.g.hud.held = null; // the last one in: the build and gold as they are
         continue;
       }
       const e = ease.inOutSine(k);

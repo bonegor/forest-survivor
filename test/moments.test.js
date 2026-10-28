@@ -2,7 +2,8 @@
 // card, chest or gear screen opens until the beat has played out, then they come in order; a
 // dropped chest is seen on the ground before it can be opened; flashes, shake and slow motion run
 // out under the cards instead of freezing there; the HUD doesn't give a chest away before it is
-// shown; and a fallen boss's bar holds, flashes and breaks up before the next one takes it.
+// shown, and takes its gold coin by coin; and a fallen boss's bar holds, flashes and breaks up
+// before the next one takes it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -162,9 +163,18 @@ test('the HUD shows the build as it was until the chest reveals each thing, the 
     assert.ok(g.gold > gold);
     while (o.revealed < 1) frame(gs);
     assert.equal(hud.held.weapons[0].icon, 'i_excalibur', 'revealed: the evolved sword');
+    assert.ok(o.lit.some((l) => l.row === 'w' && l.i === 0), "the sword's slot lights up");
     assert.equal(hud.held.gold, gold);
     while (!o.goldShown) frame(gs);
-    assert.equal(hud.held, null, 'all shown: the HUD shows the build as it is');
+    assert.equal(hud.held.gold, gold, 'counted, its coins still on their way');
+    // The counter takes the gold coin by coin as they land (28 October 2026).
+    let between = false;
+    for (let i = 0; i < 120 && hud.held; i++) {
+      frame(gs);
+      if (hud.held && hud.held.gold > gold && hud.held.gold < g.gold) between = true;
+    }
+    assert.ok(between, 'the counter takes the gold coin by coin');
+    assert.equal(hud.held, null, 'the last coin in: the HUD shows the build as it is');
   }));
 
 test("a fallen boss's bar holds, flashes and breaks up before the next boss still fighting takes it", () =>

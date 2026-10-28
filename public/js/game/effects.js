@@ -1164,8 +1164,9 @@ export class Telegraph {
 // ------------------------------------------------------------------- beam --
 
 export class Beam {
-  constructor(g, x, y, color = '#fee761', dur = 0.9, h = 110) {
-    Object.assign(this, { g, x, y, color, dur, h });
+  // lightKey: the light it casts on the ground (a rare find's own, Game.boxFind; else holy).
+  constructor(g, x, y, color = '#fee761', dur = 0.9, h = 110, lightKey = 'holy') {
+    Object.assign(this, { g, x, y, color, dur, h, lightKey });
     this.t = 0;
   }
 
@@ -1183,7 +1184,7 @@ export class Beam {
     ctx.globalAlpha = 1 - u * u;
     ctx.drawImage(img, sx - w / 2, sy - h, w, h);
     ctx.globalAlpha = 1;
-    this.g.light(this.x, this.y - 10, 80, 'holy', 1 - u);
+    this.g.light(this.x, this.y - 10, 80, this.lightKey, 1 - u);
   }
 }
 

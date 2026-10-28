@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
-import { chestTease, revealOrder, chestTimeline, CHEST_TIERS } from '../public/js/game/chests.js';
+import { chestTease, revealOrder, chestSlots, chestTimeline, CHEST_TIERS } from '../public/js/game/chests.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
@@ -68,6 +68,21 @@ test('things are shown least first, an evolution last; what was drawn is all the
     'evolve:excalibur', // the evolution last
   ]);
   assert.equal(items[0].type, 'evolve', 'the draws keep their own order');
+});
+
+// Fillers alike (a maxed build's Blessings, heals or purses) share one place, its count climbing as
+// each is shown (28 October 2026); what is drawn and when doesn't change.
+test('fillers alike share one place on the chest screen; everything else has its own', () => {
+  const items = [
+    { type: 'bless', level: 21 },
+    { type: 'bless', level: 22 },
+    { type: 'gold', value: 40 },
+    { type: 'bless', level: 23 },
+    { type: 'weapon', id: 'axe', level: 3 },
+    { type: 'weapon', id: 'axe', level: 4 },
+  ];
+  assert.deepEqual(chestSlots(items), [[0, 1, 3], [2], [4], [5]]);
+  assert.deepEqual(chestSlots([]), []);
 });
 
 test("each tier's screen keeps within its hold, the gaps growing toward the last", () => {

@@ -49,6 +49,13 @@ const TOSS = { vz: 80, carry: (2 * 80) / 320 + 0.4 * ((2 * 80 * 0.35) / 320) };
 // A dropped chest lies on the ground this long (game seconds) before it can be opened, even under
 // the hero, so it is seen before its screen comes up: 0.82 s, as it was when the clock ran faster.
 export const CHEST_SETTLE = 0.82;
+// A run of coins picked up climbs in pitch as soul gems do (Game.coinCombo): each within `window`
+// s of the last a `step` up, at most `cap` steps, so a boss's fountain rings up the scale (28
+// October 2026). Sound only.
+export const COIN_COMBO = { window: 0.35, cap: 16, step: 0.04 };
+// A dropped chest landing (a champion's, the thief's, a lord's, a boss's): a thud by its tier and
+// a glint off its lid for `glint` seconds (drawGlow).
+export const CHEST_LAND = { glint: 0.45 };
 
 // The shadows pickups cast: a chest's, a soul gem's and the rest's, made on first use.
 let shadows = null;
@@ -122,6 +129,7 @@ export class Pickup {
     if (this.dead) return false; // swept up already, e.g. on the way out of a crypt
     if (this.hold > 0) {
       this.hold -= dt;
+      if (this.hold <= 0 && this.opts.find) this.g.boxFind(this); // a rare find rings out as it pops (Game.boxFind)
       return true;
     }
     const g = this.g, p = g.player;
@@ -145,6 +153,13 @@ export class Pickup {
         if (this.kind === 'item' && !this.landed) {
           this.landed = true;
           sfx('gear', { size: this.opts.item.rarity, pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
+        }
+        // A chest landing: a thud by its tier and a glint off its lid (CHEST_LAND). A Treasure
+        // Map's, or a crypt's, lies waiting (pop: false) and never lands.
+        if (this.kind === 'chest' && !this.landed) {
+          this.landed = true;
+          this.landedAt = this.age;
+          sfx('chestland', { size: this.opts.kind === 'boss' ? 3 : this.opts.kind === 'lord' ? 2 : 1, pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
         }
         if (this.vz < -40) this.vz = -this.vz * 0.35;
         else this.vz = 0;
@@ -198,7 +213,9 @@ export class Pickup {
         const v = Math.max(1, Math.round(this.value * p.greed * (p.buff('fortune') ? 2 : 1)));
         g.gold += v;
         g.stats.gold += v;
-        sfx('coin');
+        g.coinCombo = g.coinComboT > 0 ? Math.min(g.coinCombo + 1, COIN_COMBO.cap) : 0;
+        g.coinComboT = COIN_COMBO.window;
+        sfx('coin', { pitch: 1 + g.coinCombo * COIN_COMBO.step });
         if (this.kind === 'goldpile') {
           g.numbers.add(p.x, p.y - 20, v, 'gold');
           g.hud.fling(this.x, this.y); // a coin off the pile to the gold counter
@@ -325,6 +342,16 @@ export class Pickup {
     ctx.drawImage(ready ? glow('#f77622') : this.glowSprite(), sx - s / 2, sy - s / 2, s, s);
     ctx.globalAlpha = 1;
     if (this.lightKey) this.g.light(this.x, this.y, big ? 70 : 26, ready ? 'fire' : this.lightKey, 0.8);
+    // A chest just landed: a glint off its lid (as drawn this frame: draw runs first).
+    if (this.kind === 'chest' && this.landed && this._rect) {
+      const u = (this.age - this.landedAt) / CHEST_LAND.glint;
+      if (u < 1) {
+        const r = this._rect, a = Math.sin(u * Math.PI);
+        ctx.globalAlpha = a;
+        glint(ctx, r[0] + r[2] * 0.75, r[1] + r[3] * 0.25, S * (1 + 3 * a), Math.max(1, Math.round(S)), '#fff3a8');
+        ctx.globalAlpha = 1;
+      }
+    }
   }
 
   // A Rare, Epic or Legendary piece's pillar of light, in its colour (GEAR_PILLAR), breathing; a
