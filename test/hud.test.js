@@ -171,19 +171,21 @@ test('with no boss up they still keep off the orbs', () =>
 test('the kill streak is counted for the record, not shown: the markers stand where its count stood', () =>
   game((g, p) => {
     const W = 480, H = 270, stood = [W - 88, Math.round(H * 0.42) - 20, 88, 48];
-    g.shrines.length = 0;
-    g.crypts.length = 0;
-    chestsAround(g, W, H);
     assert.equal(g.hud.drawCombo, undefined, 'no count to draw');
     const kill = () => g.killEnemy(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true }));
     while (g.combo < 60) kill();
     assert.equal(g.stats.maxCombo, 60, 'its longest kept for the record');
-    g.comboT = 2;
-    g.combo = 4000;
-    assert.ok(markers(g, W, H).boxes.some((b) => hit(b, stood)), 'a marker stands where the count stood');
     g.comboT = 1e-6;
     g.update(1 / 60);
     assert.equal(g.combo, 0, 'a lull breaks it');
+    assert.equal(g.stats.maxCombo, 60, 'and its longest stays');
+    // The markers last: the chests they point at are stand-ins, not to be run through a frame.
+    g.shrines.length = 0;
+    g.crypts.length = 0;
+    chestsAround(g, W, H);
+    g.comboT = 2;
+    g.combo = 4000;
+    assert.ok(markers(g, W, H).boxes.some((b) => hit(b, stood)), 'a marker stands where the count stood');
   }));
 
 // 28 October 2026 (the 27 October review's C3): the bar no longer snaps down at a level gained.
