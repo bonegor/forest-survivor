@@ -1,0 +1,50 @@
+{
+  "title": "Forest Survivor - approved handmade music",
+  "approval_date": "2026-10-28",
+  "description": "Original programmed compositions and performances rendered with locally installed instruments; user-approved MP3 versions copied without re-encoding.",
+  "playlist_status": "Approved library files; the active game playlist is unchanged.",
+  "tracks": [
+    {
+      "id": "spark-rush",
+      "title": "Spark Rush",
+      "file": "spark-rush.mp3",
+      "approved_version": "Spark Rush v1.mp3",
+      "bpm": 156,
+      "seconds": 124.32,
+      "encoded_lufs": -13.42,
+      "encoded_true_peak_db": -1.37,
+      "bytes": 3978135,
+      "sha256": "0ead937379b3dc2c519e85bde37cbca705bbd93e904fec29d4505e9aad1d873b",
+      "composition_source": "tools/music/handmade-fight/electronic/song.py",
+      "score_source": "tools/music/handmade-fight/scores/electronic.mid"
+    },
+    {
+      "id": "clockwork-charge",
+      "title": "Clockwork Charge",
+      "file": "clockwork-charge.mp3",
+      "approved_version": "Clockwork Charge v2.mp3",
+      "bpm": 160,
+      "seconds": 128.24,
+      "encoded_lufs": -13.24,
+      "encoded_true_peak_db": -0.98,
+      "bytes": 5129404,
+      "sha256": "9f2466b772f255a45a5463c735916ac4bc4b4f177eb1b166247822425272b57a",
+      "composition_source": "tools/music/handmade-fight/march/song.py",
+      "score_source": "tools/music/handmade-fight/scores/march.mid"
+    },
+    {
+      "id": "rally-run-heavy-guitars",
+      "title": "Rally Run - heavy guitars",
+      "file": "rally-run-heavy-guitars.mp3",
+      "approved_version": "Rally Run - heavy guitars v1.mp3",
+      "bpm": 168,
+      "seconds": 133.46,
+      "encoded_lufs": -13.08,
+      "encoded_true_peak_db": -1.13,
+      "bytes": 5338383,
+      "sha256": "208534ce2bab1d67b22e32656d017121374ffc38cc538f4ac9d88c39037e5af3",
+      "composition_source": "tools/music/handmade-fight/metal/song.py",
+      "score_source": "tools/music/handmade-fight/scores/metal.mid"
+    }
+  ]
+}

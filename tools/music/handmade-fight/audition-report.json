@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-28",
+  "status": "Local audition tracks; not installed into the game.",
+  "verification": "Real instruments and lightweight synthesis rendered successfully. Actual MP3 files decoded and checked for finite samples, duration, activity and true peak. Levels and balance measured, not listened to.",
+  "tracks": [
+    {
+      "kind": "rock",
+      "title": "Rally Run - driving rock",
+      "bpm": 168,
+      "seconds": 133.46,
+      "encoded_lufs": -13.19,
+      "encoded_true_peak_db": -0.98,
+      "active_fraction": 0.996,
+      "listening_file": "Rally Run - driving rock v1.mp3",
+      "mp3_sha256": "d80a4e97b3c10f4a0237959985833dfd0b442eb1a5942c1455b39a6f9a6218fe"
+    },
+    {
+      "kind": "electronic",
+      "title": "Spark Rush",
+      "bpm": 156,
+      "seconds": 124.32,
+      "encoded_lufs": -13.42,
+      "encoded_true_peak_db": -1.37,
+      "active_fraction": 0.99,
+      "listening_file": "Spark Rush v1.mp3",
+      "mp3_sha256": "0ead937379b3dc2c519e85bde37cbca705bbd93e904fec29d4505e9aad1d873b"
+    },
+    {
+      "kind": "march",
+      "title": "Clockwork Charge",
+      "bpm": 160,
+      "seconds": 128.24,
+      "encoded_lufs": -13.24,
+      "encoded_true_peak_db": -0.98,
+      "active_fraction": 0.988,
+      "listening_file": "Clockwork Charge v2.mp3",
+      "mp3_sha256": "9f2466b772f255a45a5463c735916ac4bc4b4f177eb1b166247822425272b57a"
+    },
+    {
+      "title": "Rally Run - heavy guitars",
+      "bpm": 168,
+      "seconds": 133.46,
+      "encoded_lufs": -13.08,
+      "encoded_true_peak_db": -1.13,
+      "active_fraction": 0.996,
+      "mp3_sha256": "208534ce2bab1d67b22e32656d017121374ffc38cc538f4ac9d88c39037e5af3",
+      "guitar_amp": "Fire Seeker",
+      "gain": 7,
+      "gain_mode": "II",
+      "same_notes_all_tracks": true,
+      "unchanged_parts": [
+        "Driving Bass",
+        "Drum Kit"
+      ],
+      "kind": "metal",
+      "listening_file": "Rally Run - heavy guitars v1.mp3"
+    }
+  ]
+}

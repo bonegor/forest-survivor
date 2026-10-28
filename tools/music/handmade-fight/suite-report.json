@@ -1,0 +1,42 @@
+{
+  "completed_date": "2026-10-29",
+  "listening_status": "Levels and balance measured, not listened to.",
+  "tracks": [
+    {
+      "kind": "clockwork-long",
+      "title": "Clockwork Charge - 15 minute version",
+      "bpm": 160.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "encoded": {
+        "lufs": -13.6,
+        "true_peak_db": -1.2
+      },
+      "active_fraction": 1.0,
+      "chapters": 25,
+      "source": "tools/music/handmade-fight/clockwork-long/song.py",
+      "midi": "tools/music/handmade-fight/scores/clockwork-long.mid",
+      "listening_file": "Clockwork Charge - 15 minute version v1.mp3",
+      "mp3_sha256": "83f3342c1a55b1b8f2228175bd4f193acc78ef24d6309f3f0b289bc427bb022e"
+    },
+    {
+      "kind": "lantern-guard",
+      "title": "Lantern Guard - fifteen minute journey",
+      "bpm": 160.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "encoded": {
+        "lufs": -13.7,
+        "true_peak_db": -1.4
+      },
+      "active_fraction": 1.0,
+      "chapters": 21,
+      "source": "tools/music/handmade-fight/lantern-guard/song.py",
+      "midi": "tools/music/handmade-fight/scores/lantern-guard.mid",
+      "listening_file": "Lantern Guard - fifteen minute journey v1.mp3",
+      "mp3_sha256": "fdc17acb6992eeb0f501eb2f487e97614ab510ae17b049bd0aadaad86cf7fcca"
+    }
+  ]
+}
