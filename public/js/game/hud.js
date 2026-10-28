@@ -1027,11 +1027,12 @@ export class Hud {
     for (const w of g.warnings) if (w.from) this.pointer(ctx, W, H, t, p.x + w.from[0], p.y + w.from[1], '#f77622', m.warn);
   }
 
-  // A ring about to close: for its last WARN.ring s, a faint ring on the ground round the hero.
+  // A ring about to close, or the last stand (a ring too): for its last WARN.ring s, a faint ring
+  // on the ground round the hero.
   drawRingWarnings(ctx, W, H, t) {
     const g = this.g, cam = g.cam, z = cam.S / view.S;
     for (const w of g.warnings) {
-      if (w.ev.type !== 'ring' || w.t < WARN.lead - WARN.ring) continue;
+      if ((w.ev.type !== 'ring' && w.ev.type !== 'stand') || w.t < WARN.lead - WARN.ring) continue;
       const k = clamp((w.t - (WARN.lead - WARN.ring)) / WARN.ring, 0, 1);
       const x = (g.player.x - cam.x) * z, y = (g.player.y - 4 - cam.y) * z, r = Math.min(W, H) * (0.46 - 0.12 * k);
       ctx.globalAlpha = (0.18 + 0.22 * k) * (0.75 + 0.25 * Math.sin(t * 12));

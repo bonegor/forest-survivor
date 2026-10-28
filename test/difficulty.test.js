@@ -9,9 +9,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
-import { isFew, minuteMore, WAVE, waveAt } from '../public/js/game/spawner.js';
+import { isFew, minuteMore, WAVE, waveAt, PACK_LEAST } from '../public/js/game/spawner.js';
 import { armored, BASE_SPEED } from '../public/js/game/player.js';
-import { NORMAL, VETERAN, ELITE, GAME_SPEED, HARDER, CROWD, VETERAN_CROWD, ELITE_CROWD, moveFor } from '../public/js/data/difficulty.js';
+import { NORMAL, VETERAN, ELITE, GAME_SPEED, HARDER, CROWD, VETERAN_CROWD, ELITE_CROWD, NORMAL_XP, moveFor } from '../public/js/data/difficulty.js';
+import { monsterHp, nightHpScale, hpScale } from '../public/js/data/waves.js';
+import { ENEMIES } from '../public/js/data/enemies.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
 
@@ -354,4 +356,43 @@ test('Normal is Veteran with an eighth of the horde, everyone walking 30% slower
   assert.equal(n.pace, 1, 'the clock in real time');
   assert.equal(moveFor('ranked', 'easy'), GAME_SPEED, 'Ranked is always Elite');
   assert.deepEqual([NORMAL.name, VETERAN.name, ELITE.name], ['Normal', 'Veteran', 'Elite']);
+});
+
+// The 27 October 2026 review (D5): Normal meets Veteran's bosses and champions, left as they are,
+// on an eighth of its horde, so its horde pays NORMAL_XP times the experience; and its "Wolves on
+// the hunt!" brought two wolves.
+test('Normal\'s horde pays NORMAL_XP times the experience; champions, crypts and bosses as ever; a pack is at least PACK_LEAST', () => {
+  assert.equal(NORMAL.xp, NORMAL_XP);
+  assert.equal(VETERAN.xp, 1);
+  assert.equal(ELITE.xp, 1);
+  for (const [diff, k] of [['easy', NORMAL_XP], ['medium', 1]]) {
+    const g = game({ diff }), p = g.player, s = g.spawner;
+    assert.equal(asks(g, () => s.fire({ type: 'swarm', enemy: 'bat', count: 4 }, 5))[0].xpMul, k, `${diff}: a swarm's`);
+    const steady = asks(g, () => {
+      s.acc = 0;
+      s.owed = 3;
+      s.update(1 / 60);
+    }).find((o) => o.steady);
+    assert.equal(steady.xpMul, k, `${diff}: the steady horde's`);
+    assert.equal(asks(g, () => s.spawnElite(10))[0].xpMul, undefined, `${diff}: a champion's as ever`);
+    assert.equal(s.stats(5).xpMul, undefined, `${diff}: a crypt's packs as ever (they take stats)`);
+    delete g.spawnEnemy; // back to the game's own
+    assert.equal(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true, xpMul: k }).xp, 2 * k, `${diff}: a skeleton's 2, times ${k}`);
+    assert.equal(g.spawnBoss('boneking', p.x + 80, p.y, { sleeping: true }).xp, ENEMIES.boneking.xp, `${diff}: a boss's as ever`);
+  }
+  // Fired at 9½ minutes: Normal's wolves, an eighth of Veteran's third, were round(2.47) = 2.
+  const n = game({ diff: 'easy' });
+  assert.equal(asks(n, () => n.spawner.fire({ type: 'pack', enemy: 'wolf', count: 8 }, 13.3)).length, PACK_LEAST);
+});
+
+// The 27 October 2026 review (D10): Ranked's monsters had the old hpScale, x6.58 health at 15:00
+// against Survival's x17.28.
+test('Ranked\'s monsters follow the night\'s health to dawn, then grow on from there', () => {
+  for (const ph of [0, 6.3, 12.6, 21]) assert.equal(monsterHp(ph, 'ranked'), nightHpScale(ph), `phase ${ph}`);
+  assert.ok(Math.abs(monsterHp(30, 'ranked') / monsterHp(21, 'ranked') - hpScale(30) / hpScale(21)) < 1e-9, 'past dawn at hpScale\'s rate');
+  assert.ok(monsterHp(21.5, 'ranked') > monsterHp(21, 'ranked'), 'and still growing');
+  assert.equal(monsterHp(10, 'dungeon'), hpScale(10), 'the Dungeon keeps hpScale');
+  assert.equal(monsterHp(10, 's15'), nightHpScale(10));
+  const r = game({ mode: 'ranked' });
+  assert.ok(Math.abs(r.spawner.stats(25).hpMul / (monsterHp(25, 'ranked') * ELITE.hp) - 1) < 1e-12, 'its horde takes it');
 });

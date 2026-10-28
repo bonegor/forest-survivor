@@ -177,7 +177,7 @@ export class Enemy {
     this.turnT = 0;
     this.wanderA = 0;
     this.dmg = def.dmg * (o.dmgMul ?? 1);
-    this.xp = def.xp;
+    this.xp = def.xp * (o.xpMul ?? 1); // the difficulty's horde experience (difficulty.js xp; Spawner)
     this.face = Math.random() < 0.5 ? -1 : 1;
     this.anim = rand(10);
     this.flash = 0;
@@ -249,6 +249,7 @@ export class Enemy {
     // A floor's guardian is sealed once spawned (Dungeon.populate); one back from the pool is not.
     this.sealed = false;
     this.thaw = 0;
+    this.burnT = 0; // how long the sunrise has burned it (Game.burnBoss)
     this.lord = !!o.lord; // one of a crypt's named bosses, each asleep in a room of its own
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
     this.summoned = !!o.summoned; // called up round the hero by a boss (Game.summonRing)

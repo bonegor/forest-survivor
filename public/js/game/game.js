@@ -61,6 +61,9 @@ export const BANNERS_MOST = 2;
 // world slows and drains to grey and dark over `drain`; he flashes white for `flash` and tips
 // over in `fall`, still in colour; "Slain by …" fades in from `name` (Hud); the results at `end`.
 export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
+// A boss still standing at dawn (the Lich, outlasted) burns away in sight over `boss` s, where it
+// had vanished at random like any foe (the 27 October 2026 review, D15; burnBoss).
+export const DAWN_BURN = { boss: 2.5 };
 // The options' FLASHES: SOFT (27 October 2026): no white flash over the screen or a boss's bar
 // brighter than this, crits in one steady gold, no white pulse.
 export const FLASH_SOFT = 0.2;
@@ -2023,10 +2026,28 @@ export class Game {
     this.dawnT = 0;
     this.calm = 1;
     this.victoryKind = kind;
-    if (kind === 'survival') this.banner('Dawn breaks!', 'You survived the night', '#fee761', 4);
+    // A boss still standing burns in the sunrise (burnBoss), and the dawn says so.
+    const lord = this.enemies.find((e) => e.boss && !e.dead);
+    if (kind === 'survival') this.banner('Dawn breaks!', lord ? `${lord.def.title || lord.def.name} burns in the sunrise` : 'You survived the night', '#fee761', 4);
     else this.banner('Victory!', 'The Lord of Cinders is no more', '#fee761', 4);
     sfx('bell');
     playJingle('victory');
+  }
+
+  // A boss caught by the sunrise (the dawn's update): it fades and flickers over DAWN_BURN.boss s,
+  // sparks pouring off it, then a last flare. Not a kill: no loot, no tally.
+  burnBoss(e, dt) {
+    e.burnT += dt;
+    const k = Math.min(1, e.burnT / DAWN_BURN.boss);
+    e.alpha = (e.def.alpha || 1) * (1 - k);
+    e.flash = this.frame % 6 < 3 ? 0.05 : 0;
+    if (this.frame % 2 === 0) this.particles.burst(e.x + rand(-e.hr, e.hr), e.y, rand(4, e.h), 4, [PC.y, PC.o, PC.w], 60, 0.9, 1, P.GLOW | P.FADE, { vz: 60 });
+    if (k >= 1) {
+      e.dead = true;
+      this.particles.burst(e.x, e.y, e.h / 2, 48, [PC.y, PC.o, PC.w], 110, 1.2, 2, P.GLOW | P.FADE, { vz: 80 });
+      this.shake(0.4);
+      sfx('bigdie');
+    }
   }
 
   finish(victory) {
@@ -2211,15 +2232,16 @@ export class Game {
     } else if (this.state === 'dawn') {
       this.dawnT += rdt;
       this.dawn = Math.min(1, this.dawnT / 2.5);
-      // Every foe burns away in the light.
+      // Every foe burns away in the light; a boss slowly, in sight (burnBoss).
       if (this.frame % 3 === 0) {
         for (const e of this.enemies) {
-          if (!e.dead && !e.prop && Math.random() < 0.15) {
+          if (!e.dead && !e.prop && !e.boss && Math.random() < 0.15) {
             e.dead = true;
             this.particles.burst(e.x, e.y - 6, 4, 8, [PC.y, PC.o, PC.w], 50, 0.8, 1, P.GLOW | P.FADE, { vz: 50 });
           }
         }
       }
+      for (const e of this.enemies) if (e.boss && !e.dead) this.burnBoss(e, rdt);
       p.update(dt);
       if (this.dawnT > 5) this.finish(true);
     }

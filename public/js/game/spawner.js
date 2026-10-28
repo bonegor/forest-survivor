@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { EVENTS, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { EVENTS, LAST_STAND, kindsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
@@ -58,6 +58,10 @@ export const SWARM_SPREAD = { wide: 170, deep: 70, base: 300, most: 1.8 };
 // step so they don't line up.
 export const RING = { more: 3, layers: 3, gap: 26 };
 
+// A pack event is never fewer than PACK_LEAST, whatever the difficulty and its few take off (the
+// 27 October 2026 review, D5: Normal's "Wolves on the hunt!" brought two).
+export const PACK_LEAST = 6;
+
 // Jolts (the owner's, 26 October 2026): "random jolts of monsters ... every 30 - 90 seconds ... the
 // computer quickly checks where the hero is currently headed" and sends a stream at him from ahead,
 // close to his way but not on it (up to JOLT.spread radians off), JOLT.count of one kind as the
@@ -98,9 +102,10 @@ export class Spawner {
 
   // The night's timed events, every swarm a batch (data/waves.js batchEvents), rolled once a run
   // the first time they are asked for: by then the mode and the floor are set, and with them how
-  // far the phase moves in SWARM_BATCH.gap seconds.
+  // far the phase moves in SWARM_BATCH.gap seconds. Survival's night has its last stand among them
+  // (data/waves.js LAST_STAND), Ranked and the Dungeon only the night's EVENTS.
   get events() {
-    if (!this._events) this._events = this.batch(EVENTS);
+    if (!this._events) this._events = this.batch(this.g.mode === 's15' ? [...EVENTS, LAST_STAND].sort((a, b) => a.at - b.at) : EVENTS);
     return this._events;
   }
 
@@ -213,7 +218,7 @@ export class Spawner {
       // screen (room: Game.recycleFar as for what is sent).
       const full = g.enemies.length - g.propCount >= HORDE_CAP.most - R.room;
       if (full && this.shown() >= R.thin) this.owed = Math.min(this.owed, 0);
-      const st = this.owed >= 1 ? { ...this.stats(phase), steady: true, room: full } : null;
+      const st = this.owed >= 1 ? { ...this.stats(phase), steady: true, room: full, xpMul: g.diff.xp ?? 1 } : null;
       for (let i = 0; i < R.perFrame && this.owed >= 1; i++) {
         const type = this.pickType(phase);
         const pt = g.world.spawnPoint(g);
@@ -236,11 +241,12 @@ export class Spawner {
     const events = this.events;
     // Ranked, once the night's are spent: one of its later events again every RANKED_EVENT_EVERY,
     // growing past phase 30, put at the end of the list (a swarm as a whole batch), where it is
-    // announced and comes like the night's own.
+    // announced and comes like the night's own. The later ones are those from the Wraith ring on,
+    // the same six since it moved to 12:00 (data/waves.js EVENTS, 27 October 2026).
     if (g.mode === 'ranked' && this.eventIdx >= events.length) {
       if (!this.loopAt) this.loopAt = phase + RANKED_EVENT_EVERY;
       if (soon >= this.loopAt) {
-        const ev = pick(EVENTS.filter((e) => e.at >= 18));
+        const ev = pick(EVENTS.filter((e) => e.at >= 16.8));
         events.push(...this.batch([{ ...ev, at: this.loopAt, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) }]));
         this.loopAt = 0;
       }
@@ -340,21 +346,28 @@ export class Spawner {
     return gone.length;
   }
 
-  // A timed swarm, ring or pack. At the cap of monsters it comes in full all the same (sent:
-  // Game.recycleFar), each of them in the place of one off the screen.
+  // A timed swarm, ring or pack, or the night's last stand. At the cap of monsters it comes in full
+  // all the same (sent: Game.recycleFar), each of them in the place of one off the screen. A pack
+  // comes at least PACK_LEAST strong, and the horde it sends pays the difficulty's xp (Normal's
+  // NORMAL_XP; a crypt's packs, which take stats, as ever).
   fire(ev, phase) {
     const g = this.g, p = g.player;
     g.warnings = g.warnings.filter((w) => w.ev !== ev);
     // A kind picked by pickType (a jolt: ev.picked) came that much more seldom already; cut again it was a ninth, not a third (27 October 2026).
-    ev = { ...ev, count: Math.max(1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) && !ev.picked ? g.diff.few : 1) * hordeMore(g, phase))) };
-    const st = this.stats(phase);
+    ev = { ...ev, count: Math.max(ev.type === 'pack' ? PACK_LEAST : 1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) && !ev.picked ? g.diff.few : 1) * hordeMore(g, phase))) };
+    const st = { ...this.stats(phase), xpMul: g.diff.xp ?? 1 };
     const cam = g.cam;
     // At the cap a refused spawn means no one is left off the screen to make room (Game.recycleFar),
     // so none of the rest would come this frame either: the event stops asking. Only at the cap, so
     // a refusal for any other reason is passed over as before.
     const shut = (e) => !e && g.enemies.length - g.propCount > HORDE_CAP.most;
     switch (ev.type) {
-      case 'ring': {
+      case 'ring':
+      case 'stand': {
+        // The last stand (data/waves.js LAST_STAND) is a ring of every kind the night has brought,
+        // one after another round it, those that shoot or lunge as few as anywhere (pickType's
+        // few), and a pack of champions together at one spot, without their names' banners.
+        const kinds = ev.type === 'stand' ? kindsBy(minuteOf(phase)) : [ev.enemy];
         const R0 = Math.hypot(cam.W, cam.H) * 0.5 + 10;
         const count = ev.count * RING.more, per = Math.ceil(count / RING.layers);
         for (let i = 0; i < count; i++) {
@@ -362,7 +375,13 @@ export class Spawner {
           const a = ((i % per) + (layer % 2) * 0.5) / per * TAU;
           const spot = g.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
           if (!spot) continue;
-          if (shut(g.spawnEnemy(ev.enemy, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true }))) break;
+          const type = kinds[i % kinds.length];
+          if (ev.type === 'stand' && isFew(type) && Math.random() >= g.diff.few) continue;
+          if (shut(g.spawnEnemy(type, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true }))) break;
+        }
+        if (ev.type === 'stand') {
+          const pt = g.world.spawnPoint(g, 20);
+          for (let k = 0; k < ev.champions; k++) this.spawnElite(phase, pt && { x: pt.x + rand(-16, 16), y: pt.y + rand(-16, 16) }, true);
         }
         // (Its banner came with its warning.)
         break;
@@ -408,11 +427,13 @@ export class Spawner {
     this.fire({ type: 'swarm', enemy: this.pickType(phase, JOLT_NOT), dir, count: JOLT.count, picked: true }, phase);
   }
 
-  spawnElite(phase) {
+  // A champion: at a spot given, and quietly (no banner of its name, no sting) when it comes in a
+  // pack (the night's last stand, LAST_STAND).
+  spawnElite(phase, at = null, quiet = false) {
     const g = this.g;
     const type = this.pickType(phase, ['bat', 'slimelet', 'rat']);
-    const pt = g.world.spawnPoint(g, 20);
-    if (!pt) return;
+    const pt = at || g.world.spawnPoint(g, 20);
+    if (!pt) return null;
     const mod = pick(CHAMPION_MODS);
     const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)} ${pick(CHAMPION_TITLE)}`;
     const st = this.stats(phase);
@@ -426,9 +447,12 @@ export class Spawner {
     });
     if (e) {
       e.xp *= 8;
-      g.banner(name, `${mod.name} champion`, mod.color, 2.2);
-      sfx('charge');
+      if (!quiet) {
+        g.banner(name, `${mod.name} champion`, mod.color, 2.2);
+        sfx('charge');
+      }
     }
+    return e;
   }
 
   // A crypt's lord: a named Skeleton Archer, drawn boss-sized, asleep in a room of its own until the

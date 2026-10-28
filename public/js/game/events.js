@@ -15,6 +15,8 @@ const WORDS = {
   'pack:wolf': ['Wolves on the hunt!', 'from the {side}'],
   'pack:goblin': ['A goblin raid!', 'from the {side}'],
   'pack:hellhound': ['Hellhounds on your trail!', 'from the {side}'],
+  // Survival's last stand at 14:00 (data/waves.js LAST_STAND).
+  'stand:all': ['The last stand!', 'Every horror of the night closes in'],
 };
 const SIDES = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 

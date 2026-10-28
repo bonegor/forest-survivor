@@ -76,30 +76,57 @@ export function hpScale(phase) {
 // Survival's night hardens much faster from minute 6.5 (phase 9) on: a hero
 // without the Armory hits a wall of health it can't cut through, one with all
 // of it gets to dawn. Tuned with the gem-collecting bot (tools/bots.mjs
-// --bot=gems --armory=none|max). Ranked and the dungeon keep hpScale.
+// --bot=gems --armory=none|max). Ranked follows it to dawn (rankedHpScale); the dungeon keeps hpScale.
 export function nightHpScale(phase) {
   return 1 + phase * 0.08 + Math.max(0, phase - 9) * 0.8 + Math.max(0, phase - 16) * 1;
 }
 
+// Ranked's night is Survival's until dawn (phase 21), then it grows on from Survival's dawn at the
+// old hpScale's rate, compounding past 30, as Game.dmgScale does past dawn (the 27 October 2026
+// review, D10: its monsters had x6.58 health at 15:00 against Survival's x17.28, and reached that
+// only about minute 29).
+export function rankedHpScale(phase) {
+  return phase <= 21 ? nightHpScale(phase) : (nightHpScale(21) * hpScale(phase)) / hpScale(21);
+}
+
 // Monster health multiplier for a mode at a phase.
-export const monsterHp = (phase, mode) => (mode === 's15' ? nightHpScale(phase) : hpScale(phase));
+export const monsterHp = (phase, mode) => (mode === 's15' ? nightHpScale(phase) : mode === 'ranked' ? rankedHpScale(phase) : hpScale(phase));
 
 // Timed events (phase minutes).
+// Off the night bosses' arrivals (the 27 October 2026 review, D14; the horde still comes at its
+// rate under them, the owner's of 26 October 2026, and the late horde from 9:00): the imp batch
+// from 9:39, on the Butcher's heels, to 10:30 (14.7: a batch of five is in by 10:58, before the
+// goblin raid's warning); the Wraith ring from 12:51, nine seconds before the Lich, to 12:00. The
+// last imp batch from 14:39 to 14:17 (20), so the whole batch is in by 14:50 and none is lost to
+// dawn (D15).
 export const EVENTS = [
   { at: 2.5, type: 'swarm', enemy: 'bat', count: 16 },
   { at: 4.5, type: 'ring', enemy: 'skeleton', count: 26 },
   { at: 7, type: 'swarm', enemy: 'bat', count: 30 },
   { at: 9.5, type: 'pack', enemy: 'wolf', count: 8 },
   { at: 11, type: 'ring', enemy: 'zombie', count: 34 },
-  { at: 13.5, type: 'swarm', enemy: 'imp', count: 26 },
+  { at: 14.7, type: 'swarm', enemy: 'imp', count: 26 },
   { at: 15.5, type: 'pack', enemy: 'goblin', count: 18 },
-  { at: 18, type: 'ring', enemy: 'ghost', count: 40 },
-  { at: 20.5, type: 'swarm', enemy: 'imp', count: 36 },
+  { at: 16.8, type: 'ring', enemy: 'ghost', count: 40 },
+  { at: 20, type: 'swarm', enemy: 'imp', count: 36 },
   { at: 22.5, type: 'pack', enemy: 'hellhound', count: 10 },
   { at: 24.5, type: 'ring', enemy: 'deathknight', count: 22 },
   { at: 27, type: 'swarm', enemy: 'imp', count: 44 },
   { at: 28.5, type: 'ring', enemy: 'skeleton', count: 60 },
 ];
+
+// The night's last stand (the 27 October 2026 review, D15: after 11:00 the night brought nothing
+// new), Survival's only (Spawner.events), at 14:00: a ring of every kind the night has brought by
+// then (kindsBy), its count before the difficulty as a ring's, and `champions` champions together,
+// told like any event in its own words and sting (events.js, audio.js warnstand).
+export const LAST_STAND = { at: 19.6, type: 'stand', enemy: 'all', count: 36, champions: 3 };
+
+// Every kind of monster the night's pockets have brought by a minute of it, in the order they came.
+export function kindsBy(minute) {
+  const out = [];
+  for (const p of POCKETS) if (p.minutes[0] < minute) for (const k of Object.keys(p.spawn)) if (!out.includes(k)) out.push(k);
+  return out;
+}
 
 // The owner's (22 October 2026): a swarm "should be 3x bigger ... in jolts of 3 to 5 ... warning
 // comes, few seconds later, a swarm. Few seconds later new warning, few seconds later new swarm",

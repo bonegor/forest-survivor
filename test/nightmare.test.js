@@ -268,6 +268,17 @@ test('Ranked\'s trial card shows no box, and a Nightmare ticked before plays Ran
   assert.equal(g.diff, ELITE);
 });
 
+// The 27 October 2026 review (D10): Ranked is always Elite, and nothing said so to a Normal player.
+test('the first time Ranked is chosen a word says it is always Elite, once', () => {
+  const { s, app } = trialScreen(unlockEverything(defaultProfile()), { mode: 'ranked' });
+  assert.equal(s.dialog?.title, 'Ranked is Elite');
+  assert.equal(loadSettings().rankedNote, true, 'remembered with the settings');
+  const again = new ModeScreen();
+  again.enter(app);
+  for (let i = 0; i < 5; i++) frame(again);
+  assert.equal(again.dialog, undefined, 'said once');
+});
+
 test('the results report a Nightmare and pay it so', async () => {
   const sentRuns = [];
   const store = {

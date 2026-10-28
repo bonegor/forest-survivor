@@ -27,6 +27,14 @@ export const VETERAN_CROWD = 2 / 3, ELITE_CROWD = 2 * VETERAN_CROWD;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
+// Normal sends an eighth of Veteran's horde but meets the same bosses and champions, left as they
+// are (the owner's difficulty tiers), so it was a long grind on an eighth of the experience to them
+// (the 27 October 2026 review, D5). Its horde pays NORMAL_XP times the experience, and its hero
+// reaches about as many level-ups by a minute of the night as Veteran's: the steady horde's rate
+// runs about 7.8 times Normal's on Veteran at dusk and 4.4 times at 13:00, as Veteran's bends
+// under HORDE_RATE.knee (spawner.js Spawner.rate).
+export const NORMAL_XP = 6;
+
 // Elite (Veteran until 23 October 2026, the owner's: "the veteran difficulty will become elite"):
 // the old Hard, made harder as above. Multipliers on the base monster
 // stats, the rate of the steady horde (spawn; spawner.js Spawner.rate, its size until 26 October
@@ -36,7 +44,9 @@ const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 // what this difficulty does to a monster whose health is its own, a crypt's lord (hp has
 // it in already): the last round's +20% (HARDER), and on Veteran and Normal 70% less on top. late
 // sends more of the night's monsters from a minute of it on (spawner.js lateMore). The id
-// stays 'hard' so saves and run reports keep their shape.
+// stays 'hard' so saves and run reports keep their shape. xp multiplies the experience of the
+// horde the Spawner sends (Spawner.update and fire: the steady horde, swarms, rings, packs and
+// jolts), never a champion's, the thief's, a boss's or a crypt's; Veteran has Elite's 1.
 // The gold a run brings home is the profile's to weigh (shared/profile.js DIFF_GOLD).
 export const ELITE = {
   id: 'hard',
@@ -51,6 +61,7 @@ export const ELITE = {
   few: 1,
   health: HARDER,
   late: null,
+  xp: 1,
   desc: `The night at full strength. Gold x${DIFF_GOLD.hard}.`,
 };
 
@@ -106,7 +117,8 @@ export const NORMAL = {
   horde: VETERAN.horde * 0.125,
   pace: VETERAN.pace * 0.7,
   foePace: VETERAN.foePace * 0.9,
-  desc: `An eighth of Veteran's monsters; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
+  xp: NORMAL_XP, // its horde's experience (above)
+  desc: `An eighth of Veteran's monsters, each worth six times the experience; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
 };
 
 // By id, as a run report and the profile's wins keep it.

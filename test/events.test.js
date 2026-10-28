@@ -4,8 +4,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { Game } from '../public/js/game/game.js';
-import { EVENTS, SWARM_BATCH } from '../public/js/data/waves.js';
+import { Game, DAWN_BURN } from '../public/js/game/game.js';
+import { EVENTS, SWARM_BATCH, LAST_STAND, kindsBy, SURVIVAL_BOSSES } from '../public/js/data/waves.js';
+import { minuteMore, RING } from '../public/js/game/spawner.js';
+import { ELITE } from '../public/js/data/difficulty.js';
+import { ENEMIES } from '../public/js/data/enemies.js';
 import { WARN, sideWord, eventWords } from '../public/js/game/events.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
@@ -151,5 +154,102 @@ test('every swarm comes as a batch of 2 to 5, each three times as big, 7 s apart
       if (g.spawner.eventIdx > last) { came += g.spawner.eventIdx - last; last = g.spawner.eventIdx; }
     }
     assert.ok(told >= n && came >= n, `${n} swarms told (${told}) and come (${came})`);
+  });
+});
+
+// The 27 October 2026 review (D14): the imp batch landed on the Butcher's heels (9:39) and the Wraith
+// ring nine seconds before the Lich (12:51). They moved; the horde still comes at its rate under a
+// boss (the owner's of 26 October 2026). The Bone King's bats at 5:00 are the closest, 30 s after him.
+test('no timed event of the night comes less than 30 s from a night boss\'s arrival', () => {
+  for (let seed = 1; seed <= 5; seed++) {
+    game((g) => {
+      for (const e of g.spawner.events.filter((x) => x.at <= 21)) {
+        for (const b of SURVIVAL_BOSSES.s15) {
+          const secs = (e.at / 1.4) * 60;
+          assert.ok(Math.abs(secs - b.at) >= 30 - 1e-9, `${e.type} of ${e.enemy} at ${secs.toFixed(0)} s, ${b.id} at ${b.at} s`);
+        }
+      }
+    }, { seed });
+  }
+});
+
+// The 27 October 2026 review (D15): after 11:00 the night brought nothing new, and dawn came flat.
+test('Survival\'s night has its last stand at 14:00; Ranked and the Dungeon don\'t', () => {
+  game((g) => {
+    const stands = g.spawner.events.filter((e) => e.type === 'stand');
+    assert.equal(stands.length, 1);
+    assert.equal(stands[0].at, LAST_STAND.at);
+    assert.ok(Math.abs((LAST_STAND.at / 1.4) * 60 - 14 * 60) < 1e-9, 'at 14:00');
+  });
+  for (const mode of ['ranked', 'dungeon']) game((g) => assert.equal(g.spawner.events.filter((e) => e.type === 'stand').length, 0, mode), { mode });
+});
+
+test('the last stand: every kind of the night in a ring, and a pack of champions, told in its own words', () => {
+  game((g) => {
+    const sp = g.spawner;
+    g.setTime((LAST_STAND.at / 1.4) * 60 - 4 * g.pace);
+    for (const e of g.enemies) e.dead = true;
+    // Only the event comes meanwhile: no steady horde, jolt, champion or thief.
+    sp.acc = Infinity;
+    sp.joltT = Infinity;
+    sp.eliteT = Infinity;
+    sp.thiefT = Infinity;
+    const titles = [], subs = [], banner = g.banner.bind(g);
+    g.banner = (title, sub, ...rest) => {
+      titles.push(title);
+      subs.push(sub);
+      return banner(title, sub, ...rest);
+    };
+    const asked = [], spawn = g.spawnEnemy.bind(g);
+    g.spawnEnemy = (type, x, y, o = {}) => {
+      if (!ENEMIES[type].prop) asked.push({ type, elite: !!o.elite });
+      return spawn(type, x, y, o);
+    };
+    const idx = sp.events.findIndex((e) => e.type === 'stand');
+    let warned = false;
+    for (let f = 0; f < 6 * 60 && sp.eventIdx <= idx; f++) {
+      g.update(1 / 60);
+      if (g.warnings.some((w) => w.ev.type === 'stand')) warned = true;
+    }
+    assert.ok(sp.eventIdx > idx, 'it came');
+    assert.ok(titles.includes('The last stand!'), 'in its own words');
+    assert.ok(warned, 'told before, its ring on the ground (Hud.drawRingWarnings)');
+    // On Elite (few 1) every kind comes, the shooters and chargers too.
+    const ring = asked.filter((a) => !a.elite);
+    assert.deepEqual(new Set(ring.map((a) => a.type)), new Set(kindsBy(14)), 'every kind the night has brought');
+    assert.equal(kindsBy(14).length, 15);
+    assert.equal(ring.length, Math.round(LAST_STAND.count * ELITE.horde * minuteMore(LAST_STAND.at)) * RING.more, 'as many as a ring of its count');
+    assert.equal(asked.filter((a) => a.elite).length, LAST_STAND.champions, 'and its champions');
+    assert.ok(!subs.some((s) => s && s.endsWith('champion')), 'without their names\' banners');
+  });
+});
+
+test('the night\'s last batch is in before 14:50, none of it lost to dawn', () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    game((g) => {
+      for (const e of g.spawner.events) if (e.at <= 21) assert.ok(e.at < (14 + 50 / 60) * 1.4, `${e.type} of ${e.enemy} at phase ${e.at}`);
+    }, { seed });
+  }
+});
+
+test('at dawn a boss still standing burns away in sight, slowly: no kill, no loot', () => {
+  game((g, p) => {
+    const subs = [], banner = g.banner.bind(g);
+    g.banner = (title, sub, ...rest) => {
+      subs.push(sub);
+      return banner(title, sub, ...rest);
+    };
+    const lich = g.spawnBoss('lich', p.x + 80, p.y, { sleeping: true });
+    g.setTime(g.duration - 0.01);
+    for (let f = 0; f < 60 && g.state !== 'dawn'; f++) g.update(1 / 60);
+    assert.equal(g.state, 'dawn');
+    assert.ok(subs.includes('The Lich burns in the sunrise'), 'the dawn says so');
+    const kills = g.kills, pickups = g.pickups.length;
+    for (let f = 0; f < 60; f++) g.update(1 / 60);
+    assert.ok(!lich.dead && lich.alpha < 1, `still burning after a second (alpha ${lich.alpha})`);
+    for (let f = 0; f < (DAWN_BURN.boss - 1 + 0.3) * 60; f++) g.update(1 / 60);
+    assert.ok(lich.dead, 'burned away');
+    assert.equal(g.kills, kills, 'not a kill');
+    assert.ok(g.pickups.length <= pickups, 'and nothing dropped');
   });
 });

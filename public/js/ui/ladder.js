@@ -29,6 +29,8 @@ export function goalText(goal) {
       return goal.unlocks === 'ranked'
         ? `Beat the Dungeon with ${title(goal.hero)} to unlock Ranked`
         : `Beat the Dungeon with ${title(goal.hero)} to bring ${title(goal.unlocks)} into it`;
+    case 'elite':
+      return 'Win a night on Elite in Survival: Ranked is always played on Elite';
     default:
       return '';
   }

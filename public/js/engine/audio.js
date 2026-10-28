@@ -283,7 +283,7 @@ const LIMITS = {
   die: [0.03, 6], hurt: [0.15, 1], flask: [0.1, 2], burn: [0.15, 2], blade: [0.12, 2], aura: [0.3, 1],
   bigdie: [0.1, 2], wood: [0.05, 3], enemyshot: [0.12, 3], charge: [0.2, 2], ui: [0.03, 2], step: [0.2, 1],
   furyready: [1, 1], tally: [0.05, 2], thunk: [0.3, 1], chestshake: [0.15, 1], reveal: [0.05, 2], evolve: [1, 1], gear: [0.08, 2], epic: [1, 1], legendary: [1, 1], milestone: [1, 1],
-  rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1],
+  rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1], warnstand: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
   thaw: [0.5, 1], banish: [0.1, 1],
 };
@@ -518,6 +518,11 @@ const SFX = {
     const k = LEVEL.warnpack;
     tone(t, { type: 'sawtooth', f0: 330, f1: 620, dur: 0.45, vol: 0.05 * k, lp: 1400, attack: 0.08 });
     tone(t + 0.45, { type: 'sawtooth', f0: 620, f1: 400, dur: 0.5, vol: 0.05 * k, lp: 1400 });
+  },
+  // The last stand (data/waves.js LAST_STAND): three heavy drum beats under a low horn rising.
+  warnstand: (t) => {
+    for (const d of [0, 0.28, 0.56]) tone(t + d, { type: 'sine', f0: 80, f1: 45, dur: 0.3, vol: 0.32 });
+    tone(t + 0.1, { type: 'sawtooth', f0: 110, f1: 165, dur: 1.1, vol: 0.06, lp: 900, attack: 0.25 });
   },
   // Something stirs before a boss: a low rumble rising for 1.5 s.
   rumble: (t) => {

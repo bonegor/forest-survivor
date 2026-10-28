@@ -460,8 +460,11 @@ export function unlocksNext(p, hero) {
   return next && !p.heroes.includes(next) ? next : null;
 }
 
-// What the player should aim for next, or null once Ranked is open.
-//   { type: 'survive' | 'survivalHard' | 'dungeon', hero, unlocks, minutes? }
+// Whether a night of Survival has been won on Elite (a Nightmare's too).
+export const wonElite = (p) => (p.wins.s15[DIFFICULTIES.indexOf('hard')] || 0) > 0;
+
+// What the player should aim for next, or null once Ranked is open and a night has been won on Elite.
+//   { type: 'survive' | 'survivalHard' | 'dungeon' | 'elite', hero, unlocks, minutes? }
 export function nextGoal(p) {
   const next = nextHeroUnlock(p);
   const survive = next && { type: 'survive', hero: prevHero(next), unlocks: next, minutes: HERO_UNLOCK_TIME / 60 };
@@ -473,7 +476,9 @@ export function nextGoal(p) {
     const h = LADDER[i];
     if (!hasFeat(p, h, FEAT.dungeon)) return { type: 'dungeon', hero: h, unlocks: LADDER[i + 1] || 'ranked' };
   }
-  return survive || null;
+  // Ranked is always Elite (data/difficulty.js diffFor); before it, one night won on Elite, so the
+  // endless night is not a player's first taste of it (the 27 October 2026 review, D10).
+  return survive || (wonElite(p) ? null : { type: 'elite' });
 }
 
 // Everything currently open, as keys; applyRun diffs these to announce unlocks.

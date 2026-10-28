@@ -335,7 +335,8 @@ export const store = {
 // as last chosen on the trial screen.
 // skins: each hero's look as chosen on the hero screen (data/heroes.js heroLook), hero -> skin id.
 // softFlash: the options' FLASHES: SOFT, white flashes held to FLASH_SOFT and crits in steady gold.
-const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {}, softFlash: false };
+// rankedNote: the trial screen's word that Ranked is always Elite has been said (ModeScreen).
+const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {}, softFlash: false, rankedNote: false };
 
 export function loadSettings() {
   try {

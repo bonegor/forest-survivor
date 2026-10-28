@@ -315,6 +315,9 @@ test('the full ladder: nights survived, then the Dungeon hero by hero, then Rank
   // The Necromancer's clear opens Ranked.
   assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: 'necromancer', unlocks: 'ranked' });
   assert.deepEqual(run({ mode: 'dungeon', hero: 'necromancer', time: 1200 }).reward.unlocks, ['mode:ranked']);
+  // Ranked is always Elite: one night won on Elite first (the 27 October 2026 review, D10).
+  assert.deepEqual(P.nextGoal(p), { type: 'elite' }, 'one night on Elite first: Ranked is always Elite');
+  run({ mode: 's15', diff: 'hard', hero: 'knight' });
   assert.equal(P.nextGoal(p), null);
   for (const h of P.HERO_ORDER) assert.ok(P.canPlay(p, 'ranked', h), h);
 });

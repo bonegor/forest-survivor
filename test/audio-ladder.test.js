@@ -1,13 +1,13 @@
 // The audio ladder: a stinger of its own for each beat, every one limited, and the music ducked
 // under the biggest beats. The boss's stir, a lord's waking, the heartbeat, the three event
-// warnings and the ultimate's launch are sounds of their own too.
+// warnings and the last stand's (27 October 2026) and the ultimate's launch are sounds of their own too.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { soundNames, limited, DUCK, DUCKED } from '../public/js/engine/audio.js';
 
 const STINGERS = ['levelup', 'chest', 'evolve', 'epic', 'legendary', 'bossslain', 'lordslain', 'record', 'milestone', 'revive', 'unlock'];
-const BEATS = ['rumble', 'lordsting', 'heartbeat', 'warnswarm', 'warnring', 'warnpack'];
+const BEATS = ['rumble', 'lordsting', 'heartbeat', 'warnswarm', 'warnring', 'warnpack', 'warnstand'];
 
 test('each beat has a stinger of its own, and each is limited', () => {
   const names = soundNames();

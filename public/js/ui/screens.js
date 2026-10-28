@@ -9,7 +9,7 @@ import { fmtTime, fmtNum, clamp } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
 import { trialScene, SCENE, heroCrop, PORTRAIT } from './scenes.js';
 import { MODES, NORMAL, VETERAN, ELITE, NIGHTMARE } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked } from '../shared/profile.js';
+import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked, wonElite } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from '../shared/progress.js';
 import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
@@ -294,6 +294,7 @@ export class ModeScreen {
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.45);
     header(ctx, W, 'Choose your Trial');
+    if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('begin');ui.lock(0.2); }return; }
     ui.begin(dt);
     const prof = app.store.profile;
     const hero = app.choice.hero;
@@ -347,6 +348,15 @@ export class ModeScreen {
       x += cw + 6;
     }
     const mode = app.choice.mode;
+    // The first time Ranked is the trial chosen, a word that it is always Elite (the 27 October 2026
+    // review, D10), said once and remembered with the settings (rankedNote).
+    if (mode === 'ranked' && !app.settings.rankedNote) {
+      app.settings.rankedNote = true;
+      saveSettings(app.settings);
+      this.dialog = new MenuDialog('Ranked is Elite', ['Ranked is always played on Elite: the night at full strength, and no dawn ever comes.', wonElite(prof) ? 'Your best time with each hero is kept as a personal record.' : 'You have not won a night on Elite yet: Survival on Elite is the place to learn it first.']);
+      ui.focus('detail_close');
+      ui.lock(0.2);
+    }
     const tw = Math.min(W - 20, 360);
     // The focused trial's description, or what it takes to unlock it: two lines kept for it, so
     // nothing under it moves as the focus does.
