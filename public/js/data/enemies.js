@@ -118,7 +118,7 @@ const MAP_KINDS = [
   ['frostslime', 'slime', { name: 'Frost Slime', death: 'ice', split: 'frostslimelet' }],
   ['frostslimelet', 'slimelet', { name: 'Frost Slimelet', death: 'ice' }],
   ['frostbitten', 'zombie', { name: 'Frostbitten', death: 'ice' }],
-  ['icespider', 'spider', { name: 'Ice Widow', death: 'ice' }],
+  ['icewidow', 'spider', { name: 'Ice Widow', death: 'ice' }],
   ['iceimp', 'imp', { name: 'Ice Imp', death: 'ice' }],
   ['frosthound', 'hellhound', { name: 'Winter Hound', death: 'ice' }],
   ['rimeknight', 'deathknight', { name: 'Rime Knight', death: 'ice' }],
