@@ -17,9 +17,10 @@
   #status{min-height:24px;color:#c9d5bd}small{color:#9aa7b5} @media(max-width:520px){main{padding:24px 12px}.cards{gap:8px}h2{font-size:16px;margin:12px 10px 0}.tag{margin-left:10px}}
 </style>
 <main>
-  <header><span class="eyebrow">Forest Survivor · Optional skins</span><h1>The hero wardrobe</h1><p>Familiar heroes, clearer materials. Compare the original art with nine new colour-refined looks, using the game's own animation and renderer.</p></header>
-  <nav aria-label="Preview controls"><select id="hero" aria-label="Hero"></select><button id="pause">Pause</button><button id="attack">Attack</button><button id="restart">Restart loop</button></nav>
-  <div class="cards"><article><h2>Original</h2><div class="tag">Your familiar look</div><canvas id="original" width="240" height="200" aria-label="Original hero animation"></canvas></article><article><h2 id="skin-name">New skin</h2><div class="tag">Optional · same abilities</div><canvas id="refined" width="240" height="200" aria-label="New hero skin animation"></canvas></article></div>
+  <header><span class="eyebrow">Forest Survivor · Version three</span><h1>Redrawn for battle</h1><p>Nine redesigned sprites: new silhouettes, connected anatomy and rebuilt equipment. Compare the original with version three through complete idle, walk and attack cycles.</p></header>
+  <nav aria-label="Preview controls"><select id="hero" aria-label="Hero"></select><button id="pause">Pause</button><button id="slow">Slow motion</button><button id="attack">Attack</button><button id="restart">Restart loop</button></nav>
+  <div class="cards"><article><h2>Original</h2><div class="tag">Before</div><canvas id="original" width="240" height="200" aria-label="Original hero animation"></canvas></article><article><h2 id="skin-name">Version three</h2><div class="tag">Redrawn model · optional skin</div><canvas id="v3" width="240" height="200" aria-label="Version three hero animation"></canvas></article></div>
+  <p id="changes"></p>
   <footer><button id="equip">Use this look</button><a href="../">Return to the game</a><small>Idle, walk and attack · both directions · 12-second loop</small></footer>
   <p id="status" role="status"></p><p>Choose <strong>LOOK</strong> beneath the hero preview in the game to switch at any time. Your original look remains the default. Skins do not unlock heroes or change their abilities.</p>
 </main>

@@ -12,7 +12,7 @@ import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 test('every hero has an original and optional look with complete sprites and poses', () => {
   for (const h of Object.values(HEROES)) {
-    assert.deepEqual(h.skins.map(s => s.id), ['original', 'refined'], h.id);
+    assert.deepEqual(h.skins.map(s => s.id), ['original', 'refined', 'v3'], h.id);
     for (const skin of h.skins) assert.ok(SPR[skin.sprite] && SPR[skin.pose], `${h.id}: ${skin.id} art`);
     assert.ok(SPR[h.sprite] && SPR[h.pose], `${h.id}: its sprite and pose`);
   }

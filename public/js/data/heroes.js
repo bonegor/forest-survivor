@@ -7,6 +7,7 @@
 
 import { WEAPONS } from './weapons.js';
 import { HERO_SKINS } from './hero-skins.js';
+import { HERO_V3 } from './hero-v3.js';
 
 // The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
 // wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
@@ -188,6 +189,7 @@ for (const [id, { name }] of Object.entries(HERO_SKINS)) {
   HEROES[id].skins = [
     { id: 'original', name: 'Original', sprite: id, pose: id + '_pose' },
     { id: 'refined', name, sprite: id + '_refined', pose: id === 'knight' ? 'knight_pose' : id + '_refined_pose' },
+    { id: 'v3', name: HERO_V3[id].name, sprite: id + '_v3', pose: id + '_v3_pose' },
   ];
 }
 

@@ -22,7 +22,7 @@ function decode(data) {
 
 // The in-game sprite. What glows in the dark: the colours baked with it (data.glow), or
 // emissive, palette keys as the art's own source sets them.
-function sheet(data, more = {}) {
+export function sheet(data, more = {}) {
   let frames;
   return {
     gen: () => (frames ??= decode(data)),
@@ -38,7 +38,7 @@ function sheet(data, more = {}) {
 
 // The menu pose: the idle loop at its own pace, cut down to the hero. Drawn at two thirds of
 // the old poses' scale (hires), as these are painted at about half again their detail.
-function pose(def) {
+export function pose(def) {
   let frames;
   const gen = () => {
     if (frames) return frames;

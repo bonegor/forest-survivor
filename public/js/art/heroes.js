@@ -5,6 +5,7 @@ import { ARCHER_SHEET, ARCHER_POSE, MAGE_SHEET, MAGE_POSE, NECROMANCER_SHEET, NE
   PALADIN_SHEET, PALADIN_POSE, DRUID_SHEET, DRUID_POSE, BERSERKER_SHEET, BERSERKER_POSE, WITCHHUNTER_SHEET, WITCHHUNTER_POSE } from './hero-sheets.js';
 import { KNIGHT_PORTRAIT_V2 } from './knight-portrait-v2.js';
 import { skinArt } from './hero-skins.js';
+import { HERO_V3_ART } from './hero-v3.js';
 
 export const HERO_ART = {
   // Mattz Art's plumed knight, selected from the free online sprite packs.
@@ -35,3 +36,4 @@ export const HERO_ART = {
 };
 
 Object.assign(HERO_ART, skinArt(HERO_ART));
+Object.assign(HERO_ART, HERO_V3_ART);
