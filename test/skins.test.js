@@ -1,7 +1,6 @@
 // A hero's looks (data/heroes.js skins), chosen on the hero screen and remembered with the
-// settings. Since 27 October 2026 every hero has one look and no LOOK button: the Paladin's two
-// (Style C and Style D) gave way to her holy crusader (lab paladin/knightstyle-e). The mechanism
-// stays for looks to come; a look a player once chose and that is gone plays as the hero's own.
+// settings. Each hero keeps the 27 October art as Original and has one optional
+// refined palette. Removed older looks still fall back to the original.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -11,9 +10,10 @@ import { SPR } from '../public/js/engine/sprites.js';
 import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
-test('every hero has one look, a full sprite and a pose of its own, and no LOOK to step through', () => {
+test('every hero has an original and optional look with complete sprites and poses', () => {
   for (const h of Object.values(HEROES)) {
-    assert.equal(h.skins, undefined, h.id);
+    assert.deepEqual(h.skins.map(s => s.id), ['original', 'refined'], h.id);
+    for (const skin of h.skins) assert.ok(SPR[skin.sprite] && SPR[skin.pose], `${h.id}: ${skin.id} art`);
     assert.ok(SPR[h.sprite] && SPR[h.pose], `${h.id}: its sprite and pose`);
   }
   const p = SPR[HEROES.paladin.sprite];

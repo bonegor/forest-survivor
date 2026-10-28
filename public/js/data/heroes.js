@@ -6,6 +6,7 @@
 // (startWeapons). Relics are shared by all.
 
 import { WEAPONS } from './weapons.js';
+import { HERO_SKINS } from './hero-skins.js';
 
 // The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
 // wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
@@ -180,6 +181,15 @@ export const HEROES = {
     ultDesc: 'For 4s foes are slowed by half; every bolt flies three at once and bursts.',
   },
 };
+
+// Original stays first: existing saves retain their look until a player chooses
+// an alternative with LOOK on the hero screen. These skins change no stats.
+for (const [id, { name }] of Object.entries(HERO_SKINS)) {
+  HEROES[id].skins = [
+    { id: 'original', name: 'Original', sprite: id, pose: id + '_pose' },
+    { id: 'refined', name, sprite: id + '_refined', pose: id === 'knight' ? 'knight_pose' : id + '_refined_pose' },
+  ];
+}
 
 // The light line drawn round a hero that has one (line: the Shadow) on the menus; none in play.
 export const HERO_LINE = '#d8e2f0';
