@@ -152,11 +152,12 @@ const click = (s, it) => {
   frame(s);
 };
 
-// The trial screen as the game shows it, past its lock.
-function trialScreen(profile = defaultProfile(), choice = {}) {
+// The trial screen as the game shows it, past its lock. settings: what the settings already hold
+// (rankedNote: Endless's word that it is always Elite already said).
+function trialScreen(profile = defaultProfile(), choice = {}, settings = {}) {
   jar.clear();
   const app = {
-    ui: new UI(), scene: { draw() {} }, store: { profile }, settings: loadSettings(),
+    ui: new UI(), scene: { draw() {} }, store: { profile }, settings: { ...loadSettings(), ...settings },
     choice: { hero: 'knight', mode: 's15', diff: 'medium', nightmare: false, ...choice },
     go(name) {
       this.went = name;
@@ -259,8 +260,10 @@ test('moving along the trials or the difficulties picks them; up and down come b
 });
 
 test('Ranked\'s trial card shows no box, and a Nightmare ticked before plays Ranked as Ranked', () => {
-  const { app } = trialScreen(unlockEverything(defaultProfile()), { mode: 'ranked', nightmare: true });
+  // Its word that it is always Elite said before: the trial screen itself, no note over it.
+  const { app } = trialScreen(unlockEverything(defaultProfile()), { mode: 'ranked', nightmare: true }, { rankedNote: true });
   assert.equal(app.choice.mode, 'ranked');
+  assert.ok(item(app, 'begin') && item(app, 'm_ranked'), 'the trial screen drawn');
   assert.equal(item(app, 'nightmare'), undefined);
   assert.equal(item(app, 'd_hard'), undefined);
   const g = game({ mode: 'ranked', diff: app.choice.diff, nightmare: app.choice.nightmare });
@@ -271,8 +274,16 @@ test('Ranked\'s trial card shows no box, and a Nightmare ticked before plays Ran
 // The 27 October 2026 review (D10): Ranked is always Elite, and nothing said so to a Normal player.
 test('the first time Ranked is chosen a word says it is always Elite, once', () => {
   const { s, app } = trialScreen(unlockEverything(defaultProfile()), { mode: 'ranked' });
-  assert.equal(s.dialog?.title, 'Ranked is Elite');
+  assert.equal(s.dialog?.title, 'Always Elite');
   assert.equal(loadSettings().rankedNote, true, 'remembered with the settings');
+  // Closed with Enter, the focus is back on the trial, not on BEGIN (27 October 2026: browsing onto
+  // it and closing the note, the next Enter began the run).
+  input.justDown.add('Enter');
+  frame(s);
+  frame(s);
+  assert.equal(s.dialog, null, 'closed');
+  assert.equal(app.ui.focusId, 'm_ranked');
+  assert.equal(app.started, undefined, 'and nothing begun');
   const again = new ModeScreen();
   again.enter(app);
   for (let i = 0; i < 5; i++) frame(again);

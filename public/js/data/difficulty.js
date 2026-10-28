@@ -46,7 +46,8 @@ export const NORMAL_XP = 6;
 // sends more of the night's monsters from a minute of it on (spawner.js lateMore). The id
 // stays 'hard' so saves and run reports keep their shape. xp multiplies the experience of the
 // horde the Spawner sends (Spawner.update and fire: the steady horde, swarms, rings, packs and
-// jolts), never a champion's, the thief's, a boss's or a crypt's; Veteran has Elite's 1.
+// jolts, and the slimelets its slimes split into: Enemy xpMul), never a champion's, the thief's, a
+// boss's or a crypt's; Veteran has Elite's 1.
 // The gold a run brings home is the profile's to weigh (shared/profile.js DIFF_GOLD).
 export const ELITE = {
   id: 'hard',
@@ -158,5 +159,8 @@ export const moveFor = (mode, id) => GAME_SPEED * (diffFor(mode, id).pace ?? 1);
 export const MODES = {
   s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn in the Darkwood.' },
   dungeon: { id: 'dungeon', name: 'Dungeon Run', sub: '3 floors', desc: 'Slay each floor\'s guardian and descend. Defeat the Demon Lord.' },
-  ranked: { id: 'ranked', name: 'Ranked', sub: 'Endless', desc: 'No dawn. The night grows deadlier forever. How long can you last?' },
+  // Shown as Endless, its id still 'ranked' so saves, cookies and run reports keep their shape (the
+  // 27 October 2026 review, D10: it keeps personal bests only, and a player reading "Ranked" looks
+  // for a leaderboard).
+  ranked: { id: 'ranked', name: 'Endless', sub: 'night', desc: 'No dawn. The night grows deadlier forever. How long can you last?' },
 };

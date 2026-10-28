@@ -1112,7 +1112,9 @@ export class Game {
     }
     if (e.def.split && !o.noSplit) {
       for (let i = 0; i < e.def.splitN; i++) {
-        const c = this.spawnEnemy(e.def.split, e.x + rand(-5, 5), e.y + rand(-5, 5), { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, instant: true, aware: true });
+        // Its experience as its own: a Normal horde slime's slimelets pay NORMAL_XP times theirs,
+        // a champion's or a crypt's as ever (Enemy xpMul).
+        const c = this.spawnEnemy(e.def.split, e.x + rand(-5, 5), e.y + rand(-5, 5), { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, instant: true, aware: true, xpMul: e.xpMul });
         if (c) {
           c.kx = rand(-60, 60);
           c.ky = rand(-60, 60);
@@ -2035,12 +2037,13 @@ export class Game {
   }
 
   // A boss caught by the sunrise (the dawn's update): it fades and flickers over DAWN_BURN.boss s,
-  // sparks pouring off it, then a last flare. Not a kill: no loot, no tally.
+  // sparks pouring off it, then a last flare. Not a kill: no loot, no tally. The flicker is the
+  // burn's tint (Enemy.draw burnT), steady with FLASHES: SOFT: a white frame every tenth of a
+  // second over a boss 57 px tall was the white pulse that option holds back (27 October 2026).
   burnBoss(e, dt) {
     e.burnT += dt;
     const k = Math.min(1, e.burnT / DAWN_BURN.boss);
     e.alpha = (e.def.alpha || 1) * (1 - k);
-    e.flash = this.frame % 6 < 3 ? 0.05 : 0;
     if (this.frame % 2 === 0) this.particles.burst(e.x + rand(-e.hr, e.hr), e.y, rand(4, e.h), 4, [PC.y, PC.o, PC.w], 60, 0.9, 1, P.GLOW | P.FADE, { vz: 60 });
     if (k >= 1) {
       e.dead = true;

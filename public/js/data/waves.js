@@ -128,6 +128,17 @@ export function kindsBy(minute) {
   return out;
 }
 
+// The same kinds, each with its weight in the latest of those pockets that sent it: how much of the
+// last stand's ring is of it (Spawner.fire). An even share each made the Cultist a fifteenth of the
+// ring, against a twenty-fourth of the horde round it, some 95 of them closing in at once on Elite
+// (27 October 2026; Cultists are few, big and slow, the owner's): by the night's own weights it is
+// as few as anywhere, the least weighed of the kinds.
+export function kindWeightsBy(minute) {
+  const w = {};
+  for (const p of POCKETS) if (p.minutes[0] < minute) Object.assign(w, p.spawn);
+  return kindsBy(minute).map((k) => [k, w[k]]);
+}
+
 // The owner's (22 October 2026): a swarm "should be 3x bigger ... in jolts of 3 to 5 ... warning
 // comes, few seconds later, a swarm. Few seconds later new warning, few seconds later new swarm",
 // then "during a swarm batch have this done 2-5 times". Each swarm of EVENTS comes as a batch of

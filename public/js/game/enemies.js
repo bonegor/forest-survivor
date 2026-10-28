@@ -177,7 +177,11 @@ export class Enemy {
     this.turnT = 0;
     this.wanderA = 0;
     this.dmg = def.dmg * (o.dmgMul ?? 1);
-    this.xp = def.xp * (o.xpMul ?? 1); // the difficulty's horde experience (difficulty.js xp; Spawner)
+    // The difficulty's horde experience (difficulty.js xp; Spawner), kept so a slime's slimelets pay
+    // as it does (Game.killEnemy's split; 27 October 2026: on Normal a horde slime paid 12 and its
+    // slimelets 1 each).
+    this.xpMul = o.xpMul ?? 1;
+    this.xp = def.xp * this.xpMul;
     this.face = Math.random() < 0.5 ? -1 : 1;
     this.anim = rand(10);
     this.flash = 0;
@@ -778,6 +782,11 @@ export class Enemy {
     if (this.flash > 0) {
       img = fr.white(flip);
       look = -1;
+    } else if (this.burnT > 0 && (this.g.settings.softFlash === true || Math.floor(this.burnT * 10) % 2 === 0)) {
+      // Burning in the sunrise (Game.burnBoss): the burn's tint flickering, held steady with
+      // FLASHES: SOFT, never a white frame.
+      img = fr.variant('burn', TINTS.burn, flip);
+      look = 2;
     } else if (this.freezeT > 0) {
       img = fr.variant('frozen', TINTS.frozen, flip);
       look = 1;

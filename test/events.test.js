@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, DAWN_BURN } from '../public/js/game/game.js';
-import { EVENTS, SWARM_BATCH, LAST_STAND, kindsBy, SURVIVAL_BOSSES } from '../public/js/data/waves.js';
+import { EVENTS, SWARM_BATCH, LAST_STAND, kindsBy, kindWeightsBy, SURVIVAL_BOSSES } from '../public/js/data/waves.js';
 import { minuteMore, RING } from '../public/js/game/spawner.js';
 import { ELITE } from '../public/js/data/difficulty.js';
 import { ENEMIES } from '../public/js/data/enemies.js';
@@ -218,6 +218,15 @@ test('the last stand: every kind of the night in a ring, and a pack of champions
     const ring = asked.filter((a) => !a.elite);
     assert.deepEqual(new Set(ring.map((a) => a.type)), new Set(kindsBy(14)), 'every kind the night has brought');
     assert.equal(kindsBy(14).length, 15);
+    // Each as much of the ring as the night weighs it, the Cultists as few as anywhere (27 October
+    // 2026: an even share made them a fifteenth of it, some 95 at once on Elite).
+    const weights = kindWeightsBy(14), total = weights.reduce((s, [, w]) => s + w, 0);
+    assert.deepEqual(weights.map(([k]) => k), kindsBy(14));
+    for (const [k, w] of weights) {
+      const n = ring.filter((a) => a.type === k).length;
+      assert.ok(Math.abs(n - (ring.length * w) / total) < 1, `${k}: ${n} of ${ring.length}, its weight ${w} of ${total}`);
+    }
+    assert.equal(Math.min(...weights.map(([, w]) => w)), weights.find(([k]) => k === 'cultist')[1], 'the Cultist the least weighed');
     assert.equal(ring.length, Math.round(LAST_STAND.count * ELITE.horde * minuteMore(LAST_STAND.at)) * RING.more, 'as many as a ring of its count');
     assert.equal(asked.filter((a) => a.elite).length, LAST_STAND.champions, 'and its champions');
     assert.ok(!subs.some((s) => s && s.endsWith('champion')), 'without their names\' banners');

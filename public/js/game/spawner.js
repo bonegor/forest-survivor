@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { EVENTS, LAST_STAND, kindsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { EVENTS, LAST_STAND, kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
@@ -73,6 +73,20 @@ export const PACK_LEAST = 6;
 export const JOLT = { every: [30, 90], count: 6, spread: 0.45, pace: ['swift', 'quick'] };
 // What a jolt never is: the shooters (Cultists, Skeleton Archers) and any kind not of JOLT.pace.
 const JOLT_NOT = Object.keys(ENEMIES).filter((type) => ENEMIES[type].shot || !JOLT.pace.includes(PACE_OF[type]));
+
+// n kinds by weight ([kind, weight] rows), spread evenly: each slot goes to the kind furthest behind
+// its share so far (a smooth weighted round-robin), so each comes within one of n times its share of
+// the weight and none in a clump (the last stand's ring, Spawner.fire).
+export function spreadKinds(rows, n) {
+  const total = rows.reduce((s, [, w]) => s + w, 0), owed = rows.map(() => 0), out = [];
+  for (let i = 0; i < n; i++) {
+    let best = 0;
+    for (let j = 0; j < rows.length; j++) if ((owed[j] += rows[j][1]) > owed[best]) best = j;
+    out.push(rows[best][0]);
+    owed[best] -= total;
+  }
+  return out;
+}
 
 export const WAVE = { first: 45, every: 75, length: 15, peak: 1.5 };
 export function waveAt(t) {
@@ -365,17 +379,18 @@ export class Spawner {
       case 'ring':
       case 'stand': {
         // The last stand (data/waves.js LAST_STAND) is a ring of every kind the night has brought,
-        // one after another round it, those that shoot or lunge as few as anywhere (pickType's
-        // few), and a pack of champions together at one spot, without their names' banners.
-        const kinds = ev.type === 'stand' ? kindsBy(minuteOf(phase)) : [ev.enemy];
+        // each as much of it as the night weighs it (kindWeightsBy), spread evenly round it
+        // (spreadKinds), those that shoot or lunge as few as anywhere (pickType's few), and a pack
+        // of champions together at one spot, without their names' banners.
         const R0 = Math.hypot(cam.W, cam.H) * 0.5 + 10;
         const count = ev.count * RING.more, per = Math.ceil(count / RING.layers);
+        const kinds = ev.type === 'stand' ? spreadKinds(kindWeightsBy(minuteOf(phase)), count) : null;
         for (let i = 0; i < count; i++) {
           const layer = Math.floor(i / per), R = R0 + layer * RING.gap;
           const a = ((i % per) + (layer % 2) * 0.5) / per * TAU;
           const spot = g.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
           if (!spot) continue;
-          const type = kinds[i % kinds.length];
+          const type = kinds ? kinds[i] : ev.enemy;
           if (ev.type === 'stand' && isFew(type) && Math.random() >= g.diff.few) continue;
           if (shut(g.spawnEnemy(type, spot.x, spot.y, { ...st, instant: true, aware: true, sent: true }))) break;
         }

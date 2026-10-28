@@ -17,7 +17,8 @@ const prevHero = (id) => HERO_ORDER[HERO_ORDER.indexOf(id) - 1];
 
 // One line describing the player's next goal (see nextGoal()).
 export function goalText(goal) {
-  if (!goal) return 'Every trial is open. Climb the Ranked ladder!';
+  // Ranked is shown as Endless (data/difficulty.js MODES; the 27 October 2026 review, D10).
+  if (!goal) return 'Every trial is open. Climb the ranks of the Endless night!';
   switch (goal.type) {
     case 'survive':
       return `Survive ${goal.minutes} minutes with ${title(goal.hero)} to unlock ${title(goal.unlocks)}`;
@@ -27,10 +28,10 @@ export function goalText(goal) {
         : `Survive 15 minutes with ${title(goal.hero)} to unlock ${title(goal.unlocks)}`;
     case 'dungeon':
       return goal.unlocks === 'ranked'
-        ? `Beat the Dungeon with ${title(goal.hero)} to unlock Ranked`
+        ? `Beat the Dungeon with ${title(goal.hero)} to unlock the Endless night`
         : `Beat the Dungeon with ${title(goal.hero)} to bring ${title(goal.unlocks)} into it`;
     case 'elite':
-      return 'Win a night on Elite in Survival: Ranked is always played on Elite';
+      return 'Win a night on Elite in Survival: the Endless night is always played on Elite';
     default:
       return '';
   }
@@ -52,7 +53,7 @@ export function unlockText(key) {
   if (kind === 'hero') return `${cap(title(id))} is unlocked!`;
   if (kind === 'dungeon') return `${cap(title(id))} may now enter the Dungeon!`;
   if (key === 'mode:dungeon') return 'The Dungeon is open, starting with the Knight!';
-  if (key === 'mode:ranked') return 'Ranked unlocked: the endless night awaits!';
+  if (key === 'mode:ranked') return 'The Endless night is open: no dawn awaits!';
   return '';
 }
 

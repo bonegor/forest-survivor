@@ -294,7 +294,10 @@ export class ModeScreen {
     app.scene.draw(ctx, W, H, dt, { campfire: false });
     dim(ctx, W, H, 0.45);
     header(ctx, W, 'Choose your Trial');
-    if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('begin');ui.lock(0.2); }return; }
+    // The note closed (below), the focus goes back onto the trials, not on to BEGIN: moving along
+    // them picks one (the owner's, 23 October 2026), so one browsing onto Endless and closing its
+    // note with Enter would have begun an Elite run with the next (27 October 2026).
+    if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('m_' + app.choice.mode);ui.lock(0.2); }return; }
     ui.begin(dt);
     const prof = app.store.profile;
     const hero = app.choice.hero;
@@ -348,12 +351,12 @@ export class ModeScreen {
       x += cw + 6;
     }
     const mode = app.choice.mode;
-    // The first time Ranked is the trial chosen, a word that it is always Elite (the 27 October 2026
-    // review, D10), said once and remembered with the settings (rankedNote).
+    // The first time Ranked (shown as Endless) is the trial chosen, a word that it is always Elite
+    // (the 27 October 2026 review, D10), said once and remembered with the settings (rankedNote).
     if (mode === 'ranked' && !app.settings.rankedNote) {
       app.settings.rankedNote = true;
       saveSettings(app.settings);
-      this.dialog = new MenuDialog('Ranked is Elite', ['Ranked is always played on Elite: the night at full strength, and no dawn ever comes.', wonElite(prof) ? 'Your best time with each hero is kept as a personal record.' : 'You have not won a night on Elite yet: Survival on Elite is the place to learn it first.']);
+      this.dialog = new MenuDialog('Always Elite', ['The Endless night is always played on Elite: the night at full strength, and no dawn ever comes.', wonElite(prof) ? 'Your best time with each hero is kept as a personal record.' : 'You have not won a night on Elite yet: Survival on Elite is the place to learn it first.']);
       ui.focus('detail_close');
       ui.lock(0.2);
     }
@@ -370,9 +373,9 @@ export class ModeScreen {
     let ty = y + ch + 25;
     const note = [];
     if (mode === 'ranked') {
-      note.push(['Endless personal bests · Elite difficulty', '#8b9bb4']);
+      note.push(['Personal bests · Elite difficulty', '#8b9bb4']);
       const best = prof.ranked[hero] || 0;
-      note.push([best ? `Your best with the ${HEROES[hero].title}: ${fmtTime(best)} · ${rankTitle(best).toUpperCase()}` : `No Ranked run with the ${HEROES[hero].title} yet`, '#feae34']);
+      note.push([best ? `Your best with the ${HEROES[hero].title}: ${fmtTime(best)} · ${rankTitle(best).toUpperCase()}` : `No Endless run with the ${HEROES[hero].title} yet`, '#feae34']);
     } else {
       const elite = app.choice.diff === ELITE.id, nightmare = elite && app.choice.nightmare === true;
       const DIFF_ROW = [NORMAL, VETERAN, ELITE];
@@ -818,7 +821,8 @@ export class RecordsScreen {
     // Three tabs side by side, narrower on a narrow screen.
     const tabs = ['overview', 'heroes', 'ranked'], tw = Math.min(100, Math.floor((W - 24 - 8 * (tabs.length - 1)) / tabs.length));
     const tx = Math.round(W / 2 - (tabs.length * tw + 8 * (tabs.length - 1)) / 2);
-    for (const [i, id] of tabs.entries()) if (button(ctx, ui, 'records_' + id, tx + i * (tw + 8), 28, tw, 15, id.toUpperCase(), { on: this.tab === id })) this.tab = id;
+    // Ranked's tab under the name it is shown by (data/difficulty.js MODES: Endless).
+    for (const [i, id] of tabs.entries()) if (button(ctx, ui, 'records_' + id, tx + i * (tw + 8), 28, tw, 15, (id === 'ranked' ? MODES.ranked.name : id).toUpperCase(), { on: this.tab === id })) this.tab = id;
     if (this.tab === 'heroes') this.drawHeroes(ctx, W, H, p);
     const rows = this.tab === 'heroes' ? [] : this.tab === 'overview' ? [
       ['Nights won', String(p.wins.s15.reduce((a,b) => a+b, 0))],
@@ -834,7 +838,7 @@ export class RecordsScreen {
       const y = 61 + i * step;
       if (this.tab === 'ranked' && ui.item('record_' + HERO_ORDER[i], x + 6, y - 2, w - 12, step)) {
         const best = p.ranked[HERO_ORDER[i]] || 0;
-        this.dialog = new MenuDialog(HEROES[HERO_ORDER[i]].title, [`Personal best: ${fmtTime(best)}`, `Title: ${rankTitle(best)}`, modeUnlocked(p, 'ranked') ? 'Endless runs on Elite. Your records are personal, not a shared leaderboard.' : 'Beat the Dungeon with the Necromancer to unlock Ranked.']);ui.focus('detail_close');ui.lock(0.2);
+        this.dialog = new MenuDialog(HEROES[HERO_ORDER[i]].title, [`Personal best: ${fmtTime(best)}`, `Title: ${rankTitle(best)}`, modeUnlocked(p, 'ranked') ? 'Endless runs on Elite. Your records are personal, not a shared leaderboard.' : 'Beat the Dungeon with the Necromancer to unlock the Endless night.']);ui.focus('detail_close');ui.lock(0.2);
       }
       if (i % 2 === 0) { ctx.fillStyle = '#1d1b2a';ctx.fillRect(x + 3, y - 2, w - 6, step); }
       drawText(ctx, label, x + 10, y, { color: ui.focused('record_' + HERO_ORDER[i]) ? '#fee761' : '#c0cbdc' });

@@ -379,6 +379,9 @@ test('Normal\'s horde pays NORMAL_XP times the experience; champions, crypts and
     delete g.spawnEnemy; // back to the game's own
     assert.equal(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true, xpMul: k }).xp, 2 * k, `${diff}: a skeleton's 2, times ${k}`);
     assert.equal(g.spawnBoss('boneking', p.x + 80, p.y, { sleeping: true }).xp, ENEMIES.boneking.xp, `${diff}: a boss's as ever`);
+    // A horde slime's slimelets pay as it does (27 October 2026: on Normal they paid 1 each).
+    const slime = g.spawnEnemy('slime', p.x + 60, p.y, { instant: true, xpMul: k });
+    assert.deepEqual(asks(g, () => g.killEnemy(slime)).map((o) => [o.type, o.xpMul]), [['slimelet', k], ['slimelet', k]], `${diff}: its slimelets times ${k}`);
   }
   // Fired at 9½ minutes: Normal's wolves, an eighth of Veteran's third, were round(2.47) = 2.
   const n = game({ diff: 'easy' });
