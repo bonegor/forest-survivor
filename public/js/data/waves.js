@@ -30,7 +30,8 @@ export const POCKETS = [
 // The minute of the night a phase stands for: 1.4 phases a minute up to
 // minute 15 (phase 21), then Ranked's 0.9 a minute.
 export const minuteOf = (phase) => (phase <= 21 ? phase / 1.4 : 15 + (phase - 21) / 0.9);
-export const pocketAt = (minute) => POCKETS.find((p) => minute >= p.minutes[0] && minute < p.minutes[1]) || POCKETS[POCKETS.length - 1];
+// The pocket of a minute, of the Darkwood's night or of a Survival map's own (data/maps.js pockets).
+export const pocketAt = (minute, pockets = POCKETS) => pockets.find((p) => minute >= p.minutes[0] && minute < p.minutes[1]) || pockets[pockets.length - 1];
 
 // The steady horde comes at a rate, the owner's (26 October 2026): "not looking at how many monsters
 // are alive ... alive monsters are just alive and for the player to deal with and should not affect
@@ -121,10 +122,11 @@ export const EVENTS = [
 // told like any event in its own words and sting (events.js, audio.js warnstand).
 export const LAST_STAND = { at: 19.6, type: 'stand', enemy: 'all', count: 36, champions: 3 };
 
-// Every kind of monster the night's pockets have brought by a minute of it, in the order they came.
-export function kindsBy(minute) {
+// Every kind of monster the night's pockets have brought by a minute of it, in the order they came
+// (the Darkwood's, or a Survival map's own: data/maps.js pockets).
+export function kindsBy(minute, pockets = POCKETS) {
   const out = [];
-  for (const p of POCKETS) if (p.minutes[0] < minute) for (const k of Object.keys(p.spawn)) if (!out.includes(k)) out.push(k);
+  for (const p of pockets) if (p.minutes[0] < minute) for (const k of Object.keys(p.spawn)) if (!out.includes(k)) out.push(k);
   return out;
 }
 
@@ -133,10 +135,10 @@ export function kindsBy(minute) {
 // ring, against a twenty-fourth of the horde round it, some 95 of them closing in at once on Elite
 // (27 October 2026; Cultists are few, big and slow, the owner's): by the night's own weights it is
 // as few as anywhere, the least weighed of the kinds.
-export function kindWeightsBy(minute) {
+export function kindWeightsBy(minute, pockets = POCKETS) {
   const w = {};
-  for (const p of POCKETS) if (p.minutes[0] < minute) Object.assign(w, p.spawn);
-  return kindsBy(minute).map((k) => [k, w[k]]);
+  for (const p of pockets) if (p.minutes[0] < minute) Object.assign(w, p.spawn);
+  return kindsBy(minute, pockets).map((k) => [k, w[k]]);
 }
 
 // The owner's (22 October 2026): a swarm "should be 3x bigger ... in jolts of 3 to 5 ... warning

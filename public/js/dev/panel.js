@@ -11,11 +11,11 @@ import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weap
 import { PASSIVES, PASSIVE_IDS } from '../data/passives.js';
 import { MODES } from '../data/difficulty.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, minuteOf, pocketAt } from '../data/waves.js';
+import { FLOORS, RANKED_BOSSES, RANKED_BOSS_EVERY, minuteOf, pocketAt } from '../data/waves.js';
+import { MAPS } from '../data/maps.js';
 import { fmtTime } from '../engine/util.js';
 import { DEBUG } from '../engine/storage.js';
 import { xpFor } from '../game/player.js';
-import { SKIES } from '../game/weather.js';
 import { goalText } from '../ui/ladder.js';
 
 const BOSSES = Object.keys(ENEMIES).filter((id) => ENEMIES[id].boss);
@@ -205,6 +205,9 @@ export function createDevPanel(app) {
 
   const allHeroes = (d) => { d.heroes = [...P.HERO_ORDER]; };
   const feat = (d, heroes, bits) => { for (const h of heroes) d.feats[h] = (d.feats[h] || 0) | bits; };
+  // Every Survival map open (profile mo, as P.openEverything opens them; 28 October 2026): the marks
+  // the presets give open none, as only a night won on the map before one does (mw).
+  const allMaps = (d) => { d.mo = 2 ** P.PROGRESS.maps.length - 1; };
 
   function num(get, set, { min = 0, max = 1e9, width } = {}) {
     const i = el('input', { type: 'number', min, max, value: get() });
@@ -232,19 +235,21 @@ export function createDevPanel(app) {
       el('h3', { textContent: 'Presets' }),
       el('div', { class: 'row' },
         preset('Fresh start', (x) => Object.assign(x, P.defaultProfile())),
-        preset('Survival ladder done', (x) => { allHeroes(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard); }),
-        preset('Dungeon open to all', (x) => { allHeroes(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard); feat(x, P.LADDER.slice(0, -1), P.FEAT.dungeon); }),
-        preset('Unlock everything', (x) => { allHeroes(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard | P.FEAT.dungeon); }),
+        preset('Survival ladder done', (x) => { allHeroes(x); allMaps(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard); }),
+        preset('Dungeon open to all', (x) => { allHeroes(x); allMaps(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard); feat(x, P.LADDER.slice(0, -1), P.FEAT.dungeon); }),
+        preset('Unlock everything', (x) => { allHeroes(x); allMaps(x); feat(x, P.HERO_ORDER, P.FEAT.survivalHard | P.FEAT.dungeon); }),
         preset('+10 000 gold', (x) => { x.gold += 10000; }),
         preset('Max Armory', (x) => { for (const u of P.UPGRADES) x.up[u.id] = u.max; }),
         preset('Clear Armory', (x) => { x.up = {}; }),
       ),
     );
 
-    // What the ladder currently says.
+    // What the ladder currently says, and Survival's maps open (28 October 2026; only the presets
+    // above and the raw JSON below change them).
     const goal = P.nextGoal(d);
     const open = P.MODES.filter((m) => P.modeUnlocked(d, m)).map((m) => MODES[m].name).join(', ');
-    body.append(el('p', { class: 'note' }, `Open trials: ${open}. Next goal: ${goalText(goal)}`));
+    const maps = P.PROGRESS.mapLadder.filter((m) => P.mapOpen(d, m)).map((m) => MAPS[m].name).join(', ') || 'none';
+    body.append(el('p', { class: 'note' }, `Open trials: ${open}. Survival maps: ${maps}. Next goal: ${goalText(goal)}`));
 
     body.append(el('h3', { textContent: 'Gold' }), el('div', { class: 'row' }, num(() => d.gold, (v) => { d.gold = v; }, { width: '120px' })));
 
@@ -400,17 +405,18 @@ export function createDevPanel(app) {
     return r > 0 ? `${PASSIVES[id].name} rank ${r}` : `${PASSIVES[id].name} taken away`;
   }
 
-  // What the clock's minute brings: that minute's pocket of the horde (data/waves.js POCKETS),
-  // the commonest first, and the boss that comes next.
+  // What the clock's minute brings: that minute's pocket of the horde, of the run's map (data/maps.js
+  // pockets; the Darkwood's are data/waves.js POCKETS), the commonest first, and the boss that comes
+  // next (its map's, in Survival).
   function minuteText(g) {
-    const m = minuteOf(g.phase), pk = pocketAt(m), [a, b] = pk.minutes;
+    const m = minuteOf(g.phase), pk = pocketAt(m, g.map.pockets), [a, b] = pk.minutes;
     const foes = Object.entries(pk.spawn).sort((x, y) => y[1] - x[1]).map(([id]) => foeName(id)).join(', ');
     const sp = g.spawner;
     let boss;
     if (g.mode === 'dungeon') boss = `This floor's guardian: ${foeName(FLOORS[g.floor - 1].guardian)}.`;
     else if (g.mode === 'ranked') boss = `Next boss: ${foeName(RANKED_BOSSES[sp.bossIdx % RANKED_BOSSES.length])} at ${fmtTime((sp.bossIdx + 1) * RANKED_BOSS_EVERY)}.`;
     else {
-      const next = (SURVIVAL_BOSSES[g.mode] || [])[sp.bossIdx];
+      const next = (g.mode === 's15' ? g.map.bosses : [])[sp.bossIdx];
       boss = next ? `Next boss: ${foeName(next.id)} at ${fmtTime(next.at)}.` : 'No boss left before dawn.';
     }
     return `Minute ${Math.floor(m)} of the night (pocket ${a}-${b === Infinity ? '' : b}): ${foes}. ${boss}`;
@@ -550,7 +556,8 @@ weather ${g.weather.kind} · rain ${g.weather.now.rain.toFixed(2)}` : '');
         }),
       ),
       // The weather from now on (weather.js Weather.force): in over a few seconds, the forecast after it made again.
-      el('div', { class: 'row' }, ...(g.weather ? Object.keys(SKIES) : []).map((k) => act(`Weather: ${k}`, (g2) => {
+      // The run's climate's skies (its map's look's: the Darkwood's clear and rain, the Sunscorch's sandstorm...).
+      el('div', { class: 'row' }, ...(g.weather ? Object.keys(g.weather.skies) : []).map((k) => act(`Weather: ${k}`, (g2) => {
         g2.weather.force(k);
         return `The weather turns to ${k}`;
       }))),

@@ -21,6 +21,16 @@ export const LIGHT_COLORS = {
   gold: [255, 210, 90],
   moon: [170, 185, 255],
   blue: [90, 140, 255],
+  // The Survival maps' own (28 October 2026, game/biomes.js): the Abyss's embers, a deeper orange
+  // than a fire's, flickering as one does (a look's `flicker`); the Frostfell's ice, a paler blue
+  // than the cyan; the Bloomvale's pink.
+  ember: [255, 110, 40],
+  ice: [150, 215, 255],
+  pink: [255, 140, 205],
+  // The Sunscorch's night-blooming cacti: the moon's own colour under a key of their own, so that
+  // the look softens them (its lightK) without dimming every moonlit thing on the map with them
+  // (the glades' sword in the stone, darkwood.js, burns as it does on every other map).
+  bloom: [170, 185, 255],
 };
 
 const sprites = {};
@@ -44,8 +54,9 @@ function lightSprite(key) {
   return c;
 }
 
-const LS = 2; // world pixels per light-map pixel
+export const LS = 2; // world pixels per light-map pixel (forest.js keeps the cracks' glow at this grain)
 const MAXL = 700;
+const MAXG = 64; // glowing pieces of ground a frame (glow)
 
 export class Lighting {
   constructor() {
@@ -57,6 +68,13 @@ export class Lighting {
     this.lr = new Float32Array(MAXL);
     this.li = new Float32Array(MAXL);
     this.lk = new Array(MAXL);
+    this.m = 0;
+    this.gi = new Array(MAXG).fill(null);
+    this.gx = new Float32Array(MAXG);
+    this.gy = new Float32Array(MAXG);
+    this.gw = new Float32Array(MAXG);
+    this.gh = new Float32Array(MAXG);
+    this.ga = new Float32Array(MAXG);
   }
 
   add(x, y, r, key = 'warm', intensity = 1) {
@@ -67,6 +85,22 @@ export class Lighting {
     this.lr[i] = r;
     this.li[i] = intensity;
     this.lk[i] = key;
+  }
+
+  // Ground that glows (28 October 2026: the Abyss's cracks, forest.js addLights): img, its glow in
+  // colour and clear elsewhere, laid over the world at x, y (w by h world px), added to this frame's
+  // light as the lights are, at alpha a. So it lights the night where it lies, and whatever stands
+  // over it is lit by it rather than painted over. A chunk's comes already at the light map's grain
+  // (LS world px a pixel, forest.js generate), so it is laid on pixel for pixel, nothing filtered.
+  glow(img, x, y, w, h, a = 1) {
+    if (this.m >= MAXG) return;
+    const i = this.m++;
+    this.gi[i] = img;
+    this.gx[i] = x;
+    this.gy[i] = y;
+    this.gw[i] = w;
+    this.gh[i] = h;
+    this.ga[i] = a;
   }
 
   render(ctx, cam, ambient) {
@@ -91,6 +125,15 @@ export class Lighting {
       g.globalAlpha = Math.min(1, this.li[i]);
       g.drawImage(lightSprite(this.lk[i]), x - r, y - r, r * 2, r * 2);
     }
+    for (let i = 0; i < this.m; i++) {
+      const x = this.gx[i] / LS - bx, y = this.gy[i] / LS - by, w = this.gw[i] / LS, h = this.gh[i] / LS;
+      if (x + w > 0 && y + h > 0 && x < lw && y < lh) {
+        g.globalAlpha = Math.max(0, Math.min(1, this.ga[i]));
+        g.drawImage(this.gi[i], x, y, w, h);
+      }
+      this.gi[i] = null; // a chunk let go is not kept for its glow
+    }
+    this.m = 0;
     g.globalAlpha = 1;
     g.globalCompositeOperation = 'source-over';
 

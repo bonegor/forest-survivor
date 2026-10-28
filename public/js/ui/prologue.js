@@ -3,7 +3,8 @@ import { input } from '../engine/input.js';
 import { view } from '../engine/view.js';
 import { saveSettings } from '../engine/storage.js';
 import { clamp } from '../engine/util.js';
-import { button, panel, dim, drawText, wrapText } from './ui.js';
+import { FIRST_MAP } from '../data/maps.js';
+import { button, panel, dim, drawText, wrapText, textWidth } from './ui.js';
 
 export class PrologueScreen {
   enter(app, params = {}) {
@@ -39,9 +40,13 @@ export class PrologueScreen {
       app.go('title');
       return;
     }
+    // The road ends in the desert, and the first night is spent there (the owner's, 28 October 2026:
+    // "the first one where we start is the desert map"; data/maps.js FIRST_MAP), as is the trial
+    // screen's until another map is picked: saved with the intro done, in the one write.
     app.settings.prologueDone = true;
+    app.settings.map = FIRST_MAP;
     saveSettings(app.settings);
-    app.choice = { hero: 'knight', mode: 's15', diff: 'easy', nightmare: false };
+    app.choice = { hero: 'knight', mode: 's15', diff: 'easy', nightmare: false, map: FIRST_MAP };
     // These coins join the first night and are banked with its ordinary end-of-run save.
     app.go('game', { prologueGold: this.game.gold });
   }
@@ -73,8 +78,9 @@ export class PrologueScreen {
     const ctx = view.uctx, W = view.W, H = view.H;
     ctx.clearRect(0, 0, W, H);
     if (this.arrival !== null) {
-      drawText(ctx, 'The Darkwood', W / 2, H / 2 - 20, { align: 'center', color: '#fee761', font: 'gothic' });
-      const lines = wrapText('By dusk, Aldric reached the Darkwood. Something stirred between the trees.', Math.min(290, W - 32));
+      // The road's end, the Sunscorch: the desert of the first night (28 October 2026).
+      drawText(ctx, 'The Sunscorch', W / 2, H / 2 - 20, { align: 'center', color: '#fee761', font: 'gothic' });
+      const lines = wrapText('By dusk, Aldric reached the Sunscorch. Something stirred beneath the sand.', Math.min(290, W - 32));
       lines.forEach((s, i) => drawText(ctx, s, W / 2, H / 2 + i * 11, { align: 'center', color: '#ead4aa' }));
       if (this.replay) {
         ui.begin(dt);
@@ -91,12 +97,16 @@ export class PrologueScreen {
     const { app, game: g } = this, p = g.player, ui = app.ui;
     ctx.fillStyle = 'rgba(25,34,27,0.85)';
     ctx.fillRect(0, 0, W, 49);
-    drawText(ctx, W < 320 ? 'Road to Darkwood' : 'The road to Darkwood', 9, 7, { color: '#fff0c4', font: 'gothic' });
+    // The road to the Sunscorch (28 October 2026), its title clear of SKIP INTRO: 144 pixels from 320
+    // wide, the short one's 104 under it (the Darkwood's were 127 and 106).
+    drawText(ctx, W < 320 ? 'Road to Sunscorch' : 'The road to the Sunscorch', 9, 7, { color: '#fff0c4', font: 'gothic' });
     drawText(ctx, `HP ${Math.ceil(p.hp)}/${p.maxHp}   GOLD ${g.gold}`, 9, 26, { color: '#fff0c4' });
+    // The way from the camp to its end, a bar between their names, 12 pixels clear of each.
+    const end = 'SUNSCORCH', bar = Math.max(16, W - 65 - textWidth(end));
     drawText(ctx, 'CAMP', 9, 39, { color: '#c7d4b0' });
-    drawText(ctx, 'DARKWOOD', W - 9, 39, { align: 'right', color: '#c7d4b0' });
-    ctx.fillStyle = '#354937'; ctx.fillRect(44, 41, Math.max(16, W - 112), 3);
-    ctx.fillStyle = '#e1c581'; ctx.fillRect(44, 41, Math.max(16, W - 112) * g.progress, 3);
+    drawText(ctx, end, W - 9, 39, { align: 'right', color: '#c7d4b0' });
+    ctx.fillStyle = '#354937'; ctx.fillRect(44, 41, bar, 3);
+    ctx.fillStyle = '#e1c581'; ctx.fillRect(44, 41, bar * g.progress, 3);
     if (!this.paused && g.state === 'play') {
       ui.begin(dt);
       if (button(ctx, ui, 'road_skip', W - 73, 7, 65, 14, this.replay ? 'END REPLAY' : 'SKIP INTRO') || (input.pressed('skip') && ui.lockT <= 0)) {

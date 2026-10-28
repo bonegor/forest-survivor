@@ -214,9 +214,11 @@ test('the trial screen puts the box under the difficulties, shut but on Elite; a
   }
   assert.equal(app.choice.nightmare, true);
   assert.equal(app.choice.diff, 'hard', 'the difficulty untouched');
-  // BEGIN plays it: the clock in real time, the hero and the monsters at the game's speed.
+  // BEGIN plays it: the clock in real time, the hero and the monsters at the game's speed. On the
+  // map the screen shows (28 October 2026): a new save's only one open, the desert, so the choice
+  // names it (a run without a map is the Darkwood's).
   click(s, item(app, 'begin'));
-  assert.deepEqual(app.started, { hero: 'knight', mode: 's15', diff: 'hard', nightmare: true });
+  assert.deepEqual(app.started, { hero: 'knight', mode: 's15', diff: 'hard', nightmare: true, map: 'desert' });
   const gs = new GameScreen();
   gs.enter({ ...app, devHold: false, store: { profile: defaultProfile(), submitRun: async () => ({ collected: 0, bonus: 0, total: 0, multiplier: 1 }) } });
   try {

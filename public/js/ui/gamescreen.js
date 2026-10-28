@@ -15,6 +15,7 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, FILLERS, BLESSING } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
+import { MAPS } from '../data/maps.js';
 import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText, runLocks } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
@@ -30,6 +31,10 @@ export class GameScreen {
     this.game = new Game({
       hero,
       mode,
+      // The Survival map chosen on the trial screen, or the first night's by the prologue (data/maps.js);
+      // none is the Darkwood (the tests, the bots, the tools), as Ranked and the Dungeon Run always are
+      // (Game: mapFor). Its report names it (ResultsOverlay.submit).
+      map: app.choice.map,
       diff: app.choice.diff || 'easy', // Normal, Veteran or Elite: Normal unless chosen, as the trial screen shows
       nightmare: app.choice.nightmare === true, // three times the monsters, if ticked there (Elite only, never on Ranked)
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
@@ -1867,7 +1872,7 @@ class ResultsOverlay {
     const res = this.res;
     this.reward = null;
     this.gs.app.store.submitRun({
-      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
+      mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
     }).then((r) => {
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
@@ -1954,7 +1959,10 @@ class ResultsOverlay {
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), 8, Math.round(L.width * s), Math.round(L.height * s));
     ctx.globalAlpha = 1;
     const ranked = res.mode === 'ranked';
-    let sub = `${HEROES[res.hero].name} · ${MODES[res.mode].name} ${MODES[res.mode].sub}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}`;
+    // In Survival the map the night was spent on ('Sir Aldric · The Frostfell'; data/maps.js, 28
+    // October 2026), each map's the same 15-minute night; elsewhere the trial and its length.
+    const where = res.mode === 's15' && Object.hasOwn(MAPS, res.map ?? '') ? MAPS[res.map].name : `${MODES[res.mode].name} ${MODES[res.mode].sub}`;
+    let sub = `${HEROES[res.hero].name} · ${where}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}`;
     if (res.died && res.stats.killedBy) sub += ` · slain by ${res.stats.killedBy}`;
     drawText(ctx, fitText(sub, W - 8), W / 2, 12 + L.height * s, { align: 'center', color: res.victory ? '#feae34' : '#8b9bb4' });
     if (this.t < TALLY.rows - 0.2) return null;

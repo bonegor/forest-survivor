@@ -122,6 +122,15 @@ export const PROGRESS = {
   evolutions: ['excalibur', 'whirlwind', 'aegis', 'sanctuary', 'stormstring', 'lodestar', 'briarheart', 'faelights', 'meteor', 'thunderstorm', 'stormlash',
     'frozenheart', 'prismatic', 'shadowstrike', 'hellfire', 'razorfield', 'tether', 'fairyring', 'doom', 'tempest', 'kraken', 'abyss', 'knell', 'beacon',
     'runestorm', 'harvest', 'comet', 'legion', 'pestilence', 'judgement', 'worldroot', 'bloodstorm', 'purifier'],
+  // The Survival maps (data/maps.js), the owner's (28 October 2026): "the first one where we start
+  // is the desert map. From there on, we progress to the frozen map. From there on, we progress to
+  // our current forest map. And from there on, we progress to the demonic map", harder in that
+  // order, and a bright flower meadow besides, which they didn't place: it comes between the frozen
+  // map and the forest, the bright maps before the dark ones. `maps` is the order the save keeps
+  // them in (profile mo, mw: bit i is maps[i]): add new ones at the end only. `mapLadder` is the
+  // order they open in: the first is open from the start, and a night won on one opens the next.
+  maps: ['forest', 'desert', 'frozen', 'meadow', 'hell'],
+  mapLadder: ['desert', 'frozen', 'meadow', 'forest', 'hell'],
 };
 
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

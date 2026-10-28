@@ -21,6 +21,11 @@
 // became Veteran and Veteran Elite, old Easy wins count as Normal's).
 // A Nightmare (three times the monsters, on Elite) is recorded as its difficulty, and pays a
 // little more gold (NIGHTMARE_GOLD).
+//
+// The Survival maps (the owner's, 28 October 2026; data/maps.js): the night is spent on one of five,
+// each opened by a night won on the one before it on the ladder (shared/progress.js mapLadder), the
+// desert first (mo, mw; mapsEarned). Everything else counts a run on any of them alike: the next
+// hero's five minutes, the ultimates, the wins and their marks, the records and the milestones.
 
 // Progression (21 October 2026, shared/progress.js): weapons, relics and each hero's ultimate open
 // by milestones, kept as bits (ul: PROGRESS.locks in order; uu: HERO_ORDER in order); weapon and
@@ -48,6 +53,12 @@ export const HERO_ORDER = ['knight', 'archer', 'mage', 'rogue', 'necromancer', '
 export const LADDER = HERO_ORDER.slice(0, 5);
 export const BASE_HEROES = ['knight'];
 export const HERO_UNLOCK_TIME = 5 * 60;
+// The Survival maps by id, in the order the save keeps their bits (mo, mw), and in the order they
+// open in: the first open from the start, each after it once a night is won on the one before it.
+// The ids only, from shared/progress.js, which imports nothing: data/maps.js (the maps themselves,
+// with their rosters and the waves) stays out of this file, which data/difficulty.js and the server
+// import, so their imports never go round in a circle.
+const MAP_IDS = PROGRESS.maps, MAP_ORDER = PROGRESS.mapLadder;
 // Per-hero achievements, stored as bit flags. survivalHard is any night won
 // (once only Hard counted); dungeonHard (4) lingers in old saves, unused.
 // evolved: his signature weapon evolved in a run (the Knight's opens the Phoenix Heart, shared/progress.js).
@@ -146,12 +157,22 @@ function phaseAt(mode, time) {
   return mode === 'ranked' && m > 15 ? 21 + (m - 15) * 0.9 : m * 1.4;
 }
 
+// How many more monsters a Survival map sends than the Darkwood, where it sends more (data/maps.js
+// foe.horde, the Abyss's; 28 October 2026): a night there may slay that many more (sanitizeRun's
+// kills, countedKills) and pick up that much more of the horde's gold (goldCap). Their caps were
+// set for the Darkwood's horde, and a Normal night counts each kill eight times over (effort): one
+// in the Abyss with every Cursed Skull, slaying all that came, could have come near the counted
+// kills' cap. Copied, as this file can't import data/maps.js (MAP_IDS); test/profile.test.js keeps
+// each at least what maps.js sends.
+const MAP_MORE = { hell: 1.2 };
+const mapMore = (id) => (Object.hasOwn(MAP_MORE, id) ? MAP_MORE[id] : 1);
+
 // The most gold a run could pick up (sanitizeRun): MAX_GOLD_PER_SEC for each second played, grown
 // as the filler purse grows with the phase (Game.filler, 1 + phase / 10), by the most greed the
-// run could have, its Armory's (`armory`, metaBonuses greed) times RUN_GREED, and by the most luck
-// (RUN_LUCK); and what selling a crypt lord's gear could pay.
+// run could have, its Armory's (`armory`, metaBonuses greed) times RUN_GREED, by the most luck
+// (RUN_LUCK) and by its map's more monsters (MAP_MORE); and what selling a crypt lord's gear could pay.
 export function goldCap(run, armory = TOP_GREED) {
-  const rate = MAX_GOLD_PER_SEC * (1 + phaseAt(run.mode, run.time) / 10) * armory * RUN_GREED * RUN_LUCK;
+  const rate = MAX_GOLD_PER_SEC * (1 + phaseAt(run.mode, run.time) / 10) * armory * RUN_GREED * RUN_LUCK * mapMore(run.map);
   return Math.floor(100 + run.realTime * rate + run.found * RARITIES[LEGENDARY].price);
 }
 const MIN_WIN_TIME = { s15: 15 * 60 - 5, dungeon: 4 * 60 };
@@ -184,6 +205,11 @@ export function defaultProfile() {
     gift: {},
     ul: 0, // the milestones' weapons and relics open: bit i is PROGRESS.locks[i]
     uu: 0, // the heroes whose ultimate is open: bit i is HERO_ORDER[i]
+    // The Survival maps open (mo: bit i is PROGRESS.maps[i]; a new save's the ladder's first, the
+    // desert) and the nights won on each (mw: bit 3i + d for maps[i] won on DIFFICULTIES[d], a
+    // Nightmare's as Elite's): 28 October 2026 (mapsEarned).
+    mo: 2 ** MAP_IDS.indexOf(MAP_ORDER[0]),
+    mw: 0,
     heroes: [...BASE_HEROES],
     feats: {}, // hero -> FEAT bits
     ranked: {}, // hero -> best Ranked time in seconds
@@ -234,12 +260,13 @@ export function sanitizeProfile(raw) {
     for (const h of heroes) if (HERO_ORDER.includes(h) && !p.heroes.includes(h)) p.heroes.push(h);
   }
   for (const h of HERO_ORDER) {
-    const f = int(raw.feats?.[h], 0, ALL_FEATS);
+    // His marks, an object as the cookie keeps them (packProfile), or packed as his times are.
+    const f = int(perHero(raw.feats, h), 0, ALL_FEATS);
     if (f) p.feats[h] = f;
-    const t = int(timeOf(raw.ranked, h), 0, MAX_TIME.ranked);
+    const t = int(perHero(raw.ranked, h), 0, MAX_TIME.ranked);
     if (t) p.ranked[h] = t;
     // His longest run, any mode; a save from before 28 October 2026 has his Ranked best for it.
-    const b = Math.max(t, int(timeOf(raw.bt, h), 0, MAX_TIME.ranked));
+    const b = Math.max(t, int(perHero(raw.bt, h), 0, MAX_TIME.ranked));
     if (b) p.bt[h] = b;
   }
   // The evolutions a save from before 27 October 2026 already tells of are known (SIGNATURE_EVO);
@@ -266,6 +293,22 @@ export function sanitizeProfile(raw) {
   }
   const v = int(raw.v, 0, 99);
   if (v >= 1 && v < 4) fromBefore(p);
+  // The Survival maps open and the nights won on each (28 October 2026). A save from before them (no
+  // mo) that has played spent all its nights in the Darkwood: it keeps the Darkwood and every map
+  // before it on the ladder, and its nights won are the Darkwood's, which opens the Abyss after it.
+  // One that never played starts in the desert, as a new save does. Taken from the field, not the
+  // version (a save may have none), and only once: the save keeps mo from then on, so a map opened
+  // by it is open already when the next run begins and is never told as new (openings).
+  p.mo = int(raw.mo, 0, ALL_MAPS);
+  p.mw = int(raw.mw, 0, ALL_MAP_WINS);
+  if (raw.mo === undefined && p.runs > 0) {
+    for (const m of MAP_ORDER.slice(0, MAP_ORDER.indexOf('forest') + 1)) p.mo = withBit(p.mo, mapI(m));
+    p.wins.s15.forEach((n, d) => {
+      if (n) p.mw = withBit(p.mw, winBit('forest', d));
+    });
+  }
+  // Every map the nights won have earned is open; one open stays open.
+  p.mo = mapsEarned(p);
   // Whatever the records have earned is open (a milestone retuned lower opens for all who passed it).
   p.ul = orBits(p.ul, earnedBits(p));
   for (const h of p.heroes) if (ultEarned(p, h)) p.uu |= heroBit(h);
@@ -286,6 +329,19 @@ const withBit = (n, i) => (hasBit(n, i) ? n : (n || 0) + 2 ** i);
 const orBits = (a, b) => LOCKS.reduce((n, _, i) => (hasBit(b, i) ? withBit(n, i) : n), a || 0);
 const lockOpen = (p, i) => !LOCKS[i].retired && hasBit(p.ul, i);
 const sum = (a) => a.reduce((s, x) => s + x, 0);
+
+// The Survival maps' bits (28 October 2026): mo's bit i is MAP_IDS[i] open, mw's bit 3i + d a night
+// won on it on DIFFICULTIES[d].
+const mapI = (m) => MAP_IDS.indexOf(m);
+const winBit = (m, d) => 3 * mapI(m) + d;
+const ALL_MAPS = 2 ** MAP_IDS.length - 1, ALL_MAP_WINS = 2 ** (3 * MAP_IDS.length) - 1;
+// Whether a Survival map is open on a profile, and whether a night has been won on it (on any
+// difficulty): the trial screen's map row, the run's credit (applyRun).
+export const mapOpen = (p, m) => mapI(m) >= 0 && hasBit(p?.mo, mapI(m));
+export const mapWon = (p, m) => mapI(m) >= 0 && [0, 1, 2].some((d) => hasBit(p?.mw, winBit(m, d)));
+// The maps a profile's nights have earned, on top of those open: the ladder's first, and every one
+// after a map with a night won on it.
+const mapsEarned = (p) => MAP_ORDER.reduce((n, m, k) => (k === 0 || mapWon(p, MAP_ORDER[k - 1]) ? withBit(n, mapI(m)) : n), p.mo || 0);
 
 // What the profile's records measure, for each kind of milestone (PROGRESS.locks need).
 function measures(p) {
@@ -366,12 +422,14 @@ function fromBefore(p) {
   give('banish', 2);
 }
 
-// Every milestone's weapon and relic and every hero's ultimate open, and the Armory's slots full
-// (the debug address, engine/storage.js unlockEverything; the bots, tools/headless.mjs).
+// Every milestone's weapon and relic, every hero's ultimate and every Survival map open, and the
+// Armory's slots full (the debug address, engine/storage.js unlockEverything; the bots,
+// tools/headless.mjs). No night is won by it (mw).
 export function openEverything(p) {
   p.ul = ALL_LOCKS;
   p.uu = ALL_ULTS;
   p.ek = ALL_EVOS;
+  p.mo = ALL_MAPS;
   for (const id of ['arsenal', 'reliquary', 'phoenix']) p.up[id] = UPGRADES.find((u) => u.id === id).max;
   return p;
 }
@@ -461,10 +519,18 @@ export function runLocks(profile, hero) {
 // (ev) is told by it and stays out, and so does an empty home: the worst case keeps its quarter
 // spare (test/profile.test.js). sanitizeProfile reads both back. The heroes are one number too, a
 // bit each in HERO_ORDER's order (27 October 2026, room for the effort and the win marks), and so
-// are each hero's Ranked best and longest run, as strings (packTimes, 28 October 2026).
+// are each hero's Ranked best and longest run, as strings (packPerHero, 28 October 2026).
+// His marks (feats) stay an object, as every build before this one reads them (28 October 2026, the
+// review of the Survival maps): packed, they made room for the maps' mo and mw, but a build before
+// reads a string as no marks at all, and a tab still running one when this one came (it reads the
+// save back before each write, engine/storage.js reload), or that build put back, would write the
+// save again without them: the Dungeon and Ranked shut and every win's star gone, with nothing in
+// the save to tell them again. Such a write drops only mo and mw, and sanitizeProfile opens the maps
+// again as for a save from before them. With the marks as they are, the worst case (a full home and
+// every fall counted) still keeps its quarter spare, if only just (test/profile.test.js).
 export function packProfile(p) {
   const { ev, ...rest } = p;
-  const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), ranked: packTimes(p.ranked), bt: packTimes(p.bt), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
+  const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), ranked: packPerHero(p.ranked), bt: packPerHero(p.bt), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
   if (!out.home?.length) delete out.home;
   return out;
 }
@@ -476,9 +542,10 @@ const giftOf = (raw, id) => (typeof raw === 'number' ? Math.floor(raw / 4 ** GIF
 // Each hero's time (ranked, bt) as a cookie keeps it: base 36 in HERO_ORDER's order, '.' between,
 // none after the last kept (28 October 2026: nine heroes' Ranked bests as an object took 146
 // characters; packed, both lists take less than that one did). A save from before keeps an
-// object; both read back (timeOf).
-const packTimes = (o) => HERO_ORDER.map((h) => (o?.[h] ? Math.floor(o[h]).toString(36) : '')).join('.').replace(/\.+$/, '');
-const timeOf = (raw, h) => (typeof raw === 'string' ? parseInt(raw.slice(0, 200).split('.')[HERO_ORDER.indexOf(h)] || '', 36) : raw?.[h]);
+// object; both read back (perHero), and his marks (feats) either way too, though the cookie keeps
+// those as an object (packProfile).
+const packPerHero = (o) => HERO_ORDER.map((h) => (o?.[h] ? Math.floor(o[h]).toString(36) : '')).join('.').replace(/\.+$/, '');
+const perHero = (raw, h) => (typeof raw === 'string' ? parseInt(raw.slice(0, 200).split('.')[HERO_ORDER.indexOf(h)] || '', 36) : raw?.[h]);
 
 // ------------------------------------------------------------- the ladder --
 
@@ -534,6 +601,11 @@ function openings(p) {
   if (modeUnlocked(p, 'dungeon')) {
     for (const h of LADDER.slice(1)) if (canPlay(p, 'dungeon', h)) out.push('dungeon:' + h);
   }
+  // Every Survival map open but the ladder's first, open from the start (28 October 2026; the
+  // results say "The Frostfell is open!", ui/ladder.js unlockText). A run without a map opens none,
+  // and a save from before the maps has its own open before the run begins (sanitizeProfile), so
+  // neither tells one.
+  for (const m of MAP_ORDER.slice(1)) if (mapOpen(p, m)) out.push('map:' + m);
   return out;
 }
 
@@ -649,11 +721,18 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
   // Ranked. A win still counts as its difficulty's.
   // Elite's modifier (data/difficulty.js nightmareFor): a Normal or Veteran run is never one.
   const nightmare = raw.mode !== 'ranked' && diff === 'hard' && raw.nightmare === true;
+  // The Survival map the night was spent on (data/maps.js; 28 October 2026): one of shared/
+  // progress.js maps, in Survival only. None in another mode (Ranked and the Dungeon Run keep to the
+  // Darkwood) or where a report names none (an older client, the bots, the tools): that night was
+  // the Darkwood's, and credits no map (applyRun).
+  const map = raw.mode === 's15' && MAP_IDS.includes(raw.map) ? raw.map : null;
   // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD), and
-  // kept so with Veteran's now two thirds of that (VETERAN_CROWD); a Nightmare three times that.
-  const kills = int(raw.kills, 0, 50 + time * 240 * (nightmare ? 3 : 1));
+  // kept so with Veteran's now two thirds of that (VETERAN_CROWD); a Nightmare three times that, and
+  // a map that sends more its more (MAP_MORE).
+  const kills = int(raw.kills, 0, 50 + time * 240 * (nightmare ? 3 : 1) * mapMore(map));
   return {
     mode: raw.mode,
+    map,
     diff,
     nightmare,
     hero: isId(raw.hero) ? raw.hero : 'knight',
@@ -662,7 +741,7 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
     died: !victory && raw.died === true,
     time,
     // Selling what the crypts gave pays too; applyRun adds what selling worn gear paid.
-    gold: int(raw.gold, 0, goldCap({ mode: raw.mode, time, realTime, found }, armoryGreed)),
+    gold: int(raw.gold, 0, goldCap({ mode: raw.mode, time, realTime, found, map }, armoryGreed)),
     claim: int(raw.gold, 0, 1e9),
     kills,
     // His longest kill streak (Game.stats.maxCombo), for the record: never more than his kills.
@@ -700,13 +779,17 @@ export function runReward(run) {
 // divided again by its three times the horde; and all of them at most what Veteran's horde could
 // give in its time (sanitizeRun's kills): a forged Normal report, held to the kills a run of its
 // length could make, would count eight times that (27 October 2026). From the plain numbers, so the
-// game measures a lock's kills as it goes (Game.lockReached) with no object made each frame.
-export const countedKills = (kills, time, diff, nightmare) => Math.min(Math.round(kills * PROGRESS.effort[diff] * (nightmare ? PROGRESS.nightmareEffort : 1)), 50 + time * 240);
-const effortFor = (run) => countedKills(run.kills, run.time, run.diff, run.nightmare);
+// game measures a lock's kills as it goes (Game.lockReached) with no object made each frame; map: the
+// Survival map's id, whose more monsters (MAP_MORE) raise that most (none: the Darkwood's).
+export const countedKills = (kills, time, diff, nightmare, map) => Math.min(Math.round(kills * PROGRESS.effort[diff] * (nightmare ? PROGRESS.nightmareEffort : 1)), 50 + time * 240 * mapMore(map));
+const effortFor = (run) => countedKills(run.kills, run.time, run.diff, run.nightmare, run.map);
 
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
-  const run = sanitizeRun(rawRun, metaBonuses(p).greed); // the cap at this save's own Armory Greed
+  // The caps at this save's own Armory Greed, and at its map's horde (MAP_MORE) only where that map is
+  // open to it: a report from one still shut, which marks no map (below), is held to the Darkwood's,
+  // as no night this save could have played sent more (the review of 28 October 2026).
+  const run = sanitizeRun(rawRun && typeof rawRun === 'object' && !mapOpen(p, rawRun.map) ? { ...rawRun, map: null } : rawRun, metaBonuses(p).greed);
   if (!run) return { ok: false, profile: p, error: 'Invalid run' };
   if (!canPlay(p, run.mode, run.hero)) return { ok: false, profile: p, error: 'That mode is locked for this hero' };
   const before = new Set(openings(p));
@@ -736,6 +819,11 @@ export function applyRun(profile, rawRun) {
   let personalBest = false;
   if (run.victory) {
     p.wins[run.mode][DIFFICULTIES.indexOf(run.diff)] += 1;
+    // A night won on a Survival map open to this save is its mark there, which opens the next on
+    // the ladder (mapsEarned, below). A run is never refused for its map (28 October 2026,
+    // test/profile.test.js): one without a map (the tests, the bots, an older client), or on a map
+    // still shut, is paid and counted as ever but marks no map.
+    if (run.map && mapOpen(p, run.map)) p.mw = withBit(p.mw, winBit(run.map, DIFFICULTIES.indexOf(run.diff)));
     let f = p.feats[run.hero] || 0;
     if (run.mode === 's15') f |= FEAT.survivalHard;
     if (run.mode === 'dungeon') f |= FEAT.dungeon;
@@ -765,6 +853,7 @@ export function applyRun(profile, rawRun) {
   p.best.gold = Math.max(p.best.gold, pickedUp);
   p.best.bosses = Math.max(p.best.bosses, run.bosses);
   p.best.combo = Math.max(p.best.combo, run.combo);
+  p.mo = mapsEarned(p); // the map after one with a night won on it, told with the rest (openings)
   reward.unlocks = openings(p).filter((k) => !before.has(k));
   // The milestones this run reached (shared/progress.js), for the results screen to announce:
   //   [{ type: 'weapon' | 'relic' | 'ult', id, need }]
@@ -814,8 +903,9 @@ export function metaBonuses(profile) {
 }
 
 // The longest state decodeState reads. It must fit the biggest cookie the game writes, the
-// profile with all nine heroes in six legendaries (packProfile): about 3 000 characters encoded
-// (test/profile.test.js measures it and keeps a quarter spare; test/server.test.js seals it). A
+// profile with all nine heroes in six legendaries (packProfile): about 3 200 characters encoded
+// since the Survival maps (test/profile.test.js measures it and keeps a quarter spare, with about
+// two characters to go: a new field needs room made first; test/server.test.js seals it). A
 // browser keeps at most 4096 bytes a cookie, its name included, so nothing longer than this can
 // be one of ours.
 export const MAX_STATE = 4000;

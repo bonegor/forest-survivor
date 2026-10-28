@@ -139,12 +139,16 @@ test('completion or skipping starts one fresh Knight night carrying only collect
   screen.enter(app); screen.game.gold = 12;
   screen.finish(); screen.finish();
   assert.equal(app.settings.prologueDone, true);
-  assert.deepEqual(app.choice, { hero: 'knight', mode: 's15', diff: 'easy', nightmare: false });
+  // The road ends in the desert, where the first night is spent (the owner's, 28 October 2026: "the
+  // first one where we start is the desert map"); remembered for the trial screen in the same write.
+  assert.deepEqual(app.choice, { hero: 'knight', mode: 's15', diff: 'easy', nightmare: false, map: 'desert' });
+  assert.equal(app.settings.map, 'desert');
   assert.deepEqual(app.visits, [{ name: 'game', params: { prologueGold: 12 } }]);
   assert.equal(app.store.profile.runs, 0);
   assert.equal(app.store.profile.gold, 0);
   screen.leave();
   const night = new GameScreen(); night.enter(app, { prologueGold: 12 });
+  assert.equal(night.game.map.id, 'desert', 'the first night in the desert');
   assert.equal(night.game.gold, 12);
   assert.equal(night.game.stats.gold, 12);
   assert.equal(night.game.time, 0);

@@ -1,7 +1,10 @@
 // A short, distance-based journey before the first night. Uses the real Knight, sword,
 // enemies and pickups, with its own road and encounters instead of the night's director.
+// Since 28 October 2026 the road to the Sunscorch, where a new player's first night is spent
+// (data/maps.js FIRST_MAP): a caravan road across the desert by day (DayForest).
 import { Game } from './game.js';
 import { Forest } from './forest.js';
+import { BIOMES } from './biomes.js';
 import { layoutChunk, CHUNK } from './darkwood.js';
 import { BASE_SPEED } from './player.js';
 import { HEROES } from '../data/heroes.js';
@@ -40,7 +43,10 @@ function roadScene() {
   for (let x = -64; x <= ROAD.length + 300; x += 4) {
     xs.push(x); ys.push(roadY(x)); hw.push(ROAD.halfWidth); av.push(0);
   }
+  // Camps as the night's start camp is (darkwood.js place): dressed by the look as it dresses that
+  // one (biomes.js biomeProp, 'start:stump': the Sunscorch's sitting stones by the fire).
   const camp = (x) => ({
+    kind: 'start',
     clear: { x, y: 0, r: 100 },
     props: [
       { n: 'campfire', x: x - 20, y: 32, anim: 8, light: ['fire', 60] },
@@ -53,18 +59,23 @@ function roadScene() {
   return { paths: [{ kind: 'road', xs, ys, hw, av }], places: [camp(0), camp(ROAD.length)], landmarks: [] };
 }
 
+// The road by day, in the Sunscorch's look (game/biomes.js DESERT): its sand and a caravan road in
+// the sun (its `day` ground), its saguaros, joshua trees and scrub standing where the trail's
+// woods stood, thinned as the desert thins them, a palm here and there by the road.
 export class DayForest extends Forest {
   constructor(g) {
-    super(g, 7361);
+    super(g, 7361, BIOMES.desert);
     this.daylight = true;
     this.scene = roadScene();
     this.start = { x: 0, y: 0 };
   }
 
   layout(cx, cy) {
-    const lay = layoutChunk(cx, cy, this.scene);
+    const lay = layoutChunk(cx, cy, this.scene, this.look.density);
     lay.daylight = true;
-    // The trees behind camp make the western boundary visible even after a detour.
+    lay.ground = this.look.day;
+    // The trees behind camp make the western boundary visible even after a detour (in the oaks'
+    // slots: saguaros, and palms by the road's end, as the look has them).
     if (cx === -1) {
       for (let y = cy * CHUNK; y < (cy + 1) * CHUNK; y += 28) {
         lay.props.push({ n: hash2(0, y, 3) > 0.5 ? 'oak1' : 'oak2', x: -88 - Math.round(hash2(1, y, 4) * 16), y });
@@ -89,7 +100,7 @@ export class DayForest extends Forest {
       ctx.save();
       ctx.translate(Math.round((x - 26 - cam.x) * cam.S), Math.round((-52 - cam.y) * cam.S));
       ctx.scale(cam.S, cam.S);
-      ctx.fillStyle = 'rgba(25,39,25,0.25)';
+      ctx.fillStyle = 'rgba(48,32,18,0.25)'; // its shadow on the sand
       ctx.fillRect(-24, 1, 49, 9);
       ctx.fillStyle = '#393b30';
       ctx.beginPath(); ctx.moveTo(-25, 5); ctx.lineTo(-7, -25); ctx.lineTo(11, 5); ctx.closePath(); ctx.fill();

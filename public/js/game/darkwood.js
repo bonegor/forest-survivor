@@ -454,7 +454,14 @@ export const cacheSizes = () => ({ roads: roadCache.size, places: placeCache.siz
 const TC = 22; // trees are candidates on a 22 px jittered grid
 const TREE_GAP = 30;
 // The props whose feet stand in chunk (cx, cy), the shrines too, and the fields that paintChunk needs.
-export function layoutChunk(cx, cy, scene = null) {
+// `knob`, a Survival map's look's density (game/biomes.js, 28 October 2026), thins or thickens what
+// stands without moving any of it: `standing` times the share of the groves' trees left standing
+// (so a sparser look's trees are some of the Darkwood's, each where it stood), and `bushes`,
+// `rocks`, `stumps` and `graves` times the odds of the scatter. Every draw is made as it always is,
+// whatever the knob, so nothing else in a chunk moves; without one (the Darkwood, the prologue's
+// road, the tools) it is the forest as it always was. What stands in each place, a cactus for an
+// oak, is the look's to say (biomes.js biomeProp): the names here are the slots.
+export function layoutChunk(cx, cy, scene = null, knob = null) {
   const x0 = cx * CHUNK, y0 = cy * CHUNK, x1 = x0 + CHUNK, y1 = y0 + CHUNK;
   const gx0 = x0 - MARGIN, gy0 = y0 - MARGIN, gx1 = gx0 + GN * CELL, gy1 = gy0 + GN * CELL;
   const F = scene || features(gx0 - RMAX, gy0 - RMAX, gx1 + RMAX, gy1 + RMAX);
@@ -577,7 +584,7 @@ export function layoutChunk(cx, cy, scene = null) {
       cands.set(ckey(gi, gj), { x, y, pri, r, gi, gj, gap: TREE_GAP - 4 + 18 * valueNoise(x / 170, y / 170, SEED + 83) });
     }
   }
-  const trees = [], tgrid = new Map();
+  const trees = [], tgrid = new Map(), standing = DARKWOOD.standing * (knob?.standing ?? 1);
   for (const c of cands.values()) {
     if (c.x < x0 - 64 || c.x >= x1 + 64 || c.y < y0 - 64 || c.y >= y1 + 64) continue;
     let ok = true;
@@ -588,9 +595,10 @@ export function layoutChunk(cx, cy, scene = null) {
       }
     }
     if (!ok) continue;
-    // Then only some of them stand (DARKWOOD.standing): picked by their own hash, so every chunk
-    // agrees, and after the spacing, so the groves thin out instead of filling the gaps again.
-    if (h(c.gi, c.gj, 24) >= DARKWOOD.standing) continue;
+    // Then only some of them stand (DARKWOOD.standing, times a look's knob): picked by their own
+    // hash, so every chunk agrees, and after the spacing, so the groves thin out instead of filling
+    // the gaps again.
+    if (h(c.gi, c.gj, 24) >= standing) continue;
     const r = c.r, cc = cellOf(c.x, c.y), pine = pineF[cc], cursed = cursedF[cc];
     const z = r(), cl = valueNoise(c.x / 260, c.y / 260, SEED + 71); // species come in clumps
     let n;
@@ -636,16 +644,18 @@ export function layoutChunk(cx, cy, scene = null) {
       }
     }
   };
+  // A look's scatter (knob): the odds below times these, the draws all made as before.
+  const bushes = knob?.bushes ?? 1, rocks = knob?.rocks ?? 1, stumps = knob?.stumps ?? 1, graves = knob?.graves ?? 1;
   // Bushes gather where the groves thin into meadow; a few dot the meadows.
   cells(40, 0, 21, (x, y, r) => {
     const c = cellOf(x, y), g = groveF[c], edge = ss(0.05, 0.3, g) * ss(0.85, 0.55, g);
     const p = (0.42 * edge + 0.02) * (1 - clearF[c] * 0.8) * (1 - cursedF[c] * 0.8);
     const pick = r.pick(['bush1', 'bush2']);
-    if (r() < p && offRoad(x, y, 12) && !treeNear(x, y, 14)) add(pick, x, y);
+    if (r() < p * bushes && offRoad(x, y, 12) && !treeNear(x, y, 14)) add(pick, x, y);
   });
   // Stones lie in little clusters, more of them in the cursed woods.
   cells(420, 40, 22, (xc, yc, r) => {
-    const keep = r() < 0.45 + zoneRaw(xc, yc)[1] * 0.4; // the centre may lie beyond the fields
+    const keep = r() < (0.45 + zoneRaw(xc, yc)[1] * 0.4) * rocks; // the centre may lie beyond the fields
     for (let k = r.int(2, 5); k > 0; k--) {
       const x = xc + r.range(-38, 38), y = yc + r.range(-24, 24), n = r() < 0.2 ? 'rock2' : r.pick(['rock1', 'rock3']);
       if (keep && owns(Math.round(x), Math.round(y)) && offRoad(x, y, 10) && !treeNear(x, y, 14)) add(n, x, y);
@@ -655,13 +665,14 @@ export function layoutChunk(cx, cy, scene = null) {
   cells(110, 0, 23, (x, y, r) => {
     const c = cellOf(x, y), g = groveF[c], edge = ss(0.05, 0.3, g) * ss(0.85, 0.55, g);
     const a = r(), b = r(), grave = r() < 0.6 ? 'gravestone' : 'gravecross';
-    if (a < 0.22 * edge * (1 - clearF[c]) && offRoad(x, y, 14) && !treeNear(x, y, 16)) add('stump', x, y);
-    else if (b < 0.05 * cursedF[c] && offRoad(x, y, 20) && !treeNear(x, y, 14)) add(grave, x, y);
+    if (a < 0.22 * edge * (1 - clearF[c]) * stumps && offRoad(x, y, 14) && !treeNear(x, y, 16)) add('stump', x, y);
+    else if (b < 0.05 * cursedF[c] * graves && offRoad(x, y, 20) && !treeNear(x, y, 14)) add(grave, x, y);
   });
-  // The places that matter.
+  // The places that matter. Each of their props says what it dresses (src: the start, a shrine, or
+  // the landmark's kind), so a look can tell the start camp's stumps from a grove's (biomeProp).
   const shrines = [], crypts = [];
   for (const P of [...F.places, ...F.landmarks]) {
-    for (const p of P.props) add(p.n, p.x, p.y, p.light ? { light: p.light, anim: p.anim } : undefined);
+    for (const p of P.props) add(p.n, p.x, p.y, p.light ? { light: p.light, anim: p.anim, src: P.kind } : { src: P.kind });
     if (P.type && owns(Math.round(P.x), Math.round(P.y))) shrines.push({ key: P.key, x: P.x, y: P.y, type: P.type });
     if (P.crypt && owns(P.crypt.x, P.crypt.y)) crypts.push(P.crypt);
   }
@@ -692,9 +703,39 @@ const LEAF = { oak: ['#7a4a2a', '#8f5a2e', '#5e3a24', '#a0642c'].map(H), pine: [
 const FLOWER = ['#e8e8d0', '#feae34', '#f6757a', '#8fb8ff', '#c49bd9'].map(H);
 const PEBBLE = ['#5a6988', '#3a4466', '#8b9bb4'].map(H);
 
+// The Darkwood's ground, as paintChunk paints a chunk that brings none of its own (cd.ground): the
+// three zones' grass (the oak meadows, the pinewoods, the cursed woods: five tones each, dark to
+// light), the road's five, the trodden verge (`verge`, added to a tone within 5 px of a path: this
+// darker), and what is strewn over it, per chunk: tufts by zone (`sparse` of them left out off the
+// oak meadows), fallen leaves under the groves, flowers (on their `stem`) where a patch of meadow
+// is above `bloom`, and pebbles, mostly on the paths. The Survival maps' looks (game/biomes.js, 28
+// October 2026) are the same table in their own colours and counts, with what only they have:
+// `ripple` (the Sunscorch's dunes), `glint` (the Frostfell's snow catching the light), `cracks`
+// (the Abyss's, glowing). Day: the prologue's palettes for the zones and the road, the rest as by night.
+export const GROUND = {
+  zones: [GRASS.oak, GRASS.pine, GRASS.cursed],
+  road: ROAD,
+  verge: -0.25,
+  tuft: TUFT,
+  tufts: 360,
+  sparse: 0.35,
+  leaf: LEAF,
+  leaves: 110,
+  flower: FLOWER,
+  stem: TUFT.oak[2],
+  flowers: 160,
+  bloom: 0.5,
+  pebble: PEBBLE,
+  pebbles: 90,
+};
+const DAY_GROUND = { ...GROUND, zones: DAY_GRASS, road: DAY_ROAD };
+
 // Paints a chunk's ground into px, CHUNK x CHUNK packed pixels. The slow fields are sampled
 // every 8 px and interpolated; the exact distance to a path is worked out only near the paths.
-export function paintChunk(cd, px) {
+// The look's ground (cd.ground, GROUND without one); a look whose cracks glow paints their glow into
+// `glow` too (CHUNK x CHUNK, clear elsewhere), which the Forest adds to the night's light (addLights).
+export function paintChunk(cd, px, glow = null) {
+  const G = cd.ground || (cd.daylight ? DAY_GROUND : GROUND), RP = G.ripple, GL = G.glint, CK = G.cracks;
   const { cx, cy, sampleF, pathDist } = cd;
   const x0 = cx * CHUNK, y0 = cy * CHUNK, N = CHUNK / 8 + 1;
   const grid = (fn) => {
@@ -706,13 +747,18 @@ export function paintChunk(cd, px) {
   const groveG = grid((x, y) => sampleF(cd.groveF, x, y)), clearG = grid((x, y) => sampleF(cd.clearF, x, y));
   const pineG = grid((x, y) => sampleF(cd.pineF, x, y)), cursedG = grid((x, y) => sampleF(cd.cursedF, x, y));
   const distG = grid((x, y) => sampleF(cd.dist, x, y));
+  // The Abyss's cracks: where a slow noise crosses its middle (a wide one, and a fine one where the
+  // ground runs hottest), on the same grid, so no pixel works out a noise of its own.
+  const crackG = CK && grid((x, y) => valueNoise(x / CK.scale, y / CK.scale, SEED + 211));
+  const fineG = CK && grid((x, y) => valueNoise(x / CK.fine, y / CK.fine, SEED + 223));
+  const heatG = CK && grid((x, y) => fbm(x / CK.heat, y / CK.heat, SEED + 227, 2));
   const at = (a, x, y) => {
     const fx = (x - x0) / 8, fy = (y - y0) / 8, i = Math.min(N - 2, Math.floor(fx)), j = Math.min(N - 2, Math.floor(fy)), tx = fx - i, ty = fy - j, c = j * N + i;
     return (a[c] + (a[c + 1] - a[c]) * tx) * (1 - ty) + (a[c + N] + (a[c + N + 1] - a[c + N]) * tx) * ty;
   };
   const zoneAt = (x, y, t) => (at(cursedG, x, y) > t ? 'cursed' : at(pineG, x, y) > t ? 'pine' : 'oak');
-  const { nearP, PX, PY, PW, PID, paths } = cd, ZONES = cd.daylight ? DAY_GRASS : [GRASS.oak, GRASS.pine, GRASS.cursed], m = MARGIN / CELL;
-  const roadColors = cd.daylight ? DAY_ROAD : ROAD;
+  const { nearP, PX, PY, PW, PID, paths } = cd, ZONES = G.zones, m = MARGIN / CELL;
+  const roadColors = G.road;
   for (let y = 0; y < CHUNK; y++) {
     const j = y >> 3, ty = (y & 7) / 8;
     for (let x = 0; x < CHUNK; x++) {
@@ -741,9 +787,28 @@ export function paintChunk(cd, px) {
         col = roadColors[clamp(Math.floor(t * roadColors.length), 0, roadColors.length - 1)];
       } else {
         const zt = 0.5 + b * 0.9 + n * 0.3, z = lerp4(cursedG, c, N, w00, w10, w01, w11) > zt ? 2 : lerp4(pineG, c, N, w00, w10, w01, w11) > zt ? 1 : 0;
-        let t = lerp4(patchG, c, N, w00, w10, w01, w11) * 1.25 - 0.12 + b * 0.22 + n * 0.12 - lerp4(groveG, c, N, w00, w10, w01, w11) * 0.26 + lerp4(clearG, c, N, w00, w10, w01, w11) * 0.1;
-        if (d < 5 + edge) t -= 0.25; // trodden verge
+        const patch = lerp4(patchG, c, N, w00, w10, w01, w11);
+        let t = patch * 1.25 - 0.12 + b * 0.22 + n * 0.12 - lerp4(groveG, c, N, w00, w10, w01, w11) * 0.26 + lerp4(clearG, c, N, w00, w10, w01, w11) * 0.1;
+        if (d < 5 + edge) t += G.verge; // trodden verge (a snow bank's lighter)
+        if (RP && RP.zones[z]) {
+          // Ripples across the dunes, bending with the patches: a lit crest, its lee in shadow.
+          const s = (wx + RP.slant * wy + RP.warp * patch) / RP.scale, f = s - Math.floor(s);
+          t += (f < RP.crest ? RP.amp : f < RP.lee ? -RP.amp * 0.6 : 0) * RP.zones[z];
+        }
         col = ZONES[z][clamp(Math.floor(t * 5), 0, 4)];
+        if (GL && GL.zones[z] && n > 0.5 - GL.share) col = GL.color; // a grain of snow catching the light
+        if (CK && CK.zones[z] && d > CK.clear) {
+          // A crack, hot in the ground (its core, its edge; the fine ones dimmer), and the same in
+          // `glow`: the light it gives the night (the Forest's addLights), so it shines in the dark.
+          const heat = lerp4(heatG, c, N, w00, w10, w01, w11), wide = CK.width * (0.35 + heat) * CK.zones[z];
+          const cv = Math.abs(lerp4(crackG, c, N, w00, w10, w01, w11) - 0.5);
+          let hot = cv < wide + b * CK.width * 0.4 ? (cv < wide * 0.45 ? 2 : 1) : -1;
+          if (hot < 0 && heat > CK.fineAt && Math.abs(lerp4(fineG, c, N, w00, w10, w01, w11) - 0.5) < CK.fineWidth * CK.zones[z]) hot = 0;
+          if (hot >= 0) {
+            col = CK.glow[hot];
+            if (glow) glow[y * CHUNK + x] = CK.glow[hot];
+          }
+        }
       }
       px[y * CHUNK + x] = col;
     }
@@ -754,10 +819,10 @@ export function paintChunk(cd, px) {
     if (lx >= 0 && ly >= 0 && lx < CHUNK && ly < CHUNK) px[ly * CHUNK + lx] = col;
   };
   const r = rngOf(cx, cy, 30);
-  for (let i = 0; i < 360; i++) {
+  for (let i = 0; i < G.tufts; i++) {
     const x = x0 + r.int(1, CHUNK - 4), y = y0 + r.int(2, CHUNK - 2), z = zoneAt(x, y, 0.5);
-    if (pathDist(x, y) < 3 || (z !== 'oak' && r() < 0.35)) continue;
-    const T = TUFT[z], col = r.pick(T);
+    if (pathDist(x, y) < 3 || (z !== 'oak' && r() < G.sparse)) continue;
+    const T = G.tuft[z], col = r.pick(T);
     put(x, y, col);
     put(x, y - 1, col);
     put(x + 2, y, col);
@@ -765,32 +830,32 @@ export function paintChunk(cd, px) {
     put(x + 1, y + 1, T[2]);
     if (r() < 0.4) put(x + 1, y - 2, T[1]);
   }
-  for (let i = 0; i < 110; i++) {
+  for (let i = 0; i < G.leaves; i++) {
     const x = x0 + r.int(0, CHUNK - 2), y = y0 + r.int(0, CHUNK - 2), z = zoneAt(x, y, 0.5);
     if (r() > 0.3 + at(groveG, x, y)) continue; // leaves fall under the trees
-    const col = r.pick(LEAF[z]);
+    const col = r.pick(G.leaf[z]);
     put(x, y, col);
     if (r() < 0.5) put(x + 1, y, col);
   }
-  for (let i = 0; i < 160; i++) {
+  for (let i = 0; i < G.flowers; i++) {
     const x = x0 + r.int(1, CHUNK - 2), y = y0 + r.int(1, CHUNK - 3);
     // flowers bloom in patches out in the open meadows
     const patch = valueNoise(x / 70, y / 70, SEED + 91) * (1 - at(groveG, x, y)) * (1 - at(cursedG, x, y));
-    if (patch < 0.5 || r() > (patch - 0.5) * 3 || pathDist(x, y) < 4) continue;
-    const col = r.pick(FLOWER);
+    if (patch < G.bloom || r() > (patch - G.bloom) * 3 || pathDist(x, y) < 4) continue;
+    const col = r.pick(G.flower);
     put(x, y, col);
-    put(x, y + 1, TUFT.oak[2]);
+    put(x, y + 1, G.stem);
     if (r() < 0.3) {
       put(x + 2, y + 1, col);
-      put(x + 2, y + 2, TUFT.oak[2]);
+      put(x + 2, y + 2, G.stem);
     }
   }
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < G.pebbles; i++) {
     const x = x0 + r.int(0, CHUNK - 3), y = y0 + r.int(0, CHUNK - 2);
     if (pathDist(x, y) > 0 && r() < 0.8) continue; // pebbles mostly on the paths
-    put(x, y, PEBBLE[2]);
-    put(x + 1, y, PEBBLE[0]);
-    put(x, y + 1, PEBBLE[1]);
-    put(x + 1, y + 1, PEBBLE[1]);
+    put(x, y, G.pebble[2]);
+    put(x + 1, y, G.pebble[0]);
+    put(x, y + 1, G.pebble[1]);
+    put(x + 1, y + 1, G.pebble[1]);
   }
 }

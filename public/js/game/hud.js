@@ -15,7 +15,7 @@ import { DEATH, FLASH_SOFT, COMBO, comboTier } from './game.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { WARN, RECORD_GRACE } from './events.js';
-import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { RANKED_BOSS_EVERY } from '../data/waves.js';
 import { HEROES } from '../data/heroes.js';
 import { THIEF } from './enemies.js';
 
@@ -666,9 +666,10 @@ export class Hud {
       // A tiny moon/sun showing the night's progress.
       ctx.fillStyle = u > 0.93 ? '#feae34' : '#c0cbdc';
       ctx.fillRect(at(g.time) - 1, 29, 2, 6);
-      // The night's shape: a skull where each boss comes (gold once slain), and the face of the hero
-      // this run unlocks at 5:00, under the bar, until then.
-      for (const m of SURVIVAL_BOSSES[g.mode] || []) {
+      // The night's shape: a skull where each of its map's bosses comes (data/maps.js bosses; gold
+      // once slain, by his id: no map brings one twice), and the face of the hero this run unlocks
+      // at 5:00, under the bar, until then.
+      for (const m of g.mode === 's15' ? g.map.bosses : []) {
         const slain = g.stats.bossLog.some((l) => l.id === m.id && l.kill !== undefined);
         drawSkull(ctx, at(m.at), 29, slain ? '#fee761' : g.time >= m.at ? '#e43b44' : '#8b9bb4');
       }

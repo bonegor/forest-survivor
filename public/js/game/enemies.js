@@ -1,7 +1,7 @@
 // Enemies: AI, status effects and drawing. Breakable props and bosses share
 // this class; boss behaviour lives in bosses.js.
 
-import { ENEMIES } from '../data/enemies.js';
+import { ENEMIES, STANDS_FOR } from '../data/enemies.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
 import { HEROES } from '../data/heroes.js';
 import { UPGRADES } from '../shared/profile.js';
@@ -49,6 +49,10 @@ export const heroPace = (g) => BASE_SPEED * (g.player.hero.stats.speed || 1) * g
 export const CONFUSE_TOUCH = 0.5;
 // The sparks a foe gives off while it burns or sickens (Enemy.addDot).
 const DOT_SPARKS = { fire: [PC.o, PC.y], poison: [PC.l, PC.L], bleed: [PC.r, PC.R] };
+// The dust a monster throws up rising out of the ground (def.rise) and on a charge (charger): the
+// ground's own where the world gives one (riseDust, chargeDust: a Survival map's, 28 October 2026;
+// sand on the dunes, snow on the Frostfell), else the forest's dirt and its grey.
+const RISE_DUST = [PC.b, PC.m, PC.a], CHARGE_DUST = [PC.N];
 // What charger() and caster() return: a heading and a share of the monster's own speed. The one
 // triple is reused by the next call, so it is read at once (Enemy.update), never kept.
 const AIM = [0, 0, 0];
@@ -106,6 +110,9 @@ export const PACE_OF = {
   skeleton: 'steady', ghost: 'steady', deathknight: 'steady', slime: 'steady', skeletonarcher: 'steady',
   zombie: 'slow', ogre: 'slow', orc: 'slow', cultist: 'slow',
 };
+// The new maps' kinds walk in the class of the Darkwood kind each stands for (data/enemies.js
+// STANDS_FOR; 28 October 2026): a Carrion Scarab as a rat, a Yeti as an Orc Brute.
+for (const [id, kind] of Object.entries(STANDS_FOR)) if (PACE_OF[kind]) PACE_OF[id] = PACE_OF[kind];
 export const NIGHTMARE_PACE = 1.05 * (1 + 0.05 * SWIFTNESS.max);
 const isPaced = (def, o = {}) => !(def.boss || def.prop || o.lord || def.ai === 'flee' || def.ai === 'static' || !def.spd);
 // A horde monster's speed in px/s on Normal and Veteran (its class's), or its own for the rest.
@@ -277,7 +284,8 @@ export class Enemy {
     this.poseAt = 0;
     this.speech = null;
     this.shake = 0;
-    this.ai = this.boss ? BOSS_AI[type] : null;
+    // A boss fights as his kit's (data/enemies.js kit: a new map's boss with a night boss's attacks).
+    this.ai = this.boss ? BOSS_AI[def.kit ?? type] : null;
     this.data = {};
     if (this.mod && this.mod.id === 'swift') this.spd *= 1.45;
     if (this.mod && this.mod.id === 'brutal') this.dmg *= 1.5;
@@ -313,7 +321,7 @@ export class Enemy {
     if (this.spawnT > 0) {
       this.spawnT -= dt;
       if (def.rise && Math.random() < 0.5) {
-        g.particles.emit(this.x + rand(-5, 5), this.y, 0, rand(-15, 15), rand(-5, 5), rand(20, 50), 0.45, 1, pick([PC.b, PC.m, PC.a]), P.GROUND | P.FADE, 2, 220);
+        g.particles.emit(this.x + rand(-5, 5), this.y, 0, rand(-15, 15), rand(-5, 5), rand(20, 50), 0.45, 1, pick(g.world.riseDust || RISE_DUST), P.GROUND | P.FADE, 2, 220);
       }
       return;
     }
@@ -664,15 +672,22 @@ export class Enemy {
           sfx('charge', { pan: clamp((this.x - p.x) / 200, -1, 1) });
         }
         return aim(this.lockX, this.lockY, 0);
-      case 'dash':
+      case 'dash': {
         this.stateT -= dt;
         this.shake = 0;
-        if (Math.random() < 0.6) g.particles.emit(this.x, this.y, 0, -this.lockX * 30, -this.lockY * 30, 5, 0.3, 1, PC.N, P.FADE, 2);
+        // Of the ground's dust (CHARGE_DUST), picked by the same throw that lets a mote fly, so no
+        // more dice are thrown than in the forest.
+        const r = Math.random();
+        if (r < 0.6) {
+          const dust = g.world.chargeDust || CHARGE_DUST;
+          g.particles.emit(this.x, this.y, 0, -this.lockX * 30, -this.lockY * 30, 5, 0.3, 1, dust[Math.floor(r * 10) % dust.length], P.FADE, 2);
+        }
         if (this.stateT <= 0) {
           this.state = 'move';
           this.cdT = c.cd * rand(0.8, 1.2);
         }
         return aim(this.lockX, this.lockY, c.spd / Math.max(1, this.spd));
+      }
       default: {
         const d = g.world.steer(this, p);
         if (this.cdT <= 0 && dist < c.range && dist > 20 && this.freezeT <= 0) {

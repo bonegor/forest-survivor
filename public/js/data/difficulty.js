@@ -157,7 +157,9 @@ export const GAME_SPEED = 1.1 * 1.2 * 1.15;
 export const moveFor = (mode, id) => GAME_SPEED * (diffFor(mode, id).pace ?? 1);
 
 export const MODES = {
-  s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn in the Darkwood.' },
+  // Survival's night is spent on one of the maps since 28 October 2026 (data/maps.js), each telling
+  // its own under the trials (ui/screens.js ModeScreen); the mode's own words name none of them.
+  s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn.' },
   dungeon: { id: 'dungeon', name: 'Dungeon Run', sub: '3 floors', desc: 'Slay each floor\'s guardian and descend. Defeat the Demon Lord.' },
   // Ranked, as the owner named it: shown as Endless for a day (the 27 October 2026 review, D10, as a
   // player reading "Ranked" might look for a leaderboard), its name back on 28 October 2026. Its

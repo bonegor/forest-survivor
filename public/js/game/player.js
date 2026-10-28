@@ -355,8 +355,10 @@ export class Player {
       if (this.stepT <= 0) {
         this.stepT = 22;
         g.particles.emit(this.x + rand(-2, 2), this.y, 0, rand(-8, 8), rand(-4, 2), 6, 0.4, 1, g.world.dustColor ?? PC.N, P.FADE | P.GROUND, 3, 30);
-        // On ground the rain has wet, each step squelches (weather.js).
+        // On ground the rain has wet, each step squelches (weather.js); in fresh snow falling (the
+        // Frostfell's, Weather.crunch) it crunches, softly. Sand, ash and petals are silent.
         if (g.weather?.wet && !this.leap) sfx('wetstep');
+        else if (g.weather?.crunch && !this.leap) sfx('step');
       }
     }
 
@@ -440,7 +442,10 @@ export class Player {
       g.particles.burst(this.x, this.y - 8, 6, 8, [PC.j, PC.q, PC.w], 50, 0.4, 1, P.GLOW | P.FADE, {});
       return 0;
     }
-    let dmg = armored(amount * g.diff.dmg, this.armor);
+    // The difficulty's damage and the Survival map's (data/maps.js foe dmg: the Sunscorch's 0.7, the
+    // Abyss's 1.25; 28 October 2026), before his armor: every blow, a touch, a shot or a boss's slam.
+    // (A hero shown on the hero screen stands in a game with no map: hero-showcase.js.)
+    let dmg = armored(amount * g.diff.dmg * (g.map?.foe?.dmg ?? 1), this.armor);
     if (this.buff('protection')) dmg *= 0.5;
     if (this.ult && this.ult.type === 'whirlwind') dmg *= 0.5;
     // Normal halves what he takes, after all of that (difficulty.js hurt). A blow always lands.

@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { EVENTS, LAST_STAND, kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, SURVIVAL_BOSSES, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
@@ -32,8 +32,10 @@ export const minuteMore = (phase) => 1 + PER_MINUTE * minuteOf(phase);
 // on a Nightmare, three times as many again (difficulty.js NIGHTMARE), on Veteran only. Never on
 // Ranked (Game.nightmare).
 export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * runMore(g);
-// The run's own part of it: a Nightmare's triple and a quarter more for each Cursed Skull.
-export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0));
+// The run's own part of it: a Nightmare's triple, a quarter more for each Cursed Skull, and its
+// Survival map's horde (data/maps.js foe: the Sunscorch's 0.7, the Abyss's 1.2; 28 October 2026),
+// whole like a Nightmare's, after the difficulty's bend (rate), in every swarm, ring and pack too.
+export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0)) * (g.map?.foe.horde ?? 1);
 
 // "make it more wave like, the generation of monsters ... it is too constant", then "not full on
 // waves, just occasionally ... base line, + wave every once in a while" (21 October 2026): the
@@ -73,6 +75,9 @@ export const PACK_LEAST = 6;
 export const JOLT = { every: [30, 90], count: 6, spread: 0.45, pace: ['swift', 'quick'] };
 // What a jolt never is: the shooters (Cultists, Skeleton Archers) and any kind not of JOLT.pace.
 const JOLT_NOT = Object.keys(ENEMIES).filter((type) => ENEMIES[type].shot || !JOLT.pace.includes(PACE_OF[type]));
+// What is never a champion: the small fry (data/enemies.js fry: bats, rats, slimelets and their like
+// on the new maps).
+const FRY = Object.keys(ENEMIES).filter((type) => ENEMIES[type].fry);
 
 // n kinds by weight ([kind, weight] rows), spread evenly: each slot goes to the kind furthest behind
 // its share so far (a smooth weighted round-robin), so each comes within one of n times its share of
@@ -116,10 +121,12 @@ export class Spawner {
 
   // The night's timed events, every swarm a batch (data/waves.js batchEvents), rolled once a run
   // the first time they are asked for: by then the mode and the floor are set, and with them how
-  // far the phase moves in SWARM_BATCH.gap seconds. Survival's night has its last stand among them
-  // (data/waves.js LAST_STAND), Ranked and the Dungeon only the night's EVENTS.
+  // far the phase moves in SWARM_BATCH.gap seconds. They are its map's (data/maps.js events: the
+  // Darkwood's are data/waves.js EVENTS, Ranked's and the Dungeon's too). Survival's night has its
+  // last stand among them (data/waves.js LAST_STAND), Ranked and the Dungeon only the night's events.
   get events() {
-    if (!this._events) this._events = this.batch(this.g.mode === 's15' ? [...EVENTS, LAST_STAND].sort((a, b) => a.at - b.at) : EVENTS);
+    const m = this.g.map;
+    if (!this._events) this._events = this.batch(this.g.mode === 's15' && m.lastStand ? [...m.events, m.lastStand].sort((a, b) => a.at - b.at) : m.events);
     return this._events;
   }
 
@@ -171,23 +178,28 @@ export class Spawner {
     this.rewarn();
   }
 
-  // One of the monsters the current pocket of the night allows, by weight. Where the rules send
-  // fewer of those that shoot or lunge, one picked comes only that often (few); otherwise another
-  // kind comes in its place, so the horde is as big and they are that many times fewer.
+  // One of the monsters the current pocket of the night allows, by weight: of its map's night (data/
+  // maps.js pockets; the Darkwood's are data/waves.js POCKETS), or its map's own fallback when the
+  // pocket has nothing left to send (a champion at dusk, which allows only small fry). Where the
+  // rules send fewer of those that shoot or lunge, one picked comes only that often (few); otherwise
+  // another kind comes in its place, so the horde is as big and they are that many times fewer.
   pickType(phase, exclude) {
-    const rows = Object.entries(pocketAt(minuteOf(phase)).spawn).filter(([type]) => !exclude || !exclude.includes(type));
+    const map = this.g.map;
+    const rows = Object.entries(pocketAt(minuteOf(phase), map.pockets).spawn).filter(([type]) => !exclude || !exclude.includes(type));
     let r = weighted(rows, (row) => row[1]);
     const few = this.g.diff.few;
     if (r && few < 1 && isFew(r[0]) && Math.random() >= few) {
       const rest = rows.filter(([type]) => !isFew(type));
       if (rest.length) r = weighted(rest, (row) => row[1]);
     }
-    return r ? r[0] : 'skeleton';
+    return r ? r[0] : map.fallback;
   }
 
+  // The horde's health at a phase: the night's growth, the difficulty's and its map's (data/maps.js
+  // foe hp, last; 28 October 2026). Champions and a crypt's packs take it too.
   stats(phase) {
     const d = this.g.diff;
-    return { hpMul: monsterHp(phase, this.g.mode) * d.hp, dmgMul: 1 };
+    return { hpMul: monsterHp(phase, this.g.mode) * d.hp * this.g.map.foe.hp, dmgMul: 1 };
   }
 
   // How many monsters a second the steady horde sends at a phase (data/waves.js hordeRate), however
@@ -216,9 +228,11 @@ export class Spawner {
 
     // Steady horde, in waves: waveRate a second, never minding how many stand (the owner's of 26
     // October 2026, data/waves.js HORDE_RATE). Due monsters gather in owed, fractions too; each
-    // whole one comes at a spawn point at the screen's edge (a Goblin with two more, all three
-    // counted). The night's or floor's first comes with HORDE_RATE.head seconds' worth (.headLate
-    // on a floor starting later in the night).
+    // whole one comes at a spawn point at the screen's edge (a kind that comes in a group with the
+    // rest of it, data/enemies.js group: a Goblin with two more, all three counted). The night's or
+    // floor's first comes with HORDE_RATE.head seconds' worth (.headLate on a floor starting later in
+    // the night). Its experience is the difficulty's and its map's (data/maps.js foe xp: more where
+    // fewer come, as Normal's NORMAL_XP).
     if (this.acc > 0) this.acc -= dt;
     else {
       const R = HORDE_RATE, rate = this.waveRate(phase);
@@ -232,12 +246,12 @@ export class Spawner {
       // screen (room: Game.recycleFar as for what is sent).
       const full = g.enemies.length - g.propCount >= HORDE_CAP.most - R.room;
       if (full && this.shown() >= R.thin) this.owed = Math.min(this.owed, 0);
-      const st = this.owed >= 1 ? { ...this.stats(phase), steady: true, room: full, xpMul: g.diff.xp ?? 1 } : null;
+      const st = this.owed >= 1 ? { ...this.stats(phase), steady: true, room: full, xpMul: (g.diff.xp ?? 1) * g.map.foe.xp } : null;
       for (let i = 0; i < R.perFrame && this.owed >= 1; i++) {
         const type = this.pickType(phase);
         const pt = g.world.spawnPoint(g);
         if (!pt) break;
-        const pack = type === 'goblin' ? 3 : 1;
+        const pack = ENEMIES[type].group || 1;
         let came = 0;
         for (let k = 0; k < pack; k++) if (g.spawnEnemy(type, pt.x + rand(-8, 8), pt.y + rand(-8, 8), st)) came++;
         // At the cap with no room (Game.recycleFar): what was due now doesn't come at all.
@@ -256,11 +270,12 @@ export class Spawner {
     // Ranked, once the night's are spent: one of its later events again every RANKED_EVENT_EVERY,
     // growing past phase 30, put at the end of the list (a swarm as a whole batch), where it is
     // announced and comes like the night's own. The later ones are those from the Wraith ring on,
-    // the same six since it moved to 12:00 (data/waves.js EVENTS, 27 October 2026).
+    // the same six since it moved to 12:00 (data/waves.js EVENTS, 27 October 2026; Ranked's map is
+    // the Darkwood's).
     if (g.mode === 'ranked' && this.eventIdx >= events.length) {
       if (!this.loopAt) this.loopAt = phase + RANKED_EVENT_EVERY;
       if (soon >= this.loopAt) {
-        const ev = pick(EVENTS.filter((e) => e.at >= 16.8));
+        const ev = pick(g.map.events.filter((e) => e.at >= 16.8));
         events.push(...this.batch([{ ...ev, at: this.loopAt, count: Math.round(ev.count * (1 + Math.max(0, phase - 30) * 0.04)) }]));
         this.loopAt = 0;
       }
@@ -323,8 +338,9 @@ export class Spawner {
           if (pt && g.spawnBoss(RANKED_BOSSES[this.bossIdx % RANKED_BOSSES.length], pt.x, pt.y)) this.bossIdx++;
         }
       }
-      const bosses = SURVIVAL_BOSSES[g.mode];
-      // Something stirs in the dark ARRIVAL.stir real seconds before a night's boss comes.
+      // Survival's night brings its map's three (data/maps.js bosses; the Darkwood's are data/waves.js
+      // SURVIVAL_BOSSES.s15). Something stirs in the dark ARRIVAL.stir real seconds before each comes.
+      const bosses = g.mode === 's15' ? g.map.bosses : null;
       if (bosses && this.bossIdx < bosses.length && g.stirFor !== this.bossIdx && g.time >= bosses[this.bossIdx].at - ARRIVAL.stir * g.pace) {
         g.stirFor = this.bossIdx;
         g.bossStir(bosses[this.bossIdx].id);
@@ -363,13 +379,13 @@ export class Spawner {
   // A timed swarm, ring or pack, or the night's last stand. At the cap of monsters it comes in full
   // all the same (sent: Game.recycleFar), each of them in the place of one off the screen. A pack
   // comes at least PACK_LEAST strong, and the horde it sends pays the difficulty's xp (Normal's
-  // NORMAL_XP; a crypt's packs, which take stats, as ever).
+  // NORMAL_XP) and its map's (data/maps.js foe xp; a crypt's packs, which take stats, as ever).
   fire(ev, phase) {
     const g = this.g, p = g.player;
     g.warnings = g.warnings.filter((w) => w.ev !== ev);
     // A kind picked by pickType (a jolt: ev.picked) came that much more seldom already; cut again it was a ninth, not a third (27 October 2026).
     ev = { ...ev, count: Math.max(ev.type === 'pack' ? PACK_LEAST : 1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) && !ev.picked ? g.diff.few : 1) * hordeMore(g, phase))) };
-    const st = { ...this.stats(phase), xpMul: g.diff.xp ?? 1 };
+    const st = { ...this.stats(phase), xpMul: (g.diff.xp ?? 1) * g.map.foe.xp };
     const cam = g.cam;
     // At the cap a refused spawn means no one is left off the screen to make room (Game.recycleFar),
     // so none of the rest would come this frame either: the event stops asking. Only at the cap, so
@@ -379,12 +395,13 @@ export class Spawner {
       case 'ring':
       case 'stand': {
         // The last stand (data/waves.js LAST_STAND) is a ring of every kind the night has brought,
-        // each as much of it as the night weighs it (kindWeightsBy), spread evenly round it
-        // (spreadKinds), those that shoot or lunge as few as anywhere (pickType's few), and a pack
-        // of champions together at one spot, without their names' banners.
+        // its map's (data/maps.js pockets), each as much of it as the night weighs it
+        // (kindWeightsBy), spread evenly round it (spreadKinds), those that shoot or lunge as few as
+        // anywhere (pickType's few), and a pack of champions together at one spot, without their
+        // names' banners.
         const R0 = Math.hypot(cam.W, cam.H) * 0.5 + 10;
         const count = ev.count * RING.more, per = Math.ceil(count / RING.layers);
-        const kinds = ev.type === 'stand' ? spreadKinds(kindWeightsBy(minuteOf(phase)), count) : null;
+        const kinds = ev.type === 'stand' ? spreadKinds(kindWeightsBy(minuteOf(phase), g.map.pockets), count) : null;
         for (let i = 0; i < count; i++) {
           const layer = Math.floor(i / per), R = R0 + layer * RING.gap;
           const a = ((i % per) + (layer % 2) * 0.5) / per * TAU;
@@ -446,7 +463,7 @@ export class Spawner {
   // pack (the night's last stand, LAST_STAND).
   spawnElite(phase, at = null, quiet = false) {
     const g = this.g;
-    const type = this.pickType(phase, ['bat', 'slimelet', 'rat']);
+    const type = this.pickType(phase, FRY);
     const pt = at || g.world.spawnPoint(g, 20);
     if (!pt) return null;
     const mod = pick(CHAMPION_MODS);
@@ -473,13 +490,14 @@ export class Spawner {
   // A crypt's lord: a named Skeleton Archer, drawn boss-sized, asleep in a room of its own until the
   // hero comes, at its own health whenever the crypt is entered (data/enemies.js) as the difficulty
   // weighs it (difficulty.js health: 20% more, as every monster since 20 October 2026, and on
-  // Normal 70% less on top), and never Stoneskin, which would take a third off every blow.
+  // Normal 70% less on top) and its map (data/maps.js foe hp), and never Stoneskin, which would take
+  // a third off every blow.
   spawnLord(x, y) {
     const g = this.g;
     const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone'));
     const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)} ${pick(CHAMPION_TITLE)}`;
     const e = g.spawnEnemy('skeletonarcher', x, y, {
-      hpMul: g.diff.health,
+      hpMul: g.diff.health * g.map.foe.hp,
       dmgMul: 1.5,
       elite: true,
       lord: true,
@@ -498,7 +516,7 @@ export class Spawner {
     const a = rand(TAU);
     const spot = g.world.freeSpot(p.x + Math.cos(a) * 120, p.y + Math.sin(a) * 100);
     if (!spot) return;
-    const e = g.spawnEnemy('thief', spot.x, spot.y, { hpMul: monsterHp(phase, g.mode) * g.diff.hp, instant: true, sent: true });
+    const e = g.spawnEnemy('thief', spot.x, spot.y, { hpMul: monsterHp(phase, g.mode) * g.diff.hp * g.map.foe.hp, instant: true, sent: true });
     if (e) {
       // One with a chest says so (Enemy.init rolls it as it comes; the 27 October 2026 review, C10),
       // for the default 2.4 s as its escape's line has (Game.escape), so the longer line can be read.

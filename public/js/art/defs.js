@@ -29,12 +29,21 @@ import { PALADIN_ITEMS } from './hero-paladin-items.js';
 import { DRUID_ITEMS } from './hero-druid-items.js';
 import { BERSERKER_ITEMS } from './hero-berserker-items.js';
 import { WITCHHUNTER_ITEMS } from './hero-witchhunter-items.js';
+import { MAP_MONSTER_ART } from './monsters-maps.js';
+import { MAP_BOSS_ART } from './bosses-maps.js';
+import { FLORA_DESERT } from './flora-desert.js';
+import { FLORA_FROZEN } from './flora-frozen.js';
+import { FLORA_MEADOW } from './flora-meadow.js';
+import { FLORA_HELL } from './flora-hell.js';
 import { TUNED } from './tuned.js';
 
 // The art as drawn, and as the game draws it: with the colour tunes baked from the sprite tuner.
 export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...PROC_ART, ...PROP_ART, ...LANDMARK_ART,
   // the four heroes of 20 October 2026: their weapons' icons and what those put on the field
-  ...PALADIN_ITEMS, ...DRUID_ITEMS, ...BERSERKER_ITEMS, ...WITCHHUNTER_ITEMS };
+  ...PALADIN_ITEMS, ...DRUID_ITEMS, ...BERSERKER_ITEMS, ...WITCHHUNTER_ITEMS,
+  // the new Survival maps of 28 October 2026 (data/maps.js): their horde, their bosses, and the
+  // trees, rocks and props their ground grows (game/biomes.js)
+  ...MAP_MONSTER_ART, ...MAP_BOSS_ART, ...FLORA_DESERT, ...FLORA_FROZEN, ...FLORA_MEADOW, ...FLORA_HELL };
 export const ART = withTunes(DRAWN, TUNED);
 
 // Art with colour tunes (tuned.js, by tools/bake-tune.mjs) laid over it: a sprite's palette

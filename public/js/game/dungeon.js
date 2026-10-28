@@ -104,6 +104,33 @@ export const THEMES = {
     dust: PC.a,
     tiles: true,
   },
+  // The Survival maps' crypts (28 October 2026, game/biomes.js crypt.inside): looks alone, as the
+  // Undercroft is, each crypt playing as its minute makes it (crypt, catacombs or inferno). The
+  // Sunscorch's tombs, cut in sandstone, its painted flecks (the crypt's moss) in ochre; the
+  // Frostfell's ice caves, walls of blue ice over a frozen floor, rimed in frost. (The Abyss's are
+  // the Inferno's own; the Bloomvale's are the Darkwood's.)
+  tomb: {
+    floor: ['#4a3a2c', '#554332', '#604c38', '#6b553e'],
+    mortar: '#241a14',
+    face: ['#9a7a52', '#86683f', '#705634', '#5a4429'],
+    faceMortar: '#2e2219',
+    top: ['#17110d', '#1e1610'],
+    rim: '#b8925f',
+    accent: ['#c28569', '#e4a672'],
+    ambient: [92, 76, 64],
+    dust: PC.t,
+  },
+  icecave: {
+    floor: ['#33465c', '#3b5068', '#445a74', '#4d6580'],
+    mortar: '#1a2434',
+    face: ['#7aa6c4', '#6690b0', '#527a9a', '#3f6482'],
+    faceMortar: '#22324a',
+    top: ['#0d1320', '#111a29'],
+    rim: '#a9dcff',
+    accent: ['#c8f4ec', '#2ce8f5'],
+    ambient: [70, 84, 116],
+    dust: PC.G,
+  },
 };
 
 // Which forest crypts wear the Undercroft's look (THEMES.undercroft): about one in three, by its

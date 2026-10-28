@@ -193,6 +193,12 @@ export const PROJECTILE_ART = {
   },
   skullbolt: { emissive: 'lz', frames: [['..lll..', '.lzzzl.', 'lzkzkzl', 'lzzzzzl', '.zkzkz.', '..lll..']] },
   firebolt: { emissive: 'oyYf', outline: false, frames: [['....oyy..', '..ooyYYy.', 'ooyyYffYy', '..ooyYYy.', '....oyy..']] },
+  // The new maps' casters' shots (28 October 2026). The Frost Witch's: a crystal of black ice round
+  // a cold white heart, rime on its upper facets, its dark rim reading on snow; an orb like the
+  // Cultist's, never a needle like the hero's own Frost shard.
+  iceshard: { emissive: 'cwX', outline: false, frames: [['...u...', '..uXu..', '.uXcUu.', 'uUcwcUu', '.uUcUu.', '..uUu..', '...u...']] },
+  // The Thorn Witch's and the Thorn Queen's: a green thorn flying point first off a glowing rosebud.
+  thornbolt: { emissive: 'iwP', frames: [['.PP....', 'PiPLe..', 'iwiLLLl', 'PiPeE..', '.PP....']] },
   meteor: {
     emissive: 'oyY',
     frames: [['...aaaa...', '..aAAAaa..', '.aAoAAAaa.', 'aAAAyAAAaa', 'aAoAAAoAaa', 'aAAAAAAaah', '.aAAoAaah.', '..aaaahh..', '...hhhh...']],

@@ -13,6 +13,7 @@ import { MenuScene } from './ui/background.js';
 import { TitleScreen, HeroScreen, ModeScreen, ArmoryScreen, CodexScreen, RecordsScreen, OptionsScreen } from './ui/screens.js';
 import { GameScreen } from './ui/gamescreen.js';
 import { PrologueScreen } from './ui/prologue.js';
+import { MAPS } from './data/maps.js';
 
 const SCREENS = {
   title: TitleScreen,
@@ -31,7 +32,7 @@ const app = {
   scene: new MenuScene(),
   store,
   settings: loadSettings(),
-  choice: { hero: 'knight', mode: 's15', diff: 'medium', nightmare: false }, // diff, nightmare: as last chosen (settings), below
+  choice: { hero: 'knight', mode: 's15', diff: 'medium', nightmare: false }, // diff, nightmare, map: as last chosen (settings), below
   screen: null,
   screenName: '',
   audioUnlocked: false,
@@ -69,6 +70,10 @@ const app = {
 // them with the settings); a new player starts on Normal.
 app.choice.diff = ['easy', 'medium', 'hard'].includes(app.settings.diff) ? app.settings.diff : 'easy';
 app.choice.nightmare = app.settings.nightmare === true;
+// The Survival map as last chosen on the trial screen (settings.map, data/maps.js), where it names
+// one; else none, and the trial screen shows its default (ui/screens.js shownMap: for a save from
+// before the maps, the Darkwood). A new player's first night, the prologue's, saves the desert.
+if (Object.hasOwn(MAPS, app.settings.map ?? '')) app.choice.map = app.settings.map;
 
 // Scanline overlay for the optional CRT look.
 let scan = null;

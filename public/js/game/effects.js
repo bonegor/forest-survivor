@@ -1755,8 +1755,10 @@ export class Frenzy {
   }
 }
 
-// The wicked, whom the Witch Hunter's bolts seek out first and bite deeper into (bane).
-export const wicked = (e) => !!(e.boss || e.lord || e.elite || e.type === 'cultist');
+// The wicked, whom the Witch Hunter's bolts seek out first and bite deeper into (bane): the strong,
+// and the casters marked wicked (data/enemies.js: the Cultist, and in his place on the new maps the
+// Frost Witch and the Thorn Witch).
+export const wicked = (e) => !!(e.boss || e.lord || e.elite || e.def.wicked);
 
 // Up to n foes for her bolts: the wicked within R, nearest first, then the rest. On a Dungeon Run
 // floor (throughWalls) those in the open come before any in the rock, wicked or not, as for all

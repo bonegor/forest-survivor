@@ -376,8 +376,14 @@ function drawCentered(ctx, img, sx, sy, scale) {
 
 // The foes' shots are drawn over everything, unlit (Game.draw), a quarter bigger than their
 // sprites (SHOT_GROW), and scale times that again. Most hit within r of the hero's feet; a
-// shot with a reach hits as it is drawn (EnemyShot.touches).
+// shot with a reach hits as it is drawn (EnemyShot.touches). Each breaks on a wall but one that
+// flies through (through: the Lich's skulls, which he throws as he floats over them, and the Thorn
+// Queen's thorns, thrown as she floats), and ends in a burst of its own colours (burst; the old
+// violet, SHOT_BURST, for the rest). Whether it flies through is its kind's, so a boss's that does
+// is a kind of its own: a caster of the horde throws one that breaks where his base's would (the
+// Thorn Witch's thorn on a crypt's wall, as the Cultist's bolt).
 const SHOT_GROW = 1.25;
+const SHOT_BURST = [PC.P, PC.i, PC.p];
 const SHOT_LOOK = {
   // The Cultist's: a big, slow orb, easy to see coming.
   darkbolt: { sprite: 'darkbolt', glow: '#b55088', light: 'purple', scale: 1.5 },
@@ -387,9 +393,19 @@ const SHOT_LOOK = {
   // bone hits wherever it crosses the hero's body: a bar 9 px either side of its drawn centre,
   // 4 px thick, turning with it.
   bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, reach: 9, r: 4 },
-  skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green' },
+  skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green', through: true },
   firebolt: { sprite: 'firebolt', glow: '#f77622', light: 'fire' },
   arrow: { sprite: 'arrow', glow: null, light: null },
+  // The new maps' (28 October 2026). The Frost Witch's, in the Cultist's place: his big, slow orb in
+  // black ice round a cold heart, spiked with rime, dark enough to read on snow, bursting in ice.
+  iceshard: { sprite: 'iceshard', glow: '#2ce8f5', light: 'cyan', scale: 1.5, burst: [PC.w, PC.X, PC.c] },
+  // The Thorn Witch's: a thorn off a glowing rosebud, a little smaller than the Cultist's orb (the
+  // Queen's, the same thorn, come in rings of sixteen), bursting in petals and leaf; it breaks on a
+  // wall as his orb does (she is his recolour, and plays as he does).
+  thornbolt: { sprite: 'thornbolt', glow: '#f6757a', light: 'red', scale: 1.25, burst: [PC.i, PC.P, PC.L] },
+  // The Thorn Queen's (data/enemies.js thornqueen bolt): the Witch's thorn, but through walls as the
+  // Lich's skulls (she fights as he does).
+  queenthorn: { sprite: 'thornbolt', glow: '#f6757a', light: 'red', scale: 1.25, through: true, burst: [PC.i, PC.P, PC.L] },
 };
 
 // The hero's body as a shot that hits as drawn sees it: an upright bar from 4 to 26 px above
@@ -450,12 +466,12 @@ export class EnemyShot {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     this.rot += (this.look.spin || 0) * dt;
-    if (g.world.solid(this.x, this.y) && this.kind !== 'skullbolt') this.dead = true;
+    if (g.world.solid(this.x, this.y) && !this.look.through) this.dead = true;
     if (!this.dead && this.touches(p)) {
       if (p.hurt(this.dmg, null, this.by, this.boss) > 0 || !p.untouchable) this.dead = true;
     }
     if (this.dead || this.life <= 0) {
-      g.particles.burst(this.x, this.y, this.z, 6, [PC.P, PC.i, PC.p], 40, 0.3, 1, P.FADE | P.GLOW, {});
+      g.particles.burst(this.x, this.y, this.z, 6, this.look.burst || SHOT_BURST, 40, 0.3, 1, P.FADE | P.GLOW, {});
       return false;
     }
     return true;

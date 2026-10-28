@@ -7,6 +7,7 @@ import { WEAPONS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { HERO_ORDER, FEAT, hasFeat, modeUnlocked, progressList, exclusionEntry } from '../shared/profile.js';
 import { PROGRESS } from '../shared/progress.js';
+import { MAPS } from '../data/maps.js';
 import { SPR } from '../engine/sprites.js';
 import { fmtTime, fmtNum } from '../engine/util.js';
 import { heroCrop } from './scenes.js';
@@ -14,6 +15,8 @@ import { padlock } from './ui.js';
 
 const title = (id) => `the ${HEROES[id].title}`;
 const prevHero = (id) => HERO_ORDER[HERO_ORDER.indexOf(id) - 1];
+// A Survival map's name within a sentence: 'the Sunscorch' (data/maps.js).
+const land = (id) => MAPS[id].name.replace(/^The /, 'the ');
 
 // One line describing the player's next goal (see nextGoal()).
 export function goalText(goal) {
@@ -36,13 +39,17 @@ export function goalText(goal) {
   }
 }
 
-// Why a hero can't enter a mode yet (short enough for a mode card).
-export function lockReason(p, mode, hero) {
+// Why a hero can't enter a mode yet (short enough for a mode card); for Survival, why a map of it is
+// still shut (28 October 2026): the night before it on the ladder (shared/progress.js mapLadder) is
+// not yet won.
+export function lockReason(p, mode, hero, map) {
   if (mode === 'dungeon') {
     if (!modeUnlocked(p, 'dungeon')) return 'Survive the night with the Necromancer';
     return `Beat the Dungeon with ${title(prevHero(hero))}`;
   }
   if (mode === 'ranked') return 'Beat the Dungeon with the Necromancer';
+  const i = PROGRESS.mapLadder.indexOf(map);
+  if (i > 0) return `Survive the night in ${land(PROGRESS.mapLadder[i - 1])}`;
   return '';
 }
 
@@ -51,6 +58,8 @@ export function unlockText(key) {
   const [kind, id] = key.split(':');
   if (kind === 'hero') return `${cap(title(id))} is unlocked!`;
   if (kind === 'dungeon') return `${cap(title(id))} may now enter the Dungeon!`;
+  // A Survival map opened by the night won on the one before it (shared/profile.js openings).
+  if (kind === 'map') return Object.hasOwn(MAPS, id) ? `${MAPS[id].name} is open!` : '';
   if (key === 'mode:dungeon') return 'The Dungeon is open, starting with the Knight!';
   if (key === 'mode:ranked') return 'Ranked unlocked: the endless night awaits!';
   return '';

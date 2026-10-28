@@ -14,8 +14,16 @@
 // while a new hero learns the woods; the sky clears before dawn, so the sunrise is seen.
 //
 // It is all for the eye and the ear: no monster, hero or weapon fights any differently in it.
+//
+// The other Survival maps (28 October 2026) each have a climate of their own (game/biomes.js, a
+// look's `weather`): their skies and spells in place of SKIES and SPELLS, forecast alike, and how
+// their weather looks: the Sunscorch's haze and sandstorms, the Frostfell's snow and blizzards, the
+// Bloomvale's drifting petals and soft showers, the Abyss's ashfall and ember storms with red
+// lightning. Only rain is heard and only rain wets a step; snow, sand, ash and petals fall silent
+// (fresh snow crunches underfoot: `crunch`), and lightning brings the same thunder anywhere. The
+// Darkwood's climate (CLIMATE) is the rain and clear above, forecast and drawn exactly as before.
 
-import { mulberry32, clamp, lerp } from '../engine/util.js';
+import { mulberry32, clamp, lerp, TAU } from '../engine/util.js';
 import { sfx, weatherBed } from '../engine/audio.js';
 
 // What each weather is: rain (0..1, how hard), dark (how much it dims the night's ambient light)
@@ -31,6 +39,19 @@ export const SPELLS = {
   clear: { secs: [120, 240], next: { rain: 1 } },
   rain: { secs: [90, 180], next: { clear: 1 } },
 };
+
+// A climate: its skies (every one of them with the same keys, rain, dark and lightning among them,
+// as at() blends one into the next key by key; and a 'clear', which opens and closes every night)
+// and its spells, and how its weather looks: `dim`, how the dark of a sky takes the night's red,
+// green and blue (DIM); `flash`, the colour lightning lights the night with (FLASH); `bolt`, a
+// bolt's colours and its light (BOLT); `gap`, the seconds between strikes (LIGHTNING.gap); `cast`,
+// { to, k }: the colour a sky's `cast` pulls the night toward; `crunch`, the sky key under which
+// the hero's steps crunch; `motes`, what falls or blows besides rain (Weather.drift: flakes, grains,
+// embers). The Darkwood's is SKIES and SPELLS and the rest as it always was.
+export const CLIMATE = { skies: SKIES, spells: SPELLS };
+const DIM = [1.2, 1, 0.6];
+const FLASH = [225, 232, 255];
+const BOLT = { glow: '120,150,255', core: '235,240,255', light: 'cold' };
 
 export const FRONT = 25; // seconds one weather takes to pass into the next
 export const CALM_START = 120; // the first two minutes are clear
@@ -53,8 +74,8 @@ export const WET = 0.35;
 const DROPS = 360, FALL = [250, 330], HIGH = [70, 190];
 const SPLASHES = 96;
 
-function pickNext(rng, kind) {
-  const next = SPELLS[kind].next;
+function pickNext(rng, kind, table = SPELLS) {
+  const next = table[kind].next;
   let sum = 0;
   for (const k in next) sum += next[k];
   let r = rng() * sum;
@@ -64,15 +85,16 @@ function pickNext(rng, kind) {
 
 const span = (rng, [a, b]) => a + rng() * (b - a);
 
-// The night's spells, [{ kind, at, until }], from `from` (the first spell given) to `end`.
-export function forecast(seed, duration, first = { kind: 'clear', at: 0, until: CALM_START }, rng = mulberry32(seed ^ 0x5ea7)) {
+// The night's spells, [{ kind, at, until }], from `from` (the first spell given) to `end`; of a
+// climate's spells (`table`, the Darkwood's SPELLS without one).
+export function forecast(seed, duration, first = { kind: 'clear', at: 0, until: CALM_START }, rng = mulberry32(seed ^ 0x5ea7), table = SPELLS) {
   const spells = [first];
   // A spell forced past the clearing (the developer panel) runs its course before it.
   const end = Number.isFinite(duration) ? Math.max(duration - DAWN_CLEAR, first.until) : ENDLESS;
   let last = first;
   while (last.until < end) {
-    const kind = pickNext(rng, last.kind);
-    last = { kind, at: last.until, until: last.until + span(rng, SPELLS[kind].secs) };
+    const kind = pickNext(rng, last.kind, table);
+    last = { kind, at: last.until, until: last.until + span(rng, table[kind].secs) };
     spells.push(last);
   }
   if (Number.isFinite(duration)) {
@@ -92,19 +114,23 @@ export function forecast(seed, duration, first = { kind: 'clear', at: 0, until: 
 const smooth = (k) => k * k * (3 - 2 * k);
 
 export class Weather {
-  constructor(g) {
+  // climate: the night's look's (game/biomes.js `weather`); the Darkwood's (CLIMATE) without one.
+  constructor(g, climate = null) {
+    const C = (this.climate = climate || CLIMATE);
+    this.skies = C.skies;
     this.g = g;
     this.rng = mulberry32(g.seed ^ 0x77e1);
-    this.spells = forecast(g.seed, g.duration);
+    this.spells = forecast(g.seed, g.duration, undefined, undefined, C.spells);
     // Where things stand now (update): the sky's blend and the spell under way.
-    this.now = { rain: 0, dark: 0, lightning: 0 };
+    this.now = { ...C.skies.clear };
     this.kind = 'clear';
     this.flash = 0; // a lightning flash, 1 at its brightest, dying away
     this.bolt = null; // { pts, x, y, t } a strike's bolt on screen
-    this.strikeT = span(this.rng, LIGHTNING.gap);
+    this.strikeT = span(this.rng, C.gap || LIGHTNING.gap);
     this.thunder = []; // [{ t, size, pan }] thunder on its way
     this.bedT = 0;
     this.rainAt = null; // when the latest spell of rain began
+    this.stormAt = null; // when the latest spell of rain or lightning began (its opening clap)
     // The rain, in world space: x, y the ground under a drop, z its height.
     this.n = 0;
     this.dx = new Float32Array(DROPS);
@@ -112,15 +138,29 @@ export class Weather {
     this.dz = new Float32Array(DROPS);
     this.dv = new Float32Array(DROPS);
     this.splash = [];
+    // What else falls or blows (C.motes, none in the Darkwood), each style in typed arrays of its
+    // own as the rain is: x, y the ground under a mote, z its height, v its fall (an ember's rise),
+    // u its speed along x, p its phase (its sway, an ember's flicker); and its colours as drawn.
+    this.motes = (C.motes || []).map((s) => ({
+      s, n: 0, x: new Float32Array(s.most), y: new Float32Array(s.most), z: new Float32Array(s.most),
+      v: new Float32Array(s.most), u: new Float32Array(s.most), p: new Float32Array(s.most),
+      fill: s.colors.map((rgb) => `rgba(${rgb},${s.alpha})`),
+    }));
   }
 
-  // Whether the weather is to be seen and heard: the forest only, by night, out of the crypts,
-  // unless the options turned it off.
   // Whether the hero's steps fall on wet ground.
   get wet() {
     return this.shown && this.now.rain >= WET;
   }
 
+  // Whether they fall in fresh snow (a climate's `crunch`: the sky's key for it), to crunch.
+  get crunch() {
+    const k = this.climate.crunch;
+    return !!k && this.shown && this.now[k] >= WET;
+  }
+
+  // Whether the weather is to be seen and heard: on the night's ground, by night, out of the
+  // crypts, unless the options turned it off.
   get shown() {
     const g = this.g;
     return !g.headless && !g.inCrypt && !g.world.daylight && g.settings.weather !== false;
@@ -131,9 +171,9 @@ export class Weather {
     const S = this.spells;
     let i = 0;
     while (i < S.length - 1 && S[i].until <= t) i++;
-    const cur = SKIES[S[i].kind], front = S[i].front ?? FRONT;
+    const cur = this.skies[S[i].kind], front = S[i].front ?? FRONT;
     const k = i > 0 ? smooth(clamp((t - S[i].at) / front, 0, 1)) : 1;
-    const prev = i > 0 ? SKIES[S[i - 1].kind] : cur;
+    const prev = i > 0 ? this.skies[S[i - 1].kind] : cur;
     for (const key in cur) out[key] = lerp(prev[key], cur[key], k);
     out.kind = S[i].kind;
     out.at = S[i].at;
@@ -145,17 +185,21 @@ export class Weather {
     const t = this.g.time;
     const keep = this.spells.filter((s) => s.at < t);
     if (keep.length) keep[keep.length - 1].until = t;
-    const spell = { kind, at: t, until: t + span(this.rng, SPELLS[kind].secs), front: 3 };
-    this.spells = [...keep, ...forecast(0, this.g.duration, spell, this.rng)];
+    const table = this.climate.spells;
+    const spell = { kind, at: t, until: t + span(this.rng, table[kind].secs), front: 3 };
+    this.spells = [...keep, ...forecast(0, this.g.duration, spell, this.rng, table)];
   }
 
   update(dt) {
-    const g = this.g, w = this.at(g.time, this.now);
+    const g = this.g, w = this.at(g.time, this.now), sky = this.skies[w.kind];
     this.kind = w.kind;
-    // A spell of rain beginning: the opening clap, if it began just now (not the clock set into it).
-    if (w.kind === 'rain' && w.at !== this.rainAt) {
-      this.rainAt = w.at;
-      if (this.shown && g.time - w.at < 2) this.strike(true);
+    // A spell of rain (or of lightning, the Abyss's ember storm) beginning: the rain's hush is heard
+    // from it (hear), and a stormy one opens with its clap, if it began just now (not the clock set
+    // into it). In the Darkwood: its spells of rain, as ever.
+    if ((sky.rain > 0 || sky.lightning > 0) && w.at !== this.stormAt) {
+      this.stormAt = w.at;
+      if (sky.rain > 0) this.rainAt = w.at;
+      if (sky.lightning > 0 && this.shown && g.time - w.at < 2) this.strike(true);
     }
     this.flash *= Math.exp(-dt * 11);
     if (this.bolt && (this.bolt.t -= dt) <= 0) this.bolt = null;
@@ -165,7 +209,7 @@ export class Weather {
     if (w.lightning > 0.5) {
       this.strikeT -= dt * w.lightning;
       if (this.strikeT <= 0) {
-        this.strikeT = span(this.rng, LIGHTNING.gap);
+        this.strikeT = span(this.rng, this.climate.gap || LIGHTNING.gap);
         if (shown) this.strike();
       }
     }
@@ -180,6 +224,10 @@ export class Weather {
 
     if (shown) this.rain(dt, w);
     else this.n = 0;
+    for (let k = 0; k < this.motes.length; k++) {
+      if (shown) this.drift(this.motes[k], dt, w);
+      else this.motes[k].n = 0;
+    }
   }
 
   // The rain heard: held where it is while this runs, and under the level-up's cards, a chest and a
@@ -193,12 +241,12 @@ export class Weather {
   }
 
   // How loud the rain is heard at second t (RAIN_HEARD): the shower's hush through the first of
-  // the spell, fading with the rain as it passes.
+  // the spell, fading with the rain as it passes (a softer rain's, the Bloomvale's shower, softer).
   heard(t, w) {
     if (this.rainAt === null) return 0;
-    const H = RAIN_HEARD, s = t - this.rainAt;
+    const H = RAIN_HEARD, s = t - this.rainAt, sky = this.skies[w.kind];
     const k = s < H.in ? smooth(clamp(s / H.in, 0, 1)) : lerp(1, H.after, smooth(clamp((s - H.full) / H.fade, 0, 1)));
-    return k * (w.kind === 'rain' ? 1 : w.rain);
+    return k * (sky.rain > 0 ? sky.rain : w.rain);
   }
 
   // A lightning strike: a bolt down to a random place in view, its flash, and the thunder at once;
@@ -242,20 +290,107 @@ export class Weather {
     this.dy[i] = c.y - 10 + rng() * (c.H + 30);
   }
 
-  // The night's ambient light, dimmed under cloud and lit by lightning (Forest.ambient).
+  // A climate's motes of one style (m.s) through dt: as many as its sky's key asks (s.key, 0 to 1
+  // of s.most), flakes and grains falling (grains blown fast along x), embers rising, all carried
+  // by the wind (s.wind px/s at the sky's full wind). Slow as they are, they would be left behind
+  // as the hero walks: whatever leaves the view's box comes in again at its far side.
+  drift(m, dt, w) {
+    const c = this.g.cam, s = m.s, want = Math.round(s.most * (w[s.key] || 0));
+    while (m.n < want) this.mote(m, m.n++, c, true);
+    if (m.n > want) m.n = want;
+    const wind = (w.wind || 0) * (s.wind || 0), ember = s.kind === 'ember';
+    const L = c.x - 40, Wd = c.W + 80, T = c.y - 30, Hd = c.H + 80;
+    for (let i = 0; i < m.n; i++) {
+      if (ember ? (m.z[i] += m.v[i] * dt) > s.top : (m.z[i] -= m.v[i] * dt) <= 0) {
+        this.mote(m, i, c, false);
+        continue;
+      }
+      m.x[i] += (m.u[i] + wind) * dt;
+      if (m.x[i] < L) m.x[i] += Wd;
+      else if (m.x[i] >= L + Wd) m.x[i] -= Wd;
+      if (m.y[i] < T) m.y[i] += Hd;
+      else if (m.y[i] >= T + Hd) m.y[i] -= Hd;
+    }
+  }
+
+  // A mote of m's style somewhere over the view; `any`, at any height (the weather setting in).
+  mote(m, i, c, any) {
+    const rng = this.rng, s = m.s;
+    m.x[i] = c.x - 40 + rng() * (c.W + 80);
+    m.y[i] = c.y - 30 + rng() * (c.H + 80);
+    m.p[i] = rng() * TAU;
+    if (s.kind === 'ember') {
+      m.z[i] = any ? rng() * s.top : span(rng, s.high);
+      m.v[i] = span(rng, s.rise);
+      m.u[i] = (rng() - 0.5) * 2 * s.sway;
+    } else {
+      m.z[i] = any ? rng() * s.high[1] : span(rng, s.high);
+      m.v[i] = span(rng, s.fall);
+      m.u[i] = s.kind === 'grain' ? span(rng, s.speed) : 0;
+    }
+  }
+
+  // Them drawn, unlit, over the night: flakes (snow, ash, petals) one or two pixels, swaying as they
+  // fall; grains short streaks along the wind; embers glowing (added), flickering.
+  drawMotes(ctx, c, m) {
+    const S = c.S, s = m.s, t = this.g.clock, nc = m.fill.length;
+    if (s.kind === 'grain') {
+      ctx.lineWidth = Math.max(1, Math.round(S / 2));
+      for (let k = 0; k < nc; k++) {
+        ctx.strokeStyle = m.fill[k];
+        ctx.beginPath();
+        for (let i = k; i < m.n; i += nc) {
+          const x = (m.x[i] - c.x) * S, y = (m.y[i] - m.z[i] - c.y) * S;
+          if (x < -40 || y < -40 || x > c.pxW + 40 || y > c.pxH + 40) continue;
+          const len = (s.len[0] + (s.len[1] - s.len[0]) * ((m.p[i] / TAU) % 1)) * S;
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - len, y + len * 0.12);
+        }
+        ctx.stroke();
+      }
+      return;
+    }
+    const ember = s.kind === 'ember';
+    if (ember) ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < nc; k++) {
+      ctx.fillStyle = m.fill[k];
+      for (let i = k; i < m.n; i += nc) {
+        const sway = Math.sin(t * (ember ? 2.3 : 1.3) + m.p[i]) * (s.sway || 0) * (ember ? 0.4 : 1);
+        const x = (m.x[i] + sway - c.x) * S, y = (m.y[i] - m.z[i] - c.y) * S;
+        if (x < -20 || y < -20 || x > c.pxW + 20 || y > c.pxH + 20) continue;
+        const px = Math.max(1, Math.round((!ember && (i % 10) < (s.big || 0) * 10 ? 2 : 1) * S));
+        if (ember) ctx.globalAlpha = 0.45 + 0.55 * Math.abs(Math.sin(t * 7 + m.p[i] * 3)) * Math.min(1, (s.top - m.z[i]) / 40);
+        ctx.fillRect(Math.round(x - px / 2), Math.round(y - px / 2), px, px);
+      }
+    }
+    if (ember) {
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  // The night's ambient light, dimmed under cloud and lit by lightning (Forest.ambient); a sky's
+  // `cast` pulls it toward its climate's colour (the Sunscorch's sand).
   tint(a) {
     if (!this.shown) return a;
-    const d = this.now.dark, f = Math.min(1, this.flash) * 0.6;
-    const r = a[0] * (1 - d * 1.2), gg = a[1] * (1 - d), b = a[2] * (1 - d * 0.6);
-    return [lerp(r, 225, f), lerp(gg, 232, f), lerp(b, 255, f)];
+    const C = this.climate, d = this.now.dark, f = Math.min(1, this.flash) * 0.6, k = C.dim || DIM, F = C.flash || FLASH;
+    let r = a[0] * (1 - d * k[0]), gg = a[1] * (1 - d * k[1]), b = a[2] * (1 - d * k[2]);
+    if (C.cast) {
+      const q = this.now.cast * C.cast.k, to = C.cast.to;
+      r = lerp(r, to[0], q);
+      gg = lerp(gg, to[1], q);
+      b = lerp(b, to[2], q);
+    }
+    return [lerp(r, F[0], f), lerp(gg, F[1], f), lerp(b, F[2], f)];
   }
 
   // The strike's light on the woods (Game.draw, with the other lights).
   addLights(g) {
-    if (this.bolt && this.shown) g.light(this.bolt.x, this.bolt.y, 170, 'cold', Math.min(1, this.bolt.t * 6));
+    if (this.bolt && this.shown) g.light(this.bolt.x, this.bolt.y, 170, (this.climate.bolt || BOLT).light, Math.min(1, this.bolt.t * 6));
   }
 
-  // Over the world, under the foes' shots and the numbers: the rain, its splashes, a bolt.
+  // Over the world, under the foes' shots and the numbers: the rain, its splashes, the climate's
+  // motes (none in the Darkwood), a bolt.
   draw(ctx, c) {
     if (!this.shown) return;
     const S = c.S, w = this.now;
@@ -284,8 +419,9 @@ export class Weather {
       }
       ctx.globalAlpha = 1;
     }
+    for (let k = 0; k < this.motes.length; k++) if (this.motes[k].n) this.drawMotes(ctx, c, this.motes[k]);
     if (this.bolt) {
-      const b = this.bolt, a = (b.t > 0.14 || b.t < 0.07 ? 1 : 0.35) * Math.min(1, b.t * 8);
+      const b = this.bolt, a = (b.t > 0.14 || b.t < 0.07 ? 1 : 0.35) * Math.min(1, b.t * 8), B = this.climate.bolt || BOLT;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineJoin = 'round';
@@ -295,10 +431,10 @@ export class Weather {
         if (i) ctx.lineTo(x, y);
         else ctx.moveTo(x, y);
       }
-      ctx.strokeStyle = `rgba(120,150,255,${(0.35 * a).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(${B.glow},${(0.35 * a).toFixed(3)})`;
       ctx.lineWidth = S * 3;
       ctx.stroke();
-      ctx.strokeStyle = `rgba(235,240,255,${a.toFixed(3)})`;
+      ctx.strokeStyle = `rgba(${B.core},${a.toFixed(3)})`;
       ctx.lineWidth = Math.max(1, S * 0.75);
       ctx.stroke();
       ctx.restore();

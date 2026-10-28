@@ -3,6 +3,12 @@
 // crossroads, a bend, a landmark and a crossroads far out, then checks that the forest comes out
 // the same in any order and without seams, and how long a chunk takes.
 //   node tools/mapgen/endless.mjs [--seed=1] [--trees=1] [--out=tools/mapgen/out/endless]
+// Another Survival map's look (public/js/game/biomes.js, 28 October 2026): --biome=desert (frozen,
+// meadow, hell) paints the same views as the game paints that look: its ground, what stands in
+// each place (biomeProp, its flora read from art/flora-<look>.js if defs.js has it not yet), its
+// crypt doors, its night's light and its cracks' glow, laid out from its map's world seed
+// (data/maps.js) unless --seed says otherwise; into tools/mapgen/out/endless-<look>.
+// --views-only: just the pictures (a smaller overview, no far one), without the checks and timing.
 
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,16 +17,25 @@ import { packedPalette, OUTLINE } from '../../public/js/art/palette.js';
 import { fromRows, outline, makeBuf, hexPack } from '../../public/js/engine/pixels.js';
 import { GLYPHS } from '../../public/js/engine/fontdata.js';
 import { fbm, mulberry32, clamp, TAU } from '../../public/js/engine/util.js';
-import { DARKWOOD, CHUNK, TREE_NAMES, GRASS, ROAD, setWorld, layoutChunk, paintChunk, place, road, roadsOf, roadExists, cacheSizes } from '../../public/js/game/darkwood.js';
+import { DARKWOOD, CHUNK, TREE_NAMES, setWorld, layoutChunk, paintChunk, place, road, roadsOf, roadExists, cacheSizes } from '../../public/js/game/darkwood.js';
+import { BIOMES, biomeProp } from '../../public/js/game/biomes.js';
+import { LIGHT_COLORS } from '../../public/js/game/lighting.js';
 import { writePng } from '../png.mjs';
 
 const arg = (k, d) => {
   const a = process.argv.find((s) => s.startsWith(`--${k}=`));
   return a ? a.slice(k.length + 3) : d;
 };
-setWorld({ seed: Number(arg('seed', DARKWOOD.seed)), trees: Number(arg('trees', DARKWOOD.trees)) });
+const BIOME = arg('biome', 'forest'), LOOK = BIOMES[BIOME], VIEWS_ONLY = process.argv.includes('--views-only');
+if (!LOOK) throw new Error(`no look '${BIOME}': ${Object.keys(BIOMES).join(', ')}`);
+// The look's own world: its map's seed (the Darkwood's 1).
+const WORLD = BIOME === 'forest' ? DARKWOOD.seed : Object.values((await import('../../public/js/data/maps.js')).MAPS).find((m) => m.look === BIOME)?.seed ?? DARKWOOD.seed;
+setWorld({ seed: Number(arg('seed', WORLD)), trees: Number(arg('trees', DARKWOOD.trees)) });
 const SEED = DARKWOOD.seed, D = DARKWOOD.spacing;
-const OUT = arg('out', 'tools/mapgen/out/endless');
+const OUT = arg('out', BIOME === 'forest' ? 'tools/mapgen/out/endless' : `tools/mapgen/out/endless-${BIOME}`);
+// Its flora, drawn before the game's art table has it (art/flora-<look>.js FLORA_<LOOK>).
+const FLORA = BIOME === 'forest' ? {} : await import(`../../public/js/art/flora-${BIOME}.js`).then((m) => m[`FLORA_${BIOME.toUpperCase()}`] || {}, () => ({}));
+const GROUND = LOOK.ground, ZONE = { oak: 0, pine: 1, cursed: 2 };
 const CELL = 8, MARGIN = 112, GN = (CHUNK + 2 * MARGIN) / CELL; // as in darkwood.js
 const TREE_GAP = 30;
 const SPEED = 70; // the hero's walking speed, world px per second
@@ -34,8 +49,9 @@ const bayer = (x, y) => BAYER[(y & 3) * 4 + (x & 3)];
 const pal = packedPalette();
 const sprites = {};
 function sprite(name) {
-  if (sprites[name]) return sprites[name];
-  const def = ART[name];
+  if (name in sprites) return sprites[name];
+  const def = ART[name] || FLORA[name];
+  if (!def) return (sprites[name] = null); // not drawn yet: the game leaves it out too
   const raw = resolveFrames(def)[0];
   let b = Array.isArray(raw) ? fromRows(raw, pal) : raw;
   const thin = def.thin ? new Set([...def.thin].map((ch) => pal[ch])) : null;
@@ -46,19 +62,30 @@ const rgbOf = (c) => [c & 255, (c >>> 8) & 255, (c >>> 16) & 255];
 const packRgb = (r, g, b) => ((255 << 24) | (clamp(b, 0, 255) << 16) | (clamp(g, 0, 255) << 8) | clamp(r, 0, 255)) >>> 0;
 const H = (hex) => hexPack(hex);
 const SHRINE_LIGHT = { fury: 'red', haste: 'cyan', fortune: 'gold', wisdom: 'purple', protection: 'green' };
-// What the game draws for a chunk: its props, its shrines, and the lights they cast.
+// What the game draws for a chunk: its props (what stands in each place on the look, Forest.generate),
+// its shrines, and the lights they cast (each key as bright as the look burns it); on another look its
+// crypts' doors too (the game's syncShrines), in its stone.
 function chunkScene(cd) {
-  const props = [...cd.props], lights = [];
-  for (const p of cd.props) if (p.light) lights.push([p.x, p.y - 6, p.light[1], p.light[0], p.light[0] === 'cyan' ? 0.55 : 1]);
+  const props = [], lights = [];
+  for (const q of cd.props) {
+    const p = LOOK.props ? biomeProp(LOOK, q, cd) : q;
+    if (!p || !sprite(p.n)) continue;
+    props.push(p);
+    if (p.light) lights.push([p.x, p.y - 6, p.light[1], p.light[0], LOOK.lightK[p.light[0]] ?? 1]);
+  }
   for (const s of cd.shrines) {
     props.push({ n: 'shrine', x: Math.round(s.x), y: Math.round(s.y) });
     lights.push([s.x, s.y - 12, 70, SHRINE_LIGHT[s.type], 0.9]);
   }
+  if (BIOME !== 'forest') for (const d of cd.crypts) props.push({ n: sprite(LOOK.crypt.door) ? LOOK.crypt.door : 'crypt', x: d.x, y: d.y });
   return { props, lights };
 }
+// A chunk's ground as the look paints it, and its cracks' glow if they glow (buf.glow).
 const ground = (cd) => {
   const buf = makeBuf(CHUNK, CHUNK);
-  paintChunk(cd, buf.d);
+  cd.ground = GROUND;
+  if (GROUND.cracks) buf.glow = new Uint32Array(CHUNK * CHUNK);
+  paintChunk(cd, buf.d, buf.glow || null);
   return buf;
 };
 
@@ -73,18 +100,17 @@ function blitSprite(buf, spr, x, y) {
     }
   }
 }
-const LIGHT_COLORS = { warm: [255, 186, 120], fire: [255, 140, 60], white: [255, 255, 255], cyan: [120, 240, 255], red: [255, 80, 60], gold: [255, 210, 90], purple: [200, 120, 255], green: [150, 255, 120] };
 const falloff = (t) => (t < 0.25 ? 1 - t * 0.72 : t < 0.5 ? 0.82 - (t - 0.25) * 1.36 : t < 0.75 ? 0.48 - (t - 0.5) * 1.2 : 0.18 - (t - 0.75) * 0.72);
 
 // One screen of the game: 600x338 world px at night, as at 1080p (shown 3x bigger), built
 // chunk by chunk exactly as the game would build it.
 function renderView(name, cx, cy, hero = null) {
   const w = 600, h = 338, x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);
-  const buf = makeBuf(w, h), props = [], L = [];
+  const buf = makeBuf(w, h), props = [], L = [], glow = GROUND.cracks ? new Uint32Array(w * h) : null;
   // Chunks a little beyond the screen too, for the trees that lean in and the lights that reach in.
   for (let ky = Math.floor((y0 - 120) / CHUNK); ky <= Math.floor((y0 + h + 120) / CHUNK); ky++) {
     for (let kx = Math.floor((x0 - 120) / CHUNK); kx <= Math.floor((x0 + w + 120) / CHUNK); kx++) {
-      const cd = layoutChunk(kx, ky), sc = chunkScene(cd);
+      const cd = layoutChunk(kx, ky, null, LOOK.density), sc = chunkScene(cd);
       props.push(...sc.props);
       L.push(...sc.lights);
       if (kx * CHUNK >= x0 + w || (kx + 1) * CHUNK <= x0 || ky * CHUNK >= y0 + h || (ky + 1) * CHUNK <= y0) continue;
@@ -94,7 +120,10 @@ function renderView(name, cx, cy, hero = null) {
         if (yy < 0 || yy >= h) continue;
         for (let x = 0; x < CHUNK; x++) {
           const xx = kx * CHUNK + x - x0;
-          if (xx >= 0 && xx < w) buf.d[yy * w + xx] = g.d[y * CHUNK + x];
+          if (xx >= 0 && xx < w) {
+            buf.d[yy * w + xx] = g.d[y * CHUNK + x];
+            if (glow) glow[yy * w + xx] = g.glow[y * CHUNK + x];
+          }
         }
       }
     }
@@ -105,10 +134,23 @@ function renderView(name, cx, cy, hero = null) {
     const s = sprite(p.n);
     blitSprite(buf, s, p.x - x0 - Math.floor(s.w / 2), p.y - y0 - s.h + 1);
   }
-  // Night: ambient light times the scene, lamps and fires added on, like the game's light pass.
+  // Night: ambient light times the scene, lamps and fires added on, like the game's light pass. The
+  // look's light a tenth into the night (the Darkwood's 118, 120, 172).
   const near = L.filter(([x, y, r]) => x > x0 - r && x < x0 + w + r && y > y0 - r && y < y0 + h + r);
   near.push([cx, cy - 6, 125, 'warm', 1], [cx, cy - 8, 46, 'white', 0.7]); // the hero's own lantern glow
-  const amb = [118, 120, 172];
+  const amb = LOOK.night[1][1];
+  // The cracks' glow lights the night too (Forest.addLights, lighting.js glow, at the middle of its
+  // pulse): averaged into the light map's 2 px texels and spread smoothly over the screen, as the game's.
+  const lw = Math.ceil(w / 2) + 1, lh = Math.ceil(h / 2) + 1, GL = glow ? new Float32Array(lw * lh * 3) : null, gk = glow ? GROUND.cracks.alpha : 0;
+  if (GL) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!glow[y * w + x]) continue;
+        const [r, g, b] = rgbOf(glow[y * w + x]), i = ((y >> 1) * lw + (x >> 1)) * 3;
+        GL[i] += r / 4; GL[i + 1] += g / 4; GL[i + 2] += b / 4;
+      }
+    }
+  }
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let lr = amb[0], lg = amb[1], lb = amb[2];
@@ -117,6 +159,15 @@ function renderView(name, cx, cy, hero = null) {
         if (d >= 1) continue;
         const f = falloff(d) * k, c = LIGHT_COLORS[key];
         lr += c[0] * f; lg += c[1] * f; lb += c[2] * f;
+      }
+      if (GL) {
+        const fx = clamp((x + 0.5) / 2 - 0.5, 0, lw - 1.001), fy = clamp((y + 0.5) / 2 - 0.5, 0, lh - 1.001);
+        const i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j;
+        for (let ch = 0; ch < 3; ch++) {
+          const a = GL[(j * lw + i) * 3 + ch], b = GL[(j * lw + i + 1) * 3 + ch], c = GL[((j + 1) * lw + i) * 3 + ch], d = GL[((j + 1) * lw + i + 1) * 3 + ch];
+          const v = ((a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty) * gk;
+          if (ch === 0) lr += v; else if (ch === 1) lg += v; else lb += v;
+        }
       }
       const [r, g, b] = rgbOf(buf.d[y * w + x]);
       buf.d[y * w + x] = packRgb(Math.round((r * Math.min(lr, 255)) / 255), Math.round((g * Math.min(lg, 255)) / 255), Math.round((b * Math.min(lb, 255)) / 255));
@@ -152,7 +203,7 @@ function renderOverview(name, wx, wy, n) {
   const buf = makeBuf(W, W), props = [], places = new Map(), landmarks = new Map();
   for (let ky = 0; ky < n; ky++) {
     for (let kx = 0; kx < n; kx++) {
-      const cd = layoutChunk(cx0 + kx, cy0 + ky);
+      const cd = layoutChunk(cx0 + kx, cy0 + ky, null, LOOK.density);
       chunkCount++;
       propCount += cd.props.length;
       for (const p of cd.props) {
@@ -168,8 +219,8 @@ function renderOverview(name, wx, wy, n) {
           const x = (cx0 + kx) * CHUNK + (i + 0.5) * CELL, y = (cy0 + ky) * CHUNK + (j + 0.5) * CELL;
           const z = cd.cursedF[c] > 0.5 + b * 0.5 ? 'cursed' : cd.pineF[c] > 0.5 + b * 0.5 ? 'pine' : 'oak';
           const t2 = fbm(x / 110, y / 110, SEED, 2) * 0.6 + 0.35 - cd.groveF[c] * 0.3 + cd.clearF[c] * 0.15 + b * 0.1;
-          let col = GRASS[z][clamp(Math.floor(t2 * 5), 0, 4)];
-          if (cd.dist[c] < 0.5 + b * 4) col = ROAD[cd.dist[c] < -5 ? 4 : 3];
+          let col = GROUND.zones[ZONE[z]][clamp(Math.floor(t2 * 5), 0, 4)];
+          if (cd.dist[c] < 0.5 + b * 4) col = GROUND.road[cd.dist[c] < -5 ? 4 : 3];
           buf.d[py * W + px] = col;
         }
       }
@@ -216,13 +267,13 @@ function renderOverview(name, wx, wy, n) {
 }
 
 // ---- 6. Make the pictures, then check the forest really is the same however it is made ----------
-console.log(`Endless Darkwood, seed ${SEED}`);
+console.log(BIOME === 'forest' ? `Endless Darkwood, seed ${SEED}` : `Endless Darkwood in the ${BIOME}'s look, seed ${SEED}`);
 // Timing first, while the heap is as small as the game's: each chunk made and painted in turn,
 // as the game does one per frame, after the first 40 have warmed the code up.
 const chunkMs = [], groundMs = [];
-for (let k = 0; k < 340; k++) {
+for (let k = 0; k < (VIEWS_ONLY ? 0 : 340); k++) {
   const t0 = performance.now();
-  const cd = layoutChunk((k % 20) - 10, Math.floor(k / 20) - 8);
+  const cd = layoutChunk((k % 20) - 10, Math.floor(k / 20) - 8, null, LOOK.density);
   const t1 = performance.now();
   ground(cd);
   if (k >= 40) {
@@ -230,12 +281,13 @@ for (let k = 0; k < 340; k++) {
     groundMs.push(performance.now() - t1);
   }
 }
-lap('timing 300 chunks');
-const home = renderOverview('overview', 0, 0, 48);
-lap(`overview round the start (48x48 chunks)`);
+if (!VIEWS_ONLY) lap('timing 300 chunks');
+const HOME = VIEWS_ONLY ? 24 : 48;
+const home = renderOverview('overview', 0, 0, HOME);
+lap(`overview round the start (${HOME}x${HOME} chunks)`);
 const FAR = { x: 67 * D, y: 47 * D }; // a crossroads about 120,000 px from the start
-const far = renderOverview('overview-far', FAR.x, FAR.y, 24);
-lap(`overview far away (24x24 chunks)`);
+const far = VIEWS_ONLY ? null : renderOverview('overview-far', FAR.x, FAR.y, 24);
+if (!VIEWS_ONLY) lap(`overview far away (24x24 chunks)`);
 
 const start = place(0, 0);
 renderView('start', start.x, start.y + 14, start.hero);
@@ -259,13 +311,17 @@ renderView('landmark', lm.x, lm.y + 10);
 const farNode = place(67, 47);
 renderView('far', farNode.x, farNode.y + 10);
 lap('game-scale views');
+if (VIEWS_ONLY) {
+  lap('done');
+  process.exit(0);
+}
 
 // Same forest whatever the order: forget everything, then rebuild chunks in another order.
 const probe = [];
 const pr = mulberry32(99);
 for (let k = 0; k < 120; k++) probe.push([pr.int(-24, 23), pr.int(-24, 23)]);
 for (let k = 0; k < 40; k++) probe.push([Math.floor(FAR.x / CHUNK) + pr.int(-12, 11), Math.floor(FAR.y / CHUNK) + pr.int(-12, 11)]);
-const snap = (list) => list.map(([x, y]) => JSON.stringify(layoutChunk(x, y), (k, v) => (k === 'props' || k === 'shrines' || k === '' || /^\d+$/.test(k) || typeof v !== 'object' ? v : undefined))).join('\n');
+const snap = (list) => list.map(([x, y]) => JSON.stringify(layoutChunk(x, y, null, LOOK.density), (k, v) => (k === 'props' || k === 'shrines' || k === '' || /^\d+$/.test(k) || typeof v !== 'object' ? v : undefined))).join('\n');
 const before = snap(probe);
 const cached = cacheSizes();
 let roadBytes = 0;

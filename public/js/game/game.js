@@ -5,7 +5,8 @@ import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, monsterHp, minuteOf, HORDE_CAP, SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { mapFor } from '../data/maps.js';
 import { RANKS, HERO_UNLOCK_TIME, countedKills } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
@@ -30,6 +31,7 @@ import { SpatialGrid } from './grid.js';
 import { jostle, CROWD } from './crowd.js';
 import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
+import { BIOMES } from './biomes.js';
 import { Weather } from './weather.js';
 import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
@@ -70,17 +72,21 @@ export const FLASH_SOFT = 0.2;
 // The combo (28 October 2026, the 27 October review's C7): kills with no lull of `hold` seconds of
 // the world's time between them (Game.update). The HUD shows it from `show` kills, on every
 // difficulty; its four named tiers (CARNAGE!, MASSACRE!, ANNIHILATION!, GODLIKE!) come at `tiers`
-// on Veteran, and on another difficulty at those times its horde over Veteran's (data/difficulty.js
-// spawn, a Nightmare's NIGHTMARE.more again) to the power `bend`: late in a thick night the combo
-// runs on unbroken (the casino review), so its tiers rise with the horde, but a thin one breaks
-// between kills, so not by as much (an estimate to tune). Presentation only: a combo pays no gold or
-// experience ("the grind is by design").
+// on Veteran, and on another difficulty or map at those times its horde over Veteran's
+// (data/difficulty.js spawn, a Nightmare's NIGHTMARE.more again, its Survival map's foe.horde
+// again) to the power `bend`: late in a thick night the combo runs on unbroken (the casino review),
+// so its tiers rise with the horde, but a thin one breaks between kills, so not by as much (an
+// estimate to tune). Presentation only: a combo pays no gold or experience ("the grind is by
+// design").
 export const COMBO = { hold: 2, show: 10, tiers: [50, 100, 200, 500], bend: 0.5 };
-// The tiers as a run of this difficulty has them, each rounded to 5 and clear of COMBO.show and of
-// the one below (Normal 20/35/70/175, Elite 70/140/285/705, an Elite Nightmare 120/245/490/1225).
-// The Cursed Skulls are left out: the tiers stay put through the run.
-export function comboTiers(diff, nightmare = false) {
-  const crowd = (diff.spawn / VETERAN.spawn) * (nightmare ? NIGHTMARE.more : 1);
+// The tiers as a run of this difficulty and map has them, each rounded to 5 and clear of COMBO.show
+// and of the one below (Normal 20/35/70/175, Elite 70/140/285/705, an Elite Nightmare
+// 120/245/490/1225; Veteran on the Sunscorch 40/85/165/420, in the Abyss 55/110/220/550). The map's
+// horde (data/maps.js foe.horde, the Darkwood's 1) counts as a Nightmare's does: it is the run's
+// from first to last (spawner.js runMore, 28 October 2026). The Cursed Skulls are left out: the
+// tiers stay put through the run.
+export function comboTiers(diff, nightmare = false, horde = 1) {
+  const crowd = (diff.spawn / VETERAN.spawn) * (nightmare ? NIGHTMARE.more : 1) * horde;
   return COMBO.tiers.map((n, i) => Math.max(COMBO.show + 5 * (i + 1), Math.round((n * crowd ** COMBO.bend) / 5) * 5));
 }
 // A combo of n's tier: -1 below COMBO.show (not shown), 0 shown (COMBO), 1-4 the named tiers.
@@ -96,11 +102,20 @@ export function comboTier(tiers, n) {
 export const CRYPT_STEPS = { w: 9, below: 9 };
 export const CRYPT_PUSH = 0.5;
 
-// A crypt's name, by its crossroads (key 'i,j'). One that wears the Undercroft's look
-// (dungeon.js cryptLook) is an Undercroft.
-export function cryptName(key) {
-  const [a, b] = key.split(',').map(Number);
-  const kind = cryptLook(key) === 'undercroft' ? 'Undercroft' : CRYPT_KIND[Math.floor(hash2(a, b, 41) * CRYPT_KIND.length)];
+// What a crypt wears inside (its Dungeon look), by its crossroads (key 'i,j') and the night's look
+// (game/biomes.js, the Darkwood's without one): the look's own (the Sunscorch's sandstone tombs, the
+// Frostfell's ice caves, the Abyss's Inferno), else one in three an Undercroft (dungeon.js
+// cryptLook) and the rest as the night's minute makes it, as in the Darkwood and the Bloomvale.
+export function cryptLookFor(key, look = BIOMES.forest) {
+  return look.crypt.inside || cryptLook(key);
+}
+
+// A crypt's name, by its crossroads (key 'i,j') and the night's look: what its look calls its
+// crypts (the Sunscorch's Tombs and Necropolises, the Abyss's Pits...; the Darkwood's CRYPT_KIND),
+// and one that wears the Undercroft's look (cryptLookFor, as it is entered) is an Undercroft.
+export function cryptName(key, look = BIOMES.forest) {
+  const [a, b] = key.split(',').map(Number), kinds = look.crypt.kinds || CRYPT_KIND;
+  const kind = cryptLookFor(key, look) === 'undercroft' ? 'Undercroft' : kinds[Math.floor(hash2(a, b, 41) * kinds.length)];
   return `${kind} of ${CRYPT_OF[Math.floor(hash2(a, b, 42) * CRYPT_OF.length)]}`;
 }
 
@@ -239,6 +254,9 @@ export class Game {
     // A Nightmare, three times the monsters (data/difficulty.js NIGHTMARE), as chosen: Veteran only,
     // never on Ranked.
     this.nightmare = nightmareFor(o.mode, o.nightmare, this.diffId);
+    // Where the night is spent (data/maps.js): Survival's map as chosen, the Darkwood without one
+    // (the tests, the bots, the tools) and for Ranked and the Dungeon Run.
+    this.map = mapFor(o.mode, o.map);
     this.settings = o.settings || {};
     this.seed = Math.floor(Math.random() * 2 ** 31);
     this.duration = this.mode === 's15' ? 15 * 60 : Infinity;
@@ -280,7 +298,7 @@ export class Game {
     this.combo = 0;
     this.comboT = 0;
     this.comboTier = -1; // the tier it has come to (comboTier), its sting played once each
-    this.comboTiers = comboTiers(this.diff, this.nightmare);
+    this.comboTiers = comboTiers(this.diff, this.nightmare, this.map.foe.horde);
     this.comboSting = 0; // the highest tier come to since the last sting, rung at the frame's end (update)
     this.comboRun = 0; // the combos a lull has broken, so the HUD pops the next as it comes up (Hud.drawCombo)
     // A boss's arrival (arrival.js): the stir before it, its name card, the heartbeat while it is
@@ -390,23 +408,32 @@ export class Game {
 
     if (this.mode === 'dungeon') this.enterFloor(this.floor);
     else {
-      this.world = new Forest(this, this.seed);
-      // The night's weather (weather.js): the forest's only, forecast from the run's seed.
-      this.weather = new Weather(this);
+      // The night's ground (game/biomes.js): the map's look, the Darkwood's without a map (and in
+      // Ranked), laid out from the map's world seed.
+      this.world = new Forest(this, this.seed, this.look);
+      // The night's weather (weather.js): the look's climate, forecast from the run's seed.
+      this.weather = new Weather(this, this.look.weather);
       this.player.x = this.world.start.x;
       this.player.y = this.world.start.y;
-      playMusic('forest');
+      playMusic(this.map.music);
     }
     for (const id of startWeapons(HEROES[o.hero])) this.addWeapon(id);
     this.syncCam();
     this.cam.x = this.player.x - this.cam.W / 2;
     this.cam.y = this.player.y - this.cam.H / 2;
-    if (this.mode === 's15') this.banner('The Darkwood', 'Survive 15 minutes until dawn', '#8fb8ff', 3.5);
+    // The map's name over its night (The Darkwood's as it always was).
+    if (this.mode === 's15') this.banner(this.map.name, 'Survive 15 minutes until dawn', this.map.color, 3.5);
     else if (this.mode === 'ranked') {
       this.banner('The Endless Night', 'No dawn will come. Last as long as you can.', '#f6757a', 3.5);
       this.rankIdx = RANKS.findLastIndex(([min]) => this.time >= min * 60);
       this.bestBeaten = this.rankedBest > 0 && this.time > this.rankedBest;
     }
+  }
+
+  // The look of the night's ground (game/biomes.js), the map's: the Darkwood's without one. What
+  // its crypts are called and wear inside go by it too (cryptName, cryptLookFor).
+  get look() {
+    return BIOMES[this.map.look] || BIOMES.forest;
   }
 
   // ------------------------------------------------------------- clock --
@@ -522,8 +549,9 @@ export class Game {
       sp.bossIdx = Math.floor(t / RANKED_BOSS_EVERY);
       this.rankIdx = RANKS.findLastIndex(([min]) => t >= min * 60);
       this.bestBeaten = this.rankedBest > 0 && t > this.rankedBest;
-    } else if (SURVIVAL_BOSSES[this.mode]) {
-      const bosses = SURVIVAL_BOSSES[this.mode];
+    } else if (this.mode === 's15') {
+      // Survival's are its map's (data/maps.js bosses), as the Spawner brings them.
+      const bosses = this.map.bosses;
       sp.bossIdx = 0;
       while (sp.bossIdx < bosses.length && bosses[sp.bossIdx].at <= t) sp.bossIdx++;
     }
@@ -953,9 +981,11 @@ export class Game {
     return this.spawnEnemy(type, spot.x, spot.y, { always: true });
   }
 
+  // A boss at the night's health (a Dungeon Run floor's its own), the difficulty's and the map's
+  // (data/maps.js foe hp, last).
   spawnBoss(id, x, y, o = {}) {
     const mul = this.mode === 'dungeon' ? [0.65, 1.3, 4][this.floor - 1] : monsterHp(this.phase, this.mode) * 0.8;
-    const e = this.spawnEnemy(id, x, y, { hpMul: this.diff.hp * mul, instant: true, always: true, ...o });
+    const e = this.spawnEnemy(id, x, y, { hpMul: this.diff.hp * mul * this.map.foe.hp, instant: true, always: true, ...o });
     if (!e) return null;
     // The Crypt's guardian is the gentler first boss: cramped rooms make every blow count.
     this.bossPower = this.mode === 'dungeon' && this.floor === 1 ? 0.75 : 1;
@@ -1003,9 +1033,12 @@ export class Game {
 
   summonRing(type, n, R, o = {}) {
     const p = this.player;
+    // Of the map's own kind in their place where it has one (data/maps.js summons: the Lich's
+    // Wraiths rise as Dust Wraiths on the Sunscorch), the Darkwood's as they always were.
+    type = this.map.summons?.[type] ?? type;
     // Summoned round the hero by a boss: they know where he is (Enemy.aware), and at the cap they
     // come in full and are never the ones that make room (recycleFar).
-    const st = { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, aware: true, summoned: true, ...o };
+    const st = { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp * this.map.foe.hp, aware: true, summoned: true, ...o };
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + rand(-0.2, 0.2);
       const spot = this.world.freeSpot(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R * 0.85);
@@ -1168,7 +1201,7 @@ export class Game {
       for (let i = 0; i < e.def.splitN; i++) {
         // Its experience as its own: a Normal horde slime's slimelets pay NORMAL_XP times theirs,
         // a champion's or a crypt's as ever (Enemy xpMul).
-        const c = this.spawnEnemy(e.def.split, e.x + rand(-5, 5), e.y + rand(-5, 5), { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp, instant: true, aware: true, xpMul: e.xpMul });
+        const c = this.spawnEnemy(e.def.split, e.x + rand(-5, 5), e.y + rand(-5, 5), { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp * this.map.foe.hp, instant: true, aware: true, xpMul: e.xpMul });
         if (c) {
           c.kx = rand(-60, 60);
           c.ky = rand(-60, 60);
@@ -1227,6 +1260,26 @@ export class Game {
         ps.burst(e.x, e.y - 4, 4, 10, [PC.P, PC.p, PC.q], 70, 0.7, 1, P.GLOW | P.FADE, { vz: 50 });
         if (chance(0.5)) this.addDecal('dark', e.x, e.y, 3 + e.r * 0.5);
         sfx('die', { pitch: rand(1, 1.3), pan });
+        break;
+      // The new maps' (data/enemies.js, 28 October 2026): the desert's dead crumble to sand and dust,
+      // the Frostfell's shatter in shards of ice, the Bloomvale's burst in sap and petals. Each with
+      // the death's own sound, pitched: low and dry, high and glassy, the goo's lower and wetter.
+      case 'sand':
+        ps.burst(e.x, e.y, 6, 10, [PC.T, PC.C, PC.D], 60, 0.8, 1, P.GROUND | P.FADE, { vz: 60, grav: 260 });
+        ps.burst(e.x, e.y - 4, 4, 6, [PC.t, PC.D, PC.H], 25, 1.2, 2, P.FADE, { vz: 20, drag: 1.5 });
+        if (chance(0.5)) this.addDecal('sand', e.x, e.y, 3 + e.r * 0.6);
+        sfx('die', { pitch: rand(0.6, 0.75), pan });
+        break;
+      case 'ice':
+        ps.burst(e.x, e.y - 4, 6, 12, [PC.w, PC.X, PC.c, PC.G], 80, 0.7, 1, P.GLOW | P.GROUND | P.FADE, { vz: 90, grav: 300 });
+        if (chance(0.5)) this.addDecal('ice', e.x, e.y, 3 + e.r * 0.5);
+        sfx('die', { pitch: rand(1.4, 1.7), pan });
+        break;
+      case 'sap':
+        ps.burst(e.x, e.y, 6, 8, [PC.L, PC.e, PC.y], 70, 0.7, 1, P.GROUND | P.FADE, { vz: 70, grav: 280 });
+        ps.burst(e.x, e.y - 6, 6, 6, [PC.i, PC.P, PC.Y, PC.l], 30, 1.3, 1, P.FADE, { vz: 25, drag: 2.5 });
+        if (chance(0.6)) this.addDecal('sap', e.x, e.y, 3 + e.r * 0.6);
+        sfx('goo', { pitch: rand(0.7, 0.9), pan });
         break;
       case 'gold':
         ps.burst(e.x, e.y - 4, 6, 24, [PC.Y, PC.y, PC.w], 120, 1, 1, P.GLOW | P.FADE, { vz: 90 });
@@ -1350,8 +1403,8 @@ export class Game {
       }
     }
     if (next) return;
-    // The music eases back to the night's over a few seconds.
-    if (this.mode !== 'dungeon' || this.floor < 3) playMusic(this.mode === 'dungeon' ? 'dungeon-' + FLOORS[this.floor - 1].theme : 'forest', { fade: ARRIVAL.easeBack });
+    // The music eases back to the night's over a few seconds: its map's (data/maps.js music).
+    if (this.mode !== 'dungeon' || this.floor < 3) playMusic(this.mode === 'dungeon' ? 'dungeon-' + FLOORS[this.floor - 1].theme : this.map.music, { fade: ARRIVAL.easeBack });
   }
 
   // A crypt's lord has fallen, and leaves its coins, its gold and, rolled lord by lord (LORD_DROPS
@@ -1409,7 +1462,7 @@ export class Game {
   // What the prompt over a crypt's door says (Hud.drawCryptDoor): its name, how many lords sleep
   // below were he to go in now, and how far his push up its steps has come (0 to 1).
   doorInfo(d) {
-    return { name: cryptName(d.key), lords: cryptLords(minuteOf(this.phase), d.depth), k: clamp((d.push || 0) / CRYPT_PUSH, 0, 1) };
+    return { name: cryptName(d.key, this.look), lords: cryptLords(minuteOf(this.phase), d.depth), k: clamp((d.push || 0) / CRYPT_PUSH, 0, 1) };
   }
 
   // Every hero fights by hand below: in a crypt only his own weapon (the knight's sword, the
@@ -1488,10 +1541,11 @@ export class Game {
       this.clearTransient();
       const [a, b] = d.key.split(',').map(Number);
       const minute = minuteOf(this.phase);
-      const name = cryptName(d.key);
+      const name = cryptName(d.key, this.look);
       this.inCrypt = { key: d.key, depth: d.depth, minute, name, hp: p.hp };
+      // What lies there and sleeps there by the night's minute; how it looks by the map's look too.
       const theme = minute < 6 ? 'crypt' : minute < 11 ? 'catacombs' : 'inferno';
-      new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, look: cryptLook(d.key), lords: cryptLords(minute, d.depth) });
+      new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, look: cryptLookFor(d.key, this.look), lords: cryptLords(minute, d.depth) });
       p.x = this.world.start.x;
       p.y = this.world.start.y;
       this.gatherMinions();
@@ -1573,7 +1627,7 @@ export class Game {
     p.invuln = Math.max(p.invuln, 1.5);
     this.gatherMinions();
     this.snapCam();
-    playMusic(this.boss && !this.boss.dead ? 'boss' : 'forest');
+    playMusic(this.boss && !this.boss.dead ? 'boss' : this.map.music);
     return f.door;
   }
 
@@ -1863,10 +1917,11 @@ export class Game {
     const p = this.player;
     this.effects.push(new Ring(this, p.x, p.y, 6, 260, 0.8, '#fee761', false, 3));
     // Bosses, crypt lords and champions only take a heavy blow: a relic is no way past them. The
-    // blow grows and shrinks with their health (difficulty.js health), so it takes the same share of
-    // them on Normal as on Veteran: a flat 200 would all but fell a Normal crypt lord (216).
+    // blow grows and shrinks with their health (difficulty.js health, and the map's: data/maps.js foe
+    // hp), so it takes the same share of them on Normal as on Veteran, in the Sunscorch as in the
+    // Abyss: a flat 200 would all but fell a Normal crypt lord (216).
     for (const e of this.enemiesOnScreen()) {
-      if (e.boss || e.elite) this.hitEnemy(e, 200 * this.diff.health, { type: 'holy' });
+      if (e.boss || e.elite) this.hitEnemy(e, 200 * this.diff.health * this.map.foe.hp, { type: 'holy' });
       else this.killEnemy(e, { noSplit: true });
     }
   }
@@ -2087,7 +2142,7 @@ export class Game {
   eventWarning(ev) {
     const R = Math.hypot(this.cam.W, this.cam.H) * 0.55;
     const from = ev.type === 'swarm' ? [-Math.cos(ev.dir) * R, -Math.sin(ev.dir) * R] : ev.type === 'pack' && ev.off ? ev.off : null;
-    const [title, sub] = eventWords(ev, from ? sideWord(from) : '');
+    const [title, sub] = eventWords(ev, from ? sideWord(from) : '', this.map.side);
     // A batch's swarms each say which they are (data/waves.js batchEvents), "2 of 4".
     const which = ev.of > 1 ? `${ev.batch + 1} of ${ev.of}` : '';
     this.banner(title, [sub, which].filter(Boolean).join(' · '), '#e43b44', WARN.lead + 0.4);
@@ -2127,7 +2182,8 @@ export class Game {
       case 'bosses':
         return this.stats.bosses >= l.at;
       case 'kills':
-        return l.from + countedKills(this.kills, t, this.diffId, this.nightmare) >= l.at;
+        // Held as the report will be (sanitizeRun), its map's more monsters too (the Abyss's).
+        return l.from + countedKills(this.kills, t, this.diffId, this.nightmare, this.map.id) >= l.at;
       case 'evolution':
         for (const w of p.weapons) if (w.evolved && w.id === l.of) return true;
         return false;
@@ -2220,6 +2276,7 @@ export class Game {
       victory,
       died, // for the Consecration's milestone (shared/progress.js deaths)
       mode: this.mode,
+      map: this.mode === 's15' ? this.map.id : null, // the Survival map it was spent on (data/maps.js)
       diff: this.diffId,
       nightmare: this.nightmare,
       hero: p.id,
@@ -2762,7 +2819,9 @@ export class Game {
     // Lighting.
     this.world.addLights(this);
     if (this.weather) this.weather.addLights(this);
-    for (const d of this.crypts) if (!d.sealed && onScreen(c, d.x, d.y, 80)) this.light(d.x, d.y - 8, 44 + 4 * Math.sin(d.t * 2), 'purple', 0.8);
+    // An open crypt's door in its look's light (game/biomes.js crypt: the Abyss's hellgates by fire).
+    const doorLight = this.look.crypt.light || 'purple';
+    for (const d of this.crypts) if (!d.sealed && onScreen(c, d.x, d.y, 80)) this.light(d.x, d.y - 8, 44 + 4 * Math.sin(d.t * 2), doorLight, 0.8);
     const flick = 0.94 + 0.06 * Math.sin(this.clock * 9) * Math.sin(this.clock * 5.3);
     this.light(p.x, p.y - 6, (this.mode === 'dungeon' ? 130 : 125) * flick, 'warm', 1);
     this.light(p.x, p.y - 8, 46, 'white', 0.7);
@@ -2770,8 +2829,11 @@ export class Game {
     // By night the vignette darkens the scene, its fog and rain with it, before the horde is
     // lifted out of it, so the far monsters at the screen's edge stand out of the dark as the
     // near ones do (enemies.js NIGHT_EDGE); the glows, shots and numbers drawn after it go over it.
-    // By day the fog and weather and then the vignette go over everything, last.
-    const vig = vignette(256, 144, '8,6,16', this.world.daylight ? 0.18 : 0.7);
+    // By day the fog and weather and then the vignette go over everything, last. Its colour and
+    // strength by night are the world's look's (game/biomes.js; the Darkwood's, and a crypt's or a
+    // Dungeon Run floor's, as they always were).
+    const wv = this.world.vignette;
+    const vig = vignette(256, 144, wv ? wv[0] : '8,6,16', this.world.daylight ? 0.18 : wv ? wv[1] : 0.7);
     if (!this.world.daylight) {
       this.drawSkies(ctx, c);
       ctx.drawImage(vig, 0, 0, c.pxW, c.pxH);
@@ -3000,7 +3062,7 @@ export class Game {
     const sx = (d.x - c.x) * S, sy = (d.y - 7 - c.y) * S;
     const sz = (24 + 3 * Math.sin(d.t * 2)) * S;
     ctx.globalAlpha = 0.6;
-    ctx.drawImage(glow('#8f5bb0'), sx - sz / 2, sy - sz / 2, sz, sz);
+    ctx.drawImage(glow(this.look.crypt.glow || '#8f5bb0'), sx - sz / 2, sy - sz / 2, sz, sz);
     ctx.globalAlpha = 1;
   }
 

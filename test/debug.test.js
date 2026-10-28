@@ -65,6 +65,9 @@ test('at the debug flag every hero and mode is open, in a save of its own', asyn
   const all = (type) => P.progressList(p).filter((l) => l.type === type).length;
   assert.ok(open.ult && open.weapons.length === all('weapon') && open.relics.length === all('relic') && all('weapon') === 23 && all('relic') === 22, 'everything open');
   assert.ok(P.progressList(p).every((l) => l.open));
+  // Every Survival map too (28 October 2026), none of them won.
+  for (const m of P.PROGRESS.maps) assert.ok(P.mapOpen(p, m), m);
+  assert.equal(p.mw, 0);
   // A run played there is kept there, its unlocks with it.
   const reward = await store.submitRun({ mode: 'ranked', diff: 'hard', hero: 'necromancer', victory: false, time: 120, realTime: 120, kills: 50, level: 6, floor: 1, gold: 30 });
   assert.ok(reward.total > 0, 'the run counts');

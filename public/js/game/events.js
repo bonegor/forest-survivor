@@ -17,6 +17,32 @@ const WORDS = {
   'pack:hellhound': ['Hellhounds on your trail!', 'from the {side}'],
   // Survival's last stand at 14:00 (data/waves.js LAST_STAND).
   'stand:all': ['The last stand!', 'Every horror of the night closes in'],
+  // The new maps' (data/maps.js events, 28 October 2026). The Sunscorch.
+  'swarm:vulture': ['Vultures circle in!', 'from the {side}'],
+  'swarm:scarab': ['Scarabs boil out of the sand!', 'from the {side}'],
+  'ring:mummy': ['The tombs open around you!', ''],
+  'ring:dustwraith': ['Dust wraiths close in around you!', ''],
+  'ring:anubite': ['The tomb guard surrounds you!', ''],
+  'pack:jackal': ['Jackals on the hunt!', 'from the {side}'],
+  // The Frostfell.
+  'swarm:snowowl': ['Owls on the wind!', 'from the {side}'],
+  'swarm:iceimp': ['Ice imps from the {side}!', ''],
+  'ring:frostbitten': ['The frozen dead rise around you!', ''],
+  'ring:frostwisp': ['Frost wisps close in around you!', ''],
+  'ring:rimeknight': ['Rime knights surround you!', ''],
+  'pack:frosthound': ['Winter hounds on your trail!', 'from the {side}'],
+  // The Bloomvale.
+  'swarm:bee': ['A swarm of bees!', 'from the {side}'],
+  'ring:myconid': ['Myconids sprout around you!', ''],
+  'ring:flytrap': ['Snapjaws spring up around you!', ''],
+  'ring:pixie': ['Pixies close in around you!', ''],
+  'ring:thornknight': ['Thorn knights surround you!', ''],
+  'pack:mantis': ['Mantises on the hunt!', 'from the {side}'],
+  // The Abyss.
+  'swarm:flameskull': ['Flameskulls from the {side}!', ''],
+  'ring:damned': ['The damned rise around you!', ''],
+  'ring:hellwraith': ['Tormented souls close in around you!', ''],
+  'pack:fiend': ['A fiend raid!', 'from the {side}'],
 };
 const SIDES = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 
@@ -26,10 +52,12 @@ export function sideWord([dx, dy]) {
   return SIDES[(Math.round(a / (Math.PI / 4)) + 8) % 8];
 }
 
-// An event's banner: [title, sub], its side put in.
-export function eventWords(ev, side = '') {
+// An event's banner: [title, sub], its side put in. Where it has none (a pack with nowhere to be
+// shown coming from) it comes from `away`: its map's beyond (data/maps.js side: the Darkwood's dark,
+// the Sunscorch's dunes).
+export function eventWords(ev, side = '', away = 'dark') {
   const [t, s] = WORDS[`${ev.type}:${ev.enemy}`] || (ev.type === 'ring' ? ['You are being surrounded!', ''] : ev.type === 'swarm' ? ['A swarm is coming!', 'from the {side}'] : ['A pack on the hunt!', 'from the {side}']);
-  const put = (x) => x.replace('{side}', side || 'dark');
+  const put = (x) => x.replace('{side}', side || away);
   return [put(t), put(s)];
 }
 

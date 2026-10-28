@@ -225,6 +225,11 @@ const SPLAT = {
   ash: ['#4b3d44', '#7d6a6a', '#2a1f2d'],
   ecto: ['#0099db', '#2ce8f5', '#124e89'],
   wood: ['#733e39', '#b86f50', '#3e2731'],
+  // The new maps' deaths (Game.deathFx, 28 October 2026): a drift of sand, a frozen puddle, amber
+  // sap with a green rim.
+  sand: ['#9e8c60', '#d2c393', '#6e5f43'],
+  ice: ['#6fb8b0', '#c8f4ec', '#124e89'],
+  sap: ['#3e8948', '#feae34', '#265c42'],
 };
 
 export function splatSprite(kind, variant, r) {

@@ -25,8 +25,8 @@ const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
 const STALE_RUNS = ['fs_lrun', 'fs_drun'];
 
 // Every hero in, and as if each had survived the night and beaten the Dungeon: every mode open
-// to every hero (shared/profile.js canPlay); every weapon, relic and ultimate open, and the
-// Armory's weapon and relic slots full (P.openEverything).
+// to every hero (shared/profile.js canPlay); every weapon, relic and ultimate and every Survival map
+// open, and the Armory's weapon and relic slots full (P.openEverything).
 export function unlockEverything(p) {
   p.heroes = [...P.HERO_ORDER];
   for (const h of P.HERO_ORDER) p.feats[h] = (p.feats[h] || 0) | P.FEAT.survivalHard | P.FEAT.dungeon;
@@ -382,6 +382,8 @@ export const store = {
 // skins: each hero's look as chosen on the hero screen (data/heroes.js heroLook), hero -> skin id.
 // softFlash: the options' FLASHES: SOFT, white flashes held to FLASH_SOFT and crits in steady gold.
 // rankedNote: the trial screen's word that Ranked is always Elite has been said (ModeScreen).
+// map: the Survival map last picked on the trial screen (data/maps.js), or the first night's, the
+// desert (ui/prologue.js); none until then, when the trial screen shows its default (main.js).
 const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {}, softFlash: false, rankedNote: false };
 
 export function loadSettings() {

@@ -9,12 +9,13 @@ import { fmtTime, fmtNum, clamp } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
 import { trialScene, SCENE, heroCrop, PORTRAIT } from './scenes.js';
 import { MODES, NORMAL, VETERAN, ELITE, NIGHTMARE } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked, wonElite, affordableRanks } from '../shared/profile.js';
+import { MAPS, MAP_LADDER, FIRST_MAP } from '../data/maps.js';
+import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked, wonElite, affordableRanks, mapOpen } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from '../shared/progress.js';
-import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas, newDot } from './ui.js';
+import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas, newDot, padlock } from './ui.js';
 import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon, seenKey, isNewEntry, seenKeys } from './ladder.js';
-import { flank } from './skin.js';
+import { flank, pointer } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
 import { codexSummary, codexDescription, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
 import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
@@ -290,6 +291,17 @@ export { HeroScreen } from './hero-selection.js';
 
 // ------------------------------------------------------------------- mode --
 
+// The Survival map the trial screen shows, and BEGIN plays (data/maps.js; 28 October 2026): the one
+// chosen (app.choice.map) while it is open; else the Darkwood where it is open (a save from before
+// the maps spent every night there), else the last map open on the ladder.
+export function shownMap(profile, chosen) {
+  if (Object.hasOwn(MAPS, chosen ?? '') && mapOpen(profile, chosen)) return chosen;
+  if (mapOpen(profile, 'forest')) return 'forest';
+  return [...MAP_LADDER].reverse().find((m) => mapOpen(profile, m.id))?.id || FIRST_MAP;
+}
+// The map row's height and the gap under it: what the row moves the rest of the screen down by.
+const MAP_ROW = 17;
+
 export class ModeScreen {
   enter(app, params = {}) {
     this.app = app;
@@ -299,6 +311,9 @@ export class ModeScreen {
     // A trial this hero can't enter (yet) falls back to Survival.
     const kept = canPlay(app.store.profile, app.choice.mode, app.choice.hero);
     if (!kept) app.choice.mode = 's15';
+    // A map chosen that is shut now (a fresh start since it was) falls back to the one shown in its
+    // place. None chosen stays none, the row showing its default; nothing is saved for coming here.
+    if (app.choice.map !== undefined && !mapOpen(app.store.profile, app.choice.map)) app.choice.map = shownMap(app.store.profile);
     // Back from a run with the trial as it was (HeroScreen's again): the focus starts on BEGIN.
     app.ui.focusId = params.again && kept ? 'begin' : 'm_' + app.choice.mode;
   }
@@ -306,7 +321,11 @@ export class ModeScreen {
   draw(ctx, W, H, dt) {
     const app = this.app, ui = app.ui;
     this.t += dt;
-    app.scene.draw(ctx, W, H, dt, { campfire: false });
+    const prof = app.store.profile;
+    // The map Survival will be spent on (shownMap), and behind the screen its land and sky while
+    // Survival is the trial chosen (ui/background.js biome).
+    let map = shownMap(prof, app.choice.map);
+    app.scene.draw(ctx, W, H, dt, { campfire: false, ...(app.choice.mode === 's15' && { biome: map }) });
     dim(ctx, W, H, 0.45);
     header(ctx, W, 'Choose your Trial');
     // The note closed (below), the focus goes back onto the trials, not on to BEGIN: moving along
@@ -314,7 +333,6 @@ export class ModeScreen {
     // note with Enter would have begun an Elite run with the next (27 October 2026).
     if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('m_' + app.choice.mode);ui.lock(0.2); }return; }
     ui.begin(dt);
-    const prof = app.store.profile;
     const hero = app.choice.hero;
     const modes = Object.keys(MODES);
     const cw = Math.min(110, Math.floor((W - 24) / modes.length) - 6), ch = 84;
@@ -336,9 +354,10 @@ export class ModeScreen {
       if (f && open && ui.focusSource !== 'pointer' && app.choice.mode !== m) app.choice.mode = m;
       const sel = app.choice.mode === m;
       panel(ctx, x, y, cw, ch, { trim: f ? ['#ffffff', '#feae34'] : sel ? ['#feae34', '#733e39'] : ['#5a6988', '#3a4466'], rivets: sel, fill: sel ? '#241b2c' : open ? null : '#120e18' });
-      // Each trial its own scene (scenes.js): Survival's dusk, the Dungeon's stairs, Ranked's blood
-      // moon; in shadow while locked. As large as the card's picture area allows, a whole-number scale.
-      const scene = trialScene(m, open);
+      // Each trial its own scene (scenes.js): Survival's the map it will be spent on (data/maps.js),
+      // the Dungeon's stairs, Ranked's blood moon; in shadow while locked. As large as the card's
+      // picture area allows, a whole-number scale.
+      const scene = trialScene(m, open, m === 's15' ? map : undefined);
       const k = Math.max(1, Math.floor(Math.min((cw - 8) / SCENE.w, (ch - 40) / SCENE.h)));
       const sx0 = Math.round(x + cw / 2 - (SCENE.w * k) / 2), sy0 = Math.round(y + 4 + (ch - 38 - SCENE.h * k) / 2);
       ctx.fillStyle = '#0d0b14';
@@ -350,7 +369,9 @@ export class ModeScreen {
         drawText(ctx, 'SELECTED', x + cw / 2, y + ch - 11, { align: 'center', color: '#3e2731', outline: null });
       }
       drawText(ctx, M.name.toUpperCase(), x + cw / 2, y + 52, { align: 'center', color: !open ? '#5a6988' : f || sel ? '#fee761' : '#c0cbdc' });
-      drawText(ctx, open ? M.sub : 'LOCKED', x + cw / 2, y + 61, { align: 'center', color: open ? '#8b9bb4' : '#5a6988' });
+      // Under Survival the map's name in its colour (every map's is the same 15-minute night).
+      const sub = !open ? 'LOCKED' : m === 's15' ? fitLine(MAPS[map].name, cw - 6) : M.sub;
+      drawText(ctx, sub, x + cw / 2, y + 61, { align: 'center', color: !open ? '#5a6988' : m === 's15' ? MAPS[map].color : '#8b9bb4' });
       // This hero's record here: stars for wins, or the best Ranked time.
       if (m === 'ranked') {
         const best = prof.ranked[hero];
@@ -375,17 +396,61 @@ export class ModeScreen {
       ui.focus('detail_close');
       ui.lock(0.2);
     }
+    // The Survival maps (data/maps.js; the owner's, 28 October 2026: the desert first, then the
+    // frozen map, the forest and the demonic map, a flower meadow between), a row of tabs under the
+    // trials while Survival is the trial chosen. As along the trials and the difficulties, moving
+    // along it picks the map in focus where it is open, and the pointer's hover never does; up or
+    // down into it comes back to the map shown; a click or Enter goes on to BEGIN. A map picked is
+    // remembered with the settings, never for only coming to the screen. A shut one wears a padlock
+    // and, in focus, says what opens it (below). All under the row moves down by its height.
+    let focusMap = null;
+    const row = mode === 's15' ? MAP_ROW : 0;
+    if (row) {
+      const n = MAP_LADDER.length, gap = 4, bw = Math.min(64, Math.floor((W - 24 - gap * (n - 1)) / n));
+      const mx0 = Math.round(W / 2 - (n * bw + gap * (n - 1)) / 2), my = y + ch + 4;
+      MAP_LADDER.forEach((M, i) => {
+        const id = 'map_' + M.id, open = mapOpen(prof, M.id), on = map === M.id, mx = mx0 + i * (bw + gap);
+        // Its short name, or its first three letters on a tab too narrow for it (a phone held upright).
+        const label = textWidth(M.short) <= bw - 14 ? M.short : M.short.slice(0, 3);
+        const activated = button(ctx, ui, id, mx, my, bw, 13, open ? label : '', { color: on ? '#fee761' : '#8b9bb4', on, disabled: !open, group: 'map', home: on });
+        if (activated) ui.focus('begin');
+        const f = ui.focused(id);
+        if (f) focusMap = M.id;
+        if ((activated || (f && ui.focusSource !== 'pointer')) && open && !on) {
+          map = app.choice.map = app.settings.map = M.id;
+          saveSettings(app.settings);
+        }
+        if (!open) {
+          // The padlock, and the name beside it where both fit; in focus brighter, with the pointer at
+          // it as at a button in focus (one that can't be pressed shows none of its own).
+          const lw = textWidth(label), both = lw + 11 <= bw - 14, lx = Math.round(mx + bw / 2 - (both ? lw + 11 : 9) / 2);
+          padlock(ctx, lx, my + 2, 1, f ? '#feae34' : '#5a6988', f ? '#fee761' : '#8b9bb4');
+          if (both) drawText(ctx, label, lx + 11, my + 2, { color: f ? '#c0cbdc' : '#5d4a52' });
+          if (f) pointer(ctx, mx - 2 + Math.round(Math.sin(ui.t * 8)), my + 6);
+        }
+      });
+    }
     const tw = Math.min(W - 20, 360);
-    // The focused trial's description, or what it takes to unlock it: two lines kept for it, so
-    // nothing under it moves as the focus does.
+    // The focused trial's description, or what it takes to unlock it; under Survival the map's own
+    // (data/maps.js desc), the one in focus on the row or else the one shown, or what opens a shut
+    // one. Two lines kept for it, so nothing under it moves as the focus does; one where the map
+    // row leaves a short screen no room for two (an 854 x 480 window's 427 x 240), cut short.
     const lockedFocus = focusMode && !canPlay(prof, focusMode, hero);
-    const desc = lockedFocus ? `To unlock: ${lockReason(prof, focusMode, hero)}` : MODES[focusMode || mode].desc;
-    wrapText(desc, tw).slice(0, 2).forEach((line, i) => drawText(ctx, line, W / 2, y + ch + 5 + i * 9, { align: 'center', color: lockedFocus ? '#feae34' : '#c0cbdc' }));
+    const shutMap = !!focusMap && !mapOpen(prof, focusMap);
+    const desc = shutMap ? `To unlock: ${lockReason(prof, 's15', hero, focusMap)}`
+      : focusMap ? MAPS[focusMap].desc
+      : lockedFocus ? `To unlock: ${lockReason(prof, focusMode, hero)}`
+      : (focusMode || mode) === 's15' ? MAPS[map].desc : MODES[focusMode || mode].desc;
+    // (rowDescN: the lines kept under the map row, which BEGIN's place keeps room for, below.)
+    const rowDescN = H < 250 ? 1 : 2, descN = row ? rowDescN : 2, lines = wrapText(desc, tw);
+    if (lines.length > descN) lines[descN - 1] = fitLine(lines.slice(descN - 1).join(' '), tw);
+    lines.slice(0, descN).forEach((line, i) => drawText(ctx, line, W / 2, y + ch + 5 + row + i * 9, { align: 'center', color: shutMap || lockedFocus ? '#feae34' : '#c0cbdc' }));
+    this.desc = desc; // what the slot tells (test/trial-maps.test.js reads it)
     // Normal, Veteran or Elite (data/difficulty.js), a row of choices like the trials: moving along
     // it picks one. Under it the Nightmare box (three times the monsters), open only on Elite (the
     // owner's, 21 October 2026). All remembered with the settings. Ranked keeps one best per hero,
     // so it is always Elite and never a Nightmare: there neither is shown.
-    let ty = y + ch + 25;
+    let ty = y + ch + 7 + row + descN * 9;
     const note = [];
     if (mode === 'ranked') {
       note.push(['Endless personal bests · Elite difficulty', '#8b9bb4']);
@@ -421,13 +486,36 @@ export class ModeScreen {
         ty += 9;
       }
     }
-    // BEGIN in one place whatever is chosen: under room for the longest notes (four lines), and on a
-    // short screen no lower than over the keys' line.
-    const beginY = Math.max(ty + 6, Math.min(H - 44, y + ch + 25 + 34 + 4 * 9 + 8));
-    if (button(ctx, ui, 'begin', Math.round(W / 2 - 50), beginY, 100, 15, 'BEGIN', { color: '#fee761' })) app.startRun();
+    // BEGIN in one place whatever is chosen: under room for the map row and the longest notes (four
+    // lines), and on a short screen no lower than over the keys' line, but never higher than where
+    // Survival leaves it with two lines of notes (rest: the trials, the map row, its description, the
+    // difficulties and the box, the notes). There it stays as the trial or the difficulty changes,
+    // where it hopped up and down (a 1366 x 768 laptop's 456 x 256) and took the keys' line with it
+    // as it went (an 854 x 480 window's 427 x 240, which now never shows that line): the review of
+    // 28 October 2026. Longer notes (a narrow window) still push it.
+    const rest = y + ch + 7 + MAP_ROW + rowDescN * 9 + 34 + 2 * 9 + 6;
+    const beginY = Math.max(ty + 6, Math.min(Math.max(H - 44, rest), y + ch + MAP_ROW + 25 + 34 + 4 * 9 + 8));
+    if (button(ctx, ui, 'begin', Math.round(W / 2 - 50), beginY, 100, 15, 'BEGIN', { color: '#fee761' })) {
+      // The map shown is the one played: chosen now where the one shown by default isn't the
+      // Darkwood's (a run without a map is the Darkwood's), or where the one chosen has shut since.
+      if (mode === 's15' && (app.choice.map ?? 'forest') !== map) app.choice.map = map;
+      app.startRun();
+    }
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('hero');
-    keysHint(ctx, W, H);
+    // The keys' line where BEGIN, as it is drawn, leaves it room: on a short screen BEGIN's place
+    // under the map row (rest), or notes that push it lower, take it.
+    if (beginY + 15 < H - 17) keysHint(ctx, W, H);
+    // Off the map row, left or right goes where it always has: along the trials past the last round
+    // to the first and past the first to BACK, off NORMAL or ELITE up to the trial over it. Never onto
+    // the row's end tabs, which lie further out than the end trials' and the end difficulties' middles
+    // and pick their map once in focus (NORMAL's left chose the Sunscorch and ELITE's right the Abyss:
+    // the review of 28 October 2026). Only from on the row do left and right move along it (up or
+    // down, which ui.end takes first, still go onto it), and it is back in the frame's list once the
+    // move is made.
+    const items = ui.items;
+    if (row && !ui.focusId?.startsWith('map_') && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) ui.items = items.filter((i) => !i.id.startsWith('map_'));
     ui.end();
+    ui.items = items;
     if (input.pressed('back')) app.go('hero');
   }
 }

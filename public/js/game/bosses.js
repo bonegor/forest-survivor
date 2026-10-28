@@ -1,5 +1,13 @@
 // Boss behaviour. Each AI returns [dirX, dirY, speedMultiplier] per frame and
 // schedules telegraphed attacks so every hit can be dodged.
+//
+// The four AIs are the night's four bosses' own kits. A new map's boss (data/enemies.js, 28 October
+// 2026) fights with one of them (def.kit: the Pharaoh and the Pit Lord as the Bone King, the Frost
+// Giant as the Butcher, the Thorn Queen as the Lich) and brings his own shot (def.bolt), his own
+// summons (def.summon), his own blast (def.blast, an effects.js style), his own words (def.lines, by
+// what the kit says them at: summon; enrage and dash; rage and meteor) and his own particle colours
+// (def.sparks, palette keys: the Lich's blink, the Butcher's dust). Each is the kit's own where a
+// boss has none, so the four fight as they always did, draw for draw.
 
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick } from '../engine/util.js';
@@ -27,11 +35,26 @@ function say(e, text, dur = 2.2) {
   e.speech = { text, t: dur };
 }
 
+// A boss's own particle colours (def.sparks, palette keys), as the particles take them: worked out
+// once a set. Null for a boss without (his kit's own then).
+const SPARKS = new Map();
+function sparksOf(e) {
+  const keys = e.def.sparks;
+  if (!keys) return null;
+  let cols = SPARKS.get(keys);
+  if (!cols) SPARKS.set(keys, (cols = [...keys].map((k) => PC[k])));
+  return cols;
+}
+
+// The ring round a boss's blast, by its style: a fire's gold, a frost's ice, a holy one's gold, and
+// the old pink for the rest (the Bone King's dark, the Butcher's blood).
+const BLAST_RING = { fire: '#fee761', frost: '#c8f4ec', holy: '#fee761' };
+
 // by: who struck it, as the results name the blow that slew the hero; boss: the boss's name alone,
 // for the results' wounds (names.js bossOf).
 function blast(g, x, y, r, dmg, style, by, boss = null) {
   g.effects.push(new Explosion(g, x, y, r, style));
-  g.effects.push(new Ring(g, x, y, 4, r * 1.1, 0.4, style === 'fire' ? '#fee761' : '#f6757a'));
+  g.effects.push(new Ring(g, x, y, 4, r * 1.1, 0.4, BLAST_RING[style] || '#f6757a'));
   const p = g.player;
   // As a boss's touch grows with the night (Enemy.update): 0.6 of the night's own growth (Game.dmgScale), so a
   // warned slam late in the night never hurts less than a stray bolt (27 October 2026).
@@ -105,10 +128,10 @@ export const BOSS_AI = {
         shape: 'circle', x: e.x, y: e.y, r: R, dur: 1, follow: e,
         onDone: () => {
           if (!still(e, id)) return;
-          blast(g, e.x, e.y, R, 24, 'dark', foeName(e), bossOf(e));
+          blast(g, e.x, e.y, R, 24, e.def.blast ?? 'dark', foeName(e), bossOf(e));
           // Each bone sets off out along its own line, about 10 px from the next (19 px round
           // him, 25 for the ring of 15), so the ring never stacks on one point.
-          ring(g, e, e.phase ? 15 : 11, 'bone', 85, 11, rand(TAU), { out: e.phase ? 25 : 19 });
+          ring(g, e, e.phase ? 15 : 11, e.def.bolt ?? 'bone', 85, 11, rand(TAU), { out: e.phase ? 25 : 19 });
         },
       }));
       return [0, 0, 0];
@@ -116,15 +139,15 @@ export const BOSS_AI = {
     if (e.cd2 <= 0) {
       e.cd2 = e.phase ? 9 : 12.5;
       cast(e, 0.9, 'summon');
-      if (Math.random() < 0.6) say(e, pick(['RISE, MY SERVANTS!', 'KNEEL BEFORE YOUR KING!', 'THE DEAD OBEY ME!']));
-      g.summonRing('skeleton', e.phase ? 10 : 7, 72, { elite: false });
+      if (Math.random() < 0.6) say(e, pick(e.def.lines?.summon ?? ['RISE, MY SERVANTS!', 'KNEEL BEFORE YOUR KING!', 'THE DEAD OBEY ME!']));
+      g.summonRing(e.def.summon ?? 'skeleton', e.phase ? 10 : 7, 72, { elite: false });
       sfx('boss');
       return [0, 0, 0];
     }
     if (e.phase && e.cd3 <= 0) {
       // Five bones, the middle one at the hero; every 3.75 s, so as few as four a volley would be.
       e.cd3 = 3.75;
-      fan(g, e, 5, 0.22, 'bone', 115, 12);
+      fan(g, e, 5, 0.22, e.def.bolt ?? 'bone', 115, 12);
       strikePose(e, 'volley');
     }
     const v = toward(e);
@@ -136,7 +159,7 @@ export const BOSS_AI = {
     e.phase = e.hp / e.maxHp < 0.3 ? 1 : 0;
     if (e.phase && !e.data.enraged) {
       e.data.enraged = true;
-      say(e, 'NOW I AM ANGRY!');
+      say(e, e.def.lines?.enrage ?? 'NOW I AM ANGRY!');
       sfx('boss');
     }
     e.cdT -= dt;
@@ -152,15 +175,19 @@ export const BOSS_AI = {
           sfx('charge');
         }
         return [e.lockX, e.lockY, 0];
-      case 'dash':
+      case 'dash': {
         e.stateT -= dt;
-        if (Math.random() < 0.8) g.particles.emit(e.x + rand(-6, 6), e.y, 0, -e.lockX * 40, -e.lockY * 40, 10, 0.4, 2, PC.a, P.FADE, 2);
+        // His dust: his own (sparks: the Frost Giant's snow) picked by the throw that lets it fly, so
+        // the Butcher's ash takes no more dice than it did.
+        const r = Math.random(), dust = sparksOf(e);
+        if (r < 0.8) g.particles.emit(e.x + rand(-6, 6), e.y, 0, -e.lockX * 40, -e.lockY * 40, 10, 0.4, 2, dust ? dust[Math.floor(r * 10) % dust.length] : PC.a, P.FADE, 2);
         if (e.stateT <= 0) {
           e.state = 'recover';
           e.stateT = e.phase ? 0.3 : 0.6;
           g.shake(0.25);
         }
         return [e.lockX, e.lockY, BUTCHER_DASH.spd / e.spd];
+      }
       case 'recover':
         e.stateT -= dt;
         if (e.stateT <= 0) e.state = 'move';
@@ -182,7 +209,7 @@ export const BOSS_AI = {
       e.face = faceAttack(e.face, false, e.lockX, e.lockY);
       const len = BUTCHER_DASH.spd * g.diff.speed * g.move * (g.diff.foePace ?? 1) * BUTCHER_DASH.t + e.r + p.r;
       g.effects.push(new Telegraph(g, { shape: 'line', x: e.x, y: e.y, ang: a, len, w: 2 * (e.r + p.r), dur: e.stateT }));
-      if (Math.random() < 0.35) say(e, pick(['FRESH MEAT!', 'COME HERE!', 'MEAT FOR THE HOOKS!']), 1.6);
+      if (Math.random() < 0.35) say(e, pick(e.def.lines?.dash ?? ['FRESH MEAT!', 'COME HERE!', 'MEAT FOR THE HOOKS!']), 1.6);
       return [0, 0, 0];
     }
     if (e.cd2 <= 0 && d < 70) {
@@ -192,7 +219,7 @@ export const BOSS_AI = {
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: 54, dur: 0.85, follow: e,
         onDone: () => {
-          if (still(e, id)) blast(g, e.x, e.y, 54, 30, 'blood', foeName(e), bossOf(e));
+          if (still(e, id)) blast(g, e.x, e.y, 54, 30, e.def.blast ?? 'blood', foeName(e), bossOf(e));
         },
       }));
       return [0, 0, 0];
@@ -211,29 +238,31 @@ export const BOSS_AI = {
     e.data.off = (e.data.off || 0) + dt * 0.6;
     if (e.cdT <= 0) {
       e.cdT = e.phase ? 2 : 2.7;
-      ring(g, e, e.phase ? 16 : 12, 'skullbolt', 58, 13, e.data.off);
-      if (e.phase) fan(g, e, 3, 0.3, 'skullbolt', 70, 13, { homing: 0.9, life: 5 });
+      const bolt = e.def.bolt ?? 'skullbolt';
+      ring(g, e, e.phase ? 16 : 12, bolt, 58, 13, e.data.off);
+      if (e.phase) fan(g, e, 3, 0.3, bolt, 70, 13, { homing: 0.9, life: 5 });
       cast(e, 0.35);
       return [0, 0, 0];
     }
     // Blinks away when cornered, but not right after a blink: melee gets a window.
     if (e.cd2 <= 0 || (distP(e) < 45 && e.cd2 < 3.5)) {
       e.cd2 = rand(8, 11);
-      // Blink away in a puff of grave-light.
-      g.particles.burst(e.x, e.y - 12 * e.scale, 0, 24, [PC.l, PC.L, PC.e], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
+      // Blink away in a puff of grave-light (or of his own: the Thorn Queen's petals).
+      const puff = sparksOf(e);
+      g.particles.burst(e.x, e.y - 12 * e.scale, 0, 24, puff ?? [PC.l, PC.L, PC.e], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
       const a = rand(TAU), r = rand(85, 120);
       const spot = g.world.freeSpot(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r) || { x: e.x, y: e.y };
       e.x = spot.x;
       e.y = spot.y;
-      g.particles.burst(e.x, e.y - 12 * e.scale, 0, 24, [PC.l, PC.L, PC.w], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
+      g.particles.burst(e.x, e.y - 12 * e.scale, 0, 24, puff ?? [PC.l, PC.L, PC.w], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
       sfx('teleport');
       cast(e, 0.5);
       return [0, 0, 0];
     }
     if (e.cd3 <= 0) {
       e.cd3 = e.phase ? 9 : 12;
-      if (Math.random() < 0.5) say(e, pick(['YOUR SOUL IS MINE.', 'DEATH IS ONLY THE BEGINNING.', 'SERVE ME IN DEATH!']));
-      g.summonRing('ghost', e.phase ? 8 : 6, 80);
+      if (Math.random() < 0.5) say(e, pick(e.def.lines?.summon ?? ['YOUR SOUL IS MINE.', 'DEATH IS ONLY THE BEGINNING.', 'SERVE ME IN DEATH!']));
+      g.summonRing(e.def.summon ?? 'ghost', e.phase ? 8 : 6, 80);
       cast(e, 0.8);
       return [0, 0, 0];
     }
@@ -252,10 +281,12 @@ export const BOSS_AI = {
     const phase = hpf < 0.25 ? 2 : hpf < 0.55 ? 1 : 0;
     if (phase > e.phase) {
       e.phase = phase;
-      say(e, phase === 2 ? 'I WILL BURN THIS WORLD!' : 'YOU DARE?!');
+      const rage = e.def.lines?.rage;
+      say(e, rage ? rage[phase - 1] : phase === 2 ? 'I WILL BURN THIS WORLD!' : 'YOU DARE?!');
       sfx('boss');
       g.shake(0.6);
-      g.effects.push(new Ring(g, e.x, e.y, 6, 120, 0.7, '#f77622', false, 3));
+      // In his colour (Azgaroth's '#f77622').
+      g.effects.push(new Ring(g, e.x, e.y, 6, 120, 0.7, e.def.color, false, 3));
     }
     if (casting(e, dt)) return [0, 0, 0];
     e.cdT -= dt;
@@ -265,7 +296,7 @@ export const BOSS_AI = {
     const d = distP(e);
     if (e.cdT <= 0) {
       e.cdT = [3.6, 2.8, 2][e.phase];
-      fan(g, e, [5, 7, 9][e.phase], 0.2, 'firebolt', 105, 15);
+      fan(g, e, [5, 7, 9][e.phase], 0.2, e.def.bolt ?? 'firebolt', 105, 15);
       cast(e, 0.4, 'volley');
       return [0, 0, 0];
     }
@@ -274,9 +305,9 @@ export const BOSS_AI = {
       const n = [6, 9, 12][e.phase];
       for (let i = 0; i < n; i++) {
         const a = rand(TAU), r = i === 0 ? 0 : rand(16, 110);
-        strike(g, e, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 24, 22, 1.05 + i * 0.07, 'fire');
+        strike(g, e, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 24, 22, 1.05 + i * 0.07, e.def.blast ?? 'fire');
       }
-      if (Math.random() < 0.5) say(e, pick(['BURN!', 'THE SKY FALLS!', 'KNEEL IN ASH!']), 1.6);
+      if (Math.random() < 0.5) say(e, pick(e.def.lines?.meteor ?? ['BURN!', 'THE SKY FALLS!', 'KNEEL IN ASH!']), 1.6);
       cast(e, 0.6, 'meteor');
       return [0, 0, 0];
     }
@@ -288,15 +319,15 @@ export const BOSS_AI = {
         shape: 'circle', x: e.x, y: e.y, r: 84, dur: 0.9, follow: e,
         onDone: () => {
           if (!still(e, id)) return;
-          blast(g, e.x, e.y, 84, 32, 'fire', foeName(e), bossOf(e));
-          ring(g, e, 16, 'firebolt', 90, 12, rand(TAU));
+          blast(g, e.x, e.y, 84, 32, e.def.blast ?? 'fire', foeName(e), bossOf(e));
+          ring(g, e, 16, e.def.bolt ?? 'firebolt', 90, 12, rand(TAU));
         },
       }));
       return [0, 0, 0];
     }
     if (e.cd3 <= 0) {
       e.cd3 = [13, 11, 9][e.phase];
-      g.summonRing('imp', [6, 8, 10][e.phase], 90);
+      g.summonRing(e.def.summon ?? 'imp', [6, 8, 10][e.phase], 90);
       cast(e, 0.7, 'summon');
       return [0, 0, 0];
     }

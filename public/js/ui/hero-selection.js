@@ -6,6 +6,7 @@ import { clamp, fmtTime } from '../engine/util.js';
 import { HEROES, HERO_ORDER, heroLook, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PROGRESS } from '../shared/progress.js';
+import { MAP_LADDER } from '../data/maps.js';
 import { nextHeroUnlock, nextGoal, openFor, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, itemName, itemLines, RARITIES } from '../shared/items.js';
 import { panel, button, stepper, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
@@ -147,7 +148,8 @@ export class HeroScreen {
     } else {
       // Every star he has earned, each in its colour (ladder.js featStars: the wins, then their marks).
       const earned = featStars(app.store.profile, h.id).filter(s => s[2]);
-      if (locked || !earned.length) drawText(ctx, locked ? 'NOT YET RECRUITED' : 'READY FOR THE DARKWOOD', box.x + box.w / 2, box.y + box.h - 12, { align: 'center', color: locked ? '#8b9bb4' : '#c28569' });
+      // Ready for the night, on whichever Survival map it falls (28 October 2026).
+      if (locked || !earned.length) drawText(ctx, locked ? 'NOT YET RECRUITED' : 'READY FOR THE NIGHT', box.x + box.w / 2, box.y + box.h - 12, { align: 'center', color: locked ? '#8b9bb4' : '#c28569' });
       else {
         const x0 = Math.round(box.x + box.w / 2 - (earned.length * 7 - 2) / 2);
         earned.forEach(([, col], i) => drawText(ctx, '★', x0 + i * 7, box.y + box.h - 12, { color: col }));
@@ -220,7 +222,7 @@ export class HeroScreen {
       lines.push({ text: it ? itemName(it) : `${SLOT_NAMES[slot]} · empty`, color: it ? RARITIES[it.rarity].color : '#8b9bb4' });
       if (it) lines.push(...itemLines(it));
     }
-    lines.push('Find equipment in forest crypts. Each hero keeps their own gear.');
+    lines.push('Find equipment in crypts. Each hero keeps their own gear.'); // a crypt is on every map
     this.dialog = new MenuDialog('Equipment', lines);
     this.app.ui.focus('detail_close');this.app.ui.lock(0.2);
   }
@@ -230,6 +232,8 @@ export class HeroScreen {
     this.dialog = new MenuDialog('Your journey', [
       { text: goalText(nextGoal(p)), color: '#fee761' },
       `${p.heroes.length} of ${HERO_ORDER.length} heroes recruited. Survive 5 minutes with a hero to recruit the next.`,
+      // The Survival maps in the order they open (data/maps.js; 28 October 2026).
+      `Win a night in Survival to open the next land: ${MAP_LADDER.map((m) => m.name.replace(/^The /, 'the ')).join(', ').replace(/, (?=[^,]*$)/, ', then ')}.`,
       'Survive the night with the Necromancer to open the Dungeon for the Knight.',
       'Clear the Dungeon with Knight, Ranger, Sorcerer, Shadow, then Necromancer to open Ranked. The other heroes may enter once the Dungeon opens.',
       'Ranked: endless runs, personal bests and rank titles.',

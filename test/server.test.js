@@ -334,10 +334,15 @@ test('a maximal save of all nine heroes fits the sealed cookie and reads back wh
   const I = await import('../public/js/shared/items.js');
   assert.equal(P.HERO_ORDER.length, 9);
   const p = P.defaultProfile();
-  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, heroes: [...P.HERO_ORDER] });
+  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, deaths: 1e7, heroes: [...P.HERO_ORDER] });
   p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999 };
   for (const m of P.WIN_MODES) p.wins[m] = [1e6, 1e6, 1e6];
   for (const u of P.UPGRADES) p.up[u.id] = u.max;
+  // Every Survival map open and a night won on each on every difficulty (28 October 2026: mo, mw at
+  // their most), and the five longest weapon ids left at home.
+  p.mo = 2 ** P.PROGRESS.maps.length - 1;
+  p.mw = 2 ** (3 * P.PROGRESS.maps.length) - 1;
+  p.home = ['lightning', 'runestone', 'caltrops', 'starfall', 'lantern'];
   const legend = (slot) => {
     const stats = {};
     for (const id of I.POOLS[slot].slice(-4)) stats[id] = I.statRange(id, I.LEGENDARY)[1];

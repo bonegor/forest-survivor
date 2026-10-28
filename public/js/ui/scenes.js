@@ -8,15 +8,22 @@ import { bounds, hexPack, unpack } from '../engine/pixels.js';
 // The trial cards' scenes, 64 × 44 art pixels each: the night's forest at dusk under a crescent,
 // the Dungeon's stairs going down into torchlight, Ranked's blood moon over the graves (the
 // gravestone of round 4 in front). Locked, the same in shadow.
+// Survival's is the map it is played on (data/maps.js; the owner's five maps of 28 October 2026:
+// "the desert map ... a frozen, you know, snowy map ... a bright flower, colorful map ... a dark,
+// hellish, demonic map"): the Sunscorch's sun going down behind a pyramid, the Frostfell's aurora
+// over the ice peaks, the Bloomvale's blossom at twilight, the Abyss's black sun over a river of
+// fire. The Darkwood (map 'forest', or none: the tests, an older caller) is the dusk it always
+// was, the very same picture. The Dungeon and Ranked keep theirs whatever map is chosen.
 export const SCENE = { w: 64, h: 44 };
 const cache = new Map();
 
-export function trialScene(mode, open) {
-  const key = mode + (open ? '' : ':locked');
+export function trialScene(mode, open, map) {
+  const own = mode === 's15' && Object.hasOwn(MAP_SCENES, map ?? '') ? map : null;
+  const key = mode + (own ? ':' + own : '') + (open ? '' : ':locked');
   if (cache.has(key)) return cache.get(key);
   const c = makeCanvas(SCENE.w, SCENE.h), x = c.getContext('2d');
   x.imageSmoothingEnabled = false;
-  (mode === 'dungeon' ? stairs : mode === 'ranked' ? bloodMoon : dusk)(x, SCENE.w, SCENE.h);
+  (mode === 'dungeon' ? stairs : mode === 'ranked' ? bloodMoon : own ? MAP_SCENES[own] : dusk)(x, SCENE.w, SCENE.h);
   if (!open) {
     // In shadow: the picture all but gone, its shapes still there.
     x.globalCompositeOperation = 'source-atop';
@@ -90,6 +97,254 @@ function dusk(x, w, h) {
   // Near pines framing the road.
   for (const [cx, top, ph] of [[4, 6, 38], [14, 16, 28], [56, 9, 35], [64, 14, 30]]) pine(x, cx, top, ph, '#0d1016');
 }
+
+// A rolling crest (a dune, a drift, a meadow's swell) at about y0 down to the foot of the
+// picture: amp and freq shape its wave, its top row in the crest colour; with `lit` and `shade`,
+// its slopes falling to the right (toward the sun) lit and those rising in shadow, `deep` rows down.
+function crest(x, w, h, y0, amp, freq, ph, body, top = null, lit = null, shade = null, deep = 2) {
+  const at = (xx) => Math.round(y0 + Math.sin(xx * freq + ph) * amp + Math.sin(xx * freq * 2.3 + ph * 1.7) * amp * 0.35);
+  for (let xx = 0; xx < w; xx++) {
+    const y = at(xx), next = at(xx + 1);
+    x.fillStyle = body;
+    x.fillRect(xx, y, 1, h - y);
+    if (lit && next > y) {
+      x.fillStyle = lit;
+      x.fillRect(xx, y, 1, deep + next - y);
+    } else if (shade && next < y) {
+      x.fillStyle = shade;
+      x.fillRect(xx, y, 1, deep);
+    }
+    if (top) {
+      x.fillStyle = top;
+      x.fillRect(xx, y, 1, 1);
+    }
+  }
+}
+
+// A peak, or a tomb, seen from a corner: rows widening from its tip at (cx, tip) down to `foot`
+// by `slope` px a row each side, its ridge leaning right by `lean` a row, the face left of the
+// ridge in one colour and the face right of it in another. o.cap: its top rows in two colours of
+// their own (capLeft, capRight); o.edge: its right edge catching the light; o.rough: notches.
+function peak(x, cx, tip, foot, slope, lean, left, right, o = {}) {
+  for (let r = 0; tip + r < foot; r++) {
+    const a = Math.round(r * slope) + (o.rough && (r * 7 + cx) % 5 === 2 ? o.rough : 0), ridge = Math.min(cx + a, cx + Math.floor(r * lean)), y = tip + r;
+    x.fillStyle = r < (o.cap || 0) ? o.capLeft : left;
+    x.fillRect(cx - a, y, ridge - (cx - a) + 1, 1);
+    x.fillStyle = r < (o.cap || 0) ? o.capRight : right;
+    x.fillRect(ridge + 1, y, cx + a - ridge, 1);
+    if (o.edge) {
+      x.fillStyle = o.edge;
+      x.fillRect(cx + a, y, 1, 1);
+    }
+  }
+}
+
+// A spire of rock from its foot up to a tip at (cx + lean, tip), chipped here and there, its edge
+// toward the fire (side 1 right, -1 left) lit.
+function shard(x, cx, tip, foot, half, lean, col, rim = null, side = 1) {
+  const n = foot - tip;
+  for (let r = 0; r < n; r++) {
+    const t = r / (n - 1), c = cx + Math.round(lean * (1 - t)), a = Math.round(half * t ** 1.2 + ((r * 5 + cx) % 7 === 3 ? -1 : (r * 3 + cx) % 11 === 4 ? 1 : 0));
+    x.fillStyle = col;
+    x.fillRect(c - a, tip + r, a * 2 + 1, 1);
+    if (rim) {
+      x.fillStyle = rim;
+      x.fillRect(side > 0 ? c + a : c - a, tip + r, 1, 1);
+    }
+  }
+}
+
+// A round hill's brow, half an ellipse standing on `base`, its top row lit.
+function hill(x, cx, base, rx, ry, body, brow) {
+  for (let xx = -rx; xx <= rx; xx++) {
+    const hh = Math.round(Math.sqrt(1 - (xx / (rx + 0.5)) ** 2) * ry);
+    x.fillStyle = body;
+    x.fillRect(cx + xx, base - hh, 1, hh);
+    x.fillStyle = brow;
+    x.fillRect(cx + xx, base - hh, 1, 1);
+  }
+}
+
+// A pine bowed under snow: the silhouette, each tier of branches white along its top, in shade
+// on its right.
+function snowPine(x, cx, top, h) {
+  pine(x, cx, top, h, '#0d1622');
+  for (let r = 0; r < h; r += 4) {
+    const half = Math.floor(r / 4);
+    x.fillStyle = '#c0cbdc';
+    x.fillRect(cx - half, top + r, half + 1, 1);
+    x.fillRect(cx - half - 1, top + r + 1, 1, 1);
+    x.fillStyle = '#5a6988';
+    x.fillRect(cx + 1, top + r, half, 1);
+  }
+}
+
+// Single pixels, [x, y] each, in one colour.
+function dots(x, col, list) {
+  x.fillStyle = col;
+  for (const [px, py] of list) x.fillRect(px, py, 1, 1);
+}
+
+// The Sunscorch: the sun going down behind the dunes and the tombs, the dunes' crests and the
+// slopes toward it lit, a saguaro framing them and a skull bleaching in the sand.
+function sunscorch(x, w, h) {
+  bands(x, w, 0, 32, ['#2a1f45', '#3b2346', '#68386c', '#be4a2f', '#f77622', '#feae34']);
+  stars(x, w, 10, '#ead4aa', 5);
+  const g = x.createRadialGradient(44, 26, 6, 44, 26, 17);
+  g.addColorStop(0, 'rgba(254,174,52,0.55)');
+  g.addColorStop(1, 'rgba(254,174,52,0)');
+  x.fillStyle = g;
+  x.fillRect(27, 9, 34, 21);
+  disc(x, 44, 26, 7, '#fee761');
+  disc(x, 44, 26, 5, '#fff6c2');
+  // The tombs, a small one far off and a great one, the faces toward the sun lit, their edges
+  // catching it.
+  peak(x, 31, 21, 30, 0.8, 0.3, '#5a2e44', '#7a3a48', { edge: '#be4a2f' });
+  peak(x, 15, 12, 30, 0.8, 0.3, '#3e2731', '#733e39', { edge: '#d77643' });
+  crest(x, w, h, 29, 1.5, 0.07, 1.2, '#5a2e44', '#7a3a48');
+  crest(x, w, h, 33, 3, 0.085, 3.6, '#733e39', '#e4a672', '#b86f50', '#5c3036', 1);
+  crest(x, w, h, 40, 3, 0.065, 0.9, '#3e2731', '#be4a2f', '#733e39', '#2a1f2d', 1);
+  // A saguaro framing them, its sunward edges lit.
+  x.fillStyle = '#1b1220';
+  x.fillRect(56, 14, 4, 30);
+  x.fillRect(57, 13, 2, 1);
+  x.fillRect(51, 27, 5, 2);
+  x.fillRect(51, 20, 2, 7);
+  x.fillRect(60, 23, 3, 2);
+  x.fillRect(61, 16, 2, 7);
+  x.fillStyle = '#be4a2f';
+  x.fillRect(56, 15, 1, 12);
+  x.fillRect(51, 21, 1, 6);
+  x.fillRect(61, 17, 1, 6);
+  // A skull bleaching on the dune, horns and all.
+  dots(x, '#ead4aa', [[7, 40], [13, 40], [8, 41], [9, 41], [10, 41], [11, 41], [12, 41], [9, 42], [11, 42], [10, 43]]);
+  dots(x, '#2a1f2d', [[10, 42]]);
+}
+
+// The Frostfell: the aurora over the ice peaks, green in the frozen lake at their feet, the
+// snowfield and its drifts, pines bowed under snow framing it.
+function frostfell(x, w, h) {
+  bands(x, w, 0, 32, ['#0d1024', '#111a33', '#162443', '#1c3052', '#243e62', '#2f5070']);
+  stars(x, w, 26, '#c0cbdc', 11);
+  // The aurora: curtains hung from a slow wave across the sky, brightest at their hem.
+  const aur = ['#9ee562', '#63c74d', '#3e8948', '#265c42', '#193c3e'];
+  for (let xx = 0; xx < w; xx++) {
+    const wave = Math.sin(xx * 0.1 + 0.3), hem = Math.round(9 + wave * 3 + Math.sin(xx * 0.33) * 0.8);
+    const len = 3 + ((xx * 5 + (xx >> 2)) % 4) + Math.round(wave * 1.5 + 1.5);
+    for (let k = 0; k < len; k++) {
+      x.fillStyle = aur[Math.min(aur.length - 1, Math.floor((k * aur.length) / len))];
+      x.fillRect(xx, hem - k, 1, 1);
+    }
+  }
+  // The ice peaks, lit from the left, snow on their heads.
+  for (const [cx, tip, sl] of [[46, 17, 1], [6, 18, 1.1], [60, 19, 0.9], [25, 12, 0.95]]) peak(x, cx, tip, 30, sl, 0.25, '#5a6988', '#3a4466', { cap: 5, capLeft: '#c0cbdc', capRight: '#8b9bb4', rough: 1 });
+  // The lake frozen at their feet, the aurora's green in its ice.
+  x.fillStyle = '#1c3052';
+  x.fillRect(0, 29, w, 5);
+  for (const [lx, ly, n] of [[9, 30, 2], [17, 31, 1], [28, 30, 3], [36, 31, 2], [47, 30, 2], [55, 31, 1]]) {
+    x.fillStyle = '#3e8948';
+    x.fillRect(lx, ly, 1, n);
+    x.fillStyle = '#63c74d';
+    x.fillRect(lx, ly, 1, 1);
+  }
+  dots(x, '#c0cbdc', [[21, 30], [40, 32]]);
+  // The snowfield, its drifts.
+  crest(x, w, h, 34, 1, 0.12, 2, '#8b9bb4', '#c0cbdc');
+  crest(x, w, h, 39, 1.6, 0.09, 4.5, '#c0cbdc', '#ffffff');
+  // Pines bowed under snow framing it.
+  for (const [cx, top, ph] of [[4, 6, 38], [14, 16, 28], [56, 9, 35], [64, 14, 30]]) snowPine(x, cx, top, ph);
+}
+
+// The Bloomvale: twilight over the round hills, a path winding in through the flowers, trees in
+// blossom framing it and the fireflies coming out.
+function bloomvale(x, w, h) {
+  bands(x, w, 0, 32, ['#2c3366', '#3f477e', '#6a5aa0', '#b0689a', '#e8889a', '#f6b08a']);
+  stars(x, w, 12, '#ffffff', 2);
+  dots(x, '#ffffff', [[45, 6], [44, 6], [46, 6], [45, 5], [45, 7]]);
+  // Round hills far off, the last light on their brows, small trees in blossom on them.
+  hill(x, 12, 31, 16, 7, '#3f3f76', '#5f5596');
+  hill(x, 52, 31, 18, 8, '#3f3f76', '#5f5596');
+  hill(x, 32, 32, 15, 5, '#33356a', '#4b4a86');
+  for (const [tx, ty] of [[7, 25], [18, 26], [45, 25], [56, 24], [29, 28]]) {
+    x.fillStyle = '#2c2240';
+    x.fillRect(tx, ty + 1, 1, 2);
+    x.fillStyle = '#b55088';
+    x.fillRect(tx - 1, ty - 1, 3, 2);
+    x.fillRect(tx, ty - 2, 1, 1);
+    dots(x, '#f6757a', [[tx, ty - 2], [tx - 1, ty - 1]]);
+  }
+  // The meadow, its nearer swell lit, the path winding in.
+  crest(x, w, h, 31, 0.8, 0.17, 2, '#265c42', '#3e8948');
+  crest(x, w, h, 36, 1.5, 0.1, 5, '#3e8948', '#63c74d');
+  for (let y = 31; y < h; y++) {
+    const t = (y - 31) / (h - 32), half = Math.round(t * t * 6 + t * 2), cx = 32 + Math.round(Math.sin(t * 2.6 + 1) * 5);
+    x.fillStyle = '#c28569';
+    x.fillRect(cx - half, y, half * 2 + 1, 1);
+    x.fillStyle = '#e4a672';
+    x.fillRect(cx - half, y, 1, 1);
+  }
+  // Flowers.
+  let s = 9;
+  for (let i = 0; i < 40; i++) {
+    s = (s * 16807) % 2147483647;
+    dots(x, ['#f6757a', '#ffffff', '#fee761', '#8f5bb0'][i % 4], [[s % w, 32 + (Math.floor(s / w) % 12)]]);
+  }
+  // Trees in blossom framing the path.
+  for (const [cx, cy, r, foot] of [[6, 12, 9, 40], [57, 18, 7, 38]]) {
+    x.fillStyle = '#3e2731';
+    x.fillRect(cx, cy, 2, foot - cy);
+    disc(x, cx, cy, r, '#b55088');
+    disc(x, cx - 2, cy - 2, r - 2, '#f6757a');
+    dots(x, '#ffd0d8', [[cx - 4, cy - 4], [cx - 1, cy - 5], [cx - 5, cy - 1], [cx + 1, cy - 2]]);
+  }
+  // Fireflies.
+  for (const [fx, fy] of [[20, 26], [41, 29], [48, 21], [15, 34], [37, 38], [26, 34]]) {
+    dots(x, 'rgba(158,229,98,0.45)', [[fx - 1, fy], [fx + 1, fy], [fx, fy - 1], [fx, fy + 1]]);
+    dots(x, '#fee761', [[fx, fy]]);
+  }
+}
+
+// The Abyss: a black sun over the pit, spires of black rock, a river of fire winding in, embers.
+function abyss(x, w, h) {
+  bands(x, w, 0, 31, ['#120a10', '#24101c', '#3e1622', '#6a1a24', '#a22633', '#d04a2a']);
+  // The black sun, its corona.
+  const g = x.createRadialGradient(44, 10, 5, 44, 10, 15);
+  g.addColorStop(0, 'rgba(247,118,34,0.6)');
+  g.addColorStop(1, 'rgba(247,118,34,0)');
+  x.fillStyle = g;
+  x.fillRect(28, 0, 32, 26);
+  disc(x, 44, 10, 6, '#feae34');
+  disc(x, 44, 10, 5, '#0d0b14');
+  // Spires far off against the glow.
+  for (const [cx, tip, half, lean] of [[23, 16, 2, 2], [28, 21, 2, -1], [39, 18, 3, -2], [47, 21, 2, 1]]) shard(x, cx, tip, 31, half, lean, '#2a0e16');
+  // The black ground, lit by a river of fire winding in across it.
+  x.fillStyle = '#140a0e';
+  x.fillRect(0, 29, w, h - 29);
+  const lg = x.createRadialGradient(32, 40, 2, 32, 40, 22);
+  lg.addColorStop(0, 'rgba(228,59,68,0.4)');
+  lg.addColorStop(1, 'rgba(228,59,68,0)');
+  x.fillStyle = lg;
+  x.fillRect(0, 29, w, h - 29);
+  for (let y = 29; y < h; y++) {
+    const t = (y - 29) / (h - 30), half = Math.round(1 + t * t * 7 + t * 2), cx = 32 + Math.round(Math.sin(t * 2.8 + 0.6) * 5);
+    x.fillStyle = '#a22633';
+    x.fillRect(cx - half - 1, y, half * 2 + 3, 1);
+    x.fillStyle = '#f77622';
+    x.fillRect(cx - half, y, half * 2 + 1, 1);
+    x.fillStyle = '#fee761';
+    x.fillRect(cx - Math.floor(half / 3), y, Math.floor(half / 3) * 2 + 1, 1);
+  }
+  // Spires of black rock framing it, their edges toward the fire lit.
+  shard(x, 5, 3, h, 6, -2, '#0a0608', '#a22633', 1);
+  shard(x, 14, 18, h, 4, 3, '#0a0608', '#7a1f2a', 1);
+  shard(x, 58, 6, h, 6, 2, '#0a0608', '#a22633', -1);
+  shard(x, 50, 21, h, 4, -3, '#0a0608', '#7a1f2a', -1);
+  // Embers rising.
+  dots(x, '#feae34', [[24, 27], [40, 25], [35, 21], [28, 32], [44, 31]]);
+  dots(x, '#f77622', [[20, 23], [47, 19], [37, 15]]);
+}
+
+const MAP_SCENES = { desert: sunscorch, frozen: frostfell, meadow: bloomvale, hell: abyss };
 
 // The Dungeon: a stone hall, an arch, its stairs going down into torchlight.
 function stairs(x, w, h) {

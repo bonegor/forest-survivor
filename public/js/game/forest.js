@@ -2,45 +2,69 @@
 // to crossroads, a shrine at each and a crypt at every second, groves and landmarks between)
 // comes from darkwood.js; this turns it into chunks of ground and props, keeps the shrines and
 // crypts in play, and lights the night.
+//
+// Every Survival map's night is spent in one (28 October 2026): the same endless map laid out from
+// the map's own world seed (data/maps.js seed) and dressed in its look (game/biomes.js): its ground,
+// what stands in each of the Darkwood's places, its light, fog, air and crypt doors. The Darkwood's
+// look is the forest as it always was.
 
 import { SPR } from '../engine/sprites.js';
-import { makeCanvas, hash2, fbm, rand, lerp, clamp, pick } from '../engine/util.js';
+import { makeCanvas, hash2, fbm, rand, lerp, clamp, pick, mulberry32 } from '../engine/util.js';
 import { PC, P } from './particles.js';
-import { CHUNK as CH, TREE_NAMES, layoutChunk, paintChunk, shrinesNear, cryptsNear, start, trimCaches } from './darkwood.js';
+import { CHUNK as CH, DARKWOOD, TREE_NAMES, setWorld, layoutChunk, paintChunk, shrinesNear, cryptsNear, start, trimCaches } from './darkwood.js';
+import { BIOMES, NIGHT, biomeProp } from './biomes.js';
+import { LS } from './lighting.js';
 import { LANDMARK_SOLIDS, LANDMARK_TALL } from '../art/landmarks.js';
 
-// Half the width of each tree's trunk at its foot.
+// Half the width of each tree's trunk at its foot (a look's own trees: its `trunks`).
 const TRUNK = { oak1: 3.5, oak2: 3.5, oak3: 3.5, pine1: 2.5, pine2: 2.5, deadtree1: 2.5, deadtree2: 2.5 };
 // Shrines come into play within this distance of the hero (the next crossroads down each road)
 // and leave it beyond the second; one that has been used stays used.
 const SHRINE_NEAR = 2400, SHRINE_FAR = 2800;
 
-// Ambient light over the course of the night (survival progress 0..1).
-export const NIGHT = [
-  [0, [150, 136, 186]],
-  [0.1, [118, 120, 172]],
-  [0.5, [102, 110, 164]],
-  [0.86, [110, 114, 166]],
-  [0.95, [176, 146, 166]],
-  [1, [240, 214, 190]],
-];
+// Ambient light over the course of the night (survival progress 0..1): the Darkwood's (its look's,
+// game/biomes.js, where every look's night is; still exported here, for the sprite tuner).
+export { NIGHT };
 
 // What steer() returns: the one pair, filled again by the next call.
 const HEADING = [0, 0];
+
+// A look's number, or a roll of r between its two (Forest.air).
+const roll = (r, v) => (typeof v === 'number' ? v : v[0] + r() * (v[1] - v[0]));
 
 // A crypt building's footprint round its door (x, y): w wide, up deep, its front steps px above
 // the door's line.
 export const CRYPT_BOX = { w: 24, up: 18, steps: 3 };
 
 export class Forest {
-  constructor(g, seed) {
+  // look: the map's (game/biomes.js), the Darkwood's without one.
+  constructor(g, seed, look = BIOMES.forest) {
     this.g = g;
     this.seed = seed;
+    this.look = look;
+    // The map's own world (data/maps.js seed: its roads, crossroads, groves and landmarks), the
+    // Darkwood's 1 without a map. darkwood.js keeps the world it lays out as module state, so every
+    // Forest sets it to its own (the Darkwood setting 1 back after a night elsewhere): nothing of one
+    // run's world is left for the next.
+    const world = g.map?.seed ?? 1;
+    if (DARKWOOD.seed !== world) setWorld({ seed: world });
     this.chunks = new Map();
-    this.dustColor = PC.b;
-    this.fog = makeFogTexture(seed);
+    this.glowPad = null; // where a chunk's cracks' glow is painted full size (generate), made when first wanted
+    // The hero's footsteps' dust, the dirt a monster rises from and a charger's dust (enemies.js:
+    // null, the forest's own there).
+    this.dustColor = look.dust.step;
+    this.riseDust = look.dust.rise;
+    this.chargeDust = look.dust.charge;
+    this.vignette = look.vignette; // Game.draw, by night
+    this.flicker = new Set(look.flicker);
+    this.fog = makeFogTexture(seed, look.fog.rgb);
+    this.windX = 0; // how far the weather's wind has carried the fog (drawOverlay)
     this.ffT = 0;
     this.leafT = 0;
+    // A look's own air (look.fx): its emitters' clocks, and dice of its own, so the Darkwood's
+    // Math.random draws stay as they were.
+    this.fxT = look.fx ? look.fx.map(() => 0) : null;
+    this.fxRng = mulberry32((seed ^ 0x1f3a) >>> 0);
     this.start = start();
     this.mapShrines = true; // the spawner leaves the shrines to the map
     this.usedShrines = new Set();
@@ -88,6 +112,11 @@ export class Forest {
       this.shrineT = 0.5;
       this.syncShrines();
     }
+    // Another look's air (its embers, snow, petals...), and its fog carried by the wind.
+    if (this.look.fx) {
+      this.air(dt);
+      return;
+    }
     // Fireflies and falling leaves: the fireflies hide from the rain (weather.js). The same draws
     // of Math.random whatever the weather.
     const wet = g.weather ? g.weather.now.rain : 0;
@@ -106,6 +135,27 @@ export class Forest {
     }
   }
 
+  // A look's air in place of the fireflies and leaves (biomes.js fx): each emitter's motes over the
+  // view, or falling from above it, on dice of the look's own; some hide where rain is seen, as the
+  // fireflies do, and the weather's wind carries what it may, and the fog.
+  air(dt) {
+    const g = this.g, cam = g.cam, r = this.fxRng, fx = this.look.fx, w = g.weather;
+    const seen = !!w && w.shown, wet = seen ? w.now.rain || 0 : 0, wind = seen ? w.now.wind || 0 : 0;
+    if (this.look.fog.wind) this.windX += dt * wind * this.look.fog.wind;
+    for (let i = 0; i < fx.length; i++) {
+      const e = fx[i];
+      this.fxT[i] -= dt;
+      while (this.fxT[i] <= 0) {
+        this.fxT[i] += Math.max(0.01, roll(r, e.every));
+        if (e.rain && wet > 0 && r() < wet * 0.85) continue;
+        const sky = e.at === 'sky';
+        const x = sky ? cam.x + r() * cam.W : cam.x - 20 + r() * (cam.W + 40);
+        const y = sky ? cam.y - 10 + r() * (cam.H * 0.6 + 10) : cam.y - 20 + r() * (cam.H + 40);
+        g.particles.emit(x, y, roll(r, e.z), roll(r, e.vx) + wind * (e.wind || 0), roll(r, e.vy), roll(r, e.vz), roll(r, e.life), e.size, e.colors[Math.floor(r() * e.colors.length)], e.flags, e.drag || 0);
+      }
+    }
+  }
+
   // The shrines at the crossroads near the hero join the game's own list; far ones leave it.
   syncShrines() {
     const g = this.g, p = g.player, have = new Set();
@@ -121,44 +171,78 @@ export class Forest {
       g.shrines.push({ x: s.x, y: s.y, type: s.type, used: this.usedShrines.has(s.key), t: hash2(Math.round(s.x), Math.round(s.y), 7) * 6, spr: SPR.shrine, shrine: true, key: s.key });
     }
     // Crypt doors the same way; the game remembers which ones it has cleared, and which the
-    // hero fainted in (both shut for good).
+    // hero fainted in (both shut for good). Each in its look's stone (look.crypt.door, the same
+    // 26 x 29 frames), the Darkwood's mausoleum while a look's own is not drawn.
     const doors = new Set();
     for (let i = g.crypts.length - 1; i >= 0; i--) {
       const d = g.crypts[i];
       if (Math.hypot(d.x - p.x, d.y - p.y) > SHRINE_FAR) g.crypts.splice(i, 1);
       else doors.add(d.key);
     }
+    const door = SPR[this.look.crypt.door] || SPR.crypt;
     for (const d of cryptsNear(p.x, p.y, SHRINE_NEAR)) {
-      if (!doors.has(d.key)) g.crypts.push({ ...d, sealed: g.cleared.has(d.key) || g.lost.has(d.key), t: hash2(d.x, d.y, 9) * 6, spr: SPR.crypt, crypt: true });
+      if (!doors.has(d.key)) g.crypts.push({ ...d, sealed: g.cleared.has(d.key) || g.lost.has(d.key), t: hash2(d.x, d.y, 9) * 6, spr: door, crypt: true });
     }
   }
 
   layout(cx, cy) {
-    return layoutChunk(cx, cy);
+    return layoutChunk(cx, cy, null, this.look.density);
   }
 
   generate(cx, cy) {
     const c = makeCanvas(CH, CH);
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(CH, CH);
-    const lay = this.layout(cx, cy);
+    const lay = this.layout(cx, cy), look = this.look;
+    // The look's ground, unless the layout brought its own (the prologue's road by day; a layout
+    // that only says it is daylit keeps the Darkwood's day palettes, darkwood.js).
+    if (!lay.ground && !lay.daylight) lay.ground = look.ground;
+    // A look whose cracks glow paints their glow apart: the light they give the night (addLights).
+    // Kept at the light map's grain (lighting.js LS, 2 world px a texel), all the light map ever
+    // takes of it: painted full size on the Forest's one pad, cleared for each chunk, then drawn down
+    // to half once, smoothly, which averages each 2 x 2 as the light map did when it took the full
+    // glow every frame. The same light, from a quarter of the pixels kept a chunk, nothing made and
+    // thrown away a chunk, and nothing filtered a frame (render lays it on pixel for pixel).
+    let glow = null;
     // Headless, the layout (trees, props, colliders) is all that matters.
     if (!this.g.headless) {
-      paintChunk(lay, new Uint32Array(img.data.buffer));
+      let pad = null;
+      if (lay.ground?.cracks) {
+        if (!this.glowPad) {
+          const pc = makeCanvas(CH, CH), pg = pc.getContext('2d'), pimg = pg.createImageData(CH, CH);
+          this.glowPad = { c: pc, g: pg, img: pimg, px: new Uint32Array(pimg.data.buffer) };
+        }
+        pad = this.glowPad;
+        pad.px.fill(0);
+      }
+      paintChunk(lay, new Uint32Array(img.data.buffer), pad && pad.px);
       ctx.putImageData(img, 0, 0);
+      if (pad) {
+        pad.g.putImageData(pad.img, 0, 0);
+        glow = makeCanvas(CH / LS, CH / LS);
+        glow.getContext('2d').drawImage(pad.c, 0, 0, CH / LS, CH / LS);
+      }
     }
     const props = [], trunks = [];
-    for (const q of lay.props) {
+    for (const q0 of lay.props) {
+      // What stands in the slot on this look (biomes.js biomeProp): in the Darkwood, the slot's own.
+      const q = look.props ? biomeProp(look, q0, lay) : q0;
+      if (!q) continue;
       const spr = SPR[q.n];
       if (!spr) continue;
-      const tree = TREE_NAMES.has(q.n);
-      const p = { spr, x: q.x, y: q.y, frame: 0, anim: q.anim || 0, light: q.light || null, tree: tree || LANDMARK_TALL.has(q.n), t: hash2(q.x, q.y, 11) * 10, solid: 0, trunk: tree ? TRUNK[q.n] : 0 };
+      // A tree by its slot: whatever stands in a tree's place (a saguaro in an oak's) stops the hero
+      // at its trunk, fades while he is behind it and is a tree to the Druid; as tall a landmark too,
+      // and one of the look's trees standing in a tall landmark's place (the Bloomvale's vine-wrapped
+      // trees for the graveyards' skull trees) is a tree with its trunk.
+      const tree = TREE_NAMES.has(q0.n), tall = LANDMARK_TALL.has(q0.n) || LANDMARK_TALL.has(q.n);
+      const trunk = tree ? (look.trunks?.[q.n] ?? TRUNK[q.n] ?? TRUNK[q0.n]) : (tall && look.trunks?.[q.n]) || 0;
+      const p = { spr, x: q.x, y: q.y, frame: 0, anim: q.anim || 0, light: q.light || null, tree: tree || tall, t: hash2(q.x, q.y, 11) * 10, solid: 0, trunk };
       props.push(p);
       if (p.trunk) trunks.push(p);
       // A landmark's solid parts (its posts, its stone) stop the hero as trunks do.
       for (const [dx, dy, r] of LANDMARK_SOLIDS[q.n] || []) trunks.push({ x: q.x + dx, y: q.y + dy, trunk: r });
     }
-    return { cx, cy, canvas: c, props, trunks, used: 0 };
+    return { cx, cy, canvas: c, glow, props, trunks, used: 0 };
   }
 
   forEachVisible(cam, margin, fn) {
@@ -211,24 +295,32 @@ export class Forest {
     if (fr.em) ctx.drawImage(fr.em, X, Y, w, h);
   }
 
+  // The props' lights: a fire's (and a look's embers', look.flicker) flickering, each key as bright
+  // as its look burns it (look.lightK: the Darkwood's glowing mushrooms and stones at 0.55). A look
+  // whose cracks glow (the Abyss's) lights the night along them too, pulsing (lighting.js glow): what
+  // stands over a crack is lit by it, not painted over.
   addLights(g) {
-    const t = g.time;
+    const t = g.time, flicker = this.flicker, K = this.look.lightK, CK = this.look.ground.cracks;
+    const hot = CK ? CK.alpha + CK.pulse * Math.sin(g.clock * 1.7) : 0;
     this.forEachVisible(g.cam, 120, (c) => {
       for (const p of c.props) {
         if (!p.light) continue;
-        const flick = p.light[0] === 'fire' ? 0.85 + 0.15 * Math.sin(t * 13 + p.t) * Math.sin(t * 7.3 + p.t * 2) : 1;
-        g.light(p.x, p.y - 6, p.light[1] * flick, p.light[0], p.light[0] === 'cyan' ? 0.55 : 1);
+        const flick = flicker.has(p.light[0]) ? 0.85 + 0.15 * Math.sin(t * 13 + p.t) * Math.sin(t * 7.3 + p.t * 2) : 1;
+        g.light(p.x, p.y - 6, p.light[1] * flick, p.light[0], K[p.light[0]] ?? 1);
       }
+      if (c.glow) g.lighting.glow(c.glow, c.cx * CH, c.cy * CH, CH, CH, hot);
     });
   }
 
+  // The night's light (its look's, the Darkwood's NIGHT): deepening, under the weather, and
+  // brought to its dawn's by the sunrise.
   ambient() {
-    const g = this.g;
+    const g = this.g, night = this.look.night, dawn = this.look.dawn;
     // Ranked has no dawn: the night deepens over 12 minutes and stays.
     const u = g.mode === 'ranked' ? clamp(g.time / 900, 0, 0.86) : clamp(g.time / g.duration, 0, 1);
     let i = 0;
-    while (i < NIGHT.length - 2 && NIGHT[i + 1][0] < u) i++;
-    const [t0, c0] = NIGHT[i], [t1, c1] = NIGHT[i + 1];
+    while (i < night.length - 2 && night[i + 1][0] < u) i++;
+    const [t0, c0] = night[i], [t1, c1] = night[i + 1];
     const k = clamp((u - t0) / (t1 - t0), 0, 1);
     let c = [lerp(c0[0], c1[0], k), lerp(c0[1], c1[1], k), lerp(c0[2], c1[2], k)];
     if (g.mode === 'ranked' && g.phase > 30) {
@@ -239,21 +331,25 @@ export class Forest {
     if (g.weather) c = g.weather.tint(c);
     if (g.dawn > 0) {
       const d = clamp(g.dawn, 0, 1);
-      c = [lerp(c[0], 255, d), lerp(c[1], 244, d), lerp(c[2], 228, d)];
+      c = [lerp(c[0], dawn[0], d), lerp(c[1], dawn[1], d), lerp(c[2], dawn[2], d)];
     }
     return c;
   }
 
   drawOverlay(ctx, cam, time) {
-    // Two drifting fog layers, drifting east as the leaves fall.
+    const F = this.look.fog, w = this.g.weather;
+    // Two drifting fog layers, drifting east as the leaves fall: a look's thicker in its weather's
+    // haze, and carried further by its wind (Forest.air), while the weather is seen.
     const S = cam.S;
     const fog = this.fog;
     const scale = S * 3;
     const tw = fog.width * scale, th = fog.height * scale;
+    const haze = F.haze && w && w.shown ? 1 + (w.now.haze || 0) * F.haze : 1;
     for (let layer = 0; layer < 2; layer++) {
-      const ox = -((((cam.x * (layer ? 1.15 : 0.85) - time * (layer ? 6 : 3.5)) * S) % tw + tw) % tw) - tw;
-      const oy = -(((cam.y * (layer ? 1.15 : 0.85) + time * (layer ? 1.5 : 0.8)) * S) % th) - th;
-      ctx.globalAlpha = layer ? 0.06 : 0.09;
+      const drift = time * (layer ? F.drift[1] : F.drift[0]) + this.windX * (layer ? 1.3 : 1);
+      const ox = -((((cam.x * (layer ? 1.15 : 0.85) - drift) * S) % tw + tw) % tw) - tw;
+      const oy = -(((cam.y * (layer ? 1.15 : 0.85) + time * (layer ? F.rise[1] : F.rise[0])) * S) % th) - th;
+      ctx.globalAlpha = (layer ? F.alpha[1] : F.alpha[0]) * haze;
       for (let y = oy; y < cam.pxH; y += th) for (let x = ox; x < cam.pxW; x += tw) ctx.drawImage(fog, x, y, tw, th);
     }
     ctx.globalAlpha = 1;
@@ -378,7 +474,8 @@ export class Forest {
   }
 }
 
-function makeFogTexture(seed) {
+// The fog's tile, in its look's colour (the Darkwood's a pale blue, 200, 210, 240).
+function makeFogTexture(seed, rgb) {
   const N = 96;
   const c = makeCanvas(N, N);
   const ctx = c.getContext('2d');
@@ -391,9 +488,9 @@ function makeFogTexture(seed) {
       const val = n(u, v) * (1 - u) * (1 - v) + n(u - 1, v) * u * (1 - v) + n(u, v - 1) * (1 - u) * v + n(u - 1, v - 1) * u * v;
       const a = clamp((val - 0.42) * 3, 0, 1);
       const i = (y * N + x) * 4;
-      img.data[i] = 200;
-      img.data[i + 1] = 210;
-      img.data[i + 2] = 240;
+      img.data[i] = rgb[0];
+      img.data[i + 1] = rgb[1];
+      img.data[i + 2] = rgb[2];
       img.data[i + 3] = a * 255;
     }
   }
