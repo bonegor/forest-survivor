@@ -42,6 +42,10 @@ export class Forest {
     this.g = g;
     this.seed = seed;
     this.look = look;
+    // A map spent by day (its look's sun: the owner's "only spend the night in the forest, make the
+    // desert and snow one be normal bright", 28 October 2026): lit as the road by day is, its ground
+    // its daytime one, drawn in the day's order (Game.draw), and still under its weather.
+    this.daylight = !!look.sun;
     // The map's own world (data/maps.js seed: its roads, crossroads, groves and landmarks), the
     // Darkwood's 1 without a map. darkwood.js keeps the world it lays out as module state, so every
     // Forest sets it to its own (the Darkwood setting 1 back after a night elsewhere): nothing of one
@@ -196,7 +200,7 @@ export class Forest {
     const lay = this.layout(cx, cy), look = this.look;
     // The look's ground, unless the layout brought its own (the prologue's road by day; a layout
     // that only says it is daylit keeps the Darkwood's day palettes, darkwood.js).
-    if (!lay.ground && !lay.daylight) lay.ground = look.ground;
+    if (!lay.ground && !lay.daylight) lay.ground = look.sun ? look.day || look.ground : look.ground;
     // A look whose cracks glow paints their glow apart: the light they give the night (addLights).
     // Kept at the light map's grain (lighting.js LS, 2 world px a texel), all the light map ever
     // takes of it: painted full size on the Forest's one pad, cleared for each chunk, then drawn down
@@ -315,7 +319,17 @@ export class Forest {
   // The night's light (its look's, the Darkwood's NIGHT): deepening, under the weather, and
   // brought to its dawn's by the sunrise.
   ambient() {
-    const g = this.g, night = this.look.night, dawn = this.look.dawn;
+    const g = this.g, night = this.look.night, dawn = this.look.dawn, sun = this.look.sun;
+    // A map spent by day stands in its sun the day long, under its weather.
+    if (sun) {
+      const s = g.weather ? g.weather.tint(sun) : sun; // tint hands back the sun itself when unseen
+      let c = [s[0], s[1], s[2]];
+      if (g.dawn > 0) {
+        const d = clamp(g.dawn, 0, 1);
+        c = [lerp(c[0], dawn[0], d), lerp(c[1], dawn[1], d), lerp(c[2], dawn[2], d)];
+      }
+      return c;
+    }
     // Ranked has no dawn: the night deepens over 12 minutes and stays.
     const u = g.mode === 'ranked' ? clamp(g.time / 900, 0, 0.86) : clamp(g.time / g.duration, 0, 1);
     let i = 0;

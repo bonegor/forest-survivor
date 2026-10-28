@@ -3,6 +3,14 @@
 // slot machine's lights, and they and gold throw off twinkles. Rapid hits on the same target
 // merge into one growing number that re-pops.
 //
+// The owner's (28 October 2026), the kill streak's count taken off the screen: "Let us make sure to
+// nicely flash damage numbers instead", and "the damage should be shown when its dealt, not just when
+// monster dies ... not shown when deal on hero". Every number flashes white as it pops (POP_FLASH;
+// steady with FLASHES: SOFT), as a crit's always did; many more hits on the horde show at once
+// (PLAIN_MAX, CRIT_MAX, MAX), so a blow that doesn't kill is seen too in a thick night, and the clear
+// zone round the hero is no wider than his body (CLEAR), where the blows of a melee land. The hero's
+// own wounds show none (Player.hurt): the screen's red flash and his bar tell them.
+//
 // They have a hierarchy (TIER), so the late night's thousands of blows never bury the hero or a
 // boss: at most MAX alive. The big ones (the hero's wounds and heals, gold, words, and the one
 // number each boss, lord or champion holds over its head, HELD) always come. Crits on the horde
@@ -46,11 +54,12 @@ const PLAIN = new Set(['normal', 'fire', 'frost', 'holy', 'shock', 'dark', 'pois
 // The tiers, lowest first.
 export const TIER = { plain: 0, crit: 1, big: 2 };
 
-export const MAX = 40;
-export const PLAIN_MAX = 12;
-export const CRIT_MAX = 10;
-// No hit on the horde is shown this near the hero's middle (world px).
-export const CLEAR = 22;
+export const MAX = 80;
+export const PLAIN_MAX = 40;
+export const CRIT_MAX = 20;
+// No hit on the horde is shown this near the hero's middle (world px): his body, no more (22 before
+// 28 October 2026, which hid the blows landing on the foes against him).
+export const CLEAR = 10;
 // Hits on a boss, a lord or a champion within this many seconds of the last add up in its one
 // number over its head.
 export const HELD = 0.5;
@@ -58,6 +67,8 @@ const LIFE = 0.85;
 const TEXT_LIFE = 1.6; // words last longer than numbers (Numbers.text)
 // The shine's sweep across the digits: when, and how wide (text pixels).
 const SHINE_FROM = 0.05, SHINE_FOR = 0.32, SHINE_W = 3;
+// The white flash every number pops in with (seconds), and a crit's (draw).
+const POP_FLASH = 0.08, CRIT_FLASH = 0.09;
 
 export class Numbers {
   constructor() {
@@ -272,9 +283,15 @@ export class Numbers {
         }
       }
       // White-hot flash on the first frames of a crit, and on a held number a crit was just added to.
-      if ((st.crit && t < 0.09) || n.critT > 0) {
+      if ((st.crit && t < CRIT_FLASH) || n.critT > 0) {
         const fc = textCanvas(n.str, '#ffffff', '#ffffff', st.edge ? '#ffffff' : null, 'bold');
-        ctx.globalAlpha = 0.85 * (1 - t / 0.09);
+        ctx.globalAlpha = 0.85 * (1 - t / CRIT_FLASH);
+        ctx.drawImage(fc, X, Y, Math.round(w), Math.round(h));
+      } else if (t < POP_FLASH && !this.steady) {
+        // Every other number flashes white as it pops, and again as a hit merged into it re-pops it
+        // (add: its clock set back to 0.05); never with FLASHES: SOFT.
+        const fc = textCanvas(n.str, '#ffffff', '#ffffff', st.edge ? '#ffffff' : null, n.font);
+        ctx.globalAlpha = alpha * 0.8 * (1 - t / POP_FLASH);
         ctx.drawImage(fc, X, Y, Math.round(w), Math.round(h));
       }
       if (spin) ctx.restore();

@@ -66,6 +66,7 @@ export class DayForest extends Forest {
   constructor(g) {
     super(g, 7361, BIOMES.desert);
     this.daylight = true;
+    this.noWeather = true; // the road's sky stays clear: no weather is seen or heard on it
     this.scene = roadScene();
     this.start = { x: 0, y: 0 };
   }

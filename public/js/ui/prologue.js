@@ -80,7 +80,7 @@ export class PrologueScreen {
     if (this.arrival !== null) {
       // The road's end, the Sunscorch: the desert of the first night (28 October 2026).
       drawText(ctx, 'The Sunscorch', W / 2, H / 2 - 20, { align: 'center', color: '#fee761', font: 'gothic' });
-      const lines = wrapText('By dusk, Aldric reached the Sunscorch. Something stirred beneath the sand.', Math.min(290, W - 32));
+      const lines = wrapText('By midday, Aldric reached the Sunscorch. Something stirred beneath the sand.', Math.min(290, W - 32));
       lines.forEach((s, i) => drawText(ctx, s, W / 2, H / 2 + i * 11, { align: 'center', color: '#ead4aa' }));
       if (this.replay) {
         ui.begin(dt);
@@ -143,7 +143,7 @@ export class PrologueScreen {
     const { app, game: g } = this, ui = app.ui, fallen = g.state === 'over';
     dim(ctx, W, H, 0.6);
     const w = Math.min(250, W - 20), x = (W - w) / 2;
-    const lines = wrapText(fallen ? 'Try the road again, or begin the night.' : 'A short journey before the first night.', w - 16);
+    const lines = wrapText(fallen ? 'Try the road again, or go on to the Sunscorch.' : 'A short journey before the first fight.', w - 16);
     const h = 88 + lines.length * 11, y = H / 2 - h / 2, by = y + 32 + lines.length * 11;
     panel(ctx, x, y, w, h, { title: fallen ? 'Back on your feet' : 'The road can wait' });
     lines.forEach((s, i) => drawText(ctx, s, W / 2, y + 22 + i * 11, { align: 'center', color: '#c0cbdc' }));
@@ -152,7 +152,7 @@ export class PrologueScreen {
       if (fallen) this.game = new Prologue({ settings: app.settings });
       this.paused = false; this.game.state = 'play'; ui.lock(0.2);
     }
-    if (button(ctx, ui, 'road_leave', W / 2 - 65, by + 23, 130, 15, this.replay ? 'RETURN TO CAMP' : 'SKIP TO NIGHT')) this.finish();
+    if (button(ctx, ui, 'road_leave', W / 2 - 65, by + 23, 130, 15, this.replay ? 'RETURN TO CAMP' : 'SKIP THE ROAD')) this.finish();
     ui.end();
   }
 }

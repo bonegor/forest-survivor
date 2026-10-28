@@ -15,7 +15,7 @@ const fresh = () => {
 };
 const tier = (n, t) => n.list.filter((m) => m.tier === t).length;
 
-test('a burst of 200 plain hits and 5 crits keeps the 5 crits, the plain ones capped, at most 40 in all', () => {
+test('a burst of 200 plain hits and 5 crits keeps the 5 crits, the plain ones capped, at most MAX in all', () => {
   const n = fresh();
   for (let i = 0; i < 200; i++) {
     n.add(300 + (i % 20) * 9, 300 + Math.floor(i / 20) * 9, 10 + i, 'normal');

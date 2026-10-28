@@ -1,12 +1,13 @@
 // The Sunscorch's look (data/maps.js 'desert'): the first of the five Survival maps, where a new
 // player's first night is spent. The owner's (28 October 2026): "One would be the desert map ...
-// And I want you to make it so that the first one where we start is the desert map." A desert
-// under a cool moon: dunes rippled by the wind where the Darkwood has its oak meadows, a redder
+// And I want you to make it so that the first one where we start is the desert map." Then, the
+// same day: "we will have to only have to spend the night in the forest, make the desert and snow
+// one be normal bright": its fifteen minutes are a day in the sun (sun, below), its ground the sand
+// of the road by day (day). A desert: dunes rippled by the wind where the Darkwood has its oak meadows, a redder
 // hardpan where it has its pinewoods, a bleached salt pan where its woods are cursed, and caravan
 // tracks for its roads. Saguaros and palms stand where its oaks stand, joshua trees where its
-// pines do, dead acacias in the pan (the flora, art/flora-desert.js). A bright night, the
-// second brightest of the five after the Bloomvale's, as the gentlest one should be, its crypts
-// sandstone tombs.
+// pines do, dead acacias in the pan (the flora, art/flora-desert.js), its crypts sandstone tombs.
+// Its moonlit ground and night (ground, night) are kept for a night it may be given again.
 //
 // The fields are game/biomes.js's (its header says what each one is); this file is the Sunscorch's
 // alone, so its look can be refined without touching another map's.
@@ -150,7 +151,10 @@ export const DESERT = {
     'graveyard:lm_skulltree2': 'lm_driedtree',
   },
   trunks: { sand_cactus1: 3, sand_cactus2: 3, sand_palm1: 2.5, sand_joshua1: 2.5, sand_joshua2: 2.5, sand_acacia1: 2.5, sand_acacia2: 2.5 },
-  // A bright night (28 October 2026: L 0.6 at its depth, 0.56 before, against the Darkwood's
+  // In the sun all day long (the owner's "normal bright", 28 October 2026): a warm white light, the
+  // monsters in their own colours, too bright for the night's lifted edge (enemies.js nightFloor).
+  sun: [255, 248, 230],
+  // Its night, as it was lit before it was given the day: a bright night (L 0.6 at its depth, 0.56 before, against the Darkwood's
   // 0.45 and the Frostfell's 0.5): dusk warm, the depth a cool silver-blue moonlight on the warm
   // sand (bluer than before, the ground's tones worked back from it), the dawn coming in gold.
   night: [

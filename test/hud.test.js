@@ -4,15 +4,13 @@
 // name stays on the screen, over the fury orb. The pause screen shows the clock the HUD showed.
 // Only the three elites nearest the hero are named, and a boss's words come after the names and
 // the markers, below its own name at the top. Levels gained at once run the experience bar to its
-// end, flash it and start it again, one by one; the combo pops only as it comes up and at a new
-// tier, its tiers rising with the difficulty's horde, a frame's new tiers ringing one sting, the
-// highest's (28 October 2026).
+// end, flash it and start it again, one by one. The kill streak is counted for the record but
+// drawn nowhere and kept clear of nowhere (28 October 2026).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { Game, FLASH_SOFT, COMBO, comboTier, comboTiers } from '../public/js/game/game.js';
-import { XP_WRAP, COMBO_POP } from '../public/js/game/hud.js';
-import { NORMAL, VETERAN, ELITE } from '../public/js/data/difficulty.js';
+import { Game, FLASH_SOFT } from '../public/js/game/game.js';
+import { XP_WRAP } from '../public/js/game/hud.js';
 import { GameScreen, PauseOverlay } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { HEROES } from '../public/js/data/heroes.js';
@@ -164,123 +162,28 @@ test('with no boss up they still keep off the orbs', () =>
     assertClear(g, W, H, 'no boss');
   }));
 
-// What the combo at the right edge covers as drawn at rest (Hud.drawCombo): its count, its word
-// and its timer.
-function comboBoxes(g, W, H) {
-  const { ctx, calls } = recorder();
-  g.hud.tierShown = comboTier(g.comboTiers, g.combo);
-  g.hud.comboWordT = Infinity;
-  g.hud.comboScale = 1;
-  g.hud.drawCombo(ctx, W, H, 0.3);
-  return calls
-    .filter((c) => c[0] === 'drawImage' || c[0] === 'fillRect')
-    .map((c) => (c[0] === 'fillRect' ? c.slice(1, 5) : [c[2], c[3], c[4] ?? c[1].width, c[5] ?? c[1].height]));
-}
-
-test('they keep off the combo at the right edge while it is up, and stand there when it is not', () =>
-  game((g) => {
-    const W = 480, H = 270;
+// The kill streak left the screen (28 October 2026, game.js COMBO). The owner's: "the combo counter
+// on the right actually doesn't make sense, since apart from the very early game, the monsters just
+// keep on spawning so quick that it just keeps on rising. Let us make sure to nicely flash damage
+// numbers instead". It is still counted, its longest kept for the record (best.combo), and a lull
+// still breaks it; nothing of it is drawn and nothing is kept clear for it: a marker stands where
+// its count stood whatever it has come to.
+test('the kill streak is counted for the record, not shown: the markers stand where its count stood', () =>
+  game((g, p) => {
+    const W = 480, H = 270, stood = [W - 88, Math.round(H * 0.42) - 20, 88, 48];
     g.shrines.length = 0;
     g.crypts.length = 0;
     chestsAround(g, W, H);
-    g.combo = 0;
-    const free = markers(g, W, H).boxes;
-    for (const n of [12, 381, 4000]) {
-      g.combo = n;
-      g.comboT = 2;
-      const combo = comboBoxes(g, W, H);
-      assert.ok(combo.length >= 3, `a combo of ${n} is drawn`);
-      assert.ok(free.some((b) => combo.some((r) => hit(b, r))), 'with no combo up the markers stand where it goes');
-      const bad = markers(g, W, H).boxes.find((b) => combo.some((r) => hit(b, r)));
-      assert.ok(!bad, `a combo of ${n}: a marker at ${bad} is on it`);
-    }
-  }));
-
-// The combo (28 October 2026, the 27 October review's C7): Veteran's tiers as they were, the others'
-// rising with the horde.
-test("the combo's tiers rise with the difficulty's horde, Veteran's as they were", () => {
-  const v = comboTiers(VETERAN), n = comboTiers(NORMAL), e = comboTiers(ELITE), m = comboTiers(ELITE, true);
-  assert.deepEqual(v, COMBO.tiers);
-  for (const [name, a] of Object.entries({ Normal: n, Veteran: v, Elite: e, 'an Elite Nightmare': m })) {
-    assert.ok(a[0] > COMBO.show, `${name}: its first tier after the count shows (${a})`);
-    for (let i = 1; i < a.length; i++) assert.ok(a[i] > a[i - 1], `${name}: each tier above the one below (${a})`);
-  }
-  for (let i = 0; i < COMBO.tiers.length; i++) assert.ok(n[i] < v[i] && v[i] < e[i] && e[i] < m[i], `tier ${i + 1}: ${n[i]} < ${v[i]} < ${e[i]} < ${m[i]}`);
-  assert.equal(comboTier(v, COMBO.show - 1), -1, 'not shown below COMBO.show');
-  assert.equal(comboTier(v, COMBO.show), 0, 'COMBO from it');
-  assert.equal(comboTier(v, v[0]), 1);
-  assert.equal(comboTier(v, v[3]), 4);
-});
-
-test('the combo pops as it comes up and at each new tier, not at a kill that only counts, and settles by the clock', () =>
-  game((g) => {
-    const { ctx } = recorder(), draw = (dt) => g.hud.drawCombo(ctx, 480, 270, 0.3, dt);
-    g.comboT = COMBO.hold;
-    g.combo = COMBO.show;
-    draw(1 / 60);
-    assert.ok(g.hud.comboScale > 1.3, `it pops as it comes up (${g.hud.comboScale})`);
-    draw(1); // settled
-    g.combo++;
-    assert.ok(g.combo < g.comboTiers[0]);
-    draw(1 / 60);
-    assert.ok(g.hud.comboScale < 1.01, `a kill alone does not pop it (${g.hud.comboScale})`);
-    assert.ok(g.hud.comboWordT > COMBO_POP.wordFor, 'nor its word');
-    g.combo = g.comboTiers[0];
-    draw(1 / 60);
-    assert.ok(g.hud.comboScale > 1.3, `a new tier pops it (${g.hud.comboScale})`);
-    assert.ok(g.hud.comboWordT < COMBO_POP.wordFor, "and the tier's word");
-    // The same time in two frames or in four: the same pop left.
-    g.hud.comboScale = 1.5;
-    draw(1 / 30);
-    draw(1 / 30);
-    const s1 = g.hud.comboScale;
-    g.hud.comboScale = 1.5;
-    for (let i = 0; i < 4; i++) draw(1 / 60);
-    assert.ok(Math.abs(s1 - g.hud.comboScale) < 1e-9, `${s1} and ${g.hud.comboScale}`);
-  }));
-
-test("the run comes to the combo's tiers one by one, and a lull starts it over", () =>
-  game((g, p) => {
+    assert.equal(g.hud.drawCombo, undefined, 'no count to draw');
     const kill = () => g.killEnemy(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true }));
-    assert.equal(g.comboTier, -1);
-    while (g.combo < COMBO.show) kill();
-    assert.equal(g.comboTier, 0, 'shown');
-    while (g.combo < g.comboTiers[0]) kill();
-    assert.equal(g.comboTier, 1, 'the first named tier');
+    while (g.combo < 60) kill();
+    assert.equal(g.stats.maxCombo, 60, 'its longest kept for the record');
+    g.comboT = 2;
+    g.combo = 4000;
+    assert.ok(markers(g, W, H).boxes.some((b) => hit(b, stood)), 'a marker stands where the count stood');
     g.comboT = 1e-6;
     g.update(1 / 60);
-    assert.equal(g.combo, 0, 'the lull broke it');
-    assert.equal(g.comboTier, -1, 'and its tiers come again');
-  }));
-
-// 28 October 2026: a frame's kills taking the combo past two tiers at once (a Holy Relic, an
-// ultimate) rang the lower tier's sting, the higher's dropped by its limit, under the higher's word.
-test("a frame's kills past two tiers ring one sting, the higher tier's, at the frame's end", () =>
-  game((g, p) => {
-    const kill = () => g.killEnemy(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true }));
-    while (g.combo < g.comboTiers[0] - 1) kill();
-    assert.equal(g.comboSting, 0, 'no sting before the first named tier');
-    while (g.combo < g.comboTiers[1]) kill();
-    assert.equal(g.comboTier, 2);
-    assert.equal(g.comboSting, 2, "the second tier's sting, not the first's");
-    g.update(1 / 60);
-    assert.equal(g.comboSting, 0, "rung at the frame's end, once");
-  }));
-
-test('a combo brought up in the frame the lull broke the last one still pops as it comes up', () =>
-  game((g, p) => {
-    const { ctx } = recorder(), draw = (dt) => g.hud.drawCombo(ctx, 480, 270, 0.3, dt);
-    const kill = () => g.killEnemy(g.spawnEnemy('skeleton', p.x + 60, p.y, { instant: true }));
-    while (g.combo < g.comboTiers[0]) kill();
-    draw(1 / 60);
-    draw(1); // settled
-    // The lull runs out, and that frame's blows bring the next combo up before the HUD is drawn.
-    g.comboT = 1e-6;
-    g.update(1 / 60);
-    assert.equal(g.combo, 0, 'the lull broke it');
-    while (g.combo < COMBO.show) kill();
-    draw(1 / 60);
-    assert.ok(g.hud.comboScale > 1.3, `the new one pops (${g.hud.comboScale})`);
+    assert.equal(g.combo, 0, 'a lull breaks it');
   }));
 
 // 28 October 2026 (the 27 October review's C3): the bar no longer snaps down at a level gained.

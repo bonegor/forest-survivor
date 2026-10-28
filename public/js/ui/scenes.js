@@ -10,10 +10,11 @@ import { bounds, hexPack, unpack } from '../engine/pixels.js';
 // gravestone of round 4 in front). Locked, the same in shadow.
 // Survival's is the map it is played on (data/maps.js; the owner's five maps of 28 October 2026:
 // "the desert map ... a frozen, you know, snowy map ... a bright flower, colorful map ... a dark,
-// hellish, demonic map"): the Sunscorch's sun going down behind a pyramid, the Frostfell's aurora
-// over the ice peaks, the Bloomvale's blossom at twilight, the Abyss's black sun over a river of
-// fire. The Darkwood (map 'forest', or none: the tests, an older caller) is the dusk it always
-// was, the very same picture. The Dungeon and Ranked keep theirs whatever map is chosen.
+// hellish, demonic map"): the Sunscorch's sun high over a pyramid and the Frostfell's cold sun
+// over the ice peaks, both by day since the owner's word of the same day (sunscorch, below), the
+// Bloomvale's blossom at twilight, the Abyss's black sun over a river of fire. The Darkwood (map
+// 'forest', or none: the tests, an older caller) is the dusk it always was, the very same picture.
+// The Dungeon and Ranked keep theirs whatever map is chosen.
 export const SCENE = { w: 64, h: 44 };
 const cache = new Map();
 
@@ -165,16 +166,16 @@ function hill(x, cx, base, rx, ry, body, brow) {
   }
 }
 
-// A pine bowed under snow: the silhouette, each tier of branches white along its top, in shade
+// A pine bowed under snow: the tree in `body`, each tier of branches `snow` along its top, `shade`
 // on its right.
-function snowPine(x, cx, top, h) {
-  pine(x, cx, top, h, '#0d1622');
+function snowPine(x, cx, top, h, body, snow, shade) {
+  pine(x, cx, top, h, body);
   for (let r = 0; r < h; r += 4) {
     const half = Math.floor(r / 4);
-    x.fillStyle = '#c0cbdc';
+    x.fillStyle = snow;
     x.fillRect(cx - half, top + r, half + 1, 1);
     x.fillRect(cx - half - 1, top + r + 1, 1, 1);
-    x.fillStyle = '#5a6988';
+    x.fillStyle = shade;
     x.fillRect(cx + 1, top + r, half, 1);
   }
 }
@@ -185,74 +186,79 @@ function dots(x, col, list) {
   for (const [px, py] of list) x.fillRect(px, py, 1, 1);
 }
 
-// The Sunscorch: the sun going down behind the dunes and the tombs, the dunes' crests and the
-// slopes toward it lit, a saguaro framing them and a skull bleaching in the sand.
+// The Sunscorch by day (the owner's, 28 October 2026: "we will have to only have to spend the
+// night in the forest, make the desert and snow one be normal bright"): the sun high and white-hot
+// in a clear blue sky over the dunes and the tombs, the dunes' crests and the slopes toward it
+// lit, a saguaro green in the sun framing them and a skull bleaching in the sand.
 function sunscorch(x, w, h) {
-  bands(x, w, 0, 32, ['#2a1f45', '#3b2346', '#68386c', '#be4a2f', '#f77622', '#feae34']);
-  stars(x, w, 10, '#ead4aa', 5);
-  const g = x.createRadialGradient(44, 26, 6, 44, 26, 17);
-  g.addColorStop(0, 'rgba(254,174,52,0.55)');
-  g.addColorStop(1, 'rgba(254,174,52,0)');
+  bands(x, w, 0, 32, ['#2c6cc6', '#3a82d4', '#4f98de', '#6cb0e8', '#92c8ee', '#c4e0ec']);
+  const g = x.createRadialGradient(44, 8, 4, 44, 8, 14);
+  g.addColorStop(0, 'rgba(255,246,194,0.6)');
+  g.addColorStop(1, 'rgba(255,246,194,0)');
   x.fillStyle = g;
-  x.fillRect(27, 9, 34, 21);
-  disc(x, 44, 26, 7, '#fee761');
-  disc(x, 44, 26, 5, '#fff6c2');
+  x.fillRect(30, 0, 28, 22);
+  disc(x, 44, 8, 5, '#fee761');
+  disc(x, 44, 8, 4, '#fff6c2');
+  disc(x, 44, 8, 2, '#ffffff');
   // The tombs, a small one far off and a great one, the faces toward the sun lit, their edges
   // catching it.
-  peak(x, 31, 21, 30, 0.8, 0.3, '#5a2e44', '#7a3a48', { edge: '#be4a2f' });
-  peak(x, 15, 12, 30, 0.8, 0.3, '#3e2731', '#733e39', { edge: '#d77643' });
-  crest(x, w, h, 29, 1.5, 0.07, 1.2, '#5a2e44', '#7a3a48');
-  crest(x, w, h, 33, 3, 0.085, 3.6, '#733e39', '#e4a672', '#b86f50', '#5c3036', 1);
-  crest(x, w, h, 40, 3, 0.065, 0.9, '#3e2731', '#be4a2f', '#733e39', '#2a1f2d', 1);
-  // A saguaro framing them, its sunward edges lit.
-  x.fillStyle = '#1b1220';
+  peak(x, 31, 21, 30, 0.8, 0.3, '#d8a868', '#f2d49a', { edge: '#fff2cc' });
+  peak(x, 15, 12, 30, 0.8, 0.3, '#c88a4c', '#f0c47c', { edge: '#fff0c0' });
+  crest(x, w, h, 29, 1.5, 0.07, 1.2, '#e6c48c', '#f6e2b4');
+  crest(x, w, h, 33, 3, 0.085, 3.6, '#dcaa62', '#fbe6b0', '#f0c87e', '#c08a4c', 1);
+  crest(x, w, h, 40, 3, 0.065, 0.9, '#c98f48', '#f6d08a', '#e2ac60', '#a26a34', 1);
+  // A saguaro framing them, its sunward edges lit, its others in shade.
+  x.fillStyle = '#3e8948';
   x.fillRect(56, 14, 4, 30);
   x.fillRect(57, 13, 2, 1);
   x.fillRect(51, 27, 5, 2);
   x.fillRect(51, 20, 2, 7);
   x.fillRect(60, 23, 3, 2);
   x.fillRect(61, 16, 2, 7);
-  x.fillStyle = '#be4a2f';
+  x.fillStyle = '#265c42';
+  x.fillRect(59, 15, 1, 29);
+  x.fillRect(52, 21, 1, 6);
+  x.fillRect(62, 17, 1, 6);
+  x.fillRect(51, 28, 5, 1);
+  x.fillStyle = '#63c74d';
   x.fillRect(56, 15, 1, 12);
   x.fillRect(51, 21, 1, 6);
   x.fillRect(61, 17, 1, 6);
   // A skull bleaching on the dune, horns and all.
-  dots(x, '#ead4aa', [[7, 40], [13, 40], [8, 41], [9, 41], [10, 41], [11, 41], [12, 41], [9, 42], [11, 42], [10, 43]]);
-  dots(x, '#2a1f2d', [[10, 42]]);
+  dots(x, '#ffffff', [[7, 40], [13, 40], [8, 41], [9, 41], [10, 41], [11, 41], [12, 41], [9, 42], [11, 42], [10, 43]]);
+  dots(x, '#733e39', [[10, 42]]);
 }
 
-// The Frostfell: the aurora over the ice peaks, green in the frozen lake at their feet, the
-// snowfield and its drifts, pines bowed under snow framing it.
+// The Frostfell by day (the same word of the owner's): a pale cold sun in a clear blue sky over the
+// ice peaks, the lake frozen at their feet, the snowfield and its drifts, pines bowed under snow
+// framing it.
 function frostfell(x, w, h) {
-  bands(x, w, 0, 32, ['#0d1024', '#111a33', '#162443', '#1c3052', '#243e62', '#2f5070']);
-  stars(x, w, 26, '#c0cbdc', 11);
-  // The aurora: curtains hung from a slow wave across the sky, brightest at their hem.
-  const aur = ['#9ee562', '#63c74d', '#3e8948', '#265c42', '#193c3e'];
-  for (let xx = 0; xx < w; xx++) {
-    const wave = Math.sin(xx * 0.1 + 0.3), hem = Math.round(9 + wave * 3 + Math.sin(xx * 0.33) * 0.8);
-    const len = 3 + ((xx * 5 + (xx >> 2)) % 4) + Math.round(wave * 1.5 + 1.5);
-    for (let k = 0; k < len; k++) {
-      x.fillStyle = aur[Math.min(aur.length - 1, Math.floor((k * aur.length) / len))];
-      x.fillRect(xx, hem - k, 1, 1);
-    }
-  }
+  bands(x, w, 0, 32, ['#3a74c8', '#4a8ad6', '#62a2e2', '#82bbec', '#a8d2f2', '#d0e8f6']);
+  const g = x.createRadialGradient(18, 7, 3, 18, 7, 11);
+  g.addColorStop(0, 'rgba(255,251,235,0.55)');
+  g.addColorStop(1, 'rgba(255,251,235,0)');
+  x.fillStyle = g;
+  x.fillRect(7, 0, 22, 18);
+  disc(x, 18, 7, 4, '#fff4cc');
+  disc(x, 18, 7, 3, '#ffffff');
   // The ice peaks, lit from the left, snow on their heads.
-  for (const [cx, tip, sl] of [[46, 17, 1], [6, 18, 1.1], [60, 19, 0.9], [25, 12, 0.95]]) peak(x, cx, tip, 30, sl, 0.25, '#5a6988', '#3a4466', { cap: 5, capLeft: '#c0cbdc', capRight: '#8b9bb4', rough: 1 });
-  // The lake frozen at their feet, the aurora's green in its ice.
-  x.fillStyle = '#1c3052';
-  x.fillRect(0, 29, w, 5);
+  for (const [cx, tip, sl] of [[46, 17, 1], [6, 18, 1.1], [60, 19, 0.9], [25, 12, 0.95]]) peak(x, cx, tip, 30, sl, 0.25, '#c4d2ea', '#7488b8', { cap: 5, capLeft: '#ffffff', capRight: '#d4def0', rough: 1 });
+  // The lake frozen at their feet, pale ice catching the sun, down under the snowfield's first
+  // crest where it dips.
+  x.fillStyle = '#9cc8e4';
+  x.fillRect(0, 29, w, 7);
   for (const [lx, ly, n] of [[9, 30, 2], [17, 31, 1], [28, 30, 3], [36, 31, 2], [47, 30, 2], [55, 31, 1]]) {
-    x.fillStyle = '#3e8948';
+    x.fillStyle = '#c8e6f6';
     x.fillRect(lx, ly, 1, n);
-    x.fillStyle = '#63c74d';
+    x.fillStyle = '#ffffff';
     x.fillRect(lx, ly, 1, 1);
   }
-  dots(x, '#c0cbdc', [[21, 30], [40, 32]]);
+  dots(x, '#ffffff', [[21, 30], [40, 32]]);
   // The snowfield, its drifts.
-  crest(x, w, h, 34, 1, 0.12, 2, '#8b9bb4', '#c0cbdc');
-  crest(x, w, h, 39, 1.6, 0.09, 4.5, '#c0cbdc', '#ffffff');
+  crest(x, w, h, 34, 1, 0.12, 2, '#d0dbe9', '#f2f6fb');
+  crest(x, w, h, 39, 1.6, 0.09, 4.5, '#e7eef7', '#ffffff');
   // Pines bowed under snow framing it.
-  for (const [cx, top, ph] of [[4, 6, 38], [14, 16, 28], [56, 9, 35], [64, 14, 30]]) snowPine(x, cx, top, ph);
+  for (const [cx, top, ph] of [[4, 6, 38], [14, 16, 28], [56, 9, 35], [64, 14, 30]]) snowPine(x, cx, top, ph, '#265c42', '#ffffff', '#8aa2c4');
 }
 
 // The Bloomvale: twilight over the round hills, a path winding in through the flowers, trees in

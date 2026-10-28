@@ -1,14 +1,15 @@
 // Animated menu backdrop: moonlit sky, parallax pine silhouettes, drifting
 // mist, and the heroes resting around a campfire.
-// Behind the trial screen while Survival is the trial chosen, the land its night will be spent in
+// Behind the trial screen while Survival is the trial chosen, the land it will be spent in
 // (o.biome: a map's look, data/maps.js, for the five maps the same word as the map's id; the
 // owner's five maps of 28 October 2026: "the desert map ... a frozen, you know, snowy map ... a
 // bright flower, colorful map ... a dark, hellish, demonic map"): the Sunscorch's dunes and tombs
-// with the sun going down and sand on the wind; the Frostfell's crags of ice under the aurora and
-// a cold moon, snow falling; the Bloomvale's round hills in blossom at twilight, petals on the
-// breeze; the Abyss's spires of rock under the black sun, the fire glowing up from below and
-// embers rising. Without one, or with 'forest' (the title, every other menu), it is the Darkwood it always
-// was, pixel for pixel, the title's campfire and all.
+// under the sun high in a blue sky, sand on the wind; the Frostfell's crags of ice and firs under
+// snow in a cold sun, snow falling (both by day since the owner's word of the same day, at their
+// THEMES below); the Bloomvale's round hills in blossom at twilight, petals on the breeze; the
+// Abyss's spires of rock under the black sun, the fire glowing up from below and embers rising.
+// Without one, or with 'forest' (the title, every other menu), it is the Darkwood it always was,
+// pixel for pixel, the title's campfire and all.
 
 import { SPR, idleFrame } from '../engine/sprites.js';
 import { makeCanvas, mulberry32, clamp, rand, TAU, hexToRgb } from '../engine/util.js';
@@ -90,9 +91,10 @@ function wrapRect(g, W, x, y, w, h) {
 // Rolling ground: dunes, or drifts of snow. A long swell with a quicker ripple on it, whole waves
 // across the strip so that it tiles; its crest's top row in p.rim, deeper down the slopes that
 // fall away toward the light (to the right). The far dunes drift up over the feet of the tombs
-// (p.tombs); saguaros (p.cacti) or firs under snow (p.firs) stand on the near ones. What stands on
-// them is sized by the height as the land is, but kept to a share of the width, so that a phone
-// held upright (293 × 633) doesn't grow them wider than its screen.
+// (p.tombs); saguaros (p.cacti, green in the sun: p.cactus, body and lit edge) or firs under snow
+// (p.firs, in p.fir under p.snow) stand on the near ones. What stands on them is sized by the
+// height as the land is, but kept to a share of the width, so that a phone held upright
+// (293 × 633) doesn't grow them wider than its screen.
 function dunes(W, H, seed, base, height, color, density, p) {
   const c = makeCanvas(W, H), g = c.getContext('2d'), rng = mulberry32(seed);
   const k = Math.max(1, Math.round((W / (height * 9)) * density)), k2 = k * 3 + 1, p1 = rng() * TAU, p2 = rng() * TAU;
@@ -110,11 +112,11 @@ function dunes(W, H, seed, base, height, color, density, p) {
   }
   for (let i = 0; i < (p.cacti || 0); i++) {
     const x = Math.round(((i + 0.15 + rng() * 0.7) * W) / p.cacti);
-    saguaro(g, W, x, top(x) + 2, Math.round(Math.min(height * (0.8 + rng() * 0.4), W * 0.16)), color, p.lit);
+    saguaro(g, W, x, top(x) + 2, Math.round(Math.min(height * (0.8 + rng() * 0.4), W * 0.16)), p.cactus[0], p.cactus[1]);
   }
   for (let i = 0; i < (p.firs || 0); i++) {
     const x = Math.round(((i + 0.15 + rng() * 0.7) * W) / p.firs);
-    fir(g, W, x, top(x) + 2, Math.round(Math.min(height * (2 + rng() * 1.4), W * 0.22)), color, p.snow);
+    fir(g, W, x, top(x) + 2, Math.round(Math.min(height * (2 + rng() * 1.4), W * 0.22)), p.fir, p.snow);
   }
   return c;
 }
@@ -178,7 +180,22 @@ function fir(g, W, cx, foot, h, color, snow) {
   }
 }
 
-// Crags of rock and ice: peaks with notched and stepped slopes, the face toward the moon (left) in
+// A wood of firs under snow, packed close as the Darkwood's pines are (treeLayer), its floor in
+// their shade below `base` in the strip's colour; the firs (p.fir under p.snow) up to about
+// `height` tall, but no taller than a share of the width, as the dunes keep what stands on them.
+function firwood(W, H, seed, base, height, color, density, p) {
+  const c = makeCanvas(W, H), g = c.getContext('2d'), rng = mulberry32(seed);
+  g.fillStyle = color;
+  g.fillRect(0, base, W, H - base);
+  for (let x = -10; x < W + 10; ) {
+    const h = Math.max(6, Math.round(Math.min(height * (0.45 + rng() * 0.9), W * 0.16)));
+    fir(g, W, Math.round(x), base + 2, h, p.fir, p.snow);
+    x += Math.max(1, h * 0.3 * density * (0.5 + rng()));
+  }
+  return c;
+}
+
+// Crags of rock and ice: peaks with notched and stepped slopes, the face toward the sun (left) in
 // p.lit; snow on their heads (p.cap of their height, its lower edge ragged, p.snow lit and
 // p.snowShade in shade); p.edge, ice catching the light up the lit edge.
 function crags(W, H, seed, base, height, color, density, p) {
@@ -329,39 +346,19 @@ function cracks(g, W, H, base, rng, cols) {
 }
 
 // The moon as the Darkwood's always was (its craters, its rim, its shaded and its lit side) in the
-// look's colours; or the sun going down (o.sun), white-hot at its heart, cut by bands of the haze
-// it sinks through; or the black sun (o.dark), a burning ring round the dark, as on the Abyss's
-// trial card (scenes.js). Drawn once, at radius r; cols: crater, rim, shade, light (the sun's rim,
-// body and heart; the black sun's rim, inner rim and dark).
+// look's colours; or the sun high in the day's sky (o.sun), white-hot at its heart; or the black
+// sun (o.dark), a burning ring round the dark, as on the Abyss's trial card (scenes.js). Drawn
+// once, at radius r; cols: crater, rim, shade, light (the sun's rim, body and heart; the black
+// sun's rim, inner rim and dark).
 function orb(r, o) {
   const c = makeCanvas(r * 2 + 1, r * 2 + 1), g = c.getContext('2d'), [crater, edge, shade, light] = o.cols;
   for (let y = -r; y <= r; y++) {
-    if (o.sun && y > 0 && [0.3, 0.5, 0.66, 0.8, 0.92].some((b, i) => y >= Math.round(r * b) && y < Math.round(r * b) + 1 + (i >> 1))) continue;
     for (let x = -r; x <= r; x++) {
       const d = Math.hypot(x, y);
       if (d > r) continue;
       const pit = !o.sun && !o.dark && (Math.hypot(x + r * 0.3, y - r * 0.2) < r * 0.25 || Math.hypot(x - r * 0.35, y + r * 0.3) < r * 0.18);
       g.fillStyle = pit ? crater : d > r - 1.2 ? edge : o.dark ? (d > r - 2.2 ? shade : light) : o.sun ? (d < r * 0.6 ? light : shade) : x + y > r * 0.4 ? shade : light;
       g.fillRect(x + r, y + r, 1, 1);
-    }
-  }
-  return c;
-}
-
-// The Frostfell's aurora: a curtain hung from a slow wave across the sky, its rays ragged, brightest
-// at the hem and fading up into the dark (cols, the hem's first); whole waves across, so that it
-// tiles; its swing kept to what a wide screen's would be, so that on a narrow one it still hangs
-// rather than zigzags. MenuScene.draw drifts two across each other.
-function aurora(W, H, seed, cols) {
-  const c = makeCanvas(W, Math.ceil(H * 0.5)), g = c.getContext('2d'), rng = mulberry32(seed), n = cols.length, u = Math.min(H, W * 0.5625);
-  const p1 = rng() * TAU, p2 = rng() * TAU, p3 = rng() * TAU;
-  for (let x = 0; x < W; x++) {
-    const v = (TAU * x) / W, hem = Math.round(H * 0.25 + u * (0.05 * Math.sin(2 * v + p1) + 0.015 * Math.sin(7 * v + p2)));
-    const len = Math.round(u * (0.07 + 0.06 * (0.5 + 0.5 * Math.sin(3 * v + p3))) * (0.7 + (0.3 * ((x * 37) % 7)) / 6));
-    for (let i = 0; i < n; i++) {
-      const lo = Math.floor((len * i) / n), hi = Math.floor((len * (i + 1)) / n);
-      g.fillStyle = cols[i];
-      g.fillRect(x, hem - hi, 1, hi - lo);
     }
   }
   return c;
@@ -377,13 +374,14 @@ function motes(W, H, m) {
   return list;
 }
 
-// Each look's sky and land: the sky's stops (gradientCanvas); its stars (one to `per` px² over the
-// top `top` of the screen, by how bright they twinkle and the big ones' cross); the moon or the
-// sun (orb: where, its radius as a share of H and at least, its halo's reach and colours); the
-// clouds' colour and how high; the three strips far to near (a painter and its own settings, the
-// ground's top as round(H × share) + px); the mist over the far two; and what drifts (motes, or
-// the Darkwood's fireflies), the aurora, the glow from below. The Darkwood's are the numbers it
-// always had.
+// Each look's sky and land: the sky's stops (gradientCanvas); its stars by night (one to `per` px²
+// over the top `top` of the screen, by how bright they twinkle and the big ones' cross); the moon
+// or the sun (orb: where, its radius as a share of H and at least, its halo's reach and colours);
+// the clouds' colour and how high; the strips far to near, three (the Frostfell's four: a fir wood
+// in front of its snowfield), each a painter and its own settings, the ground's top as
+// round(H × share) + px; the mist over the far two; what drifts (motes, or the Darkwood's
+// fireflies); the glow from below; by day a lighter vignette at the corners than the night's. The
+// Darkwood's are the numbers it always had.
 const THEMES = {
   // The Darkwood: moonlight over the pines, fireflies.
   forest: {
@@ -398,34 +396,41 @@ const THEMES = {
     ],
     mist: { y: 0.68, dy: 0.08, rgb: '120,100,170' },
   },
-  // The Sunscorch: the sun going down behind the dunes and the tombs, saguaros, sand on the wind.
+  // The Sunscorch by day (the owner's, 28 October 2026: "we will have to only have to spend the
+  // night in the forest, make the desert and snow one be normal bright"): the sun high and
+  // white-hot in a clear blue sky, up in the corner the trial cards leave open, the sky paler down
+  // to the haze on the sand; the dunes and the tombs lighter the further off they lie, the nearest
+  // in its own shade, dark under the trial screen's line of keys (drawn without an outline);
+  // saguaros green in the sun, sand on the wind.
   desert: {
-    sky: [[0, '#0e0a1c'], [0.25, '#2a1f45'], [0.42, '#5a2a50'], [0.55, '#9a3e40'], [0.65, '#d86a2c'], [0.75, '#f7a043'], [1, '#fee761']],
-    stars: { per: 1800, top: 0.34, cols: ['#fff6c2', '#ead4aa', '#8b6d7a', '#c28569'] },
-    orb: { x: 0.72, y: 0.62, r: [0.085, 13], reach: 4, sun: true, halo: ['rgba(254,174,52,0.35)', 'rgba(254,174,52,0)'], cols: [null, '#feae34', '#fee761', '#fff6c2'] },
-    clouds: { y: 0.4, col: 'rgba(104,56,108,0.45)' },
+    sky: [[0, '#3a88de'], [0.3, '#4c9ae4'], [0.5, '#6cb4ea'], [0.62, '#9ccdee'], [0.72, '#d0e4e6'], [1, '#f0dcb0']],
+    orb: { x: 0.92, y: 0.12, r: [0.055, 9], reach: 4.5, sun: true, halo: ['rgba(255,246,210,0.55)', 'rgba(255,246,210,0)'], cols: [null, '#feae34', '#fee761', '#fff6c2'] },
+    clouds: { y: 0.1, col: 'rgba(255,250,240,0.35)' },
     layers: [
-      { paint: dunes, seed: 11, base: [0.72, 0], height: 0.07, color: '#7a3a48', rim: '#b0584a', lit: '#a24a48', tombs: 1, density: 1, speed: 2 },
-      { paint: dunes, seed: 23, base: [0.8, 0], height: 0.1, color: '#45213a', rim: '#8a4044', lit: '#6e3040', tombs: 1, density: 1, speed: 5 },
-      { paint: dunes, seed: 37, base: [0.9, 0], height: 0.15, color: '#1a0e1c', rim: '#4e2634', lit: '#5c2c36', cacti: 2, density: 1, speed: 9 },
+      { paint: dunes, seed: 11, base: [0.72, 0], height: 0.07, color: '#e0b878', rim: '#f4dcaa', lit: '#f6e2b8', tombs: 1, density: 1, speed: 2 },
+      { paint: dunes, seed: 23, base: [0.8, 0], height: 0.1, color: '#d09a52', rim: '#f0cc88', lit: '#ebc07c', tombs: 1, density: 1, speed: 5 },
+      { paint: dunes, seed: 37, base: [0.9, 0], height: 0.15, color: '#946440', rim: '#e0a860', cactus: ['#3e8948', '#63c74d'], cacti: 2, density: 1, speed: 9 },
     ],
-    mist: { y: 0.7, dy: 0.09, rgb: '247,140,80' },
-    motes: { kind: 'sand', seed: 5, per: 2600, y: [0.45, 1], vx: [35, 80], vy: [-3, 3], sway: 4, cols: ['#ead4aa', '#e4a672', '#c28569'] },
+    mist: { y: 0.7, dy: 0.09, rgb: '255,236,200' },
+    motes: { kind: 'sand', seed: 5, per: 2600, y: [0.45, 1], vx: [35, 80], vy: [-3, 3], sway: 4, cols: ['#e8c890', '#d4a868', '#fff0cc'] },
+    vignette: 'rgba(5,4,10,0.15)',
   },
-  // The Frostfell: the aurora and a cold moon over crags of ice, firs under snow, snow falling.
+  // The Frostfell by day (the same word of the owner's): a pale cold sun up in the other corner,
+  // over crags of ice blue in their shade and white on their heads, the snowfield at their feet, a
+  // wood of firs under snow in front, its floor dark under that line of keys, snow falling.
   frozen: {
-    sky: [[0, '#03050d'], [0.35, '#0a1530'], [0.6, '#142a4c'], [0.82, '#21426a'], [1, '#2f5a80']],
-    stars: { per: 650, top: 0.6, cols: ['#ffffff', '#c0cbdc', '#5a6988', '#8fd8ff'] },
-    aurora: { seed: 9, cols: ['rgba(158,229,98,0.95)', 'rgba(99,199,77,0.75)', 'rgba(62,137,72,0.5)', 'rgba(38,92,66,0.3)', 'rgba(25,60,62,0.14)'] },
-    orb: { x: 0.82, y: 0.3, r: [0.042, 8], reach: 5, halo: ['rgba(190,220,255,0.22)', 'rgba(190,220,255,0)'], cols: ['#a8bcd8', '#c8d8ec', '#e0ecf8', '#ffffff'] },
-    clouds: { y: 0.1, col: 'rgba(8,14,32,0.4)' },
+    sky: [[0, '#3c86da'], [0.35, '#56a2e6'], [0.55, '#7cbcee'], [0.7, '#acd6f2'], [0.8, '#d0e6f6'], [1, '#e2eef8']],
+    orb: { x: 0.08, y: 0.12, r: [0.045, 8], reach: 5, sun: true, halo: ['rgba(255,251,235,0.6)', 'rgba(255,251,235,0)'], cols: [null, '#fff4cc', '#fffbea', '#ffffff'] },
+    clouds: { y: 0.08, col: 'rgba(240,246,255,0.5)' },
     layers: [
-      { paint: crags, seed: 11, base: [0.72, 0], height: 0.3, color: '#22304e', lit: '#34486e', snow: '#c0cbdc', snowShade: '#8b9bb4', cap: 0.32, slope: [0.9, 1.6], lean: 0.25, density: 0.8, speed: 2 },
-      { paint: crags, seed: 23, base: [0.8, 0], height: 0.2, color: '#121c30', lit: '#1c2a46', snow: '#8b9bb4', snowShade: '#5a6988', cap: 0.2, edge: '#3e5680', slope: [0.5, 0.9], lean: 0.2, density: 0.9, speed: 5 },
-      { paint: dunes, seed: 37, base: [0.9, 0], height: 0.08, color: '#111a2e', rim: '#5a6988', snow: '#8b9bb4', firs: 3, density: 1, speed: 9 },
+      { paint: crags, seed: 11, base: [0.72, 0], height: 0.3, color: '#8a9ec4', lit: '#b4c6e2', snow: '#eef3f9', snowShade: '#c8d6ea', cap: 0.32, slope: [0.9, 1.6], lean: 0.25, density: 0.8, speed: 2 },
+      { paint: crags, seed: 23, base: [0.8, 0], height: 0.2, color: '#5a6f9a', lit: '#8098c4', snow: '#dce6f2', snowShade: '#a8b8d4', cap: 0.2, edge: '#c8e6f6', slope: [0.5, 0.9], lean: 0.2, density: 0.9, speed: 4 },
+      { paint: dunes, seed: 37, base: [0.88, 0], height: 0.06, color: '#c4d2e6', rim: '#eef3f9', fir: '#2c5c4a', snow: '#e8eef6', firs: 2, density: 1, speed: 6 },
+      { paint: firwood, seed: 41, base: [0.93, 0], height: 0.12, color: '#16302e', fir: '#1f4a3c', snow: '#dce6f2', density: 1, speed: 9 },
     ],
-    mist: { y: 0.71, dy: 0.08, rgb: '170,205,240' },
-    motes: { kind: 'snow', seed: 6, per: 1800, y: [0, 1], vx: [-4, 10], vy: [10, 24], sway: 6, cols: ['#ffffff', '#c0cbdc'] },
+    mist: { y: 0.71, dy: 0.08, rgb: '230,240,255' },
+    motes: { kind: 'snow', seed: 6, per: 1800, y: [0, 1], vx: [-4, 10], vy: [10, 24], sway: 6, cols: ['#ffffff', '#c8d8ec'] },
+    vignette: 'rgba(5,4,10,0.15)',
   },
   // The Bloomvale: twilight over round hills, trees in blossom, flowers, petals on the breeze.
   meadow: {
@@ -458,14 +463,14 @@ const THEMES = {
   },
 };
 
-// A look's backdrop at one size, all drawn once (MenuScene.build): the sky, the stars, the three
-// strips, the moon or the sun with its halo, the vignette, the mist's colours, and where the look
-// has them the aurora's two curtains, the glow from below and the motes. Gradients made here are
-// kept, so that a frame draws without making any.
+// A look's backdrop at one size, all drawn once (MenuScene.build): the sky, the stars (none by
+// day), the strips, the moon or the sun with its halo, the vignette, the mist's colours,
+// and where the look has them the glow from below and the motes. Gradients made here are kept,
+// so that a frame draws without making any.
 function scenery(W, H, th) {
   const sky = gradientCanvas(W, H, th.sky), g = sky.getContext('2d');
   const rng = mulberry32(7), stars = [];
-  for (let i = 0; i < (W * H) / th.stars.per; i++) stars.push([rng() * W, rng() * H * th.stars.top, rng() * TAU, rng() < 0.15]);
+  if (th.stars) for (let i = 0; i < (W * H) / th.stars.per; i++) stars.push([rng() * W, rng() * H * th.stars.top, rng() * TAU, rng() < 0.15]);
   const layers = th.layers.map((L) => ({ c: L.paint(W, H, L.seed, Math.round(H * L.base[0]) + L.base[1], H * L.height, L.color, L.density, L), speed: L.speed }));
   const o = th.orb, r = Math.max(o.r[1], Math.round(H * o.r[0])), x = Math.round(W * o.x), y = Math.round(H * o.y);
   const halo = g.createRadialGradient(x, y, r, x, y, r * o.reach);
@@ -473,22 +478,17 @@ function scenery(W, H, th) {
   halo.addColorStop(1, o.halo[1]);
   const vig = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.6);
   vig.addColorStop(0, 'rgba(5,4,10,0)');
-  vig.addColorStop(1, 'rgba(5,4,10,0.75)');
+  vig.addColorStop(1, th.vignette || 'rgba(5,4,10,0.75)');
   let glow = null;
   if (th.glow) {
     glow = g.createLinearGradient(0, H, 0, H * 0.45);
     glow.addColorStop(0, th.glow[0]);
     glow.addColorStop(1, th.glow[1]);
   }
-  const A = th.aurora;
   return {
     th, sky, stars, layers, vig, glow,
     orb: { c: orb(r, o), x, y, r, R: r * o.reach, halo },
     mist: [0, 1].map((i) => `rgba(${th.mist.rgb},${0.07 + i * 0.03})`),
-    aurora: A && [
-      { c: aurora(W, H, A.seed, A.cols), speed: 3, alpha: 0.6, swing: 0.25, rate: 0.45, ph: 0 },
-      { c: aurora(W, H, A.seed + 1, A.cols), speed: -2, alpha: 0.4, swing: 0.25, rate: 0.7, ph: 2 },
-    ],
     motes: th.motes ? motes(W, H, th.motes) : null,
   };
 }
@@ -531,8 +531,8 @@ export class MenuScene {
     this.t += dt;
     const t = this.t, s = this.s, th = s.th;
     ctx.drawImage(s.sky, 0, 0);
-    // Stars.
-    const sc = th.stars.cols;
+    // Stars (by night).
+    const sc = th.stars && th.stars.cols;
     for (let i = 0; i < s.stars.length; i++) {
       const st = s.stars[i], x = st[0], y = st[1], tw = 0.5 + 0.5 * Math.sin(t * 2 + st[2]);
       ctx.fillStyle = tw > 0.7 ? sc[0] : tw > 0.35 ? sc[1] : sc[2];
@@ -545,22 +545,12 @@ export class MenuScene {
         ctx.fillRect(Math.round(x), Math.round(y) + 1, 1, 1);
       }
     }
-    // The Frostfell's aurora: two curtains drifting across each other, each brightening and fading.
-    if (s.aurora) {
-      for (let i = 0; i < 2; i++) {
-        const A = s.aurora[i], off = Math.round((((t * A.speed) % W) + W) % W);
-        ctx.globalAlpha = A.alpha + A.swing * Math.sin(t * A.rate + A.ph);
-        ctx.drawImage(A.c, off - W, 0);
-        ctx.drawImage(A.c, off, 0);
-      }
-      ctx.globalAlpha = 1;
-    }
     // Moon with halo (or the sun, the black sun).
     const b = s.orb;
     ctx.fillStyle = b.halo;
     ctx.fillRect(b.x - b.R, b.y - b.R, b.R * 2, b.R * 2);
     ctx.drawImage(b.c, b.x - b.r, b.y - b.r);
-    // Clouds drifting across the moon.
+    // Clouds drifting across the moon (by day, white across the sun).
     ctx.fillStyle = th.clouds.col;
     for (let i = 0; i < 4; i++) {
       const cx = ((t * (3 + i) + i * 140) % (W + 160)) - 80;
@@ -568,7 +558,7 @@ export class MenuScene {
       ctx.fillRect(Math.round(cx), Math.round(cy), 70 + i * 10, 3);
       ctx.fillRect(Math.round(cx + 10), Math.round(cy - 2), 40, 2);
     }
-    // Parallax tree lines (or dunes, crags, hills, spires).
+    // Parallax tree lines (or dunes, crags, a fir wood, hills, spires).
     for (let i = 0; i < s.layers.length; i++) {
       const L = s.layers[i], off = -((t * L.speed) % W);
       ctx.drawImage(L.c, Math.round(off), 0);

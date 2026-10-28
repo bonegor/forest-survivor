@@ -202,7 +202,7 @@ test("the Abyss's cracks light the night where they run; the Darkwood's ground h
 
 test("every look's ground is the Darkwood's table in its own colours, and its night has the forest's breakpoints", () => {
   const breaks = NIGHT.map(([u]) => u);
-  const grounds = LOOKS.map((id) => [id, BIOMES[id].ground]).concat([['desert by day', BIOMES.desert.day]]);
+  const grounds = LOOKS.map((id) => [id, BIOMES[id].ground]).concat([['desert by day', BIOMES.desert.day], ['snow by day', BIOMES.frozen.day]]);
   for (const [id, G] of grounds) {
     assert.equal(G.zones.length, 3, `${id}: three zones`);
     for (const z of G.zones) assert.ok(z.length === 5 && z.every(Number.isFinite), `${id}: five tones a zone`);
@@ -224,6 +224,31 @@ test("every look's ground is the Darkwood's table in its own colours, and its ni
     assert.ok(typeof L.vignette[0] === 'string' && L.vignette[1] > 0, `${id}: its vignette`);
     for (const k of ['alpha', 'drift', 'rise']) assert.equal(L.fog[k].length, 2, `${id}: its fog's ${k}`);
     assert.equal(L.fog.rgb.length, 3);
+  }
+});
+
+// The owner's (28 October 2026): "we will have to only have to spend the night in the forest, make the
+// desert and snow one be normal bright". The Sunscorch and the Frostfell stand in their sun the whole
+// fifteen minutes (a light too bright for the night's lifted edge), on their ground by day, drawn in the
+// day's order and still under their weather; the Bloomvale, the Darkwood and the Abyss keep their nights.
+test('the Sunscorch and the Frostfell are spent in the sun, under their weather; the other maps by night', () => {
+  const luma = ([r, gg, b]) => (0.299 * r + 0.587 * gg + 0.114 * b) / 255;
+  for (const id of ['desert', 'frozen']) {
+    const L = BIOMES[id];
+    assert.ok(L.sun && luma(L.sun) >= 0.95, `${id}: a sun too bright for the night's edge`);
+    assert.ok(L.day && L.day.zones.length === 3, `${id}: its ground by day`);
+    const g = night({ map: id });
+    assert.equal(g.world.daylight, true, `${id}: drawn by day`);
+    assert.ok(!g.world.noWeather, `${id}: its weather still comes`);
+    for (const t of [0, 300, 899]) {
+      g.time = t;
+      assert.deepEqual(g.world.ambient(), [...L.sun], `${id}: the same sun at ${t} s`);
+    }
+    assert.notEqual(g.world.ambient(), L.sun, `${id}: a copy of its sun, never the look's own`);
+  }
+  for (const id of ['meadow', 'forest', 'hell']) {
+    assert.equal(BIOMES[id].sun ?? null, null, `${id}: no sun`);
+    assert.ok(!night({ map: id }).world.daylight, `${id}: by night`);
   }
 });
 

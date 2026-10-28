@@ -1,6 +1,6 @@
 // A single run: owns every system and runs the update/draw loop.
 
-import { diffFor, nightmareFor, moveFor, VETERAN, NIGHTMARE } from '../data/difficulty.js';
+import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
@@ -69,33 +69,14 @@ export const DAWN_BURN = { boss: 2.5 };
 // The options' FLASHES: SOFT (27 October 2026): no white flash over the screen or a boss's bar
 // brighter than this, crits in one steady gold, no white pulse.
 export const FLASH_SOFT = 0.2;
-// The combo (28 October 2026, the 27 October review's C7): kills with no lull of `hold` seconds of
-// the world's time between them (Game.update). The HUD shows it from `show` kills, on every
-// difficulty; its four named tiers (CARNAGE!, MASSACRE!, ANNIHILATION!, GODLIKE!) come at `tiers`
-// on Veteran, and on another difficulty or map at those times its horde over Veteran's
-// (data/difficulty.js spawn, a Nightmare's NIGHTMARE.more again, its Survival map's foe.horde
-// again) to the power `bend`: late in a thick night the combo runs on unbroken (the casino review),
-// so its tiers rise with the horde, but a thin one breaks between kills, so not by as much (an
-// estimate to tune). Presentation only: a combo pays no gold or experience ("the grind is by
-// design").
-export const COMBO = { hold: 2, show: 10, tiers: [50, 100, 200, 500], bend: 0.5 };
-// The tiers as a run of this difficulty and map has them, each rounded to 5 and clear of COMBO.show
-// and of the one below (Normal 20/35/70/175, Elite 70/140/285/705, an Elite Nightmare
-// 120/245/490/1225; Veteran on the Sunscorch 40/85/165/420, in the Abyss 55/110/220/550). The map's
-// horde (data/maps.js foe.horde, the Darkwood's 1) counts as a Nightmare's does: it is the run's
-// from first to last (spawner.js runMore, 28 October 2026). The Cursed Skulls are left out: the
-// tiers stay put through the run.
-export function comboTiers(diff, nightmare = false, horde = 1) {
-  const crowd = (diff.spawn / VETERAN.spawn) * (nightmare ? NIGHTMARE.more : 1) * horde;
-  return COMBO.tiers.map((n, i) => Math.max(COMBO.show + 5 * (i + 1), Math.round((n * crowd ** COMBO.bend) / 5) * 5));
-}
-// A combo of n's tier: -1 below COMBO.show (not shown), 0 shown (COMBO), 1-4 the named tiers.
-export function comboTier(tiers, n) {
-  if (n < COMBO.show) return -1;
-  let k = 0;
-  while (k < tiers.length && n >= tiers[k]) k++;
-  return k;
-}
+// The kill streak (28 October 2026, the 27 October review's C7): kills with no lull of `hold`
+// seconds of the world's time between them (Game.update), kept for the record (Game.stats.maxCombo,
+// the save's best.combo) and no longer shown. The owner's, the same day: "the combo counter on the
+// right actually doesn't make sense, since apart from the very early game, the monsters just keep on
+// spawning so quick that it just keeps on rising. Let us make sure to nicely flash damage numbers
+// instead": its count, its named tiers and their stings are gone, and every damage number flashes
+// white as it pops (numbers.js).
+export const COMBO = { hold: 2 };
 // Going into a crypt is meant: the hero stands on its steps (CRYPT_STEPS: half as wide, how far
 // below the door) pushing up for CRYPT_PUSH seconds, half a second, while a prompt fills over the
 // door (Hud.drawCryptDoor); stepping off or letting go starts over.
@@ -297,10 +278,6 @@ export class Game {
     this.skulls = 0; // Cursed Skulls taken this run (cursedSkull)
     this.combo = 0;
     this.comboT = 0;
-    this.comboTier = -1; // the tier it has come to (comboTier), its sting played once each
-    this.comboTiers = comboTiers(this.diff, this.nightmare, this.map.foe.horde);
-    this.comboSting = 0; // the highest tier come to since the last sting, rung at the frame's end (update)
-    this.comboRun = 0; // the combos a lull has broken, so the HUD pops the next as it comes up (Hud.drawCombo)
     // A boss's arrival (arrival.js): the stir before it, its name card, the heartbeat while it is
     // nearly done.
     this.stir = null; // { id, t, after }
@@ -422,7 +399,8 @@ export class Game {
     this.cam.x = this.player.x - this.cam.W / 2;
     this.cam.y = this.player.y - this.cam.H / 2;
     // The map's name over its night (The Darkwood's as it always was).
-    if (this.mode === 's15') this.banner(this.map.name, 'Survive 15 minutes until dawn', this.map.color, 3.5);
+    // A map spent in the sun (its look's sun: 28 October 2026) has no dawn to wait for.
+    if (this.mode === 's15') this.banner(this.map.name, this.look.sun ? 'Survive 15 minutes' : 'Survive 15 minutes until dawn', this.map.color, 3.5);
     else if (this.mode === 'ranked') {
       this.banner('The Endless Night', 'No dawn will come. Last as long as you can.', '#f6757a', 3.5);
       this.rankIdx = RANKS.findLastIndex(([min]) => this.time >= min * 60);
@@ -1151,15 +1129,6 @@ export class Game {
     this.combo++;
     this.comboT = COMBO.hold;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
-    // A new tier: its sting, a step higher each (the HUD pops the count and the tier's word). It
-    // rings at the frame's end (update), once, for the highest tier the frame came to (28 October
-    // 2026): a Holy Relic or an ultimate taking the count past two tiers at once rang the lower's
-    // sting, the higher's dropped by its limit, while the HUD popped the higher's word.
-    const tier = comboTier(this.comboTiers, this.combo);
-    if (tier > this.comboTier) {
-      if (tier > 0) this.comboSting = tier;
-      this.comboTier = tier;
-    }
     p.furyKill(e);
     // Kills that heal: the Paladin's Devotion (a little, KILL_HEAL), Red Frenzy's (FRENZY.heal each).
     if (p.hero.stats.killHeal) p.leech(p.hero.stats.killHeal);
@@ -2230,9 +2199,11 @@ export class Game {
     this.dawnT = 0;
     this.calm = 1;
     this.victoryKind = kind;
-    // A boss still standing burns in the sunrise (burnBoss), and the dawn says so.
+    // A boss still standing burns in the sunrise (burnBoss), and the dawn says so. On a map spent in
+    // the sun (its look's sun, 28 October 2026) the horde breaks instead, the boss fleeing the field.
     const lord = this.enemies.find((e) => e.boss && !e.dead);
-    if (kind === 'survival') this.banner('Dawn breaks!', lord ? `${lord.def.title || lord.def.name} burns in the sunrise` : 'You survived the night', '#fee761', 4);
+    if (kind === 'survival' && this.look.sun) this.banner('The horde breaks!', lord ? `${lord.def.title || lord.def.name} flees the field` : 'You held out', '#fee761', 4);
+    else if (kind === 'survival') this.banner('Dawn breaks!', lord ? `${lord.def.title || lord.def.name} burns in the sunrise` : 'You survived the night', '#fee761', 4);
     else this.banner('Victory!', 'The Lord of Cinders is no more', '#fee761', 4);
     sfx('bell');
     playMusic('results');
@@ -2381,12 +2352,7 @@ export class Game {
     this.coinComboT -= dt;
     if (this.comboT > 0) {
       this.comboT -= dt;
-      if (this.comboT <= 0) {
-        this.combo = 0;
-        this.comboTier = -1; // a combo begun again comes to its tiers again
-        this.comboSting = 0;
-        this.comboRun++;
-      }
+      if (this.comboT <= 0) this.combo = 0;
     }
     if (this.state === 'play') {
       // A boss nearly done: its heart beats (and its bar pulses, Hud.drawBoss).
@@ -2552,12 +2518,6 @@ export class Game {
     // The Codex's locks last, after the frame's other banners (checkLocks).
     if (this.state === 'play') this.checkLocks(rdt);
     if (this.hints) this.hints.update();
-    // The frame came to a combo's new tier (killEnemy): one sting, the highest tier's, whatever
-    // the weapons, a relic or the ultimate felled in it.
-    if (this.comboSting > 0) {
-      sfx('combo', { size: this.comboSting });
-      this.comboSting = 0;
-    }
   }
 
   // Foes pass through props (barrels, crates...), and in the forest through the trees, so nothing

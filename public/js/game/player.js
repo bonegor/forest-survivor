@@ -468,7 +468,8 @@ export class Player {
     const who = src ? src.def.name : boss || by || 'Unknown';
     g.stats.wounds[who] = (g.stats.wounds[who] || 0) + dmg;
     g.stats.minHp = Math.min(g.stats.minHp, Math.max(0, this.hp) / this.maxHp);
-    g.numbers.add(this.x, this.y - 18, dmg, 'player');
+    // No number for his own wounds (the owner's, 28 October 2026: "not shown when deal on hero"):
+    // the screen's red flash, the shake and his bar tell them.
     g.shake(0.35);
     g.hurtFlash = 0.35;
     sfx('hurt');

@@ -159,11 +159,12 @@ export class Weather {
     return !!k && this.shown && this.now[k] >= WET;
   }
 
-  // Whether the weather is to be seen and heard: on the night's ground, by night, out of the
-  // crypts, unless the options turned it off.
+  // Whether the weather is to be seen and heard: on a map's ground, by night or by day (a map spent
+  // in the sun has its weather too: 28 October 2026), out of the crypts, unless the world has none
+  // (the road by day: noWeather) or the options turned it off.
   get shown() {
     const g = this.g;
-    return !g.headless && !g.inCrypt && !g.world.daylight && g.settings.weather !== false;
+    return !g.headless && !g.inCrypt && !g.world.noWeather && g.settings.weather !== false;
   }
 
   // The sky at second t of the night: the blend of the spell under way and the one it follows.
@@ -236,7 +237,7 @@ export class Weather {
   hear(dt) {
     if ((this.bedT -= dt) > 0) return;
     this.bedT = 0.1;
-    const g = this.g, on = !g.headless && !g.world.daylight && g.settings.weather !== false, k = g.inCrypt ? 0.2 : 1;
+    const g = this.g, on = !g.headless && !g.world.noWeather && g.settings.weather !== false, k = g.inCrypt ? 0.2 : 1;
     if (on) weatherBed(this.heard(g.time, this.now) * k);
   }
 

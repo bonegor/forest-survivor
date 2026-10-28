@@ -35,7 +35,9 @@ const SEED = DARKWOOD.seed, D = DARKWOOD.spacing;
 const OUT = arg('out', BIOME === 'forest' ? 'tools/mapgen/out/endless' : `tools/mapgen/out/endless-${BIOME}`);
 // Its flora, drawn before the game's art table has it (art/flora-<look>.js FLORA_<LOOK>).
 const FLORA = BIOME === 'forest' ? {} : await import(`../../public/js/art/flora-${BIOME}.js`).then((m) => m[`FLORA_${BIOME.toUpperCase()}`] || {}, () => ({}));
-const GROUND = LOOK.ground, ZONE = { oak: 0, pine: 1, cursed: 2 };
+// A look spent in the sun (its sun: the Sunscorch and the Frostfell since 28 October 2026) is
+// painted with its day ground and lit by its sun, as Forest does.
+const GROUND = LOOK.sun ? LOOK.day || LOOK.ground : LOOK.ground, ZONE = { oak: 0, pine: 1, cursed: 2 };
 const CELL = 8, MARGIN = 112, GN = (CHUNK + 2 * MARGIN) / CELL; // as in darkwood.js
 const TREE_GAP = 30;
 const SPEED = 70; // the hero's walking speed, world px per second
@@ -138,7 +140,7 @@ function renderView(name, cx, cy, hero = null) {
   // look's light a tenth into the night (the Darkwood's 118, 120, 172).
   const near = L.filter(([x, y, r]) => x > x0 - r && x < x0 + w + r && y > y0 - r && y < y0 + h + r);
   near.push([cx, cy - 6, 125, 'warm', 1], [cx, cy - 8, 46, 'white', 0.7]); // the hero's own lantern glow
-  const amb = LOOK.night[1][1];
+  const amb = LOOK.sun || LOOK.night[1][1];
   // The cracks' glow lights the night too (Forest.addLights, lighting.js glow, at the middle of its
   // pulse): averaged into the light map's 2 px texels and spread smoothly over the screen, as the game's.
   const lw = Math.ceil(w / 2) + 1, lh = Math.ceil(h / 2) + 1, GL = glow ? new Float32Array(lw * lh * 3) : null, gk = glow ? GROUND.cracks.alpha : 0;

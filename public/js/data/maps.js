@@ -216,7 +216,7 @@ export const MAPS = {
     name: 'The Sunscorch',
     short: 'DESERT',
     color: '#feae34',
-    desc: 'Dunes, bleached bones and buried tombs. The gentlest night: start here.',
+    desc: 'Sunlit dunes, bleached bones and buried tombs. The gentlest fight: start here.',
     look: 'desert',
     seed: 2, // its own world (game/darkwood.js setWorld): its own roads, groves and landmarks
     music: 'forest',
@@ -234,7 +234,7 @@ export const MAPS = {
     name: 'The Frostfell',
     short: 'FROZEN',
     color: '#8fd8ff',
-    desc: 'A frozen waste where the dead never rot. Colder, and harder, than the dunes.',
+    desc: 'A frozen waste under a cold sun, where the dead never rot. Harder than the dunes.',
     look: 'frozen',
     seed: 3,
     music: 'forest',

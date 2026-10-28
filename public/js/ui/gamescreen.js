@@ -16,6 +16,7 @@ import { PASSIVES, FILLERS, BLESSING } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
 import { MAPS } from '../data/maps.js';
+import { BIOMES } from '../game/biomes.js';
 import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText, runLocks } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
@@ -1825,7 +1826,6 @@ class ResultsOverlay {
     // before submit, which the browser's own store applies at once.
     const prof = gs.app.store.profile;
     this.before = { ...prof.best };
-    this.firstRun = !prof.runs; // no run on record yet: every row's record is nought
     this.btBefore = prof.bt?.[res.hero] || 0; // his longest run before this one (the NEXT bar's tick)
     // The first night won shows the second circle (shared/profile.js hiddenLock): the results say so.
     this.firstNight = res.victory && res.mode === 's15' && !(prof.wins?.s15 || []).some((n) => n > 0);
@@ -1859,8 +1859,8 @@ class ResultsOverlay {
     rows.push(
       ['Level', String(res.level), res.level > (b.level || 0)],
       ['Kills', fmtNum(res.kills), res.kills > (b.kills || 0)],
-      // The combo has been on record since 28 October 2026: a save from before has none to beat yet.
-      ['Best combo', String(st.maxCombo), st.maxCombo > (b.combo || 0) && ((b.combo || 0) > 0 || this.firstRun)],
+      // No Best combo row since the kill streak left the screen (28 October 2026, game.js COMBO: "the
+      // combo counter ... doesn't make sense"); the save still keeps the longest (best.combo).
       ['Bosses slain', String(st.bosses), st.bosses > (b.bosses || 0)],
       ['Gold found', fmtNum(res.gold), res.gold > (b.gold || 0)],
       ['Damage dealt', fmtNum(st.damage), false],
@@ -1951,7 +1951,9 @@ class ResultsOverlay {
       ui.lock(0.25);
     }
     this.backdrop(ctx, W, H);
-    const title = res.victory ? (res.mode === 'dungeon' ? 'VICTORY' : 'DAWN BREAKS') : this.quit ? 'RUN ENDED' : 'YOU HAVE FALLEN';
+    // A Survival win on a map spent in the sun (its look's sun, 28 October 2026) saw no dawn: a victory, as the Dungeon's.
+    const sunlit = res.mode === 's15' && BIOMES[MAPS[res.map]?.look]?.sun;
+    const title = res.victory ? (res.mode === 'dungeon' || sunlit ? 'VICTORY' : 'DAWN BREAKS') : this.quit ? 'RUN ENDED' : 'YOU HAVE FALLEN';
     const cols = res.victory ? ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f'] : this.quit ? ['#ffffff', '#e8eef6', '#c0cbdc', '#8b9bb4', '#5a6988'] : ['#f6757a', '#e43b44', '#a22633', '#5c0f1c', '#3e2731'];
     const L = logo(title, cols);
     const s = Math.min(1, (W - 20) / L.width);

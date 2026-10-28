@@ -3,7 +3,10 @@
 // the frozen map." The Darkwood under snow: snowfields where it has its oak meadows, blue-shadowed
 // drifts under the pines, ice sheets where its woods are cursed, trampled slush for its roads and
 // snow banked along them. Its own trees under snow stand where the Darkwood's stand (the flora,
-// art/flora-frozen.js); ice crystals glow where its mushrooms do. Its crypts are ice caves.
+// art/flora-frozen.js); ice crystals glow where its mushrooms do. Its crypts are ice caves. Then,
+// the same day: "we will have to only have to spend the night in the forest, make the desert and
+// snow one be normal bright": its fifteen minutes are a cold, clear day (sun, below) on white snow
+// (day); its night's snow and light (ground, night) are kept for a night it may be given again.
 //
 // The fields are game/biomes.js's (its header says what each one is); this file is the Frostfell's
 // alone, so its look can be refined without touching another map's.
@@ -45,6 +48,32 @@ const ground = {
   glint: { zones: [1, 0, 1], share: 0.004, color: H('#d4e4f4') },
 };
 
+// The snow by day: white fields, the drifts in the pines' shade a cold blue, the ice sheets
+// cyan, the roads trampled to grey slush; lumps of snow, twigs and needles on it, a glint here and there.
+const day = {
+  ...ground,
+  zones: [
+    tones(['#c4d0e0', '#d0dbe9', '#dce5f1', '#e7eef7', '#f2f6fb']), // the snowfields
+    tones(['#aebed4', '#bac9dd', '#c6d3e5', '#d2ddec', '#dde6f2']), // drifts in the pines' shade
+    tones(['#94bed4', '#a2c9dc', '#b0d3e4', '#bedcea', '#cce5f0']), // the ice sheets
+  ],
+  road: tones(['#7e8490', '#8c929e', '#9aa0ab', '#a8aeb8', '#b6bcc5']), // trampled slush
+  tuft: {
+    oak: tones(['#ffffff', '#e2eaf4', '#c2cee0']), // lumps of snow
+    pine: tones(['#b6c6da', '#ccd8e8', '#a0b0c8']),
+    cursed: tones(['#d4f2ff', '#eafaff', '#a8d6ee']), // ice
+  },
+  leaf: {
+    oak: tones(['#6a5a54', '#7a6a62', '#58484a']), // twigs on the snow
+    pine: tones(['#4a6a5c', '#5a7a6a', '#3a5a4c']), // fallen needles
+    cursed: tones(['#c4ecff', '#e0f8ff', '#a2d2ec']), // ice chips
+  },
+  flower: tones(['#ffffff', '#c8f4ec', '#a9dcff', '#8fd8ff']), // frost flowers
+  stem: H('#a4b4ca'),
+  pebble: tones(['#8b9bb4', '#6a7890', '#a8b4c8']),
+  glint: { zones: [1, 0, 1], share: 0.004, color: H('#ffffff') },
+};
+
 // The climate (weather.js): clear nights, snowfall, and now and then a blizzard: the flakes thick
 // and driven by the wind, the fog white, the night darker. Snow is never heard falling and never
 // wets a step; fresh snow crunches underfoot (`crunch`: the hero's steps while it falls).
@@ -70,6 +99,7 @@ const weather = {
 export const FROZEN = {
   id: 'frozen',
   ground,
+  day,
   density: { standing: 0.9, bushes: 1, rocks: 1, stumps: 1, graves: 1 },
   props: {
     oak1: ['snow_oak1', 'snow_oak2'],
@@ -92,6 +122,10 @@ export const FROZEN = {
     gravecross: 'snow_grave',
   },
   trunks: { snow_oak1: 3.5, snow_oak2: 3.5, snow_pine1: 2.5, snow_pine2: 2.5, snow_dead1: 2.5, snow_dead2: 2.5 },
+  // A cold, clear day (the owner's "normal bright", 28 October 2026): a white light with blue in
+  // it, the monsters in their own colours, too bright for the night's lifted edge (enemies.js nightFloor).
+  sun: [240, 246, 255],
+  // Its night, as it was lit before it was given the day.
   night: [
     [0, [164, 158, 198]],
     [0.1, [130, 140, 190]],
