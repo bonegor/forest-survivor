@@ -8,6 +8,7 @@ import '../tools/headless.mjs';
 import { GameScreen, woundLines, WOUND_TIPS, heroGoalBar, goldSteps } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
+import { textWidth } from '../public/js/engine/font.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, applyRun, metaBonuses } from '../public/js/shared/profile.js';
@@ -106,6 +107,22 @@ test('a Veteran run is reported as Veteran, and paid ×1', async () => {
   assert.equal(vet.store.profile.gold, 180 + vs.overlay.reward.wage);
 });
 
+// The rows give way before the unlocked do (28 October 2026): on a screen too low for one row of
+// them under the rows, Damage dealt is left out (never a record; each weapon's damage is beside it).
+test('on a low screen the results leave out Damage dealt before the unlocked', async () => {
+  const gs = await playToResults(makeApp({ hero: 'knight', mode: 's15', diff: 'medium' }));
+  const o = gs.overlay, has = (k) => o.rows.some(([label]) => label === k);
+  o.reward = { ...o.reward, unlocked: [{ type: 'weapon', id: 'axe', need: 'Survive 1:00 in one run' }] };
+  o.skip();
+  o.draw(ctx, 480, 600, 0);
+  assert.ok(has('Damage dealt'), 'kept where there is room');
+  o.draw(ctx, 427, 200, 0);
+  o.draw(ctx, 427, 200, 0);
+  assert.ok(!has('Damage dealt'), 'left out where there is none');
+  assert.ok(has('Gold found') && has('Kills'), 'the rest stay');
+  assert.equal(o.ticked, o.rows.length);
+});
+
 test("the results screen leads only back to camp: the hero screen, the run's hero ready, once the count has landed", async () => {
   const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
   const gs = await playToResults(app);
@@ -194,6 +211,12 @@ test("the results' NEXT line is the distance to the next hero, where it is this 
   assert.equal(heroGoalBar(goal, { hero: 'archer', time: 271 }), null, 'another hero');
   assert.equal(heroGoalBar(goal, { hero: 'knight', time: 300 }), null, 'made it');
   assert.equal(heroGoalBar({ type: 'dungeon', hero: 'knight', unlocks: 'archer' }, { hero: 'knight', time: 271 }), null, 'another goal');
+  // Its words in the longest form that fits the room (28 October 2026): the hero played goes first,
+  // then the times; the hero the goal opens stays.
+  const run = { hero: 'knight', time: 271 };
+  assert.equal(heroGoalBar(goal, run, textWidth(bar.text)).text, bar.text, 'the whole where it fits');
+  assert.equal(heroGoalBar(goal, run, textWidth(bar.text) - 1).text, '04:31 of 05:00 · 29 s from the Ranger');
+  assert.equal(heroGoalBar(goal, run, 100).text, '29 s from the Ranger');
 });
 
 // The review's C11 (28 October 2026): the gold found counts up, then each step of the formula is

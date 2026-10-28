@@ -109,7 +109,7 @@ test("the results' UNLOCKED rows come a page at a time, their chips one by one",
   const next = chipView(pages, chips(pages[0]) * TALLY.row + TALLY.page + 1e-6);
   assert.equal(next.page, 1, 'a page held, then the next');
   assert.equal(chipView([rows.slice(0, 1)], 1e3).page, 0, 'a single page stays');
-  assert.equal(chipView([rows.slice(0, 1)], 1e3).shown, chips([rows.slice(0, 1)]));
+  assert.equal(chipView([rows.slice(0, 1)], 1e3).shown, chips(rows.slice(0, 1)), 'a single page stays whole');
 });
 
 test('the HUD draws the slots a run hasn\'t opened and a shut ultimate locked', () => {

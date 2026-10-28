@@ -727,9 +727,10 @@ export class LevelUpOverlay {
       }
       const icon = SPR[info.icon].frames[0];
       const blink = Math.floor(this.t * 4) % 2;
-      // FIRST FIND in green over NEW's gold (firstFind); its short form where the card is narrow.
+      // FIRST FIND in green over NEW's gold (firstFind); its short form where the card is narrow. Its
+      // white blink held steady green with FLASHES: SOFT (28 October 2026), as the combo's word is.
       const first = this.first?.[i], full = first ? 'FIRST FIND' : info.tag, short = first ? 'FIRST!' : info.isNew ? 'NEW!' : info.tag;
-      const tagColor = first ? (blink ? '#ffffff' : '#9ee562') : info.isNew ? (blink ? '#fee761' : '#feae34') : '#8b9bb4';
+      const tagColor = first ? (blink && this.g.settings.softFlash !== true ? '#ffffff' : '#9ee562') : info.isNew ? (blink ? '#fee761' : '#feae34') : '#8b9bb4';
       if (vertical) {
         // The icon at the left over its pips; name and tag on top, the text under them.
         ctx.drawImage(smoothScaled(icon, 1), x + 6, y + lift + 5);
@@ -1658,14 +1659,18 @@ export function armoryLine(p) {
 // The review's C4 (28 October 2026): when the next goal is a time with the hero just played (the
 // next hero's five minutes), the NEXT line is that distance, as a bar: '04:31 of 05:00 with the
 // Knight · 29 s from the Ranger'. This run's time, the real distance only; a run that made it has
-// its unlock told above and the goal has moved on. Null for any other goal.
+// its unlock told above and the goal has moved on. Null for any other goal. Its text the longest of
+// three forms that fits w (28 October 2026: "with the Berserker" cut "from the Witch Hunter" to
+// "Witch Hu…" on the widest panel): the hero played goes first, the bar telling it, then the times;
+// the hero the goal opens stays.
 //   { k: this run's share of the goal, need: its seconds, text }
-export function heroGoalBar(goal, res) {
+export function heroGoalBar(goal, res, w = Infinity) {
   if (goal?.type !== 'survive' || goal.hero !== res.hero) return null;
   const need = goal.minutes * 60, left = need - res.time;
   if (left <= 0) return null;
-  const gap = left < 60 ? `${left} s` : fmtTime(left);
-  return { k: clamp(res.time / need, 0, 1), need, text: `${fmtTime(res.time)} of ${fmtTime(need)} with the ${HEROES[res.hero].title} · ${gap} from the ${HEROES[goal.unlocks].title}` };
+  const gap = `${left < 60 ? `${left} s` : fmtTime(left)} from the ${HEROES[goal.unlocks].title}`, times = `${fmtTime(res.time)} of ${fmtTime(need)}`;
+  const forms = [`${times} with the ${HEROES[res.hero].title} · ${gap}`, `${times} · ${gap}`, gap];
+  return { k: clamp(res.time / need, 0, 1), need, text: forms.find((f) => textWidth(f) <= w) || forms[2] };
 }
 
 // The results' gold as a short cascade (the review's C11, 28 October 2026): the gold found counts
@@ -1842,8 +1847,8 @@ class ResultsOverlay {
     const rows = [[ranked ? 'Survived' : 'Time', fmtTime(res.time), res.mode === 's15' && res.time > (b.s15 || 0)]];
     if (ranked) rows.push(['Rank', rankTitle(res.time), false]);
     // A won Dungeon Run counts as its fourth floor, as the save keeps it (applyRun best.dungeon) and
-    // the Records say Conquered.
-    if (res.mode === 'dungeon') rows.push(['Floor reached', res.victory ? 'Conquered' : String(res.floor), (res.victory ? 4 : res.floor) > (b.dungeon || 0)]);
+    // the Records say Conquered; its row is 'Dungeon', as 'Floor reached' ran into the word.
+    if (res.mode === 'dungeon') rows.push(res.victory ? ['Dungeon', 'Conquered', 4 > (b.dungeon || 0)] : ['Floor reached', String(res.floor), res.floor > (b.dungeon || 0)]);
     rows.push(
       ['Level', String(res.level), res.level > (b.level || 0)],
       ['Kills', fmtNum(res.kills), res.kills > (b.kills || 0)],
@@ -1979,7 +1984,16 @@ class ResultsOverlay {
     const unlocked = saved ? this.reward.unlocked || [] : [];
     const near = saved ? (this.near ??= nearestLocks(this.gs.app.store.profile, 2)) : [];
     const cap = H - 52 - L.height * s;
-    let tight = 16 + Math.max(this.rows.length * 10, side ? nw * 15 : 0) + (side ? 0 : nw * 15 + 4) + notes.length * 10 + 55;
+    const need = () => 16 + Math.max(this.rows.length * 10, side ? nw * 15 : 0) + (side ? 0 : nw * 15 + 4) + notes.length * 10 + 55;
+    let tight = need();
+    // The rows give way before the unlocked do (28 October 2026): where not even one row of them
+    // fits under the rows (a 240-high screen), Damage dealt is left out, as the Gold found row had
+    // put it under the chips. It is never a record, and each weapon's damage is told beside it.
+    if (unlocked.length && cap - tight < UNLOCK_ROW && this.rows[this.rows.length - 1][0] === 'Damage dealt') {
+      this.rows.pop();
+      this.ticked = Math.min(this.ticked, this.rows.length);
+      tight = need();
+    }
     let chips = chipRows(unlocked, pw - 16);
     const fit = Math.max(1, Math.floor((cap - tight) / UNLOCK_ROW));
     // More rows than fit: a page at a time (chipView), each row with room at its end for its "1/2".
@@ -2109,11 +2123,11 @@ class ResultsOverlay {
       // What next: the next goal, and what the gold buys.
       const prof = app.store.profile;
       nearLines(near.slice(0, nNear), pw - 12).forEach((line, i) => drawText(ctx, line, W / 2, y + ph - 20 - (nNear - i) * 10, { align: 'center', color: '#c28569' }));
-      const goal = nextGoal(prof), bar = heroGoalBar(goal, res), ny = y + ph - 20;
+      const goal = nextGoal(prof), bw = 40, bar = heroGoalBar(goal, res, pw - 12 - bw - 4), ny = y + ph - 20;
       if (bar) {
-        // The distance as a bar before its words (heroGoalBar); a pale tick where his longest run
-        // before this one stood, if it went further.
-        const bw = 40, text = fitText(bar.text, pw - 12 - bw - 4), bx = Math.round(W / 2 - (bw + 4 + textWidth(text)) / 2);
+        // The distance as a bar before its words (heroGoalBar, in the form that fits); a pale tick
+        // where his longest run before this one stood, if it went further.
+        const text = fitText(bar.text, pw - 12 - bw - 4), bx = Math.round(W / 2 - (bw + 4 + textWidth(text)) / 2);
         codexBar(ctx, bx, ny + 2, bw, bar.k, '#feae34');
         const was = this.btBefore / bar.need;
         if (was > bar.k && was < 1) {

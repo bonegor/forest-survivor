@@ -692,9 +692,12 @@ export class Hud {
     drawText(ctx, k, right, y + 10, { align: 'right', color: '#c0cbdc' });
     ctx.drawImage(SPR.h_skull.frames[0].c, right - textWidth(k) - 11, y + 9);
     // The record near or beaten (killBest), beside the count, left of its skull: under the count
-    // stands the gold, and under that a crypt's or a floor's map.
-    const kb = killBest(g);
-    if (kb) drawText(ctx, kb.text, right - textWidth(k) - 14, y + 10, { align: 'right', color: kb.color });
+    // stands the gold, and under that a crypt's or a floor's map. In the Dungeon the floor's
+    // objective is centred on the same row: where they would meet (a portrait screen, the seal's
+    // long line) the record gives way (28 October 2026).
+    const kb = killBest(g), kx = right - textWidth(k) - 14;
+    const clear = !kb || g.mode !== 'dungeon' || !g.objective || kx - textWidth(kb.text) > cx + Math.ceil(textWidth(g.objective) / 2) + 4;
+    if (kb && clear) drawText(ctx, kb.text, kx, y + 10, { align: 'right', color: kb.color });
     // Gold, rolling up to what it is (never down: a fresh run, or a shown chest's held gold, snaps).
     const want = this.held ? this.held.gold : g.gold;
     if (want < this.goldRoll) this.goldRoll = want;

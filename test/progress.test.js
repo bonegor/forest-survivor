@@ -208,14 +208,26 @@ test('the ultimate is locked until a run with the hero lasts two minutes: no fur
 
 // The ranks the gold in hand buys (the results' line, the title's coin on UPGRADES: 28 October 2026):
 // of what is for sale only, so never the Phoenix Heart before its milestone.
+// Counted from the table (28 October 2026), so a retuned price or a new upgrade leaves it standing.
 test('the gold in hand buys ranks of what is for sale, the Phoenix Heart only once it is', () => {
+  const heart = P.UPGRADES.find((u) => u.id === 'phoenix');
+  const forSale = (p) => P.UPGRADES.filter((u) => P.upgradeOpen(p, u) && P.upgradeCost(u.id, 0) <= p.gold).length;
   const p = P.defaultProfile();
   p.gold = 1e6;
-  assert.equal(P.affordableRanks(p), P.UPGRADES.length - 1, 'all but the Phoenix Heart');
+  assert.ok(!P.upgradeOpen(p, heart), 'the Phoenix Heart not yet for sale');
+  assert.equal(P.affordableRanks(p), forSale(p), 'every first rank for sale, the Phoenix Heart not among them');
+  assert.ok(P.affordableRanks(p) < P.UPGRADES.length);
+  // One at its top is no longer counted.
+  const top = P.UPGRADES.find((u) => !u.lock);
+  assert.equal(P.affordableRanks({ ...p, up: { ...p.up, [top.id]: top.max } }), forSale(p) - 1, 'none past its top');
   p.gold = 260;
-  assert.equal(P.affordableRanks(p), 17);
+  assert.equal(P.affordableRanks(p), forSale(p));
   p.gold = 0;
   assert.equal(P.affordableRanks(p), 0);
+  // The Knight's Longsword evolved puts it up for sale: then it counts.
+  const q = { ...P.applyRun(P.defaultProfile(), { ...RUN, time: 300, realTime: 300, evolved: true }).profile, gold: 1e6 };
+  assert.ok(P.upgradeOpen(q, heart), 'for sale now');
+  assert.equal(P.affordableRanks(q), forSale(q), 'the Phoenix Heart among them');
 });
 
 test('a run pays a wage for its time at the difficulty\'s rate, and every first Armory rank is half price', () => {
