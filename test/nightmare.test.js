@@ -25,7 +25,7 @@ Object.defineProperty(document, 'cookie', {
 });
 const { Game } = await import('../public/js/game/game.js');
 const { lateMore, isFew, minuteMore, RING } = await import('../public/js/game/spawner.js');
-const { VETERAN, ELITE, NIGHTMARE, GAME_SPEED } = await import('../public/js/data/difficulty.js');
+const { VETERAN, ELITE, NIGHTMARE, GAME_SPEED, MODES } = await import('../public/js/data/difficulty.js');
 const { EVENTS } = await import('../public/js/data/waves.js');
 const { mulberry32 } = await import('../public/js/engine/util.js');
 const { defaultProfile, metaBonuses, applyRun, sanitizeRun, DIFF_GOLD, NIGHTMARE_GOLD } = await import('../public/js/shared/profile.js');
@@ -153,7 +153,7 @@ const click = (s, it) => {
 };
 
 // The trial screen as the game shows it, past its lock. settings: what the settings already hold
-// (rankedNote: Endless's word that it is always Elite already said).
+// (rankedNote: Ranked's word that it is always Elite already said).
 function trialScreen(profile = defaultProfile(), choice = {}, settings = {}) {
   jar.clear();
   const app = {
@@ -263,6 +263,7 @@ test('Ranked\'s trial card shows no box, and a Nightmare ticked before plays Ran
   // Its word that it is always Elite said before: the trial screen itself, no note over it.
   const { app } = trialScreen(unlockEverything(defaultProfile()), { mode: 'ranked', nightmare: true }, { rankedNote: true });
   assert.equal(app.choice.mode, 'ranked');
+  assert.equal(MODES.ranked.name, 'Ranked', 'the name the owner gave it (28 October 2026)');
   assert.ok(item(app, 'begin') && item(app, 'm_ranked'), 'the trial screen drawn');
   assert.equal(item(app, 'nightmare'), undefined);
   assert.equal(item(app, 'd_hard'), undefined);
@@ -275,6 +276,7 @@ test('Ranked\'s trial card shows no box, and a Nightmare ticked before plays Ran
 test('the first time Ranked is chosen a word says it is always Elite, once', () => {
   const { s, app } = trialScreen(unlockEverything(defaultProfile()), { mode: 'ranked' });
   assert.equal(s.dialog?.title, 'Always Elite');
+  assert.match(s.dialog.lines[0], /^Ranked is always played on Elite/);
   assert.equal(loadSettings().rankedNote, true, 'remembered with the settings');
   // Closed with Enter, the focus is back on the trial, not on BEGIN (27 October 2026: browsing onto
   // it and closing the note, the next Enter began the run).

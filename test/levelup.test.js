@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, MILESTONES, CARD_WEIGHT, SIGNATURE_PITY } from '../public/js/game/game.js';
-import { GameScreen, LevelUpOverlay, PauseOverlay, cardsReadyAt, LEVELUP_DELAY, cardChange, cardSynergy } from '../public/js/ui/gamescreen.js';
+import { GameScreen, LevelUpOverlay, PauseOverlay, cardsReadyAt, LEVELUP_DELAY, cardChange, cardSynergy, UNTOLD } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
@@ -280,6 +280,31 @@ test('an evolution not yet made keeps its relic unknown: no name, and no gold ba
     g.state = 'levelup';
     g.pendingLevels = 1;
     assert.deepEqual(new LevelUpOverlay(gs).completes, ['excalibur'], 'once known, told');
+  }, known(['excalibur']));
+});
+
+// 28 October 2026: a weapon brought to the top with its relic held completes its evolution all the
+// same, so its back is gold, but while the evolution is unknown its line names neither it nor the
+// relic (COMPLETES ???); a Phoenix Heart's card likewise.
+test('a card that completes an evolution not yet made says COMPLETES ???, never its name', () => {
+  screen((g, gs, p) => {
+    toLevel(sword(p), 8);
+    g.addPassive('might', 1);
+    g.levelChoices = () => [levelCard('sword', 8), relicCard('phoenix')];
+    g.state = 'levelup';
+    g.pendingLevels = 1;
+    const lv = new LevelUpOverlay(gs);
+    assert.deepEqual(lv.completes, [UNTOLD, UNTOLD]);
+    assert.deepEqual(lv.backs, ['gold', 'gold']);
+    lv.draw(ctx, 480, 270, 0.6); // drawn face up with its COMPLETES ??? (no throw)
+  }, known([]));
+  screen((g, gs, p) => {
+    toLevel(sword(p), 8);
+    g.addPassive('might', 1);
+    g.levelChoices = () => [levelCard('sword', 8)];
+    g.state = 'levelup';
+    g.pendingLevels = 1;
+    assert.deepEqual(new LevelUpOverlay(gs).completes, ['excalibur'], 'once known, named');
   }, known(['excalibur']));
 });
 

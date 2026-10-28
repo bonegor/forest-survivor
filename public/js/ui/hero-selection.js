@@ -214,8 +214,8 @@ export class HeroScreen {
       { text: goalText(nextGoal(p)), color: '#fee761' },
       `${p.heroes.length} of ${HERO_ORDER.length} heroes recruited. Survive 5 minutes with a hero to recruit the next.`,
       'Survive the night with the Necromancer to open the Dungeon for the Knight.',
-      'Clear the Dungeon with Knight, Ranger, Sorcerer, Shadow, then Necromancer to open the Endless night. The other heroes may enter once the Dungeon opens.',
-      'Endless: no dawn, personal bests and rank titles.',
+      'Clear the Dungeon with Knight, Ranger, Sorcerer, Shadow, then Necromancer to open Ranked. The other heroes may enter once the Dungeon opens.',
+      'Ranked: endless runs, personal bests and rank titles.',
       'Weapons and relics unlock through milestones in the Codex. Permanent upgrades are bought in the Armory.',
     ]);
     this.app.ui.focus('detail_close');this.app.ui.lock(0.2);

@@ -249,7 +249,7 @@ export function createDevPanel(app) {
     body.append(el('h3', { textContent: 'Gold' }), el('div', { class: 'row' }, num(() => d.gold, (v) => { d.gold = v; }, { width: '120px' })));
 
     // Heroes and their achievements.
-    const head = el('tr', {}, el('th', { textContent: 'Hero' }), el('th', { textContent: 'Owned' }), FEATS.map(([, label]) => el('th', { textContent: label })), el('th', { textContent: 'Endless best' }));
+    const head = el('tr', {}, el('th', { textContent: 'Hero' }), el('th', { textContent: 'Owned' }), FEATS.map(([, label]) => el('th', { textContent: label })), el('th', { textContent: 'Ranked best' }));
     const rows = P.HERO_ORDER.map((h) => {
       const best = el('input', { value: d.ranked[h] ? fmtTime(d.ranked[h]) : '', placeholder: 'mm:ss', size: 6 });
       best.style.width = '58px';
@@ -582,7 +582,7 @@ weather ${g.weather.kind} · rain ${g.weather.now.rain.toFixed(2)}` : '');
           return 'Fallen';
         }, 'go'),
       ),
-      el('p', { class: 'note', textContent: 'Results still go through the normal rules: wins, unlocks and Endless bests are recorded as if earned.' }),
+      el('p', { class: 'note', textContent: 'Results still go through the normal rules: wins, unlocks and Ranked bests are recorded as if earned.' }),
     );
   }
 

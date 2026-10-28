@@ -172,12 +172,20 @@ function evoHint(g, id) {
 }
 
 // What a card tells of the evolution it completes (Game.completesEvolution), as its gold back and
-// its COMPLETES line: nothing for a new relic whose evolution isn't known yet, for that would name
-// the relic still unknown (Game.evoKnown). A Phoenix Heart, which evolves any, always tells.
+// its COMPLETES line: the evolution once a run before has made it (Game.evoKnown), else UNTOLD.
+// Its name beside "Evolves with a relic yet unknown" gave away what the relic held was for (28
+// October 2026): a weapon brought to the top with its relic held, or a Phoenix Heart, which evolves
+// any, still has the gold back while the evolution is unknown (the next chest evolves it, and the
+// HUD says EVOLVE READY once it is at hand), but its line says "COMPLETES ???". A new relic whose
+// own pairing is the secret tells nothing, for a gold back would name it.
+export const UNTOLD = '???';
 const toldCompletes = (g, c) => {
   const into = g.completesEvolution(c);
-  return into && c.type === 'passive' && !PASSIVES[c.id].evolvesAny && !g.evoKnown(evolvedFrom(into)) ? null : into;
+  if (!into || g.evoKnown(evolvedFrom(into))) return into;
+  return c.type === 'passive' && !PASSIVES[c.id].evolvesAny ? null : UNTOLD;
 };
+// The gold line of a card that completes an evolution (toldCompletes): its name, or ??? untold.
+const completesLine = (into) => `COMPLETES ${into === UNTOLD ? UNTOLD : WEAPONS[into].name.toUpperCase()}`;
 
 // A card's change in numbers, as this hero has it (cardChange): signed percent, a multiplier as
 // percent, a whole number.
@@ -379,7 +387,7 @@ export class LevelUpOverlay {
 
   roll() {
     this.choices = this.g.levelChoices(this.g.choiceCount());
-    // What each card completes (an evolution's name), its back, and when it flips up.
+    // What each card completes (an evolution, or UNTOLD while unknown), its back, and when it flips up.
     this.completes = this.choices.map((c) => toldCompletes(this.g, c));
     this.backs = this.choices.map((c, i) => backOf(c, this.completes[i]));
     this.flips = this.choices.map((c, i) => flipAt(i));
@@ -678,7 +686,7 @@ export class LevelUpOverlay {
         more.forEach((ln, j) => drawRich(ctx, ln, x + 44, y + lift + 17 + (told.length + j) * 9, { color: '#9ee562' }));
         // Its synergy with the hero's perk (cardSynergy), in his colour, on a line still free.
         if (info.synergy && told.length + more.length < room) drawText(ctx, fitText(info.synergy.text, w - 52), x + 44, y + lift + 17 + (told.length + more.length) * 9, { color: info.synergy.color });
-        if (gold) drawText(ctx, `COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, x + w - 6, y + lift + h - 14, { align: 'right', color: blink ? '#fee761' : '#feae34' });
+        if (gold) drawText(ctx, completesLine(this.completes[i]), x + w - 6, y + lift + h - 14, { align: 'right', color: blink ? '#fee761' : '#feae34' });
         else if (info.hint && h >= 64) {
           // Its evolution (evoHint): the relic and its state, or a relic yet unknown and a ?.
           const hx = x + w - 6 - 16, hy = y + lift + h - 20, eh = info.hint;
@@ -720,7 +728,7 @@ export class LevelUpOverlay {
         if (info.synergy && ty + 9 <= y + lift + h - low) drawText(ctx, fitText(info.synergy.text, w - 12), x + w / 2, ty + 3, { align: 'center', color: info.synergy.color });
         if (gold && h > 120) {
           // It completes an evolution: said in gold where the hint was.
-          const lines = wrapText(`COMPLETES ${WEAPONS[this.completes[i]].name.toUpperCase()}`, w - 10);
+          const lines = wrapText(completesLine(this.completes[i]), w - 10);
           lines.forEach((ln, j) => drawText(ctx, ln, x + w / 2, y + lift + h - 17 - (lines.length - 1 - j) * 9, { align: 'center', color: blink ? '#fee761' : '#feae34' }));
         } else if (info.hint && h > 120) {
           // Its evolution (evoHint), on two lines: the relic (or "Evolves with a relic") and its state.

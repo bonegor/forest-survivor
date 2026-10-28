@@ -159,8 +159,9 @@ export const moveFor = (mode, id) => GAME_SPEED * (diffFor(mode, id).pace ?? 1);
 export const MODES = {
   s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out until dawn in the Darkwood.' },
   dungeon: { id: 'dungeon', name: 'Dungeon Run', sub: '3 floors', desc: 'Slay each floor\'s guardian and descend. Defeat the Demon Lord.' },
-  // Shown as Endless, its id still 'ranked' so saves, cookies and run reports keep their shape (the
-  // 27 October 2026 review, D10: it keeps personal bests only, and a player reading "Ranked" looks
-  // for a leaderboard).
-  ranked: { id: 'ranked', name: 'Endless', sub: 'night', desc: 'No dawn. The night grows deadlier forever. How long can you last?' },
+  // Ranked, as the owner named it: shown as Endless for a day (the 27 October 2026 review, D10, as a
+  // player reading "Ranked" might look for a leaderboard), its name back on 28 October 2026. Its
+  // records say they are personal, not a shared leaderboard (RecordsScreen), and its first choosing
+  // says once that it is always Elite (ModeScreen, rankedNote).
+  ranked: { id: 'ranked', name: 'Ranked', sub: 'Endless', desc: 'No dawn. The night grows deadlier forever. How long can you last?' },
 };
