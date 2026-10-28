@@ -1,11 +1,12 @@
 {
-  "title": "title-decision.ogg",
-  "forest": "forest-rock.ogg",
-  "crypt": "crypt-hunting-grounds.ogg",
-  "boss": "boss-epic-battle.ogg",
-  "victory": "victory-you-are-victorious.ogg",
-  "gameover": "gameover-dried-tears.ogg",
-  "dungeon-crypt": "dungeon-crypt.mp3",
-  "dungeon-catacombs": "dungeon-catacombs.ogg",
-  "dungeon-inferno": "dungeon-inferno.ogg"
+  "title": { "file": "sunroom-circuit.ogg", "gapless": true },
+  "results": { "file": "stillwater-echo-guitar.ogg", "gapless": true },
+  "forest": { "file": "wildfire-run.ogg", "gapless": true },
+  "crypt": { "file": "stormlight-drive.ogg", "gain": 1.15, "gapless": true },
+  "boss": { "file": "ironwood-rising.ogg", "gain": 0.85, "gapless": true },
+  "victory": "stillwater-echo-guitar.ogg",
+  "gameover": "stillwater-echo-guitar.ogg",
+  "dungeon-crypt": { "file": "stormlight-drive.ogg", "gain": 1.15, "gapless": true },
+  "dungeon-catacombs": { "file": "wildfire-run.ogg", "gapless": true },
+  "dungeon-inferno": { "file": "ironwood-rising.ogg", "gain": 0.85, "gapless": true }
 }

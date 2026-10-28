@@ -9,7 +9,7 @@ import { FLOORS, monsterHp, minuteOf, HORDE_CAP, SURVIVAL_BOSSES, RANKED_BOSS_EV
 import { RANKS, HERO_UNLOCK_TIME, countedKills } from '../shared/profile.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
-import { sfx, playMusic, playJingle, stopMusic, cutToMusic } from '../engine/audio.js';
+import { sfx, playMusic, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
 import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE, LOCK_KIND, LOCK_GAP } from './events.js';
@@ -2179,7 +2179,7 @@ export class Game {
     if (kind === 'survival') this.banner('Dawn breaks!', lord ? `${lord.def.title || lord.def.name} burns in the sunrise` : 'You survived the night', '#fee761', 4);
     else this.banner('Victory!', 'The Lord of Cinders is no more', '#fee761', 4);
     sfx('bell');
-    playJingle('victory');
+    playMusic('results');
   }
 
   // A boss caught by the sunrise (the dawn's update): it fades and flickers over DAWN_BURN.boss s,

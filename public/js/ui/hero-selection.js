@@ -55,8 +55,7 @@ export class HeroScreen {
     this.t = 0;
     this.lastHero = app.choice.hero || 'knight';
     this.infoScroll = 0;
-    // The title piece, after a fall's lament if it still plays (27 October 2026): never a run's
-    // battle or boss music on into camp after Quit Run, nor silence after a death.
+    // Returning to camp switches from the results' echo guitar to the menu piece.
     playAfterJingle('title');
     app.ui.lock(0.2);
     // Back from a run (the results' RETURN TO CAMP): the hero is as he was, so the focus starts on

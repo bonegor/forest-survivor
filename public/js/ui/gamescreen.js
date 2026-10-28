@@ -2,7 +2,7 @@
 // (level up, treasure chests, gear found, pause, results) on top.
 
 import { input, padKey } from '../engine/input.js';
-import { sfx, playAfterJingle, playJingle, playMusic } from '../engine/audio.js';
+import { sfx, playMusic } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
@@ -1836,11 +1836,9 @@ class ResultsOverlay {
     // The level-ups' FIRST FINDs of this run, kept now it is over (by a fall, Quit Run or a win).
     if (gs.offeredNew?.length) seenBox.add('offered', gs.offeredNew);
     this.submit();
-    // A win's jingle is heard in full, the title piece after it; a fall's lament plays now; a quit
-    // goes back to the title piece.
-    if (res.victory) playAfterJingle('title');
-    else if (this.g.player.dead) playJingle('gameover');
-    else playMusic('title'); // a quit: the run's forest or boss music would play on (stopMusic is the death's)
+    // The echo-guitar piece continues throughout a win or loss's results. Returning to camp
+    // selects the menu music; quitting a living run also returns to that piece.
+    playMusic(res.victory || this.g.player.dead ? 'results' : 'title');
     gs.app.ui.focusId = 'camp';
   }
 

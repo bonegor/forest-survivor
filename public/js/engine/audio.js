@@ -1,9 +1,11 @@
 // Procedural audio: every sound effect is synthesised with WebAudio. Music
-// plays only from the files listed in audio/music/tracks.json (title, forest,
+// plays only from the files listed in audio/music/tracks.json (title, results, forest,
 // crypt, boss, victory, gameover, and a piece per Dungeon Run floor),
 // crossfading from one to the next. A piece is listed as its file, or as
 // { "file": ..., "gain": ... } to play it louder or softer. A piece with no
 // file is silent.
+// Exact-bar Ogg edits use { "file": ..., "gapless": true }: the browser loops
+// the complete file without the legacy MP3 lead-in/overlap compensation.
 
 // Pieces that play once instead of looping.
 const ONCE = new Set(['victory', 'gameover']);
@@ -810,10 +812,12 @@ function track(name) {
   const gain = A.ctx.createGain();
   gain.gain.value = 0;
   gain.connect(A.musicBus);
-  t = { gain, level, once: ONCE.has(name), voices: [], cur: 0, playing: false, fadeTimer: 0 };
-  for (let i = t.once ? 1 : 2; i > 0; i--) {
+  const gapless = entry?.gapless === true;
+  t = { gain, level, gapless, once: !gapless && ONCE.has(name), voices: [], cur: 0, playing: false, fadeTimer: 0 };
+  for (let i = t.once || gapless ? 1 : 2; i > 0; i--) {
     const el = new Audio(MUSIC_DIR + file);
     el.preload = 'auto';
+    el.loop = gapless;
     const g = A.ctx.createGain();
     g.gain.value = level;
     A.ctx.createMediaElementSource(el).connect(g);
@@ -854,7 +858,7 @@ function track(name) {
 function turnLoops() {
   if (!A.ctx) return;
   for (const t of A.tracks.values()) {
-    if (!t.playing || t.once) continue;
+    if (!t.playing || t.once || t.gapless) continue;
     const el = t.voices[t.cur].el;
     if (el.paused || !el.duration || el.currentTime < el.duration - XF - 0.03) continue;
     handOff(t);
@@ -863,6 +867,14 @@ function turnLoops() {
 
 // Hand a loop to its other player: it starts at LEAD_IN and comes in over XF as this one goes.
 function handOff(t) {
+  // Native looping normally never raises ended. Recover at zero if a browser
+  // suspended playback at the end, without dropping any of the opening beat.
+  if (t.gapless) {
+    const el = t.voices[0].el;
+    el.currentTime = 0;
+    el.play().catch(() => {});
+    return;
+  }
   const a = t.voices[t.cur], b = t.voices[1 - t.cur], now = A.ctx.currentTime;
   b.el.currentTime = LEAD_IN;
   b.el.play().catch(() => {});

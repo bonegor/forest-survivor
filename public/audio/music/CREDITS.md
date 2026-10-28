@@ -1,5 +1,34 @@
 # Music credits
 
+## Forest Survivor original soundtrack — 28 October 2026
+
+The active soundtrack contains original instrumental compositions made for this project:
+
+| File | Title | Game use |
+| --- | --- | --- |
+| `sunroom-circuit.ogg` | Sunroom Circuit | Main menu and camp |
+| `stillwater-echo-guitar.ogg` | Stillwater — Echo Guitar | Victory and death results |
+| `wildfire-run.ogg` | Wildfire Run | Forest; dungeon catacombs |
+| `stormlight-drive.ogg` | Stormlight Drive | Crypt; dungeon crypt |
+| `ironwood-rising.ogg` | Ironwood Rising | Bosses; dungeon inferno |
+
+The three gameplay songs have separately composed verses, returning hooks, transitions and
+instrumental development. Wildfire Run uses layered rock guitars, bass, acoustic guitar,
+electric piano, pad, counterline and two complementary drum lanes. Ironwood Rising adds
+melodic metal guitars, harmonies, strings, keys and three percussion lanes. Stormlight Drive
+combines electronic drums, acoustic fills, shaker, synth bass, chords, lead, arpeggios,
+guitar layers and effects.
+
+Instrument renders use the installed Shreddage/Kontakt, Guitar Rig, Ample Guitar and
+Cakewalk Studio Instruments, alongside original synthesized sounds. The audio mixes were
+assembled and exported in Sonar. Only finished music is distributed here, not instrument
+libraries or plugin presets. The Ogg game edits repeat at bar boundaries with release tails
+or short crossfades carried into the repeat. Full song versions and editable projects are
+kept in the local Forest Survivor Soundtrack collection.
+
+The older music and audition material below remains credited for reference; `tracks.json`
+is the authoritative list of music included in a release.
+
 `tracks.json` says which file plays for which piece of the game. To swap a track, replace its file or point the entry at another one; an entry can also be `{ "file": "...", "gain": 2 }` to play it louder or softer. The files are the only music: a piece with no file is silent.
 
 ## Original: the menu-music candidates (`menu/`)

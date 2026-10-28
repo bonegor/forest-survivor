@@ -13,6 +13,7 @@ import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, applyRun, metaBonuses } from '../public/js/shared/profile.js';
 import { Game } from '../public/js/game/game.js';
+import { musicState, playMusic } from '../public/js/engine/audio.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
 Object.assign(view, { ctx, uctx: ctx, W: 480, H: 270, S: 1, pxW: 480, pxH: 270 });
@@ -82,6 +83,37 @@ function click(gs, id) {
   Object.assign(input.mouse, { x: it.x + 2, y: it.y + 2, clicked: true });
   frame(gs);
 }
+
+test('a death keeps echo-guitar results music until leaving the results', async () => {
+  const gs = await playToResults(makeApp({ hero: 'knight', mode: 's15', diff: 'medium' }));
+  assert.equal(musicState().piece, 'results');
+  for (let f = 0; f < 180; f++) frame(gs);
+  assert.equal(musicState().piece, 'results', 'the tally does not switch back to the title');
+});
+
+test('winning starts results music at dawn and keeps it on the results screen', async () => {
+  const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
+  app.startRun();
+  const gs = app.screen;
+  playMusic('boss');
+  gs.game.victory('survival');
+  assert.equal(musicState().piece, 'results');
+  gs.game.finish(true);
+  frame(gs);
+  await new Promise((r) => setImmediate(r));
+  assert.ok(gs.overlay?.res?.victory);
+  assert.equal(musicState().piece, 'results');
+});
+
+test('quitting a living run returns to menu music', async () => {
+  const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
+  app.startRun();
+  playMusic('forest');
+  app.screen.game.finish(false);
+  frame(app.screen);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(musicState().piece, 'title');
+});
 
 test('a Veteran run is reported as Veteran, and paid ×1', async () => {
   const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
