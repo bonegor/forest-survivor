@@ -95,6 +95,18 @@ export class HeroScreen {
       ctx.globalAlpha = 1;
       const label = locked ? id === next ? 'NEXT' : 'LOCKED' : h.short.toUpperCase();
       drawText(ctx, label, x + L.cardW / 2, y + L.cardH - 10, { align: 'center', color: on ? '#fee761' : locked ? '#687186' : '#c0cbdc' });
+      // The next hero's card fills toward his five minutes with the hero before him: that hero's
+      // longest run (profile bt, the review's C4, 28 October 2026), the real distance only. Between
+      // the portrait (y + 26 at most) and the label.
+      if (locked && id === next) {
+        const k = clamp((profile.bt?.[HERO_ORDER[i - 1]] || 0) / HERO_UNLOCK_TIME, 0, 1), bw = L.cardW - 12;
+        if (k > 0) {
+          ctx.fillStyle = '#262b44';
+          ctx.fillRect(x + 6, y + L.cardH - 13, bw, 2);
+          ctx.fillStyle = '#feae34';
+          ctx.fillRect(x + 6, y + L.cardH - 13, Math.max(1, Math.round(bw * k)), 2);
+        }
+      }
       if (on) { ctx.fillStyle = '#fee761';ctx.fillRect(x + 3, y + L.cardH - 2, L.cardW - 6, 1); }
     }
 
@@ -155,9 +167,14 @@ export class HeroScreen {
     const ultimateY = perkY + perk.length * 9 + 10;
     const goalY = ultimateY + 13 + ult.length * 9 + 7;
     const next = nextHeroUnlock(profile), prev = HERO_ORDER[HERO_ORDER.indexOf(h.id) - 1];
-    const note = locked ? (h.id === next ? `Survive ${HERO_UNLOCK_TIME / 60} minutes with the ${HEROES[prev].title} to recruit this hero.` : 'Recruit the earlier heroes to continue this path.') : !ownedUltimate ? `Unlock ${h.ultName}: survive ${fmtTime(PROGRESS.ultTime)} with this hero.` : goalText(nextGoal(profile));
+    // Each hero's longest run on the clock, any mode (profile bt, the review's C4, 28 October 2026):
+    // the next hero's note tells the one before him's, a hero of the save his own under the note.
+    const longest = (hid) => profile.bt?.[hid] || 0;
+    const prevRun = locked && h.id === next && longest(prev) ? ` Longest run with the ${HEROES[prev].title}: ${fmtTime(longest(prev))}.` : '';
+    const note = locked ? (h.id === next ? `Survive ${HERO_UNLOCK_TIME / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : 'Recruit the earlier heroes to continue this path.') : !ownedUltimate ? `Unlock ${h.ultName}: survive ${fmtTime(PROGRESS.ultTime)} with this hero.` : goalText(nextGoal(profile));
     const notes = wrapText(note, inner);
-    const total = goalY + notes.length * 9 + 8;
+    const runs = !locked && longest(h.id) ? wrapText(`Longest run with this hero: ${fmtTime(longest(h.id))}`, inner) : [];
+    const total = goalY + (notes.length + runs.length) * 9 + 8;
     const most = Math.max(0, total - (height - 12));
     const mouse = input.mouse;
     if (mouse.x >= x && mouse.x < x + w && mouse.y >= y && mouse.y < y + height) this.infoScroll += Math.sign(mouse.wheel || 0) * 27;
@@ -185,6 +202,7 @@ export class HeroScreen {
     drawText(ctx, fit(h.ultName.toUpperCase() + (ownedUltimate ? '' : ' · LOCKED'), inner), tx, top + ultimateY, { color: ownedUltimate ? '#f6757a' : '#b39aac' });
     ult.forEach((line, i) => drawText(ctx, line, tx, top + ultimateY + 11 + i * 9, { color: '#c0cbdc' }));
     notes.forEach((line, i) => drawText(ctx, line, tx, top + goalY + i * 9, { color: '#c28569' }));
+    runs.forEach((line, i) => drawText(ctx, line, tx, top + goalY + (notes.length + i) * 9, { color: '#8b9bb4' }));
     ctx.restore();
     if (most) {
       const bh = Math.max(12, Math.round((height - 8) ** 2 / total));

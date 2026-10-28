@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { GameScreen, woundLines, WOUND_TIPS } from '../public/js/ui/gamescreen.js';
+import { GameScreen, woundLines, WOUND_TIPS, heroGoalBar, goldSteps } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
@@ -95,6 +95,9 @@ test('a Veteran run is reported as Veteran, and paid ×1', async () => {
   assert.equal(reward.total, 120 + reward.wage, 'and the wage for its time (shared/progress.js)');
   assert.ok(!reward.unsaved);
   assert.equal(app.store.profile.gold, reward.total);
+  // Its longest kill streak goes with it, for the record; the gold found is one (28 October 2026).
+  assert.equal(app.sent[0].combo, gs.game.stats.maxCombo);
+  assert.deepEqual(gs.overlay.rows.find(([k]) => k === 'Gold found'), ['Gold found', '120', true], 'the first gold on record');
   // And an Elite one as Elite.
   const vet = makeApp({ hero: 'knight', mode: 's15', diff: 'hard' });
   const vs = await playToResults(vet);
@@ -178,4 +181,33 @@ test("a boss's every blow is one line of the wounds, and counts as a boss's", ()
     Math.random = random;
     input.bot = bot;
   }
+});
+
+// The review's C4 (28 October 2026): where the next goal is a time with the hero just played, the
+// NEXT line is the real distance, as a bar; a run that made it, another hero or another goal, none.
+test("the results' NEXT line is the distance to the next hero, where it is this hero's time", () => {
+  const goal = { type: 'survive', hero: 'knight', unlocks: 'archer', minutes: 5 };
+  const bar = heroGoalBar(goal, { hero: 'knight', time: 271 });
+  assert.equal(bar.text, '04:31 of 05:00 with the Knight · 29 s from the Ranger');
+  assert.ok(Math.abs(bar.k - 271 / 300) < 1e-9);
+  assert.match(heroGoalBar(goal, { hero: 'knight', time: 100 }).text, /03:20 from the Ranger$/, 'a minute or more told as a time');
+  assert.equal(heroGoalBar(goal, { hero: 'archer', time: 271 }), null, 'another hero');
+  assert.equal(heroGoalBar(goal, { hero: 'knight', time: 300 }), null, 'made it');
+  assert.equal(heroGoalBar({ type: 'dungeon', hero: 'knight', unlocks: 'archer' }, { hero: 'knight', time: 271 }), null, 'another goal');
+});
+
+// The review's C11 (28 October 2026): the gold found counts up, then each step of the formula is
+// stamped in, a beat apart, all in the span the single count took; a rate of ×1 or under is never a
+// stamp (no step down), and nothing paid changes.
+test("the results' gold comes as a cascade: the gold found, then the rate above ×1, the wage, a win's bonus", () => {
+  const s = goldSteps({ gold: 340, multiplier: 1.5, collected: 510, wage: 450, bonus: 500, total: 1460 }, 2.5);
+  assert.equal(s.countTo, 340);
+  assert.deepEqual(s.stamps.map((st) => [st.key, st.to]), [['mult', 510], ['wage', 960], ['bonus', 1460]]);
+  assert.ok(Math.abs(s.end - 2.5) < 1e-9, 'in the span the count took');
+  assert.ok(s.count > 0 && s.stamps.every((st, i) => st.at > (i ? s.stamps[i - 1].at : s.count)), 'each in its turn');
+  const normal = goldSteps({ gold: 340, multiplier: 0.75, collected: 255, wage: 100, bonus: 0, total: 355 }, 2);
+  assert.equal(normal.countTo, 255, "Normal's gold counted at its rate");
+  assert.ok(!normal.stamps.some((st) => st.key === 'mult'), 'never a step down');
+  assert.equal(normal.stamps.at(-1).to, 355);
+  assert.equal(goldSteps({ gold: 0, multiplier: 1, collected: 0, wage: 5, bonus: 0, total: 5 }, 1.5).count, 0, 'no gold found: only the wage');
 });

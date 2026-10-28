@@ -2147,6 +2147,7 @@ export class Game {
       kills: this.kills,
       level: p.level,
       bosses: this.stats.bosses, // bosses and crypt lords slain, for the milestones (shared/progress.js)
+      combo: this.stats.maxCombo, // his longest kill streak, for the record (shared/profile.js best.combo)
       evolved: this.signatureEvolved(), // and his signature evolved
       evos: p.weapons.filter((w) => w.evolved).map((w) => w.id), // and every evolution he held
       floor: this.floor,

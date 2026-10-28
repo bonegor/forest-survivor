@@ -3,17 +3,17 @@
 import { input, padKey } from '../engine/input.js';
 import { sfx, playMusic, playAfterJingle, setVolumes, initAudio } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
-import { saveSettings, DEBUG } from '../engine/storage.js';
+import { saveSettings, DEBUG, seenBox } from '../engine/storage.js';
 import { presentBackdrop } from '../engine/view.js';
 import { fmtTime, fmtNum, clamp } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
 import { trialScene, SCENE, heroCrop, PORTRAIT } from './scenes.js';
 import { MODES, NORMAL, VETERAN, ELITE, NIGHTMARE } from '../data/difficulty.js';
-import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked, wonElite } from '../shared/profile.js';
+import { UPGRADES, upgradeCost, upgradeOpen, totalWins, nextGoal, canPlay, rankTitle, modeUnlocked, wonElite, affordableRanks } from '../shared/profile.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from '../shared/progress.js';
-import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas } from './ui.js';
-import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon } from './ladder.js';
+import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, drawRich, wrapText, textWidth, textCanvas, newDot } from './ui.js';
+import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon, seenKey, isNewEntry, seenKeys } from './ladder.js';
 import { flank } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
 import { codexSummary, codexDescription, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
@@ -64,6 +64,7 @@ export class TitleScreen {
     this.app = app;
     this.t = 0;
     this.ready = app.audioUnlocked;
+    this.marksFor = null; // the NEW marks taken anew (draw)
     if (this.ready) playMusic('title');
     // Back from a menu: on the button that opened it (params.focus), not on START RUN.
     if (params.focus) app.ui.focusId = params.focus;
@@ -123,6 +124,17 @@ export class TitleScreen {
       return;
     }
 
+    // The NEW marks (the review's C5, 28 October 2026): the seen list's first fill, the save as it is
+    // now (once a browser); then a dot on CODEX while anything has opened since the Codex last showed
+    // it, and a coin on UPGRADES while the gold in hand buys a rank. Taken anew for each save in hand
+    // and each time the title is come back to (enter), as the Codex adds to the list on leaving.
+    if (this.marksFor !== app.store.profile) {
+      const p = (this.marksFor = app.store.profile);
+      seenBox.start(seenKeys(p));
+      const seen = seenBox.read();
+      this.marks = { codex: codexEntries(p).some((e) => isNewEntry(e, seen)), armory: !DEBUG && affordableRanks(p) > 0 };
+    }
+
     // No Continue: a run is never saved to come back to, only its results when it ends.
     ui.begin(dt);
     const firstJourney = needsPrologue(app.store.profile, app.settings);
@@ -138,7 +150,10 @@ export class TitleScreen {
     ctx.fillStyle = well;
     ctx.fillRect(W / 2 - bw, cy - bw, bw * 2, bw * 2);
     for (const [id, label] of items) {
-      if (button(ctx, ui, id, Math.round(W / 2 - bw / 2), y, bw, bh, label)) this.pick(id);
+      const bx = Math.round(W / 2 - bw / 2);
+      if (button(ctx, ui, id, bx, y, bw, bh, label)) this.pick(id);
+      if (id === 'codex' && this.marks.codex) newDot(ctx, bx + bw - 14, y + 5);
+      if (id === 'armory' && this.marks.armory) ctx.drawImage(SPR.h_coin.frames[0].c, bx + bw - 14, y + 5);
       y += bh + gap;
     }
     const goal = nextGoal(app.store.profile);
@@ -600,6 +615,10 @@ export class CodexScreen {
     this.seen = null; // the focus last frame: a new one by the keys is scrolled into view
     this.shown = null; // the tile the panel tells of: the last in focus, kept while BACK has it
     this.tab = codexLastTab;
+    // The seen list as the Codex opened (no NEW marks without one), and the new tiles shown in full
+    // since: seen, once the Codex is left (exit; the review's C5, 28 October 2026).
+    this.fresh = seenBox.read();
+    this.looked = new Set();
     app.ui.lock(0.2);
     app.ui.focusId = tileId(codexTab(app.store.profile, this.tab)[0]);
   }
@@ -646,6 +665,8 @@ export class CodexScreen {
       const f = ui.focused(fid);
       if (f) this.shown = fid;
       this.tile(ctx, e, x, y, L.cw, L.ch, f);
+      // A new one in full view is seen, once the Codex is left; its mark stays till then.
+      if (y >= L.y0 && y + L.ch <= L.y0 + L.view && isNewEntry(e, this.fresh)) this.looked.add(seenKey(e));
     });
     ctx.restore();
     // The bar: where the view is in the whole grid.
@@ -668,6 +689,7 @@ export class CodexScreen {
   }
 
   exit() {
+    seenBox.add('codex', this.looked || []);
     codexLastTab = this.tab;
     this.app.go(this.back, this.back === 'title' ? { focus: 'codex' } : {});
   }
@@ -691,6 +713,8 @@ export class CodexScreen {
       const text = `${label} ${of.filter((e) => e.open).length}/${of.length}`;
       if (button(ctx, ui, bid, tx + i * (tw + 4), 25, tw, 14, text, { on, group: 'codex_tabs', home: on })) this.setTab(id);
       if (ui.focused(bid) && ui.focusSource !== 'pointer') this.setTab(id);
+      // A NEW mark while the tab holds a new entry not yet shown in full.
+      if (all.some((e) => tabOf(e) === id && isNewEntry(e, this.fresh) && !this.looked.has(seenKey(e)))) newDot(ctx, tx + i * (tw + 4) + tw - 9, 30);
     });
   }
 
@@ -778,6 +802,8 @@ export class CodexScreen {
     lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 12 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
     if (!open || (e.type === 'feature' && e.next)) codexBar(ctx, tx, y + h - 4, room, e.progress, '#feae34');
     if (sw) codexSwitch(ctx, x + w - 18, y + 4, !e.home);
+    // New since this browser last looked (the review's C5): a green dot in its corner.
+    if (isNewEntry(e, this.fresh)) newDot(ctx, x + 2, y + 2);
   }
 }
 
@@ -792,8 +818,9 @@ function codexSwitch(ctx, x, y, on) {
   ctx.fillRect(on ? x + 8 : x + 1, y + 1, 5, 5);
 }
 
-// A tile's bar, w wide at (x, y): k of it filled in col over an empty iron groove.
-function codexBar(ctx, x, y, w, k, col) {
+// A tile's bar, w wide at (x, y): k of it filled in col over an empty iron groove (the results'
+// NEXT bar too, ui/gamescreen.js heroGoalBar).
+export function codexBar(ctx, x, y, w, k, col) {
   ctx.fillStyle = '#0d0b14';
   ctx.fillRect(x, y, w, 4);
   ctx.fillStyle = '#262b44';

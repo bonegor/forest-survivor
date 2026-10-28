@@ -90,8 +90,8 @@ export function codexName(e) {
 }
 
 // How far the records have come toward a lock still shut, in its own measure ('2:14 best',
-// '412 slain'); '' where there is nothing to tell. An ultimate's is his Ranked best, the only time
-// kept for each hero, so none is told until there is one.
+// '412 slain'); '' where there is nothing to tell. An ultimate's is his longest run (profile bt, 28
+// October 2026), so none is told until there is one.
 export function codexRecord(e) {
   if (e.type === 'feature') return `${e.level} exclusion slot${e.level === 1 ? '' : 's'} unlocked`;
   if (e.open || e.start) return '';
@@ -150,3 +150,18 @@ export function codexEntries(p) {
 
 // The n locks nearest to opening, the furthest along first.
 export const nearestLocks = (p, n = 2) => codexEntries(p).filter((e) => !e.open).sort((a, b) => b.progress - a.progress).slice(0, n);
+
+// ------------------------------------------------------------ NEW marks --
+// (the review's C5, 28 October 2026; engine/storage.js seenBox keeps them.) An entry's key in the seen
+// list: its kind's letter and id, '?' after it while only revealed (a second-circle weapon still shut
+// after the first night won), so it is new again once it opens; the exclusion slots by how many are open.
+export const seenKey = (e) => (e.type === 'feature' ? `x:${e.level}` : `${e.type[0]}:${e.id}`) + (e.open ? '' : '?');
+// Whether an entry is new to this browser: opened (or, of the second circle, revealed) since the seen
+// list began, not open from the start, and not yet looked at in the Codex. Never without a seen list.
+export const isNewEntry = (e, seen) => !!seen && !e.start && !e.hidden && (e.open || !!e.deep) && !seen.codex.has(seenKey(e));
+// What a profile has open (and revealed) now, as keys: the seen list's first fill. Its weapons and
+// relics are offered already too, as far as FIRST FIND goes (ui/gamescreen.js firstFind).
+export function seenKeys(p) {
+  const codex = codexEntries(p).filter((e) => !e.start && !e.hidden && (e.open || e.deep)).map(seenKey);
+  return { codex, offered: codex.filter((k) => /^[wr]:[^?]*$/.test(k)) };
+}

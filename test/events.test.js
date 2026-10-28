@@ -1,6 +1,7 @@
 // The night's events announced (events.js): each scripted swarm, ring and pack is
 // told about two seconds before it comes, in its own words and from its side, and comes from that
-// side; a record passed mid-run is told once, never in the first minute.
+// side; a record passed mid-run is told once, never in the first minute, and the kill record shows
+// beside the count once a run nears it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -10,6 +11,7 @@ import { minuteMore, RING } from '../public/js/game/spawner.js';
 import { ELITE } from '../public/js/data/difficulty.js';
 import { ENEMIES } from '../public/js/data/enemies.js';
 import { WARN, sideWord, eventWords } from '../public/js/game/events.js';
+import { killBest } from '../public/js/game/hud.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
@@ -115,6 +117,18 @@ test('no record to beat (a fresh profile): nothing told', () =>
     g.update(1 / 60);
     assert.equal(g.banners.filter((b) => b.title.startsWith('NEW RECORD')).length, 0);
   }, { records: { kills: 0, level: 0, time: 0 } }));
+
+// The review's C8(c) (28 October 2026): past 85% of the most kills a run has made, the HUD shows
+// that record, dim, beside the count, and NEW BEST once the banner has told it passed; never in the
+// first minute, nor before there is a record.
+test('the kill record shows beside the count once near, NEW BEST once beaten', () => {
+  const g = (o = {}) => ({ records: { kills: 100 }, time: 61, kills: 90, recordsBroken: new Set(), ...o });
+  assert.equal(killBest(g()).text, 'BEST 100');
+  assert.equal(killBest(g({ kills: 80 })), null, 'not yet near');
+  assert.equal(killBest(g({ time: 30 })), null, 'never in the first minute');
+  assert.equal(killBest(g({ records: { kills: 0 } })), null, 'no record yet');
+  assert.equal(killBest(g({ kills: 120, recordsBroken: new Set(['kills']) })).text, 'NEW BEST');
+});
 
 test('every swarm comes as a batch of 2 to 5, each three times as big, 7 s apart, each told before it which of the batch it is', () => {
   const sizes = new Set();

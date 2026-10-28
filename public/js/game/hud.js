@@ -14,7 +14,7 @@ import { ringSprite } from './fxsprites.js';
 import { DEATH, FLASH_SOFT, COMBO, comboTier } from './game.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
-import { WARN } from './events.js';
+import { WARN, RECORD_GRACE } from './events.js';
 import { SURVIVAL_BOSSES, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { HEROES } from '../data/heroes.js';
 
@@ -363,6 +363,18 @@ export function revealOn(held, it, g) {
   return null;
 }
 
+// The review's C8(c) (28 October 2026): a run nearing the most kills a run has made (Game.records,
+// the profile's as the run began) shows it, dim, past KILL_NEAR of it, and NEW BEST in green once
+// Game.checkRecords' banner has told it passed; never in the first minute (RECORD_GRACE), as that
+// banner. Only a real record: none before one is kept. { text, color }, or null: nothing to show.
+export const KILL_NEAR = 0.85;
+export function killBest(g) {
+  const rec = g.records?.kills || 0;
+  if (rec <= 0 || g.time < RECORD_GRACE) return null;
+  if (g.recordsBroken?.has('kills')) return { text: 'NEW BEST', color: '#63c74d' };
+  return g.kills >= rec * KILL_NEAR ? { text: `BEST ${fmtNum(rec)}`, color: '#8b9bb4' } : null;
+}
+
 export class Hud {
   constructor(g) {
     this.g = g;
@@ -679,6 +691,10 @@ export class Hud {
     const k = fmtNum(g.kills);
     drawText(ctx, k, right, y + 10, { align: 'right', color: '#c0cbdc' });
     ctx.drawImage(SPR.h_skull.frames[0].c, right - textWidth(k) - 11, y + 9);
+    // The record near or beaten (killBest), beside the count, left of its skull: under the count
+    // stands the gold, and under that a crypt's or a floor's map.
+    const kb = killBest(g);
+    if (kb) drawText(ctx, kb.text, right - textWidth(k) - 14, y + 10, { align: 'right', color: kb.color });
     // Gold, rolling up to what it is (never down: a fresh run, or a shown chest's held gold, snaps).
     const want = this.held ? this.held.gold : g.gold;
     if (want < this.goldRoll) this.goldRoll = want;

@@ -173,7 +173,9 @@ export function defaultProfile() {
     deaths: 0, // runs that ended with the hero fallen (milestones: shared/progress.js deaths)
     // time: the longest run on the clock in any mode; gold: the most gold picked up in a run;
     // bosses: the most bosses (and crypt lords) slain in a run. Milestones read them (earnedBits).
-    best: { s15: 0, dungeon: 0, kills: 0, level: 0, time: 0, gold: 0, bosses: 0 },
+    // combo: the longest kill streak in a run (Game.stats.maxCombo), for the results' NEW BEST
+    // (28 October 2026); it opens nothing.
+    best: { s15: 0, dungeon: 0, kills: 0, level: 0, time: 0, gold: 0, bosses: 0, combo: 0 },
     up: {},
     // Armory ranks a save from before was given (fromBefore); a refund pays them back as gold too.
     gift: {},
@@ -182,6 +184,9 @@ export function defaultProfile() {
     heroes: [...BASE_HEROES],
     feats: {}, // hero -> FEAT bits
     ranked: {}, // hero -> best Ranked time in seconds
+    // hero -> his longest run on the clock in seconds, in any mode (28 October 2026, the review's
+    // C4): the hero screen, the results' NEXT bar and the Codex's ultimate bars.
+    bt: {},
     gear: {}, // hero -> slot -> the item that hero wears there (shared/items.js)
     ev: [], // the evolutions a lock waits on (need 'evolution') that a run has reached
     ek: 0, // every evolution a run has made: bit i is PROGRESS.evolutions[i] (knownEvos)
@@ -208,6 +213,7 @@ export function sanitizeProfile(raw) {
   p.best.time = int(raw.best?.time, 0, MAX_TIME.ranked);
   p.best.gold = int(raw.best?.gold, 0, 1e9);
   p.best.bosses = int(raw.best?.bosses, 0, 9999);
+  p.best.combo = int(raw.best?.combo, 0, 1e7);
   for (const u of UPGRADES) {
     const r = int(raw.up?.[u.id], 0, u.max);
     if (r) p.up[u.id] = r;
@@ -227,8 +233,11 @@ export function sanitizeProfile(raw) {
   for (const h of HERO_ORDER) {
     const f = int(raw.feats?.[h], 0, ALL_FEATS);
     if (f) p.feats[h] = f;
-    const t = int(raw.ranked?.[h], 0, MAX_TIME.ranked);
+    const t = int(timeOf(raw.ranked, h), 0, MAX_TIME.ranked);
     if (t) p.ranked[h] = t;
+    // His longest run, any mode; a save from before 28 October 2026 has his Ranked best for it.
+    const b = Math.max(t, int(timeOf(raw.bt, h), 0, MAX_TIME.ranked));
+    if (b) p.bt[h] = b;
   }
   // The evolutions a save from before 27 October 2026 already tells of are known (SIGNATURE_EVO);
   // taken again every time, which changes nothing once they are in.
@@ -319,10 +328,11 @@ function earnedBits(p) {
   return bits;
 }
 
-// Whether a hero's records show a run with him of PROGRESS.ultTime: a Ranked best that long, a win
-// with him (no win is that short), or the next hero brought in (five minutes with him).
+// Whether a hero's records show a run with him of PROGRESS.ultTime: his longest run that long (bt),
+// a Ranked best that long, a win with him (no win is that short), or the next hero brought in (five
+// minutes with him).
 function ultEarned(p, h) {
-  if ((p.ranked[h] || 0) >= PROGRESS.ultTime || (p.feats[h] || 0) !== 0) return true;
+  if ((p.bt[h] || 0) >= PROGRESS.ultTime || (p.ranked[h] || 0) >= PROGRESS.ultTime || (p.feats[h] || 0) !== 0) return true;
   const next = HERO_ORDER[HERO_ORDER.indexOf(h) + 1];
   return HERO_UNLOCK_TIME >= PROGRESS.ultTime && !!next && p.heroes.includes(next);
 }
@@ -388,12 +398,12 @@ export function lastInPlay(profile, id) {
 }
 
 // Every lock, for a codex: the open-from-the-start ones (start: true), the milestones with how
-// far the records have come (progress 0..1), and each hero's ultimate (its progress is his Ranked
-// best's, the only time kept for each hero; 1 once open).
+// far the records have come (progress 0..1), and each hero's ultimate (its progress is his longest
+// run's (bt); 1 once open).
 // A lock for sale whose milestone is reached is not open until bought: its need says so (forSale).
 // A shared weapon left at home is open, and says so (home). One of the second circle before a night
-// is won is hidden: the Codex shows neither its name nor its deed.
-//   [{ type: 'weapon' | 'relic' | 'ult', id, open, need, progress, start?, forSale?, home?, hidden? }]
+// is won is hidden: the Codex shows neither its name nor its deed; once revealed it is still `deep`.
+//   [{ type: 'weapon' | 'relic' | 'ult', id, open, need, progress, start?, forSale?, home?, hidden?, deep? }]
 export function progressList(profile) {
   const p = sanitizeProfile(profile), m = measures(p);
   const out = [];
@@ -404,13 +414,14 @@ export function progressList(profile) {
     const reached = lockOpen(p, i), open = lockUsable(p, i), forSale = reached && !open;
     const e = { type: l.type, id: l.id, open, need: forSale ? 'For sale in the Armory' : needText(l), progress: reached ? 1 : Math.min(1, measure(p, l, m) / l.at) };
     if (forSale) e.forSale = true;
+    if (l.deep) e.deep = true; // of the second circle: once revealed, the Codex marks it NEW (ui/ladder.js isNewEntry)
     if (hiddenLock(l, m)) Object.assign(e, { hidden: true, need: 'Win a night to learn more' });
     if (l.type === 'weapon' && p.home.includes(l.id)) e.home = true;
     out.push(e);
   });
   for (const h of HERO_ORDER) {
     const open = ((p.uu & heroBit(h)) !== 0);
-    out.push({ type: 'ult', id: h, open, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero', progress: open ? 1 : Math.min(1, (p.ranked[h] || 0) / PROGRESS.ultTime) });
+    out.push({ type: 'ult', id: h, open, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero', progress: open ? 1 : Math.min(1, (p.bt[h] || 0) / PROGRESS.ultTime) });
   }
   return out;
 }
@@ -421,10 +432,11 @@ export function progressList(profile) {
 // Since every evolution is kept as a bit (ek, 27 October 2026) the list of those a lock waits on
 // (ev) is told by it and stays out, and so does an empty home: the worst case keeps its quarter
 // spare (test/profile.test.js). sanitizeProfile reads both back. The heroes are one number too, a
-// bit each in HERO_ORDER's order (27 October 2026, room for the effort and the win marks).
+// bit each in HERO_ORDER's order (27 October 2026, room for the effort and the win marks), and so
+// are each hero's Ranked best and longest run, as strings (packTimes, 28 October 2026).
 export function packProfile(p) {
   const { ev, ...rest } = p;
-  const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
+  const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), ranked: packTimes(p.ranked), bt: packTimes(p.bt), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
   if (!out.home?.length) delete out.home;
   return out;
 }
@@ -433,6 +445,12 @@ export function packProfile(p) {
 const GIFTS = ['arsenal', 'reliquary', 'reroll', 'banish'];
 const packGift = (gift) => GIFTS.reduce((n, id, i) => n + Math.min(3, gift?.[id] || 0) * 4 ** i, 0);
 const giftOf = (raw, id) => (typeof raw === 'number' ? Math.floor(raw / 4 ** GIFTS.indexOf(id)) % 4 : raw?.[id]);
+// Each hero's time (ranked, bt) as a cookie keeps it: base 36 in HERO_ORDER's order, '.' between,
+// none after the last kept (28 October 2026: nine heroes' Ranked bests as an object took 146
+// characters; packed, both lists take less than that one did). A save from before keeps an
+// object; both read back (timeOf).
+const packTimes = (o) => HERO_ORDER.map((h) => (o?.[h] ? Math.floor(o[h]).toString(36) : '')).join('.').replace(/\.+$/, '');
+const timeOf = (raw, h) => (typeof raw === 'string' ? parseInt(raw.slice(0, 200).split('.')[HERO_ORDER.indexOf(h)] || '', 36) : raw?.[h]);
 
 // ------------------------------------------------------------- the ladder --
 
@@ -509,6 +527,12 @@ export function upgradeOpen(profile, u) {
   if (!u.lock) return true;
   const i = LOCKS.findIndex((l) => l.id === u.lock);
   return i >= 0 && lockOpen(profile, i);
+}
+
+// How many Armory upgrades the gold in hand buys a rank of now: for sale (upgradeOpen) and not at
+// their top (the results' armoryLine; the title's coin on UPGRADES, the review's C5, 28 October 2026).
+export function affordableRanks(p) {
+  return UPGRADES.filter((u) => (p.up?.[u.id] || 0) < u.max && upgradeOpen(p, u) && upgradeCost(u.id, p.up?.[u.id] || 0) <= (p.gold || 0)).length;
 }
 
 // A shared weapon left at home (on: true) or taken along again: one left at home is never offered
@@ -597,6 +621,9 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
   // Ranked. A win still counts as its difficulty's.
   // Elite's modifier (data/difficulty.js nightmareFor): a Normal or Veteran run is never one.
   const nightmare = raw.mode !== 'ranked' && diff === 'hard' && raw.nightmare === true;
+  // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD), and
+  // kept so with Veteran's now two thirds of that (VETERAN_CROWD); a Nightmare three times that.
+  const kills = int(raw.kills, 0, 50 + time * 240 * (nightmare ? 3 : 1));
   return {
     mode: raw.mode,
     diff,
@@ -609,9 +636,9 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
     // Selling what the crypts gave pays too; applyRun adds what selling worn gear paid.
     gold: int(raw.gold, 0, goldCap({ mode: raw.mode, time, realTime, found }, armoryGreed)),
     claim: int(raw.gold, 0, 1e9),
-    // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD), and
-    // kept so with Veteran's now two thirds of that (VETERAN_CROWD); a Nightmare three times that.
-    kills: int(raw.kills, 0, 50 + time * 240 * (nightmare ? 3 : 1)),
+    kills,
+    // His longest kill streak (Game.stats.maxCombo), for the record: never more than his kills.
+    combo: int(raw.combo, 0, kills),
     level: int(raw.level, 1, 999),
     // Bosses and crypt lords slain (Game.stats.bosses), for the milestones: no more than a boss a
     // minute and a few, and every lord of every crypt the run could have reached (as `found`).
@@ -705,8 +732,11 @@ export function applyRun(profile, rawRun) {
   p.best.kills = Math.max(p.best.kills, run.kills);
   p.best.level = Math.max(p.best.level, run.level);
   p.best.time = Math.max(p.best.time, run.time);
+  // His longest run, any mode (the clock that brings in the next hero and opens his ultimate).
+  if (run.time > 0) p.bt[run.hero] = Math.max(p.bt[run.hero] || 0, run.time);
   p.best.gold = Math.max(p.best.gold, pickedUp);
   p.best.bosses = Math.max(p.best.bosses, run.bosses);
+  p.best.combo = Math.max(p.best.combo, run.combo);
   reward.unlocks = openings(p).filter((k) => !before.has(k));
   // The milestones this run reached (shared/progress.js), for the results screen to announce:
   //   [{ type: 'weapon' | 'relic' | 'ult', id, need }]

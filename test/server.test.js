@@ -346,6 +346,7 @@ test('a maximal save of all nine heroes fits the sealed cookie and reads back wh
   for (const h of P.HERO_ORDER) {
     p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
+    p.bt[h] = 14400; // his longest run (28 October 2026)
     p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
   }
   await withServer(async (base) => {

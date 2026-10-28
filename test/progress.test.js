@@ -206,6 +206,18 @@ test('the ultimate is locked until a run with the hero lasts two minutes: no fur
   }, p);
 });
 
+// The ranks the gold in hand buys (the results' line, the title's coin on UPGRADES: 28 October 2026):
+// of what is for sale only, so never the Phoenix Heart before its milestone.
+test('the gold in hand buys ranks of what is for sale, the Phoenix Heart only once it is', () => {
+  const p = P.defaultProfile();
+  p.gold = 1e6;
+  assert.equal(P.affordableRanks(p), P.UPGRADES.length - 1, 'all but the Phoenix Heart');
+  p.gold = 260;
+  assert.equal(P.affordableRanks(p), 17);
+  p.gold = 0;
+  assert.equal(P.affordableRanks(p), 0);
+});
+
 test('a run pays a wage for its time at the difficulty\'s rate, and every first Armory rank is half price', () => {
   const r = P.runReward(P.sanitizeRun({ ...RUN, diff: 'hard', time: 600, realTime: 600, gold: 100 }));
   assert.deepEqual([r.collected, r.wage, r.total], [150, 600 * 0.5 * 1.5, 150 + 450]);

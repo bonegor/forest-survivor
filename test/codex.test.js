@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { CodexScreen, codexLayout, codexTab, CODEX_TILE, menuEntries } from '../public/js/ui/screens.js';
-import { chipRows } from '../public/js/ui/gamescreen.js';
+import { chipRows, chipPages, chipView, TALLY } from '../public/js/ui/gamescreen.js';
 import { codexEntries, codexRecord, nearestLocks } from '../public/js/ui/ladder.js';
 import { UI } from '../public/js/ui/ui.js';
 import { buildSprites, SPR } from '../public/js/engine/sprites.js';
@@ -93,6 +93,23 @@ test('the results\' UNLOCKED rows keep within the panel', () => {
     for (const row of rows) assert.ok(row.reduce((s, c) => s + c.w, 0) + 10 * (row.length - 1) <= w, 'no row wider than the panel');
   }
   assert.deepEqual(chipRows([], 300), [], 'nothing opened: no rows');
+});
+
+// More rows than the panel has room for come a page at a time, each row on one page, the chips of a
+// page one by one (the review's C5, 28 October 2026): nothing lost behind a "+N MORE".
+test("the results' UNLOCKED rows come a page at a time, their chips one by one", () => {
+  const rows = chipRows(codexEntries(everything()).filter((e) => !e.start), 277);
+  const pages = chipPages(rows, 2);
+  assert.deepEqual(pages.flat(), rows, 'every row on one page, in order');
+  assert.ok(pages.every((p) => p.length >= 1 && p.length <= 2));
+  assert.ok(pages.length > 1, 'more than one page');
+  const chips = (p) => p.flat().filter((c) => c.e).length;
+  assert.deepEqual(chipView(pages, 0), { page: 0, shown: 1, first: true }, 'the first chip at once');
+  assert.equal(chipView(pages, TALLY.row * 2.5).shown, Math.min(3, chips(pages[0])), 'one every TALLY.row');
+  const next = chipView(pages, chips(pages[0]) * TALLY.row + TALLY.page + 1e-6);
+  assert.equal(next.page, 1, 'a page held, then the next');
+  assert.equal(chipView([rows.slice(0, 1)], 1e3).page, 0, 'a single page stays');
+  assert.equal(chipView([rows.slice(0, 1)], 1e3).shown, chips([rows.slice(0, 1)]));
 });
 
 test('the HUD draws the slots a run hasn\'t opened and a shut ultimate locked', () => {

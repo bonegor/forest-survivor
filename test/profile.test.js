@@ -28,7 +28,7 @@ test('encode/decode round-trips and rejects junk', () => {
 test('every hero in six legendaries, and every record at its most, still fits the cookie', () => {
   const p = P.defaultProfile();
   Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, heroes: [...P.HERO_ORDER] });
-  p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999, time: 14400, gold: 1e9, bosses: 9999 };
+  p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999, time: 14400, gold: 1e9, bosses: 9999, combo: 1e7 };
   for (const m of P.WIN_MODES) p.wins[m] = [1e6, 1e6, 1e6];
   for (const u of P.UPGRADES) p.up[u.id] = u.max;
   // Progression (shared/progress.js): everything open, and the most a save from before was given.
@@ -43,10 +43,12 @@ test('every hero in six legendaries, and every record at its most, still fits th
   for (const h of P.HERO_ORDER) {
     p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
+    p.bt[h] = 14400; // his longest run (28 October 2026)
     p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
   }
   const clean = P.sanitizeProfile(p);
   assert.equal(typeof P.packProfile(clean).heroes, 'number', 'the heroes kept as bits');
+  assert.ok(typeof P.packProfile(clean).ranked === 'string' && typeof P.packProfile(clean).bt === 'string', "each hero's times kept as strings");
   assert.deepEqual(clean.gear, p.gear, 'all of it is valid');
   const json = JSON.stringify(P.packProfile(clean));
   // The server seals at most about 3 000 characters of JSON into a 4 096-character cookie.
@@ -370,4 +372,30 @@ test('a win marks its difficulty on the hero: Veteran, Elite, and a Nightmare as
   assert.ok(r.ok);
   assert.equal(r.profile.feats.archer, P.FEAT.survivalHard, 'a Normal win: the any-win star alone');
   assert.equal(P.sanitizeProfile({ feats: { knight: 1023 } }).feats.knight, 1023, 'every mark kept');
+});
+
+// Each hero's longest run on the clock, in any mode (28 October 2026, the review's C4): the hero
+// screen, the results' NEXT bar and the Codex's ultimate bars. A save from before has his Ranked best
+// for it; the cookie keeps both lists as strings, and an object from before reads back too.
+test("each hero's longest run is kept, from any mode, and read back from the cookie", () => {
+  let p = P.applyRun(P.defaultProfile(), { mode: 's15', diff: 'medium', hero: 'knight', time: 271, gold: 0 }).profile;
+  assert.equal(p.bt.knight, 271);
+  p = P.applyRun(p, { mode: 's15', diff: 'medium', hero: 'knight', time: 100, gold: 0 }).profile;
+  assert.equal(p.bt.knight, 271, 'a shorter run keeps it');
+  assert.equal(P.sanitizeProfile({ v: 4, heroes: ['knight', 'archer'], ranked: { archer: 400 } }).bt.archer, 400, 'a Ranked best of before');
+  assert.equal(typeof P.packProfile(p).bt, 'string');
+  assert.deepEqual(P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(p)))).bt, p.bt, 'and back');
+  // The Codex's ultimate bar fills with it.
+  const half = P.applyRun(P.defaultProfile(), { mode: 's15', diff: 'medium', hero: 'knight', time: 60, gold: 0 }).profile;
+  assert.equal(P.progressList(half).find((e) => e.type === 'ult' && e.id === 'knight').progress, 0.5);
+});
+
+// The longest kill streak a run has made (28 October 2026, the review's C8a), for the results'
+// NEW BEST: never more than the run's kills.
+test("the best combo is kept, a run's no more than its kills", () => {
+  let p = P.applyRun(P.defaultProfile(), { mode: 's15', diff: 'medium', time: 120, kills: 40, combo: 999, level: 3 }).profile;
+  assert.equal(p.best.combo, 40);
+  p = P.applyRun(p, { mode: 's15', diff: 'medium', time: 120, kills: 40, combo: 12, level: 3 }).profile;
+  assert.equal(p.best.combo, 40, 'a lesser one keeps it');
+  assert.equal(P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(p)))).best.combo, 40, 'read back');
 });

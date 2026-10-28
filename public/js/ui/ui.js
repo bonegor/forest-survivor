@@ -357,4 +357,17 @@ export function padlock(ctx, x, y, s = 1, body = '#5a6988', shackle = '#8b9bb4')
   ctx.drawImage(c, Math.round(x), Math.round(y), 9 * s, 9 * s);
 }
 
+// A NEW mark, 5 x 5 at (x, y): a dot in its colour on a dark rim, a glint in its corner (the Codex's
+// new entries and their tabs, the title's CODEX: the review's C5, 28 October 2026).
+export function newDot(ctx, x, y, color = '#9ee562') {
+  x = Math.round(x);
+  y = Math.round(y);
+  ctx.fillStyle = '#181425';
+  ctx.fillRect(x, y, 5, 5);
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 1, y + 1, 3, 3);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x + 1, y + 1, 1, 1);
+}
+
 export { drawText, textCanvas, textWidth, drawRich, wrapText };

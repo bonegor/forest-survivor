@@ -95,6 +95,51 @@ export const saveBox = {
   },
 };
 
+// What this browser has been shown (the review's C5, 28 October 2026), for the NEW marks: the Codex
+// entries looked at (codex) and the milestones' weapons and relics a level-up has offered (offered),
+// as keys (ui/ladder.js seenKey, ui/gamescreen.js offerKey). A convenience, never the save:
+// localStorage only, no cookie, and where the browser keeps nothing (a private window, storage off)
+// there are no marks at all, rather than marks that never go. Its first fill (start) is all a save
+// has open then, so only what opens from there on is marked.
+const SEEN = DEBUG ? 'fs_dseen' : 'fs_seen';
+export const seenBox = {
+  // { codex: Set, offered: Set }, or null: no localStorage, or nothing kept in it yet.
+  read() {
+    const s = browserStore();
+    if (!s) return null;
+    try {
+      const raw = s.getItem(SEEN), o = raw == null ? null : JSON.parse(raw);
+      if (!o || typeof o !== 'object') return null;
+      const set = (a) => new Set(Array.isArray(a) ? a.filter((k) => typeof k === 'string') : []);
+      return { codex: set(o.codex), offered: set(o.offered) };
+    } catch {
+      return null; // refused, or not ours to read
+    }
+  },
+  write(seen) {
+    try {
+      browserStore()?.setItem(SEEN, JSON.stringify({ codex: [...seen.codex], offered: [...seen.offered] }));
+    } catch {} // full, or refused: the marks stay as they were
+  },
+  // The first fill, once a browser: { codex: [keys], offered: [keys] }.
+  start(keys) {
+    if (browserStore() && !this.read()) this.write({ codex: new Set(keys.codex), offered: new Set(keys.offered) });
+  },
+  // Keys added to one list ('codex' or 'offered'); nothing without one.
+  add(list, keys) {
+    const seen = this.read();
+    if (!seen) return;
+    const n = seen[list].size;
+    for (const k of keys) seen[list].add(k);
+    if (seen[list].size > n) this.write(seen);
+  },
+  clear() {
+    try {
+      browserStore()?.removeItem(SEEN);
+    } catch {}
+  },
+};
+
 async function api(path, body) {
   const res = await fetch('/api/' + path, body === undefined
     ? { credentials: 'same-origin', cache: 'no-store' }
@@ -319,6 +364,7 @@ export const store = {
   },
 
   async reset() {
+    seenBox.clear(); // a fresh start's NEW marks start afresh (the title fills them again)
     if (this.mode === 'server') {
       const data = await api('reset', {});
       this.profile = P.sanitizeProfile(data.profile);

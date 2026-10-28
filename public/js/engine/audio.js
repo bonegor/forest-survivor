@@ -286,6 +286,7 @@ const LIMITS = {
   rumble: [1, 1], thunder: [0.8, 2], bigthunder: [4, 1], wetstep: [0.15, 2], lordsting: [0.5, 1], heartbeat: [0.3, 1], warnswarm: [1, 1], warnring: [1, 1], warnpack: [1, 1], warnstand: [1, 1],
   levelup: [0.15, 1], chest: [0.3, 1], bossslain: [1, 1], lordslain: [0.6, 1], revive: [1, 1], record: [1, 1], unlock: [1, 1],
   thaw: [0.5, 1], banish: [0.1, 1], find: [0.12, 2], treasure: [0.5, 1], chestland: [0.15, 2], coinland: [0.02, 6],
+  stamp: [0.1, 2], // the results' gold formula, a beat (TALLY.beat) apart
   // A combo's tiers: the game asks for one sting a frame at most and four a combo (Game.update),
   // so none is held back. Two tiers come to a few frames apart ring both, the second a step
   // higher; at 0.3 s apart the second was dropped while its word popped (28 October 2026).
@@ -488,6 +489,14 @@ const SFX = {
     tone(t + 0.02, { type: 'triangle', f0: 784, dur: 0.35, vol: 0.05 });
     noise(t, { f0: 900, f1: 120, dur: 0.18, vol: 0.18 });
   },
+  // A step of the results' gold formula stamped in (the difficulty's rate above ×1, the wage, a win's
+  // bonus): a short pitched thunk, a step up the chest's scale each (ui/gamescreen.js goldSteps, the
+  // review's C11, 28 October 2026). Synthesised, as every sound of the screens.
+  stamp: (t, o) => {
+    tone(t, { type: 'sine', f0: 160 * o.p, f1: 70 * o.p, dur: 0.16, vol: 0.22 });
+    tone(t, { type: 'triangle', f0: 659 * o.p, dur: 0.14, vol: 0.06 });
+    noise(t, { filter: 'bandpass', f0: 1800 * o.p, q: 2, dur: 0.06, vol: 0.12 });
+  },
   die: (t, o) => {
     noise(t, { f0: 1800 * o.p, f1: 200, dur: 0.12, vol: 0.12, pan: o.pan });
     tone(t, { type: 'square', f0: 300 * o.p, f1: 60, dur: 0.1, vol: 0.05, pan: o.pan });
@@ -514,9 +523,11 @@ const SFX = {
     arp(t, [262, 330, 392, 523], 0.07, { type: 'triangle', dur: 0.3, vol: 0.1 });
     tone(t + 0.35, { type: 'square', f0: 1568, dur: 0.45, vol: 0.05, attack: 0.01 });
   },
-  pick: (t) => {
-    tone(t, { type: 'square', f0: 784, dur: 0.06, vol: 0.06 });
-    tone(t + 0.07, { type: 'square', f0: 1175, dur: 0.15, vol: 0.06 });
+  // A card taken, a box ticked, a results row stamped NEW BEST: its pitch the caller's (the results'
+  // NEW BEST rows step up, 28 October 2026; every other caller gives none and hears it as ever).
+  pick: (t, o) => {
+    tone(t, { type: 'square', f0: 784 * o.p, dur: 0.06, vol: 0.06 });
+    tone(t + 0.07, { type: 'square', f0: 1175 * o.p, dur: 0.15, vol: 0.06 });
   },
   // A combo's new tier (Game.update, 28 October 2026): a rising sweep into a bright chord stab, a
   // step up the chord each tier (o.size 1-4: root, third, fifth, octave) and a shimmer growing with

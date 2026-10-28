@@ -23,11 +23,13 @@ test('each beat has a stinger of its own, and each is limited', () => {
   // the gold counter (28 October 2026).
   for (const s of ['find', 'treasure', 'chestland', 'coinland']) assert.ok(names.includes(s) && limited(s), s);
   assert.ok(names.includes('combo') && limited('combo'), "a combo's new tier has its sting");
+  // A step of the results' gold formula stamped in (the review's C11, 28 October 2026).
+  assert.ok(names.includes('stamp') && limited('stamp'), "the results' gold has its stamp");
 });
 
 test('the music ducks about 8 dB for about 1.2 s under every T4 and T5 stinger', () => {
   assert.equal(DUCK.db, -8);
   assert.ok(DUCK.secs >= 1 && DUCK.secs <= 1.5);
   for (const s of ['evolve', 'epic', 'legendary', 'bossslain', 'revive', 'record', 'unlock']) assert.ok(DUCKED.has(s), s);
-  for (const s of ['levelup', 'chest', 'coin', 'milestone', 'find', 'treasure', 'chestland', 'coinland', 'combo', ...BEATS]) assert.ok(!DUCKED.has(s), `${s} is no jackpot`);
+  for (const s of ['levelup', 'chest', 'coin', 'milestone', 'find', 'treasure', 'chestland', 'coinland', 'combo', 'stamp', ...BEATS]) assert.ok(!DUCKED.has(s), `${s} is no jackpot`);
 });

@@ -15,13 +15,13 @@ import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { PASSIVES, FILLERS, BLESSING } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
-import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, PROGRESS, needText } from '../shared/profile.js';
+import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
 import { buttonFace } from './skin.js';
-import { OptionsScreen } from './screens.js';
-import { saveSettings } from '../engine/storage.js';
+import { OptionsScreen, codexBar } from './screens.js';
+import { saveSettings, seenBox } from '../engine/storage.js';
 
 export class GameScreen {
   enter(app, params = {}) {
@@ -46,6 +46,10 @@ export class GameScreen {
     this.game.gold = this.game.stats.gold = params.prologueGold || 0;
     // Nothing of the run is saved while it lasts: its results reach the save when it ends
     // (ResultsOverlay), by death, Quit Run or victory.
+    // The seen list as the run began (engine/storage.js seenBox), for the level-up's FIRST FIND; the
+    // marks it makes are written when the run ends, as nothing is while it lasts (the hints' rule).
+    this.seen = seenBox.read();
+    this.offeredNew = [];
     this.overlay = null;
     this.away = false; // the game was left; the run pauses once it is back in play (frame)
     // The touch buttons in play: the pause button and the fury orb (touchFor).
@@ -368,6 +372,16 @@ const backOf = (c, completes) => (completes ? 'gold' : c.isNew ? (c.type === 'we
 // (Game.eventWarning, the owner's "N of M"). Nothing for a level alone. ({ at, of }:
 // LevelUpOverlay.chain.)
 export const chainStamp = ({ at, of }) => (of <= 1 ? '' : at === 1 ? `×${of}` : `${at} of ${of}`);
+// FIRST FIND (the review's C5, 28 October 2026): a level-up card's tag the first time this browser is
+// offered a weapon or relic a milestone opened (shared/progress.js locks), in place of NEW WEAPON or
+// NEW RELIC. offerKey: its key in the seen list (engine/storage.js seenBox; ui/ladder.js seenKey's
+// letters). Never without a seen list.
+export const offerKey = (c) => `${c.type === 'weapon' ? 'w' : 'r'}:${c.id}`;
+export function firstFind(c, seen) {
+  if (!seen || !c.isNew || (c.type !== 'weapon' && c.type !== 'passive')) return false;
+  const type = c.type === 'weapon' ? 'weapon' : 'relic';
+  return PROGRESS.locks.some((l) => !l.retired && l.type === type && l.id === c.id) && !seen.offered.has(offerKey(c));
+}
 
 export class LevelUpOverlay {
   constructor(gs) {
@@ -397,6 +411,7 @@ export class LevelUpOverlay {
     // What each card completes (an evolution, or UNTOLD while unknown), its back, and when it flips up.
     this.completes = this.choices.map((c) => toldCompletes(this.g, c));
     this.backs = this.choices.map((c, i) => backOf(c, this.completes[i]));
+    this.first = this.choices.map((c) => this.markFirst(c)); // FIRST FIND, in place of NEW
     this.flips = this.choices.map((c, i) => flipAt(i));
     this.readyAt = cardsReadyAt(this.choices.length);
     // Nothing but the fillers (the whole build maxed, which lasts unless a Phoenix Heart is
@@ -409,6 +424,17 @@ export class LevelUpOverlay {
     this.t = 0;
     this.gs.app.ui.focusId = 'c0';
     this.lastCard = 'c0';
+  }
+
+  // Whether a card is this browser's first offer of a milestone's weapon or relic (firstFind): then
+  // it is offered, kept in the run's seen list and among the marks written as the run ends.
+  markFirst(c) {
+    const seen = this.gs.seen, first = firstFind(c, seen);
+    if (first) {
+      seen.offered.add(offerKey(c));
+      (this.gs.offeredNew ??= []).push(offerKey(c));
+    }
+    return first;
   }
 
   // Whether card i can't be taken yet: the screen's first moments (LEVELUP_DELAY, or a chain's or
@@ -474,9 +500,10 @@ export class LevelUpOverlay {
       this.choices[i] = next;
       this.completes[i] = toldCompletes(g, next);
       this.backs[i] = backOf(next, this.completes[i]);
+      this.first[i] = this.markFirst(next);
       this.flips[i] = this.t + BANISH_GO;
     } else {
-      for (const a of [this.choices, this.completes, this.backs, this.flips]) a.splice(i, 1);
+      for (const a of [this.choices, this.completes, this.backs, this.flips, this.first]) a.splice(i, 1);
       this.fillersOnly = g.fillersOnly();
     }
     return true;
@@ -700,13 +727,15 @@ export class LevelUpOverlay {
       }
       const icon = SPR[info.icon].frames[0];
       const blink = Math.floor(this.t * 4) % 2;
-      const tagColor = info.isNew ? (blink ? '#fee761' : '#feae34') : '#8b9bb4';
+      // FIRST FIND in green over NEW's gold (firstFind); its short form where the card is narrow.
+      const first = this.first?.[i], full = first ? 'FIRST FIND' : info.tag, short = first ? 'FIRST!' : info.isNew ? 'NEW!' : info.tag;
+      const tagColor = first ? (blink ? '#ffffff' : '#9ee562') : info.isNew ? (blink ? '#fee761' : '#feae34') : '#8b9bb4';
       if (vertical) {
         // The icon at the left over its pips; name and tag on top, the text under them.
         ctx.drawImage(smoothScaled(icon, 1), x + 6, y + lift + 5);
         drawPips(ctx, x + 22, y + lift + 41, c.level, info.max, this.t);
         drawText(ctx, info.name, x + 44, y + lift + 6, { color: info.color });
-        const tag = textWidth(info.name) + textWidth(info.tag) + 58 <= w ? info.tag : info.isNew ? 'NEW!' : info.tag;
+        const tag = textWidth(info.name) + textWidth(full) + 58 <= w ? full : short;
         if (tag) drawText(ctx, tag, x + w - 6, y + lift + 6, { align: 'right', color: tagColor });
         const lines = wrapText(info.desc, w - 52), room = Math.min(gold || info.hint ? 3 : 4, Math.floor((h - 26) / 9));
         // Its change in numbers (cardChange), in green, on the lines the text leaves free.
@@ -733,8 +762,8 @@ export class LevelUpOverlay {
           drawText(ctx, ln, x + w / 2, ty, { align: 'center', color: info.color });
           ty += 9;
         }
-        if (info.tag) {
-          const tag = textWidth(info.tag) <= w - 8 ? info.tag : 'NEW!';
+        if (full) {
+          const tag = textWidth(full) <= w - 8 ? full : short;
           drawText(ctx, tag, x + w / 2, ty + 1, { align: 'center', color: tagColor });
           ty += 11;
         }
@@ -1602,25 +1631,69 @@ export class PauseOverlay {
 // ---------------------------------------------------------------- results --
 
 // How the results tell the run (ResultsOverlay): the title first; then the rows tick in `row`
-// seconds apart from `rows` on, a soft tick each, a record broken stamped NEW BEST; the gold
-// counts up over goldMin to goldMax seconds (the more, the longer) with coins climbing in pitch,
-// and lands with a thunk. Any key, click or tap shows it all at once; only then does RETURN TO
-// CAMP take a press.
-export const TALLY = { rows: 0.6, row: 0.16, weapon: 0.08, gap: 0.3, goldMin: 1.5, goldMax: 2.5 };
+// seconds apart from `rows` on, a soft tick each, a record broken stamped NEW BEST, each a step
+// higher; the gold found counts up with coins climbing in pitch, then each step of the formula is
+// stamped in `beat` apart (goldSteps), all within goldMin to goldMax seconds (the more, the longer),
+// landing with a thunk. The UNLOCKED chips then come in one every `row`, a page of them held
+// `page` seconds where there are more than fit (chipView). Any key, click or tap shows it all at
+// once; only then does RETURN TO CAMP take a press.
+export const TALLY = { rows: 0.6, row: 0.16, weapon: 0.08, gap: 0.3, goldMin: 1.5, goldMax: 2.5, beat: 0.35, countMin: 0.6, page: 2.4 };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
-// What gold buys at the Armory now: how many ranks are affordable, or how far the cheapest is.
+// What gold buys at the Armory now: how many ranks are affordable (affordableRanks: for sale, not at
+// their top), or how far the cheapest one for sale is.
 export function armoryLine(p) {
-  let n = 0, near = null;
+  const n = affordableRanks(p);
+  if (n) return `${n} Armory rank${n > 1 ? 's' : ''} affordable`;
+  let near = null;
   for (const u of UPGRADES) {
     const rank = p.up[u.id] || 0;
-    if (rank >= u.max) continue;
+    if (rank >= u.max || !upgradeOpen(p, u)) continue;
     const cost = upgradeCost(u.id, rank);
-    if (cost <= p.gold) n++;
-    else if (!near || cost - p.gold < near.need) near = { need: cost - p.gold, name: `${u.name} ${ROMAN[rank] || rank + 1}` };
+    if (cost > p.gold && (!near || cost - p.gold < near.need)) near = { need: cost - p.gold, name: `${u.name} ${ROMAN[rank] || rank + 1}` };
   }
-  if (n) return `${n} Armory rank${n > 1 ? 's' : ''} affordable`;
   return near ? `+${fmtNum(near.need)} gold to ${near.name}` : 'The Armory is complete';
+}
+
+// The review's C4 (28 October 2026): when the next goal is a time with the hero just played (the
+// next hero's five minutes), the NEXT line is that distance, as a bar: '04:31 of 05:00 with the
+// Knight · 29 s from the Ranger'. This run's time, the real distance only; a run that made it has
+// its unlock told above and the goal has moved on. Null for any other goal.
+//   { k: this run's share of the goal, need: its seconds, text }
+export function heroGoalBar(goal, res) {
+  if (goal?.type !== 'survive' || goal.hero !== res.hero) return null;
+  const need = goal.minutes * 60, left = need - res.time;
+  if (left <= 0) return null;
+  const gap = left < 60 ? `${left} s` : fmtTime(left);
+  return { k: clamp(res.time / need, 0, 1), need, text: `${fmtTime(res.time)} of ${fmtTime(need)} with the ${HEROES[res.hero].title} · ${gap} from the ${HEROES[goal.unlocks].title}` };
+}
+
+// The results' gold as a short cascade (the review's C11, 28 October 2026): the gold found counts
+// up, then a beat apart each step is stamped in, the total stepping up to it: the difficulty's rate
+// (a Nightmare's in it) where it is above 1, the wage for the time on the clock, a win's bonus. A rate
+// of 1 or under (Normal's 0.75) is no stamp, never told as a step down: the count is of the gold at
+// that rate already, the formula saying "× 0.75" beside it from the start. All in about the span the
+// single count took (goldFor). What is paid is runReward's, as ever.
+//   { count: its seconds, countTo, stamps: [{ key: 'mult' | 'wage' | 'bonus', to, at }], end }
+export function goldSteps(r, span) {
+  const up = r.multiplier > 1 && r.gold > 0, wage = r.wage || 0, bonus = r.bonus || 0, stamps = [];
+  if (up) stamps.push({ key: 'mult', to: r.collected });
+  if (wage) stamps.push({ key: 'wage', to: r.collected + wage });
+  if (bonus) stamps.push({ key: 'bonus', to: r.collected + wage + bonus });
+  const countTo = up ? r.gold : r.collected;
+  const count = countTo > 0 ? Math.max(TALLY.countMin, span - stamps.length * TALLY.beat) : 0;
+  stamps.forEach((st, i) => (st.at = count + (i + 1) * TALLY.beat));
+  return { count, countTo, stamps, end: stamps.length ? stamps[stamps.length - 1].at : count };
+}
+// The formula's parts, in the longest of its three forms whose whole line fits w: the gold found
+// (with its rate, where that is no stamp of its own), then one part for each stamp.
+export function goldParts(r, gold, time, plan, w) {
+  const m = r.multiplier, own = plan.stamps.some((st) => st.key === 'mult');
+  const forms = [0, 1, 2].map((form) => {
+    const part = { mult: ` × ${m}`, wage: ` + ${r.wage} ${form === 0 ? `wage for ${fmtTime(time)}` : 'wage'}`, bonus: ` + ${r.bonus} ${form < 2 ? 'victory bonus' : 'bonus'}` };
+    return [`${form < 2 ? 'Collected' : 'Gold'} ${gold}${own ? '' : ` × ${m}`}`, ...plan.stamps.map((st) => part[st.key])];
+  });
+  return forms.find((p) => textWidth(p.join('')) <= w) || forms[2];
 }
 
 // The results' UNLOCKED: what the run opened (reward.unlocked), as chips of an icon and a name in
@@ -1647,20 +1720,36 @@ export function chipRows(list, maxW) {
   return rows;
 }
 
-// One row of those chips, centred on cx, its icons' tops at y; `more` of them left out told at its
-// end, as many more of the row's chips giving way to that as keep it maxW wide.
-function drawChips(ctx, row, cx, y, more, maxW) {
-  row = [...row];
-  const width = () => row.reduce((s, c) => s + c.w, 0) + 10 * (row.length - 1) + (more > 0 ? 10 + textWidth(`+${more} MORE`) : 0);
-  while (more > 0 && width() > maxW && row.length > 1 && row[row.length - 1].e) {
-    row.pop();
-    more++;
+// The UNLOCKED rows a page at a time, perPage rows each (what room the panel has).
+export const chipPages = (rows, perPage) => {
+  const n = Math.max(1, perPage), out = [];
+  for (let i = 0; i < rows.length; i += n) out.push(rows.slice(i, i + n));
+  return out;
+};
+// What of them shows dt seconds after they began (the review's C5, 28 October 2026): the page, and
+// how many of its chips are in, one every TALLY.row; a page full holds TALLY.page, then the next
+// comes; after the last they go round again, whole (first: false). A single page stays. Where there
+// are more than fit, nothing is lost behind a "+N MORE".
+//   { page, shown, first }
+export function chipView(pages, dt) {
+  const n = pages.map((rows) => rows.flat().filter((c) => c.e).length);
+  let t = Math.max(0, dt);
+  for (let i = 0; i < pages.length; i++) {
+    if (t < n[i] * TALLY.row + TALLY.page) return { page: i, shown: Math.min(n[i], Math.floor(t / TALLY.row) + 1), first: true };
+    t -= n[i] * TALLY.row + TALLY.page;
   }
-  const tail = more > 0 ? `+${more} MORE` : '', total = width();
-  let x = Math.round(cx - total / 2);
+  const page = Math.floor(t / TALLY.page) % pages.length;
+  return { page, shown: n[page], first: false };
+}
+
+// One row of those chips, centred on cx, its icons' tops at y, laid out whole so nothing moves as
+// they come in: its label always, its first `shown` chips, and `tail` at its end (a page's "1/2").
+function drawChips(ctx, row, cx, y, tail, shown = row.length) {
+  const total = row.reduce((s, c) => s + c.w, 0) + 10 * (row.length - 1) + (tail ? 10 + textWidth(tail) : 0);
+  let x = Math.round(cx - total / 2), k = 0;
   for (const c of row) {
     if (c.label) drawText(ctx, c.label, x, y + 4, { color: ['#ffffff', '#9ee562', '#63c74d'] });
-    else {
+    else if (k++ < shown) {
       codexIcon(ctx, c.e, x, y, false);
       drawText(ctx, fitText(chipName(c.e), c.w - 19), x + 19, y + 4, { color: '#fee761' });
     }
@@ -1668,6 +1757,10 @@ function drawChips(ctx, row, cx, y, more, maxW) {
   }
   if (tail) drawText(ctx, tail, x, y + 4, { color: '#8b9bb4' });
 }
+
+// The second circle's weapons (shared/progress.js deep), revealed by the first night won: the
+// results say how many (11; the review's C5 counted 10).
+const SECOND_CIRCLE = PROGRESS.locks.filter((l) => l.deep && !l.retired).length;
 
 // The locks nearest to opening, as lines under the gold: 'NEXT: Frost Nova · Survive 3:00 in a run
 // — 2:14 best', all in the longest form that fits every one of them, cut to fit at the last.
@@ -1714,12 +1807,25 @@ class ResultsOverlay {
     this.wounds = woundLines(res);
     // Quit Run: no win and no fall (Game.finish's died). Its own neutral title, and the title piece.
     this.quit = !res.victory && !res.died;
-    // The records as they stood before this run: a row beating one is stamped NEW BEST.
-    this.before = { ...gs.app.store.profile.best };
+    // The records as they stood before this run: a row beating one is stamped NEW BEST. All read
+    // before submit, which the browser's own store applies at once.
+    const prof = gs.app.store.profile;
+    this.before = { ...prof.best };
+    this.firstRun = !prof.runs; // no run on record yet: every row's record is nought
+    this.btBefore = prof.bt?.[res.hero] || 0; // his longest run before this one (the NEXT bar's tick)
+    // The first night won shows the second circle (shared/profile.js hiddenLock): the results say so.
+    this.firstNight = res.victory && res.mode === 's15' && !(prof.wins?.s15 || []).some((n) => n > 0);
     this.rows = this.tally();
     this.ticked = 0; // rows that have ticked in
     this.goldAt = null; // when the gold began to count (this.t)
+    this.plan = null; // the gold's cascade (goldSteps): its plan, the stamps in, the last one's moment
+    this.stamped = 0;
+    this.stampAt = null;
+    this.chipsAt = null; // when the UNLOCKED chips began to come in (this.t), and how many were heard
+    this.chipsHeard = 0;
     this.landed = false; // the count is done (or skipped): RETURN TO CAMP takes a press
+    // The level-ups' FIRST FINDs of this run, kept now it is over (by a fall, Quit Run or a win).
+    if (gs.offeredNew?.length) seenBox.add('offered', gs.offeredNew);
     this.submit();
     // A win's jingle is heard in full, the title piece after it; a fall's lament plays now; a quit
     // goes back to the title piece.
@@ -1729,17 +1835,22 @@ class ResultsOverlay {
     gs.app.ui.focusId = 'camp';
   }
 
-  // The rows: [label, value, record broken].
+  // The rows: [label, value, record broken]: every record the profile keeps (best) stamped where
+  // this run beat it (the review's C8a, 28 October 2026).
   tally() {
     const res = this.res, st = res.stats, b = this.before, ranked = res.mode === 'ranked';
     const rows = [[ranked ? 'Survived' : 'Time', fmtTime(res.time), res.mode === 's15' && res.time > (b.s15 || 0)]];
     if (ranked) rows.push(['Rank', rankTitle(res.time), false]);
-    if (res.mode === 'dungeon') rows.push(['Floor reached', String(res.floor), false]);
+    // A won Dungeon Run counts as its fourth floor, as the save keeps it (applyRun best.dungeon) and
+    // the Records say Conquered.
+    if (res.mode === 'dungeon') rows.push(['Floor reached', res.victory ? 'Conquered' : String(res.floor), (res.victory ? 4 : res.floor) > (b.dungeon || 0)]);
     rows.push(
       ['Level', String(res.level), res.level > (b.level || 0)],
       ['Kills', fmtNum(res.kills), res.kills > (b.kills || 0)],
-      ['Best combo', String(st.maxCombo), false],
-      ['Bosses slain', String(st.bosses), false],
+      // The combo has been on record since 28 October 2026: a save from before has none to beat yet.
+      ['Best combo', String(st.maxCombo), st.maxCombo > (b.combo || 0) && ((b.combo || 0) > 0 || this.firstRun)],
+      ['Bosses slain', String(st.bosses), st.bosses > (b.bosses || 0)],
+      ['Gold found', fmtNum(res.gold), res.gold > (b.gold || 0)],
       ['Damage dealt', fmtNum(st.damage), false],
     );
     return rows;
@@ -1749,7 +1860,7 @@ class ResultsOverlay {
     const res = this.res;
     this.reward = null;
     this.gs.app.store.submitRun({
-      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
+      mode: res.mode, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
     }).then((r) => {
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
@@ -1772,6 +1883,7 @@ class ResultsOverlay {
   skip() {
     this.t = Math.max(this.t, this.rowsEnd + TALLY.gap);
     this.ticked = this.rows.length;
+    this.stampAt = null;
     if (this.reward && !this.reward.unsaved) {
       this.shown = this.reward.total;
       this.land();
@@ -1846,7 +1958,11 @@ class ResultsOverlay {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
       for (const k of this.reward.unlocks || []) notes.push([unlockText(k), '#fee761']);
-      if (!this.announced && (this.reward.unlocks?.length || rk?.personalBest)) {
+      // The first night won reveals the second circle (the review's C5, 28 October 2026): told here,
+      // its weapons marked NEW in the Codex (ui/ladder.js isNewEntry).
+      const circle = this.firstNight && !this.reward.unsaved;
+      if (circle) notes.push([`THE SECOND CIRCLE STIRS · ${SECOND_CIRCLE} weapons revealed`, '#fee761']);
+      if (!this.announced && (this.reward.unlocks?.length || rk?.personalBest || circle)) {
         this.announced = true;
         sfx(rk?.personalBest ? 'record' : 'unlock');
       }
@@ -1864,8 +1980,11 @@ class ResultsOverlay {
     const near = saved ? (this.near ??= nearestLocks(this.gs.app.store.profile, 2)) : [];
     const cap = H - 52 - L.height * s;
     let tight = 16 + Math.max(this.rows.length * 10, side ? nw * 15 : 0) + (side ? 0 : nw * 15 + 4) + notes.length * 10 + 55;
-    const chips = chipRows(unlocked, pw - 16);
-    const nChips = Math.min(chips.length, Math.max(1, Math.floor((cap - tight) / UNLOCK_ROW)));
+    let chips = chipRows(unlocked, pw - 16);
+    const fit = Math.max(1, Math.floor((cap - tight) / UNLOCK_ROW));
+    // More rows than fit: a page at a time (chipView), each row with room at its end for its "1/2".
+    if (chips.length > fit) chips = chipRows(unlocked, pw - 16 - 10 - textWidth('9/9'));
+    const nChips = Math.min(chips.length, fit);
     const unH = unlocked.length ? nChips * UNLOCK_ROW : 0;
     // A fall's wounds and their tip (woundLines) take the room the rest leaves, the tip giving way
     // first, then the wounds, before the nearest locks do (27 October 2026: on a 480x270 screen
@@ -1900,11 +2019,15 @@ class ResultsOverlay {
     const wFrom = TALLY.rows + this.rows.length * TALLY.row;
     let wy = side ? y + 8 : y + 14 + this.rows.length * 10;
     const wx = side ? x + 166 : x + 8;
+    // The one that dealt the most, marked MVP (the review's C8a, 28 October 2026), where there are two or more.
+    const mvp = res.weapons.length > 1 ? res.weapons.slice(0, 6).reduce((a, w) => (w.dmg > a.dmg ? w : a)) : null;
     res.weapons.slice(0, 6).forEach((w, j) => {
       if (this.t < wFrom + j * TALLY.weapon) return;
-      const def = WEAPONS[w.id];
+      const def = WEAPONS[w.id], star = w === mvp && w.dmg > 0;
       ctx.drawImage(SPR[def.icon].frames[0].c, wx, wy - 3);
-      drawText(ctx, fitText(def.name, x + pw - 74 - wx - 18), wx + 18, wy + 1, { color: def.evolved ? '#f77622' : '#c0cbdc' });
+      const name = fitText(def.name, x + pw - 74 - wx - 18 - (star ? textWidth('MVP') + 4 : 0));
+      drawText(ctx, name, wx + 18, wy + 1, { color: def.evolved ? '#f77622' : '#c0cbdc' });
+      if (star) drawText(ctx, 'MVP', wx + 18 + textWidth(name) + 4, wy + 1, { color: ['#ffffff', '#fee761', '#feae34'] });
       const secs = Math.max(1, res.time - (w.since || 0));
       drawText(ctx, `${fmtNum(w.dmg)}  ${fmtNum(w.dmg / secs)}/s`, x + pw - 8, wy + 1, { align: 'right', color: '#feae34' });
       wy += 15;
@@ -1913,12 +2036,26 @@ class ResultsOverlay {
     const gy = y + ph - 51 - nNear * 10;
     notes.forEach(([text, color], i) => drawText(ctx, fitText(text, pw - 12), W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
     if (this.landed && unH) {
-      if (!this.announced) {
-        this.announced = true;
-        sfx('unlock');
+      this.chipsAt ??= this.t;
+      const pages = chipPages(chips, nChips), view = chipView(pages, this.t - this.chipsAt);
+      // Each chip's first showing: the unlock's bell with the first, a note a step up the scale each.
+      if (view.first) {
+        const upto = pages.slice(0, view.page).reduce((n, rows) => n + rows.flat().filter((c) => c.e).length, 0) + view.shown;
+        while (this.chipsHeard < upto) {
+          if (!this.announced) {
+            this.announced = true;
+            sfx('unlock');
+          }
+          sfx('reveal', { pitch: SCALE[Math.min(SCALE.length - 1, this.chipsHeard++)] });
+        }
       }
-      const rows = chips.slice(0, nChips), more = unlocked.length - rows.flat().filter((c) => c.e).length;
-      rows.forEach((row, r) => drawChips(ctx, row, W / 2, gy - 6 - notes.length * 10 - unH + r * UNLOCK_ROW, r === rows.length - 1 ? more : 0, pw - 16));
+      const rows = pages[view.page], tail = pages.length > 1 ? `${view.page + 1}/${pages.length}` : '';
+      let left = view.shown;
+      rows.forEach((row, r) => {
+        const k = row.filter((c) => c.e).length;
+        drawChips(ctx, row, W / 2, gy - 6 - notes.length * 10 - unH + r * UNLOCK_ROW, r === rows.length - 1 ? tail : '', clamp(left, 0, k));
+        left -= k;
+      });
     }
     const unsaved = this.reward?.unsaved;
     const counting = this.reward && !unsaved && this.t >= this.rowsEnd + TALLY.gap;
@@ -1927,33 +2064,64 @@ class ResultsOverlay {
       drawText(ctx, fitText(`This run's gold isn't saved${why ? `: ${why}` : ''}`, pw - 12), W / 2, gy, { align: 'center', color: '#e43b44' });
       this.landed = true;
     } else if (counting) {
-      const total = this.reward.total;
+      // The gold picked up, the wage for the time on the clock (shared/progress.js wage) and a
+      // win's bonus, as a cascade (goldSteps). The gold as credited (runReward gold: within the cap,
+      // with gear sold), so the line adds up; an older server's reward says only what was picked up.
+      const r = this.reward, total = r.total, gold = r.gold ?? res.gold;
       this.goldAt ??= this.t;
+      const plan = (this.plan ??= goldSteps({ ...r, gold }, this.goldFor(total))), at = this.t - this.goldAt;
       if (!total) this.land(); // nothing to count
       if (!this.landed) {
-        const k = clamp((this.t - this.goldAt) / this.goldFor(total), 0, 1);
-        const before = this.shown;
-        this.shown = total * ease.outCubic(k);
-        // A coin a twentieth of the way, climbing in pitch.
-        const step = Math.max(1, total / 20);
-        if (Math.floor(this.shown / step) > Math.floor(before / step)) sfx('coin', { pitch: 1 + 0.6 * (this.shown / Math.max(1, total)) });
-        if (k >= 1) this.land();
+        if (!this.stamped) {
+          const k = plan.count > 0 ? clamp(at / plan.count, 0, 1) : 1, before = this.shown;
+          this.shown = plan.countTo * ease.outCubic(k);
+          // A coin a twentieth of the way, climbing in pitch.
+          const step = Math.max(1, plan.countTo / 20);
+          if (Math.floor(this.shown / step) > Math.floor(before / step)) sfx('coin', { pitch: 1 + 0.6 * (this.shown / Math.max(1, plan.countTo)) });
+        }
+        // Each stamp in its turn: the total steps up to it, a step on up the scale past the coins.
+        while (this.stamped < plan.stamps.length && at >= plan.stamps[this.stamped].at) {
+          this.shown = plan.stamps[this.stamped++].to;
+          this.stampAt = this.t;
+          sfx('stamp', { pitch: SCALE[Math.min(SCALE.length - 1, 3 + this.stamped)] });
+        }
+        if (at >= plan.end) {
+          this.shown = total;
+          this.land(); // the thunk, on the last stamp
+        }
       }
-      // The gold picked up, the wage for the time on the clock (shared/progress.js wage) and a
-      // win's bonus: in full where it fits. The gold as credited (runReward gold: within the cap,
-      // with gear sold), so the line adds up; an older server's reward says only what was picked up.
-      const r = this.reward, gold = r.gold ?? res.gold, bonus = (long) => (r.bonus ? ` + ${r.bonus} ${long ? 'victory bonus' : 'bonus'}` : '');
-      const wage = (long) => (r.wage ? ` + ${r.wage} ${long ? `wage for ${fmtTime(res.time)}` : 'wage'}` : '');
-      const parts = [`Collected ${gold} × ${r.multiplier}${wage(true)}${bonus(true)}`, `Collected ${gold} × ${r.multiplier}${wage(false)}${bonus(true)}`, `Gold ${gold} × ${r.multiplier}${wage(false)}${bonus(false)}`];
-      drawText(ctx, fitText(parts.find((t) => textWidth(t) <= pw - 12) || parts[2], pw - 12), W / 2, gy, { align: 'center', color: '#8b9bb4' });
-      const c = textCanvas(`+${fmtNum(Math.floor(this.shown))} GOLD`, ['#fff3a8', '#fee761', '#feae34'], '#181425');
+      // The formula, built as its stamps land: laid out as its whole line, so nothing moves; the
+      // newest part gold for a moment.
+      const w = pw - 12, parts = goldParts(r, gold, res.time, plan, w), n = this.landed ? parts.length : 1 + this.stamped;
+      const line = parts.join(''), fresh = n > 1 && this.stampAt != null && this.t - this.stampAt < 0.4;
+      if (textWidth(line) > w) drawText(ctx, fitText(parts.slice(0, n).join(''), w), W / 2, gy, { align: 'center', color: '#8b9bb4' });
+      else {
+        const x0 = Math.round(W / 2 - textWidth(line) / 2), done = parts.slice(0, n - 1).join('');
+        if (done) drawText(ctx, done, x0, gy, { color: '#8b9bb4' });
+        drawText(ctx, parts[n - 1], x0 + textWidth(done), gy, { color: fresh ? '#fee761' : '#8b9bb4' });
+      }
+      // The total flashes white as a stamp lands (held gold with FLASHES: SOFT).
+      const hot = !this.g.settings?.softFlash && this.stampAt != null && this.t - this.stampAt < 0.12;
+      const c = textCanvas(`+${fmtNum(Math.floor(this.shown))} GOLD`, hot ? ['#ffffff', '#ffffff', '#fee761'] : ['#fff3a8', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(W / 2 - c.width), gy + 9, c.width * 2, c.height * 2);
     } else if (!this.reward) drawText(ctx, 'Counting your spoils…', W / 2, gy + 6, { align: 'center', color: '#8b9bb4' });
     if (this.landed && this.reward) {
       // What next: the next goal, and what the gold buys.
       const prof = app.store.profile;
       nearLines(near.slice(0, nNear), pw - 12).forEach((line, i) => drawText(ctx, line, W / 2, y + ph - 20 - (nNear - i) * 10, { align: 'center', color: '#c28569' }));
-      drawText(ctx, fitText('NEXT: ' + goalText(nextGoal(prof)), pw - 12), W / 2, y + ph - 20, { align: 'center', color: '#feae34' });
+      const goal = nextGoal(prof), bar = heroGoalBar(goal, res), ny = y + ph - 20;
+      if (bar) {
+        // The distance as a bar before its words (heroGoalBar); a pale tick where his longest run
+        // before this one stood, if it went further.
+        const bw = 40, text = fitText(bar.text, pw - 12 - bw - 4), bx = Math.round(W / 2 - (bw + 4 + textWidth(text)) / 2);
+        codexBar(ctx, bx, ny + 2, bw, bar.k, '#feae34');
+        const was = this.btBefore / bar.need;
+        if (was > bar.k && was < 1) {
+          ctx.fillStyle = '#ead4aa';
+          ctx.fillRect(bx + 1 + Math.round((bw - 2) * was), ny + 1, 1, 6);
+        }
+        drawText(ctx, text, bx + bw + 4, ny, { color: '#feae34' });
+      } else drawText(ctx, fitText('NEXT: ' + goalText(goal), pw - 12), W / 2, ny, { align: 'center', color: '#feae34' });
       drawText(ctx, fitText(armoryLine(prof), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
     }
     ui.begin(dt);
