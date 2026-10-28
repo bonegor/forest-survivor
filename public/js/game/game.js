@@ -33,10 +33,11 @@ import { Spawner } from './spawner.js';
 import { Forest } from './forest.js';
 import { BIOMES } from './biomes.js';
 import { Weather } from './weather.js';
+import { makeHazards } from './hazards/index.js';
 import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
-import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, Sanctum, Overgrowth, Frenzy, Purge, FRENZY } from './effects.js';
+import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, Sanctum, Overgrowth, Frenzy, Purge, FRENZY, ultFlash, prewarmUlt } from './effects.js';
 import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
 import { Minion } from './minions.js';
 import { Hints } from './hints.js';
@@ -340,6 +341,7 @@ export class Game {
     this.cleared = new Set();
     this.lost = new Set(); // crypts the hero left before their last lord fell, or fainted in: shut to him
     this.inCrypt = null; // the crypt the hero is in; the night's clock stands still meanwhile
+    this.hazards = null; // what the map's sky does to the fight (game/hazards: gusts, the dust haze), if anything
     this.boxBlowAt = null; // when the blow he last struck by hand lands on the boxes about him (breakBoxes)
     this.cryptsOpen = o.crypts !== false; // the balance bots keep to the forest unless asked
     this.cryptDoor = null; // the crypt door whose steps the hero stands on (update)
@@ -390,6 +392,9 @@ export class Game {
       this.world = new Forest(this, this.seed, this.look);
       // The night's weather (weather.js): the look's climate, forecast from the run's seed.
       this.weather = new Weather(this, this.look.weather);
+      // And what that weather does to the fight, where the look says (game/hazards, 28 October 2026:
+      // the Frostfell's gusts, the Sunscorch's duststorm haze); none in the Darkwood.
+      this.hazards = makeHazards(this, this.look);
       this.player.x = this.world.start.x;
       this.player.y = this.world.start.y;
       playMusic(this.map.music);
@@ -953,7 +958,9 @@ export class Game {
   }
 
   spawnProp(type, x, y) {
-    const spot = this.world.freeSpot(x, y);
+    // On land, where a Survival map's ground has gaps and rock to keep a box out of (Forest.landSpot,
+    // 28 October 2026: none found, no box); the Darkwood's and a Dungeon floor's free spot otherwise.
+    const spot = this.world.landSpot ? this.world.landSpot(x, y) : this.world.freeSpot(x, y);
     if (!spot) return null;
     // Not instant: it fades in over the usual 0.25 s (Enemy spawnT), so a site coming in view doesn't pop in.
     return this.spawnEnemy(type, spot.x, spot.y, { always: true });
@@ -1517,6 +1524,9 @@ export class Game {
       new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, look: cryptLookFor(d.key, this.look), lords: cryptLords(minute, d.depth) });
       p.x = this.world.start.x;
       p.y = this.world.start.y;
+      // Whatever of the map's ground held or carried him (quicksand, a gust's frost, a slide) stays up
+      // here: he goes down on his own feet (Player.clearTerrain, 28 October 2026).
+      p.clearTerrain();
       this.gatherMinions();
       this.snapCam();
       this.objective = '';
@@ -1594,6 +1604,7 @@ export class Game {
     p.x = f.door.x;
     p.y = f.door.y + 12;
     p.invuln = Math.max(p.invuln, 1.5);
+    p.clearTerrain(); // and comes back up on his own feet, by the stairs, the hole or waking (28 October 2026)
     this.gatherMinions();
     this.snapCam();
     playMusic(this.boss && !this.boss.dead ? 'boss' : this.map.music);
@@ -1864,13 +1875,15 @@ export class Game {
   }
 
   // Rimeheart: the foes within R of (x, y) freeze for t s; a boss, a lord or a champion is only
-  // slowed. A frozen foe stands, so it is those chasing him that are held.
-  rimeFreeze(x, y, R, t) {
-    sfx('freeze');
+  // slowed. A frozen foe stands, so it is those chasing him that are held. A Frostfell gust's (28
+  // October 2026, hazards/gusts.js) takes the ring its tell drew on the snow, R out to the sides and
+  // ry up and down (Rimeheart's: ry = R, the circle), and is heard only where it is seen (heard).
+  rimeFreeze(x, y, R, t, ry = R, heard = true) {
+    if (heard) sfx('freeze');
     this.particles.burst(x, y - 6, 10, 10, [PC.w, PC.c, PC.U], 70, 0.5, 1, P.GLOW | P.FADE, {});
     for (const e of this.grid.foes(x, y, R, tmp)) {
       if (e.dead || e.prop || e.sealed || e.sleeping || e.dormant) continue;
-      if (Math.hypot(e.x - x, e.y - y) > R + e.hr) continue;
+      if (ry === R ? Math.hypot(e.x - x, e.y - y) > R + e.hr : ((e.x - x) / (R + e.hr)) ** 2 + ((e.y - y) / (ry + e.hr)) ** 2 > 1) continue;
       if (e.boss || e.lord || e.elite) {
         e.slowT = Math.max(e.slowT, t);
         e.slowF = Math.max(e.slowF, 0.6);
@@ -2001,6 +2014,7 @@ export class Game {
     this.ultStop = ULT_LAUNCH.stop;
     p.invuln = Math.max(p.invuln, ULT_LAUNCH.stop + 0.1);
     sfx('ult');
+    prewarmUlt(this, type); // its baked art made ready under the stop (effects.js)
   }
 
   startUlt(type) {
@@ -2011,6 +2025,9 @@ export class Game {
     this.ultRun = { type, name: p.hero.ultName, kills: 0, dmg: 0 };
     this.shake(0.4);
     this.effects.push(new Ring(this, p.x, p.y, 4, 90, 0.5, '#f6757a', true, 2));
+    // And over it, the release of a charge (the owner's, 28 October 2026: "see what of their
+    // effects we can use for weapons and bake it in with our approach"): effects.js ultFlash.
+    ultFlash(this, p);
     if (type === 'whirlwind') this.effects.push(new Whirl(this, dur));
     else if (type === 'arrowstorm') this.effects.push(new ArrowRain(this, dur));
     else if (type === 'shadowdance') {
@@ -2430,6 +2447,8 @@ export class Game {
 
     this.world.update(dt);
     if (this.weather) this.weather.update(dt);
+    // What the weather does to the fight (game/hazards: its own sleep in a crypt and outside play).
+    if (this.hazards) this.hazards.update(dt);
     // Sweep last frame's dead before indexing; the grid must match the array.
     const E = this.enemies;
     for (let i = E.length - 1; i >= 0; i--) {
@@ -2550,7 +2569,10 @@ export class Game {
         }
       }
     }
-    if (live && !p.dead && (sx || sy)) {
+    // Held by quicksand or frozen by a gust (28 October 2026, the owner's "hero steps in and cannot
+    // move for a few seconds"), the crowd moves him no more than his steering does (Player.update),
+    // as a boss never does; the foes on him are eased off alone. Never held in the Darkwood.
+    if (live && !p.dead && !p.held && (sx || sy)) {
       const H = CROWD.hero, k = 1 - Math.exp(-H.rate * dt), most = H.most * dt;
       let mx = sx * k, my = sy * k;
       const m = Math.hypot(mx, my);
@@ -2679,6 +2701,8 @@ export class Game {
   // The world's drifting overlay (the forest's fog) and the weather over it (draw).
   drawSkies(ctx, c) {
     if (this.world.drawOverlay) this.world.drawOverlay(ctx, c, this.clock);
+    // The duststorm's blinding sand over the fog, the storm's grains blowing over it (game/hazards/haze.js).
+    if (this.hazards) this.hazards.drawOverlay(ctx, c);
     if (this.weather) this.weather.draw(ctx, c);
   }
 
@@ -2710,6 +2734,8 @@ export class Game {
     }
     ctx.globalAlpha = 1;
     if (this.world.drawGroundProps) this.world.drawGroundProps(ctx, c, this.clock);
+    // A gust gathering on the snow, under everything standing (game/hazards/gusts.js).
+    if (this.hazards) this.hazards.drawGround(ctx, c);
 
     for (const e of this.effects) if (e.drawGround) e.drawGround(ctx, c);
     for (const pk of this.pickups) pk.draw(ctx, c);
@@ -2757,6 +2783,11 @@ export class Game {
         if (after && !covered && !o.prop && standsOver(o, p)) covered = true;
       } else this.world.drawProp(ctx, c, o, this.clock);
     }
+    // A Survival map's traps told over whatever stands on them (28 October 2026, REQS2: never hidden
+    // under the horde's feet without a tell): the quicksand pools and ice sheets by the hero outlined
+    // (Forest.drawTerrainTells), a gust's ring and snow (game/hazards/gusts.js). Neither in the Darkwood.
+    if (this.world.drawTerrainTells) this.world.drawTerrainTells(ctx, c);
+    if (this.hazards) this.hazards.drawOver(ctx, c);
     // The weapons' shots and blasts over the trees and boxes, under the monsters (horde-over.js).
     const armed = this.projectiles.length > 0 || this.effects.length > 0;
     let horde = armed && maskHorde(c, list, p);
@@ -2816,6 +2847,8 @@ export class Game {
     for (const e of this.effects) if (e.drawGlow) e.drawGlow(ctx, c);
     for (const pr of this.projectiles) pr.drawGlow(ctx, c);
     if (horde) putHorde(ctx);
+    // The world's own glow over the horde (the Bloomvale's fae rings' lines: game/fae.js; 28 October 2026).
+    if (this.world.drawGlow) this.world.drawGlow(ctx, c);
     for (const s of this.shrines) this.drawShrineGlow(ctx, c, s);
     for (const d of this.crypts) if (!d.sealed && onScreen(c, d.x, d.y, 60)) this.drawCryptGlow(ctx, c, d);
     for (const pk of this.pickups) pk.drawGlow(ctx, c);
@@ -2894,26 +2927,30 @@ export class Game {
     const p = this.player;
     if (p.dead) return; // fallen: drawn after the world has drained (drawFallen)
     this.placePlayer(c);
-    const [X, Y, w, h, , , img, alpha] = p._rect;
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(img, X, Y, w, h);
+    const r = p._rect;
+    ctx.globalAlpha = r[7];
+    heroImage(ctx, r[6], r, c.S);
     ctx.globalAlpha = 1;
   }
 
   // Where the hero stands on the screen this frame and in which picture, unless he has fallen:
-  // p._rect, [X, Y, w, h, frame, flip, picture, alpha].
+  // p._rect, [X, Y, w, h, frame, flip, picture, alpha, sink]. On a Survival map's ground (28 October
+  // 2026): frozen by a gust, his standing frame in the frozen foes' ice tint (TINTS.frozen), still;
+  // sliding on ice, his standing frame, no bob; held in quicksand, sunk `sink` px into it, as many rows
+  // cut off his feet as he is drawn lower (heroImage), so his feet stay at the sand's top.
   placePlayer(c) {
     const p = this.player;
     const S = c.S;
     const spr = SPR[p.hero.sprite];
     const moving = p.moving;
+    const frozen = !!p.held && p.held.kind === 'frost', still = frozen || !!p.slide;
     // Walk cycles step a little faster so planted feet slide less against the ground.
     const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
     // Walk/idle remains the base. In the forest the ranger draws before the bow is ready and
     // releases with its real projectile; in a crypt every hero plays his attack for a blow
     // struck by hand, when it is struck the way he faces (on the move a shot may fly behind
     // him), the ranger his shot on the move too.
-    let fr = moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate));
+    let fr = still ? idleFrame(spr, 0) : moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate));
     const clip = this.caveStrike && p.strikeAt !== null ? strikeClip(spr) : null;
     if (clip && faceAlong(p.face, Math.cos(p.strikeAng), Math.sin(p.strikeAng)) === p.face) {
       const k = clip.from + Math.floor((this.clock - p.strikeAt) * spr.attackFps + 1e-6);
@@ -2922,15 +2959,16 @@ export class Game {
     const bowPose = this.caveStrike ? null : rangerPose(this, spr, step);
     if (bowPose) fr = bowPose.frame;
     const flip = bowPose ? bowPose.flip : p.face < 0;
-    let img = p.flash > 0 ? fr.white(flip) : fr.get(flip);
+    let img = p.flash > 0 ? fr.white(flip) : frozen ? fr.variant('frozen', TINTS.frozen, flip) : fr.get(flip);
     // Walk cycles carry their own body bob; two-frame sprites hop on alternate steps.
-    const bob = spr.selfBob ? 0 : moving ? (spr.walk ? 0 : -(step % 2)) : Math.sin(p.anim * 2) > 0.6 ? -1 : 0;
+    const bob = spr.selfBob || still ? 0 : moving ? (spr.walk ? 0 : -(step % 2)) : Math.sin(p.anim * 2) > 0.6 ? -1 : 0;
     const w = img.width * S, h = img.height * S;
-    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY + bob - p.hop) * S);
+    const sink = Math.round(p.sink);
+    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY + bob - p.hop) * S) + Math.round(sink * S);
     let alpha = 1;
     if (p.invuln > 0 && !(p.ult && p.ult.type === 'shadowdance') && Math.floor(p.invuln * 18) % 2 === 0) alpha = 0.45;
     if (p.ult && p.ult.type === 'shadowdance') alpha = 0.35 + 0.15 * Math.sin(this.clock * 20);
-    p._rect = [X, Y, w, h, fr, flip, img, alpha];
+    p._rect = [X, Y, w, h, fr, flip, img, alpha, sink];
   }
 
   // The hero fallen (DEATH): the world drains to grey and darkens round him, and he, still in
@@ -2960,8 +2998,8 @@ export class Game {
   drawPlayerEmissive(ctx) {
     const p = this.player;
     if (p.dead || !p._rect) return;
-    const [X, Y, w, h, fr, flip] = p._rect;
-    if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, X, Y, w, h);
+    const r = p._rect, fr = r[4];
+    if (fr.em) heroImage(ctx, r[5] ? fr.emf : fr.em, r, this.cam.S);
   }
 
   // The ring on the ground under the hero (HERO_MARK): his colour, pulsing; red when he is low.
@@ -2981,12 +3019,35 @@ export class Game {
   drawHero(ctx, c) {
     const p = this.player;
     if (p.dead || !p._rect) return;
-    const [X, Y, w, h, , , img, alpha] = p._rect;
+    const r = p._rect;
     if (this.heroCovered && !(p.ult && p.ult.type === 'shadowdance')) this.drawHeroRing(ctx, c, 0.8);
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(img, X, Y, w, h);
+    if (p.held) this.drawHold(ctx, c);
+    ctx.globalAlpha = r[7];
+    heroImage(ctx, r[6], r, c.S);
     ctx.globalAlpha = 1;
     this.drawPlayerEmissive(ctx);
+  }
+
+  // A Survival map's hold on the hero (Player.held, 28 October 2026), drawn just under him so no crowd
+  // hides it: its clock, an arc round his feet running down as the hold does, in the sand's colour or
+  // the ice's (REQS2: every trap readable, and how long it holds him too); and in quicksand the sinking
+  // swirl he stands in (art/terrain.js fx_quicksand).
+  drawHold(ctx, c) {
+    const p = this.player, h = p.held, S = c.S, M = HERO_MARK, lw = Math.max(1, Math.round(S));
+    const sx = (p.x - c.x) * S, sy = (p.y + 1 - c.y) * S;
+    const spr = h.kind === 'sand' && SPR.fx_quicksand;
+    if (spr) {
+      const img = spr.frames[Math.floor(this.clock * (spr.fps || 5)) % spr.frames.length].c, w = img.width * S, hh = img.height * S;
+      ctx.globalAlpha = 0.8;
+      ctx.drawImage(img, Math.round(sx - w / 2), Math.round(sy - hh / 2), w, hh);
+    }
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = h.kind === 'sand' ? '#c28569' : '#9ee7ff';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, (M.rx + 3) * S, (M.ry + 2) * S, 0, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(h.t / h.max, 0, 1));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   drawShrine(ctx, c, s) {
@@ -3044,6 +3105,18 @@ function standsOver(o, p) {
   const r = o._rect, q = p._rect;
   if (!r || !q) return Math.abs(o.x - p.x) < 9 && o.y > p.y && o.y - p.y < 14;
   return r[0] < q[0] + q[2] && r[0] + r[2] > q[0] && r[1] < q[1] + q[3] && r[1] + r[3] > q[1];
+}
+
+// The hero's picture, or its glowing parts, at his rectangle r (Game.placePlayer): whole; or, sunk in
+// quicksand (r[8] px, 28 October 2026), with that many rows cut off its foot and drawn that much
+// shorter, as he is drawn that much lower, so his feet stay at the sand's top.
+function heroImage(ctx, img, r, S) {
+  const sink = r[8] || 0;
+  if (!sink) {
+    ctx.drawImage(img, r[0], r[1], r[2], r[3]);
+    return;
+  }
+  ctx.drawImage(img, 0, 0, img.width, img.height - sink, r[0], r[1], r[2], r[3] - Math.round(sink * S));
 }
 
 function onScreen(c, x, y, m) {

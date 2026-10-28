@@ -17,7 +17,7 @@
 //
 // The other Survival maps (28 October 2026) each have a climate of their own (game/biomes.js, a
 // look's `weather`): their skies and spells in place of SKIES and SPELLS, forecast alike, and how
-// their weather looks: the Sunscorch's haze and sandstorms, the Frostfell's snow and blizzards, the
+// their weather looks: the Sunscorch's clear skies and duststorms, the Frostfell's snow and blizzards, the
 // Bloomvale's drifting petals and soft showers, the Abyss's ashfall and ember storms with red
 // lightning. Only rain is heard and only rain wets a step; snow, sand, ash and petals fall silent
 // (fresh snow crunches underfoot: `crunch`), and lightning brings the same thunder anywhere. The
@@ -48,6 +48,10 @@ export const SPELLS = {
 // { to, k }: the colour a sky's `cast` pulls the night toward; `crunch`, the sky key under which
 // the hero's steps crunch; `motes`, what falls or blows besides rain (Weather.drift: flakes, grains,
 // embers). The Darkwood's is SKIES and SPELLS and the rest as it always was.
+// Since 28 October 2026 a climate may say which skies its day opens and closes with (`first`, `close`;
+// 'clear' unless given): the Frostfell's snow from its first second to its last (the owner's "Weather
+// is snow blizzard"). A sky's other keys may drive a map's hazards too (game/hazards: the Sunscorch's
+// `murk`, its duststorm's blinding sand; the Frostfell's `gust`, how often its gusts blow).
 export const CLIMATE = { skies: SKIES, spells: SPELLS };
 const DIM = [1.2, 1, 0.6];
 const FLASH = [225, 232, 255];
@@ -120,7 +124,10 @@ export class Weather {
     this.skies = C.skies;
     this.g = g;
     this.rng = mulberry32(g.seed ^ 0x77e1);
-    this.spells = forecast(g.seed, g.duration, undefined, undefined, C.spells);
+    // Opened by its `first` sky for the calm minutes where the climate gives one, and closed by its
+    // `close` (closes); the Darkwood's (neither) forecast exactly as it always was.
+    this.spells = forecast(g.seed, g.duration, C.first ? { kind: C.first, at: 0, until: CALM_START } : undefined, undefined, C.spells);
+    this.closes();
     // Where things stand now (update): the sky's blend and the spell under way.
     this.now = { ...C.skies.clear };
     this.kind = 'clear';
@@ -189,6 +196,14 @@ export class Weather {
     const table = this.climate.spells;
     const spell = { kind, at: t, until: t + span(this.rng, table[kind].secs), front: 3 };
     this.spells = [...keep, ...forecast(0, this.g.duration, spell, this.rng, table)];
+    this.closes();
+  }
+
+  // A climate's `close` sky for the last spell, the one the day ends in (forecast's clearing before
+  // dawn), in a run that ends; none given, it stays clear.
+  closes() {
+    const k = this.climate.close;
+    if (k && Number.isFinite(this.g.duration)) this.spells[this.spells.length - 1].kind = k;
   }
 
   update(dt) {

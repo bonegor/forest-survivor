@@ -138,7 +138,9 @@ test('a swing at nothing leaves a standing hero facing as he was', () => gameCas
   w.update(.11);
   flips.push(displayedFlip(g));
   // Out to the side he faces, not the way he walked (23 October 2026), and the second behind him.
-  assert.deepEqual(g.effects.slice(-2).map(s => s.ang), [Math.PI, 2 * Math.PI], 'both slashes still swing');
+  // The slashes alone: each cut's baked picture (fxart.js vfxBurst, 28 October 2026) goes into the
+  // effects just before its Slash.
+  assert.deepEqual(g.effects.filter(s => s.constructor.name === 'Slash').slice(-2).map(s => s.ang), [Math.PI, 2 * Math.PI], 'both slashes still swing');
   assert.equal(p.face, -1);
   assert.deepEqual(flips, [true, true], 'he never turns, not even for one slash');
 }));

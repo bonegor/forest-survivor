@@ -25,7 +25,10 @@ const RMAX = 176; // the fields only care how far a path is up to here (trees th
 const MARGIN = 112; // a chunk's fields reach this far beyond it, so trees just over the edge are known
 const GN = (CHUNK + 2 * MARGIN) / CELL;
 export const TREE_NAMES = new Set(['oak1', 'oak2', 'oak3', 'pine1', 'pine2', 'deadtree1', 'deadtree2']);
-const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
+// Exported (as pathOf, footpath, resample, chaikin and normalsOf below) for game/topology, which lays
+// the Sunscorch's, the Frostfell's and the Abyss's roads and places out in this file's own shapes (28
+// October 2026); nothing here changes by it.
+export const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
 
 let SEED, D, JIT, h, rngOf, SHRINE_ORDER;
 const roadCache = new Map(), placeCache = new Map(), landmarkCache = new Map();
@@ -61,7 +64,7 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => 
 const lerp4 = (a, c, N, w00, w10, w01, w11) => a[c] * w00 + a[c + 1] * w10 + a[c + N] * w01 + a[c + N + 1] * w11;
 
 // Evenly spaced points along a polyline.
-function resample(pts, step) {
+export function resample(pts, step) {
   const n = pts.length, cum = [0];
   for (let i = 0; i < n - 1; i++) cum.push(cum[i] + Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]));
   const L = cum[n - 1], m = Math.max(2, Math.round(L / step)), out = [];
@@ -74,14 +77,14 @@ function resample(pts, step) {
   }
   return out;
 }
-const normalsOf = (pts) =>
+export const normalsOf = (pts) =>
   pts.map((p, i) => {
     const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
     const tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1;
     return [ty / l, -tx / l];
   });
 // Corner cutting that keeps the two ends where they are.
-function chaikin(p) {
+export function chaikin(p) {
   const out = [p[0]];
   for (let k = 0; k < p.length - 1; k++) {
     const [ax, ay] = p[k], [bx, by] = p[k + 1];
@@ -91,7 +94,7 @@ function chaikin(p) {
   return out;
 }
 // A path as the chunks see it: points, a half width at each, and its bounds.
-function pathOf(kind, xs, ys, hw, av = null) {
+export function pathOf(kind, xs, ys, hw, av = null) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   for (let k = 0; k < xs.length; k++) {
     minx = Math.min(minx, xs[k] - hw[k]);
@@ -300,7 +303,7 @@ export function shrinesNear(x, y, r) {
 }
 
 // A footpath that wanders a little on its way out to a landmark.
-function footpath(ax, ay, bx, by, seed, wander) {
+export function footpath(ax, ay, bx, by, seed, wander) {
   const len = Math.hypot(bx - ax, by - ay), n = Math.max(2, Math.round(len / 4));
   const nx = -(by - ay) / len, ny = (bx - ax) / len, xs = [], ys = [], hw = [];
   for (let k = 0; k <= n; k++) {
@@ -339,75 +342,84 @@ export function landmark(i, j) {
     }
     L = { x, y, i, j, kind, props: [], clear: { x, y, r: kind === 'woodcamp' ? 100 : 128 } };
     L.path = footpath(bx, by, x, y + 30, Math.floor(h(i, j, 14) * 1e6), 140);
-    const r = rngOf(i, j, 10);
-    const add = (n, px, py, extra) => {
-      const p = { n, x: Math.round(px), y: Math.round(py), ...extra };
-      L.props.push(p);
-      return p;
-    };
-    if (kind === 'circle') {
-      for (let k = 0; k < 7; k++) {
-        const a = (k / 7) * TAU;
-        add('menhir', x + Math.cos(a) * 50, y + Math.sin(a) * 36, { light: ['cyan', 34] });
-      }
-      // The old monument in the middle, its stepped ring centred in the circle's.
-      add('lm_monument', x, y + 10, { light: ['cyan', 80] });
-    } else if (kind === 'ruins') {
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * TAU + r.range(-0.25, 0.25);
-        add(r() < 0.5 ? 'ruinpillar' : 'brokenpillar', x + Math.cos(a) * 46, y + Math.sin(a) * 32);
-      }
-      add('rubble', x + r.range(-16, 16), y + r.range(-8, 8));
-      add('rubble', x + r.range(-28, 28), y + r.range(-16, 16));
-      // A mossy gargoyle still keeps the middle, or the heap it fell to.
-      add(r() < 0.6 ? 'lm_gargoyle2' : 'lm_rockpile', x + r.range(-6, 6), y - 6);
-    } else if (kind === 'graveyard') {
-      const graves = [];
-      for (let row = 0; row < 3; row++) {
-        for (let k = 0; k < 4; k++) {
-          if (r() < 0.8) graves.push(add(r() < 0.6 ? 'gravestone' : 'gravecross', x - 36 + k * 24 + r.range(-3, 3), y - 22 + row * 22 + r.range(-2, 2)));
-        }
-      }
-      // A cursed tree over the graves, its foot behind the back row, a faint violet glow about it.
-      const tree = r();
-      add(tree < 0.4 ? 'lm_skulltree' : tree < 0.75 ? 'lm_skulltree2' : 'lm_driedtree', x + 62, y - 34, { light: ['purple', 50] });
-      add('lantern', x - 50, y + 30, { light: ['warm', 60] });
-      // Candles burning on two of the graves, and a skull on a post by the way in.
-      for (let k = 0; k < 2 && graves.length; k++) {
-        const g = graves.splice(Math.floor(r() * graves.length), 1)[0];
-        add(k ? 'lm_candle2' : 'lm_candle', g.x + (r() < 0.5 ? -8 : 8), g.y + 3, { light: ['fire', 30] });
-      }
-      add(r() < 0.5 ? 'lm_skullpost' : 'lm_skullpost2', x + 22, y + 34);
-    } else if (kind === 'gallows') {
-      // A gallows with a gibbet beside it, heads on pikes across from it, and candelabras burning red.
-      // The gibbet stands on the side away from where the footpath comes in, the thin pikes on its side.
-      const s = bx > x ? -1 : 1;
-      add('lm_gallows', x - 8 * s, y - 16);
-      add('lm_blood', x - 6 * s, y - 10);
-      add('lm_gibbet', x + 64 * s, y + 8);
-      add('lm_candelabra', x - 44 * s, y - 22, { light: ['red', 56] });
-      add('lm_candelabra', x + 28 * s, y - 22, { light: ['red', 56] });
-      add('lm_pikehead', x - 64 * s, y + 2);
-      add(r() < 0.5 ? 'lm_pikeblood' : 'lm_pikehead', x - 78 * s, y + 18);
-      add('lm_pike', x - 54 * s, y + 24);
-      add('lm_skullpost', x - 16, y + 30);
-      add('lm_skullpost2', x + 16, y + 30);
-      add('lm_driedtree', x - 84 * s, y - 30);
-    } else if (kind === 'glade') {
-      // A sword in a stone under a pale light, two gargoyles keeping it and candles round it.
-      add('lm_swordstone', x, y, { light: ['moon', 76] });
-      const left = r() < 0.5;
-      add(left ? 'lm_gargoyle' : 'lm_gargoyle2', x - 44, y - 16);
-      add(left ? 'lm_gargoyle2' : 'lm_gargoyle', x + 44, y - 16);
-      for (const a of [-2.6, -1.9, -1.2, -0.5]) add(a < -1.5 ? 'lm_candle' : 'lm_candle2', x + Math.cos(a) * 30, y + 6 + Math.sin(a) * 24, { light: ['fire', 26] });
-      add('lm_rockpile', x + r.range(-60, -40), y + r.range(14, 30));
-      for (let k = r.int(2, 3); k > 0; k--) add('mushrooms', x + r.range(30, 60) * (r() < 0.5 ? -1 : 1), y + r.range(8, 34), { light: ['cyan', 26] });
-    } else {
-      add('campfire', x, y, { anim: 8, light: ['fire', 110] });
-      for (let k = 0; k < 4; k++) add('stump', x + r.range(-50, 50), y + r.range(-34, 34));
-    }
+    dressLandmark(L, rngOf(i, j, 10), bx);
   }
   landmarkCache.set(key, L);
+  return L;
+}
+// What stands at a landmark of the Darkwood's kinds (L: { x, y, kind, props: [] }), from its dice r
+// (int, range, pick) in their order; bx, where its footpath comes in (the gallows' gibbet stands on
+// the other side). Apart from landmark() since 28 October 2026, so game/topology dresses the
+// Sunscorch's, the Frostfell's and the Abyss's landmarks of these kinds as the Darkwood's are; an
+// unknown kind is a woodcamp.
+export function dressLandmark(L, r, bx) {
+  const { x, y, kind } = L;
+  const add = (n, px, py, extra) => {
+    const p = { n, x: Math.round(px), y: Math.round(py), ...extra };
+    L.props.push(p);
+    return p;
+  };
+  if (kind === 'circle') {
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * TAU;
+      add('menhir', x + Math.cos(a) * 50, y + Math.sin(a) * 36, { light: ['cyan', 34] });
+    }
+    // The old monument in the middle, its stepped ring centred in the circle's.
+    add('lm_monument', x, y + 10, { light: ['cyan', 80] });
+  } else if (kind === 'ruins') {
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * TAU + r.range(-0.25, 0.25);
+      add(r() < 0.5 ? 'ruinpillar' : 'brokenpillar', x + Math.cos(a) * 46, y + Math.sin(a) * 32);
+    }
+    add('rubble', x + r.range(-16, 16), y + r.range(-8, 8));
+    add('rubble', x + r.range(-28, 28), y + r.range(-16, 16));
+    // A mossy gargoyle still keeps the middle, or the heap it fell to.
+    add(r() < 0.6 ? 'lm_gargoyle2' : 'lm_rockpile', x + r.range(-6, 6), y - 6);
+  } else if (kind === 'graveyard') {
+    const graves = [];
+    for (let row = 0; row < 3; row++) {
+      for (let k = 0; k < 4; k++) {
+        if (r() < 0.8) graves.push(add(r() < 0.6 ? 'gravestone' : 'gravecross', x - 36 + k * 24 + r.range(-3, 3), y - 22 + row * 22 + r.range(-2, 2)));
+      }
+    }
+    // A cursed tree over the graves, its foot behind the back row, a faint violet glow about it.
+    const tree = r();
+    add(tree < 0.4 ? 'lm_skulltree' : tree < 0.75 ? 'lm_skulltree2' : 'lm_driedtree', x + 62, y - 34, { light: ['purple', 50] });
+    add('lantern', x - 50, y + 30, { light: ['warm', 60] });
+    // Candles burning on two of the graves, and a skull on a post by the way in.
+    for (let k = 0; k < 2 && graves.length; k++) {
+      const g = graves.splice(Math.floor(r() * graves.length), 1)[0];
+      add(k ? 'lm_candle2' : 'lm_candle', g.x + (r() < 0.5 ? -8 : 8), g.y + 3, { light: ['fire', 30] });
+    }
+    add(r() < 0.5 ? 'lm_skullpost' : 'lm_skullpost2', x + 22, y + 34);
+  } else if (kind === 'gallows') {
+    // A gallows with a gibbet beside it, heads on pikes across from it, and candelabras burning red.
+    // The gibbet stands on the side away from where the footpath comes in, the thin pikes on its side.
+    const s = bx > x ? -1 : 1;
+    add('lm_gallows', x - 8 * s, y - 16);
+    add('lm_blood', x - 6 * s, y - 10);
+    add('lm_gibbet', x + 64 * s, y + 8);
+    add('lm_candelabra', x - 44 * s, y - 22, { light: ['red', 56] });
+    add('lm_candelabra', x + 28 * s, y - 22, { light: ['red', 56] });
+    add('lm_pikehead', x - 64 * s, y + 2);
+    add(r() < 0.5 ? 'lm_pikeblood' : 'lm_pikehead', x - 78 * s, y + 18);
+    add('lm_pike', x - 54 * s, y + 24);
+    add('lm_skullpost', x - 16, y + 30);
+    add('lm_skullpost2', x + 16, y + 30);
+    add('lm_driedtree', x - 84 * s, y - 30);
+  } else if (kind === 'glade') {
+    // A sword in a stone under a pale light, two gargoyles keeping it and candles round it.
+    add('lm_swordstone', x, y, { light: ['moon', 76] });
+    const left = r() < 0.5;
+    add(left ? 'lm_gargoyle' : 'lm_gargoyle2', x - 44, y - 16);
+    add(left ? 'lm_gargoyle2' : 'lm_gargoyle', x + 44, y - 16);
+    for (const a of [-2.6, -1.9, -1.2, -0.5]) add(a < -1.5 ? 'lm_candle' : 'lm_candle2', x + Math.cos(a) * 30, y + 6 + Math.sin(a) * 24, { light: ['fire', 26] });
+    add('lm_rockpile', x + r.range(-60, -40), y + r.range(14, 30));
+    for (let k = r.int(2, 3); k > 0; k--) add('mushrooms', x + r.range(30, 60) * (r() < 0.5 ? -1 : 1), y + r.range(8, 34), { light: ['cyan', 26] });
+  } else {
+    add('campfire', x, y, { anim: 8, light: ['fire', 110] });
+    for (let k = 0; k < 4; k++) add('stump', x + r.range(-50, 50), y + r.range(-34, 34));
+  }
   return L;
 }
 
@@ -461,10 +473,16 @@ const TREE_GAP = 30;
 // whatever the knob, so nothing else in a chunk moves; without one (the Darkwood, the prologue's
 // road, the tools) it is the forest as it always was. What stands in each place, a cactus for an
 // oak, is the look's to say (biomes.js biomeProp): the names here are the slots.
-export function layoutChunk(cx, cy, scene = null, knob = null) {
+// `topo`, a Survival map's ground of its own (game/topology, 28 October 2026: the Sunscorch's and the
+// Frostfell's corridors, the Abyss's islands): its roads, places and landmarks in place of the
+// lattice's (topo.features, fetched per box as the prologue's scene is given whole), and no tree, bush
+// or stone of the scatter where the hero can't stand (topo.canStand: in the mountains, over the lava
+// or the void, in quicksand or on the ice, on a bridge). What the topology lays on purpose (its
+// places' and landmarks' props) stands where it is laid. Without one, the lattice as it always was.
+export function layoutChunk(cx, cy, scene = null, knob = null, topo = null) {
   const x0 = cx * CHUNK, y0 = cy * CHUNK, x1 = x0 + CHUNK, y1 = y0 + CHUNK;
   const gx0 = x0 - MARGIN, gy0 = y0 - MARGIN, gx1 = gx0 + GN * CELL, gy1 = gy0 + GN * CELL;
-  const F = scene || features(gx0 - RMAX, gy0 - RMAX, gx1 + RMAX, gy1 + RMAX);
+  const F = scene || (topo ? topo.features(gx0 - RMAX, gy0 - RMAX, gx1 + RMAX, gy1 + RMAX) : features(gx0 - RMAX, gy0 - RMAX, gx1 + RMAX, gy1 + RMAX));
 
   // The paths as flat arrays, and how far each field cell is from the nearest path's edge.
   const PX = [], PY = [], PW = [], PID = [], AV = [], paths = [];
@@ -558,6 +576,7 @@ export function layoutChunk(cx, cy, scene = null, knob = null) {
   const add = (n, x, y, extra) => {
     const p = { n, x: Math.round(x), y: Math.round(y), ...extra };
     if (!owns(p.x, p.y)) return null;
+    if (topo && !extra?.src && !topo.canStand(p.x, p.y)) return null; // the scatter only where he can stand
     props.push(p);
     return p;
   };
@@ -599,6 +618,9 @@ export function layoutChunk(cx, cy, scene = null, knob = null) {
     // hash, so every chunk agrees, and after the spacing, so the groves thin out instead of filling
     // the gaps again.
     if (h(c.gi, c.gj, 24) >= standing) continue;
+    // A topology's ground: no tree in the rock, over a gap, in quicksand or on the ice. After the
+    // contest, as the standing share is, so every chunk agrees and no other tree moves.
+    if (topo && !topo.canStand(c.x, c.y)) continue;
     const r = c.r, cc = cellOf(c.x, c.y), pine = pineF[cc], cursed = cursedF[cc];
     const z = r(), cl = valueNoise(c.x / 260, c.y / 260, SEED + 71); // species come in clumps
     let n;

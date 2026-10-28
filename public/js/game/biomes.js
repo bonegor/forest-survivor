@@ -47,6 +47,17 @@
 //             light an open door casts and its glow's colour (Game.draw; the Darkwood's violet without) }
 //   flicker   the light keys that flicker as a fire does (lighting.js LIGHT_COLORS)
 //   lightK    how bright a light key burns (1 unless given)
+//   topology  a ground of its own instead of the Darkwood's lattice (game/topology, 28 October 2026;
+//             absent: the lattice): { kind: 'corridor' (the Sunscorch along x, the Frostfell along y:
+//             its band, faces, road, crypts, shrines, landmarks, patches and spires) or 'islands' (the
+//             Abyss: its spacing, radii, joinings and variants) }, made by topology/index.js makeTopology
+//   terrain   how that ground is painted (topology/paint.js): its rock, cliff face, quicksand, water,
+//             ice, lava, void and bridge decks' colours, and the tells' colours round its patches
+//   hazards   what its sky does to the fight (game/hazards): the Frostfell's gusts, the Sunscorch's
+//             duststorm haze; absent: none
+//   fae       the Bloomvale's fae court (game/fae-rings.js FAE: its rings' places, clocks and dance;
+//             game/fae.js brings them to life), absent elsewhere
+//   clearAt   (x, y) => whether nothing may stand there (biomeProp): the Bloomvale's rings' clearings
 
 import { GROUND } from './darkwood.js';
 import { hash2 } from '../engine/util.js';
@@ -100,6 +111,8 @@ export const BIOMES = { forest: FOREST, desert: DESERT, frozen: FROZEN, meadow: 
 export function biomeProp(look, q, lay = null) {
   const map = look.props;
   if (!map) return q;
+  // Nothing stands in a fae ring's clearing (the Bloomvale's: game/fae-rings.js, 28 October 2026).
+  if (look.clearAt && look.clearAt(q.x, q.y)) return null;
   let e = q.src ? map[q.src + ':' + q.n] : undefined;
   if (e === undefined && q.src) e = map[q.src + ':*'];
   if (e === undefined) e = map[q.n];

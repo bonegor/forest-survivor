@@ -218,7 +218,10 @@ export function spriteBuffers(def) {
 export function buildSprite(name, def) {
   const built = spriteBuffers(def);
   const frames = built.frames.map((b) => new Frame(b, built.emissive));
-  if (def.palette) for (const to of Object.values(def.palette)) addColour(px.hexPack(to));
+  // Its colours join the particle list (addColour) for its death burst; art that never bursts
+  // (def.burst === false: the Survival maps' recoloured doors, bones and moonblooms, 28 October 2026)
+  // leaves the list's 256 to what does: the horde, and the sprite tuner's live tunes.
+  if (def.palette && def.burst !== false) for (const to of Object.values(def.palette)) addColour(px.hexPack(to));
   return { name, frames, walk: def.walk || null, idle: def.idle || null,
     motionRate: def.motionRate || 1, idleRate: def.idleRate ?? 4,
     attack: def.attack || null, attackFps: def.attackFps || 0, selfBob: !!def.selfBob,
@@ -264,6 +267,9 @@ export const TINTS = {
   frozen: (b) => px.tint(b, px.hexPack('#9ee7ff'), 0.55),
   burn: (b) => px.tint(b, px.hexPack('#ff6a3d'), 0.35),
   dim: (b) => px.tint(b, px.hexPack('#181425'), 0.55),
+  // A fae ring's dancer (the Bloomvale's, game/fae.js, 28 October 2026): charmed pink, apart from
+  // the frozen's ice and the burn's orange.
+  charmed: (b) => px.tint(b, px.hexPack('#ffb8d8'), 0.45),
 };
 
 // The night look of a frame (enemies.js NIGHT_EDGE, which lifts its colours first: nightLift):

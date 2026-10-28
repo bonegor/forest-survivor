@@ -5,7 +5,7 @@ import { rand, TAU, lerp } from '../engine/util.js';
 import { shadowSprite, glow, crescentSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { explode } from './effects.js';
-import { fireballFrame, fxFrames } from './fxart.js';
+import { fireballFrame, fxFrames, vfxBurst } from './fxart.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
 import { reachesFeet, reachesBody, spriteRadius } from './hitbox.js';
 
@@ -279,6 +279,10 @@ export class Projectile {
           slow: this.slow, slowT: this.slowT, freeze: this.freeze, shatter: this.shatter, noFury: this.noFury, ult: this.ult,
         });
         if (this.onHit) this.onHit(this, e);
+        // A silver bolt's hit (the Silver Crossbow's; the Purifier's burst, onHit, has its own): a
+        // small silver star where it strikes, pointing the way it flies (Sprite Fusion's impact,
+        // baked: vfx.js, 28 October 2026). Before it, it showed next to nothing. Only a picture.
+        else if (this.kind === 'bolt') vfxBurst(g, 'vfx_silver_small', this.x, this.y - this.z, { flip: Math.cos(this.ang) < 0, cap: 6, span: 0.3 });
         if (this.kind === 'fireball') {
           this.impact();
           return false;

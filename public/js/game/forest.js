@@ -15,6 +15,13 @@ import { CHUNK as CH, DARKWOOD, TREE_NAMES, setWorld, layoutChunk, paintChunk, s
 import { BIOMES, NIGHT, biomeProp } from './biomes.js';
 import { LS } from './lighting.js';
 import { LANDMARK_SOLIDS, LANDMARK_TALL } from '../art/landmarks.js';
+import { FaeCourt } from './fae.js';
+import { TERRAIN_SOLIDS } from '../art/terrain.js';
+import { makeTopology, SURFACE, HERO_BLOCKED, FOE_SLOWED, TMAX } from './topology/index.js';
+import { sampleField, fieldGrad, surfaceOf } from './topology/terrain.js';
+import { blobSdf } from './topology/shapes.js';
+import { paintTerrain } from './topology/paint.js';
+import { drawLavaTiles, drawSwirls, drawTells } from './topology/draw.js';
 
 // Half the width of each tree's trunk at its foot (a look's own trees: its `trunks`).
 const TRUNK = { oak1: 3.5, oak2: 3.5, oak3: 3.5, pine1: 2.5, pine2: 2.5, deadtree1: 2.5, deadtree2: 2.5 };
@@ -28,6 +35,10 @@ export { NIGHT };
 
 // What steer() returns: the one pair, filled again by the next call.
 const HEADING = [0, 0];
+// What fieldAt() returns: the one object, filled again by the next call (read it at once).
+const FIELD = { open: TMAX, gx: 0, gy: 0 };
+// The eight ways floorNear, landSpot and freeSpot look, a unit step each.
+const WAYS = [[1, 0], [0.7071, 0.7071], [0, 1], [-0.7071, 0.7071], [-1, 0], [-0.7071, -0.7071], [0, -1], [0.7071, -0.7071]];
 
 // A look's number, or a roll of r between its two (Forest.air).
 const roll = (r, v) => (typeof v === 'number' ? v : v[0] + r() * (v[1] - v[0]));
@@ -37,8 +48,9 @@ const roll = (r, v) => (typeof v === 'number' ? v : v[0] + r() * (v[1] - v[0]));
 export const CRYPT_BOX = { w: 24, up: 18, steps: 3 };
 
 export class Forest {
-  // look: the map's (game/biomes.js), the Darkwood's without one.
-  constructor(g, seed, look = BIOMES.forest) {
+  // look: the map's (game/biomes.js), the Darkwood's without one. o.topology false: the look's
+  // ground without its topology (the prologue's road by day, in the Sunscorch's look).
+  constructor(g, seed, look = BIOMES.forest, o = {}) {
     this.g = g;
     this.seed = seed;
     this.look = look;
@@ -69,10 +81,40 @@ export class Forest {
     // Math.random draws stay as they were.
     this.fxT = look.fx ? look.fx.map(() => 0) : null;
     this.fxRng = mulberry32((seed ^ 0x1f3a) >>> 0);
-    this.start = start();
+    // A map's ground of its own (game/topology, 28 October 2026: the Sunscorch's and the Frostfell's
+    // corridors between their mountains and cliffs, the Abyss's islands over lava or the void): laid
+    // out from the map's world seed, its gaps from the run's. Null in the Darkwood (its look has none),
+    // in Ranked and on the prologue's road, and every use of it below is behind it, so the Darkwood is
+    // what it was, pixel for pixel and draw for draw. Its terrain fields are kept per chunk by a
+    // number (terrainOf), the last one asked for remembered.
+    this.topo = o.topology === false ? null : makeTopology(look, world, g.seed);
+    this.terrain = new Map();
+    this._tk = NaN;
+    this._tc = null;
+    this.debrisT = 0;
+    this.start = this.topo ? this.topo.start() : start();
     this.mapShrines = true; // the spawner leaves the shrines to the map
     this.usedShrines = new Set();
     this.shrineT = 0;
+    // The Bloomvale's fae court (its look's `fae`: game/fae.js). The owner's (28 October 2026):
+    // "Meadow, IDK what to do with meadow, you guys figure out something, have some good game design
+    // idea how to make meadow not be identical to forest." Its rings' bands go on the ground, their
+    // lines over the horde (Game.draw's drawGlow) and the nearest waking one gets the HUD's arrow
+    // (marker): each the court's, on this world alone, after whatever the world draws there itself.
+    // No other look has a court, so the Darkwood's world has none of these of its own.
+    this.court = look.fae ? new FaeCourt(g, this) : null;
+    if (this.court) {
+      const court = this.court, ground = this.drawGroundProps, glow = this.drawGlow, mark = this.marker;
+      this.drawGroundProps = (ctx, cam, time) => {
+        if (ground) ground.call(this, ctx, cam, time);
+        court.drawGround(ctx, cam);
+      };
+      this.drawGlow = (ctx, cam) => {
+        if (glow) glow.call(this, ctx, cam);
+        court.drawGlow(ctx, cam);
+      };
+      this.marker = () => court.marker() || (mark ? mark.call(this) : null);
+    }
   }
 
   key(cx, cy) {
@@ -110,12 +152,23 @@ export class Forest {
         if (Math.abs(c.cx - pcx) > 3 || Math.abs(c.cy - pcy) > 3) this.chunks.delete(k);
       }
       trimCaches(g.player.x, g.player.y);
+      if (this.topo) this.topo.trim(g.player.x, g.player.y);
+    }
+    // A topology's terrain fields (each chunk's, asked for by the monsters' pace near the hero too):
+    // those more than four chunks from him go once there are more than 90.
+    if (this.topo && this.terrain.size > 90) {
+      const pcx = Math.floor(g.player.x / CH), pcy = Math.floor(g.player.y / CH);
+      for (const [k, t] of this.terrain) if (Math.abs(t.cx - pcx) > 4 || Math.abs(t.cy - pcy) > 4) this.terrain.delete(k);
+      this._tk = NaN;
+      this._tc = null;
     }
     this.shrineT -= dt;
     if (this.shrineT <= 0) {
       this.shrineT = 0.5;
       this.syncShrines();
     }
+    // The Bloomvale's fae rings round the hero (game/fae.js), on the night's clock.
+    if (this.court) this.court.update(dt);
     // Another look's air (its embers, snow, petals...), and its fog carried by the wind.
     if (this.look.fx) {
       this.air(dt);
@@ -158,11 +211,24 @@ export class Forest {
         g.particles.emit(x, y, roll(r, e.z), roll(r, e.vx) + wind * (e.wind || 0), roll(r, e.vy), roll(r, e.vz), roll(r, e.life), e.size, e.colors[Math.floor(r() * e.colors.length)], e.flags, e.drag || 0);
       }
     }
+    // The void's depth (the Abyss's, game/topology, 28 October 2026): now and then a faint speck of
+    // ash sinking away into the dark, where the fall is deep, on the look's own dice.
+    if (this.topo && this.topo.variant === 'void') {
+      this.debrisT -= dt;
+      while (this.debrisT <= 0) {
+        this.debrisT += 0.12;
+        const x = cam.x + r() * cam.W, y = cam.y + r() * cam.H;
+        if (this.surfaceAt(x, y) !== SURFACE.GAP || this.openAt(x, y) >= -24) continue;
+        g.particles.emit(x, y, 0, (r() - 0.5) * 6, 10 + r() * 14, -4, 1.5 + r() * 1.3, 1, [PC.a, PC.A, PC.W][Math.floor(r() * 3)], P.FADE | P.SHRINK, 0);
+      }
+    }
   }
 
   // The shrines at the crossroads near the hero join the game's own list; far ones leave it.
+  // A topology's (the Sunscorch's, the Frostfell's, the Abyss's) places are its own; a corridor's
+  // crypts, two minutes' walk apart, come into play from farther (topo.cryptRange).
   syncShrines() {
-    const g = this.g, p = g.player, have = new Set();
+    const g = this.g, p = g.player, have = new Set(), T = this.topo;
     for (let i = g.shrines.length - 1; i >= 0; i--) {
       const s = g.shrines[i];
       if (!s.key) continue;
@@ -170,27 +236,27 @@ export class Forest {
       if (Math.hypot(s.x - p.x, s.y - p.y) > SHRINE_FAR) g.shrines.splice(i, 1);
       else have.add(s.key);
     }
-    for (const s of shrinesNear(p.x, p.y, SHRINE_NEAR)) {
+    for (const s of T ? T.shrinesNear(p.x, p.y, SHRINE_NEAR) : shrinesNear(p.x, p.y, SHRINE_NEAR)) {
       if (have.has(s.key)) continue;
       g.shrines.push({ x: s.x, y: s.y, type: s.type, used: this.usedShrines.has(s.key), t: hash2(Math.round(s.x), Math.round(s.y), 7) * 6, spr: SPR.shrine, shrine: true, key: s.key });
     }
     // Crypt doors the same way; the game remembers which ones it has cleared, and which the
     // hero fainted in (both shut for good). Each in its look's stone (look.crypt.door, the same
-    // 26 x 29 frames), the Darkwood's mausoleum while a look's own is not drawn.
-    const doors = new Set();
+    // 26 x 29 frames: every look's is drawn), the Darkwood's mausoleum should one be missing.
+    const doors = new Set(), near = T ? T.cryptRange.near : SHRINE_NEAR, far = T ? T.cryptRange.far : SHRINE_FAR;
     for (let i = g.crypts.length - 1; i >= 0; i--) {
       const d = g.crypts[i];
-      if (Math.hypot(d.x - p.x, d.y - p.y) > SHRINE_FAR) g.crypts.splice(i, 1);
+      if (Math.hypot(d.x - p.x, d.y - p.y) > far) g.crypts.splice(i, 1);
       else doors.add(d.key);
     }
     const door = SPR[this.look.crypt.door] || SPR.crypt;
-    for (const d of cryptsNear(p.x, p.y, SHRINE_NEAR)) {
+    for (const d of T ? T.cryptsNear(p.x, p.y, near) : cryptsNear(p.x, p.y, near)) {
       if (!doors.has(d.key)) g.crypts.push({ ...d, sealed: g.cleared.has(d.key) || g.lost.has(d.key), t: hash2(d.x, d.y, 9) * 6, spr: door, crypt: true });
     }
   }
 
   layout(cx, cy) {
-    return layoutChunk(cx, cy, null, this.look.density);
+    return layoutChunk(cx, cy, null, this.look.density, this.topo);
   }
 
   generate(cx, cy) {
@@ -208,10 +274,13 @@ export class Forest {
     // glow every frame. The same light, from a quarter of the pixels kept a chunk, nothing made and
     // thrown away a chunk, and nothing filtered a frame (render lays it on pixel for pixel).
     let glow = null;
+    // A topology's terrain over the chunk (its mountains, gaps, patches and decks), painted over the
+    // ground below; the lava's glow goes on the pad with the cracks'.
+    const tc = this.topo ? this.terrainOf(cx, cy) : null;
     // Headless, the layout (trees, props, colliders) is all that matters.
     if (!this.g.headless) {
       let pad = null;
-      if (lay.ground?.cracks) {
+      if (lay.ground?.cracks || tc?.lava) {
         if (!this.glowPad) {
           const pc = makeCanvas(CH, CH), pg = pc.getContext('2d'), pimg = pg.createImageData(CH, CH);
           this.glowPad = { c: pc, g: pg, img: pimg, px: new Uint32Array(pimg.data.buffer) };
@@ -219,7 +288,9 @@ export class Forest {
         pad = this.glowPad;
         pad.px.fill(0);
       }
-      paintChunk(lay, new Uint32Array(img.data.buffer), pad && pad.px);
+      const px32 = new Uint32Array(img.data.buffer);
+      paintChunk(lay, px32, pad && pad.px);
+      if (tc && tc.any) paintTerrain(tc, px32, pad && pad.px, look, this.topo);
       ctx.putImageData(img, 0, 0);
       if (pad) {
         pad.g.putImageData(pad.img, 0, 0);
@@ -243,10 +314,11 @@ export class Forest {
       const p = { spr, x: q.x, y: q.y, frame: 0, anim: q.anim || 0, light: q.light || null, tree: tree || tall, t: hash2(q.x, q.y, 11) * 10, solid: 0, trunk };
       props.push(p);
       if (p.trunk) trunks.push(p);
-      // A landmark's solid parts (its posts, its stone) stop the hero as trunks do.
-      for (const [dx, dy, r] of LANDMARK_SOLIDS[q.n] || []) trunks.push({ x: q.x + dx, y: q.y + dy, trunk: r });
+      // A landmark's solid parts (its posts, its stone) stop the hero as trunks do; so do a topology's
+      // rocks, bones and bridge posts (art/terrain.js).
+      for (const [dx, dy, r] of LANDMARK_SOLIDS[q.n] || TERRAIN_SOLIDS[q.n] || []) trunks.push({ x: q.x + dx, y: q.y + dy, trunk: r });
     }
-    return { cx, cy, canvas: c, glow, props, trunks, used: 0 };
+    return { cx, cy, canvas: c, glow, props, trunks, used: 0, terrain: tc };
   }
 
   forEachVisible(cam, margin, fn) {
@@ -273,6 +345,8 @@ export class Forest {
         list.push(p);
       }
     });
+    // The fae rings' moonblooms (the Bloomvale's: game/fae.js), props as the rest.
+    if (this.court) this.court.collect(cam, list);
   }
 
   drawProp(ctx, cam, p, time) {
@@ -290,7 +364,15 @@ export class Forest {
     if (alpha < 1) ctx.globalAlpha = alpha;
     ctx.drawImage(img, X, Y, w, h);
     if (alpha < 1) ctx.globalAlpha = 1;
-    p._rect = [X, Y, w, h, fr];
+    // Where it was drawn (drawPropEmissive, the night's cut: enemies.js nightCut), in one array a prop
+    // filled again each frame, so no prop allocates a frame: the trees, nor the Bloomvale's moonblooms
+    // (game/fae.js collect; 28 October 2026).
+    const r = p._rect || (p._rect = [0, 0, 0, 0, null]);
+    r[0] = X;
+    r[1] = Y;
+    r[2] = w;
+    r[3] = h;
+    r[4] = fr;
   }
 
   drawPropEmissive(ctx, p) {
@@ -305,7 +387,10 @@ export class Forest {
   // stands over a crack is lit by it, not painted over.
   addLights(g) {
     const t = g.time, flicker = this.flicker, K = this.look.lightK, CK = this.look.ground.cracks;
-    const hot = CK ? CK.alpha + CK.pulse * Math.sin(g.clock * 1.7) : 0;
+    // The lava's glow (a topology's: game/topology) lights the night through the same pad, at the
+    // cracks' alpha where the look's ground cracks, else its own.
+    const LV = !CK && this.topo && this.look.terrain?.lava;
+    const hot = CK ? CK.alpha + CK.pulse * Math.sin(g.clock * 1.7) : LV ? LV.alpha + LV.pulse * Math.sin(g.clock * 1.7) : 0;
     this.forEachVisible(g.cam, 120, (c) => {
       for (const p of c.props) {
         if (!p.light) continue;
@@ -314,6 +399,8 @@ export class Forest {
       }
       if (c.glow) g.lighting.glow(c.glow, c.cx * CH, c.cy * CH, CH, CH, hot);
     });
+    // A waking fae ring's light (the Bloomvale's: game/fae.js).
+    if (this.court) this.court.addLights(g);
   }
 
   // The night's light (its look's, the Darkwood's NIGHT): deepening, under the weather, and
@@ -379,8 +466,18 @@ export class Forest {
   // through, so the horde never snags on the woods (the user's rule: monsters bump into
   // nothing). A trunk is a squat ellipse at the foot of its tree, as the ground is seen at an
   // angle.
+  // On a topology's ground (game/topology, 28 October 2026) the mountains, cliffs, water, lava and
+  // the void hold him too (holdOut), before the crypts and trunks and again after them, so a trunk's
+  // nudge never leaves him over a gap.
   collide(e) {
-    if (e !== this.g.player) return;
+    const T = this.topo;
+    if (e !== this.g.player) {
+      // The Gilded Thief, fleeing, is held by them as the hero is (never by a trunk): the owner's rule
+      // that he can always be caught (enemies.js walled). Every other monster crosses everything.
+      if (T && e.def && e.def.ai === 'flee') this.holdOut(e);
+      return;
+    }
+    if (T) this.holdOut(e);
     // A crypt's walls: only its steps, below its door, can be stood on (Game's door check).
     for (const d of this.g.crypts) {
       const dx = e.x - d.x, dy = e.y - (d.y - CRYPT_BOX.up / 2 - CRYPT_BOX.steps);
@@ -407,11 +504,14 @@ export class Forest {
       e.x = p.x + (tx / tl) * rx;
       e.y = p.y + ((ty / tl) * rx * ry) / rx;
     });
+    if (T) this.holdOut(e);
   }
 
   // Whether a body of radius r could stand at (x, y): off every trunk and landmark post (as
   // collide shapes them) and out of every crypt's walls. What a leap tests its way by (weapons.js LEAP).
+  // On a topology's ground, on land too: a leap stops at a gap's edge, never across it.
   open(x, y, r = 5) {
+    if (this.topo && this.fieldAt(x, y).open < r) return false;
     for (const d of this.g.crypts) {
       const dx = x - d.x, dy = y - (d.y - CRYPT_BOX.up / 2 - CRYPT_BOX.steps);
       if (Math.abs(dx) < CRYPT_BOX.w / 2 + 3 && Math.abs(dy) < CRYPT_BOX.up / 2) return false;
@@ -456,11 +556,26 @@ export class Forest {
     return HEADING;
   }
 
+  // Where something sent near (x, y) comes in (a ring, a pack, a summons, a boss's blink, a minion
+  // called back, the Druid's mushrooms): there. On a topology's ground, the nearest land within 96 px
+  // (8 ways, 16 px a step), else there all the same: monsters cross the gaps, and nothing an event
+  // counts on is lost.
   freeSpot(x, y) {
-    return { x, y };
+    if (!this.topo) return { x, y };
+    return this.seek(x, y, 16, 96, 16, 8, false) || { x, y };
   }
 
+  // Where the horde comes in, at the view's edge (edgePoint). On a topology's ground, up to three more
+  // tries for one on land; one still in the rock or over the void crosses on foot. The Darkwood's: the
+  // one call, its very draws of Math.random.
   spawnPoint(g, margin = 22) {
+    let pt = this.edgePoint(g, margin);
+    if (!this.topo) return pt;
+    for (let k = 0; k < 3 && !this.free(pt.x, pt.y); k++) pt = this.edgePoint(g, margin);
+    return pt;
+  }
+
+  edgePoint(g, margin = 22) {
     const cam = g.cam, p = g.player;
     const x0 = cam.x - margin, y0 = cam.y - margin, w = cam.W + margin * 2, h = cam.H + margin * 2;
     // Favour the direction of travel a little.
@@ -485,6 +600,155 @@ export class Forest {
     const p = this.g.player;
     const lim = Math.max(cam.W, cam.H) * 0.85;
     return Math.abs(e.x - p.x) > lim || Math.abs(e.y - p.y) > lim;
+  }
+
+  // ------------------------------------------- a topology's ground (game/topology) --
+  // The Sunscorch's mountains, the Frostfell's cliffs and ice, the Abyss's lava or void and bridges
+  // (28 October 2026). Every query reads the chunk's terrain fields (topology/terrain.js), so what is
+  // drawn, what holds the hero and what each asks agree; none makes anything per call, and without a
+  // topology each answers the Darkwood's at once.
+
+  // The terrain fields of chunk (cx, cy), made on first asking and kept by a number; null without.
+  terrainOf(cx, cy) {
+    if (!this.topo) return null;
+    const k = (cx + 32768) * 65536 + (cy + 32768);
+    if (k === this._tk) return this._tc;
+    let t = this.terrain.get(k);
+    if (!t) {
+      t = this.topo.terrain(cx, cy);
+      this.terrain.set(k, t);
+    }
+    this._tk = k;
+    this._tc = t;
+    return t;
+  }
+  // What the ground is at (x, y) (topology/index.js SURFACE): GROUND without a topology.
+  surfaceAt(x, y) {
+    if (!this.topo) return SURFACE.GROUND;
+    return surfaceOf(this.terrainOf(Math.floor(x / CH), Math.floor(y / CH)), x, y, this.topo.axis);
+  }
+  // Px to the nearest wall or gap's edge (+ on land) and its gradient: the one object, filled again
+  // by the next call. TMAX and flat without a topology.
+  fieldAt(x, y) {
+    if (!this.topo) {
+      FIELD.open = TMAX;
+      FIELD.gx = FIELD.gy = 0;
+      return FIELD;
+    }
+    return fieldGrad(this.terrainOf(Math.floor(x / CH), Math.floor(y / CH)), x, y, FIELD);
+  }
+  openAt(x, y) {
+    return this.fieldAt(x, y).open;
+  }
+  // The quicksand pool or ice sheet under (x, y) ({ key, kind, x, y, r, ... }), or null.
+  patchAt(x, y) {
+    if (!this.topo) return null;
+    const tc = this.terrainOf(Math.floor(x / CH), Math.floor(y / CH));
+    for (const p of tc.patches) if (blobSdf(p, x, y, 16) > 0) return p;
+    return null;
+  }
+  // Signed px into a quicksand pool or ice sheet at (x, y) (+ inside): -TMAX without one.
+  patchDepth(x, y) {
+    if (!this.topo) return -TMAX;
+    const tc = this.terrainOf(Math.floor(x / CH), Math.floor(y / CH));
+    return sampleField(tc, tc.patch, x, y, -TMAX);
+  }
+  // Whether the hero could stand at (x, y): every caller's `!w.free || w.free(...)` reads the same as
+  // without it in the Darkwood.
+  free(x, y) {
+    return !this.topo || !HERO_BLOCKED[this.surfaceAt(x, y)];
+  }
+  // The first point on land from (x, y) outward (itself first), `need` px from any edge, 8 ways on
+  // rings from r0 to r1 every `step` px; off the patches too when `dry`. Null when there is none.
+  seek(x, y, r0, r1, step, need, dry) {
+    const ok = (a, b) => this.fieldAt(a, b).open >= need && (!dry || this.patchDepth(a, b) <= -4);
+    if (ok(x, y)) return { x, y };
+    for (let r = r0; r <= r1; r += step) {
+      for (const [ux, uy] of WAYS) if (ok(x + ux * r, y + uy * r)) return { x: x + ux * r, y: y + uy * r };
+    }
+    return null;
+  }
+  // The land nearest (x, y), where what fell there is carried (Game.addPickup, a boss's loot): the
+  // point if the hero could stand there, else 8 ways out to 640 px; failing that, the middle of the
+  // nearest island or the road where it runs. A new { x, y } without a topology.
+  floorNear(x, y) {
+    if (!this.topo || this.free(x, y)) return { x, y };
+    const s = this.seek(x, y, 8, 640, 8, 8, false);
+    if (s) return s;
+    const T = this.topo;
+    if (T.kind === 'islands') {
+      const I = T.island(Math.round(x / T.T.spacing), Math.round(y / T.T.spacing));
+      return { x: I.x, y: I.y };
+    }
+    const u = T.U(x, y), v = T.road(u);
+    return { x: T.X(u, v), y: T.Y(u, v) };
+  }
+  // The nearest dry land within R px of (x, y) (8 ways, 16 px a step): where something that must
+  // stand on land is put (a box of loot, the thief), or null. (x, y) itself without a topology.
+  landSpot(x, y, R = 160) {
+    if (!this.topo) return { x, y };
+    return this.seek(x, y, 16, R, 16, 8, true);
+  }
+  // Whether a walking monster at (x, y) goes at the slower pace of one crossing the rock, the lava or
+  // the void (enemies.js WALL_PACE). Never in the Darkwood, nor more than 800 px from the hero (its
+  // chunk is never made for that, and its pace off screen doesn't matter).
+  slows(x, y) {
+    if (!this.topo) return false;
+    const p = this.g.player;
+    if (Math.abs(x - p.x) > 800 || Math.abs(y - p.y) > 800) return false;
+    return FOE_SLOWED[this.surfaceAt(x, y)] === 1;
+  }
+  // Pushes e out of the walls and gaps along the field, onto open >= its radius: at most twice. Deep
+  // in the rock (where the field lies flat at -TMAX) he is brought to the nearest land.
+  holdOut(e) {
+    const r = e.r || 5;
+    for (let k = 0; k < 2; k++) {
+      const f = this.fieldAt(e.x, e.y);
+      if (f.open >= r) return;
+      const l = Math.hypot(f.gx, f.gy), push = r - f.open;
+      if (l < 1e-4) {
+        const s = this.floorNear(e.x, e.y);
+        e.x = s.x;
+        e.y = s.y;
+        return;
+      }
+      e.x += (f.gx / l) * push;
+      e.y += (f.gy / l) * push;
+    }
+  }
+  // What moves in the ground, under everything (Game.draw): the lava's 32 px tiles turning (the
+  // crypts' baked lava), and over each quicksand pool its sinking swirl. Nothing without a topology,
+  // not a call on the context.
+  drawGroundProps(ctx, cam, time) {
+    if (!this.topo) return;
+    const stamp = (this._swirlN = (this._swirlN || 0) + 1);
+    this.forEachVisible(cam, 0, (c) => {
+      const tc = c.terrain;
+      if (!tc) return;
+      if (tc.lavaTiles) drawLavaTiles(ctx, cam, time, tc);
+      for (const p of tc.patches) {
+        if (p.kind !== 'quicksand' || p._swirl === stamp) continue;
+        p._swirl = stamp;
+        drawSwirls(ctx, cam, time, p);
+      }
+    });
+  }
+  // The tells over the horde (Game.draw, after the actors): every quicksand pool and ice sheet within
+  // 160 px of the hero outlined, so none is ever hidden under the horde's feet (REQS2: readable).
+  drawTerrainTells(ctx, cam) {
+    if (!this.topo || !this.topo.patchKind) return;
+    const p = this.g.player, pcx = Math.floor(p.x / CH), pcy = Math.floor(p.y / CH), tell = this.look.terrain?.tell || {};
+    const stamp = (this._tellN = (this._tellN || 0) + 1);
+    for (let cy = pcy - 1; cy <= pcy + 1; cy++) {
+      for (let cx = pcx - 1; cx <= pcx + 1; cx++) {
+        for (const q of this.terrainOf(cx, cy).patches) {
+          if (q._tell === stamp) continue;
+          q._tell = stamp;
+          if (Math.hypot(q.x - p.x, q.y - p.y) - q.ext > 160) continue;
+          drawTells(ctx, cam, q, tell[q.kind] || '#ffffff');
+        }
+      }
+    }
   }
 }
 

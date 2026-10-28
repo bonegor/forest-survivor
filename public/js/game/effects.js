@@ -10,7 +10,7 @@ import { ringSprite, discSprite, slashFrame, glow, glint, beamSprite, shadowSpri
 import { PC, P } from './particles.js';
 import { WEAPON_SPRITES, BRAND_TIME } from '../data/weapons.js';
 import { danceBlade, spawnProjectile } from './projectiles.js';
-import { fxBurst, poolFlames, flameSeed } from './fxart.js';
+import { fxBurst, vfxBurst, vfxFrames, vfxOn, vfxPrewarm, poolFlames, flameSeed } from './fxart.js';
 import { reachesFeet, reachesBody, spriteRadius } from './hitbox.js';
 
 function blitCentered(ctx, img, sx, sy, scale) {
@@ -35,6 +35,38 @@ export const SLASH_HIT = { to: 0.7, reach: 4 };
 // How long a slash is seen: a quick cut.
 export const SLASH_DUR = 0.16;
 
+// The cuts baked from Sprite Fusion's slash (vfx.js, tools/vfx/picks.mjs; the owner's, 28 October
+// 2026: "see what of their effects we can use for weapons and bake it in with our approach"): the
+// Longsword's (slash), Excalibur's (holy), the Whirlwind's blade (whirl) and the axes' chops
+// (chop), each at these reaches (picks.mjs CUT_REACH, the same lists). A blow is drawn at the
+// nearest one within CUT_SLACK of its reach; past them all, the game's own cut is drawn at the
+// true reach, so the art never shows a blow longer or shorter than it is (the owner's, 22 October
+// 2026: "if I hit a monster it doesn't always hit even if the animation implies a hit").
+export const CUT_REACH = { slash: [30, 38, 46, 56], holy: [46, 56, 68, 82], whirl: [46, 56, 66, 80], chop: [32, 38, 44, 50, 56, 66] };
+const CUT_SLACK = 0.12;
+// Each reach's sprites, by name: a cut's six (up, straight out and down, on his right; the same on
+// his left, baked at their own angles so they sweep clockwise as ours do), the Whirlwind's one
+// blade, a chop's two (starting right, starting down: either may be mirrored).
+const CUT_ENDS = { slash: ['_up', '_0', '_dn', '_up_l', '_0_l', '_dn_l'], whirl: [''], chop: ['_r', '_d'] };
+CUT_ENDS.holy = CUT_ENDS.slash;
+const CUT_NAMES = Object.fromEntries(Object.entries(CUT_REACH).map(([kind, list]) => [kind, Object.fromEntries(list.map((R) => [R, CUT_ENDS[kind].map((end) => `vfx_${kind}_${R}${end}`)]))]));
+const NO_CUTS = Object.freeze([]);
+// The names of the baked sprites of a `kind` of cut for a blow of reach R (CUT_ENDS' order), or
+// none: past the reaches baked, the game draws its own.
+export function bakedCuts(kind, R) {
+  const list = CUT_REACH[kind];
+  let best = list[0];
+  for (let i = 1; i < list.length; i++) if (Math.abs(list[i] - R) < Math.abs(best - R)) best = list[i];
+  return Math.abs(best - R) <= best * CUT_SLACK ? CUT_NAMES[kind][best] : NO_CUTS;
+}
+// Which of a cut's six a swing at `ang` is: KINDS.sword.shoot swings straight out to a side, or
+// 0.55 rad up or down from it (a crypt's blow by hand too: Weapon.strike), so the nearest is the
+// one; on his left (cos < 0) the left three, by the angle mirrored onto his right.
+function cutIndex(ang) {
+  const c = Math.cos(ang), s = Math.sin(ang), a = Math.atan2(s, c < 0 ? -c : c);
+  return (c < 0 ? 3 : 0) + (a < -0.275 ? 0 : a > 0.275 ? 2 : 1);
+}
+
 export class Slash {
   constructor(g, w, ang, R, arc, dmg, holy) {
     this.g = g;
@@ -51,6 +83,11 @@ export class Slash {
     this.hit = new Set(); // each foe once a swing
     const p = g.player;
     if (holy) g.particles.burst(p.x + Math.cos(ang) * R * 0.7, p.y + Math.sin(ang) * R * 0.7, 6, 8, [PC.Y, PC.y, PC.w], 70, 0.4, 1, P.GLOW | P.FADE, {});
+    // The cut as drawn: the baked one at the nearest reach (bakedCuts), riding with him from his
+    // chest as this one is drawn; or, past the reaches baked or with too many effects just begun,
+    // this one's own (draw). Only a picture: the blow is this Slash's, as ever (strike).
+    const cuts = bakedCuts(holy ? 'holy' : 'slash', this.R);
+    this.vfx = cuts.length ? vfxBurst(g, cuts[cutIndex(ang)], p.x, p.y - 7, { follow: p }) : null;
     this.strike();
   }
 
@@ -82,6 +119,7 @@ export class Slash {
   }
 
   draw(ctx, cam) {
+    if (this.vfx) return; // the baked cut is drawn (constructor)
     const p = this.g.player;
     const f = Math.min(5, Math.floor((this.t / this.dur) * 6));
     const img = slashFrame(this.R, this.arc, this.ai, f, 6, this.pal);
@@ -92,6 +130,8 @@ export class Slash {
   drawGlow(ctx, cam) {
     const p = this.g.player;
     if (!this.holy) {
+      // A baked cut has its glint and white edge of its own (unlit, vfx.js em).
+      if (this.vfx) return;
       // A glint of steel at the cut's leading tip (where slashFrame draws it), at its reach.
       const u = this.t / this.dur;
       if (u > 0.75) return;
@@ -124,6 +164,42 @@ const EXPLO = {
   silver: { ring: '#ffffff', glow: '#c0cbdc', light: 'cold', parts: [PC.w, PC.G, PC.g], num: 'holy', glowK: 0.6 },
 };
 
+// Lightning Strike's and Thunderstorm's shock baked (a forked pixel lightning, vfx.js), by the ring
+// each settles at, world px (picks.mjs, the same sizes). A blast is drawn with the nearest within
+// CUT_SLACK of its reach; past them all, as it was (its haze and flash: explode leaves it bare
+// only under its art), so the art never shows a blast wider or narrower than the one that lands
+// (the owner's, 22 October 2026: "if I hit a monster it doesn't always hit even if the animation
+// implies a hit"; 28 October 2026: a 27 px zap inside a 39 px blast, a 45 px one over a 40).
+export const ZAP_RING = { vfx_zap: 27, vfx_zap_35: 35, vfx_zap_big: 45, vfx_zap_57: 57 };
+const ZAPS = Object.entries(ZAP_RING).map(([name, r]) => [Object.freeze([name]), r]);
+// The zap of a shock of reach R, as a list (none, or its one: for vfxPrewarm as well): the one
+// off by the least share of its ring.
+export function bakedZap(R) {
+  let best = ZAPS[0], off = Math.abs(best[1] - R) / best[1];
+  for (let i = 1; i < ZAPS.length; i++) {
+    const o = Math.abs(ZAPS[i][1] - R) / ZAPS[i][1];
+    if (o < off) (best = ZAPS[i]), (off = o);
+  }
+  return off <= CUT_SLACK ? best[0] : NO_CUTS;
+}
+
+// The weapons' blasts baked from Sprite Fusion's (vfx.js, 28 October 2026), played over the ring
+// by explode (a boss's slam, a new Explosion of its own, takes none: Hrimgar's frost is no frozen
+// foe shattering): Lightning Strike's and Thunderstorm's shock, a forked pixel lightning, by the
+// blast's reach (bakedZap); the Purifier's silver star; a frozen foe shattering, Frozen Heart's
+// (Game.killEnemy, its only 'frost'). At most cap of a kind begin within span s (as the sky bolt's
+// own column, Bolt), so a storm of them never crowds the rest out. bare: the shock's art carries its
+// light (its glow frames), so the Explosion's cyan haze and white flash are left out under it.
+const EXPLO_VFX = {
+  shock: { name: (R) => bakedZap(R)[0], cap: 6, span: 0.42, bare: true },
+  silver: { name: () => 'vfx_silver', cap: 8, span: 0.5, bare: false },
+  frost: { name: () => 'vfx_shatter', cap: 8, span: 0.5, bare: false },
+};
+// A meteor's crash flash (opts.vfx: Meteor.update) and any other named: as many.
+const VFX_ANY = { cap: 6, span: 0.5, bare: false };
+
+// opts: kb, ult (the ultimate's blow), art (the blast's sprite, Explosion), vfx (a baked effect
+// over it in place of its style's, EXPLO_VFX) and flip (mirrored: a silver bolt flying left).
 export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
   const st = EXPLO[style] || EXPLO.fire;
   if (dmg > 0) {
@@ -137,7 +213,14 @@ export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
       g.hitEnemy(e, dmg, { w, type: st.num, kb: opts.kb ?? 1.4, kx: dx / (d || 1), ky: dy / (d || 1), ult: opts.ult });
     }
   }
-  g.effects.push(new Explosion(g, x, y, R, style, opts.art));
+  const ex = new Explosion(g, x, y, R, style, opts.art);
+  g.effects.push(ex);
+  // Its baked effect, at the blast's point (vfx.js's origin), over its ring. Only a picture.
+  const xv = opts.vfx ? VFX_ANY : EXPLO_VFX[style], name = opts.vfx || (xv ? xv.name(R) : null);
+  if (name) {
+    ex.vfx = vfxBurst(g, name, x, y, { cap: xv.cap, span: xv.span, flip: opts.flip });
+    ex.bare = !!ex.vfx && xv.bare;
+  }
   sfx('explode', { size: clamp(R / 28, 0.6, 1.8), pan: clamp((x - g.player.x) / 200, -1, 1), pitch: rand(0.85, 1.1) });
 }
 
@@ -151,6 +234,8 @@ export class Explosion {
     this.st = EXPLO[style] || EXPLO.fire;
     this.style = style;
     this.t = 0;
+    this.vfx = null; // its baked effect, if explode played one (EXPLO_VFX)
+    this.bare = false; // and that one's light in place of its haze and flash (drawGlow)
     // The fire bomb's dome stands on the ground; any other blast bursts round the point.
     art ??= this.st.art;
     if (art) fxBurst(g, art, x, y, art === 'fx_explosion' ? { centre: true, fps: 16 } : { fps: 16, dy: 6 });
@@ -183,6 +268,10 @@ export class Explosion {
 
   drawGlow(ctx, cam) {
     const u = this.t / 0.45;
+    if (this.bare) {
+      this.g.light(this.x, this.y, this.R * 4, this.st.light, 1.2 * (1 - u));
+      return;
+    }
     const [sx, sy] = toScreen(cam, this.x, this.y - 4);
     const s = this.R * 3.4 * cam.S * (0.6 + u * 0.6);
     const k = this.st.glowK ?? 1;
@@ -848,8 +937,12 @@ export class Bolt {
     // keeps only its light. A chain's leaves a splash of sparks on each foe it leaps to.
     this.art = style === 'sky';
     // So the horde still reads in a storm: at most 6 strikes on screen at once, and a chain's
-    // splash only while fewer than 3 are.
+    // splash only while fewer than 3 are. A chain's splash is a small forked zap where it strikes
+    // (Sprite Fusion's lightning impact, baked: vfx.js, 28 October 2026), no longer the foot of a
+    // sky bolt's column, which read as one falling there; the column's tail as it was if the baked
+    // effects are off (fxart.js setVfx).
     if (this.art) fxBurst(g, 'fx_lightning', this.b.x, this.b.y + 4, { fps: 24, glow: true, alpha: 0.9, flip: this.a.x > this.b.x, cap: 6, span: 0.42 });
+    else if (style === 'chain' && vfxOn()) vfxBurst(g, 'vfx_zap_tiny', this.b.x, this.b.y, { flip: this.a.x > this.b.x, cap: 3, span: 0.42 });
     else if (style === 'chain') fxBurst(g, 'fx_lightning', this.b.x, this.b.y + 5, { from: 6, fps: 20, glow: true, alpha: 0.7, flip: this.a.x > this.b.x, cap: 3, span: 0.42 });
   }
 
@@ -944,7 +1037,10 @@ export class Meteor {
     if (this.t < 0) return true;
     const u = this.t / this.fall;
     if (u >= 1) {
-      explode(this.g, this.tx, this.ty, this.R, this.dmg, this.w, 'fire', { kb: 2, ult: this.opts.ult, art: 'fx_firebomb' });
+      // A weapon's or Cataclysm's crash flashes (Sprite Fusion's explosion, its first 0.15 s baked:
+      // a white disc, a double shock ring, a spray of sparks; 28 October 2026) over the firebomb's
+      // dome; the boss's dying shower (no weapon's, no damage) only the dome.
+      explode(this.g, this.tx, this.ty, this.R, this.dmg, this.w, 'fire', { kb: 2, ult: this.opts.ult, art: 'fx_firebomb', vfx: this.w || this.ult ? 'vfx_meteor' : null });
       if (this.opts.pool) {
         this.g.effects.push(new Pool(this.g, this.w, this.tx, this.ty, this.R * 0.75, this.opts.pool, this.dmg * 0.2, this.opts.tick || 0.35, 'fire'));
       }
@@ -1168,6 +1264,7 @@ export class Beam {
   constructor(g, x, y, color = '#fee761', dur = 0.9, h = 110, lightKey = 'holy') {
     Object.assign(this, { g, x, y, color, dur, h, lightKey });
     this.t = 0;
+    this.bare = false; // only its light: a baked column is drawn in its place (Pillar.update)
   }
 
   update(dt) {
@@ -1177,6 +1274,10 @@ export class Beam {
 
   drawGlow(ctx, cam) {
     const u = this.t / this.dur;
+    if (this.bare) {
+      this.g.light(this.x, this.y - 10, 80, this.lightKey, 1 - u);
+      return;
+    }
     const [sx, sy] = toScreen(cam, this.x, this.y);
     const img = beamSprite(this.color);
     const w = img.width * cam.S * (1 + u * 0.6) * (u < 0.1 ? u * 10 : 1);
@@ -1194,6 +1295,7 @@ export class Beam {
 // with him (Game.clearTransient); those over the world end there (WORLD_ULTS).
 
 // Knight: a spinning storm of steel around the hero.
+export const WHIRL_R = 46;
 export class Whirl {
   constructor(g, dur) {
     this.g = g;
@@ -1202,6 +1304,27 @@ export class Whirl {
     this.t = 0;
     this.tickT = 0;
     this.ang = 0;
+    this.at = -1; // the reach its blade was picked for (blade)
+    this.fr = null;
+  }
+
+  // Its blade baked from Sprite Fusion's slash (vfx.js, 28 October 2026: thin steel with a white
+  // outer edge and glints, the reach a clean circle), at the nearest reach baked to R (bakedCuts),
+  // turned as it spins; null past them (or with the baked effects off): the game's own (draw).
+  blade(R) {
+    if (R !== this.at) {
+      const cuts = bakedCuts('whirl', R), fr = cuts.length ? vfxFrames(cuts[0]) : null;
+      this.at = R;
+      this.fr = fr ? fr[0] : null;
+    }
+    return this.fr;
+  }
+
+  // Its blade made ready before it is first drawn (Game.launchUlt, under the world's stop): every
+  // one of its turns is made the first time one is asked for.
+  static prewarm(p) {
+    const cuts = bakedCuts('whirl', WHIRL_R * p.area), fr = cuts.length ? vfxFrames(cuts[0]) : null;
+    if (fr) fr[0].rotations(32);
   }
 
   update(dt) {
@@ -1209,7 +1332,7 @@ export class Whirl {
     this.t += dt;
     this.ang += dt * 16;
     this.tickT -= dt;
-    const R = 46 * p.area;
+    const R = WHIRL_R * p.area;
     if (this.tickT <= 0) {
       this.tickT = 0.12;
       const cands = g.grid.foes(p.x, p.y, R);
@@ -1231,11 +1354,11 @@ export class Whirl {
 
   draw(ctx, cam) {
     const p = this.g.player;
-    const R = 46 * p.area;
+    const R = WHIRL_R * p.area, fr = this.blade(R);
     for (let k = 0; k < 2; k++) {
       const a = this.ang + k * Math.PI;
       const ai = ((Math.round((a / TAU) * 32) % 32) + 32) % 32;
-      const img = slashFrame(R, 2.6, ai, 3, 6, STEEL);
+      const img = fr ? fr.rotated(a, 32) : slashFrame(R, 2.6, ai, 3, 6, STEEL);
       const [sx, sy] = toScreen(cam, p.x, p.y - 7);
       ctx.globalAlpha = 0.85;
       blitCentered(ctx, img, sx, sy, cam.S);
@@ -1251,6 +1374,26 @@ export class Whirl {
     ctx.drawImage(glow('#c0cbdc'), sx - s / 2, sy - s / 2, s, s);
     ctx.globalAlpha = 1;
   }
+}
+
+// Every ultimate's start (Game.startUlt), over its pink ring: the release of a charge at his
+// chest, riding with him (Sprite Fusion's energy, baked: vfx.js, 28 October 2026), a white flash,
+// a cross flare, a thick white ring turning pink inside the wider one, a spray of motes. Only a
+// picture.
+export function ultFlash(g, p) {
+  vfxBurst(g, 'vfx_ult', p.x, p.y - 8, { follow: p });
+}
+// What an ultimate draws from the bake, made ready under the world's stop as it is called
+// (Game.launchUlt), so its start never waits on it: the flash, Cataclysm's meteor flashes and
+// Purge's silver bursts (else made ready only with the weapon that plays them: a Sorcerer yet to
+// evolve Meteor Storm has none), the Whirlwind's turning blade, Red Frenzy's chops.
+const ULT_FLASH = ['vfx_ult'];
+const ULT_ART = { cataclysm: ['vfx_ult', 'vfx_meteor'], purge: ['vfx_ult', 'vfx_silver'] };
+export function prewarmUlt(g, type) {
+  const p = g.player;
+  vfxPrewarm(ULT_ART[type] || ULT_FLASH);
+  if (type === 'whirlwind') Whirl.prewarm(p);
+  else if (type === 'frenzy') vfxPrewarm(bakedCuts('chop', FRENZY.R * p.area));
 }
 
 // What an arrow of the storm throws up where it lands (ArrowRain.update).
@@ -1406,7 +1549,13 @@ export class Pillar {
         g.hitEnemy(f, main ? s.dmg : s.dmg * SMITE.splash, { w, type: 'holy', kb: s.kb, kx: dx / (d || 1), ky: dy / (d || 1) });
         brandFoe(f, s.brand);
       }
-      g.effects.push(new Beam(g, this.x, this.y + 1, '#fee761', 0.42, 130));
+      // The pillar itself: Sprite Fusion's holy light baked (vfx.js, 28 October 2026), a pixel
+      // column slamming down on the blow, banded white to gold, halo rings and sparkles rising, in
+      // place of the Beam's smooth gradient (the one thing in the game not drawn in pixels), which
+      // then only lights the ground as it did; the Beam whole if the baked one can't play.
+      const beam = new Beam(g, this.x, this.y + 1, '#fee761', 0.42, 130);
+      beam.bare = !!vfxBurst(g, 'vfx_pillar', this.x, this.y + 1);
+      g.effects.push(beam);
       g.effects.push(new Ring(g, this.x, this.y, 3, R, 0.3, '#fee761', false, 2));
       g.particles.burst(this.x, this.y, 4, 14, [PC.Y, PC.y, PC.w], R * 3.5, 0.45, 1, P.GLOW | P.FADE, { flat: 0.8, vz: 60 });
       sfx('zap', { pitch: rand(0.55, 0.7), pan: clamp((this.x - g.player.x) / 200, -1, 1) });
@@ -1580,6 +1729,13 @@ export class Chop {
     }
     g.particles.burst(this.x, this.y, 5, 6, [PC.r, PC.R, PC.G], R * 3, 0.3, 1, P.FADE, { flat: 0.9, vz: 30 });
     if (!o.quiet) sfx('slash', { pitch: rand(0.7, 0.85) });
+    // The chop as drawn: Sprite Fusion's slash baked nearly all the way round (vfx.js, 28 October
+    // 2026; a white rim on a blood-red body), at the nearest reach baked (bakedCuts), starting right
+    // or down and maybe mirrored by where he stands (hash2: no die is thrown for a picture, and
+    // `ai` above is still drawn, so the game's dice fall as they did); past those reaches, or with
+    // too many effects just begun, this one's own (draw).
+    const cuts = bakedCuts('chop', this.R);
+    this.vfx = cuts.length ? vfxBurst(g, cuts[hash2(Math.round(this.x), Math.round(this.y), 75) < 0.5 ? 0 : 1], this.x, this.y - 5) : null;
   }
 
   update(dt) {
@@ -1588,6 +1744,7 @@ export class Chop {
   }
 
   draw(ctx, cam) {
+    if (this.vfx) return; // the baked chop is drawn (constructor)
     const f = Math.min(5, Math.floor((this.t / this.dur) * 6));
     const [sx, sy] = toScreen(cam, this.x, this.y - 5);
     blitCentered(ctx, slashFrame(this.R, 6, this.ai, f, 6, BLOOD), sx, sy, cam.S);
@@ -1775,7 +1932,8 @@ export function boltTargets(g, x, y, R, n) {
 // the bolt's damage for Purge's, evo for the Purifier's own (it fires three at once, so less each).
 export const SILVER_BURST = { R: 18, dmg: 0.4, evo: 0.2 };
 function silverBurst(pr, e) {
-  explode(pr.g, e.x, e.y - 2, SILVER_BURST.R, pr.dmg * (pr.ult ? SILVER_BURST.dmg : SILVER_BURST.evo), pr.w, 'silver', { kb: 0.6, ult: pr.ult });
+  // Its baked star (EXPLO_VFX) points the way the bolt flies, mirrored for one flying left.
+  explode(pr.g, e.x, e.y - 2, SILVER_BURST.R, pr.dmg * (pr.ult ? SILVER_BURST.dmg : SILVER_BURST.evo), pr.w, 'silver', { kb: 0.6, ult: pr.ult, flip: Math.cos(pr.ang) < 0 });
 }
 
 // One of her heavy silver bolts from (x, y) along ang (weapons.js KINDS.crossbow, Purge): o.dmg,

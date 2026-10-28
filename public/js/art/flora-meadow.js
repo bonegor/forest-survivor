@@ -22,6 +22,8 @@
 //                     gravestones and crosses
 //   crypt_meadow      props.js's crypt grown over with ivy and flowers, the same 26x29 frames (open,
 //                     sealed) and shape, its stairs still glowing lavender ('j')
+//   fae_bloom1..2     the moonblooms round a fae ring (game/fae.js, 28 October 2026), four frames
+//                     each (bud, open, bright, wilted), and their Unseelie skins (fae_bloom1_u, _2_u)
 import { makeBuf, blit } from '../engine/pixels.js';
 import { packedPalette } from './palette.js';
 import { mulberry32 } from '../engine/util.js';
@@ -577,6 +579,144 @@ const IVY = [
 // The ink edge, the dark doorway and the glowing stairs are left as they are: only stone grows over.
 const overgrow = (rows) => rows.map((row, y) => [...row].map((c, x) => (IVY[y][x] !== '.' && !'.khqj'.includes(c) ? IVY[y][x] : c)).join(''));
 
+// ---- The Fae Court's moonblooms (game/fae.js, 28 October 2026) ----------------------------------
+// The owner's (28 October 2026): "Meadow, IDK what to do with meadow, you guys figure out something,
+// have some good game design idea how to make meadow not be identical to forest." The judge's pick,
+// the Fae Court: ten moonblooms round each ring at radius 50 (game/fae-rings.js FAE.bloomR), "not
+// mushroom caps", so a ring never reads as the Puffcap Spores' Fairy Ring round the hero. Ivory petals
+// edged pink round a gold heart that glows: unlike any weapon effect, and the Bloomvale's own flower.
+// Four frames each, never played on a clock: game/fae.js picks the frame by the ring's state, so the
+// blooms are the ring's countdown.
+//   0 bud      asleep: a closed ivory bud (w z T) in green sepals, on its stem over a leaf rosette;
+//              none of the glowing keys (Y y i), so a sleeping ring is quiet by night
+//   1 open     opening one by one as the ring stirs, clockwise like a clock filling: five petals
+//              touching, lit w, bone z, a cool moonlit shade G to the lower right, the rim pink (i),
+//              a 3 x 2 gold heart (Y y) that glows
+//   2 bright   while it dances: the head lifted 1 px and flung wide into a five-pointed star, every
+//              tip pink and lit. In the 3 s quickening the court blinks 1 and 2 at 4 Hz, so the ring
+//              pulses (a compact disc, a wide star) as well as glowing more and less
+//   3 wilted   for 6 s after a dance: the stem bowed over and the head hung, mauve-brown (P lit, A
+//              papery, p shade), no glow
+// The rosette and the stem's foot stay put through all four, so a bloom never shifts on its spot.
+//   fae_bloom1   9 x 12  one moonbloom (7 in 10 round a ring)
+//   fae_bloom2  11 x 10  two smaller ones from one rosette leaning together, their hearts turned to
+//                        each other (3 in 10); bright, both turn up to the sky; wilted, they fall apart
+const ROSETTE = ['...Lee...', '.LLeeeEE.', '.eEeEEEv.'];
+const ROSETTE2 = ['..LLeeeeE..', '.eEeEEeEEv.'];
+const MOONBLOOM1 = {
+  emissive: 'Yyi',
+  frames: [
+    [ // 0 bud
+      '.........',
+      '.........',
+      '.........',
+      '....w....',
+      '...wzT...',
+      '...zzT...',
+      '...LTE...',
+      '..Le.eE..',
+      '....e....',
+      ...ROSETTE,
+    ],
+    [ // 1 open
+      '.........',
+      '.........',
+      '...iwi...',
+      '..wwwzz..',
+      '.iwYYyzi.',
+      '.wwYyyzG.',
+      '..izzGi..',
+      '....e....',
+      '....e....',
+      ...ROSETTE,
+    ],
+    [ // 2 bright
+      '...iwi...',
+      'i..wwz..i',
+      'iwwwwzzGi',
+      '.iwYYyGi.',
+      '..wYyyG..',
+      '.iwz.zGi.',
+      '.ii...ii.',
+      '....e....',
+      '....e....',
+      ...ROSETTE,
+    ],
+    [ // 3 wilted
+      '.........',
+      '.........',
+      '.........',
+      '....eee..',
+      '...e...e.',
+      '...e..PPp',
+      '...e.PPAp',
+      '...e.pAAp',
+      '....epA.A',
+      ...ROSETTE,
+    ],
+  ],
+};
+const MOONBLOOM2 = {
+  emissive: 'Yyi',
+  frames: [
+    [ // 0 bud
+      '...........',
+      '...........',
+      '..w........',
+      '.wzT....w..',
+      '.zzT...wzT.',
+      '.LTE...zzT.',
+      '...e...e...',
+      '...e...e...',
+      ...ROSETTE2,
+    ],
+    [ // 1 open
+      '...........',
+      '.iwi.......',
+      'iwwYy..iwi.',
+      'iwzyy.yYwzi',
+      '.iGG..yyzGi',
+      '..e....iGi.',
+      '...e...e...',
+      '...e...e...',
+      ...ROSETTE2,
+    ],
+    [ // 2 bright
+      '.iwi.......',
+      'iwwzi..iwi.',
+      '.wYyG.iwwzi',
+      'izyyi..wYyG',
+      '.i.i..izyyi',
+      '..e....i.i.',
+      '...e...e...',
+      '...e...e...',
+      ...ROSETTE2,
+    ],
+    [ // 3 wilted: the left head hung on its bowed stem, the right one fallen over to the ground
+      '...........',
+      '...........',
+      '...........',
+      '..ee.......',
+      '.e..e...ee.',
+      '.e..PA.e..e',
+      '.e.PAApe.PA',
+      '..e.pA.e.pA',
+      ...ROSETTE2,
+    ],
+  ],
+};
+// The Unseelie Hour's skin (from 8:00), a recolour of the same drawing, picked by eye from four on the
+// night meadow (a pale rose heart read as an eye, not crimson; a darker rim lost the ring at 4x):
+// petals violet (pale lavender lit, a mid violet, a deep violet shade), the rim crimson, the heart a hot
+// rose over blood crimson, the bud's cream the deep violet, the leaves a cold blue-green. The glow
+// follows the swap (engine/sprites.js spriteBuffers: the emissive set is the recoloured Y y i), and no
+// other colour of the skin lands on those three, so the bud and the wilt stay unlit in it too.
+const UNSEELIE_BLOOM = {
+  w: '#e2ccff', z: '#b48ce8', G: '#8058c0', T: '#8058c0',
+  i: '#e8304a', Y: '#ff5a78', y: '#b0183a',
+  L: '#4f9a7c', e: '#2f7060', E: '#1f4c4a', v: '#173538',
+};
+
 // ---- The meadow's sprites ---------------------------------------------------------------------
 export const FLORA_MEADOW = {
   bloom_tree1: { gen: () => [genBlossom(3, PINK)] },
@@ -658,4 +798,10 @@ export const FLORA_MEADOW = {
     'eELNNNNNNNNNNNEe',
   ]] },
   crypt_meadow: { emissive: 'j', frames: CRYPT.map(overgrow) },
+  fae_bloom1: MOONBLOOM1,
+  fae_bloom2: MOONBLOOM2,
+  // (burst: false, a bloom never bursts: the skin's ten colours stay off the particle list, which a
+  // byte holds, engine/sprites.js buildSprite.)
+  fae_bloom1_u: { ...MOONBLOOM1, palette: UNSEELIE_BLOOM, burst: false },
+  fae_bloom2_u: { ...MOONBLOOM2, palette: UNSEELIE_BLOOM, burst: false },
 };

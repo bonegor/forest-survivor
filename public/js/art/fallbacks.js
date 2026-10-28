@@ -4,4 +4,6 @@ export const ART_FALLBACKS = {
   // The Armory's Arsenal and Reliquary (21 October 2026): an axe and a clover until their own.
   i_arsenal: 'i_axe',
   i_reliquary: 'i_luck',
+  // (The Bloomvale's moonblooms and the Survival maps' new ground stood in here until drawn, 28
+  // October 2026: all drawn now, in art/flora-meadow.js and art/terrain.js.)
 };

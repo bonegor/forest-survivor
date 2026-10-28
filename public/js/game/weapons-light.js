@@ -6,10 +6,11 @@
 // Effect interface as in effects.js: update(dt) -> keep?; drawGround / draw / drawGlow(ctx, cam).
 
 import { sfx } from '../engine/audio.js';
-import { rand, TAU, clamp, angleDiff, ease, pick } from '../engine/util.js';
+import { rand, TAU, clamp, angleDiff, ease, pick, hash2 } from '../engine/util.js';
 import { glow, glint } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { Ring, brandFoe } from './effects.js';
+import { vfxFrames, vfxData } from './fxart.js';
 import { reachesFeet, reachesBody } from './hitbox.js';
 
 const toScreen = (cam, x, y) => [(x - cam.x) * cam.S, (y - cam.y) * cam.S];
@@ -408,6 +409,21 @@ export class ReapMark {
 // as a small area blow in a burst of sparks.
 // Its light is cool starlight (ring: the burst's), apart from Smite's gold and the lightning's cyan.
 export const STAR = { fall: 0.3, R: 13, dx: 46, h: 120, tail: 0.45, ring: '#c4d0ff' };
+
+// A star's flare (Sprite Fusion's sparkle, baked: vfx.js, 28 October 2026), in place of the two
+// crossed bars it was: an eight-point flare, long arms graded from white, popping in, turning,
+// twinkling, with satellites and motes. Its head as it falls (vfx_starhead, looping); where it
+// lands, Starfall's in moonlight (vfx_star), Comet Shower's in gold (vfx_comet). Light itself:
+// drawn in the glow pass, adding light; but by day (the Sunscorch, the Frostfell) laid over as it
+// is, as light added to bright sand and snow washes out (the critic's, 28 October 2026), its
+// lavender, slate and gold arms then standing out on them.
+function flare(ctx, cam, fr, v, x, y, flip, day) {
+  const S = cam.S, op = ctx.globalCompositeOperation;
+  if (day) ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(fr.get(flip), Math.round((x - (flip ? fr.w - v.ox : v.ox) - cam.x) * S), Math.round((y - v.oy - cam.y) * S), fr.w * S, fr.h * S);
+  if (day) ctx.globalCompositeOperation = op;
+}
+
 export class Star {
   constructor(g, w, x, y, delay = 0) {
     this.g = g;
@@ -418,6 +434,7 @@ export class Star {
     this.struck = false;
     this.big = !!w.s.comet;
     this.dur = STAR.fall;
+    this.flip = hash2(Math.round(x), Math.round(y), 76) < 0.5; // its flare's, by where it falls
   }
 
   get R() {
@@ -464,15 +481,27 @@ export class Star {
       ctx.moveTo(sx, sy);
       ctx.lineTo(tx, ty);
       ctx.stroke();
-      glint(ctx, sx, sy, (this.big ? 5 : 3.5) * S, S, '#ffffff');
+      // Its head: the baked flare (flare), else a four-point glint.
+      const head = vfxFrames('vfx_starhead');
+      if (head) {
+        const v = vfxData('vfx_starhead');
+        flare(ctx, cam, head[Math.floor(this.t * v.fps) % head.length], v, hx, hy, false, !!this.g.world.daylight);
+      } else glint(ctx, sx, sy, (this.big ? 5 : 3.5) * S, S, '#ffffff');
       this.g.light(hx, hy, 22, 'moon', 0.6);
     } else {
-      // The spot it struck: a four-point sparkle opening and fading.
+      // The spot it struck: the baked flare popping in, pulsing and fading (flare, its frames
+      // the 0.25 s of this tail), else a four-point sparkle opening and fading.
       const u = clamp((this.t - STAR.fall) / 0.25, 0, 1);
-      const [sx, sy] = toScreen(cam, this.x, this.y);
-      ctx.globalAlpha = 1 - u;
-      glint(ctx, sx, sy, (3 + u * this.R * 0.6) * S, S, STAR.ring);
-      ctx.globalAlpha = 1;
+      const name = this.big ? 'vfx_comet' : 'vfx_star', land = vfxFrames(name);
+      if (land) {
+        const v = vfxData(name);
+        flare(ctx, cam, land[Math.min(land.length - 1, Math.floor((this.t - STAR.fall) * v.fps))], v, this.x, this.y, this.flip, !!this.g.world.daylight);
+      } else {
+        const [sx, sy] = toScreen(cam, this.x, this.y);
+        ctx.globalAlpha = 1 - u;
+        glint(ctx, sx, sy, (3 + u * this.R * 0.6) * S, S, STAR.ring);
+        ctx.globalAlpha = 1;
+      }
       this.g.light(this.x, this.y, this.R * 2, 'moon', (1 - u) * 0.8);
     }
   }

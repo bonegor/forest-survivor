@@ -16,6 +16,7 @@
 //   small: 'name'           // a smaller cut of a hires pose, for when it does not fit
 //   palette: { p: '#7a4a80' } // colours drawn instead: palette keys, or the art's own '#rrggbb'
 //   rim: '#8b9bb4'          // a 1px ring outside the outline (palette and rim: tuned.js)
+//   burst: false            // never dies in a burst: its palette's colours stay off the particle list
 // }
 
 import { HERO_ART } from './heroes.js';
@@ -35,6 +36,7 @@ import { FLORA_DESERT } from './flora-desert.js';
 import { FLORA_FROZEN } from './flora-frozen.js';
 import { FLORA_MEADOW } from './flora-meadow.js';
 import { FLORA_HELL } from './flora-hell.js';
+import { TERRAIN_ART } from './terrain.js';
 import { TUNED } from './tuned.js';
 
 // The art as drawn, and as the game draws it: with the colour tunes baked from the sprite tuner.
@@ -43,7 +45,10 @@ export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, 
   ...PALADIN_ITEMS, ...DRUID_ITEMS, ...BERSERKER_ITEMS, ...WITCHHUNTER_ITEMS,
   // the new Survival maps of 28 October 2026 (data/maps.js): their horde, their bosses, and the
   // trees, rocks and props their ground grows (game/biomes.js)
-  ...MAP_MONSTER_ART, ...MAP_BOSS_ART, ...FLORA_DESERT, ...FLORA_FROZEN, ...FLORA_MEADOW, ...FLORA_HELL };
+  ...MAP_MONSTER_ART, ...MAP_BOSS_ART, ...FLORA_DESERT, ...FLORA_FROZEN, ...FLORA_MEADOW, ...FLORA_HELL,
+  // their new ground's (game/topology, 28 October 2026): cave mouths, igloos, ice rocks, spires, bones,
+  // bridge posts and swirls (art/terrain.js)
+  ...TERRAIN_ART };
 export const ART = withTunes(DRAWN, TUNED);
 
 // Art with colour tunes (tuned.js, by tools/bake-tune.mjs) laid over it: a sprite's palette

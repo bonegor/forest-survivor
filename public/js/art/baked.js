@@ -3,6 +3,23 @@
 
 // One baked sprite's frames as { w, h, d } buffers (packed RGBA, as the engine's).
 export function bakedBuffers(data) {
+  // Run-length coded (rle: 1, tools/vfx/bake.mjs, 28 October 2026: the weapons' effects, mostly
+  // clear): a byte under 128 is one pixel of that colour; one of 128 or more, a run of (byte - 126)
+  // pixels of the colour in the next byte.
+  if (data.rle) {
+    return data.frames.map((encoded) => {
+      const bytes = atob(encoded), d = new Uint32Array(data.w * data.h);
+      for (let k = 0, i = 0; k < bytes.length; k++) {
+        const b = bytes.charCodeAt(k);
+        if (b < 128) d[i++] = data.palette[b];
+        else {
+          d.fill(data.palette[bytes.charCodeAt(++k)], i, i + b - 126);
+          i += b - 126;
+        }
+      }
+      return { w: data.w, h: data.h, d };
+    });
+  }
   // Palette indices are one byte per pixel, or two (little-endian) past 256 colours.
   const n = data.indexBytes || 1;
   return data.frames.map((encoded) => {

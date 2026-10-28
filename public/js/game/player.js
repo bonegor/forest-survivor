@@ -9,6 +9,7 @@ import { clamp, damp, rand, lerp } from '../engine/util.js';
 import { PC, P } from './particles.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { foeName } from './names.js';
+import { SURFACE } from './topology/index.js';
 
 export const BASE_SPEED = 70;
 export const BASE_MAGNET = 42;
@@ -87,6 +88,24 @@ export const RIME = { r: 50, base: 1, per: 0.2, rest: 7, cut: 0.6 };
 // The Druid's Grove Warden: a tree within `near` px of him (World.treeNear), looked for every
 // `every` s.
 export const GROVE = { near: 48, every: 0.25 };
+// What a Survival map's own ground does to him (game/topology, 28 October 2026), only where the map
+// has such ground (g.world.topo: never in the Darkwood, Ranked, a crypt or on the road by day). Each
+// hold is short, drawn (Game.drawHero: a timer arc round his feet) and followed by a grace to walk out
+// in (REQS2: every trap readable and fair); his weapons fire on through all of it, and he can be hit.
+// The Sunscorch's quicksand, the owner's "feel free to add quicksand, hero steps in and cannot move for
+// a few seconds": held `hold` s, sinking `sink` px; then `grace` s in which no quicksand takes him, to
+// walk out. It takes him once his feet are `enter` px inside its rim.
+export const QUICKSAND = { hold: 2.5, grace: 1.5, sink: 4, enter: 2 };
+// The Frostfell's ice, the owner's "hero steps on the ice and continues sliding until reaches regular
+// ground. If hits wall while sliding will stop and can decide where to slide next": a slide at `speed`
+// times his walking speed along the way he came on, the player's steering ignored; begun by walking on
+// at more than `start` px/s once his feet are `enter` px on the ice, or, standing on it, by a direction
+// pressed. It ends once he is `leave` px off the ice (-1: just off it), or when a step of it covers less
+// than `block` of its way along it: he struck something solid (a cliff, a rock, a trunk, an igloo).
+export const ICE = { speed: 1.25, start: 12, enter: 1, leave: -1, block: 0.5 };
+// Frozen by a gust (game/hazards/gusts.js), the owner's "gusts here and there freeze monsters or hero":
+// held `hold` s, then `grace` s in which no gust freezes him.
+export const FROST = { hold: 1.5, grace: 1.5 };
 
 export function xpFor(level) {
   if (level < 20) return 5 + (level - 1) * 10;
@@ -147,6 +166,13 @@ export class Player {
     this.leap = null; // a leap of the Twin Axes under way (leapTo)
     this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
     this.groveT = 0;
+    // A Survival map's ground (QUICKSAND, ICE, FROST): none of it ever set in the Darkwood.
+    this.held = null; // { kind: 'sand' | 'frost', t, max }: HELD in quicksand or FROZEN by a gust; he can't move
+    this.sandFree = 0; // s left in which no quicksand takes him
+    this.frostFree = 0; // s left in which no gust freezes him
+    this.slide = null; // { x, y }: SLIDING, the unit heading of a slide on ice under way
+    this.onIce = false; // standing on ice, not sliding (a direction pressed starts a slide)
+    this.sprayT = 0; // the ice thrown up as he slides (update)
     this.recompute();
     this.revivals += this.gearB.revival;
     this.hp = this.maxHp;
@@ -265,8 +291,94 @@ export class Player {
 
   // The Twin Axes' leap (weapons.js LEAP): to (x, y) over LEAP.dur s, onLand then. The leap is his
   // own blow carrying him, never a blow shoving him, and it only goes where the weapon found open.
+  // Held by quicksand or a gust's frost (28 October 2026) he can't leap out of it: the blow falls
+  // where he stands (onLand at once), so the axes keep chopping while he is held, as every other
+  // weapon keeps firing. A leap from a slide ends the slide (he lands standing: update). Whether he leapt.
   leapTo(x, y, onLand, dur = 0.16) {
+    if (this.held) {
+      onLand();
+      return false;
+    }
+    this.slide = null;
     this.leap = { x0: this.x, y0: this.y, x1: x, y1: y, t: 0, dur, onLand, lx: this.x, ly: this.y };
+    return true;
+  }
+
+  // Frozen by a gust (FROST, game/hazards/gusts.js) for t s: refused in the grace after the last
+  // (frostFree), already held, in the air (a leap), in the Ward's bubble or in the Shadow Dance, which
+  // no blow touches either. A slide is stopped where it is. Whether it took him.
+  freeze(t = FROST.hold) {
+    if (this.dead || this.held || this.frostFree > 0 || this.leap || this.buff('ward') || (this.ult && this.ult.type === 'shadowdance')) return false;
+    this.held = { kind: 'frost', t, max: t };
+    this.slide = null;
+    this.vx = 0;
+    this.vy = 0;
+    this.moving = false;
+    return true;
+  }
+
+  // Every hold of the ground let go (Game.enterCrypt, backToForest): a crypt's floor and the forest
+  // he comes back to by its door start him on his own feet.
+  clearTerrain() {
+    this.held = null;
+    this.sandFree = 0;
+    this.frostFree = 0;
+    this.slide = null;
+    this.onIce = false;
+  }
+
+  // How far he has sunk into quicksand, in px (Game.placePlayer cuts that much off his feet): down
+  // to QUICKSAND.sink over his first 0.35 s in it.
+  get sink() {
+    const h = this.held;
+    return h && h.kind === 'sand' ? QUICKSAND.sink * Math.min(1, (h.max - h.t) / 0.35) : 0;
+  }
+
+  // The ground's clocks: the graces run down, and a hold run out lets him go into its own grace
+  // (QUICKSAND.grace, FROST.grace), to walk out of the sand or away from where the gust blew. They
+  // stand still with everything else under a level-up's cards, a chest, a find or the pause (Game.update).
+  holdClock(dt) {
+    if (this.sandFree > 0) this.sandFree -= dt;
+    if (this.frostFree > 0) this.frostFree -= dt;
+    const h = this.held;
+    if (h && (h.t -= dt) <= 0) {
+      this.held = null;
+      if (h.kind === 'sand') this.sandFree = QUICKSAND.grace;
+      else this.frostFree = FROST.grace;
+    }
+  }
+
+  // What the ground under his feet does to him, on a Survival map's own ground (g.world.topo; the
+  // world's surfaceAt and patchDepth, game/topology). Quicksand takes him once his feet are
+  // QUICKSAND.enter px in, out of its grace and not in the air; ice carries him on at the pace he came
+  // on with (a leap comes down standing on it), and once he is ICE.leave px off it his steering is his
+  // again, his pace easing from the slide's. `landed`: a leap came down this frame.
+  groundUnder(g, landed) {
+    const w = g.world, s = w.surfaceAt(this.x, this.y);
+    if (s !== SURFACE.QUICKSAND && s !== SURFACE.ICE && !this.slide && !this.onIce) return;
+    const pd = w.patchDepth(this.x, this.y);
+    if (s === SURFACE.QUICKSAND) {
+      if (pd > QUICKSAND.enter && this.sandFree <= 0 && !this.held && !this.leap) {
+        this.held = { kind: 'sand', t: QUICKSAND.hold, max: QUICKSAND.hold };
+        this.vx = 0;
+        this.vy = 0;
+        this.moving = false;
+        this.slide = null;
+        this.onIce = false;
+        g.numbers.text(this.x, this.y - 22, 'Quicksand!', 'gold');
+        sfx('thunk');
+      }
+      return;
+    }
+    if (s === SURFACE.ICE && pd > ICE.enter && !this.slide && !this.held && !this.leap) {
+      const v = Math.hypot(this.vx, this.vy);
+      if (v > ICE.start && !landed) this.slide = { x: this.vx / v, y: this.vy / v };
+      else this.onIce = true;
+    }
+    if ((this.slide || this.onIce) && pd < ICE.leave) {
+      this.slide = null;
+      this.onIce = false;
+    }
   }
 
   // How high off the ground he is in a leap, in px (Game.drawPlayer).
@@ -318,20 +430,53 @@ export class Player {
         if (id === 'mirror') this.recompute(); // the extra shot goes
       }
     }
-    // Movement.
+    // Movement. A Survival map's ground may hold him (HELD in quicksand, FROZEN by a gust) or carry
+    // him (SLIDING on ice): its clocks first, then the player's steering, unless the ground has him.
+    // In the Darkwood none of it is ever set, and he steers exactly as he always did.
+    this.holdClock(dt);
     const ax = input.axis();
     const sp = this.moveSpeed;
-    this.vx = damp(this.vx, ax.x * sp, 16, dt);
-    this.vy = damp(this.vy, ax.y * sp, 16, dt);
-    this.moving = Math.abs(ax.x) + Math.abs(ax.y) > 0.1;
-    if (this.moving) {
+    const pressed = Math.abs(ax.x) + Math.abs(ax.y) > 0.1;
+    // Standing on ice, stopped by something solid or come down on it: a direction pressed sends him
+    // sliding that way, from this frame (the owner's "can decide where to slide next").
+    let fresh = false;
+    if (this.onIce && !this.slide && !this.held && !this.leap && pressed) {
+      const l = Math.hypot(ax.x, ax.y);
+      this.slide = { x: ax.x / l, y: ax.y / l };
       this.aim = Math.atan2(ax.y, ax.x);
-      this.face = faceAlong(this.face, ax.x, ax.y);
+      fresh = true;
+    }
+    if (this.held) {
+      // Held: he doesn't move whatever is pressed, and keeps facing and aiming the way he did.
+      this.vx = 0;
+      this.vy = 0;
+      this.moving = false;
+    } else if (this.slide) {
+      // Sliding: carried along the slide's way at ICE.speed of his pace, in his standing pose, the
+      // steering ignored until he is off the ice or stopped.
+      this.vx = this.slide.x * sp * ICE.speed;
+      this.vy = this.slide.y * sp * ICE.speed;
+      this.moving = false;
+      this.face = faceAlong(this.face, this.slide.x, this.slide.y);
+    } else if (this.onIce && !this.leap) {
+      // Standing on the ice with nothing pressed: he stands.
+      this.vx = 0;
+      this.vy = 0;
+      this.moving = false;
+    } else {
+      this.vx = damp(this.vx, ax.x * sp, 16, dt);
+      this.vy = damp(this.vy, ax.y * sp, 16, dt);
+      this.moving = pressed;
+      if (this.moving) {
+        this.aim = Math.atan2(ax.y, ax.x);
+        this.face = faceAlong(this.face, ax.x, ax.y);
+      }
     }
     // Only the player moves the hero: no blow, however heavy, shoves him (Enemy.update). His own
     // leap carries him (leapTo), the player's steering held while he is in the air.
     // Carried off mid-leap (a crypt's door, the stairs): the leap is over, and lands nowhere.
     if (this.leap && Math.hypot(this.x - this.leap.lx, this.y - this.leap.ly) > 1) this.leap = null;
+    let landed = false;
     if (this.leap) {
       const L = this.leap;
       L.t += dt;
@@ -341,16 +486,44 @@ export class Player {
       if (u >= 1) {
         this.leap = null;
         g.world.collide(this);
+        landed = true;
         if (!this.dead) L.onLand();
       }
     } else {
+      const x0 = this.x, y0 = this.y;
       this.x += this.vx * dt;
       this.y += this.vy * dt;
       g.world.collide(this);
+      // A step of a slide that covered less than ICE.block of its way along it struck something
+      // solid (the world held him: a cliff, a rock, a trunk, an igloo's walls): he stops there, on
+      // the ice, and a direction pressed sends him off again.
+      const S = this.slide, way = sp * ICE.speed * dt;
+      if (S && way > 0 && (this.x - x0) * S.x + (this.y - y0) * S.y < ICE.block * way) {
+        // One pressed from standing and stopped at once (pressed into what he stands against) goes
+        // nowhere: he stays where he stood, rather than creeping along it a frame's step at a time,
+        // steered as if he walked (28 October 2026, the owner's "continues sliding until reaches
+        // regular ground"). Never on ice in the Darkwood.
+        if (fresh) {
+          this.x = x0;
+          this.y = y0;
+        }
+        this.slide = null;
+        this.onIce = true;
+        this.vx = 0;
+        this.vy = 0;
+      }
     }
+    // What the ground under him does, where the map has ground of its own (never in the Darkwood).
+    if (g.world.topo) this.groundUnder(g, landed);
     const spd = Math.hypot(this.vx, this.vy);
     this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
-    if (this.moving) {
+    if (this.slide) {
+      // Sliding: ice thrown up from under him instead of dust, and no step heard.
+      if ((this.sprayT -= dt) <= 0) {
+        this.sprayT = 0.06;
+        g.particles.emit(this.x + rand(-3, 3), this.y, 0, -this.vx * 0.2 + rand(-10, 10), -this.vy * 0.2 + rand(-5, 5), rand(10, 20), 0.35, 1, rand(1) < 0.5 ? PC.w : PC.c, P.FADE | P.GROUND, 3, 60);
+      }
+    } else if (this.moving) {
       this.stepT -= dt * spd;
       if (this.stepT <= 0) {
         this.stepT = 22;

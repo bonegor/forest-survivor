@@ -18,7 +18,9 @@
 //                    mushrooms' place (emissive 'zXY')
 //   sand_cairn       a cairn of piled stones over a grave, the gravestones' place
 //   crypt_desert     the crypt (props.js) as a sandstone tomb: the same 26x29 frames, open and
-//                    sealed, its stairs still glowing in 'j'
+//                    sealed, its stairs still glowing in 'j' (no look's door since 28 October 2026,
+//                    when the Sunscorch's crypts became caves, art/terrain.js crypt_cave: kept for
+//                    a look that may want it again)
 //
 // Painted like procgen.js: pixel buffers in palette tones, lit from the top-left and dithered
 // with the same Bayer matrix, so they sit beside the Darkwood's own at its level of detail. One

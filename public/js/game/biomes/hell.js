@@ -136,4 +136,45 @@ export const HELL = {
   crypt: { door: 'crypt_hell', inside: 'inferno', kinds: ['Pit', 'Abyss Gate'], light: 'fire', glow: '#f77622' },
   flicker: ['fire', 'ember'],
   lightK: { cyan: 0.55, ember: 0.8 },
+  // Its ground (game/topology/islands.js, 28 October 2026). The owner's: "for hell, it has to bean area
+  // made of patches of land connected by bridges and occasionally just land. Everything should look
+  // dead....and, yeah, should be like patches of this dead baren wasteland connected with either thin
+  // stretches of this land or bridges here and there and below it should look like .....basically two
+  // versions, one version has lava around these patches of land and below the bridges and the other has
+  // like a huge fall into the void." Islands on a lattice `spacing` px apart (straying `stray` of it), `r`
+  // px round (the start's `startR`), never nearer one another than `gapMin`, their coasts wobbling `amp`
+  // of their radius; each joined to its four neighbours (`links`: one in five or so left out where both
+  // ends can spare it, never leaving an island with fewer than three) by a bridge (`bridge` of them,
+  // `hw.bridge` px half wide, of planks, bone or stone by `materials`), a thin isthmus (`isthmus`) or
+  // a broad joining of land (the rest), bending `bend` of its length. Below: lava or the void, one or the
+  // other per run (`variants`, by the run's seed); the islands and their joinings the same in both.
+  topology: {
+    kind: 'islands', spacing: 900, stray: 0.15, r: [230, 420], startR: 520, gapMin: 80, amp: 0.2,
+    links: {
+      drop: 0.2, bridge: 0.5, isthmus: 0.35, bend: 0.08,
+      hw: { bridge: [12, 18], isthmus: [20, 40], broad: [70, 130] },
+      materials: { planks: 0.5, bone: 0.25, stone: 0.25 },
+    },
+    variants: ['lava', 'void'],
+  },
+  // How the gaps and bridges are painted (game/topology/paint.js): the lava (the Dungeon's ramp, its
+  // crust where it meets the rock, glowing into the night's light at `alpha`, pulsing `pulse`), the
+  // dark rock of an island's south cliff (four strata, light to dark), the void (black, a faint speck
+  // here and there) and the lit lip of a rim over it, the decks' planks, rails and nails, bone and stone,
+  // and the shade a deck casts on what is below it.
+  terrain: {
+    lava: { ramp: tones(['#be4a2f', '#f77622', '#feae34', '#fee761']), crust: tones(['#140b0f', '#7a2a22']), alpha: 0.8, pulse: 0.15 },
+    cliff: tones(['#4a3638', '#3a2a2c', '#2a1e22', '#1a1216']),
+    void: tones(['#04030a', '#2a2438']),
+    lip: H('#6e5c60'),
+    drop: H('#0a0710'),
+    planks: tones(['#5a3a26', '#6a4630', '#4e3220']),
+    plankGap: H('#1e120c'),
+    rail: H('#3a261a'),
+    nail: H('#a0a0a8'),
+    bone: tones(['#d8ccb4', '#c4b69c', '#a89a80', '#8a7e68']),
+    stone: tones(['#5a5460', '#4a4450', '#3e3a46']),
+    mortar: H('#1e1a24'),
+    shade: 0.5,
+  },
 };

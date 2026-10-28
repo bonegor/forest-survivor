@@ -223,6 +223,10 @@ const MARK_ART = {
   stairs: ['....GG', '....Gg', '..GGgg', '..Gggg', 'GGgggg', 'Gggggg'],
   shrine: ['..##..', '.#w##.', '..##..', '.GGgg.', '.Gggg.', 'GGgggg'],
   warn: ['..oo..', '.okko.', '.okko.', 'ookkoo', 'oooooo', 'ookkoo'], // an event coming: a warning triangle
+  // A fae ring waking (the Bloomvale's: game/fae.js, 28 October 2026): a pink ring lit top-left (z),
+  // shaded magenta to the lower right (P), round a gold heart (Y lit, y); its inside goes to ink with
+  // the outline, so the heart sits in a dark eye as the ring's own clear middle does.
+  ring: ['.izii.', 'z....i', 'i.YY.P', 'i.Yy.P', 'i....P', '.iPPP.'],
 };
 const SHRINE_GEMS = { fury: 'r', haste: 'c', fortune: 'y', wisdom: 'j', protection: 'L' };
 // What the world's own marker is, told by its colour (Dungeon.marker): the stairs down, a crypt's
@@ -1131,8 +1135,12 @@ export class Hud {
 
   // Markers at the screen's edge toward what's worth finding off it: the boss, shrines, crypts,
   // chests, the thief and the world's own marker (the stairs, a sleeping lord), in that order.
+  // In a duststorm (the Sunscorch's: Hazards.hazeR, 28 October 2026) what stands on the screen but is
+  // lost in the sand beyond the hero's clear sight shows its icon where it stands (hazeMark); what is off
+  // the screen keeps its arrow. Without a haze (the Darkwood, every other map, a clear sky) as ever.
   drawIndicators(ctx, W, H, t) {
     const g = this.g, m = marks();
+    this.hazeR = g.hazards ? g.hazards.hazeR : null;
     this.markerBand(W, H);
     if (g.boss && !g.boss.dead) this.pointer(ctx, W, H, t, g.boss.x, g.boss.y - 10, '#e43b44', m.boss);
     for (const s of g.shrines) if (!s.used) this.pointer(ctx, W, H, t, s.x, s.y - 10, SHRINE_COLORS[s.type], m.shrine[s.type]);
@@ -1197,7 +1205,10 @@ export class Hud {
     const cam = this.g.cam;
     const z = cam.S / view.S;
     const sx = (wx - cam.x) * z, sy = (wy - cam.y) * z;
-    if (sx > 8 && sy > 8 && sx < W - 8 && sy < H - 8) return;
+    if (sx > 8 && sy > 8 && sx < W - 8 && sy < H - 8) {
+      if (this.hazeR != null && icon) this.hazeMark(ctx, t, wx, wy, sx, sy, icon);
+      return;
+    }
     placeMarker(sx, sy);
     const x = SPOT.x, y = SPOT.y, a = Math.atan2(sy - y, sx - x);
     const bob = Math.sin(t * 6) * 1.5;
@@ -1218,6 +1229,18 @@ export class Hud {
     ctx.fill();
     ctx.restore();
     if (icon) ctx.drawImage(icon, Math.round(x + IN_X[SPOT.edge] * MARK_IN - icon.width / 2), Math.round(y + IN_Y[SPOT.edge] * MARK_IN - icon.height / 2));
+  }
+
+  // A marker's icon where world point (wx, wy) stands on the screen (HUD point sx, sy), when it is
+  // lost in the duststorm's sand: more than hazeR + 16 world px from the hero (the haze's clear sight,
+  // and a little), pulsing, without an arrow (the owner's "duststorm with effect reduced visibility",
+  // 28 October 2026: the sand hides the boss, a shrine, a crypt, a chest, the thief, never their place).
+  hazeMark(ctx, t, wx, wy, sx, sy, icon) {
+    const p = this.g.player;
+    if (Math.hypot(wx - p.x, wy - p.y) <= this.hazeR + 16) return;
+    ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 5);
+    ctx.drawImage(icon, Math.round(sx - icon.width / 2), Math.round(sy - icon.height / 2));
+    ctx.globalAlpha = 1;
   }
 
   // Fallen: "Slain by …" fades in over the drained world (Game DEATH.name), before the results.

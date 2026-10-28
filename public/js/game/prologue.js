@@ -64,7 +64,9 @@ function roadScene() {
 // woods stood, thinned as the desert thins them, a palm here and there by the road.
 export class DayForest extends Forest {
   constructor(g) {
-    super(g, 7361, BIOMES.desert);
+    // The Sunscorch's look without its ground (game/topology, 28 October 2026): the road keeps its own
+    // scene, no corridor between mountains.
+    super(g, 7361, BIOMES.desert, { topology: false });
     this.daylight = true;
     this.noWeather = true; // the road's sky stays clear: no weather is seen or heard on it
     this.scene = roadScene();

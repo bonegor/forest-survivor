@@ -514,7 +514,11 @@ export class Spawner {
   spawnThief(phase) {
     const g = this.g, p = g.player;
     const a = rand(TAU);
-    const spot = g.world.freeSpot(p.x + Math.cos(a) * 120, p.y + Math.sin(a) * 100);
+    // On land a Survival map's ground lets the hero reach (Forest.landSpot, 28 October 2026: the thief is
+    // held by walls and gaps as he is, so one never comes in the rock or over the void); none found, no
+    // thief this time. The Darkwood's free spot otherwise, the very same point.
+    const x = p.x + Math.cos(a) * 120, y = p.y + Math.sin(a) * 100;
+    const spot = g.world.landSpot ? g.world.landSpot(x, y) : g.world.freeSpot(x, y);
     if (!spot) return;
     const e = g.spawnEnemy('thief', spot.x, spot.y, { hpMul: monsterHp(phase, g.mode) * g.diff.hp * g.map.foe.hp, instant: true, sent: true });
     if (e) {

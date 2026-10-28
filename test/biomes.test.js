@@ -170,8 +170,14 @@ test("whatever stands in a tree's place is a tree: it stops the hero, fades over
     for (let cy = -2; cy <= 1; cy++) {
       for (let cx = -2; cx <= 1; cx++) {
         const at = new Map(g.world.chunk(cx, cy).props.map((p) => [`${p.x},${p.y}`, p]));
-        for (const q of D.layoutChunk(cx, cy, null, L.density).props) {
+        // Laid out on the map's own ground (game/topology, 28 October 2026: the Sunscorch's and the
+        // Frostfell's corridors, the Abyss's islands), as the Forest lays it: no tree in the rock or
+        // over a gap, and the topology's own places.
+        for (const q of D.layoutChunk(cx, cy, null, L.density, g.world.topo).props) {
           if (!D.TREE_NAMES.has(q.n)) continue;
+          // Nothing stands in a fae ring's clearing, 64 px round its middle (the Bloomvale's: game/fae-rings.js,
+          // 28 October 2026).
+          if (L.clearAt?.(q.x, q.y)) continue;
           const p = at.get(`${q.x},${q.y}`);
           assert.ok(p, `${id}: what stands in the ${q.n} at ${q.x},${q.y}`);
           assert.ok(p.tree && p.trunk > 0, `${id}: the ${q.n} at ${q.x},${q.y} is a tree`);
@@ -273,9 +279,18 @@ test("the Darkwood's weather is forecast as it was; every climate's skies blend 
     for (const m of C.motes || []) assert.ok(m.key in C.skies.clear, `${id}: its ${m.kind} follow a sky's ${m.key}`);
     const w = new Weather({ ...g, seed: 77 }, C);
     assert.ok(w.spells.every((s) => s.kind in C.skies), `${id}: only its own skies`);
-    assert.equal(w.spells[0].kind, 'clear');
-    assert.equal(w.spells.at(-1).kind, 'clear', `${id}: clear before dawn`);
+    // Opened and closed by its `first` and `close` skies where it gives them (the Frostfell's snow,
+    // 28 October 2026: the owner's "Weather is snow blizzard"), clear otherwise.
+    assert.equal(w.spells[0].kind, C.first ?? 'clear', `${id}: the sky it opens with`);
+    assert.equal(w.spells.at(-1).kind, C.close ?? 'clear', `${id}: the sky it ends in`);
   }
+  assert.equal(BIOMES.frozen.weather.first, 'snow', 'the Frostfell opens in falling snow');
+  assert.equal(BIOMES.frozen.weather.close, 'snow', 'and ends in it');
+  // The Sunscorch's sky is clear or a duststorm (the owner's "weather is clear or has duststorm", 28
+  // October 2026): no other, and only the storm's murk blinds.
+  assert.deepEqual(Object.keys(BIOMES.desert.weather.skies).sort(), ['clear', 'duststorm']);
+  assert.equal(BIOMES.desert.weather.skies.clear.murk, 0);
+  assert.equal(BIOMES.desert.weather.skies.duststorm.murk, 1);
   // Only rain is heard and wets a step: the Bloomvale's shower, without its thunder; the snow
   // crunches; sand and ash fall silent; the Abyss's ember storms bring the thunder.
   const skies = (id) => Object.values(BIOMES[id].weather.skies);
@@ -297,7 +312,7 @@ test("the Darkwood's weather is forecast as it was; every climate's skies blend 
 
 test("a crypt's look within and its name go by the map's look, the Darkwood's as they were", () => {
   const keys = ['0,0', '2,0', '0,2', '-2,2', '4,-2', '2,4', '-4,0', '6,6', '-6,-4', '8,2'];
-  const words = { forest: /^(Crypt|Barrow|Tomb|Ossuary|Sepulchre|Vault|Undercroft) of /, desert: /^(Tomb|Necropolis) of /, frozen: /^(Ice Cave|Glacier Vault) of /, meadow: /^(Barrow|Hollow|Undercroft) of /, hell: /^(Pit|Abyss Gate) of / };
+  const words = { forest: /^(Crypt|Barrow|Tomb|Ossuary|Sepulchre|Vault|Undercroft) of /, desert: /^(Cave|Tomb|Necropolis) of /, frozen: /^(Ice Cave|Glacier Vault) of /, meadow: /^(Barrow|Hollow|Undercroft) of /, hell: /^(Pit|Abyss Gate) of / };
   for (const key of keys) {
     assert.equal(cryptName(key), cryptName(key, FOREST), 'without a look, the Darkwood');
     assert.equal(cryptLookFor(key), cryptLook(key));

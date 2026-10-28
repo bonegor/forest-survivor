@@ -164,8 +164,11 @@ export class Hollow {
       if (d > this.R || d < 3) continue;
       const step = Math.min(d - 2, s.pull * dt * (1.15 - 0.5 * (d / this.R)));
       const nx = e.x + (dx / d) * step, ny = e.y + (dy / d) * step;
-      // Never into a crypt's wall; a Dungeon Run floor's horde goes through them (Enemy.walled).
-      if (!g.world.free || g.world.throughWalls || g.world.free(nx, ny)) {
+      // Never into a crypt's wall; a Dungeon Run floor's horde goes through them (Enemy.walled), and
+      // out in the open the horde crosses everything, a Survival map's rock, cliffs, lava and void
+      // too (Forest.free holds the hero alone): the owner's rule that monsters bump into nothing
+      // (28 October 2026). Only a crypt has throughWalls false.
+      if (g.world.throughWalls !== false || g.world.free(nx, ny)) {
         e.x = nx;
         e.y = ny;
       }

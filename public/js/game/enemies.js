@@ -19,6 +19,7 @@ import { BOSS_AI } from './bosses.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { shotName, bossOf } from './names.js';
 import { spriteExtent } from './hitbox.js';
+import { FAE } from './fae-rings.js';
 
 // Hit cooldown channels a foe keeps (hitT): one for each weapon the hero holds (Game.freeSrc).
 const N_SRC = 24;
@@ -220,6 +221,14 @@ export class Enemy {
     this.confuseA = 0;
     this.confuseTurn = 0;
     this.confuseHit = 0;
+    // Dancing in a fae ring (the Bloomvale's, game/fae.js, 28 October 2026): dance, the ring;
+    // danceEnd, when its music stops; danceC, its court's table (fae-rings.js FAE). Then broken wild
+    // for wildT, at wildK of its pace (breakWild). Only the court sets them.
+    this.dance = null;
+    this.danceEnd = 0;
+    this.danceC = null;
+    this.wildT = 0;
+    this.wildK = 1;
     this.curseT = 0;
     this.curseRec = 0;
     this.curseShare = 0;
@@ -317,6 +326,7 @@ export class Enemy {
     if (this.stunT > 0) this.stunT -= dt;
     if (this.confuseT > 0) this.confuseT -= dt;
     if (this.fearT > 0) this.fearT -= dt;
+    if (this.wildT > 0) this.wildT -= dt;
 
     if (this.spawnT > 0) {
       this.spawnT -= dt;
@@ -379,6 +389,12 @@ export class Enemy {
     // The horde walks its class's speed (hordePace), a Nightmare's faster; the rest scale by the difficulty.
     // Both at the run's walking speed (data/difficulty.js moveFor), as the hero's; on Normal 10% slower (foePace).
     let sp = (this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed) * g.move * (g.diff.foePace ?? 1);
+    // Its pace before slows and holds (a fae dancer's wheel goes by both: danceStep); a wild one's
+    // quicker (the Bloomvale's, 28 October 2026: breakWild), but only as it walks: "a wild dancer
+    // walks at ×1.25 its pace", so a charger's dash keeps its own speed and reach (no hidden change
+    // to an attack).
+    const pace = sp;
+    if (this.wildT > 0 && this.state !== 'dash') sp *= this.wildK;
     if (this.slowT > 0) sp *= 1 - this.slowF;
     if (this.freezeT > 0 || this.rootT > 0) sp = 0;
     if (this.holdCd > 0) this.holdCd -= dt;
@@ -390,6 +406,23 @@ export class Enemy {
     // one (WALL_PACE), whatever its heading; a flier goes over them and a Wraith through them anywhere,
     // at their own pace.
     if (g.world.throughWalls && !def.fly && def.ai !== 'phaser' && !g.world.free(this.x, this.y)) sp *= WALL_PACE;
+    // On a Survival map's own ground (game/topology, 28 October 2026) a walker crosses the mountains,
+    // the cliffs, the lava and the void as the Dungeon Run's horde comes through walls: slower
+    // (WALL_PACE), held by none of it (the owner's rule: monsters bump into nothing). A flier and a
+    // Wraith go over at their own pace; quicksand and ice slow no monster. The Forest's slows answers
+    // false at once without a topology, so the Darkwood's horde walks as it always did.
+    else if (g.world.slows && !def.fly && def.ai !== 'phaser' && g.world.slows(this.x, this.y)) sp *= WALL_PACE;
+
+    // A fae dancer's music stops on its beat, whatever the dancer is doing then (the Bloomvale's, 28
+    // October 2026: the bell, the petals and the release are one moment, every change telegraphed).
+    // One confused or afraid at that moment breaks wild with the rest, not later, as that wears off,
+    // far from its ring and long after the bell; one by then more than FAE.drop past the line just
+    // leaves the dance, as in danceStep.
+    if (this.dance && g.time >= this.danceEnd) {
+      const r = this.dance;
+      if ((this.x - r.x) ** 2 + (this.y - r.y) ** 2 <= (FAE.r + FAE.drop) ** 2) this.breakWild(this.danceC);
+      this.dance = null;
+    }
 
     let dx = 0, dy = 0;
     if (this.lockT > 0) {
@@ -421,6 +454,11 @@ export class Enemy {
       dy = Math.sin(this.confuseA);
       sp *= 0.8;
       this.confusedTouch(dt);
+    } else if (this.dance && this.danceStep(sp, pace)) {
+      // Dancing in a fae ring: round its line, not at the hero (danceStep); out of it, its own way.
+      dx = AIM[0];
+      dy = AIM[1];
+      sp = AIM[2];
     } else if (this.ai) {
       const r = this.ai(this, dt, sp);
       dx = r[0];
@@ -651,6 +689,42 @@ export class Enemy {
     }
   }
 
+  // Dancing in a fae ring (the Bloomvale's, game/fae.js, 28 October 2026: the owner's "have some good
+  // game design idea how to make meadow not be identical to forest"): its heading and speed round the
+  // ring's line, into AIM, or null once it is out of the dance, to go its own way this very frame. The
+  // wheel turns clockwise on the screen at FAE.spin rad/s (FAE.quickSpin in the dance's last
+  // seconds), a spring drawing it toward the line at FAE.pull × how far off it is, never faster than
+  // its own pace; the turn is rigid, so its lanes don't shear (crowd.js spreads the dancers into a
+  // band). sp is its speed after slows, freezes and holds, pace before them: one slowed by half goes
+  // round half as fast, a frozen one not at all, and a blow's knockback moves it as ever. When the
+  // music stops it breaks wild (update, on the beat whatever it is doing: breakWild); one carried more
+  // than FAE.drop past the line (Game.relocate, a hard knockback) leaves the dance as it is. It still
+  // bites the hero on touch (update), and never shoots or charges while it dances: those branches
+  // don't run.
+  danceStep(sp, pace) {
+    const r = this.dance, C = this.danceC, t = this.g.time;
+    const rx = this.x - r.x, ry = this.y - r.y, d = Math.hypot(rx, ry);
+    if (d > FAE.r + FAE.drop) {
+      this.dance = null;
+      return null;
+    }
+    const w = t >= this.danceEnd - C.quick ? FAE.quickSpin : FAE.spin;
+    const vr = clamp(FAE.pull * (FAE.r - d), -pace, pace);
+    const ux = d > 1e-3 ? rx / d : 1, uy = d > 1e-3 ? ry / d : 0; // dead on the middle: out east
+    const vx = -w * ry + vr * ux, vy = w * rx + vr * uy, v = Math.hypot(vx, vy);
+    if (v < 1e-6 || pace <= 0) return aim(0, 0, 0);
+    return aim(vx / v, vy / v, (v * sp) / pace);
+  }
+
+  // Broken wild as a fae ring's music stops (game/fae.js): for C.wild seconds it walks at C.pace of its
+  // pace, never past the swift class's (a bare Knight's: the owner's speed classes of 20 October 2026,
+  // "mice and bats ... as fast as basic no upgrade knight"), the burn's tint flickering on it (draw);
+  // no ring takes it again meanwhile, so a dance can't loop.
+  breakWild(C) {
+    this.wildT = C.wild;
+    this.wildK = this.paced ? Math.max(1, Math.min(C.pace, KNIGHT_PACE / this.spd)) : 1;
+  }
+
   // A champion taking a blow. A charge already under way carries on.
   stagger() {
     if (this.holdCd > 0 || this.state === 'dash') return;
@@ -815,6 +889,14 @@ export class Enemy {
       img = fr.variant('frozen', TINTS.frozen, flip);
       look = 1;
     } else if (this.state === 'wind' && Math.floor(this.life * 20) % 2) {
+      img = fr.variant('burn', TINTS.burn, flip);
+      look = 2;
+    } else if (this.dance) {
+      // Dancing in a fae ring (game/fae.js): charmed pink, and ringed in pink by night.
+      img = fr.variant('charmed', TINTS.charmed, flip);
+      look = 6;
+    } else if (this.wildT > 0 && (this.g.settings.softFlash === true || Math.floor(this.life * 20) % 2 === 0)) {
+      // Broken wild: the wind-up's burn, flickering at 10 Hz, held steady under FLASHES: SOFT.
       img = fr.variant('burn', TINTS.burn, flip);
       look = 2;
     } else if (this.elite) img = fr.variant('eliteo', eliteOutlineBuf, flip);
@@ -1119,6 +1201,8 @@ const IDLE_FPS = 8;
 const ringOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.ringA));
 const haloOf = (hex) => hexPack(hex, Math.round(255 * NIGHT_EDGE.haloA));
 const RING = ringOf(NIGHT_EDGE.ring), HALO = haloOf(NIGHT_EDGE.ring);
+// A fae ring's dancers' (NIGHT_LOOKS 6).
+const CHARM_RING = ringOf('#ff8fc8'), CHARM_HALO = haloOf('#ff8fc8');
 // A frame in its night colours (NIGHT_EDGE lift, gamma, sat and contrast), each colour worked out once; its ink
 // outline (a tuned sprite's own: b.ink) and a rim of its own (b.rim) stay as they are.
 // Lifted first, then saturated and pulled apart: contrast before the lift would crush the darks
@@ -1156,6 +1240,9 @@ export const NIGHT_LOOKS = [
   ['night-eliteo', (b) => nightBuf(eliteOutlineBuf(nightLift(b)), 0)],
   ['night-frozen-e', (b) => nightBuf(TINTS.frozen(nightLift(b)), 0)],
   ['night-burn-e', (b) => nightBuf(TINTS.burn(nightLift(b)), 0)],
+  // A fae ring's dancer (the Bloomvale's, game/fae.js, 28 October 2026): charmed and ringed in pink,
+  // so the wheel reads apart from the free horde's grey-blue. Appended, so 0-5 keep their meaning.
+  ['night-charmed', (b) => nightBuf(TINTS.charmed(nightLift(b)), CHARM_RING, CHARM_HALO)],
 ];
 // An ally's, lifted as the horde's and ringed in green so that a skeleton of the hero's reads
 // apart from the horde's.

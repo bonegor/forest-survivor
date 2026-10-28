@@ -87,19 +87,21 @@ const day = {
   glint: null, // the salt's glint is the moon's
 };
 
-// The climate (weather.js): clear nights, a haze of blown sand, now and then a sandstorm, its
-// grains streaking along the wind, the fog thick with sand and the night cast toward orange. No
-// rain and no thunder, so none of it is heard and no step is wet.
+// The climate (weather.js), the owner's (28 October 2026): "weather is clear or has duststorm with
+// effect reduced visibility". A clear sky, or a duststorm (the sandstorm it was, by its new name): its
+// grains streaking along the wind, the fog thick with sand, the light cast toward orange, and its
+// `murk` the sand that blinds (game/hazards/haze.js: at its height only about 120 px round the hero is
+// seen clearly). Clear for two to four minutes, a storm for one to two; the light haze of sand there
+// was between them went (the owner's "clear or ... duststorm": it can come back as a sky of murk 0.3).
+// No rain and no thunder, so none of it is heard and no step is wet.
 const weather = {
   skies: {
-    clear: { rain: 0, dark: 0, lightning: 0, grain: 0, haze: 0, wind: 0, cast: 0 },
-    haze: { rain: 0, dark: 0.05, lightning: 0, grain: 0.22, haze: 0.6, wind: 0.3, cast: 0.3 },
-    sandstorm: { rain: 0, dark: 0.16, lightning: 0, grain: 1, haze: 1, wind: 1, cast: 0.75 },
+    clear: { rain: 0, dark: 0, lightning: 0, grain: 0, haze: 0, wind: 0, cast: 0, murk: 0 },
+    duststorm: { rain: 0, dark: 0.16, lightning: 0, grain: 1, haze: 1, wind: 1, cast: 0.75, murk: 1 },
   },
   spells: {
-    clear: { secs: [120, 240], next: { haze: 2, sandstorm: 1 } },
-    haze: { secs: [70, 140], next: { clear: 2, sandstorm: 1 } },
-    sandstorm: { secs: [60, 120], next: { haze: 1, clear: 1 } },
+    clear: { secs: [120, 240], next: { duststorm: 1 } },
+    duststorm: { secs: [60, 110], next: { clear: 1 } },
   },
   dim: [0.4, 0.8, 1.5], // the dark of a storm takes the blue first
   cast: { to: [236, 168, 104], k: 0.3 },
@@ -149,6 +151,8 @@ export const DESERT = {
     // The graveyard's cursed trees, dried acacias here (their violet glow kept).
     'graveyard:lm_skulltree': 'lm_driedtree',
     'graveyard:lm_skulltree2': 'lm_driedtree',
+    // An oasis's ring of trees (game/topology/places.js, 28 October 2026): date palms, trees all the same.
+    'oasis:oak1': 'sand_palm1',
   },
   trunks: { sand_cactus1: 3, sand_cactus2: 3, sand_palm1: 2.5, sand_joshua1: 2.5, sand_joshua2: 2.5, sand_acacia1: 2.5, sand_acacia2: 2.5 },
   // In the sun all day long (the owner's "normal bright", 28 October 2026): a warm white light, the
@@ -175,7 +179,56 @@ export const DESERT = {
     { every: [0.2, 0.5], at: 'view', z: [1, 6], vx: [12, 28], vy: [-3, 3], vz: [-1, 1], life: [1.5, 3], size: 1, colors: [PC.t, PC.T, PC.S], flags: P.FADE, drag: 0.1, wind: 70 },
   ],
   weather,
-  crypt: { door: 'crypt_desert', inside: 'tomb', kinds: ['Tomb', 'Necropolis'] },
+  // What its sky does to the fight (game/hazards): the duststorm's haze, as thick as the sky's murk,
+  // clear `clear` px round the hero and the sand opaque from `full` px, at `alpha`, in the sand's colour.
+  hazards: { haze: { key: 'murk', clear: 120, full: 200, alpha: 0.82, rgb: [200, 164, 112] } },
+  // Its crypts are caves (28 October 2026, the owner's "At the top, there is an entrance of a cave
+  // every once in a while ... and that is basicallly the crypt"): their mouths cut in the foot of the
+  // top range (topology), a tomb within as before, called caves now too.
+  crypt: { door: 'crypt_cave', inside: 'tomb', kinds: ['Cave', 'Tomb', 'Necropolis'] },
   flicker: ['fire'],
   lightK: { cyan: 0.55, bloom: 0.7 },
+  // Its ground (game/topology/corridor.js, 28 October 2026). The owner's: "The desert map should be
+  // long left to right map that has a mountain range at top and bottom. At the top, there is an
+  // entrance of a cave every once in a while 2 mins walk apart roughly and that is basicallly the
+  // crypt. feel free to add quicksand". An endless corridor along x: open sand `band` px across (y
+  // about -600 to 600, the faces wobbling `face.amp` px slowly and `face.rough` px finely), the ranges
+  // beyond it; a caravan road winding along it, bending both ways up to `road.amp` px, never nearer
+  // a face than `road.keep`; caves a minute's walk from the start each way (`crypts.first` px, a bare
+  // Knight walking about 64 px/s on Normal), then every two minutes' walk (`every`, ± `jitter`), each
+  // down a footpath from the road; a shrine on the road every `shrines.every` px (35 s of walking);
+  // landmarks between the shrines (`share` of the gaps, `side` px off the road: ruins, a giant's
+  // bones, a stone circle, an oasis); quicksand pools (`patches`: per cell of `cell` px along x, one
+  // of `per`, `r` px round, `offRoad` px off its edge, `clear` px from a place, `fromFace` from a
+  // range), and spires on the ridges every `spires.every` px. Its jitters were made a little tighter
+  // than first planned (the shrines' 250, the caves' 1,000), so two shrines stand 1,700-2,800 px apart
+  // and two caves 7,000-11,000 (test/topology.test.js).
+  topology: {
+    kind: 'corridor', axis: 'x', band: 1200,
+    face: { amp: 70, wave: 1100, rough: 18, grain: 160, ridge: 260 },
+    road: { amp: 300, periods: [2900, 1700], wobble: 0.35, seg: 1024, keep: 180 },
+    crypts: { first: 4500, every: 9000, jitter: 1000, at: 'top', face: 'cliff' },
+    shrines: { every: 2240, jitter: 250 },
+    landmarks: { share: 0.6, side: [160, 280], kinds: ['ruins', 'bones', 'circle', 'ruins', 'oasis', 'bones'] },
+    patches: { kind: 'quicksand', cell: 900, per: [0, 1, 1, 2], r: [15, 35], aspect: [0.8, 1], amp: 0.22, offRoad: 40, clear: 160, fromFace: 60, rocks: null },
+    spires: { name: ['mtn_spire1', 'mtn_spire2'], every: 120, depth: [40, 220] },
+  },
+  // How its ground is painted beyond darkwood.js's (game/topology/paint.js), by day: the ranges' rock
+  // (six tones, dark to light: a red sandstone, darker and redder than any sand so the ranges never
+  // read as more dunes, its terraces and ridges lit from the top left), the cliff's face under the top range
+  // (five, darker toward its foot), the lit lip at its top and the dark line at its foot; quicksand
+  // (five, all darker than the darkest sand by more than 0.12 in lightness, so a pool reads at a
+  // glance), its pale dry rim and wet dark ring; an oasis's water (four); and the tell's colour, the
+  // line drawn round a pool over the horde near the hero (Forest.drawTerrainTells).
+  terrain: {
+    rock: tones(['#4e2c1e', '#74412b', '#8c5234', '#a6643e', '#c07a4c', '#d89462']),
+    face: tones(['#4a2a1c', '#5a3424', '#6c402a', '#7e4c32', '#925a3a']),
+    lip: H('#e8b07a'),
+    foot: H('#2e1a12'),
+    quicksand: tones(['#4a3424', '#57402b', '#634a31', '#705437', '#7c5d3c']),
+    qsRim: H('#d9bf8e'),
+    qsWet: H('#3a2618'),
+    water: tones(['#2f6f8a', '#3d86a0', '#57a3b8', '#8cc8d4']),
+    tell: { quicksand: '#f0d29c' },
+  },
 };

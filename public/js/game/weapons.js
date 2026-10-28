@@ -4,10 +4,10 @@ import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weap
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick, angleDiff } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
-import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode, Pillar, Burrow, Chop, FRENZY, PURGE, boltTargets, stunFoe, silverBolt, LeechChain, LEECH, plantMushroom } from './effects.js';
+import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode, Pillar, Burrow, Chop, FRENZY, PURGE, boltTargets, stunFoe, silverBolt, LeechChain, LEECH, plantMushroom, bakedCuts, bakedZap } from './effects.js';
 import { Minion } from './minions.js';
 import { KINDS_LIGHT } from './weapons-light.js';
-import { fxBurst } from './fxart.js';
+import { fxBurst, vfxPrewarm } from './fxart.js';
 import { gust, gustFoes, GALE_R, Hook, Hollow, thickest, toll, tollFoes, BELL_R } from './crowdfx.js';
 import { PC, P } from './particles.js';
 import { reachesBody } from './hitbox.js';
@@ -36,6 +36,27 @@ export const HASTE = 1.35;
 // The way from p (anything with an x and a y) to the foe t; with no foe, fallback: by default the
 // way the hero faces (p.aim).
 export const aimAt = (p, t, fallback = p.aim) => (t ? Math.atan2(t.y - p.y, t.x - p.x) : fallback);
+
+// The effects baked from Sprite Fusion's (fxart.js, vfx.js; 28 October 2026) a weapon of a kind
+// plays; a sword's cuts, the axes' chops and the lightning's shock by their reach as it is now
+// (bakedCuts, bakedZap). Each is made ready (its frames' canvases) as the weapon is gained,
+// levelled or evolved, or the hero's area grows (recompute: the level-up card's pause hides the
+// few milliseconds), not on its first blow. Only before the run or under a card, a chest or gear:
+// a recompute mid-fight (a level the run's auto-pick takes with no screen, Game.resolveAutoLevels:
+// a Blessing of Reach raising his area to a new reach) leaves the art to be made as its first blow
+// plays it, a sprite at a time, not all six of a new reach's cuts in one frame (28 October 2026).
+const VFX_OF = {
+  chain: ['vfx_zap_tiny'], smite: ['vfx_pillar'], meteor: ['vfx_meteor'],
+  crossbow: ['vfx_silver_small', 'vfx_silver'], starfall: ['vfx_star', 'vfx_comet', 'vfx_starhead'], frost: ['vfx_shatter'],
+};
+function prewarm(w) {
+  if (w.g.state === 'play' && w.g.clock > 0) return;
+  const k = w.def.kind, s = w.s;
+  if (k === 'sword') vfxPrewarm(bakedCuts(s.wave ? 'holy' : 'slash', 30 * s.area));
+  else if (k === 'leap') vfxPrewarm(bakedCuts('chop', CHOP_R * s.area));
+  else if (k === 'lightning') vfxPrewarm(bakedZap(SHOCK_R * s.area));
+  else if (VFX_OF[k]) vfxPrewarm(VFX_OF[k]);
+}
 
 export class Weapon {
   constructor(g, id, src) {
@@ -73,6 +94,7 @@ export class Weapon {
   recompute() {
     this.s = heroStats(this.def, this.level, this.g.player);
     if (this.fx && this.fx.refresh) this.fx.refresh();
+    prewarm(this);
   }
 
   levelUp() {
@@ -265,6 +287,9 @@ export const LEAP = { reach: 64, ahead: 1.75, dur: 0.16, step: 3, near: 10, clos
 // and what each kill of Bloodstorm's heals (of his health).
 export const CHOP_R = 30;
 export const KILL_HEAL_BLOOD = 0.005;
+// Lightning Strike's and Thunderstorm's splash round the struck foe, at area 1 (its zap drawn by it:
+// prewarm).
+export const SHOCK_R = 26;
 
 export function leapTarget(g, p, w) {
   const ahead = (e) => {
@@ -528,9 +553,9 @@ export const KINDS = {
       g.effects.push(new Bolt(g, [{ x: e.x + rand(-6, 6), y: e.y - 150 }, { x: e.x, y: e.y - 4 }], 'sky'));
       g.hitEnemy(e, w.s.dmg, { w, type: 'shock', kb: w.s.kb, kx: rand(-1, 1), ky: rand(-1, 1) });
       stunFoe(e, w.s.stun);
-      explode(g, e.x, e.y, 26 * w.s.area, w.s.dmg * 0.5, w, 'shock', { kb: w.s.kb });
-      for (const f of g.grid.foes(e.x, e.y, 26 * w.s.area)) {
-        if (f !== e && Math.hypot(f.x - e.x, f.y - e.y) <= 26 * w.s.area + f.hr) stunFoe(f, w.s.stun * 0.6);
+      explode(g, e.x, e.y, SHOCK_R * w.s.area, w.s.dmg * 0.5, w, 'shock', { kb: w.s.kb });
+      for (const f of g.grid.foes(e.x, e.y, SHOCK_R * w.s.area)) {
+        if (f !== e && Math.hypot(f.x - e.x, f.y - e.y) <= SHOCK_R * w.s.area + f.hr) stunFoe(f, w.s.stun * 0.6);
       }
       g.particles.burst(e.x, e.y, 8, 10, [PC.c, PC.w, PC.U], 90, 0.35, 1, P.GLOW | P.FADE, { vz: 50 });
       g.light(e.x, e.y, 90, 'white', 0.9);

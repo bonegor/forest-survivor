@@ -556,7 +556,7 @@ weather ${g.weather.kind} · rain ${g.weather.now.rain.toFixed(2)}` : '');
         }),
       ),
       // The weather from now on (weather.js Weather.force): in over a few seconds, the forecast after it made again.
-      // The run's climate's skies (its map's look's: the Darkwood's clear and rain, the Sunscorch's sandstorm...).
+      // The run's climate's skies (its map's look's: the Darkwood's clear and rain, the Sunscorch's duststorm...).
       el('div', { class: 'row' }, ...(g.weather ? Object.keys(g.weather.skies) : []).map((k) => act(`Weather: ${k}`, (g2) => {
         g2.weather.force(k);
         return `The weather turns to ${k}`;

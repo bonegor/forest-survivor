@@ -252,11 +252,14 @@ export const MAPS = {
     name: 'The Bloomvale',
     short: 'MEADOW',
     color: '#f6757a',
-    desc: 'Bright meadows in bloom, ruled by fae and thorn. Prettier than it is kind.',
+    desc: 'Fae rings dance in the blooming meadows. Prettier than it is kind.',
     look: 'meadow',
     seed: 4,
     music: 'forest',
-    foe: { hp: 0.95, dmg: 0.9, horde: 0.9, xp: 1.1 },
+    // Its fae rings (game/fae.js, 28 October 2026) take the horde off the hero for a while, so a
+    // little more of it comes (horde 0.95, was 0.9) for a little less each (xp 1.05, was 1.1): 0.9975
+    // of the Darkwood's experience, levelling as ever, and still between the Frostfell and the Darkwood.
+    foe: { hp: 0.95, dmg: 0.9, horde: 0.95, xp: 1.05 },
     pockets: MEADOW_POCKETS,
     events: MEADOW_EVENTS,
     lastStand: LAST_STAND,

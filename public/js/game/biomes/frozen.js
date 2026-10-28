@@ -74,20 +74,26 @@ const day = {
   glint: { zones: [1, 0, 1], share: 0.004, color: H('#ffffff') },
 };
 
-// The climate (weather.js): clear nights, snowfall, and now and then a blizzard: the flakes thick
-// and driven by the wind, the fog white, the night darker. Snow is never heard falling and never
-// wets a step; fresh snow crunches underfoot (`crunch`: the hero's steps while it falls).
+// The climate (weather.js), the owner's (28 October 2026): "Weather is snow blizzard, gusts here and
+// there freeze monsters or hero." Snowfall, and blizzards in it: the flakes thick and driven by the
+// wind, the fog white, the light dimmer; a clear sky only now and then, briefly. The day opens and ends
+// in falling snow (`first`, `close`). Each sky's `gust` is how often the gusts blow (game/hazards/
+// gusts.js): at a blizzard's 1 every 5 to 11 s, in a snowfall about three times rarer, under a clear sky
+// twenty times. Snow is never heard falling and never wets a step; fresh snow crunches underfoot
+// (`crunch`: the hero's steps while it falls).
 const weather = {
   skies: {
-    clear: { rain: 0, dark: 0, lightning: 0, flake: 0, haze: 0, wind: 0 },
-    snow: { rain: 0, dark: 0.06, lightning: 0, flake: 0.5, haze: 0.4, wind: 0.15 },
-    blizzard: { rain: 0, dark: 0.14, lightning: 0, flake: 1, haze: 1, wind: 1 },
+    clear: { rain: 0, dark: 0, lightning: 0, flake: 0, haze: 0, wind: 0, gust: 0 },
+    snow: { rain: 0, dark: 0.06, lightning: 0, flake: 0.5, haze: 0.4, wind: 0.15, gust: 0.3 },
+    blizzard: { rain: 0, dark: 0.14, lightning: 0, flake: 1, haze: 1, wind: 1, gust: 1 },
   },
   spells: {
-    clear: { secs: [120, 240], next: { snow: 2, blizzard: 1 } },
-    snow: { secs: [90, 180], next: { clear: 2, blizzard: 1 } },
-    blizzard: { secs: [60, 110], next: { snow: 1, clear: 1 } },
+    clear: { secs: [40, 70], next: { snow: 1 } },
+    snow: { secs: [90, 180], next: { blizzard: 2, clear: 0.4 } },
+    blizzard: { secs: [60, 120], next: { snow: 1 } },
   },
+  first: 'snow',
+  close: 'snow',
   dim: [1, 0.9, 0.7],
   crunch: 'flake',
   // Flakes one or two pixels, drifting as they fall, drawn unlit: kept to a soft 0.6 so they never glow.
@@ -144,7 +150,50 @@ export const FROZEN = {
     { every: [0.15, 0.35], at: 'sky', z: [50, 70], vx: [-4, 6], vy: [2, 6], vz: [-14, -9], life: [3.5, 5], size: 1, colors: [PC.w, PC.G], flags: P.FADE, drag: 0.05, wind: 50 },
   ],
   weather,
-  crypt: { door: 'crypt_frozen', inside: 'icecave', kinds: ['Ice Cave', 'Glacier Vault'] },
+  // What its sky does to the fight (game/hazards): gusts (gusts.js), none before `after` s, one every
+  // `every` s at the sky's full `gust`, gathering `tell` s over `r` px, freezing the horde `foes` s and
+  // the hero `hero` s; at his feet `aim` of the time, else `near` px off, `most` at once.
+  hazards: { gusts: { key: 'gust', after: 120, every: [5, 11], tell: 1.2, r: [35, 50], foes: 3, hero: 1.5, aim: 0.35, near: [40, 220], most: 3 } },
+  // Its crypts' doors are igloos (28 October 2026, the owner's "Entrance to crypts are iglus here and
+  // there"), an ice cave within as before.
+  crypt: { door: 'crypt_igloo', inside: 'icecave', kinds: ['Ice Cave', 'Glacier Vault'] },
   flicker: ['fire'],
   lightK: { cyan: 0.55, ice: 0.6 },
+  // Its ground (game/topology/corridor.js, 28 October 2026). The owner's: "The frost map goes up and
+  // down feel free to add details to it like ice here and there - hero steps on the ice and continues
+  // sliding until reaches regular ground ... Entrance to crypts are iglus here and there, some 2
+  // minutes apart." An endless corridor along y: open snow `band` px across (x about -750 to 750), ice
+  // cliffs and rock either side; a road winding up and down it; igloos beside the road (`off` px off
+  // its middle) a minute's walk from the start each way, then every two minutes' walk; a shrine every
+  // 35 s of walking; landmarks between; ice sheets and frozen ponds off the road (`patches`: 50-260 px
+  // across), half of them with rocks frozen in and at their rims (art/terrain.js: solid to the hero, so
+  // a slide stops on one); spires of rock and ice on the cliffs. Its fields are the Sunscorch's (its
+  // header says what each one is).
+  topology: {
+    kind: 'corridor', axis: 'y', band: 1500,
+    face: { amp: 80, wave: 1200, rough: 20, grain: 150, ridge: 260 },
+    road: { amp: 330, periods: [2700, 1600], wobble: 0.35, seg: 1024, keep: 200 },
+    crypts: { first: 4500, every: 9000, jitter: 1000, at: 'road', off: [70, 100], face: 'igloo' },
+    shrines: { every: 2240, jitter: 250 },
+    landmarks: { share: 0.5, side: [180, 320], kinds: ['circle', 'woodcamp', 'ruins', 'graveyard'] },
+    patches: { kind: 'ice', cell: 800, per: [1, 1, 2], r: [25, 130], aspect: [0.55, 1], amp: 0.16, offRoad: 30, clear: 150, fromFace: 50, rocks: { share: 0.5, n: [1, 3], names: ['ice_rock1', 'ice_rock2', 'ice_rock3'] } },
+    spires: { name: ['ice_spire1', 'ice_spire2'], every: 140, depth: [40, 220] },
+  },
+  // How its ground is painted beyond darkwood.js's (game/topology/paint.js), by day: the cliffs' rock
+  // (six tones of blue-grey, darker than the snow so the walls read), a band of face along them, snow
+  // on their ledges and high ridges, the lit lip
+  // and dark foot; the ice (four tones, pale cyan to white: a sheen across it, cracks, a white rim and
+  // a blue shadow just outside it); the tell's colour round a sheet near the hero.
+  terrain: {
+    rock: tones(['#3e4c62', '#4e5d75', '#5f6f88', '#73839b', '#8b9ab0', '#a6b4c6']),
+    face: tones(['#3f4f66', '#4c5d75', '#5b6c84', '#6b7c94', '#7c8da4']),
+    snow: H('#f2f6fb'),
+    lip: H('#ffffff'),
+    foot: H('#2e3a4e'),
+    ice: tones(['#7fc4dc', '#94d2e6', '#a9def0', '#c2eaf6']),
+    iceCrack: H('#5a9ab8'),
+    iceRim: H('#ffffff'),
+    iceEdge: H('#8ea6c8'),
+    tell: { ice: '#4fa8d8' },
+  },
 };

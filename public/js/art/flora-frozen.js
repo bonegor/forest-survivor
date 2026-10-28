@@ -24,7 +24,9 @@
 //   snow_grave                the gravestones and grave crosses: dark stone, snow on its head
 //   crypt_frozen              the crypt: the same 26x29 mausoleum and frames, its roof under snow,
 //                             its columns ice, icicles from the cornice; open, its stairs still glow
-//                             'j'; sealed, its door is a slab of ice with the cross in it
+//                             'j'; sealed, its door is a slab of ice with the cross in it (no
+//                             look's door since 28 October 2026, when the Frostfell's became
+//                             igloos, art/terrain.js crypt_igloo: kept for a look that may want it)
 
 import { makeBuf } from '../engine/pixels.js';
 import { packedPalette } from './palette.js';

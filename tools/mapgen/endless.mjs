@@ -9,6 +9,13 @@
 // crypt doors, its night's light and its cracks' glow, laid out from its map's world seed
 // (data/maps.js) unless --seed says otherwise; into tools/mapgen/out/endless-<look>.
 // --views-only: just the pictures (a smaller overview, no far one), without the checks and timing.
+// A look with a ground of its own (game/topology, 28 October 2026: the Sunscorch's and the Frostfell's
+// corridors, the Abyss's islands) is laid out and painted by it as the game does it: its overview a strip
+// of 128 x 12 chunks along a corridor round the start (its faces, road, caves or igloos, shrines and
+// patches marked) or a square of the islands (the gaps in lava red or void black, the bridges brown);
+// its views the start, the first crypt (cave, igloo, crypt), the nearest quicksand pool or ice pond, a
+// shrine, the road's sharpest bend, a landmark, the nearest bridge and isthmus, and one far out.
+// --run=<seed>: the run's seed (the Abyss's lava or void by it); --variant=lava|void sets it outright.
 
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,6 +26,10 @@ import { GLYPHS } from '../../public/js/engine/fontdata.js';
 import { fbm, mulberry32, clamp, TAU } from '../../public/js/engine/util.js';
 import { DARKWOOD, CHUNK, TREE_NAMES, setWorld, layoutChunk, paintChunk, place, road, roadsOf, roadExists, cacheSizes } from '../../public/js/game/darkwood.js';
 import { BIOMES, biomeProp } from '../../public/js/game/biomes.js';
+import { ART_FALLBACKS } from '../../public/js/art/fallbacks.js';
+import { makeTopology, SURFACE, TN } from '../../public/js/game/topology/index.js';
+import { sampleField } from '../../public/js/game/topology/terrain.js';
+import { paintTerrain } from '../../public/js/game/topology/paint.js';
 import { LIGHT_COLORS } from '../../public/js/game/lighting.js';
 import { writePng } from '../png.mjs';
 
@@ -32,6 +43,14 @@ if (!LOOK) throw new Error(`no look '${BIOME}': ${Object.keys(BIOMES).join(', ')
 const WORLD = BIOME === 'forest' ? DARKWOOD.seed : Object.values((await import('../../public/js/data/maps.js')).MAPS).find((m) => m.look === BIOME)?.seed ?? DARKWOOD.seed;
 setWorld({ seed: Number(arg('seed', WORLD)), trees: Number(arg('trees', DARKWOOD.trees)) });
 const SEED = DARKWOOD.seed, D = DARKWOOD.spacing;
+// Its ground of its own, as the Forest makes it (game/topology): null for the Darkwood and the Bloomvale.
+const RUN = arg('run') ? Number(arg('run')) : undefined;
+const newTopo = () => {
+  const t = makeTopology(LOOK, SEED, RUN);
+  if (t && arg('variant')) t.variant = arg('variant');
+  return t;
+};
+let TOPO = newTopo();
 const OUT = arg('out', BIOME === 'forest' ? 'tools/mapgen/out/endless' : `tools/mapgen/out/endless-${BIOME}`);
 // Its flora, drawn before the game's art table has it (art/flora-<look>.js FLORA_<LOOK>).
 const FLORA = BIOME === 'forest' ? {} : await import(`../../public/js/art/flora-${BIOME}.js`).then((m) => m[`FLORA_${BIOME.toUpperCase()}`] || {}, () => ({}));
@@ -52,8 +71,9 @@ const pal = packedPalette();
 const sprites = {};
 function sprite(name) {
   if (name in sprites) return sprites[name];
-  const def = ART[name] || FLORA[name];
-  if (!def) return (sprites[name] = null); // not drawn yet: the game leaves it out too
+  // Not drawn yet: its stand-in as the game draws it (art/fallbacks.js), or left out as the game does.
+  const def = ART[name] || FLORA[name] || ART[ART_FALLBACKS[name]];
+  if (!def) return (sprites[name] = null);
   const raw = resolveFrames(def)[0];
   let b = Array.isArray(raw) ? fromRows(raw, pal) : raw;
   const thin = def.thin ? new Set([...def.thin].map((ch) => pal[ch])) : null;
@@ -82,12 +102,19 @@ function chunkScene(cd) {
   if (BIOME !== 'forest') for (const d of cd.crypts) props.push({ n: sprite(LOOK.crypt.door) ? LOOK.crypt.door : 'crypt', x: d.x, y: d.y });
   return { props, lights };
 }
-// A chunk's ground as the look paints it, and its cracks' glow if they glow (buf.glow).
+// A chunk laid out as the game lays it (with its topology, when the look has one).
+const lay = (kx, ky) => layoutChunk(kx, ky, null, LOOK.density, TOPO);
+// A chunk's ground as the look paints it, and its cracks' (or its lava's) glow if they glow (buf.glow);
+// its topology's terrain over it, as Forest.generate paints it.
 const ground = (cd) => {
   const buf = makeBuf(CHUNK, CHUNK);
   cd.ground = GROUND;
-  if (GROUND.cracks) buf.glow = new Uint32Array(CHUNK * CHUNK);
+  if (GROUND.cracks || TOPO?.variant === 'lava') buf.glow = new Uint32Array(CHUNK * CHUNK);
   paintChunk(cd, buf.d, buf.glow || null);
+  if (TOPO) {
+    const tc = TOPO.terrain(cd.cx, cd.cy);
+    if (tc.any) paintTerrain(tc, buf.d, buf.glow || null, LOOK, TOPO);
+  }
   return buf;
 };
 
@@ -108,11 +135,11 @@ const falloff = (t) => (t < 0.25 ? 1 - t * 0.72 : t < 0.5 ? 0.82 - (t - 0.25) * 
 // chunk by chunk exactly as the game would build it.
 function renderView(name, cx, cy, hero = null) {
   const w = 600, h = 338, x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);
-  const buf = makeBuf(w, h), props = [], L = [], glow = GROUND.cracks ? new Uint32Array(w * h) : null;
+  const buf = makeBuf(w, h), props = [], L = [], glow = GROUND.cracks || TOPO?.variant === 'lava' ? new Uint32Array(w * h) : null;
   // Chunks a little beyond the screen too, for the trees that lean in and the lights that reach in.
   for (let ky = Math.floor((y0 - 120) / CHUNK); ky <= Math.floor((y0 + h + 120) / CHUNK); ky++) {
     for (let kx = Math.floor((x0 - 120) / CHUNK); kx <= Math.floor((x0 + w + 120) / CHUNK); kx++) {
-      const cd = layoutChunk(kx, ky, null, LOOK.density), sc = chunkScene(cd);
+      const cd = lay(kx, ky), sc = chunkScene(cd);
       props.push(...sc.props);
       L.push(...sc.lights);
       if (kx * CHUNK >= x0 + w || (kx + 1) * CHUNK <= x0 || ky * CHUNK >= y0 + h || (ky + 1) * CHUNK <= y0) continue;
@@ -143,7 +170,7 @@ function renderView(name, cx, cy, hero = null) {
   const amb = LOOK.sun || LOOK.night[1][1];
   // The cracks' glow lights the night too (Forest.addLights, lighting.js glow, at the middle of its
   // pulse): averaged into the light map's 2 px texels and spread smoothly over the screen, as the game's.
-  const lw = Math.ceil(w / 2) + 1, lh = Math.ceil(h / 2) + 1, GL = glow ? new Float32Array(lw * lh * 3) : null, gk = glow ? GROUND.cracks.alpha : 0;
+  const lw = Math.ceil(w / 2) + 1, lh = Math.ceil(h / 2) + 1, GL = glow ? new Float32Array(lw * lh * 3) : null, gk = glow ? (GROUND.cracks || LOOK.terrain.lava).alpha : 0;
   if (GL) {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
@@ -196,23 +223,27 @@ function drawText(buf, s, x, y, col) {
   }
   return cx - x;
 }
-// A square of chunks round a point at one pixel per 8x8 world pixels, daylit for legibility.
-// Every chunk is made on its own, as the game would make it, and the picture is pieced together.
+// A square of chunks round a point at one pixel per 8x8 world pixels, daylit for legibility (nx by ny
+// of them: a corridor's strip along its axis). Every chunk is made on its own, as the game would make
+// it, and the picture is pieced together. With a topology its terrain too: the ranges and cliffs in
+// their rock, the lava red or the void black, the decks brown, the quicksand and ice; its crypt doors
+// marked (cave, igloo, crypt).
 const allTrees = [];
 let chunkCount = 0, propCount = 0;
-function renderOverview(name, wx, wy, n) {
-  const cx0 = Math.floor(wx / CHUNK) - n / 2, cy0 = Math.floor(wy / CHUNK) - n / 2, P = CHUNK / CELL, W = n * P;
-  const buf = makeBuf(W, W), props = [], places = new Map(), landmarks = new Map();
-  for (let ky = 0; ky < n; ky++) {
-    for (let kx = 0; kx < n; kx++) {
-      const cd = layoutChunk(cx0 + kx, cy0 + ky, null, LOOK.density);
+function renderOverview(name, wx, wy, nx, ny = nx) {
+  const cx0 = Math.floor(wx / CHUNK) - Math.floor(nx / 2), cy0 = Math.floor(wy / CHUNK) - Math.floor(ny / 2), P = CHUNK / CELL, W = nx * P, HH = ny * P;
+  const buf = makeBuf(W, HH), props = [], places = new Map(), landmarks = new Map();
+  const TT = LOOK.terrain;
+  for (let ky = 0; ky < ny; ky++) {
+    for (let kx = 0; kx < nx; kx++) {
+      const cd = lay(cx0 + kx, cy0 + ky), tc = TOPO ? TOPO.terrain(cx0 + kx, cy0 + ky) : null;
       chunkCount++;
       propCount += cd.props.length;
       for (const p of cd.props) {
         props.push(p);
         if (TREE_NAMES.has(p.n)) allTrees.push(p);
       }
-      for (const p of cd.places) places.set(`${p.i},${p.j}`, p);
+      for (const p of cd.places) places.set(p.key, p);
       for (const L of cd.landmarks) landmarks.set(`${L.i},${L.j}`, L);
       const m = MARGIN / CELL;
       for (let j = 0; j < P; j++) {
@@ -223,6 +254,13 @@ function renderOverview(name, wx, wy, n) {
           const t2 = fbm(x / 110, y / 110, SEED, 2) * 0.6 + 0.35 - cd.groveF[c] * 0.3 + cd.clearF[c] * 0.15 + b * 0.1;
           let col = GROUND.zones[ZONE[z]][clamp(Math.floor(t2 * 5), 0, 4)];
           if (cd.dist[c] < 0.5 + b * 4) col = GROUND.road[cd.dist[c] < -5 ? 4 : 3];
+          if (tc && tc.any) {
+            const o = sampleField(tc, tc.open, x, y, 127), pt = sampleField(tc, tc.patch, x, y, -127), dk = sampleField(tc, tc.deck, x, y, -127);
+            if (dk > 0) col = H('#8a5a3a');
+            else if (o < 0 && tc.blocked === SURFACE.GAP) col = TOPO.variant === 'lava' ? (o > -6 ? TT.lava.crust[1] : TT.lava.ramp[clamp(Math.floor(1.5 + b * 2), 0, 3)]) : o > -6 ? TT.cliff[1] : TT.void[0];
+            else if (o < 0) col = tc.pools.length && tc.pools.some((q) => Math.hypot(q.x - x, q.y - y) < q.ext + 8) ? TT.water[1] : o > -5 ? TT.foot : TT.rock[clamp(Math.floor(-o / 40 + 1 + b), 0, 3)];
+            else if (pt > 0) col = TT.quicksand ? TT.quicksand[1] : TT.ice[1];
+          }
           buf.d[py * W + px] = col;
         }
       }
@@ -233,7 +271,7 @@ function renderOverview(name, wx, wy, n) {
     const cx = (x - ox) / CELL, cy = (y - oy) / CELL;
     for (let j = Math.floor(cy - r - 1); j <= Math.ceil(cy + r + 1); j++) {
       for (let i = Math.floor(cx - r - 1); i <= Math.ceil(cx + r + 1); i++) {
-        if (i < 0 || j < 0 || i >= W || j >= W) continue;
+        if (i < 0 || j < 0 || i >= W || j >= HH) continue;
         const d = Math.hypot(i + 0.5 - cx, j + 0.5 - cy);
         if (d <= r) buf.d[j * W + i] = col;
         else if (ink && d <= r + 0.8) buf.d[j * W + i] = ink;
@@ -251,19 +289,26 @@ function renderOverview(name, wx, wy, n) {
     else if (p.n.startsWith('grave') || p.n.includes('pillar')) dot(p.x, p.y - 4, 0.8, H('#c0cbdc'));
     else if (p.n === 'menhir') dot(p.x, p.y - 4, 0.9, H('#2ce8f5'));
     else if (p.n === 'campfire' || p.n === 'lantern') dot(p.x, p.y - 4, 1, H('#feae34'));
+    else if (p.n.includes('spire')) dot(p.x, p.y - 6, 1, H('#3a2a20'));
+    else if (p.n.startsWith('hell_post')) dot(p.x, p.y - 2, 0.6, H('#e8d8b0'));
   }
   const COL = { fury: '#e43b44', haste: '#2ce8f5', fortune: '#feae34', wisdom: '#c49bd9', protection: '#63c74d' };
   for (const p of places.values()) {
     if (p.kind === 'start') {
       dot(p.x, p.y, 6, H('#f77622'), H('#ffffff'));
       drawText(buf, 'start', Math.round((p.x - ox) / CELL) + 10, Math.round((p.y - oy) / CELL) - 4, H('#ffffff'));
-    } else {
+    } else if (p.type) {
       dot(p.x, p.y, 5, H(COL[p.type]), H('#ffffff'));
       dot(p.x, p.y, 2, H('#ffffff'));
       drawText(buf, p.type, Math.round((p.x - ox) / CELL) + 8, Math.round((p.y - oy) / CELL) - 3, H(COL[p.type]));
     }
+    if (TOPO && p.crypt) {
+      const d = p.crypt;
+      dot(d.x, d.y - 8, 4, H('#181425'), H('#feae34'));
+      drawText(buf, d.face === 'cliff' ? 'cave' : d.face === 'igloo' ? 'igloo' : 'crypt', Math.round((d.x - ox) / CELL) + 7, Math.round((d.y - oy) / CELL) - 4, H('#feae34'));
+    }
   }
-  for (const L of landmarks.values()) drawText(buf, L.kind, Math.round((L.x - ox) / CELL) - 14, Math.round((L.y - oy) / CELL) + 9, H('#c0cbdc'));
+  for (const L of landmarks.values()) if (L.kind !== 'ridge' && L.kind !== 'bridgehead') drawText(buf, L.kind, Math.round((L.x - ox) / CELL) - 14, Math.round((L.y - oy) / CELL) + 9, H('#c0cbdc'));
   writePng(join(OUT, `${name}.png`), buf);
   return { places: [...places.values()], landmarks: [...landmarks.values()] };
 }
@@ -271,47 +316,108 @@ function renderOverview(name, wx, wy, n) {
 // ---- 6. Make the pictures, then check the forest really is the same however it is made ----------
 console.log(BIOME === 'forest' ? `Endless Darkwood, seed ${SEED}` : `Endless Darkwood in the ${BIOME}'s look, seed ${SEED}`);
 // Timing first, while the heap is as small as the game's: each chunk made and painted in turn,
-// as the game does one per frame, after the first 40 have warmed the code up.
-const chunkMs = [], groundMs = [];
+// as the game does one per frame, after the first 40 have warmed the code up. A topology's terrain
+// fields and their painting are timed apart too (they are within the ground's time).
+const chunkMs = [], groundMs = [], terrainMs = [], tpaintMs = [];
 for (let k = 0; k < (VIEWS_ONLY ? 0 : 340); k++) {
+  const kx = (k % 20) - 10, ky = Math.floor(k / 20) - 8;
   const t0 = performance.now();
-  const cd = layoutChunk((k % 20) - 10, Math.floor(k / 20) - 8, null, LOOK.density);
+  const cd = lay(kx, ky);
   const t1 = performance.now();
   ground(cd);
+  const t2 = performance.now();
   if (k >= 40) {
     chunkMs.push(t1 - t0);
-    groundMs.push(performance.now() - t1);
+    groundMs.push(t2 - t1);
+  }
+  if (TOPO) {
+    const a = performance.now(), tc = TOPO.terrain(kx, ky), b = performance.now();
+    if (tc.any) paintTerrain(tc, makeBuf(CHUNK, CHUNK).d, null, LOOK, TOPO);
+    if (k >= 40) {
+      terrainMs.push(b - a);
+      tpaintMs.push(performance.now() - b);
+    }
   }
 }
 if (!VIEWS_ONLY) lap('timing 300 chunks');
-const HOME = VIEWS_ONLY ? 24 : 48;
-const home = renderOverview('overview', 0, 0, HOME);
-lap(`overview round the start (${HOME}x${HOME} chunks)`);
-const FAR = { x: 67 * D, y: 47 * D }; // a crossroads about 120,000 px from the start
-const far = VIEWS_ONLY ? null : renderOverview('overview-far', FAR.x, FAR.y, 24);
-if (!VIEWS_ONLY) lap(`overview far away (24x24 chunks)`);
+// The overview: a corridor's strip along its axis, else a square round the start.
+const ST = TOPO ? TOPO.start() : { x: 0, y: 0 };
+const HOME = TOPO?.kind === 'islands' ? (VIEWS_ONLY ? 32 : 48) : VIEWS_ONLY ? 24 : 48;
+const [NX, NY] = TOPO?.kind === 'corridor' ? (TOPO.axis === 'x' ? [128, 12] : [12, 128]) : [HOME, HOME];
+const home = renderOverview('overview', ST.x, ST.y, NX, NY);
+lap(`overview round the start (${NX}x${NY} chunks)`);
+// About 120,000 px from the start: along a corridor, or a crossroads (an island) far off.
+const FAR = TOPO?.kind === 'corridor' ? (TOPO.axis === 'x' ? { x: 120000, y: 0 } : { x: 0, y: 120000 }) : { x: 67 * D, y: 47 * D };
+const far = VIEWS_ONLY ? null : TOPO?.kind === 'corridor' ? renderOverview('overview-far', FAR.x, FAR.y, TOPO.axis === 'x' ? 24 : 12, TOPO.axis === 'x' ? 12 : 24) : renderOverview('overview-far', FAR.x, FAR.y, 24);
+if (!VIEWS_ONLY) lap(`overview far away`);
 
-const start = place(0, 0);
-renderView('start', start.x, start.y + 14, start.hero);
-const firstShrines = roadsOf(0, 0).map(([a, b, s]) => (a === 0 && b === 0 ? place(a + 1, b + s) : place(a, b)));
-const ne = firstShrines.find((p) => p.x > 0 && p.y < 0) || firstShrines[0];
-renderView('shrine', ne.x, ne.y + 10);
-// The sharpest bend on the roads round the start, away from the crossroads.
 let bend = null;
-for (const e of cacheSizes().roadList) {
-  if (Math.abs(e.xs[0]) > 4 * D || Math.abs(e.ys[0]) > 4 * D) continue;
-  for (let k = 60; k < e.xs.length - 60; k += 4) {
-    const a1 = Math.atan2(e.ys[k] - e.ys[k - 25], e.xs[k] - e.xs[k - 25]), a2 = Math.atan2(e.ys[k + 25] - e.ys[k], e.xs[k + 25] - e.xs[k]);
-    let turn = Math.abs(a2 - a1);
-    if (turn > Math.PI) turn = TAU - turn;
-    if (!bend || turn > bend.turn) bend = { turn, x: e.xs[k], y: e.ys[k] };
+if (TOPO) {
+  // A topology's views: its start, its first crypt, its nearest patch (and pond), a shrine, the road's
+  // sharpest bend, its landmarks, its edges; the islands' nearest bridge, isthmus and broad joining.
+  const T = TOPO, byNear = (a, b) => Math.hypot(a.x - ST.x, a.y - ST.y) - Math.hypot(b.x - ST.x, b.y - ST.y);
+  renderView('start', ST.x, ST.y - 10, ST);
+  const crypt = T.cryptsNear(ST.x, ST.y, 9000).filter((c) => c.key !== '0,0').sort(byNear)[0];
+  renderView(crypt.face === 'cliff' ? 'cave' : crypt.face === 'igloo' ? 'igloo' : 'crypt', crypt.x, crypt.y + 10, { x: crypt.x + 3, y: crypt.y + 44 });
+  if (T.patchKind) {
+    const ps = T.patchesNear(ST.x, ST.y, 6000).sort(byNear), p = ps[0], pond = ps.find((q) => q.rocks);
+    renderView(T.patchKind === SURFACE.QUICKSAND ? 'quicksand' : 'ice', p.x, p.y, { x: Math.round(p.x + p.ext + 14), y: Math.round(p.y + 6) });
+    if (pond) renderView('pond', pond.x, pond.y);
   }
+  const sh = T.shrinesNear(ST.x, ST.y, 6000).sort(byNear)[0];
+  renderView('shrine', sh.x, sh.y + 10);
+  const lms = home.landmarks.filter((L) => !['ridge', 'bridgehead', 'pond'].includes(L.kind)).sort(byNear);
+  for (const kind of [...new Set(lms.map((L) => L.kind))].slice(0, 4)) {
+    const L = lms.find((q) => q.kind === kind);
+    renderView('landmark-' + kind, L.x, L.y + 10);
+  }
+  if (T.kind === 'corridor') {
+    // The sharpest bend of the road within 6,000 px of the start, over 200 px.
+    for (let u = -6000; u <= 6000; u += 20) {
+      const a1 = Math.atan2(T.road(u) - T.road(u - 100), 100), a2 = Math.atan2(T.road(u + 100) - T.road(u), 100), turn = Math.abs(a2 - a1);
+      if (!bend || turn > bend.turn) bend = { turn, x: T.X(u, T.road(u)), y: T.Y(u, T.road(u)) };
+    }
+    renderView('bend', bend.x, bend.y);
+    // Both edges a little way along: the lo face (the top range, the left cliff) and the hi one.
+    const u = 1500;
+    renderView('edge-lo', T.X(u, T.lo(u) + 120), T.Y(u, T.lo(u) + 120));
+    renderView('edge-hi', T.X(u, T.hi(u) - 120), T.Y(u, T.hi(u) - 120));
+    const uf = FAR.x + FAR.y;
+    renderView('far', T.X(uf, T.road(uf)), T.Y(uf, T.road(uf)));
+  } else {
+    const links = [];
+    for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) for (const d of [0, 1]) if (T.link(i, j, d)) links.push(T.link(i, j, d));
+    const mid = (L) => L.pts[(L.mA + L.mB) >> 1];
+    links.sort((a, b) => Math.hypot(...mid(a)) - Math.hypot(...mid(b)));
+    for (const kind of ['bridge', 'isthmus', 'broad']) {
+      const L = links.find((q) => q.kind === kind);
+      if (L) renderView(kind, mid(L)[0], mid(L)[1]);
+    }
+    const I = T.island(20, 13);
+    renderView('far', I.x, I.y);
+  }
+} else {
+  const start = place(0, 0);
+  renderView('start', start.x, start.y + 14, start.hero);
+  const firstShrines = roadsOf(0, 0).map(([a, b, s]) => (a === 0 && b === 0 ? place(a + 1, b + s) : place(a, b)));
+  const ne = firstShrines.find((p) => p.x > 0 && p.y < 0) || firstShrines[0];
+  renderView('shrine', ne.x, ne.y + 10);
+  // The sharpest bend on the roads round the start, away from the crossroads.
+  for (const e of cacheSizes().roadList) {
+    if (Math.abs(e.xs[0]) > 4 * D || Math.abs(e.ys[0]) > 4 * D) continue;
+    for (let k = 60; k < e.xs.length - 60; k += 4) {
+      const a1 = Math.atan2(e.ys[k] - e.ys[k - 25], e.xs[k] - e.xs[k - 25]), a2 = Math.atan2(e.ys[k + 25] - e.ys[k], e.xs[k + 25] - e.xs[k]);
+      let turn = Math.abs(a2 - a1);
+      if (turn > Math.PI) turn = TAU - turn;
+      if (!bend || turn > bend.turn) bend = { turn, x: e.xs[k], y: e.ys[k] };
+    }
+  }
+  renderView('bend', bend.x, bend.y);
+  const lm = [...home.landmarks].sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y)).find((L) => L.kind === 'circle') || home.landmarks[0];
+  renderView('landmark', lm.x, lm.y + 10);
+  const farNode = place(67, 47);
+  renderView('far', farNode.x, farNode.y + 10);
 }
-renderView('bend', bend.x, bend.y);
-const lm = [...home.landmarks].sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y)).find((L) => L.kind === 'circle') || home.landmarks[0];
-renderView('landmark', lm.x, lm.y + 10);
-const farNode = place(67, 47);
-renderView('far', farNode.x, farNode.y + 10);
 lap('game-scale views');
 if (VIEWS_ONLY) {
   lap('done');
@@ -321,14 +427,28 @@ if (VIEWS_ONLY) {
 // Same forest whatever the order: forget everything, then rebuild chunks in another order.
 const probe = [];
 const pr = mulberry32(99);
-for (let k = 0; k < 120; k++) probe.push([pr.int(-24, 23), pr.int(-24, 23)]);
+for (let k = 0; k < 120; k++) probe.push(TOPO?.kind === 'corridor' ? (TOPO.axis === 'x' ? [pr.int(-60, 59), pr.int(-5, 4)] : [pr.int(-5, 4), pr.int(-60, 59)]) : [pr.int(-24, 23), pr.int(-24, 23)]);
 for (let k = 0; k < 40; k++) probe.push([Math.floor(FAR.x / CHUNK) + pr.int(-12, 11), Math.floor(FAR.y / CHUNK) + pr.int(-12, 11)]);
-const snap = (list) => list.map(([x, y]) => JSON.stringify(layoutChunk(x, y, null, LOOK.density), (k, v) => (k === 'props' || k === 'shrines' || k === '' || /^\d+$/.test(k) || typeof v !== 'object' ? v : undefined))).join('\n');
+// A topology's terrain fields too, by an FNV hash of their numbers.
+const fieldHash = (tc) => {
+  let h = 2166136261;
+  for (const f of [tc.open, tc.patch, tc.deck]) {
+    if (!f) {
+      h = Math.imul(h ^ 7, 16777619);
+      continue;
+    }
+    const u = new Uint32Array(f.buffer, f.byteOffset, f.length);
+    for (let i = 0; i < u.length; i++) h = Math.imul(h ^ u[i], 16777619);
+  }
+  return (h >>> 0).toString(16);
+};
+const snap = (list) => list.map(([x, y]) => JSON.stringify(lay(x, y), (k, v) => (k === 'props' || k === 'shrines' || k === '' || /^\d+$/.test(k) || typeof v !== 'object' ? v : undefined)) + (TOPO ? fieldHash(TOPO.terrain(x, y)) : '')).join('\n');
 const before = snap(probe);
 const cached = cacheSizes();
 let roadBytes = 0;
 for (const e of cached.roadList) roadBytes += e.xs.length * (8 + 8 + 4 + 1);
 setWorld(); // forgets every road and place it has worked out
+TOPO = newTopo(); // and the topology's every segment, island, joining and patch
 const after = snap([...probe].reverse()).split('\n').reverse().join('\n');
 const sameOrder = before === after;
 // No two trees closer than the smallest spacing, seams included.
@@ -355,14 +475,35 @@ for (const t of allTrees) {
 lap('checks');
 
 // ---- 7. Report --------------------------------------------------------------------------------
+const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+const pct = (a, q) => [...a].sort((x, y) => x - y)[Math.floor(q * (a.length - 1))];
+const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
+if (TOPO) {
+  const T = TOPO, from = (c) => Math.round(Math.hypot(c.x - ST.x, c.y - ST.y));
+  const cr = T.cryptsNear(ST.x, ST.y, 30000).filter((c) => c.key !== '0,0').map(from).sort((a, b) => a - b);
+  const sh = T.shrinesNear(ST.x, ST.y, 12000).map(from).sort((a, b) => a - b);
+  const ms = (a) => `${pct(a, 0.5).toFixed(2)} ms median, ${pct(a, 0.9).toFixed(2)} ms at the 90th percentile, ${Math.max(...a).toFixed(2)} ms at most`;
+  console.log(`
+${T.kind === 'corridor' ? `A corridor along ${T.axis}` : `Islands over ${T.variant}`}; the start at ${ST.x}, ${ST.y}
+Crypts from the start: ${cr.slice(0, 6).join(', ')} px (the nearest two ${cr.slice(0, 2).map((d) => Math.round(d / SPEED)).join(' and ')} s of walking at ${SPEED} px/s)
+Shrines from the start: ${sh.slice(0, 6).join(', ')} px${T.kind === 'corridor' ? `
+Sharpest bend near the start ${Math.round((bend.turn * 180) / Math.PI)}° over 200 px; ${T.patchesNear(ST.x, ST.y, 50000).length} patches within 50,000 px` : ''}
+Chunks made: ${chunkCount}, ${(propCount / chunkCount).toFixed(1)} props and ${(allTrees.length / chunkCount).toFixed(1)} trees each on average
+Time per chunk, fields and props: ${ms(chunkMs)}
+Time per chunk, ground pixels:    ${ms(groundMs)}
+Time per chunk, terrain fields:   ${ms(terrainMs)}
+Time per chunk, terrain painted:  ${ms(tpaintMs)}
+
+Same ground in any order: ${sameOrder ? `yes, ${probe.length} chunks (props and terrain fields) rebuilt from nothing in reverse order match exactly` : 'NO, the chunks differ'}
+Trees along seams: closest pair ${minGap.toFixed(1)} px apart, ${tooClose} pairs under the ${TREE_GAP - 4} px spacing`);
+  lap('done');
+  process.exit(0);
+}
 const startRoads = roadsOf(0, 0).map(([a, b, s]) => road(a, b, s));
 const allPlaces = [...home.places, ...far.places].filter((p) => p.kind === 'shrine');
 const degree = (p) => roadsOf(p.i, p.j).filter((e) => roadExists(...e)).length;
 const fourWay = allPlaces.filter((p) => degree(p) === 4).length;
 const lens = [...new Set([...home.places].flatMap((p) => roadsOf(p.i, p.j).filter((e) => roadExists(...e)).map((e) => road(...e))))].map((e) => e.len);
-const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-const pct = (a, q) => [...a].sort((x, y) => x - y)[Math.floor(q * (a.length - 1))];
-const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
 console.log(`
 Start: a crossroads with ${startRoads.length} roads, ${startRoads.map((e) => `${Math.round(e.len)} px`).join(', ')} to the next crossroads
 Roads: ${Math.round(mean(lens))} px on average (${Math.round(mean(lens) / SPEED)} s of walking), ${Math.round(Math.min(...lens))}-${Math.round(Math.max(...lens))} px; sharpest bend near the start ${Math.round((bend.turn * 180) / Math.PI)}° over 200 px

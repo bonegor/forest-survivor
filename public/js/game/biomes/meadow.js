@@ -15,6 +15,7 @@
 
 import { GROUND } from '../darkwood.js';
 import { PC, P, tones, H } from './kit.js';
+import { FAE, clearAt } from '../fae-rings.js';
 
 // Light, saturated greens (their red and blue kept low, so the lavender light leaves them green
 // instead of greying them), and over them the colours of flowers. The meadows' flowers come in
@@ -142,4 +143,14 @@ export const MEADOW = {
   crypt: { door: 'crypt_meadow', inside: null, kinds: ['Barrow', 'Hollow'] },
   flicker: ['fire'],
   lightK: { cyan: 0.55, pink: 0.6 },
+  // The fae court (game/fae-rings.js, game/fae.js). The owner's (28 October 2026): "Meadow, IDK what
+  // to do with meadow, you guys figure out something, have some good game design idea how to make
+  // meadow not be identical to forest." So fae rings stand all over it, circles of ten moonblooms
+  // that wake about once a minute and dance: the horde that crosses one goes round the hero for a
+  // while instead of at him, then breaks wild when the music stops (from 8:00 the Unseelie Hour,
+  // crueller). The only thing the rings change of the land is what stands: nothing in a ring's
+  // clearing (clearAt, biomes.js biomeProp). Its trees stay as thick as they were (density above):
+  // the Druid's Grove Warden finds as many here as he did.
+  fae: FAE,
+  clearAt,
 };
