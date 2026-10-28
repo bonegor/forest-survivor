@@ -500,8 +500,9 @@ export class Spawner {
     if (!spot) return;
     const e = g.spawnEnemy('thief', spot.x, spot.y, { hpMul: monsterHp(phase, g.mode) * g.diff.hp, instant: true, sent: true });
     if (e) {
-      // One with a chest says so (Enemy.init rolls it as it comes; the 27 October 2026 review, C10).
-      g.banner('A Gilded Thief!', e.chest ? 'It carries a chest! Catch it before it escapes' : 'Catch it before it escapes!', '#feae34', 2);
+      // One with a chest says so (Enemy.init rolls it as it comes; the 27 October 2026 review, C10),
+      // for the default 2.4 s as its escape's line has (Game.escape), so the longer line can be read.
+      g.banner('A Gilded Thief!', e.chest ? 'It carries a chest! Catch it before it escapes' : 'Catch it before it escapes!', '#feae34', e.chest ? 2.4 : 2);
       sfx('coin');
     }
   }

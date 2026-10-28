@@ -2038,28 +2038,34 @@ export class Game {
     }
   }
 
-  // Ranked: announce each new rank, and the moment the personal best falls.
+  // Ranked: announce each new rank, and the moment the personal best falls. A lock reached waits
+  // LOCK_GAP after either (checkLocks).
   rankedMilestones() {
     const next = RANKS[this.rankIdx + 1];
     if (next && this.time >= next[0] * 60) {
       this.rankIdx++;
       this.banner(`Rank: ${next[1]}`, `${next[0]} minutes survived`, '#fee761', 2.6);
       sfx('levelup');
+      this.lockGapT = Math.max(this.lockGapT, LOCK_GAP);
     }
     if (!this.bestBeaten && this.rankedBest > 0 && this.time > this.rankedBest) {
       this.bestBeaten = true;
       this.banner('New personal best!', 'Every second now is a record', '#63c74d', 3);
       sfx('record');
+      this.lockGapT = Math.max(this.lockGapT, LOCK_GAP);
     }
   }
 
   // Five minutes on the clock bring in the next hero; the profile takes them in when the run ends.
+  // A lock reached with him (Ram's Horn, also at 5:00) comes LOCK_GAP after, with its own sting
+  // (checkLocks; 28 October 2026): in the same frame the unlock's limit dropped his.
   heroMilestone() {
     if (!this.unlocks || this.time < HERO_UNLOCK_TIME) return;
     const h = HEROES[this.unlocks];
     this.unlocks = null;
     this.banner(`${h.title} unlocked!`, `${h.name} can join your next run`, h.color, 3.5);
     sfx('unlock');
+    this.lockGapT = Math.max(this.lockGapT, LOCK_GAP);
   }
 
   // -------------------------------------------------------- end states --
@@ -2100,6 +2106,7 @@ export class Game {
       this.recordsBroken.add(k);
       this.banner(`NEW RECORD · ${RECORDS[k]}`, '', '#63c74d', 2.4);
       sfx('record');
+      this.lockGapT = Math.max(this.lockGapT, LOCK_GAP); // a lock reached with it waits (checkLocks)
     }
   }
 
@@ -2138,16 +2145,24 @@ export class Game {
   // boss's coming (his stir, his name card) or the ultimate's cut-in, which it waits out; nor into a
   // full banner place, where it would push one off (bannerRoom). Display only: the profile opens it
   // when the run ends, whether he wins, falls or quits (applyRun), as with the next hero (heroMilestone).
+  // 28 October 2026: nor while a level-up, a chest or a find waits to open (GameScreen.frame opens it
+  // the frame a level-up's beam ends, so the banner ran out unseen under the cards, its sting on the
+  // level-up's: a level's lock is reached with the level's screen queued, Player.addXp), nor over an
+  // event's warning and its sting (hintsHeld waits on it too). It comes after the other banners of
+  // its frame and LOCK_GAP after any of them (update: the next hero's, a rank, a record), so Ram's
+  // Horn at 5:00 follows the next hero's "unlocked!" rather than ringing over it.
   checkLocks(rdt) {
     if (this.lockGapT > 0) this.lockGapT -= rdt;
     if (!this.locks.length || this.time < RECORD_GRACE || this.lockGapT > 0) return;
     if (this.momentRunning || this.card || (this.stir && !this.stir.done) || this.ultLaunch || !this.bannerRoom) return;
+    if (this.pendingLevels > 0 || this.chestQueue.length || this.itemQueue.length || this.warnings.length) return;
     for (let i = 0; i < this.locks.length; i++) {
       const l = this.locks[i];
       if (!this.lockReached(l)) continue;
       this.locks.splice(i, 1);
       this.lockGapT = LOCK_GAP;
-      this.banner(l.name, `${LOCK_KIND[l.type]} · ${l.buy ? 'for sale in the Armory when this run ends' : 'yours when this run ends'}`, '#fee761', 3);
+      // Held under a screen that opens while it is up, to be seen in full after (fadeReal).
+      this.banner(l.name, `${LOCK_KIND[l.type]} · ${l.buy ? 'for sale in the Armory when this run ends' : 'yours when this run ends'}`, '#fee761', 3).lock = true;
       sfx('unlock');
       return;
     }
@@ -2268,10 +2283,13 @@ export class Game {
     if (this.ultLaunch && this.ultLaunch.started && (this.ultLaunch.t += rdt) >= ULT_LAUNCH.dur) this.ultLaunch = null;
     // Banners too: one that came before the cards has had its say when they close. A boss's name
     // card holds them back (they wait, unseen, and go on after it), and a first-run hint waits
-    // under the cards as well (hintsHeld), to be seen in full.
+    // under the cards as well (hintsHeld), to be seen in full. So does a lock reached (checkLocks;
+    // 28 October 2026) under a screen that hides the banners (Hud.drawBanners): told once, it is
+    // never told again, and a level-up's or a chest's screen can open a moment after it came.
+    const hidden = this.state === 'levelup' || this.state === 'chest' || this.state === 'item' || this.state === 'paused';
     for (let i = this.banners.length - 1; i >= 0; i--) {
       const b = this.banners[i];
-      if (!this.card && !(b.hint && this.hintsHeld)) b.t += rdt;
+      if (!this.card && !(b.hint && this.hintsHeld) && !(b.lock && hidden)) b.t += rdt;
       if (b.t >= b.dur) this.banners.splice(i, 1);
     }
     if (this.slowT > 0) {
@@ -2326,7 +2344,6 @@ export class Game {
       p.update(pdt);
       this.spawner.update(dt);
       this.checkRecords();
-      this.checkLocks(rdt);
     } else if (this.state === 'dying') {
       this.deathT += rdt;
       if (this.deathT > DEATH.end) this.finish(false);
@@ -2475,6 +2492,8 @@ export class Game {
     }
     if (this.state === 'play' && this.mode === 'ranked') this.rankedMilestones();
     if (this.state === 'play') this.heroMilestone();
+    // The Codex's locks last, after the frame's other banners (checkLocks).
+    if (this.state === 'play') this.checkLocks(rdt);
     if (this.hints) this.hints.update();
     // The frame came to a combo's new tier (killEnemy): one sting, the highest tier's, whatever
     // the weapons, a relic or the ultimate felled in it.

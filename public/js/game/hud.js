@@ -1293,7 +1293,8 @@ export class Hud {
 
   drawBanners(ctx, W, H) {
     const g = this.g;
-    // Under a card, chest, gear or pause screen they stay hidden (they still run out: fadeReal).
+    // Under a card, chest, gear or pause screen they stay hidden (they still run out, but for a
+    // first-run hint and a lock of the Codex reached, which wait: Game.fadeReal).
     if (g.state === 'levelup' || g.state === 'chest' || g.state === 'item' || g.state === 'paused') return;
     if (g.card) return; // a boss's name card has the screen; they wait (Game.fadeReal)
     // Below the lines at the top: a boss's own banner came down on its name.

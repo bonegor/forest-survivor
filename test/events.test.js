@@ -10,7 +10,8 @@ import { EVENTS, SWARM_BATCH, LAST_STAND, kindsBy, kindWeightsBy, SURVIVAL_BOSSE
 import { minuteMore, RING } from '../public/js/game/spawner.js';
 import { ELITE } from '../public/js/data/difficulty.js';
 import { ENEMIES } from '../public/js/data/enemies.js';
-import { WARN, sideWord, eventWords } from '../public/js/game/events.js';
+import { WARN, sideWord, eventWords, LOCK_GAP } from '../public/js/game/events.js';
+import { HEROES } from '../public/js/data/heroes.js';
 import { killBest } from '../public/js/game/hud.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
@@ -147,6 +148,55 @@ test('a lock reached mid-run is told once each, one at a time, never in the firs
     assert.deepEqual(told.map(([t]) => t).sort(), ['Belt', 'Frost Nova'], 'the next in its turn, each once');
     assert.equal(g.locks.length, 0, 'none left to tell');
   }, { locks: [{ type: 'weapon', id: 'frost', need: 'time', at: 60, from: 0, after: 0, name: 'Frost Nova' }, { type: 'relic', id: 'area', need: 'level', at: 15, from: 0, after: 0, name: 'Belt' }] }));
+
+// 28 October 2026: a lock's banner ran out unseen under the level-up's cards that opened the frame
+// after it (a level's lock comes with its level's screen queued). It waits while a level-up, a chest
+// or a find is about to open, and one told before a screen opens over it waits under it, whole.
+test('a lock waits while a screen is about to open, and stays whole under one opened over it', () =>
+  game((g) => {
+    g.spawner.update = () => {};
+    g.setTime(61);
+    g.banners.length = 0;
+    const told = () => g.banners.filter((b) => b.title === 'Frost Nova');
+    g.pendingLevels = 1;
+    g.update(1 / 60);
+    assert.equal(told().length, 0, 'not with a level-up waiting');
+    g.pendingLevels = 0;
+    g.chestQueue.push('elite');
+    g.update(1 / 60);
+    assert.equal(told().length, 0, 'not with a chest waiting');
+    g.chestQueue.length = 0;
+    g.update(1 / 60);
+    const [b] = told();
+    assert.ok(b, 'told once nothing waits');
+    const t = b.t;
+    g.state = 'levelup';
+    g.fadeReal(5);
+    assert.ok(g.banners.includes(b), 'still there under the cards');
+    assert.equal(b.t, t, 'not run down under them');
+    g.state = 'play';
+    g.fadeReal(5);
+    assert.ok(!g.banners.includes(b), 'and runs out once play is back');
+  }, { locks: [{ type: 'weapon', id: 'frost', need: 'time', at: 60, from: 0, after: 0, name: 'Frost Nova' }] }));
+
+// 28 October 2026: Ram's Horn is reached at 5:00, as the next hero is; his banner and sting come first,
+// and the lock's LOCK_GAP after, with its own sting.
+test("a lock reached with the next hero's unlock comes LOCK_GAP after his banner", () =>
+  game((g) => {
+    g.spawner.update = () => {};
+    const told = [], banner = g.banner.bind(g), hero = `${HEROES.archer.title} unlocked!`;
+    g.banner = (title, ...rest) => {
+      if (title === hero || title === "Ram's Horn") told.push(title);
+      return banner(title, ...rest);
+    };
+    g.setTime(5 * 60);
+    g.update(1 / 60);
+    assert.deepEqual(told, [hero], 'the next hero first, alone');
+    for (let f = 0; f < (LOCK_GAP - 0.5) * 60; f++) g.update(1 / 60);
+    assert.deepEqual(told, [hero], 'the lock not yet');
+    for (let f = 0; f < 2 * 60 && told.length < 2; f++) g.update(1 / 60);
+    assert.deepEqual(told, [hero, "Ram's Horn"]);
+  }, { unlocks: 'archer', locks: [{ type: 'relic', id: 'ramhorn', need: 'time', at: 5 * 60, from: 0, after: 0, name: "Ram's Horn" }] }));
 
 // The review's C8(c) (28 October 2026): past 85% of the most kills a run has made, the HUD shows
 // that record, dim, beside the count, and NEW BEST once the banner has told it passed; never in the
