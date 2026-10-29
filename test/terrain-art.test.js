@@ -133,5 +133,7 @@ test('every name the Survival maps lay out is drawn, as laid and as their look d
   } finally {
     D.setWorld({ seed: 1 });
   }
-  assert.deepEqual([...posts].sort(), ['hell_post_bone', 'hell_post_stone', 'hell_post_wood'], "the Abyss's bridges stand on all three posts");
+  // Since the fault plates (29 October 2026, topology/plates.js) the walkways are stone, iron or bone,
+  // never planks (a rock causeway has no posts), so the charred wood posts stand on none of them.
+  assert.deepEqual([...posts].sort(), ['hell_post_bone', 'hell_post_iron', 'hell_post_stone'], "the Abyss's walkways stand on all three posts");
 });

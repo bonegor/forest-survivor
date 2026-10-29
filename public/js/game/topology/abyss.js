@@ -662,7 +662,9 @@ function paintRow(px, glow, P, y) {
             if (glow && fd < (hot ? 1.3 : 0.75) + bay * 0.4) glow[k] = col;
           } else {
             if (fd < (hot ? 1.1 : 0.7) + bay * 0.3) {
-              col = hot && fd < 0.5 ? F[1] : F[0];
+              // Its deepest ember only (29 October 2026): F[1] and F[2] are the lava's own orange and gold, and
+              // a void has no lava in it, so its fissures never read as a thread of it.
+              col = F[0];
               if (glow) glow[k] = F[0];
             } else if (fd < (hot ? 3 : 2) + bay) col = mix(col, SC[0], 0.4);
           }
