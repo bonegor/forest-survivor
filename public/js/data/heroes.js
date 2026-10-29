@@ -115,6 +115,7 @@ export const HEROES = {
     pose: 'paladin_pose',
     // One look since 27 October 2026: a holy crusader after Diablo 2's Paladin (lab
     // paladin/knightstyle-e), in place of her Styles C and D; in a cylindrical great helm (knightstyle-e2).
+    // The current palette is neutral iron and aged gold, including her tabard and cape.
     weapon: 'smite',
     unique: ['smite'],
     color: '#fee761',

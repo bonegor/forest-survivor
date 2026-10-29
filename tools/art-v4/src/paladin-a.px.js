@@ -1,14 +1,14 @@
 // Paladin A: Iron Vow — squared greathelm, angled visor, restrained crown light.
 // Derived from the retained V3 rig; all 22 poses and gameplay timings preserved.
 pal({
-  // steel plate: purple-grey shadows, warm pink light
-  U: "#1b1430", V: "#2a1f42", u: "#3c3158", h: "#53476f", i: "#6c628a", m: "#7c7298", H: "#8c82a5",
-  n: "#9d93b3", I: "#aea4c1", o: "#bfb5cf", J: "#cfc5db", s: "#ded4e3", j: "#efe5ec",
-  // deep crimson cloth (tabard, cape, the shield's cross): purple-black shadows, warm coral light
-  0: "#1e0716", 1: "#370b20", 2: "#560f28", 3: "#76152e", 4: "#961d33", 5: "#b22b38", 6: "#c94540", 7: "#dc6a52",
-  // gold, the one metal accent: ember-brown shadows to pale light
-  Z: "#2e0b08", z: "#561806", t: "#842c06", y: "#b2500a", d: "#c46710", T: "#d87d12", e: "#e69a1a",
-  Y: "#f0ad22", l: "#f8c43a", Q: "#ffd650", q: "#fff0a0",
+  // neutral iron and steel: charcoal shadows to restrained silver highlights
+  U: "#171c22", V: "#232b34", u: "#303a44", h: "#414e5b", i: "#566472", m: "#6c7a85", H: "#83919b",
+  n: "#9aa7ae", I: "#b0bbc0", o: "#c4cdd0", J: "#d5dcde", s: "#e4e9e8", j: "#f2f3ef",
+  // antique-gold cloth (tabard and cape), with dark bronze folds
+  0: "#24211c", 1: "#3a3326", 2: "#554932", 3: "#75613b", 4: "#96804b", 5: "#b59a5b", 6: "#d1b875", 7: "#e6d398",
+  // aged gold metal accents: umber shadows to pale gold highlights
+  Z: "#292319", z: "#46371e", t: "#66502a", y: "#8a6d34", d: "#a78943", T: "#bea04f", e: "#d0b65f",
+  Y: "#e1ca77", l: "#ead88f", Q: "#f3e5ad", q: "#fff5d2",
   // skin
   K: "#4a1d2a", k: "#6f333a", f: "#94494a", r: "#b56a5b", F: "#d68a6c", P: "#e7aa88", p: "#f8c9a4",
   // chestnut hair, and the same ramp for the leather (belt, grip)
@@ -141,7 +141,7 @@ function hairTail(F, pts) {
   lay(F, P, 1)
 }
 
-// The torso, 11x10 at (17, 19) at rest: the neck, a steel gorget, the crimson tabard with its gold
+// The torso, 11x10 at (17, 19) at rest: the neck, a steel gorget, the antique-gold tabard with its gold
 // cross over the breastplate, a narrow waist, the leather belt with a gold buckle.
 const TORSO = `
   ...uhiIhu..
@@ -156,7 +156,7 @@ const TORSO = `
   ...uIHHhu..`
 function torso(F, x0, y0) { lay(F, new Part().grid(x0, y0, TORSO), 1) }
 
-// The tabard's front skirt: a crimson panel from the belt to above the knees, its hem swaying by `sw`
+// The tabard's front skirt: an antique-gold panel from belt to knees, its hem swaying by `sw`
 // (px at the bottom), gold-hemmed.
 function skirt(F, x0, y0, sw = 0, len = 4) {
   const P = new Part()
@@ -276,7 +276,7 @@ function sword(F, E, hand, a, len = 11, blaze = 0) {
   }
 }
 
-// The cape: a short crimson cape from the shoulders, its outer lobe lit, its inner lobe in shade.
+// The cape: a short gold cape from the shoulders, its outer lobe lit, its inner lobe in shade.
 function cape(F, spine, spine2) {
   const P = new Part()
   P.strand(spine2, [1.6, 2.0, 2.2, 1.8, 1.0, 0.4], "0123", { light: [-0.5, -1], fade: 0.3, lift: 0.1 })
