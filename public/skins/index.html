@@ -1,28 +1,22 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex">
-<title>Hero wardrobe · Forest Survivor</title>
-<style>
-  *{box-sizing:border-box}body{margin:0;background:#10131b;color:#e9e4d6;font:16px/1.5 system-ui,sans-serif}
-  main{max-width:1000px;margin:auto;padding:40px 24px}header{border-bottom:1px solid #3c414c;padding-bottom:24px}
-  .eyebrow{color:#d2b77d;font-size:12px;letter-spacing:.2em;text-transform:uppercase}h1{font:clamp(32px,6vw,56px)/1.15 Georgia,serif;margin:12px 0}
-  p{color:#aeb9c4;max-width:680px}nav{display:flex;flex-wrap:wrap;gap:10px;margin:24px 0}
-  button,select,a{font:inherit}button,select{background:#242c39;color:#eee7d6;border:1px solid #505c6e;border-radius:5px;padding:10px 16px;cursor:pointer}
-  button:hover,select:hover{border-color:#e2c58a}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #e2c58a;outline-offset:3px}
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}article{background:#181d29;border:1px solid #374153;border-radius:8px;overflow:hidden}
-  h2{font-size:20px;margin:16px 20px 0}.tag{font-size:12px;color:#c7b98e;margin:3px 20px 12px}canvas{width:100%;height:auto;image-rendering:pixelated;display:block}
-  footer{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:24px}a{color:#e2c58a}#equip{background:#d7bf87;color:#151a23;border-color:#d7bf87;font-weight:650}
-  #status{min-height:24px;color:#c9d5bd}small{color:#9aa7b5} @media(max-width:520px){main{padding:24px 12px}.cards{gap:8px}h2{font-size:16px;margin:12px 10px 0}.tag{margin-left:10px}}
-</style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Hero sprite review · Forest Survivor</title>
+<link rel="stylesheet" href="./review.css">
 <main>
-  <header><span class="eyebrow">Forest Survivor · Version three</span><h1>Redrawn for battle</h1><p>Nine redesigned sprites: new silhouettes, connected anatomy and rebuilt equipment. Compare the original with version three through complete idle, walk and attack cycles.</p></header>
-  <nav aria-label="Preview controls"><select id="hero" aria-label="Hero"></select><button id="pause">Pause</button><button id="slow">Slow motion</button><button id="attack">Attack</button><button id="restart">Restart loop</button></nav>
-  <div class="cards"><article><h2>Original</h2><div class="tag">Before</div><canvas id="original" width="240" height="200" aria-label="Original hero animation"></canvas></article><article><h2 id="skin-name">Version three</h2><div class="tag">Redrawn model · optional skin</div><canvas id="v3" width="240" height="200" aria-label="Version three hero animation"></canvas></article></div>
-  <p id="changes"></p>
-  <footer><button id="equip">Use this look</button><a href="../">Return to the game</a><small>Idle, walk and attack · both directions · 12-second loop</small></footer>
-  <p id="status" role="status"></p><p>Choose <strong>LOOK</strong> beneath the hero preview in the game to switch at any time. Your original look remains the default. Skins do not unlock heroes or change their abilities.</p>
+  <header><span class="eyebrow">Forest Survivor · Hero workshop</span><h1>Choose their next look.</h1>
+    <p>Eight heroes. Two new options each. Compare every proposal with its retained baseline and the Plumed Knight.</p></header>
+  <details id="saved-choices" open><summary id="saved-count">Saved choices</summary><ul id="saved-list"></ul></details>
+  <nav aria-label="Preview controls">
+    <label>Hero <select id="hero"></select></label>
+    <label>Motion <select id="motion"><option value="cycle">Full demonstration</option><option value="idle">Idle</option><option value="walk">Walk / hover</option><option value="attack">Attack</option></select></label>
+    <label>Facing <select id="facing"><option value="auto">Both directions</option><option value="1">Right</option><option value="-1">Left</option></select></label>
+    <button id="pause">Pause</button><button id="slow">Slow motion</button><button id="step">Step one frame</button><button id="restart">Restart loop</button>
+  </nav>
+  <p class="baseline-note" id="baseline-note"></p>
+  <div class="cards" id="cards"></div>
+  <footer><a href="../">Return to the game</a><span>Plumed Knight is unchanged. Shadow floats in every movement view.</span></footer>
+  <p id="status" role="status"></p>
 </main>
 <script type="module" src="./review.js"></script>
 </html>

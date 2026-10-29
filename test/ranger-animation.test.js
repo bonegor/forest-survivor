@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import {Game} from '../public/js/game/game.js';
 import {SPR} from '../public/js/engine/sprites.js';
+import {HEROES} from '../public/js/data/heroes.js';
 import {input} from '../public/js/engine/input.js';
 import {defaultProfile,metaBonuses} from '../public/js/shared/profile.js';
 import {bounds,flipX} from '../public/js/engine/pixels.js';
 
+const RANGER=SPR[HEROES.archer.sprite];
 const context={globalAlpha:1,drawImage(){}};
-const shown=g=>{g.drawPlayer(context,g.cam);return {index:SPR.archer.frames.indexOf(g.player._rect[4]),flip:g.player._rect[5]};};
+const shown=g=>{g.drawPlayer(context,g.cam);return {index:RANGER.frames.indexOf(g.player._rect[4]),flip:g.player._rect[5]};};
 function run(fn){
   const previous=input.bot;
   try{
@@ -22,7 +24,7 @@ function run(fn){
 }
 
 test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors',()=>{
-  const spr=SPR.archer;
+  const spr=RANGER;
   assert.equal(spr.frames.length,88,'idle, walk, shots and the shots on the move');
   for(const [i,fr] of spr.frames.entries()){
     const f=fr.buf;
@@ -34,8 +36,8 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
   }
 });
 
-test('the ranger is Style B as picked: her glow shows in every frame, her bow keeps its timing',()=>{
-  const spr=SPR.archer;
+test('the approved Moonsteel Huntress: her glow shows in every frame, her bow keeps its timing',()=>{
+  const spr=RANGER;
   assert.deepEqual([spr.idle.length,spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[8,8,8,5,14]);
   assert.deepEqual(spr.attackWalk.map(r=>r.length),[8,8,8,8,8,8,8,8]);
   assert.ok(spr.frames.every(f=>f.em),'her glow shows in every frame');
@@ -49,7 +51,7 @@ test('the real ranger movement clock plays all eight phases at 12 fps',()=>run((
     p.update(1/60);const f=shown(g).index;visited.add(f);
     if(f<previous)wraps.push(i/60);previous=f;
   }
-  assert.deepEqual([...visited].sort((a,b)=>a-b),SPR.archer.walk);
+  assert.deepEqual([...visited].sort((a,b)=>a-b),RANGER.walk);
   assert.ok(Math.abs(wraps[1]-wraps[0]-8/12)<1/30);
 }));
 
@@ -61,13 +63,13 @@ for(const face of [-1,1])test(`bow wind-up and release follow the real projectil
     const s=shown(g);poses.add(s.index);assert.equal(s.flip,face<0);
     if(g.projectiles.length>before&&!fired){
       fired=true;
-      assert.equal(s.index,SPR.archer.attack[SPR.archer.attackRelease]);
+      assert.equal(s.index,RANGER.attack[RANGER.attackRelease]);
       assert.ok(g.clock>=.35-1/60&&g.clock<=.35+1/60,'art must not delay the existing shot');
       assert.ok(Math.cos(g.projectiles[0].ang)*face>0,'arrow follows the selected facing');
     }
   }
   assert.ok(fired);
-  for(const index of SPR.archer.attack)assert.ok(poses.has(index),`missing shooting pose ${index}`);
+  for(const index of RANGER.attack)assert.ok(poses.has(index),`missing shooting pose ${index}`);
 }));
 
 // The owner, 16 October 2026: the bow fires straight, the way she faces; it seeks no foe.
@@ -76,14 +78,14 @@ test('walking while shooting keeps its leg cycle, and a foe behind her neither f
   for(let i=0;i<40;i++)p.update(1/60);
   p.aim=0;p.bowShot={at:g.clock,ang:0};
   const first=shown(g).index;
-  assert.ok(SPR.archer.attackWalk[5].includes(first));
-  p.anim+=1/(1.4*SPR.archer.motionRate);
+  assert.ok(RANGER.attackWalk[5].includes(first));
+  p.anim+=1/(1.4*RANGER.motionRate);
   const next=shown(g).index;
-  assert.ok(SPR.archer.attackWalk[5].includes(next));assert.notEqual(first,next);
+  assert.ok(RANGER.attackWalk[5].includes(next));assert.notEqual(first,next);
   const foe=g.spawnEnemy('slime',p.x-40,p.y,{instant:true,hpMul:10});foe.dormant=true;
   g.grid.rebuild(g.enemies,p.x,p.y);w.cd=0;w.update(0);
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);
-  assert.ok(SPR.archer.attackWalk[SPR.archer.attackRelease].includes(shown(g).index),'she shows the shot ahead, on the move');
+  assert.ok(RANGER.attackWalk[RANGER.attackRelease].includes(shown(g).index),'she shows the shot ahead, on the move');
   assert.ok(Math.cos(g.projectiles.at(-1).ang)>0,'the arrow flies straight ahead, not at the foe behind');
 }));
 
@@ -95,7 +97,7 @@ test('standing, the ranger shoots straight the way she faces, a foe behind her o
   assert.ok(Math.abs(g.projectiles.at(-1).ang)<1e-9,'the first arrow flies straight ahead, not at the nearer foe behind');
   assert.equal(p.face,1,'without turning her');
   assert.equal(shown(g).flip,false);
-  assert.ok(SPR.archer.attack.includes(shown(g).index),'and shows the shot');
+  assert.ok(RANGER.attack.includes(shown(g).index),'and shows the shot');
   w.update(.07);
   assert.ok(Math.abs(Math.abs(g.projectiles.at(-1).ang)-0.06)<1e-9,'the second fans out just beside it: one volley');
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);

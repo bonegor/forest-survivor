@@ -525,6 +525,7 @@ export class Player {
     else this.wade = this.sink = 0;
     const spd = Math.hypot(this.vx, this.vy);
     this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
+    // Shadow hovers: ground still affects gameplay, but it leaves no walking particles or sounds.
     if (this.slide && this.id !== 'rogue') {
       // Sliding: ice thrown up from under him instead of dust, and no step heard.
       if ((this.sprayT -= dt) <= 0) {

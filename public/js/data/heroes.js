@@ -6,8 +6,7 @@
 // (startWeapons). Relics are shared by all.
 
 import { WEAPONS } from './weapons.js';
-import { HERO_SKINS } from './hero-skins.js';
-import { HERO_V3 } from './hero-v3.js';
+import { HERO_REVIEW, HERO_DEFAULT_LOOKS } from './hero-review.js';
 
 // The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
 // wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
@@ -183,14 +182,17 @@ export const HEROES = {
   },
 };
 
-// Original stays first: existing saves retain their look until a player chooses
-// an alternative with LOOK on the hero screen. These skins change no stats.
-for (const [id, { name }] of Object.entries(HERO_SKINS)) {
+// Keep the review baselines available while shipping the owner's approved looks
+// as defaults, including when a save has no appearance setting or a retired one.
+for (const [id, options] of Object.entries(HERO_REVIEW)) {
+  const v3 = id === 'paladin' || id === 'berserker';
   HEROES[id].skins = [
-    { id: 'original', name: 'Original', sprite: id, pose: id + '_pose' },
-    { id: 'refined', name, sprite: id + '_refined', pose: id === 'knight' ? 'knight_pose' : id + '_refined_pose' },
-    { id: 'v3', name: HERO_V3[id].name, sprite: id + '_v3', pose: id + '_v3_pose' },
+    { id: v3 ? 'v3' : 'original', name: v3 ? 'V3 baseline' : 'Original', sprite: id, pose: id + '_pose' },
+    ...options.map((option, i) => ({ id: i ? 'v4b' : 'v4a', name: option.name,
+      sprite: `${id}_v4${i ? 'b' : 'a'}`, pose: `${id}_v4${i ? 'b' : 'a'}_pose` })),
   ];
+  const approved = HEROES[id].skins.find(s => s.id === HERO_DEFAULT_LOOKS[id]);
+  Object.assign(HEROES[id], { sprite: approved.sprite, pose: approved.pose, skin: approved.id });
 }
 
 // The light line drawn round a hero that has one (line: the Shadow) on the menus; none in play.
@@ -213,5 +215,5 @@ export { HERO_ORDER } from '../shared/profile.js';
 // and pose swapped; his own look, or one not known, is the hero as he is.
 export function heroLook(id, skins) {
   const h = HEROES[id], s = h.skins?.find((k) => k.id === skins?.[id]);
-  return s && s !== h.skins[0] ? { ...h, sprite: s.sprite, pose: s.pose, skin: s.id } : h;
+  return s && s.sprite !== h.sprite ? { ...h, sprite: s.sprite, pose: s.pose, skin: s.id } : h;
 }

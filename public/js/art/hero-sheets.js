@@ -5,9 +5,9 @@ import ARCHER from '../../assets/heroes/archer.js';
 import MAGE from '../../assets/heroes/mage.js';
 import NECROMANCER from '../../assets/heroes/necromancer.js';
 import ROGUE from '../../assets/heroes/rogue.js';
-import PALADIN from '../../assets/heroes/paladin.js';
+import PALADIN from '../../assets/heroes-v3/paladin.js';
 import DRUID from '../../assets/heroes/druid.js';
-import BERSERKER from '../../assets/heroes/berserker.js';
+import BERSERKER from '../../assets/heroes-v3/berserker.js';
 import WITCHHUNTER from '../../assets/heroes/witchhunter.js';
 
 function decode(data) {
@@ -63,6 +63,8 @@ export function pose(def) {
   return { gen, fps: def.idleRate * 1.6, hires: 1.5, emissive: def.emissive, glow: def.glow, outline: false };
 }
 
+// Retained baselines, 29 October: the original picks below except Paladin and Berserker,
+// whose unchanged V3 sheets now occupy their base slots. Alternatives live in hero-review.js.
 // The user's picks of 27 October 2026 (tools/bake-heroes.mjs), all in the plumed Knight's style and
 // drawn with claude-pxl (gms/3001/sprites/lab/src/<hero>-knightstyle, ranger-knightstyle/b):
 // Lyra carries her bow's release and shots on the move; Eldrin turns his head toward us. Kael stays

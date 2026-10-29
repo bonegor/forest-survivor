@@ -139,7 +139,7 @@ export class HeroScreen {
   appearance(ctx, ui, h, box, locked) {
     const skins = HEROES[h.id].skins, app = this.app;
     if (skins && !locked) {
-      const cur = skins.find(s => s.id === app.settings.skins?.[h.id]) || skins[0];
+      const cur = skins.find(s => s.id === app.settings.skins?.[h.id]) || skins.find(s => s.id === HEROES[h.id].skin) || skins[0];
       const d = stepper(ctx, ui, 'look', box.x + 3, box.y + box.h - 16, box.w - 6, 'LOOK', cur.name.toUpperCase());
       if (d) {
         app.settings.skins = { ...app.settings.skins, [h.id]: skins[(skins.indexOf(cur) + d + skins.length) % skins.length].id };
