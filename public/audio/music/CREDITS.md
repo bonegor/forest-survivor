@@ -189,3 +189,29 @@ file repeats without a gap. The changes are ours; the musicians do not endorse t
 
 The compositions by Pachelbel and Ravel, and the anonymous Romance, are in the public domain. The arrangements and recordings are under the licences above.
 "Shenandoah" is a traditional song in the public domain; the arrangement and recording are under the licence above.
+
+## Fifteen-minute combat selections (29 October 2026)
+
+The pre-run music selector offers three original, programmed compositions for
+Forest Survivor, each exactly 15:00. The MP3s below are unchanged copies of the
+user-approved listening versions. Their source scores, selected version names,
+levels and hashes are listed in `combat/manifest.json`; editable compositions
+and MIDI are in `tools/music/handmade-fight/` in the repository.
+
+- **combat/clockwork-charge-15m.mp3 — Clockwork Charge:** the expanded original
+  themes, performed with Cakewalk SI-String Section, SI-Electric Piano,
+  SI-Bass Guitar and SI-Drum Kit.
+- **combat/lantern-guard-v2-15m.mp3 — Lantern Guard v2:** new concert-harp
+  themes with string answers, bass and drums. Harp: FreePats
+  ConcertHarp-20200702.sf2, assembled by Roberto from the CC0 Versilian
+  Community Sample Library; performer K. Smith. Sources:
+  https://freepats.zenvoid.org/ and https://vis.versilstudios.com/vcsl.html.
+  The harp samples are dedicated to the public domain under CC0:
+  https://creativecommons.org/publicdomain/zero/1.0/. Supporting instruments:
+  Cakewalk SI-String Section, SI-Bass Guitar and SI-Drum Kit.
+- **combat/spark-rush-15m.mp3 — Spark Rush:** original programmed synth bass,
+  pulsing chords, plucked lead, electronic kick and clap, with Cakewalk
+  SI-Drum Kit.
+
+The existing title, results and ending music retains its separate credits.
+Earlier combat files remain archived with their licences above.

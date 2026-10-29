@@ -4,13 +4,14 @@
 // crossfading from one to the next. A piece is listed as its file, or as
 // { "file": ..., "gain": ... } to play it louder or softer. A piece with no
 // file is silent.
-// Exact-bar Ogg edits use { "file": ..., "gapless": true }: the browser loops
+// Modern full recordings use { "file": ..., "gapless": true }: the browser loops
 // the complete file without the legacy MP3 lead-in/overlap compensation.
 
 // Pieces that play once instead of looping.
 const ONCE = new Set(['victory', 'gameover']);
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
+import { DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, combatMusicPiece, isCombatMusicCue } from './combat-music.js';
 
 const MUSIC_DIR = 'audio/music/';
 // Recorded music is mastered loud; this keeps it level with the sound effects.
@@ -38,8 +39,10 @@ const A = {
   voices: new Map(),
   muted: false,
   songName: null,
+  requestedMusic: null, // the game's cue, retained while its selected recording is loading
+  combatMusic: DEFAULT_COMBAT_MUSIC,
   files: null, // piece -> file name, from tracks.json
-  tracks: new Map(), // piece -> { el, gain } once a file has played
+  tracks: new Map(), // piece -> its players and gain, created only when requested
   after: null, // the piece that starts once the jingle playing now has ended (playAfterJingle)
 };
 
@@ -50,6 +53,7 @@ if (typeof fetch === 'function' && typeof document !== 'undefined' && typeof Aud
     .then((list) => {
       A.files = list && typeof list === 'object' ? list : {};
       menuOverride();
+      if (A.requestedMusic) A.songName = resolveMusic(A.requestedMusic);
       if (A.ctx && A.songName && A.files[A.songName]) startPiece(A.songName);
     })
     .catch(() => (A.files = {}));
@@ -801,6 +805,22 @@ export const limited = (name) => !!LIMITS[name];
 
 // ---------------------------------------------------------------- music --
 
+function resolveMusic(name) {
+  if (!isCombatMusicCue(name)) return name;
+  const selected = combatMusicPiece(A.combatMusic);
+  // A missing or older manifest retains the original cue rather than silencing combat.
+  return A.files?.[selected] ? selected : name;
+}
+
+// The settings/UI choose an ID; changing it in a menu does not start a combat recording.
+export function setCombatMusic(id) {
+  const selected = normalizeCombatMusic(id);
+  if (selected === A.combatMusic) return selected;
+  A.combatMusic = selected;
+  if (isCombatMusicCue(A.requestedMusic)) playMusic(A.requestedMusic);
+  return selected;
+}
+
 // A music file playing through the music bus, so volume and mute apply. `gain` fades the
 // whole piece in and out; each of its players has its own gain for the loop seams.
 function track(name) {
@@ -816,7 +836,7 @@ function track(name) {
   t = { gain, level, gapless, once: !gapless && ONCE.has(name), voices: [], cur: 0, playing: false, fadeTimer: 0 };
   for (let i = t.once || gapless ? 1 : 2; i > 0; i--) {
     const el = new Audio(MUSIC_DIR + file);
-    el.preload = 'auto';
+    el.preload = name.startsWith('combat-') ? 'metadata' : 'auto';
     el.loop = gapless;
     const g = A.ctx.createGain();
     g.gain.value = level;
@@ -951,31 +971,39 @@ const piecePlaying = (name) => A.songName === name && A.tracks.get(name) && A.tr
 export function playMusic(name, o = {}) {
   A.after = null;
   clearTimeout(A.cutTimer);
-  if (piecePlaying(name)) return;
-  A.songName = name;
-  startPiece(name, o.fade || 0.9);
+  A.requestedMusic = name;
+  const piece = resolveMusic(name);
+  if (piecePlaying(piece)) return;
+  A.songName = piece;
+  startPiece(piece, o.fade || 0.9);
 }
 
 // A boss's arrival: the music cut to silence for `gap` s, then the piece slams in at full.
 export function cutToMusic(name, gap = 0.4) {
   A.after = null;
-  A.songName = name;
   clearTimeout(A.cutTimer);
+  A.requestedMusic = name;
+  const piece = resolveMusic(name);
+  // A boss or a dungeon floor uses the same selected performance; keep its phrase moving.
+  if (piecePlaying(piece)) return;
+  A.songName = piece;
   if (!A.ctx) return;
   fadeFiles(null, 0.05);
   A.cutTimer = setTimeout(() => {
-    if (A.songName === name) startPiece(name, 0.05, true);
+    if (A.songName === piece) startPiece(piece, 0.05, true);
   }, gap * 1000);
 }
 
 export function stopMusic() {
   A.songName = null;
+  A.requestedMusic = null;
   if (A.ctx) fadeFiles(null, 0.6);
 }
 
 export function playJingle(name) {
   if (!A.ctx || !(A.files && A.files[name])) return;
   A.songName = null;
+  A.requestedMusic = null;
   A.after = null;
   startPiece(name);
 }
@@ -990,7 +1018,7 @@ export function playAfterJingle(name) {
 
 // What the music is doing, for the developer panel and tests: the piece, and each file's players.
 export function musicState() {
-  return { piece: A.songName, after: A.after, files: A.files, tracks: A.tracks, duck: A.duck ? A.duck.gain.value : 1 };
+  return { piece: A.songName, requestedPiece: A.requestedMusic, combatMusic: A.combatMusic, after: A.after, files: A.files, tracks: A.tracks, duck: A.duck ? A.duck.gain.value : 1 };
 }
 
 export function audioReady() {

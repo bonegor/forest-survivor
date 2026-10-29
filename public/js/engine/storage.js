@@ -17,6 +17,7 @@
 import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
+import { DEFAULT_COMBAT_MUSIC, normalizeCombatMusic } from './combat-music.js';
 
 export const DEBUG = !RELEASE && !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
 const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
@@ -384,13 +385,13 @@ export const store = {
 // rankedNote: the trial screen's word that Ranked is always Elite has been said (ModeScreen).
 // map: the Survival map last picked on the trial screen (data/maps.js), or the first night's, the
 // desert (ui/prologue.js); none until then, when the trial screen shows its default (main.js).
-const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {}, softFlash: false, rankedNote: false };
+const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, combatMusic: DEFAULT_COMBAT_MUSIC, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {}, softFlash: false, rankedNote: false };
 
 export function loadSettings() {
   try {
     const raw = saveBox.read(SETTINGS);
     const s = raw ? JSON.parse(decodeURIComponent(raw)) : {};
-    return { ...DEFAULT_SETTINGS, ...s };
+    return { ...DEFAULT_SETTINGS, ...s, combatMusic: normalizeCombatMusic(s?.combatMusic) };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

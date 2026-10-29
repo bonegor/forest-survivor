@@ -5,7 +5,7 @@ import { initInput, input } from './engine/input.js';
 import { buildSprites } from './engine/sprites.js';
 import { store, loadSettings, saveSettings, DEBUG } from './engine/storage.js';
 import { RELEASE } from './engine/build.js';
-import { initAudio, setVolumes } from './engine/audio.js';
+import { initAudio, setVolumes, setCombatMusic } from './engine/audio.js';
 import { drawText } from './engine/font.js';
 import { makeCanvas } from './engine/util.js';
 import { UI } from './ui/ui.js';
@@ -47,11 +47,13 @@ const app = {
   },
 
   startRun() {
+    setCombatMusic(this.settings.combatMusic);
     this.go('game', {});
   },
 
   applySettings() {
     setVolumes(this.settings.music, this.settings.sfx);
+    setCombatMusic(this.settings.combatMusic);
     if (this.screen && this.screen.game) {
       this.screen.game.settings = this.settings;
       this.screen.game.numbers.enabled = this.settings.numbers !== false;
@@ -144,6 +146,7 @@ async function boot() {
   buildSprites();
   await store.init();
   setVolumes(app.settings.music, app.settings.sfx);
+  setCombatMusic(app.settings.combatMusic);
   // Browsers only allow audio after a user gesture.
   const unlock = () => {
     initAudio();

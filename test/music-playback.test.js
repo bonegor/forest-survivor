@@ -2,10 +2,11 @@
 // from the scheduler, as it is when an HTMLAudioElement reaches an exact Ogg loop seam.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { COMBAT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic } from '../public/js/engine/combat-music.js';
 
 let instance = 0;
 
-async function player(t) {
+async function player(t, options = {}) {
   const originals = new Map();
   const replace = (name, value) => {
     originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
@@ -63,11 +64,13 @@ async function player(t) {
     createMediaElementSource() { return node(); }
     resume() { this.resumes++; this.state = 'running'; return Promise.resolve(); }
   }
+  const media = [];
   class Media {
     constructor(src) {
       this.src = src; this.loop = false; this.paused = true; this.ended = false;
       this.duration = 132.631587; this.time = 0; this.seeks = []; this.plays = 0; this.pauses = 0;
       this.listeners = new Map();
+      media.push(this);
     }
     get currentTime() { return this.time; }
     set currentTime(value) { this.time = value; this.seeks.push(value); if (value < this.duration) this.ended = false; }
@@ -85,19 +88,137 @@ async function player(t) {
     forest: { file: 'wildfire-run.ogg', gapless: true },
     legacy: 'legacy-dungeon.mp3',
     victory: 'stillwater-echo-guitar.ogg',
+    ...options.manifest,
   };
   replace('window', { AudioContext: Context });
   replace('document', doc);
   replace('Audio', Media);
   replace('location', { search: '' });
-  replace('fetch', async (url) => url.endsWith('tracks.json')
-    ? { ok: true, json: async () => manifest }
-    : { ok: false });
+  const response = { ok: true, json: async () => manifest };
+  let releaseManifest;
+  const pending = options.deferManifest ? new Promise((resolve) => { releaseManifest = () => resolve(response); }) : Promise.resolve(response);
+  replace('fetch', (url) => url.endsWith('tracks.json') ? pending : Promise.resolve({ ok: false }));
   const api = await import(`../public/js/engine/audio.js?music-playback-test=${++instance}`);
   await new Promise(setImmediate); // settle manifest fetch before any playback request
-  api.initAudio();
-  return { api, tick, context, doc, wake: () => listeners.get('visibilitychange')?.() };
+  if (options.init !== false) api.initAudio();
+  return { api, tick, context, doc, media, wake: () => listeners.get('visibilitychange')?.(),
+    finishManifest: async () => { releaseManifest?.(); await new Promise(setImmediate); } };
 }
+
+const combatManifest = Object.fromEntries(COMBAT_MUSIC.map((track) => [track.piece, { file: track.file, gapless: true }]));
+
+test('combat music settings accept only the three published choices and default to Clockwork Charge', () => {
+  assert.equal(COMBAT_MUSIC.length, 3);
+  assert.equal(DEFAULT_COMBAT_MUSIC, 'clockwork-charge');
+  for (const track of COMBAT_MUSIC) assert.equal(normalizeCombatMusic(track.id), track.id);
+  for (const stale of [undefined, null, '', 'old-song', '__proto__', { id: 'spark-rush' }]) {
+    assert.equal(normalizeCombatMusic(stale), DEFAULT_COMBAT_MUSIC);
+  }
+});
+
+test('a selected long recording streams alone and continues through bosses and dungeon floors', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  assert.equal(media.length, 0, 'the catalog does not preload all three long recordings');
+  api.playMusic('forest');
+  const state = api.musicState(), track = state.tracks.get('combat-clockwork-charge');
+  assert.equal(state.combatMusic, DEFAULT_COMBAT_MUSIC);
+  assert.equal(state.piece, 'combat-clockwork-charge');
+  assert.equal(track.voices.length, 1);
+  const el = track.voices[0].el;
+  el.duration = 900;
+  el.currentTime = 147;
+  assert.equal(el.src, 'audio/music/combat/clockwork-charge-15m.mp3');
+  assert.equal(el.preload, 'metadata');
+  assert.equal(el.loop, true);
+  const seeks = el.seeks.length;
+  api.playMusic('boss');
+  api.cutToMusic('boss', .4);
+  api.playMusic('dungeon-crypt');
+  api.playMusic('dungeon-catacombs');
+  api.playMusic('dungeon-inferno');
+  api.playMusic('crypt');
+  api.playMusic('forest');
+  tick(2000);
+  assert.equal(media.length, 1);
+  assert.equal(el.currentTime, 147);
+  assert.equal(el.seeks.length, seeks);
+  assert.equal(el.plays, 1, 'a combat cue transition must not restart the 15-minute performance');
+  assert.equal(track.playing, true);
+});
+
+test('choosing music in a menu leaves the menu playing, and changing an active choice crossfades', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  api.playMusic('title');
+  const title = api.musicState().tracks.get('title');
+  title.voices[0].el.currentTime = 30;
+  assert.equal(api.setCombatMusic('lantern-guard'), 'lantern-guard');
+  assert.equal(api.musicState().piece, 'title');
+  assert.equal(title.voices[0].el.currentTime, 30);
+  assert.equal(media.length, 1);
+  api.playMusic('forest');
+  const lantern = api.musicState().tracks.get('combat-lantern-guard');
+  assert.equal(lantern.voices[0].el.src, 'audio/music/combat/lantern-guard-v2-15m.mp3');
+  api.setCombatMusic('spark-rush');
+  const spark = api.musicState().tracks.get('combat-spark-rush');
+  assert.equal(api.musicState().piece, 'combat-spark-rush');
+  assert.equal(spark.voices[0].el.src, 'audio/music/combat/spark-rush-15m.mp3');
+  tick(950);
+  assert.equal(lantern.voices[0].el.paused, true);
+  assert.equal(spark.voices[0].el.paused, false);
+  assert.equal(api.setCombatMusic('stale-choice'), DEFAULT_COMBAT_MUSIC);
+  assert.equal(api.musicState().piece, 'combat-clockwork-charge');
+  api.playMusic('results');
+  assert.equal(api.musicState().piece, 'results');
+});
+
+test('a choice made before audio unlock and a late manifest starts only the chosen combat file', async (t) => {
+  const { api, media, finishManifest } = await player(t, { manifest: combatManifest, deferManifest: true, init: false });
+  api.setCombatMusic('spark-rush');
+  api.playMusic('forest');
+  assert.equal(media.length, 0);
+  await finishManifest();
+  assert.equal(api.musicState().piece, 'combat-spark-rush');
+  assert.equal(media.length, 0, 'manifest arrival must not unlock audio itself');
+  api.initAudio();
+  assert.equal(media.length, 1);
+  assert.equal(media[0].src, 'audio/music/combat/spark-rush-15m.mp3');
+  assert.equal(media[0].plays, 1);
+});
+
+test('a late manifest recovers the selected music for a waiting run', async (t) => {
+  const { api, media, finishManifest } = await player(t, { manifest: combatManifest, deferManifest: true });
+  api.setCombatMusic('lantern-guard');
+  api.playMusic('dungeon-crypt');
+  assert.equal(media.length, 0);
+  await finishManifest();
+  assert.equal(media.length, 1);
+  assert.equal(api.musicState().piece, 'combat-lantern-guard');
+  api.stopMusic();
+  assert.equal(api.musicState().requestedPiece, null);
+});
+
+test('a late manifest cannot revive music stopped before it arrived', async (t) => {
+  const { api, media, finishManifest } = await player(t, { manifest: combatManifest, deferManifest: true });
+  api.playMusic('forest');
+  api.stopMusic();
+  await finishManifest();
+  assert.equal(media.length, 0);
+  assert.equal(api.musicState().piece, null);
+  assert.equal(api.musicState().requestedPiece, null);
+});
+
+test('a queued combat cue uses the latest choice after a victory jingle', async (t) => {
+  const { api } = await player(t, { manifest: combatManifest });
+  api.playJingle('victory');
+  const victory = api.musicState().tracks.get('victory');
+  api.playAfterJingle('forest');
+  api.setCombatMusic('lantern-guard');
+  assert.equal(api.musicState().piece, null);
+  assert.equal(api.musicState().after, 'forest');
+  victory.voices[0].el.ended = true;
+  victory.voices[0].el.emit('ended');
+  assert.equal(api.musicState().piece, 'combat-lantern-guard');
+});
 
 test('an exact Ogg uses one native looping player and preserves its opening beat at every timer tick', async (t) => {
   const { api, tick } = await player(t);

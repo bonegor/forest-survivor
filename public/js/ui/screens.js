@@ -1,7 +1,7 @@
 // Menu screens: title, hero select, trial select, armory, records, options.
 
 import { input, padKey } from '../engine/input.js';
-import { sfx, playMusic, playAfterJingle, setVolumes, initAudio } from '../engine/audio.js';
+import { sfx, playMusic, playAfterJingle, setVolumes, initAudio, setCombatMusic } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
 import { saveSettings, DEBUG, seenBox } from '../engine/storage.js';
 import { presentBackdrop } from '../engine/view.js';
@@ -20,6 +20,8 @@ import { MenuDialog } from './menu-dialog.js';
 import { codexSummary, codexDescription, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
 import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
 import { needsPrologue } from '../game/prologue.js';
+import { normalizeCombatMusic } from '../engine/combat-music.js';
+import { CombatMusicPicker } from './music-picker.js';
 
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
@@ -306,6 +308,9 @@ export class ModeScreen {
   enter(app, params = {}) {
     this.app = app;
     this.t = 0;
+    this.musicPicker = new CombatMusicPicker();
+    app.settings.combatMusic = normalizeCombatMusic(app.settings.combatMusic);
+    setCombatMusic(app.settings.combatMusic);
     playAfterJingle('title'); // as on the hero screen (HeroScreen.enter)
     app.ui.lock(0.2);
     // A trial this hero can't enter (yet) falls back to Survival.
@@ -333,6 +338,10 @@ export class ModeScreen {
     // note with Enter would have begun an Elite run with the next (27 October 2026).
     if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('m_' + app.choice.mode);ui.lock(0.2); }return; }
     ui.begin(dt);
+    const musicWasOpen = this.musicPicker.open;
+    const musicLock = ui.lockT, musicFocus = ui.focusId, musicFocusSource = ui.focusSource;
+    // Draw the existing choices behind the open list, without allowing clicks through it.
+    if (musicWasOpen) ui.lockT = Infinity;
     const hero = app.choice.hero;
     const modes = Object.keys(MODES);
     const cw = Math.min(110, Math.floor((W - 24) / modes.length) - 6), ch = 84;
@@ -494,8 +503,14 @@ export class ModeScreen {
     // as it went (an 854 x 480 window's 427 x 240, which now never shows that line): the review of
     // 28 October 2026. Longer notes (a narrow window) still push it.
     const rest = y + ch + 7 + MAP_ROW + rowDescN * 9 + 34 + 2 * 9 + 6;
-    const beginY = Math.max(ty + 6, Math.min(Math.max(H - 44, rest), y + ch + MAP_ROW + 25 + 34 + 4 * 9 + 8));
-    if (button(ctx, ui, 'begin', Math.round(W / 2 - 50), beginY, 100, 15, 'BEGIN', { color: '#fee761' })) {
+    const baseBeginY = Math.max(ty + 6, Math.min(Math.max(H - 44, rest), y + ch + MAP_ROW + 25 + 34 + 4 * 9 + 8));
+    const beside = H < 300;
+    const musicW = beside ? Math.min(210, W - 186) : Math.min(230, W - 24);
+    const musicX = Math.round(beside ? Math.max(68, (W - musicW - 108) / 2) : (W - musicW) / 2);
+    const beginY = baseBeginY + (beside ? 0 : 20);
+    const beginX = beside ? musicX + musicW + 8 : Math.round(W / 2 - 50);
+    this.musicPicker.draw(ctx, ui, { x: musicX, y: baseBeginY, w: musicW, h: 15 }, app.settings.combatMusic);
+    if (button(ctx, ui, 'begin', beginX, beginY, 100, 15, 'BEGIN', { color: '#fee761' })) {
       // The map shown is the one played: chosen now where the one shown by default isn't the
       // Darkwood's (a run without a map is the Darkwood's), or where the one chosen has shut since.
       if (mode === 's15' && (app.choice.map ?? 'forest') !== map) app.choice.map = map;
@@ -505,6 +520,20 @@ export class ModeScreen {
     // The keys' line where BEGIN, as it is drawn, leaves it room: on a short screen BEGIN's place
     // under the map row (rest), or notes that push it lower, take it.
     if (beginY + 15 < H - 17) keysHint(ctx, W, H);
+    if (this.musicPicker.open) {
+      if (musicWasOpen) {
+        ui.lockT = musicLock;
+        ui.focusId = musicFocus;
+        ui.focusSource = musicFocusSource;
+      }
+      ui.items.length = 0;
+      this.musicPicker.drawMenu(ctx, ui, W, H, app.settings.combatMusic, (id) => {
+        app.settings.combatMusic = setCombatMusic(id);
+        saveSettings(app.settings);
+      });
+      ui.end();
+      return;
+    }
     // Off the map row, left or right goes where it always has: along the trials past the last round
     // to the first and past the first to BACK, off NORMAL or ELITE up to the trial over it. Never onto
     // the row's end tabs, which lie further out than the end trials' and the end difficulties' middles
@@ -513,7 +542,13 @@ export class ModeScreen {
     // down, which ui.end takes first, still go onto it), and it is back in the frame's list once the
     // move is made.
     const items = ui.items;
-    if (row && !ui.focusId?.startsWith('map_') && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) ui.items = items.filter((i) => !i.id.startsWith('map_'));
+    let navigation = items;
+    if (row && !ui.focusId?.startsWith('map_') && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) navigation = navigation.filter((i) => !i.id.startsWith('map_'));
+    // Keep BEGIN in its familiar keyboard column while its compact visual row shares room
+    // with the picker. Left/right from BEGIN reaches MUSIC; up returns to the difficulty.
+    if (beside) navigation = navigation.map((i) => i.id === 'begin' ? { ...i, x: Math.round(W / 2 - 50) } : i);
+    ui.items = navigation;
+    if (ui.focusId === 'begin' && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) ui.focus('combat_music');
     ui.end();
     ui.items = items;
     if (input.pressed('back')) app.go('hero');
@@ -1080,7 +1115,7 @@ export class OptionsScreen {
     }
     if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
       this.dialog = new MenuDialog('Credits', [
-        'Music: Thorns and Iron, an original dark-fantasy score for Forest Survivor. Full music and archived soundtrack credits: audio/music/CREDITS.md',
+        'Combat music: Clockwork Charge, Lantern Guard and Spark Rush. Choose a soundtrack before BEGIN. Full music and archived soundtrack credits: audio/music/CREDITS.md',
         'Sound effects: 0 A.D. by Wildfire Games, Flare, UFO: Alien Invasion, MegaGlest, Ardentryst, HyperRogue (CC BY-SA); OpenClonk by K-Pone (CC BY); artisticdude, Ogrebane, Jan Schupke, Stendhal, Endless Sky, M.A.R.S. (CC0 / public domain)',
         'UI: Foozle Lucifer RPG UI and Kenney Fantasy UI Borders (CC0).',
         'Fonts: Pixtura12 by eishiya; Jacquard by Sarah Cadigan-Fried (SIL OFL).',

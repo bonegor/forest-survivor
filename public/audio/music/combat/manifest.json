@@ -1,0 +1,62 @@
+{
+  "title": "Forest Survivor - fifteen-minute combat music",
+  "approval_date": "2026-10-29",
+  "default": "clockwork-charge",
+  "description": "Original compositions and performances approved for combat. Exact copies of the selected MP3 listening versions, without re-encoding.",
+  "tracks": [
+    {
+      "id": "clockwork-charge",
+      "piece": "combat-clockwork-charge",
+      "title": "Clockwork Charge",
+      "file": "clockwork-charge-15m.mp3",
+      "approved_version": "Clockwork Charge - 15 minute version v1.mp3",
+      "bpm": 160.0,
+      "seconds": 900,
+      "sample_rate": 44100,
+      "samples": 39690000,
+      "encoded_lufs": -13.6,
+      "encoded_true_peak_db": -1.2,
+      "playback_gain": 0.9,
+      "bytes": 28802521,
+      "sha256": "83f3342c1a55b1b8f2228175bd4f193acc78ef24d6309f3f0b289bc427bb022e",
+      "composition_source": "tools/music/handmade-fight/clockwork-long/song.py",
+      "score_source": "tools/music/handmade-fight/scores/clockwork-long.mid"
+    },
+    {
+      "id": "lantern-guard",
+      "piece": "combat-lantern-guard",
+      "title": "Lantern Guard",
+      "file": "lantern-guard-v2-15m.mp3",
+      "approved_version": "Lantern Guard - fifteen minute journey v2.mp3",
+      "bpm": 160.0,
+      "seconds": 900,
+      "sample_rate": 44100,
+      "samples": 39690000,
+      "encoded_lufs": -13.8,
+      "encoded_true_peak_db": -1.2,
+      "playback_gain": 0.9,
+      "bytes": 28802523,
+      "sha256": "5332f430e6ba55be0f700f358c66a83262c212e1828ec7eb6452ffe50fe38d49",
+      "composition_source": "tools/music/handmade-fight/lantern-guard-v2/song.py",
+      "score_source": "tools/music/handmade-fight/scores/lantern-guard-v2.mid"
+    },
+    {
+      "id": "spark-rush",
+      "piece": "combat-spark-rush",
+      "title": "Spark Rush",
+      "file": "spark-rush-15m.mp3",
+      "approved_version": "Spark Rush - fifteen minute version v1.mp3",
+      "bpm": 156.0,
+      "seconds": 900,
+      "sample_rate": 44100,
+      "samples": 39690000,
+      "encoded_lufs": -14.3,
+      "encoded_true_peak_db": -1.8,
+      "playback_gain": 0.9,
+      "bytes": 28802520,
+      "sha256": "adea378913fe6426973e678d4c9e6854c9e5e97b8948900914f00531bdacd5f5",
+      "composition_source": "tools/music/handmade-fight/spark-rush-long/song.py",
+      "score_source": "tools/music/handmade-fight/scores/spark-rush-long.mid"
+    }
+  ]
+}

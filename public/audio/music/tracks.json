@@ -1,12 +1,15 @@
 {
   "title": { "file": "oath-at-the-gate.ogg", "gapless": true },
   "results": { "file": "embers-and-iron.ogg", "gapless": true },
-  "forest": { "file": "thorn-hunt.ogg", "gapless": true },
-  "crypt": { "file": "bone-procession.ogg", "gapless": true },
-  "boss": { "file": "crown-of-cinders.ogg", "gapless": true },
+  "forest": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
+  "crypt": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
+  "boss": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
   "victory": { "file": "embers-and-iron.ogg", "gapless": true },
   "gameover": { "file": "embers-and-iron.ogg", "gapless": true },
-  "dungeon-crypt": { "file": "bone-procession.ogg", "gapless": true },
-  "dungeon-catacombs": { "file": "thorn-hunt.ogg", "gapless": true },
-  "dungeon-inferno": { "file": "crown-of-cinders.ogg", "gapless": true }
+  "dungeon-crypt": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
+  "dungeon-catacombs": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
+  "dungeon-inferno": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
+  "combat-clockwork-charge": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
+  "combat-lantern-guard": { "file": "combat/lantern-guard-v2-15m.mp3", "gapless": true, "gain": 0.9 },
+  "combat-spark-rush": { "file": "combat/spark-rush-15m.mp3", "gapless": true, "gain": 0.9 }
 }
