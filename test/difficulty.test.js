@@ -9,11 +9,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
-import { isFew, minuteMore, WAVE, waveAt, PACK_LEAST } from '../public/js/game/spawner.js';
+import { Spawner, isFew, minuteMore, WAVE, waveAt, PACK_LEAST } from '../public/js/game/spawner.js';
 import { armored, BASE_SPEED } from '../public/js/game/player.js';
 import { NORMAL, VETERAN, ELITE, GAME_SPEED, HARDER, CROWD, VETERAN_CROWD, ELITE_CROWD, NORMAL_XP, moveFor } from '../public/js/data/difficulty.js';
 import { monsterHp, nightHpScale, hpScale } from '../public/js/data/waves.js';
 import { ENEMIES } from '../public/js/data/enemies.js';
+import { MAPS } from '../public/js/data/maps.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
 
@@ -344,9 +345,9 @@ test('the horde walks in four classes: the swift at the bare Knight’s pace, a 
 // The owner (23 October 2026): Veteran becomes Elite, Normal becomes Veteran, "and there's a new,
 // easier mode called normal ... half as many monsters as we do right now ... running 30% slower".
 // Then: "reduce the number of monsters by half and slow down the monsters slightly more, by 10%".
-test('Normal is Veteran with an eighth of the horde, everyone walking 30% slower and the monsters 10% slower again', () => {
+test('Normal keeps small timed hordes and slower movement, with a sustained steady-rate boost', () => {
   assert.equal(game({ diff: 'easy' }).diff, NORMAL);
-  assert.ok(Math.abs(NORMAL.spawn / VETERAN.spawn - 0.125) < 1e-12, 'an eighth of the steady horde');
+  assert.ok(Math.abs(NORMAL.spawn / VETERAN.spawn - 0.125) < 1e-12, 'the base before the sustained rate boost');
   assert.ok(Math.abs(NORMAL.horde / VETERAN.horde - 0.125) < 1e-12, 'an eighth of the swarms, rings and packs');
   assert.ok(Math.abs(NORMAL.foePace / VETERAN.foePace - 0.9) < 1e-12, 'the monsters 10% slower again');
   for (const k of ['hp', 'dmg', 'hurt', 'few', 'health', 'late', 'speed']) assert.equal(NORMAL[k], VETERAN[k], k);
@@ -356,6 +357,62 @@ test('Normal is Veteran with an eighth of the horde, everyone walking 30% slower
   assert.equal(n.pace, 1, 'the clock in real time');
   assert.equal(moveFor('ranked', 'easy'), GAME_SPEED, 'Ranked is always Elite');
   assert.deepEqual([NORMAL.name, VETERAN.name, ELITE.name], ['Normal', 'Veteran', 'Elite']);
+});
+
+test('Normal triples its former steady rate for the whole run, including waves and every map', () => {
+  for (const map of Object.values(MAPS)) for (const mode of ['s15', 'dungeon']) {
+    const g = { diff: NORMAL, mode, map, time: 0, skulls: 0, nightmare: false };
+    const s = new Spawner(g);
+    for (const minute of [0, 0.875, 3, 5, 8.99, 9, 10, 13, 14.9]) {
+      g.time = minute * 60;
+      const boosted = s.waveRate(minute * 1.4);
+      g.diff = { ...NORMAL, steadyMore: 1 };
+      const before = s.waveRate(minute * 1.4);
+      g.diff = NORMAL;
+      assert.ok(Math.abs(boosted / before - 3) < 1e-12, `${map.id}/${mode}/${minute}: boost stays threefold`);
+    }
+  }
+  assert.equal(VETERAN.steadyMore, undefined, 'Veteran does not get the boost');
+  assert.equal(ELITE.steadyMore, undefined, 'Elite and Ranked do not get the boost');
+});
+
+test('Normal starts with no burst and accumulates its boosted steady spawns; other difficulties keep their head start', () => {
+  const g = game({ diff: 'easy', map: 'forest' }), s = g.spawner;
+  let came = 0;
+  g.calm = 0;
+  g.time = 0;
+  g.spawnEnemy = () => { came++; return {}; };
+  g.world.spawnPoint = () => ({ x: g.player.x + 300, y: g.player.y });
+  s.pickType = () => 'rat'; // one monster per budget unit
+  s._events = [];
+  s.acc = 0;
+  s.owed = null;
+  s.eliteT = s.thiefT = s.propT = s.shrineT = s.joltT = Infinity;
+  s.update(1 / 60);
+  assert.equal(came, 0, 'no opening pack on the first spawning frame');
+  for (let i = 1; i < 600; i++) s.update(1 / 60);
+  assert.equal(came, Math.floor(s.rate(0) * 10), 'ten seconds deliver only the rate budget, with no prepaid burst');
+  assert.ok(came >= 12, 'the increased starting rate is active immediately');
+
+  g.time = 5 * 60;
+  s.resetForFloor(g.phase);
+  s.bossIdx = g.map.bosses.length; // this fixture measures steady spawns, not the overdue boss
+  s.acc = 0;
+  const before = came;
+  s.update(1 / 60);
+  assert.equal(came, before, 'a later floor also begins without a prepaid burst on Normal');
+
+  for (const diff of ['medium', 'hard']) {
+    const other = game({ diff });
+    let sent = 0;
+    other.calm = 0;
+    other.spawnEnemy = () => { sent++; return {}; };
+    other.world.spawnPoint = () => ({ x: other.player.x + 300, y: other.player.y });
+    other.spawner.acc = 0;
+    other.spawner.pickType = () => 'rat';
+    other.spawner.update(1 / 60);
+    assert.ok(sent > 1, `${diff}: its opening burst is preserved`);
+  }
 });
 
 // The 27 October 2026 review (D5): Normal meets Veteran's bosses and champions, left as they are,

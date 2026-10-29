@@ -27,12 +27,9 @@ export const VETERAN_CROWD = 2 / 3, ELITE_CROWD = 2 * VETERAN_CROWD;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
-// Normal sends an eighth of Veteran's horde but meets the same bosses and champions, left as they
-// are (the owner's difficulty tiers), so it was a long grind on an eighth of the experience to them
-// (the 27 October 2026 review, D5). Its horde pays NORMAL_XP times the experience, and its hero
-// reaches about as many level-ups by a minute of the night as Veteran's: the steady horde's rate
-// runs about 7.8 times Normal's on Veteran at dusk and 4.4 times at 13:00, as Veteran's bends
-// under HORDE_RATE.knee (spawner.js Spawner.rate).
+// Normal's smaller horde originally left too little experience before its unchanged bosses
+// (27 October 2026 review, D5), so its monsters pay six times the experience. That reward stays
+// independent of the later steady-rate boost below; timed swarms and packs keep their small size.
 export const NORMAL_XP = 6;
 
 // Elite (Veteran until 23 October 2026, the owner's: "the veteran difficulty will become elite"):
@@ -109,17 +106,21 @@ export const VETERAN = {
 // and slow down the monsters slightly more, by 10%": a quarter of Veteran's horde, and every
 // monster 10% slower again than Veteran's (foePace; the hero as before).
 // The owner's (26 October 2026): "On the normal difficulty, drop the number of monsters by half
-// again": an eighth of Veteran's horde.
+// again": an eighth of Veteran's horde. Then (29 October 2026): remove the opening burst and
+// triple the steady spawn rate, keeping that boost throughout the run. Apply steadyMore after
+// the rate's soft cap so it remains exactly threefold late too. Timed event sizes stay as before.
 export const NORMAL = {
   ...VETERAN,
   id: 'easy',
   name: 'Normal',
   spawn: VETERAN.spawn * 0.125,
   horde: VETERAN.horde * 0.125,
+  steadyMore: 3,
+  headStart: 0, // seconds of steady spawns sent at once; also zero on a new dungeon floor
   pace: VETERAN.pace * 0.7,
   foePace: VETERAN.foePace * 0.9,
   xp: NORMAL_XP, // its horde's experience (above)
-  desc: `An eighth of Veteran's monsters, each worth six times the experience; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
+  desc: `A steady stream with smaller swarms, each monster worth six times the experience; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
 };
 
 // By id, as a run report and the profile's wins keep it.

@@ -174,7 +174,7 @@ export class Spawner {
     this.eliteT = 60;
     this.thiefT = rand(90, 170);
     this.acc = 1.5;
-    this.owed = null; // a new floor gets its head start (HORDE_RATE.head, .headLate)
+    this.owed = null; // the difficulty's head start, or HORDE_RATE.head / .headLate
     this.rewarn();
   }
 
@@ -213,7 +213,7 @@ export class Spawner {
   rate(phase) {
     const g = this.g, grow = minuteMore(phase), knee = HORDE_RATE.knee * grow;
     const x = hordeRate(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * grow * lateMore(g.diff, phase);
-    return (x / (1 + x / knee)) * runMore(g);
+    return (x / (1 + x / knee)) * runMore(g) * (g.diff.steadyMore ?? 1);
   }
 
   // The rate right now: rate, and more while a wave is on (waveAt).
@@ -230,13 +230,13 @@ export class Spawner {
     // October 2026, data/waves.js HORDE_RATE). Due monsters gather in owed, fractions too; each
     // whole one comes at a spawn point at the screen's edge (a kind that comes in a group with the
     // rest of it, data/enemies.js group: a Goblin with two more, all three counted). The night's or
-    // floor's first comes with HORDE_RATE.head seconds' worth (.headLate on a floor starting later in
-    // the night). Its experience is the difficulty's and its map's (data/maps.js foe xp: more where
-    // fewer come, as Normal's NORMAL_XP).
+    // floor's first comes with the difficulty's headStart seconds' worth (zero on Normal), or
+    // HORDE_RATE.head / .headLate by default. Its experience is the difficulty's and its map's: more where
+    // fewer come, as Normal's NORMAL_XP.
     if (this.acc > 0) this.acc -= dt;
     else {
       const R = HORDE_RATE, rate = this.waveRate(phase);
-      if (this.owed === null) this.owed = this.rate(phase) * (phase < 1 ? R.head : R.headLate);
+      if (this.owed === null) this.owed = this.rate(phase) * (g.diff.headStart ?? (phase < 1 ? R.head : R.headLate));
       // At most `carry` seconds' worth wait (a head start may be more, and only runs down).
       this.owed = Math.min(this.owed + rate * dt, Math.max(this.owed, 1 + rate * R.carry));
       // Room kept for what is sent at the hero (HORDE_RATE.room): what was due doesn't come, unless

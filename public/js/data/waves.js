@@ -48,7 +48,7 @@ export const pocketAt = (minute, pockets = POCKETS) => pockets.find((p) => minut
 // below).
 // (Without the old 480 at most: nothing here counts what stands.)
 // At the start of the night and of each Dungeon Run floor `head` seconds' worth come at once, so
-// dusk is never empty (30: at dusk as many as used to stand then, 12 on Normal, 96 on Veteran,
+// dusk is never empty (Normal opts out through difficulty.headStart; at dusk 96 on Veteran,
 // 184 on Elite), `headLate` seconds' worth on a floor that starts later in the night (a Dungeon
 // Run's second and third, whose rate is already high: 30 seconds of it would be the cap at once);
 // what comes a frame is `perFrame` spawn points at most (a Goblin brings three),
