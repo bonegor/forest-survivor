@@ -32,6 +32,41 @@ def _shreddage(track):
         event[4] is not None for events in track['variants'].values() for event in events)
 
 
+def arrangement_audit(spec):
+    """Measure actual one-bar note/rhythm repetitions, ignoring renamed cells or velocities."""
+    def bar_signature(bar, pitched_only):
+        variant = next(p['variant'] for p in reversed(spec['plan']) if p['bar'] <= bar)
+        local = (bar % 2) * 16
+        result = []
+        for track in spec['tracks']:
+            if bar < track['enter'] or (pitched_only and track['role'] == 'drums'):
+                continue
+            notes = []
+            for pos, length, pitches, _, art in track['variants'][variant]:
+                if pos >= local + 16 or pos + length <= local:
+                    continue
+                pitches = [pitches] if isinstance(pitches, int) else sorted(pitches)
+                notes.append((round(pos - local, 6), round(length, 6), tuple(pitches), art))
+            if notes:
+                result.append((track['name'], tuple(sorted(notes))))
+        return tuple(result)
+    def longest(pitched_only):
+        start = max(t['enter'] for t in spec['tracks']) if pitched_only else 0
+        previous, run, maximum = None, 0, 0
+        for bar in range(start, spec['bars']):
+            signature = bar_signature(bar, pitched_only)
+            run = run + 1 if signature == previous else 1
+            maximum = max(maximum, run)
+            previous = signature
+        return maximum
+    ends = [p['bar'] for p in spec['plan'][1:]] + [spec['bars']]
+    holds = [end - p['bar'] for p, end in zip(spec['plan'], ends)]
+    return dict(max_planned_hold_bars=max(holds),
+                max_identical_audible_bar_run=longest(False),
+                max_identical_pitched_bar_run=longest(True),
+                plan_holds=sorted(set(holds)), planned_segments=len(holds))
+
+
 def validate_spec(spec, full_length=True):
     """Check the repeating arrangement contract; return the unchanged spec."""
     assert spec['pattern_bars'] == 2, 'Only two-bar cells are supported'
@@ -75,9 +110,14 @@ def validate_spec(spec, full_length=True):
     # Full arrangements begin with these two unchanging percussion layers.
     # Native cell-only exports can contain a single bass/guitar track.
     for track in tracks[:2]:
-        if track['role'] == 'drums':
+        if track['role'] == 'drums' and spec.get('arrangement') != 'cycled':
             cells = list(track['variants'].values())
             assert all(cell == cells[0] for cell in cells[1:]), (track['name'], 'drum bed changes')
+    if full_length and spec.get('arrangement') == 'cycled':
+        audit = arrangement_audit(spec)
+        assert set(audit['plan_holds']) <= {2, 4}, audit
+        assert audit['max_identical_audible_bar_run'] <= 4, audit
+        assert audit['max_identical_pitched_bar_run'] <= 4, audit
     return spec
 
 

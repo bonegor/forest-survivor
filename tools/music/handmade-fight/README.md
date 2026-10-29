@@ -143,7 +143,20 @@ the rendered recording is offered alongside the other combat selections.
 
 `repeating-grooves/` follows the drum-first, additive pattern brief: four
 fifteen-minute listening versions in metal, country, electronic and breakbeat
-styles. Each reuses short rendered instrument cells, with a fixed drum bed,
-layers entering every two bars and occasional harmonic changes. Its README
-explains the editable patterns; `render-report.json` records the listening
-versions and measurements. The portable MIDI files are `scores/repeating-*.mid`.
+styles. Revision 2 swaps related patterns after two or four bars, grouping
+returning statements, answers and turnarounds into recognizable sixteen-bar
+phrases. A steady rhythmic backbone supports varied drum accents and changing
+bass, guitar or synth figures. The additive layers, instrument palette,
+tempos and fifteen-minute lengths remain.
+
+The [arrangement README](repeating-grooves/README.md) explains the editable
+patterns and the shared render command. Native cells are rendered in batches
+with silent guards and one plugin load per track, then reused according to the
+phrase plan. The [composer review](repeating-grooves/COMPOSER_REVIEW.md) links
+the educational sources and records the actual-note repetition audit.
+
+Each piece's `song_v1.py`, `repeating-grooves/render-report-v1.json`, original
+portable MIDI and v1 listening MP3 remain preserved. New recordings receive
+incrementing version names. `repeating-grooves/render-report.json` records the
+current listening versions and measurements; revision-2 portable MIDI files
+are `scores/repeating-*-v2.mid`.

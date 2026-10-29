@@ -67,11 +67,12 @@ def shape_percussion(spec, track, head, cycle):
                              makeup_db=round(20 * math.log10(makeup), 3))
 
 
-def render_cell(spec, track, variant, directory, cfg, skill, binaries, env):
+def render_cell(spec, track, variant, directory, cfg, skill, binaries, env,
+                audio_override=None, provenance_override=None):
     """Four repetitions let the sampled strings/effects reach a cyclic state."""
     from pattern_score import export_score, write_part_midi
     from loop_voices import render_builtin
-    directory.mkdir()
+    directory.mkdir(exist_ok=True)
     loop_seconds = spec['pattern_bars'] * 240 / spec['bpm']
     count = round(loop_seconds * SR)
     cell_track = copy.deepcopy(track)
@@ -84,7 +85,10 @@ def render_cell(spec, track, variant, directory, cfg, skill, binaries, env):
     cell_json = song['tracks'][0]
     sound_name = track['sound']
     frames = count * REPEATS
-    if sound_name.startswith('local_'):
+    if audio_override is not None:
+        audio = np.asarray(audio_override, dtype=np.float32).copy()
+        provenance = provenance_override
+    elif sound_name.startswith('local_'):
         audio = render_builtin(cell_json, sound_name, frames, spec['bpm'], SR)
         provenance = 'Original deterministic synthesis'
     elif sound_name == 'country_banjo':
@@ -155,6 +159,56 @@ def render_cell(spec, track, variant, directory, cfg, skill, binaries, env):
     return head, cycle, details
 
 
+def render_native_cells(spec, track, variants, directories, atlas, cfg, skill, binaries, env):
+    """Batch the short patterns through one instrument load, with silent guards between them."""
+    from pattern_score import export_score
+    atlas.mkdir()
+    count = round(spec['pattern_bars'] * 240 / spec['bpm'] * SR)
+    seconds = count / SR
+    songs = []
+    for variant, directory in zip(variants, directories):
+        directory.mkdir()
+        cell_track = copy.deepcopy(track)
+        cell_track.update(enter=0, variants={'A': track['variants'][variant]})
+        cell_spec = dict(spec, bars=spec['pattern_bars'] * REPEATS,
+                         plan=[dict(bar=0, variant='A')], tracks=[cell_track])
+        songs.append(export_score(cell_spec, directory / 'export'))
+    combined = copy.deepcopy(songs[0])
+    combined['tracks'][0]['notes'] = []
+    for index, song in enumerate(songs):
+        offset = (index * (REPEATS + 1) + 1) * seconds
+        combined['tracks'][0]['notes'].extend([
+            [note[0] + offset, *note[1:]] for note in song['tracks'][0]['notes']])
+    combined['tracks'][0]['n_notes'] = sum(not n[4] for n in combined['tracks'][0]['notes'])
+    combined['length_sec'] = len(variants) * (REPEATS + 1) * seconds
+    combined['sections'] = []
+    export = atlas / 'export'
+    export.mkdir()
+    dump(export / 'song.json', combined)
+    local_cfg = copy.deepcopy(cfg)
+    if 'double' in track:
+        local_cfg['sounds'][track['sound']]['double'] = track['double']
+    studio = atlas / 'studio'
+    studio.mkdir()
+    dump(studio / 'sounds.json', local_cfg)
+    command([sys.executable, skill / 'scripts/render.py', export], atlas / 'render.log',
+            dict(env, MUSIC_STUDIO_HOME=str(studio)))
+    raw = next((export / 'stems').glob('*.wav'))
+    rate, data = wavfile.read(raw, mmap=True)
+    assert rate == SR and data.ndim == 2 and data.shape[1] == 2
+    sound = cfg['sounds'][track['sound']]
+    provenance = cfg['plugins'][sound['plugin']]['label']
+    if sound.get('fx'):
+        provenance += ' -> ' + cfg['plugins'][sound['fx']['plugin']]['label']
+    result = {}
+    for index, (variant, directory) in enumerate(zip(variants, directories)):
+        begin = (index * (REPEATS + 1) + 1) * count
+        audio = data[begin:begin + REPEATS * count].T
+        result[variant] = render_cell(spec, track, variant, directory, cfg, skill, binaries, env,
+                                      audio_override=audio, provenance_override=provenance)
+    return result
+
+
 def stream_stem(spec, track, cells, target, log):
     """Write repeating cells in small blocks; all parts keep their phase on the drum grid."""
     count = round(spec['pattern_bars'] * 240 / spec['bpm'] * SR)
@@ -194,15 +248,20 @@ def stream_stem(spec, track, cells, target, log):
     entry = round(track['enter'] * 240 / spec['bpm'] * SR)
     if entry:
         assert not np.any(data[:entry]), track['name']
-    # The first stable pair is byte-identical when the harmony stays unchanged.
-    first = entry + 2 * count
-    assert np.array_equal(data[first:first + count], data[first + count:first + 2 * count]), track['name']
+    # Check the actual assembled audio against every requested pattern, allowing only its seam.
+    first_active = True
+    for bar in range(track['enter'], spec['bars'], spec['pattern_bars']):
+        head, cycle, _ = cells[variant_at(spec, bar)]
+        expected = head if first_active else cycle
+        first_active = False
+        begin = (bar // spec['pattern_bars']) * count
+        assert np.array_equal(data[begin + 32:begin + count], expected[:, 32:].T), (track['name'], bar)
     return dict(frames=FRAMES, enter_bar=track['enter'], enter_seconds=round(entry / SR, 4),
-                stable_cell_repetition_verified=True)
+                stable_cell_repetition_verified=True, pattern_sequence_verified=True)
 
 
 def render_piece(slug, run, cfg, skill, binaries, env):
-    from pattern_score import validate_spec, export_score
+    from pattern_score import validate_spec, export_score, arrangement_audit
     from finish_suites import finish
     spec = runpy.run_path(str(HERE / slug / 'song.py'))['SPEC']
     validate_spec(spec)
@@ -220,14 +279,23 @@ def render_piece(slug, run, cfg, skill, binaries, env):
     reports = []
     for i, track in enumerate(spec['tracks']):
         print('LAYER', slug, track['name'], 'enters bar', track['enter'], flush=True)
-        cells, cache = {}, {}
+        cells, cache, representatives = {}, {}, {}
         for variant in sorted(track['variants']):
             fingerprint = json.dumps(track['variants'][variant], sort_keys=True)
-            if fingerprint not in cache:
-                cell_dir = loop_dir / f'{i:02d}-{variant}'
+            representatives.setdefault(fingerprint, variant)
+        unique = list(representatives.values())
+        if not track['sound'].startswith('local_') and track['sound'] != 'country_banjo':
+            print('  BATCH NATIVE CELLS', len(unique), flush=True)
+            rendered = render_native_cells(spec, track, unique, [loop_dir / f'{i:02d}-{v}' for v in unique],
+                                           loop_dir / f'{i:02d}-atlas', cfg, skill, binaries, env)
+            cache = {fp: rendered[v] for fp, v in representatives.items()}
+        else:
+            for fingerprint, variant in representatives.items():
                 print('  RENDER CELL', variant, flush=True)
-                cache[fingerprint] = render_cell(spec, track, variant, cell_dir, cfg, skill, binaries, env)
-            cells[variant] = cache[fingerprint]
+                cache[fingerprint] = render_cell(spec, track, variant, loop_dir / f'{i:02d}-{variant}',
+                                                 cfg, skill, binaries, env)
+        for variant in track['variants']:
+            cells[variant] = cache[json.dumps(track['variants'][variant], sort_keys=True)]
         destination = stems / (track['name'] + '.wav')
         result = stream_stem(spec, track, cells, destination, folder / f'{i:02d}-stream.log')
         reports.append(dict(name=track['name'], sound=track['sound'], **result,
@@ -235,11 +303,13 @@ def render_piece(slug, run, cfg, skill, binaries, env):
         print('  REPEATED TO 15:00', track['name'], flush=True)
     mix_cfg = dict(sounds={t['sound']: dict(gain_db=0) for t in spec['tracks']})
     dump(folder / 'mix-config.json', mix_cfg)
-    dump(folder / 'loop-report.json', dict(title=spec['title'], design='Two-bar additive repeating patterns',
-                                          pattern_bars=2, plan=spec['plan'], layers=reports))
+    audit = arrangement_audit(spec)
+    dump(folder / 'loop-report.json', dict(title=spec['title'], design=spec.get('arrangement', 'long-hold'),
+                                          pattern_bars=2, plan=spec['plan'], layers=reports, arrangement_audit=audit))
     print('MASTER', slug, flush=True)
     report = finish(folder, mix_cfg)
     report.update(slug=slug, genre=spec['genre'], key=spec['key'], pattern_bars=2,
+                  revision=spec.get('revision', 1), arrangement_audit=audit,
                   loop_report=str(folder / 'loop-report.json'))
     dump(folder / 'report.json', report)
     dump(Path(report['mp3']).with_suffix('.json'), report)
