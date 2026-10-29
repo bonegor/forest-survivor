@@ -112,3 +112,25 @@ Finished MP3/WAV files and editable MIDI copies are saved in the person's Music
 Studio `Finished/Forest Survivor - long battle music/` folder. The new long
 audio files remain listening versions until selected for the game. These
 scripts perform music work only; they do not schedule system shutdown.
+
+## Further listening versions
+
+`lantern-guard-v2/` keeps the fifteen-minute length but replaces the keyboard
+with a sampled concert harp. Three new themes, sustained string answers,
+syncopated bass figures and changing section lengths give it a separate
+musical identity. The original Lantern Guard remains in `lantern-guard/`.
+
+`spark-rush-long/` expands the approved electronic cue to 585 bars at 156 BPM,
+exactly fifteen minutes. The original hook and sounds return through new
+answer phrases, pedal passages, bass variations and two larger builds.
+
+```powershell
+python tools/music/handmade-fight/lantern-guard-v2/render.py
+python tools/music/handmade-fight/spark-rush-long/render.py
+```
+
+Each command uses a new output run and saves a checked MP3, WAV and MIDI in the
+long battle music listening folder. The concert-harp source and CC0 credits
+are documented in `lantern-guard-v2/DIFFERENCES.md`; the electronic voice and
+peak-shaping recipes are preserved in `spark-rush-long/`. The electronic mix
+sets `master.glue=False` to preserve the punch of its already-shaped drums.

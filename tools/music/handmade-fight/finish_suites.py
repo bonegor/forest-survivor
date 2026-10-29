@@ -88,6 +88,9 @@ def verify_mp3(path,log):
 def finish(folder,cfg):
     song = json.loads((folder/'export/song.json').read_text())
     assert abs(song['length_sec']-900)<.01
+    compression = COMP if song.get('master',{}).get('glue',True) else 'anull'
+    oversample = int(song.get('master',{}).get('limiter_oversample',1))
+    assert oversample in (1,2,4)
     raw,stats,activity = mix_stream(folder,cfg,song)
     raw_args = ['-f','f32le','-ar',str(SR),'-ac','2','-i',str(raw)]
     out = folder/'out'
@@ -98,12 +101,15 @@ def finish(folder,cfg):
     base = out/f'{title} v{v}'
     print('METERING',song['title'],flush=True)
     first_log = folder/f'pre-master-v{v}.log'
-    ff(raw_args+['-af',COMP+',ebur128=peak=true:framelog=verbose','-f','null',os.devnull],first_log)
+    ff(raw_args+['-af',compression+',ebur128=peak=true:framelog=verbose','-f','null',os.devnull],first_log)
     before = meter(first_log)
     gain = -13-before['lufs']
     # Leave 3 dB sample headroom for short cymbal transients after MP3 encoding.
     # The actual encoded true peak is checked independently below.
-    filters = (COMP+f',volume={gain:.3f}dB,alimiter=limit=0.707946:attack=5:release=80:level=false:latency=true'
+    before_limiter = f',aresample={SR*oversample}' if oversample>1 else ''
+    after_limiter = f',aresample={SR}' if oversample>1 else ''
+    filters = (compression+f',volume={gain:.3f}dB'+before_limiter+
+               ',alimiter=limit=0.707946:attack=5:release=80:level=false:latency=true'+after_limiter+
                ',afade=t=in:st=0:d=0.01,afade=t=out:st=898.5:d=1.5'
                f',apad=whole_len={FRAMES},atrim=end_sample={FRAMES}')
     print('MASTERING',song['title'],flush=True)
@@ -125,6 +131,7 @@ def finish(folder,cfg):
     shutil.copy2(midi,final.with_suffix('.mid'))
     report = dict(title=song['title'],seconds=900,samples=FRAMES,sample_rate=SR,bpm=song['bpm'],
         pre_master=before,master_gain_db=round(gain,3),encoded=measured,active_fraction=activity,
+        limiter_oversample=oversample,glue=bool(song.get('master',{}).get('glue',True)),
         stems=stats,sections=song['sections'],source=str(folder/'song.py'),
         mp3=str(final.with_suffix('.mp3')),wav=str(final.with_suffix('.wav')),midi=str(final.with_suffix('.mid')),
         mp3_sha256=hashlib.sha256(base.with_suffix('.mp3').read_bytes()).hexdigest(),

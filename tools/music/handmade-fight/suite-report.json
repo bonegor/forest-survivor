@@ -37,6 +37,44 @@
       "midi": "tools/music/handmade-fight/scores/lantern-guard.mid",
       "listening_file": "Lantern Guard - fifteen minute journey v1.mp3",
       "mp3_sha256": "fdc17acb6992eeb0f501eb2f487e97614ab510ae17b049bd0aadaad86cf7fcca"
+    },
+    {
+      "kind": "lantern-guard-v2",
+      "title": "Lantern Guard - fifteen minute journey",
+      "revision": 2,
+      "bpm": 160.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "encoded": {
+        "lufs": -13.8,
+        "true_peak_db": -1.2
+      },
+      "active_fraction": 1.0,
+      "chapters": 24,
+      "source": "tools/music/handmade-fight/lantern-guard-v2/song.py",
+      "midi": "tools/music/handmade-fight/scores/lantern-guard-v2.mid",
+      "listening_file": "Lantern Guard - fifteen minute journey v2.mp3",
+      "mp3_sha256": "5332f430e6ba55be0f700f358c66a83262c212e1828ec7eb6452ffe50fe38d49"
+    },
+    {
+      "kind": "spark-rush-long",
+      "title": "Spark Rush - fifteen minute version",
+      "revision": 1,
+      "bpm": 156.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "encoded": {
+        "lufs": -14.3,
+        "true_peak_db": -1.8
+      },
+      "active_fraction": 1.0,
+      "chapters": 20,
+      "source": "tools/music/handmade-fight/spark-rush-long/song.py",
+      "midi": "tools/music/handmade-fight/scores/spark-rush-long.mid",
+      "listening_file": "Spark Rush - fifteen minute version v1.mp3",
+      "mp3_sha256": "adea378913fe6426973e678d4c9e6854c9e5e97b8948900914f00531bdacd5f5"
     }
   ]
 }
