@@ -1,0 +1,303 @@
+{
+  "design": "Two-bar repeating drum beds, additive layers, long stable grooves.",
+  "listening_status": "Levels and balance measured, not listened to.",
+  "tracks": [
+    {
+      "slug": "steel-tread",
+      "title": "Steel Tread - 15 minute metal groove",
+      "genre": "heavy metal",
+      "key": "E minor",
+      "bpm": 160.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "pattern_bars": 2,
+      "plan": [
+        {
+          "bar": 0,
+          "variant": "A"
+        },
+        {
+          "bar": 128,
+          "variant": "B"
+        },
+        {
+          "bar": 256,
+          "variant": "A"
+        },
+        {
+          "bar": 384,
+          "variant": "B"
+        },
+        {
+          "bar": 480,
+          "variant": "A"
+        }
+      ],
+      "encoded": {
+        "lufs": -14.2,
+        "true_peak_db": -2.7
+      },
+      "sha256": "a31a418ceaa91490889a207cd107b7cce1883d306e79cb50a508576acf80bb30",
+      "listening_file": "Steel Tread - 15 minute metal groove v1.mp3",
+      "source": "tools/music/handmade-fight/repeating-grooves/steel-tread/song.py",
+      "midi": "tools/music/handmade-fight/scores/repeating-steel-tread.mid",
+      "layers": [
+        {
+          "name": "Drum Bed",
+          "enter_bar": 0,
+          "target_db": -18
+        },
+        {
+          "name": "Extra Kick",
+          "enter_bar": 2,
+          "target_db": -24
+        },
+        {
+          "name": "Bass",
+          "enter_bar": 4,
+          "target_db": -23
+        },
+        {
+          "name": "Guitar One",
+          "enter_bar": 6,
+          "target_db": -22
+        },
+        {
+          "name": "Guitar Two",
+          "enter_bar": 8,
+          "target_db": -25
+        }
+      ],
+      "drum_bed_unique_cells": 1,
+      "extra_kick_unique_cells": 1,
+      "stable_repetition_verified": true
+    },
+    {
+      "slug": "bootheel-loop",
+      "title": "Bootheel Loop - 15 minute country groove",
+      "genre": "country",
+      "key": "D major",
+      "bpm": 144.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "pattern_bars": 2,
+      "plan": [
+        {
+          "bar": 0,
+          "variant": "A"
+        },
+        {
+          "bar": 128,
+          "variant": "B"
+        },
+        {
+          "bar": 192,
+          "variant": "A"
+        },
+        {
+          "bar": 320,
+          "variant": "C"
+        },
+        {
+          "bar": 384,
+          "variant": "A"
+        },
+        {
+          "bar": 480,
+          "variant": "B"
+        },
+        {
+          "bar": 512,
+          "variant": "C"
+        },
+        {
+          "bar": 528,
+          "variant": "A"
+        }
+      ],
+      "encoded": {
+        "lufs": -14.2,
+        "true_peak_db": -2.8
+      },
+      "sha256": "ae546608fc1f358e8f6406ac4307a47b8e346b56c32d637dfd491cfdc9013ad8",
+      "listening_file": "Bootheel Loop - 15 minute country groove v1.mp3",
+      "source": "tools/music/handmade-fight/repeating-grooves/bootheel-loop/song.py",
+      "midi": "tools/music/handmade-fight/scores/repeating-bootheel-loop.mid",
+      "layers": [
+        {
+          "name": "Drum Bed",
+          "enter_bar": 0,
+          "target_db": -18.0
+        },
+        {
+          "name": "Low Kick",
+          "enter_bar": 2,
+          "target_db": -27.0
+        },
+        {
+          "name": "Alternating Bass",
+          "enter_bar": 4,
+          "target_db": -23.0
+        },
+        {
+          "name": "Acoustic Chuck",
+          "enter_bar": 6,
+          "target_db": -23.0
+        },
+        {
+          "name": "Twang Chop",
+          "enter_bar": 8,
+          "target_db": -26.0
+        },
+        {
+          "name": "Banjo Roll",
+          "enter_bar": 10,
+          "target_db": -29.0
+        }
+      ],
+      "drum_bed_unique_cells": 1,
+      "extra_kick_unique_cells": 1,
+      "stable_repetition_verified": true
+    },
+    {
+      "slug": "neon-motor",
+      "title": "Neon Motor - 15 minute electronic groove",
+      "genre": "electronic club",
+      "key": "A minor / F major colour",
+      "bpm": 128.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "pattern_bars": 2,
+      "plan": [
+        {
+          "bar": 0,
+          "variant": "A"
+        },
+        {
+          "bar": 128,
+          "variant": "B"
+        },
+        {
+          "bar": 256,
+          "variant": "A"
+        },
+        {
+          "bar": 384,
+          "variant": "B"
+        }
+      ],
+      "encoded": {
+        "lufs": -14.6,
+        "true_peak_db": -2.5
+      },
+      "sha256": "34b1e4e24fa9b2b12d39370a4bc4cb900d6cd152972054c409f9b9e8ef5958c6",
+      "listening_file": "Neon Motor - 15 minute electronic groove v1.mp3",
+      "source": "tools/music/handmade-fight/repeating-grooves/neon-motor/song.py",
+      "midi": "tools/music/handmade-fight/scores/repeating-neon-motor.mid",
+      "layers": [
+        {
+          "name": "Drum Bed",
+          "enter_bar": 0,
+          "target_db": -18.0
+        },
+        {
+          "name": "Extra Kick",
+          "enter_bar": 2,
+          "target_db": -24.0
+        },
+        {
+          "name": "Motor Bass",
+          "enter_bar": 4,
+          "target_db": -22.0
+        },
+        {
+          "name": "Offbeat Chords",
+          "enter_bar": 6,
+          "target_db": -26.0
+        },
+        {
+          "name": "Two Note Pulse",
+          "enter_bar": 8,
+          "target_db": -28.0
+        }
+      ],
+      "drum_bed_unique_cells": 1,
+      "extra_kick_unique_cells": 1,
+      "stable_repetition_verified": true
+    },
+    {
+      "slug": "breakbeat-circuit",
+      "title": "Breakbeat Circuit - 15 minute broken-beat groove",
+      "genre": "drum and bass / broken beat",
+      "key": "E minor / C major colour",
+      "bpm": 168.0,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "pattern_bars": 2,
+      "plan": [
+        {
+          "bar": 0,
+          "variant": "A"
+        },
+        {
+          "bar": 128,
+          "variant": "B"
+        },
+        {
+          "bar": 256,
+          "variant": "A"
+        },
+        {
+          "bar": 384,
+          "variant": "B"
+        },
+        {
+          "bar": 512,
+          "variant": "A"
+        }
+      ],
+      "encoded": {
+        "lufs": -14.2,
+        "true_peak_db": -2.8
+      },
+      "sha256": "45763d4c2d0f4a139c1ca670837340413dd5dbb083b6223bebed8ed9885e7669",
+      "listening_file": "Breakbeat Circuit - 15 minute broken-beat groove v1.mp3",
+      "source": "tools/music/handmade-fight/repeating-grooves/breakbeat-circuit/song.py",
+      "midi": "tools/music/handmade-fight/scores/repeating-breakbeat-circuit.mid",
+      "layers": [
+        {
+          "name": "Drum Bed",
+          "enter_bar": 0,
+          "target_db": -18.0
+        },
+        {
+          "name": "Extra Kick",
+          "enter_bar": 2,
+          "target_db": -24.0
+        },
+        {
+          "name": "Circuit Bass",
+          "enter_bar": 4,
+          "target_db": -22.0
+        },
+        {
+          "name": "Clipped Chords",
+          "enter_bar": 6,
+          "target_db": -26.0
+        },
+        {
+          "name": "Counter Pulse",
+          "enter_bar": 8,
+          "target_db": -28.0
+        }
+      ],
+      "drum_bed_unique_cells": 1,
+      "extra_kick_unique_cells": 1,
+      "stable_repetition_verified": true
+    }
+  ]
+}

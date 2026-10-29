@@ -140,3 +140,10 @@ sets `master.glue=False` to preserve the punch of its already-shaped drums.
 acoustic rhythm guitar, clean electric guitar, banjo and piano, with developing
 themes and contrasting sections. Its editable composition is `song.py`;
 the rendered recording is offered alongside the other combat selections.
+
+`repeating-grooves/` follows the drum-first, additive pattern brief: four
+fifteen-minute listening versions in metal, country, electronic and breakbeat
+styles. Each reuses short rendered instrument cells, with a fixed drum bed,
+layers entering every two bars and occasional harmonic changes. Its README
+explains the editable patterns; `render-report.json` records the listening
+versions and measurements. The portable MIDI files are `scores/repeating-*.mid`.
