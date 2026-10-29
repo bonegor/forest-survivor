@@ -3,6 +3,7 @@ export const COMBAT_MUSIC = Object.freeze([
   Object.freeze({ id: 'clockwork-charge', name: 'Clockwork Charge', piece: 'combat-clockwork-charge', file: 'combat/clockwork-charge-15m.mp3', seconds: 900 }),
   Object.freeze({ id: 'lantern-guard', name: 'Lantern Guard', piece: 'combat-lantern-guard', file: 'combat/lantern-guard-v2-15m.mp3', seconds: 900 }),
   Object.freeze({ id: 'spark-rush', name: 'Spark Rush', piece: 'combat-spark-rush', file: 'combat/spark-rush-15m.mp3', seconds: 900 }),
+  Object.freeze({ id: 'dusty-trail-stampede', name: 'Dusty Trail Stampede', piece: 'combat-dusty-trail-stampede', file: 'combat/dusty-trail-stampede-15m.mp3', seconds: 900 }),
 ]);
 
 export const DEFAULT_COMBAT_MUSIC = 'clockwork-charge';

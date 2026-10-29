@@ -69,22 +69,22 @@ function openPicker(harness) {
   assert.deepEqual(harness.app.ui.items.map((entry) => entry.id), COMBAT_MUSIC.map((track) => 'music_' + track.id));
 }
 
-test('the actual trial dropdown defaults to Clockwork and persists Spark Rush without starting a run', () => {
+test('the actual trial dropdown defaults to Clockwork and persists the country track without starting a run', () => {
   const h = trial(), choice = { ...h.app.choice };
   assert.equal(h.app.settings.combatMusic, 'clockwork-charge');
   openPicker(h);
   assert.equal(h.app.ui.focusId, 'music_clockwork-charge');
-  click(h, item(h, 'music_spark-rush'));
+  click(h, item(h, 'music_dusty-trail-stampede'));
   assert.equal(h.screen.musicPicker.open, false);
-  assert.equal(h.app.settings.combatMusic, 'spark-rush');
-  assert.equal(loadSettings().combatMusic, 'spark-rush');
+  assert.equal(h.app.settings.combatMusic, 'dusty-trail-stampede');
+  assert.equal(loadSettings().combatMusic, 'dusty-trail-stampede');
   assert.equal(h.app.started, 0);
   assert.deepEqual(h.app.choice, choice);
   assert.deepEqual(h.app.went, []);
   const next = trial({ reset: false });
-  assert.equal(next.app.settings.combatMusic, 'spark-rush', 're-entering the menu restores the saved choice');
+  assert.equal(next.app.settings.combatMusic, 'dusty-trail-stampede', 're-entering the menu restores the saved choice');
   openPicker(next);
-  assert.equal(next.app.ui.focusId, 'music_spark-rush');
+  assert.equal(next.app.ui.focusId, 'music_dusty-trail-stampede');
 });
 
 test('the picker is reachable left from BEGIN', () => {
@@ -105,13 +105,15 @@ test('keyboard arrows browse music without changing settings, and Enter confirms
   assert.equal(h.app.ui.focusId, 'music_lantern-guard');
   press(h, 'ArrowDown');
   assert.equal(h.app.ui.focusId, 'music_spark-rush');
+  press(h, 'ArrowDown');
+  assert.equal(h.app.ui.focusId, 'music_dusty-trail-stampede');
   assert.equal(h.app.settings.combatMusic, 'clockwork-charge');
   assert.equal(loadSettings().combatMusic, 'clockwork-charge');
   assert.deepEqual(h.app.choice, choice, 'browsing music cannot change trial, map or difficulty');
   assert.equal(h.app.started, 0);
   press(h, 'Enter');
-  assert.equal(h.app.settings.combatMusic, 'spark-rush');
-  assert.equal(loadSettings().combatMusic, 'spark-rush');
+  assert.equal(h.app.settings.combatMusic, 'dusty-trail-stampede');
+  assert.equal(loadSettings().combatMusic, 'dusty-trail-stampede');
   assert.equal(h.screen.musicPicker.open, false);
   assert.equal(h.app.started, 0);
   idle(h);
@@ -119,7 +121,7 @@ test('keyboard arrows browse music without changing settings, and Enter confirms
   assert.equal(h.app.ui.focusId, 'begin');
   press(h, 'Enter');
   assert.equal(h.app.started, 1);
-  assert.equal(h.app.startedMusic, 'spark-rush');
+  assert.equal(h.app.startedMusic, 'dusty-trail-stampede');
 });
 
 test('Escape closes the music list without leaving the trial screen or changing its choice', () => {

@@ -84,10 +84,10 @@ test('gamepad navigation stays within the menu and A confirms the focused track'
   p.ui.focusId = 'combat_music';
   p.press('Enter'); p.frame();
   input.pad.nav = 'up'; p.frame(); input.pad.nav = null;
-  assert.equal(p.ui.focusId, 'music_spark-rush', 'up wraps to the final option');
+  assert.equal(p.ui.focusId, 'music_dusty-trail-stampede', 'up wraps to the final option');
   input.pad.buttons = [true]; input.pad.prev = [false]; p.frame();
   input.pad.buttons = []; input.pad.prev = [];
-  assert.deepEqual(p.choices, ['spark-rush']);
+  assert.deepEqual(p.choices, ['dusty-trail-stampede']);
 });
 
 test('dropdown stays inside short landscape and narrow portrait viewports and opens above a low control', () => {

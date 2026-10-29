@@ -75,6 +75,25 @@
       "midi": "tools/music/handmade-fight/scores/spark-rush-long.mid",
       "listening_file": "Spark Rush - fifteen minute version v1.mp3",
       "mp3_sha256": "adea378913fe6426973e678d4c9e6854c9e5e97b8948900914f00531bdacd5f5"
+    },
+    {
+      "kind": "dusty-trail",
+      "title": "Dusty Trail Stampede - fifteen minute version",
+      "revision": 1,
+      "bpm": 144,
+      "seconds": 900,
+      "samples": 39690000,
+      "sample_rate": 44100,
+      "encoded": {
+        "lufs": -14.2,
+        "true_peak_db": -2.3
+      },
+      "active_fraction": 1.0,
+      "chapters": 19,
+      "source": "tools/music/handmade-fight/dusty-trail/song.py",
+      "midi": "tools/music/handmade-fight/scores/dusty-trail.mid",
+      "listening_file": "Dusty Trail Stampede - fifteen minute version v1.mp3",
+      "mp3_sha256": "6934b9f49d54f64b4e1823c5b09e5f043da73a742d6108ea36c39fe312a88af9"
     }
   ]
 }

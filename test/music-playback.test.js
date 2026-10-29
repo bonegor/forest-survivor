@@ -107,8 +107,8 @@ async function player(t, options = {}) {
 
 const combatManifest = Object.fromEntries(COMBAT_MUSIC.map((track) => [track.piece, { file: track.file, gapless: true }]));
 
-test('combat music settings accept only the three published choices and default to Clockwork Charge', () => {
-  assert.equal(COMBAT_MUSIC.length, 3);
+test('combat music settings accept only the four published choices and default to Clockwork Charge', () => {
+  assert.equal(COMBAT_MUSIC.length, 4);
   assert.equal(DEFAULT_COMBAT_MUSIC, 'clockwork-charge');
   for (const track of COMBAT_MUSIC) assert.equal(normalizeCombatMusic(track.id), track.id);
   for (const stale of [undefined, null, '', 'old-song', '__proto__', { id: 'spark-rush' }]) {
@@ -118,7 +118,7 @@ test('combat music settings accept only the three published choices and default 
 
 test('a selected long recording streams alone and continues through bosses and dungeon floors', async (t) => {
   const { api, tick, media } = await player(t, { manifest: combatManifest });
-  assert.equal(media.length, 0, 'the catalog does not preload all three long recordings');
+  assert.equal(media.length, 0, 'the catalog does not preload the long recordings');
   api.playMusic('forest');
   const state = api.musicState(), track = state.tracks.get('combat-clockwork-charge');
   assert.equal(state.combatMusic, DEFAULT_COMBAT_MUSIC);
@@ -169,6 +169,27 @@ test('choosing music in a menu leaves the menu playing, and changing an active c
   assert.equal(api.musicState().piece, 'combat-clockwork-charge');
   api.playMusic('results');
   assert.equal(api.musicState().piece, 'results');
+});
+
+test('the country selection streams its own file and survives combat cue changes', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  api.setCombatMusic('dusty-trail-stampede');
+  api.playMusic('forest');
+  const state = api.musicState(), track = state.tracks.get('combat-dusty-trail-stampede');
+  assert.equal(state.combatMusic, 'dusty-trail-stampede');
+  assert.equal(track.voices.length, 1);
+  const el = track.voices[0].el;
+  el.duration = 900;
+  el.currentTime = 287;
+  assert.equal(el.src, 'audio/music/combat/dusty-trail-stampede-15m.mp3');
+  assert.equal(el.loop, true);
+  api.cutToMusic('boss', .4);
+  api.playMusic('dungeon-crypt');
+  tick(2000);
+  assert.equal(media.length, 1);
+  assert.equal(el.currentTime, 287);
+  assert.equal(el.plays, 1);
+  assert.equal(track.playing, true);
 });
 
 test('a choice made before audio unlock and a late manifest starts only the chosen combat file', async (t) => {

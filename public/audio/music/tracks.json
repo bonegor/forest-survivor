@@ -11,5 +11,6 @@
   "dungeon-inferno": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
   "combat-clockwork-charge": { "file": "combat/clockwork-charge-15m.mp3", "gapless": true, "gain": 0.9 },
   "combat-lantern-guard": { "file": "combat/lantern-guard-v2-15m.mp3", "gapless": true, "gain": 0.9 },
-  "combat-spark-rush": { "file": "combat/spark-rush-15m.mp3", "gapless": true, "gain": 0.9 }
+  "combat-spark-rush": { "file": "combat/spark-rush-15m.mp3", "gapless": true, "gain": 0.9 },
+  "combat-dusty-trail-stampede": { "file": "combat/dusty-trail-stampede-15m.mp3", "gapless": true, "gain": 0.9 }
 }

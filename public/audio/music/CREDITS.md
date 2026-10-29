@@ -192,9 +192,9 @@ The compositions by Pachelbel and Ravel, and the anonymous Romance, are in the p
 
 ## Fifteen-minute combat selections (29 October 2026)
 
-The pre-run music selector offers three original, programmed compositions for
-Forest Survivor, each exactly 15:00. The MP3s below are unchanged copies of the
-user-approved listening versions. Their source scores, selected version names,
+The pre-run music selector offers four original, programmed compositions for
+Forest Survivor, each exactly 15:00. The MP3s below are unchanged copies of their
+published listening versions. Their source scores, selected version names,
 levels and hashes are listed in `combat/manifest.json`; editable compositions
 and MIDI are in `tools/music/handmade-fight/` in the repository.
 
@@ -212,6 +212,14 @@ and MIDI are in `tools/music/handmade-fight/` in the repository.
 - **combat/spark-rush-15m.mp3 — Spark Rush:** original programmed synth bass,
   pulsing chords, plucked lead, electronic kick and clap, with Cakewalk
   SI-Drum Kit.
+- **combat/dusty-trail-stampede-15m.mp3 — Dusty Trail Stampede:** original
+  country themes and arrangement, with Ample Guitar M Lite acoustic guitar,
+  Shreddage 3 Stratus FREE through a Guitar Rig 7 Player clean amp,
+  Cakewalk SI-Bass Guitar and SI-Drum Kit, and MuseScore_General banjo and
+  piano. MuseScore_General sample notices: FluidR3 by Frank Wen (c) 2000-02;
+  FluidR3Mono by Michael Cowgill (c) 2014-17; adaptation by S. Christian Collins
+  (c) 2018-19. MIT licence and font source:
+  https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/.
 
 The existing title, results and ending music retains its separate credits.
 Earlier combat files remain archived with their licences above.

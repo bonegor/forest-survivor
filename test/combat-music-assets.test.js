@@ -18,6 +18,7 @@ const selections = [
   ['clockwork-charge', 'clockwork-long', 'combat/clockwork-charge-15m.mp3'],
   ['lantern-guard', 'lantern-guard-v2', 'combat/lantern-guard-v2-15m.mp3'],
   ['spark-rush', 'spark-rush-long', 'combat/spark-rush-15m.mp3'],
+  ['dusty-trail-stampede', 'dusty-trail', 'combat/dusty-trail-stampede-15m.mp3'],
 ];
 
 function sourcePath(reference) {
@@ -33,10 +34,10 @@ async function sha256(path) {
   return hash.digest('hex');
 }
 
-test('the three pre-run choices resolve to the approved full-length playback files', () => {
+test('the four pre-run choices resolve to the published full-length playback files', () => {
   assert.deepEqual(COMBAT_MUSIC.map((track) => track.id), selections.map(([id]) => id));
-  assert.equal(new Set(approved.tracks.map((track) => track.id)).size, 3);
-  assert.equal(approved.tracks.length, 3);
+  assert.equal(new Set(approved.tracks.map((track) => track.id)).size, selections.length);
+  assert.equal(approved.tracks.length, selections.length);
   assert.equal(DEFAULT_COMBAT_MUSIC, 'clockwork-charge');
   assert.equal(approved.default, DEFAULT_COMBAT_MUSIC);
   for (const [id, , file] of selections) {

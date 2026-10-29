@@ -134,3 +134,9 @@ long battle music listening folder. The concert-harp source and CC0 credits
 are documented in `lantern-guard-v2/DIFFERENCES.md`; the electronic voice and
 peak-shaping recipes are preserved in `spark-rush-long/`. The electronic mix
 sets `master.glue=False` to preserve the punch of its already-shaped drums.
+
+`dusty-trail/` adds Dusty Trail Stampede, an original 540-bar country piece at
+144 BPM, exactly fifteen minutes. An alternating bass and train beat support
+acoustic rhythm guitar, clean electric guitar, banjo and piano, with developing
+themes and contrasting sections. Its editable composition is `song.py`;
+the rendered recording is offered alongside the other combat selections.

@@ -1115,7 +1115,7 @@ export class OptionsScreen {
     }
     if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
       this.dialog = new MenuDialog('Credits', [
-        'Combat music: Clockwork Charge, Lantern Guard and Spark Rush. Choose a soundtrack before BEGIN. Full music and archived soundtrack credits: audio/music/CREDITS.md',
+        'Combat music: Clockwork Charge, Lantern Guard, Spark Rush and Dusty Trail Stampede. Choose a soundtrack before BEGIN. Full music and archived soundtrack credits: audio/music/CREDITS.md',
         'Sound effects: 0 A.D. by Wildfire Games, Flare, UFO: Alien Invasion, MegaGlest, Ardentryst, HyperRogue (CC BY-SA); OpenClonk by K-Pone (CC BY); artisticdude, Ogrebane, Jan Schupke, Stendhal, Endless Sky, M.A.R.S. (CC0 / public domain)',
         'UI: Foozle Lucifer RPG UI and Kenney Fantasy UI Borders (CC0).',
         'Fonts: Pixtura12 by eishiya; Jacquard by Sarah Cadigan-Fried (SIL OFL).',
