@@ -55,9 +55,10 @@
 //             ice, lava, void and bridge decks' colours, and the tells' colours round its patches
 //   hazards   what its sky does to the fight (game/hazards): the Frostfell's gusts, the Sunscorch's
 //             duststorm haze; absent: none
-//   fae       the Bloomvale's fae court (game/fae-rings.js FAE: its rings' places, clocks and dance;
-//             game/fae.js brings them to life), absent elsewhere
-//   clearAt   (x, y) => whether nothing may stand there (biomeProp): the Bloomvale's rings' clearings
+//   fae       the Bloomvale's fae court: its Fae Thread's table (game/fae-thread.js THREAD, 29 October
+//             2026; game/fae.js brings it to life), absent elsewhere
+//   clearAt   (x, y) => whether nothing may stand there (biomeProp); no look uses it now (the
+//             Bloomvale's rings' clearings went with the rings, 29 October 2026)
 
 import { GROUND } from './darkwood.js';
 import { hash2 } from '../engine/util.js';
@@ -111,7 +112,8 @@ export const BIOMES = { forest: FOREST, desert: DESERT, frozen: FROZEN, meadow: 
 export function biomeProp(look, q, lay = null) {
   const map = look.props;
   if (!map) return q;
-  // Nothing stands in a fae ring's clearing (the Bloomvale's: game/fae-rings.js, 28 October 2026).
+  // Nothing stands where a look keeps clear (look.clearAt; the Bloomvale's rings' clearings until 29
+  // October 2026, none now).
   if (look.clearAt && look.clearAt(q.x, q.y)) return null;
   let e = q.src ? map[q.src + ':' + q.n] : undefined;
   if (e === undefined && q.src) e = map[q.src + ':*'];

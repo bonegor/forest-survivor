@@ -68,10 +68,12 @@ export function dress(L, r, bx, o = {}) {
   const add = adder(L), { x, y } = L;
   if (L.kind === 'oasis') {
     // Water ringed with palms (a tree's slot: the Sunscorch's 'oasis:oak1' is a date palm), reeds at
-    // its rim, agave and scrub about it.
+    // its rim, agave and scrub about it. Drawn in closer since the Sunscorch's band narrowed to 300 px
+    // (29 October 2026): the palms 12-24 px out from the water (14-30 before), the agave and scrub
+    // 28-48 (36-64), so the whole of it is about 130 px across and leaves the band open past it.
     const pool = o.pool, R = pool.ext;
     for (let k = r.int(3, 5), a0 = r.range(0, TAU); k > 0; k--) {
-      const a = a0 + (k / 5) * TAU + r.range(-0.3, 0.3), d = R + r.range(14, 30);
+      const a = a0 + (k / 5) * TAU + r.range(-0.3, 0.3), d = R + r.range(12, 24);
       add('oak1', x + Math.cos(a) * d, y + Math.sin(a) * d);
     }
     for (let k = r.int(2, 4); k > 0; k--) {
@@ -79,7 +81,7 @@ export function dress(L, r, bx, o = {}) {
       add('sand_reeds', x + Math.cos(a) * d, y + Math.sin(a) * d);
     }
     for (let k = r.int(2, 4); k > 0; k--) {
-      const a = r.range(0, TAU), d = R + r.range(36, 64);
+      const a = r.range(0, TAU), d = R + r.range(28, 48);
       add(r() < 0.5 ? 'redcaps' : 'bush1', x + Math.cos(a) * d, y + Math.sin(a) * d);
     }
   } else if (L.kind === 'bones') {
@@ -108,12 +110,16 @@ export function pondLandmark(p, i, j, rocks, r) {
 // A bridge's head on the land (the Abyss): its two posts either side of the deck, in its material
 // (art/terrain.js hell_post_*: a plank bridge's are the charred wood ones, hell_post_wood, as drawn on
 // 28 October 2026; the material's own name was no sprite, so half the bridges stood without posts), and at
-// one bridge in three a brazier burning beside one of them: the bridges' only lights.
+// one bridge in three a brazier burning beside one of them: the bridges' only lights. The fault plates'
+// walkways (topology/plates.js, 29 October 2026): an iron one's posts are hell_post_iron, and a rock
+// causeway, land that reaches across, has none.
 export function bridgehead(i, j, x, y, nx, ny, hw, material, brazier) {
   const L = { x, y, i, j, kind: 'bridgehead', props: [], clear: { x, y, r: 40 } };
   const add = adder(L), n = 'hell_post_' + (material === 'planks' ? 'wood' : material), o = hw + 3;
-  add(n, x + nx * o, y + ny * o);
-  add(n, x - nx * o, y - ny * o);
+  if (material !== 'rock') {
+    add(n, x + nx * o, y + ny * o);
+    add(n, x - nx * o, y - ny * o);
+  }
   if (brazier) add('brazier', x + nx * (o + 10), y + ny * (o + 10) + 2, { light: ['fire', 60], anim: 9 });
   return L;
 }

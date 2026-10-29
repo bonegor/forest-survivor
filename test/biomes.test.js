@@ -175,8 +175,8 @@ test("whatever stands in a tree's place is a tree: it stops the hero, fades over
         // over a gap, and the topology's own places.
         for (const q of D.layoutChunk(cx, cy, null, L.density, g.world.topo).props) {
           if (!D.TREE_NAMES.has(q.n)) continue;
-          // Nothing stands in a fae ring's clearing, 64 px round its middle (the Bloomvale's: game/fae-rings.js,
-          // 28 October 2026).
+          // Nothing stands where a look keeps clear (look.clearAt: the Bloomvale's rings' clearings
+          // until 29 October 2026; no look keeps any now).
           if (L.clearAt?.(q.x, q.y)) continue;
           const p = at.get(`${q.x},${q.y}`);
           assert.ok(p, `${id}: what stands in the ${q.n} at ${q.x},${q.y}`);

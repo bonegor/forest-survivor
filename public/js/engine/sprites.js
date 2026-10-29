@@ -267,8 +267,8 @@ export const TINTS = {
   frozen: (b) => px.tint(b, px.hexPack('#9ee7ff'), 0.55),
   burn: (b) => px.tint(b, px.hexPack('#ff6a3d'), 0.35),
   dim: (b) => px.tint(b, px.hexPack('#181425'), 0.55),
-  // A fae ring's dancer (the Bloomvale's, game/fae.js, 28 October 2026): charmed pink, apart from
-  // the frozen's ice and the burn's orange.
+  // A sleeper in a fae-sown circle (the Bloomvale's Fae Thread, game/fae.js, 29 October 2026):
+  // charmed pink, apart from the frozen's ice and the burn's orange.
   charmed: (b) => px.tint(b, px.hexPack('#ffb8d8'), 0.45),
 };
 

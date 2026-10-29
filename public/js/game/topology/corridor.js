@@ -20,6 +20,7 @@ import { pathOf, footpath } from '../darkwood.js';
 import { SURFACE, TN, TSTEP, TMAX, TCHUNK } from './terrain.js';
 import { dice, ss, clampT, makeBlob, blobSdf, blobOutline, blobMeets, fieldOf, settle, DEEP } from './shapes.js';
 import { shrineOrder, adder, walkPath, shrinePlace, startCamp, dress, pondLandmark } from './places.js';
+import { spireFoot } from './stone.js';
 
 const PATCH_REACH = 16; // a patch's field reaches this far past its rim (its sign is all that's read there)
 const POOL_REACH = TMAX; // an oasis's water is stamped as far as it can lower `open`
@@ -86,19 +87,36 @@ export class Corridor {
   // The road's middle at u: never long straight, bending both ways (the owner's "roads that are not
   // constantly straight"): two sines whose periods never line up, and a slow noise, within the band
   // less `keep` either side.
+  // `hug` (the Sunscorch's narrow band, 29 October 2026): kept `keep` px off the faces as they stand,
+  // not off the band's nominal half, so its bends can use what room the faces leave where they swell
+  // apart and draw in where they close. It bends about the middle of the faces' slow swell, and eases
+  // into its limit over the last `knee` px (a tanh, so it never runs flat along a face); the faces'
+  // rough grain is allowed for whole (up to `face.rough` px), so it is never nearer either than `keep`.
   road(u) {
-    const R = this.T.road, lim = this.half - R.keep;
+    const R = this.T.road;
     const v = R.amp * (0.62 * Math.sin((TAU * u) / R.periods[0] + this.f1) + 0.38 * Math.sin((TAU * u) / R.periods[1] + this.f2) + R.wobble * (fbm(u / 700, 0.5, this.s + 5, 2) - 0.5) * 2);
-    return clamp(v, -lim, lim);
+    if (!R.hug) {
+      const lim = this.half - R.keep;
+      return clamp(v, -lim, lim);
+    }
+    const F = this.T.face, a = this.loSlow(u) + F.rough + R.keep, b = this.hiSlow(u) - F.rough - R.keep;
+    const h = Math.max(0, (b - a) / 2), k = Math.min(R.knee, h), lin = h - k, w = Math.abs(v);
+    const o = w <= lin ? w : lin + (k > 0 ? k * Math.tanh((w - lin) / k) : 0);
+    return (a + b) / 2 + (v < 0 ? -o : o);
   }
   // Its half width, as darkwood.js's roads have it.
   roadHw(u) {
     return 13 + 4.5 * (fbm(u / 520, 1.3, this.s + 23, 2) - 0.5) * 2;
   }
-  // The top (Sunscorch) or left (Frostfell) face, as laid: a slow swell and a rough grain.
+  // The top (Sunscorch) or left (Frostfell) face's slow swell alone (what the road keeps off), then the
+  // face as laid: the swell and a rough grain.
+  loSlow(u) {
+    const F = this.T.face;
+    return -this.half + F.amp * (fbm(u / F.wave, 1.7, this.s + 11, 3) - 0.5) * 2;
+  }
   loRaw(u) {
     const F = this.T.face;
-    return -this.half + F.amp * (fbm(u / F.wave, 1.7, this.s + 11, 3) - 0.5) * 2 + F.rough * (fbm(u / F.grain, 3.1, this.s + 13, 2) - 0.5) * 2;
+    return this.loSlow(u) + F.rough * (fbm(u / F.grain, 3.1, this.s + 13, 2) - 0.5) * 2;
   }
   // The face as it stands: at a cave's mouth (the Sunscorch's crypts) drawn level for 24 px either side
   // of it and eased back over 32 more, so its door stands square in the cliff.
@@ -110,10 +128,14 @@ export class Corridor {
     const uk = this.cryptU(k), d = Math.abs(u - uk);
     return d >= 56 ? l : l + (this.loRaw(uk) - l) * ss(56, 24, d);
   }
-  // The bottom (Sunscorch) or right (Frostfell) face.
+  // The bottom (Sunscorch) or right (Frostfell) face: its slow swell, then as it stands.
+  hiSlow(u) {
+    const F = this.T.face;
+    return this.half + F.amp * (fbm(u / F.wave, 5.3, this.s + 17, 3) - 0.5) * 2;
+  }
   hi(u) {
     const F = this.T.face;
-    return this.half + F.amp * (fbm(u / F.wave, 5.3, this.s + 17, 3) - 0.5) * 2 + F.rough * (fbm(u / F.grain, 7.9, this.s + 19, 2) - 0.5) * 2;
+    return this.hiSlow(u) + F.rough * (fbm(u / F.grain, 7.9, this.s + 19, 2) - 0.5) * 2;
   }
 
   // ---- Crypts, shrines, landmarks, patches: each a pure function of its index -------------------------
@@ -163,9 +185,17 @@ export class Corridor {
         v = this.loRaw(u) + 16;
         face = C.face || 'cliff';
       } else {
-        // An igloo beside the road, `off` px off its middle on a side of its own.
-        const side = H(k, 0, 33) < 0.5 ? -1 : 1;
-        v = this.road(u) + side * (C.off[0] + (C.off[1] - C.off[0]) * H(k, 0, 34));
+        // An igloo beside the road, `off` px off its middle on a side of its own; or, with `room` (the
+        // Frostfell narrowed to about 520 px, 29 October 2026), across the road where its own side
+        // leaves less than `room` px between it and the cliff (judged 40 px either way along), so no
+        // igloo stands in the ice, and it never does where the band is wide.
+        let side = H(k, 0, 33) < 0.5 ? -1 : 1;
+        const r = this.road(u), d = C.off[0] + (C.off[1] - C.off[0]) * H(k, 0, 34);
+        if (C.room) {
+          const gap = (s) => Math.min(...[-40, -20, 0, 20, 40].map((du) => (s > 0 ? this.hi(u + du) - r : r - this.lo(u + du)))) - d;
+          if (gap(side) < C.room && gap(-side) > gap(side)) side = -side;
+        }
+        v = r + side * d;
         face = C.face || 'igloo';
       }
       const x = Math.round(this.X(u, v)), y = Math.round(this.Y(u, v));
@@ -204,12 +234,16 @@ export class Corridor {
     });
   }
   // The start (index 0): a plaza on the road, the camp to the side of it with more room, everything
-  // kept off the road (each prop by the road where it stands, not where the start is).
+  // kept off the road (each prop by the road where it stands, not where the start is). In a band too
+  // narrow for them (the Sunscorch's 300 px, 29 October 2026) the fire (84 px out) and the lamp and
+  // the stone across the road (44 and 46) come in, the fire to 34 px short of its range and the others
+  // to 22 of theirs; in a wider one (the Frostfell's) each stands where it always has.
   startPlace() {
     return this.memo('start', () => {
       const v = this.road(0), s = this.hi(0) - v >= v - this.lo(0) ? 1 : -1;
+      const room = s > 0 ? this.hi(0) - v : v - this.lo(0), back = s > 0 ? v - this.lo(0) : this.hi(0) - v;
       const at = (du, dv) => [this.X(du, this.road(du) + s * dv), this.Y(du, this.road(du) + s * dv)];
-      return startCamp(this.X(0, v), this.Y(0, v), { fire: at(0, 84), lamp: at(-48, -44), stone: at(52, -46) });
+      return startCamp(this.X(0, v), this.Y(0, v), { fire: at(0, Math.min(84, room - 34)), lamp: at(-48, -Math.min(44, back - 22)), stone: at(52, -Math.min(46, back - 22)) });
     });
   }
   start() {
@@ -229,6 +263,7 @@ export class Corridor {
     return this.memo('l' + k, () => {
       const T = this.T, M = T.landmarks, H = this.H;
       if (!M || H(k, 0, 41) >= M.share) return null;
+      if (M.fit) return this.fitLandmark(k);
       const uA = k ? this.shrineU(k) : 0, uB = k + 1 ? this.shrineU(k + 1) : 0, u = (uA + uB) / 2;
       const ru = this.road(u), lo = this.lo(u), hi = this.hi(u), s = hi - ru >= ru - lo ? 1 : -1;
       const d = M.side[0] + (M.side[1] - M.side[0]) * H(k, 0, 43), v = ru + s * d;
@@ -252,6 +287,73 @@ export class Corridor {
       } else L.path = footpath(bx, by, x, y + 30, seed, 140);
       return dress(L, this.rngOf(k, 0, 10), bx, { pool });
     });
+  }
+  // A landmark fitted to a narrow band (`landmarks.fit`: the Sunscorch's 300 px, 29 October 2026, the
+  // owner's "make the desert map narrower ... slightly narrower than avg computer screen"; and the
+  // Frostfell's 520 the same day, his "then the frozen map must be made narrower"). Dressed
+  // round (0, 0) first, so the reach of what stands at it is known (each prop's foot `fit.foot` px
+  // round, an oasis's water whole, its `pool` px round) before it is placed. Then at the middle of the
+  // gap between the shrines, or failing that a little either way, it is placed across on the road's
+  // roomier side, judged along all its length: `fit.road` px past the road's edge (its wobble too),
+  // `fit.face` short of its range, and `pass` px of open sand left between it and the other range,
+  // across the road, so no ruin or oasis ever closes the band. Where it fits nowhere, there is none.
+  fitLandmark(k) {
+    const T = this.T, M = T.landmarks, G = M.fit, H = this.H;
+    const uA = k ? this.shrineU(k) : 0, uB = k + 1 ? this.shrineU(k + 1) : 0;
+    const kind = M.kinds[Math.floor(H(k, 0, 42) * M.kinds.length)];
+    const pool = kind === 'oasis' ? makeBlob(0, 0, M.pool[0] + (M.pool[1] - M.pool[0]) * H(k, 0, 45), 1, 0, 0.15, this.rngOf(k, 0, 46), 1) : null;
+    const D = dress({ x: 0, y: 0, i: k, j: 1, kind, props: [] }, this.rngOf(k, 0, 10), 0, { pool });
+    let a0 = Infinity, a1 = -Infinity, c0 = Infinity, c1 = -Infinity; // its reach along u, and across v
+    const reach = (du, dv, r) => {
+      a0 = Math.min(a0, du - r);
+      a1 = Math.max(a1, du + r);
+      c0 = Math.min(c0, dv - r);
+      c1 = Math.max(c1, dv + r);
+    };
+    for (const p of D.props) reach(this.U(p.x, p.y), this.V(p.x, p.y), G.foot);
+    if (pool) reach(0, 0, pool.ext);
+    for (const f of [0, -0.18, 0.18, -0.34, 0.34]) {
+      const u = (uA + uB) / 2 + f * (uB - uA), ru = this.road(u), s = this.hi(u) - ru >= ru - this.lo(u) ? 1 : -1;
+      // Bounds on s * v, its middle across.
+      let lo = -Infinity, hi = Infinity;
+      for (let du = a0; ; du = Math.min(a1, du + 16)) {
+        const w = u + du, r = this.road(w), e = this.roadHw(w) + 4 + G.road, l = this.lo(w), h = this.hi(w);
+        if (s > 0) {
+          lo = Math.max(lo, r + e - c0, l + G.pass - c0);
+          hi = Math.min(hi, h - G.face - c1);
+        } else {
+          lo = Math.max(lo, c1 - r + e, c1 - h + G.pass);
+          hi = Math.min(hi, c0 - l - G.face);
+        }
+        if (du >= a1) break;
+      }
+      if (lo > hi) continue;
+      const v = s * (lo + (hi - lo) * H(k, 0, 43)), x = this.X(u, v), y = this.Y(u, v);
+      let near = false;
+      for (const P of this.spotsNear(u, 600)) if (Math.hypot(P.x - x, P.y - y) < (P.kind === 'shrine' ? 300 : 400)) near = true;
+      if (near) continue;
+      const R = kind === 'woodcamp' ? 100 : kind === 'oasis' ? pool.ext + 90 : kind === 'bones' ? 96 : 128;
+      const L = { x, y, i: k, j: 1, kind, props: [], clear: { x, y, r: R } };
+      // Its reach in the world, along and across (patchCell keeps the pools out of its stretch of u).
+      L.body = { u0: u + a0, u1: u + a1, v0: v + c0, v1: v + c1 };
+      const bx = this.X(u, ru), by = this.Y(u, ru), seed = Math.floor(H(k, 0, 44) * 1e6);
+      if (pool) {
+        pool.x = x;
+        pool.y = y;
+        const a = Math.atan2(by - y, bx - x), e = pool.ext + 8;
+        L.path = footpath(bx, by, x + Math.cos(a) * e, y + Math.sin(a) * e, seed, 100);
+        L.pool = pool;
+      } else {
+        // To its front, 30 px south of its middle; on the Sunscorch's x corridor into its middle, under
+        // its props, from the road either side (on through it from the north, the walk would end
+        // against the range below; and from the south, in the band narrowed to 300 px, the road runs
+        // so near that a path to its front was a stub of 20 px stopping short of it, "a ghost shadow
+        // or a dark blob on the sand": its judging, 29 October 2026).
+        L.path = footpath(bx, by, x, this.axis === 'x' ? y : y + 30, seed, 140);
+      }
+      return dress(L, this.rngOf(k, 0, 10), bx, { pool });
+    }
+    return null;
   }
   // The patches of cell q along u (quicksand pools, ice sheets): each kept clear of the road, the faces,
   // the places and the landmarks, apart from one another, inside its cell, so no cell needs another's.
@@ -291,6 +393,9 @@ export class Corridor {
           for (let k = Math.floor(u / this.T.shrines.every) - 2; ok && k <= Math.floor(u / this.T.shrines.every) + 1; k++) {
             const L = this.landmark(k);
             if (L && (Math.hypot(L.x - x, L.y - y) < Math.max(P.clear, L.clear.r) + E || meetsPath(L.path, x, y, E + PATH_GAP))) ok = false;
+            // A fitted landmark's stretch of u is its own (the Sunscorch's, 29 October 2026): a pool
+            // across the road from it would narrow the way past it, so none lies alongside it.
+            if (L && L.body && u + E + PATH_GAP > L.body.u0 && u - E - PATH_GAP < L.body.u1) ok = false;
           }
           for (const o of out) if (Math.hypot(o.x - x, o.y - y) < o.ext + E + 30) ok = false;
           if (!ok) continue;
@@ -313,7 +418,8 @@ export class Corridor {
     for (let q = Math.floor(ua / C); q <= Math.floor(ub / C); q++) for (const p of this.patchCell(q)) fn(p);
   }
   // A range's spires (decor, no collision: the hero can't get there), one landmark per RIDGE_BIN of u
-  // and range, each spire at a depth into the rock.
+  // and range, each spire at a depth into the rock (`depth`), or with `ledge` (the Sunscorch's) on a
+  // ledge of its painted tiers.
   ridge(b, side) {
     return this.memo(`r${b},${side}`, () => {
       const S = this.T.spires;
@@ -323,6 +429,28 @@ export class Corridor {
       let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
       for (let m = 0; m < n; m++) {
         const id = b * n + m, H = (k) => this.H(id, side, k);
+        if (S.ledge && this.axis === 'x') {
+          // The Sunscorch's ranges in dry stone (29 October 2026, topology/stone.js): on the top range
+          // one or two to each stretch of `every` px, on the bottom range one to most (about one in
+          // 140 px: its judging that day found a row of them, one in 75), each on a ledge in view as
+          // the painter draws it (spireFoot: the top range's upper tiers first, the bottom range's any
+          // of its first three), never on a wall or a cap.
+          for (let q = 0, nq = side ? (H(75) < 0.86 ? 1 : 0) : H(75) < 0.4 ? 2 : 1; q < nq; q++) {
+            const u = b * RIDGE_BIN + (m + (q + 0.15 + 0.7 * H(74 + q * 5)) / nq) * S.every;
+            if (side === 0 && this.caves) {
+              const k = this.cryptNear(u);
+              if (k && Math.abs(this.cryptU(k) - u) < 34) continue; // never over a cave's mouth
+            }
+            const x = Math.round(u), y = spireFoot(this, x, side, H(72 + q * 5), H(76 + q * 5));
+            if (y === null) continue;
+            add(S.name[Math.floor(H(73 + q * 5) * S.name.length)], x, y);
+            minx = Math.min(minx, x - 30);
+            maxx = Math.max(maxx, x + 30);
+            miny = Math.min(miny, y - 50);
+            maxy = Math.max(maxy, y + 10);
+          }
+          continue;
+        }
         if (H(71) > 0.62) continue;
         const u = b * RIDGE_BIN + (m + 0.2 + 0.6 * H(74)) * S.every;
         if (side === 0 && this.caves) {

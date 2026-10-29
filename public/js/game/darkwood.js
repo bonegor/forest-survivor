@@ -756,7 +756,11 @@ const DAY_GROUND = { ...GROUND, zones: DAY_GRASS, road: DAY_ROAD };
 // every 8 px and interpolated; the exact distance to a path is worked out only near the paths.
 // The look's ground (cd.ground, GROUND without one); a look whose cracks glow paints their glow into
 // `glow` too (CHUNK x CHUNK, clear elsewhere), which the Forest adds to the night's light (addLights).
-export function paintChunk(cd, px, glow = null) {
+// `rows` ([a, b), or null for all): the rows whose ground is painted pixel by pixel. The Sunscorch's
+// ranges paint every pixel of the rest over whole (29 October 2026, topology/paint.js groundRows), so
+// its rock chunks skip the sand no one would see; the tufts, leaves, flowers and pebbles are laid
+// all the same, so the rows painted are as they would be.
+export function paintChunk(cd, px, glow = null, rows = null) {
   const G = cd.ground || (cd.daylight ? DAY_GROUND : GROUND), RP = G.ripple, GL = G.glint, CK = G.cracks;
   const { cx, cy, sampleF, pathDist } = cd;
   const x0 = cx * CHUNK, y0 = cy * CHUNK, N = CHUNK / 8 + 1;
@@ -781,7 +785,7 @@ export function paintChunk(cd, px, glow = null) {
   const zoneAt = (x, y, t) => (at(cursedG, x, y) > t ? 'cursed' : at(pineG, x, y) > t ? 'pine' : 'oak');
   const { nearP, PX, PY, PW, PID, paths } = cd, ZONES = G.zones, m = MARGIN / CELL;
   const roadColors = G.road;
-  for (let y = 0; y < CHUNK; y++) {
+  for (let y = rows ? rows[0] : 0, y1 = rows ? rows[1] : CHUNK; y < y1; y++) {
     const j = y >> 3, ty = (y & 7) / 8;
     for (let x = 0; x < CHUNK; x++) {
       const i = x >> 3, tx = (x & 7) / 8, c = j * N + i;

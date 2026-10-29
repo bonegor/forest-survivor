@@ -20,10 +20,14 @@
 // in shade; a worn lintel stone across its springing; under it sandstone steps going down into the
 // dark, each tread lit faint lavender from below; a trodden sill at the foot. Sealed: the mouth choked
 // by boulders fallen from the crown, one rolled out onto the sill, nothing glowing. The rock is the
-// cliff's own: `palette` draws its eight keys in the Sunscorch's terrain tones (look.terrain: 1 2 3 4 =
-// face[0..3], B = face[4], t s o = rock[3..5], b the seams a shade under face[0]), so the door sits in
-// the painted face as the same stone; the lintel, risers and sill keep the game's T, I, H.
-const CAVE_PALETTE = { 1: '#5e3e2a', 2: '#6e4a30', 3: '#805838', 4: '#946842', B: '#a87a4e', t: '#c08e5c', s: '#d4a670', o: '#e4bf8a', b: '#46301f' };
+// cliff's own: `palette` draws its eight keys in the Sunscorch's terrain tones, so the door sits in the
+// painted wall as the same stone; the lintel, risers and sill keep the game's T, I, H. Since the walls
+// became dry stone (29 October 2026, game/topology/stone.js) those are the walls' grey-brown stones
+// (look.terrain: 1 2 3 4 B = stone[2..6]), the pale cobbles of their caps (t s o = cap[3..5]) and the
+// joints' dark (b = stone[1]). Its ink too (k, the outline the build draws round it and the dark of its
+// mouth) is the stones' own outline, stone[0], not the game's navy (its judging, 29 October 2026: the
+// navy outline "clashes with the warm R0 outlines of the stones around it").
+const CAVE_PALETTE = { 1: '#46302a', 2: '#54392f', 3: '#61463a', 4: '#7d5e4a', B: '#9b7c60', t: '#9b7c60', s: '#a98b6d', o: '#b89b7a', b: '#3a2622', k: '#2b1b1c' };
 
 // The Frostfell's: an igloo. The owner's (28 October 2026): "Entrance to crypts are iglus here and
 // there, some 2 minutes apart." A dome of five courses of snow blocks and a cap, each course sagging
@@ -573,7 +577,7 @@ export const TERRAIN_ART = {
 
   // ---- The swirls: ground marks (no outline, as cobweb and stairs), played on a clock over the trap.
   // fx_quicksand, 24 x 14, the sinking swirl over every quicksand pool (topology/draw.js drawSwirls, at
-  // alpha 0.55; Game.drawHold at 0.8 under a held hero's feet). The owner's (28 October 2026): "feel
+  // alpha 0.55; Game.drawHold at up to 0.8 under a wading hero's feet). The owner's (28 October 2026): "feel
   // free to add quicksand, hero steps in and cannot move for a few seconds", and every trap readable at
   // a glance: a pit seen from three quarters, a black eye (h) under its far rim in shade (m), its near
   // lip in the sun (B t), and two grooves of wet sand spiralling down into it, breaking into dots at

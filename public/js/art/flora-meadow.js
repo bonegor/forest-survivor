@@ -22,8 +22,16 @@
 //                     gravestones and crosses
 //   crypt_meadow      props.js's crypt grown over with ivy and flowers, the same 26x29 frames (open,
 //                     sealed) and shape, its stairs still glowing lavender ('j')
-//   fae_bloom1..2     the moonblooms round a fae ring (game/fae.js, 28 October 2026), four frames
-//                     each (bud, open, bright, wilted), and their Unseelie skins (fae_bloom1_u, _2_u)
+//   fae_bloom1..2     the moonblooms (game/fae.js, 28 October 2026), four frames each (bud, open,
+//                     bright, wilted), and their Unseelie skins (fae_bloom1_u, _2_u): since 29
+//                     October 2026 they open along the rim of every circle the Fae Thread sows
+//   moonbloom1..2     the same moonblooms as props, their bright frame only, glowing: twelve stand
+//                     round the start's sown disc (game/topology/quilt.js)
+//   bloom_hay1..2     the hay fields' bales (29 October 2026), in the field's own sage-gold: a round
+//                     bale on its side (16x12), two square bales side by side (18x13)
+//   bloom_scarecrow   a scarecrow in a patched coat, crowned with flowers, arms out on its post
+//                     (14x26), watching over a hay field
+// (The bales and the scarecrow stop the hero: art/landmarks.js LANDMARK_SOLIDS.)
 import { makeBuf, blit } from '../engine/pixels.js';
 import { packedPalette } from './palette.js';
 import { mulberry32 } from '../engine/util.js';
@@ -582,11 +590,13 @@ const overgrow = (rows) => rows.map((row, y) => [...row].map((c, x) => (IVY[y][x
 // ---- The Fae Court's moonblooms (game/fae.js, 28 October 2026) ----------------------------------
 // The owner's (28 October 2026): "Meadow, IDK what to do with meadow, you guys figure out something,
 // have some good game design idea how to make meadow not be identical to forest." The judge's pick,
-// the Fae Court: ten moonblooms round each ring at radius 50 (game/fae-rings.js FAE.bloomR), "not
+// the Fae Court: ten moonblooms round each ring at radius 50 (FAE.bloomR in game/fae-rings.js, gone since), "not
 // mushroom caps", so a ring never reads as the Puffcap Spores' Fairy Ring round the hero. Ivory petals
 // edged pink round a gold heart that glows: unlike any weapon effect, and the Bloomvale's own flower.
 // Four frames each, never played on a clock: game/fae.js picks the frame by the ring's state, so the
-// blooms are the ring's countdown.
+// blooms are the ring's countdown. The rings went on 29 October 2026 for the Fae Thread (the hero's
+// own path, a loop of it sown into a circle that puts what it holds to sleep): the same four frames
+// now open along a sowing's rim, bud to open as it is sown, bright through the lull, then wilted.
 //   0 bud      asleep: a closed ivory bud (w z T) in green sepals, on its stem over a leaf rosette;
 //              none of the glowing keys (Y y i), so a sleeping ring is quiet by night
 //   1 open     opening one by one as the ring stirs, clockwise like a clock filling: five petals
@@ -717,6 +727,104 @@ const UNSEELIE_BLOOM = {
   L: '#4f9a7c', e: '#2f7060', E: '#1f4c4a', v: '#173538',
 };
 
+// ---- The quilt's hay fields (29 October 2026) --------------------------------------------------
+// The Bloomvale of 29 October 2026 is a quilt of flower fields, the owner's "bright flower, colorful
+// map" (28 October 2026) word for word, and the field a landmark stands in is hay: mown, raked into
+// windrows (game/topology/paint-quilt.js), its hay baled where it lay. The bales are the hay field's own
+// sage-gold (MEADOW.terrain.hay), drawn in six spare keys recoloured to it (C 1 2 D 3 4, lightest to
+// darkest: the stubble's #ccc892, the field's three tones, the windrow's #8e945a, a deep shade), so the
+// field and its bales are one crop by day and by night; the twine is the game's brown (b, lit B). They
+// never burst (burst: false), so the six take none of the particle list's 256.
+const HAY = { C: '#ccc892', 1: '#c0c082', 2: '#b2b474', D: '#a4a868', 3: '#8e945a', 4: '#6a7042' };
+const HAY_TONES = '43D21C'; // darkest -> lightest, as tones() wants them
+const hashXY = (x, y) => {
+  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+
+// A round bale lying on its side, its cut face turned to the viewer at the left (an upright ellipse,
+// foreshortened) and its roll running back to the right, a row higher at its far end: the face rolled
+// round a dark hub in rings of the windrow's tone, its rim lit at the top left and shaded where it
+// meets the roll; the roll lit along its top and shaded under, two bands of twine round it, lit (B)
+// over its top half, curved as the roll is.
+const ROUND_BALE = [
+  '....C1CB1C1B1...',
+  '..C11D1CB1C1B12.',
+  '.C1222D12B121B2D',
+  'C1DDDD232B122B2D',
+  'C2D22D232B2D2BD3',
+  '12D44D23Db2D2bD3',
+  '12D43D33DbD2Db33',
+  '12DD3D333bDD3b34',
+  '12D22D343b3D3b44',
+  '12DDDD343b334b4.',
+  '.D223344b343b4..',
+  '..33444b444.....',
+];
+
+// Two square bales side by side, the right one a step further back: their tops lit, their cut ends to
+// the viewer stubbled in short strokes, shaded to the right and the ground, two bands of twine over
+// each, and a tuft of loose hay on the far one.
+function genSquareBales() {
+  const W = 18, H = 13, buf = makeBuf(W, H), hay = tones(HAY_TONES);
+  const bale = (x0, y0, w, top, front, twine) => {
+    for (let j = 0; j < top + front; j++) {
+      for (let i = 0; i < w; i++) {
+        const x = x0 + i, y = y0 + j, u = i / (w - 1), band = twine.includes(i);
+        let t;
+        if (j < top) { // the top, under the sky
+          t = clampT(0.86 - u * 0.3 + bayer(x, y) * 0.26 - (hashXY(x >> 1, y) < 0.2 ? 0.12 : 0), 6);
+          if (band) { set(buf, x, y, pal.b); continue; }
+        } else { // the cut end: short strokes of straw
+          const v = (j - top) / (front - 1);
+          t = clampT(0.72 - u * 0.26 - v * 0.22 + bayer(x, y) * 0.25 - (hashXY((x + (y & 1)) >> 1, y) < 0.3 ? 0.16 : 0), 6);
+          if (j === top) t = Math.min(5, t + 1); // the lit edge where the top turns down
+          if (i === w - 1 || j === top + front - 1) t = Math.min(t, 1);
+          if (band) { set(buf, x, y, j === top ? pal.B : hay[0]); continue; } // cinched into the straw
+        }
+        set(buf, x, y, hay[t]);
+      }
+    }
+  };
+  bale(0, 4, 8, 3, 6, [2, 5]); // a pixel apart, so the ink runs between them
+  bale(9, 3, 9, 3, 6, [2, 6]); // the right one a step back
+  stamp(buf, ['..1C...', '.C12D1.', 'C1D23D3'], 11, 1); // a tuft of loose hay heaped on it
+  return buf;
+}
+
+// A scarecrow to watch over a hay field: a sackcloth head with stitched eyes, crowned with meadow
+// flowers, on a post, arms out in a slate coat patched rust and lavender, belted with twine, its straw
+// at the cuffs and the hem.
+const SCARECROW = [
+  '....i.z..Y....',
+  '...iPLzeYye...',
+  '...LTTTttSE...',
+  '..CTTTTtttSC..',
+  '..DTTmTtmtSD..',
+  '...TTTTtttS...',
+  '....TmtmmS....',
+  '.....tttS.....',
+  '.....Bbbm.....',
+  'CggggggggggNnC',
+  'DNNNgggNNNNnnD',
+  '.nnnNgNNNNnnn.',
+  '...BdgNNNNnn..',
+  '...dBgNNjjnn..',
+  '...gNNNNjpnn..',
+  '...Bbbbbbbm...',
+  '...gNNNNNnn...',
+  '...NnNNNnNn...',
+  '...CDCBbCDC...',
+  '....D.Bb.D....',
+  '......Bb......',
+  '......Bb......',
+  '......Bb......',
+  '......Bb......',
+  '....L.Bb.e....',
+  '...LeEBbeEe...',
+];
+
 // ---- The meadow's sprites ---------------------------------------------------------------------
 export const FLORA_MEADOW = {
   bloom_tree1: { gen: () => [genBlossom(3, PINK)] },
@@ -804,4 +912,11 @@ export const FLORA_MEADOW = {
   // byte holds, engine/sprites.js buildSprite.)
   fae_bloom1_u: { ...MOONBLOOM1, palette: UNSEELIE_BLOOM, burst: false },
   fae_bloom2_u: { ...MOONBLOOM2, palette: UNSEELIE_BLOOM, burst: false },
+  // The moonblooms as props (29 October 2026): one frame each, the bright one, glowing. Twelve stand
+  // round the start's sown disc and the Fae Thread's sowings open the four-frame ones above on their rims.
+  moonbloom1: { emissive: MOONBLOOM1.emissive, frames: [MOONBLOOM1.frames[2]] },
+  moonbloom2: { emissive: MOONBLOOM2.emissive, frames: [MOONBLOOM2.frames[2]] },
+  bloom_hay1: { palette: HAY, burst: false, frames: [ROUND_BALE] },
+  bloom_hay2: { palette: HAY, burst: false, gen: () => [genSquareBales()] },
+  bloom_scarecrow: { frames: [SCARECROW] },
 };

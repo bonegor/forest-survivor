@@ -42,7 +42,7 @@ const GEAR_LIGHT = [null, null, 'cyan', 'purple', 'gold'];
 export const GEAR_PILLAR = [0, 0, 70, 120, Infinity];
 
 // Items that fly to you inside the magnet radius.
-const MAGNETIC = new Set(['gem', 'coin', 'goldpile', 'potion', 'fury']);
+export const MAGNETIC = new Set(['gem', 'coin', 'goldpile', 'potion', 'fury']);
 // A toss (opts.toss): thrown up at vz, it flies 2·vz/320 s, bounces once at 0.35 of that with 0.4 of
 // its speed and stops; carry is how far that takes it per px/s of its speed.
 const TOSS = { vz: 80, carry: (2 * 80) / 320 + 0.4 * ((2 * 80 * 0.35) / 320) };

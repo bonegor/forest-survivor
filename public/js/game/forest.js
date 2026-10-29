@@ -20,7 +20,7 @@ import { TERRAIN_SOLIDS } from '../art/terrain.js';
 import { makeTopology, SURFACE, HERO_BLOCKED, FOE_SLOWED, TMAX } from './topology/index.js';
 import { sampleField, fieldGrad, surfaceOf } from './topology/terrain.js';
 import { blobSdf } from './topology/shapes.js';
-import { paintTerrain } from './topology/paint.js';
+import { paintTerrain, groundRows } from './topology/paint.js';
 import { drawLavaTiles, drawSwirls, drawTells } from './topology/draw.js';
 
 // Half the width of each tree's trunk at its foot (a look's own trees: its `trunks`).
@@ -98,10 +98,11 @@ export class Forest {
     this.shrineT = 0;
     // The Bloomvale's fae court (its look's `fae`: game/fae.js). The owner's (28 October 2026):
     // "Meadow, IDK what to do with meadow, you guys figure out something, have some good game design
-    // idea how to make meadow not be identical to forest." Its rings' bands go on the ground, their
-    // lines over the horde (Game.draw's drawGlow) and the nearest waking one gets the HUD's arrow
-    // (marker): each the court's, on this world alone, after whatever the world draws there itself.
-    // No other look has a court, so the Darkwood's world has none of these of its own.
+    // idea how to make meadow not be identical to forest." Since 29 October 2026 it is the hero's
+    // own Fae Thread: a sowing's preview fill goes on the ground, the thread and the sown circles
+    // over the horde (Game.draw's drawGlow); marker gives no arrow now. Each the court's, on this
+    // world alone, after whatever the world draws there itself. No other look has a court, so the
+    // Darkwood's world has none of these of its own.
     this.court = look.fae ? new FaeCourt(g, this) : null;
     if (this.court) {
       const court = this.court, ground = this.drawGroundProps, glow = this.drawGlow, mark = this.marker;
@@ -134,6 +135,9 @@ export class Forest {
 
   update(dt) {
     const g = this.g, cam = g.cam;
+    // A topology that builds its ground ahead of the hero (the Abyss's plates, 29 October 2026) does so
+    // for 1.5 ms a frame, so walking never meets a first build all at once.
+    if (this.topo?.prewarm) this.topo.prewarm(g.player.x, g.player.y, 1.5);
     // Pre-generate one chunk per frame around the view.
     const x0 = Math.floor((cam.x - 160) / CH), x1 = Math.floor((cam.x + cam.W + 160) / CH);
     const y0 = Math.floor((cam.y - 160) / CH), y1 = Math.floor((cam.y + cam.H + 160) / CH);
@@ -167,7 +171,7 @@ export class Forest {
       this.shrineT = 0.5;
       this.syncShrines();
     }
-    // The Bloomvale's fae rings round the hero (game/fae.js), on the night's clock.
+    // The Bloomvale's Fae Thread at the hero's feet (game/fae.js), on the night's clock.
     if (this.court) this.court.update(dt);
     // Another look's air (its embers, snow, petals...), and its fog carried by the wind.
     if (this.look.fx) {
@@ -289,8 +293,10 @@ export class Forest {
         pad.px.fill(0);
       }
       const px32 = new Uint32Array(img.data.buffer);
-      paintChunk(lay, px32, pad && pad.px);
+      // (No ground under what the terrain paints over whole: the Sunscorch's ranges.)
+      paintChunk(lay, px32, pad && pad.px, groundRows(tc, look, this.topo));
       if (tc && tc.any) paintTerrain(tc, px32, pad && pad.px, look, this.topo);
+      if (this.court) this.court.paintInto(px32, cx, cy, tc);
       ctx.putImageData(img, 0, 0);
       if (pad) {
         pad.g.putImageData(pad.img, 0, 0);
@@ -345,7 +351,7 @@ export class Forest {
         list.push(p);
       }
     });
-    // The fae rings' moonblooms (the Bloomvale's: game/fae.js), props as the rest.
+    // The moonblooms on a fae-sown circle's rim (the Bloomvale's: game/fae.js), props as the rest.
     if (this.court) this.court.collect(cam, list);
   }
 
@@ -399,7 +405,7 @@ export class Forest {
       }
       if (c.glow) g.lighting.glow(c.glow, c.cx * CH, c.cy * CH, CH, CH, hot);
     });
-    // A waking fae ring's light (the Bloomvale's: game/fae.js).
+    // A fae-sown circle's light (the Bloomvale's: game/fae.js).
     if (this.court) this.court.addLights(g);
   }
 
@@ -676,6 +682,7 @@ export class Forest {
     const s = this.seek(x, y, 8, 640, 8, 8, false);
     if (s) return s;
     const T = this.topo;
+    if (T.home) return T.home(x, y); // the Abyss's fault plates (29 October 2026): the nearest node's dry heart
     if (T.kind === 'islands') {
       const I = T.island(Math.round(x / T.T.spacing), Math.round(y / T.T.spacing));
       return { x: I.x, y: I.y };
@@ -685,15 +692,24 @@ export class Forest {
   }
   // The nearest dry land within R px of (x, y) (8 ways, 16 px a step): where something that must
   // stand on land is put (a box of loot, the thief), or null. (x, y) itself without a topology.
+  // In a corridor, none found there, it is looked for again straight across from it, 24 px in from
+  // the nearer face: the Sunscorch's band, narrower than the screen since 29 October 2026, leaves a
+  // box sent 190-260 px from the hero (Spawner.spawnProps) deep in the rock now and then (about one
+  // in 13 round a hero standing still), and it comes down on the sand still that far along the way.
+  // Only what found no land before is moved. The Frostfell, narrowed to about 520 px the same day
+  // (biomes/frozen.js), has its boxes and thief brought onto the snow across its band the same way.
   landSpot(x, y, R = 160) {
     if (!this.topo) return { x, y };
-    return this.seek(x, y, 16, R, 16, 8, true);
+    const s = this.seek(x, y, 16, R, 16, 8, true), T = this.topo;
+    if (s || T.kind !== 'corridor') return s;
+    const u = T.U(x, y), v = clamp(T.V(x, y), T.lo(u) + 24, T.hi(u) - 24);
+    return this.seek(T.X(u, v), T.Y(u, v), 16, R, 16, 8, true);
   }
   // Whether a walking monster at (x, y) goes at the slower pace of one crossing the rock, the lava or
   // the void (enemies.js WALL_PACE). Never in the Darkwood, nor more than 800 px from the hero (its
   // chunk is never made for that, and its pace off screen doesn't matter).
   slows(x, y) {
-    if (!this.topo) return false;
+    if (!this.topo || this.topo.still) return false;
     const p = this.g.player;
     if (Math.abs(x - p.x) > 800 || Math.abs(y - p.y) > 800) return false;
     return FOE_SLOWED[this.surfaceAt(x, y)] === 1;

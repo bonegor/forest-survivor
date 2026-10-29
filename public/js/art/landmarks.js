@@ -7,6 +7,7 @@ import LM from '../../assets/art/landmarks.js';
 import { bakedDef, bakedBuffers } from './baked.js';
 import { makeBuf, blit } from '../engine/pixels.js';
 import { packedPalette } from './palette.js';
+import { HELL_ARCH } from './flora-hell.js';
 
 // A sprite's flames (bright reds) glow unlit at night: the def's glow colours.
 const flames = (data) => data.palette.filter((c) => {
@@ -105,6 +106,22 @@ export const LANDMARK_SOLIDS = {
   lm_skulltree2: [[0, -2, 6]],
   lm_driedtree: [[0, -2, 4]],
   lm_monument: [[0, -14, 11]],
+  // The Bloomvale's hay fields (29 October 2026, art/flora-meadow.js): a round bale and two square ones
+  // stop the hero as a rock does, the scarecrow only at its post.
+  bloom_hay1: [[0, 0, 6]],
+  bloom_hay2: [[0, 0, 7]],
+  bloom_scarecrow: [[0, 0, 2]],
+  // The Abyss's ruins (art/flora-hell.js, 29 October 2026): a wall end along its foot (all of it, as
+  // its lowest course always stands), the arch at its two piers (its opening walked through), the seal
+  // stone, a walkway's iron post. The pillars and the stake stop the hero at their trunks
+  // (biomes/hell.js trunks); the fallen drum, low as a rock, doesn't.
+  hell_wall1: [-9, -3, 3, 9].map((dx) => [dx, -3, 4]),
+  hell_wall2: [-16, -8, 0, 8, 16].map((dx) => [dx, -3, 4.5]),
+  hell_arch: HELL_ARCH.piers.map(([a, b]) => [(a + b + 1) / 2 - HELL_ARCH.w / 2, -2, 5.5]),
+  hell_seal: [[0, -2, 5]],
+  hell_post_iron: [[0, -1, 3]],
 };
-// Tall ones fade, as the trees do, while the hero walks behind them.
-export const LANDMARK_TALL = new Set(['lm_gallows', 'lm_gibbet', 'lm_skulltree', 'lm_skulltree2', 'lm_driedtree']);
+// Tall ones fade, as the trees do, while the hero walks behind them; the Abyss's pillars and arch too
+// (29 October 2026), in whatever slot they stand, and a pillar stops him at its trunk there.
+export const LANDMARK_TALL = new Set(['lm_gallows', 'lm_gibbet', 'lm_skulltree', 'lm_skulltree2', 'lm_driedtree',
+  'hell_pillar1', 'hell_pillar2', 'hell_pillar3', 'hell_arch']);

@@ -11,7 +11,7 @@
 // --views-only: just the pictures (a smaller overview, no far one), without the checks and timing.
 // A look with a ground of its own (game/topology, 28 October 2026: the Sunscorch's and the Frostfell's
 // corridors, the Abyss's islands) is laid out and painted by it as the game does it: its overview a strip
-// of 128 x 12 chunks along a corridor round the start (its faces, road, caves or igloos, shrines and
+// of 128 x 12 chunks (x 4 for a band under 600 px) along a corridor round the start (its faces, road, caves or igloos, shrines and
 // patches marked) or a square of the islands (the gaps in lava red or void black, the bridges brown);
 // its views the start, the first crypt (cave, igloo, crypt), the nearest quicksand pool or ice pond, a
 // shrine, the road's sharpest bend, a landmark, the nearest bridge and isthmus, and one far out.
@@ -29,7 +29,8 @@ import { BIOMES, biomeProp } from '../../public/js/game/biomes.js';
 import { ART_FALLBACKS } from '../../public/js/art/fallbacks.js';
 import { makeTopology, SURFACE, TN } from '../../public/js/game/topology/index.js';
 import { sampleField } from '../../public/js/game/topology/terrain.js';
-import { paintTerrain } from '../../public/js/game/topology/paint.js';
+import { paintTerrain, groundRows } from '../../public/js/game/topology/paint.js';
+import { strawPixel } from '../../public/js/game/topology/paint-quilt.js';
 import { LIGHT_COLORS } from '../../public/js/game/lighting.js';
 import { writePng } from '../png.mjs';
 
@@ -38,12 +39,25 @@ const arg = (k, d) => {
   return a ? a.slice(k.length + 3) : d;
 };
 const BIOME = arg('biome', 'forest'), LOOK = BIOMES[BIOME], VIEWS_ONLY = process.argv.includes('--views-only');
+// --u=<0..1>: the views lit by the look's night at that much of the night (as Forest.ambient), not a
+// tenth into it (29 October 2026: the Bloomvale's crops checked at midnight, --u=0.5).
+const U = arg('u') === undefined ? null : Number(arg('u'));
+const nightAt = (night, u) => {
+  if (u === null) return night[1][1];
+  let i = 0;
+  while (i < night.length - 2 && night[i + 1][0] < u) i++;
+  const [t0, c0] = night[i], [t1, c1] = night[i + 1], k = clamp((u - t0) / (t1 - t0), 0, 1);
+  return [0, 1, 2].map((q) => c0[q] + (c1[q] - c0[q]) * k);
+};
+// The quilt's own props, laid as pseudo-landmarks (topology/quilt.js): no label on the overview.
+const PSEUDO = ['avenue', 'orchard', 'lone', 'hay'];
 if (!LOOK) throw new Error(`no look '${BIOME}': ${Object.keys(BIOMES).join(', ')}`);
 // The look's own world: its map's seed (the Darkwood's 1).
 const WORLD = BIOME === 'forest' ? DARKWOOD.seed : Object.values((await import('../../public/js/data/maps.js')).MAPS).find((m) => m.look === BIOME)?.seed ?? DARKWOOD.seed;
 setWorld({ seed: Number(arg('seed', WORLD)), trees: Number(arg('trees', DARKWOOD.trees)) });
 const SEED = DARKWOOD.seed, D = DARKWOOD.spacing;
-// Its ground of its own, as the Forest makes it (game/topology): null for the Darkwood and the Bloomvale.
+// Its ground of its own, as the Forest makes it (game/topology): null for the Darkwood; the Bloomvale's
+// quilt of flower fields since 29 October 2026.
 const RUN = arg('run') ? Number(arg('run')) : undefined;
 const newTopo = () => {
   const t = makeTopology(LOOK, SEED, RUN);
@@ -75,9 +89,17 @@ function sprite(name) {
   const def = ART[name] || FLORA[name] || ART[ART_FALLBACKS[name]];
   if (!def) return (sprites[name] = null);
   const raw = resolveFrames(def)[0];
-  let b = Array.isArray(raw) ? fromRows(raw, pal) : raw;
+  let b = Array.isArray(raw) ? fromRows(raw, pal) : raw, ink = OUTLINE;
+  // In its own colours (def.palette), as the game draws it (engine/sprites.js recolouring): the
+  // Sunscorch's cave door in its walls' stone, not the palette keys' greens, its outline too (its ink,
+  // k, recoloured: the stones' own outline since 29 October 2026).
+  if (def.palette) {
+    const map = new Map(Object.entries(def.palette).map(([k, v]) => [(k.length === 1 ? pal[k] : hexPack(k)) & 0xffffff, hexPack(v) & 0xffffff]));
+    b = { ...b, d: b.d.map((c) => (c >>> 24 && map.has(c & 0xffffff) ? ((c & 0xff000000) | map.get(c & 0xffffff)) >>> 0 : c)) };
+    if (map.has(OUTLINE & 0xffffff)) ink = ((OUTLINE & 0xff000000) | map.get(OUTLINE & 0xffffff)) >>> 0;
+  }
   const thin = def.thin ? new Set([...def.thin].map((ch) => pal[ch])) : null;
-  if (def.outline !== false) b = outline(b, OUTLINE, false, thin);
+  if (def.outline !== false) b = outline(b, ink, false, thin);
   return (sprites[name] = b);
 }
 const rgbOf = (c) => [c & 255, (c >>> 8) & 255, (c >>> 16) & 255];
@@ -110,13 +132,37 @@ const ground = (cd) => {
   const buf = makeBuf(CHUNK, CHUNK);
   cd.ground = GROUND;
   if (GROUND.cracks || TOPO?.variant === 'lava') buf.glow = new Uint32Array(CHUNK * CHUNK);
-  paintChunk(cd, buf.d, buf.glow || null);
-  if (TOPO) {
-    const tc = TOPO.terrain(cd.cx, cd.cy);
-    if (tc.any) paintTerrain(tc, buf.d, buf.glow || null, LOOK, TOPO);
-  }
+  const tc = TOPO ? TOPO.terrain(cd.cx, cd.cy) : null;
+  paintChunk(cd, buf.d, buf.glow || null, groundRows(tc, LOOK, TOPO));
+  if (tc && tc.any) paintTerrain(tc, buf.d, buf.glow || null, LOOK, TOPO);
+  if (SOWN && tc && tc.bloom) sowInto(SOWN, tc, buf.d);
   return buf;
 };
+// The quilt's view of a sown circle (29 October 2026): a wobbly loop pressed into a crop field as the
+// Fae Court presses one (game/fae.js), the straw only on the flowers (bloom > 0), even-odd inside it.
+let SOWN = null;
+function sowInto(S, tc, px) {
+  const P = paintPalette(), { xs, ys } = S, n = xs.length;
+  for (let y = 0; y < CHUNK; y++) {
+    const wy = tc.y0 + y + 0.5;
+    for (let x = 0; x < CHUNK; x++) {
+      const wx = tc.x0 + x + 0.5;
+      if (Math.abs(wx - S.cx) > S.r || Math.abs(wy - S.cy) > S.r) continue;
+      let inside = false, near = Infinity;
+      for (let a = 0, b = n - 1; a < n; b = a++) {
+        if (ys[a] > wy !== ys[b] > wy && wx < ((xs[b] - xs[a]) * (wy - ys[a])) / (ys[b] - ys[a]) + xs[a]) inside = !inside;
+        const dx = xs[b] - xs[a], dy = ys[b] - ys[a], l2 = dx * dx + dy * dy;
+        let t = l2 ? ((wx - xs[a]) * dx + (wy - ys[a]) * dy) / l2 : 0;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        near = Math.min(near, Math.hypot(xs[a] + dx * t - wx, ys[a] + dy * t - wy));
+      }
+      if (!inside || sampleField(tc, tc.bloom, wx, wy, -127) <= 0) continue;
+      px[y * CHUNK + x] = near < 2 ? P.strawRim : strawPixel(P, wx - S.cx, wy - S.cy, Infinity, bayer(tc.x0 + x, tc.y0 + y));
+    }
+  }
+}
+let PALETTE = null;
+const paintPalette = () => PALETTE || (PALETTE = JSON.parse(JSON.stringify(LOOK.terrain), (k, v) => (typeof v === 'number' && Number.isInteger(v) && v > 0x7fffffff ? v | 0 : v)));
 
 function blitSprite(buf, spr, x, y) {
   for (let j = 0; j < spr.h; j++) {
@@ -167,7 +213,7 @@ function renderView(name, cx, cy, hero = null) {
   // look's light a tenth into the night (the Darkwood's 118, 120, 172).
   const near = L.filter(([x, y, r]) => x > x0 - r && x < x0 + w + r && y > y0 - r && y < y0 + h + r);
   near.push([cx, cy - 6, 125, 'warm', 1], [cx, cy - 8, 46, 'white', 0.7]); // the hero's own lantern glow
-  const amb = LOOK.sun || LOOK.night[1][1];
+  const amb = LOOK.sun || nightAt(LOOK.night, U);
   // The cracks' glow lights the night too (Forest.addLights, lighting.js glow, at the middle of its
   // pulse): averaged into the light map's 2 px texels and spread smoothly over the screen, as the game's.
   const lw = Math.ceil(w / 2) + 1, lh = Math.ceil(h / 2) + 1, GL = glow ? new Float32Array(lw * lh * 3) : null, gk = glow ? (GROUND.cracks || LOOK.terrain.lava).alpha : 0;
@@ -254,7 +300,18 @@ function renderOverview(name, wx, wy, nx, ny = nx) {
           const t2 = fbm(x / 110, y / 110, SEED, 2) * 0.6 + 0.35 - cd.groveF[c] * 0.3 + cd.clearF[c] * 0.15 + b * 0.1;
           let col = GROUND.zones[ZONE[z]][clamp(Math.floor(t2 * 5), 0, 4)];
           if (cd.dist[c] < 0.5 + b * 4) col = GROUND.road[cd.dist[c] < -5 ? 4 : 3];
-          if (tc && tc.any) {
+          if (tc && tc.edge) {
+            // The quilt: its lanes, each crop field in its flowers' middle tone, the headlands, the
+            // orchards and the hay in their own.
+            const e = sampleField(tc, tc.edge, x, y, 127), bl = sampleField(tc, tc.bloom, x, y, -127);
+            const p = tc.plots[tc.plot[clamp(Math.round((y - tc.y0) / 4), 0, TN - 1) * TN + clamp(Math.round((x - tc.x0) / 4), 0, TN - 1)]];
+            if (e < 0) col = TT.lane.crown[0];
+            else if (p.kind === 'crop') {
+              const tu = LOOK.topology.tulips, bed = (((p.bedStart + Math.floor((p.axis ? x - p.left.X0 : y - p.top.base) / 32)) % tu.length) + tu.length) % tu.length;
+              col = bl > 0 ? TT.crops[p.crop === 'tulips' ? tu[bed] : p.crop].bloom[1] : TT.headland[1];
+            }
+            else col = p.kind === 'orchard' ? TT.orchard.mown[b > 0 ? 1 : 0] : TT.hay[1];
+          } else if (tc && tc.any) {
             const o = sampleField(tc, tc.open, x, y, 127), pt = sampleField(tc, tc.patch, x, y, -127), dk = sampleField(tc, tc.deck, x, y, -127);
             if (dk > 0) col = H('#8a5a3a');
             else if (o < 0 && tc.blocked === SURFACE.GAP) col = TOPO.variant === 'lava' ? (o > -6 ? TT.lava.crust[1] : TT.lava.ramp[clamp(Math.floor(1.5 + b * 2), 0, 3)]) : o > -6 ? TT.cliff[1] : TT.void[0];
@@ -308,7 +365,7 @@ function renderOverview(name, wx, wy, nx, ny = nx) {
       drawText(buf, d.face === 'cliff' ? 'cave' : d.face === 'igloo' ? 'igloo' : 'crypt', Math.round((d.x - ox) / CELL) + 7, Math.round((d.y - oy) / CELL) - 4, H('#feae34'));
     }
   }
-  for (const L of landmarks.values()) if (L.kind !== 'ridge' && L.kind !== 'bridgehead') drawText(buf, L.kind, Math.round((L.x - ox) / CELL) - 14, Math.round((L.y - oy) / CELL) + 9, H('#c0cbdc'));
+  for (const L of landmarks.values()) if (L.kind !== 'ridge' && L.kind !== 'bridgehead' && !PSEUDO.includes(L.kind)) drawText(buf, L.kind, Math.round((L.x - ox) / CELL) - 14, Math.round((L.y - oy) / CELL) + 9, H('#c0cbdc'));
   writePng(join(OUT, `${name}.png`), buf);
   return { places: [...places.values()], landmarks: [...landmarks.values()] };
 }
@@ -342,13 +399,19 @@ for (let k = 0; k < (VIEWS_ONLY ? 0 : 340); k++) {
 if (!VIEWS_ONLY) lap('timing 300 chunks');
 // The overview: a corridor's strip along its axis, else a square round the start.
 const ST = TOPO ? TOPO.start() : { x: 0, y: 0 };
-const HOME = TOPO?.kind === 'islands' ? (VIEWS_ONLY ? 32 : 48) : VIEWS_ONLY ? 24 : 48;
-const [NX, NY] = TOPO?.kind === 'corridor' ? (TOPO.axis === 'x' ? [128, 12] : [12, 128]) : [HOME, HOME];
-const home = renderOverview('overview', ST.x, ST.y, NX, NY);
+const HOME = TOPO?.kind === 'islands' || TOPO?.kind === 'plates' ? (VIEWS_ONLY ? 32 : 48) : VIEWS_ONLY ? 24 : 48;
+// A corridor's strip is 12 chunks across, or 4 where its band is under 600 px (the Sunscorch's 300
+// since 29 October 2026), so the strip is the band and a little of each range, not rock round a thread.
+const ACROSS = TOPO?.kind === 'corridor' && TOPO.T.band < 600 ? 4 : 12;
+const [NX, NY] = TOPO?.kind === 'corridor' ? (TOPO.axis === 'x' ? [128, ACROSS] : [ACROSS, 128]) : [HOME, HOME];
+// Across a corridor, the strip is centred on the band's middle, not the start beside the road (the
+// Frostfell's, narrowed to about 520 px on 29 October 2026, starts 116 px left of it, so a strip round
+// the start cut off its right cliff; the Sunscorch's strip is the same either way).
+const home = TOPO?.kind === 'corridor' ? renderOverview('overview', TOPO.X(TOPO.U(ST.x, ST.y), 0), TOPO.Y(TOPO.U(ST.x, ST.y), 0), NX, NY) : renderOverview('overview', ST.x, ST.y, NX, NY);
 lap(`overview round the start (${NX}x${NY} chunks)`);
 // About 120,000 px from the start: along a corridor, or a crossroads (an island) far off.
 const FAR = TOPO?.kind === 'corridor' ? (TOPO.axis === 'x' ? { x: 120000, y: 0 } : { x: 0, y: 120000 }) : { x: 67 * D, y: 47 * D };
-const far = VIEWS_ONLY ? null : TOPO?.kind === 'corridor' ? renderOverview('overview-far', FAR.x, FAR.y, TOPO.axis === 'x' ? 24 : 12, TOPO.axis === 'x' ? 12 : 24) : renderOverview('overview-far', FAR.x, FAR.y, 24);
+const far = VIEWS_ONLY ? null : TOPO?.kind === 'corridor' ? renderOverview('overview-far', FAR.x, FAR.y, TOPO.axis === 'x' ? 24 : ACROSS, TOPO.axis === 'x' ? ACROSS : 24) : renderOverview('overview-far', FAR.x, FAR.y, 24);
 if (!VIEWS_ONLY) lap(`overview far away`);
 
 let bend = null;
@@ -366,7 +429,7 @@ if (TOPO) {
   }
   const sh = T.shrinesNear(ST.x, ST.y, 6000).sort(byNear)[0];
   renderView('shrine', sh.x, sh.y + 10);
-  const lms = home.landmarks.filter((L) => !['ridge', 'bridgehead', 'pond'].includes(L.kind)).sort(byNear);
+  const lms = home.landmarks.filter((L) => !['ridge', 'bridgehead', 'pond', ...PSEUDO].includes(L.kind)).sort(byNear);
   for (const kind of [...new Set(lms.map((L) => L.kind))].slice(0, 4)) {
     const L = lms.find((q) => q.kind === kind);
     renderView('landmark-' + kind, L.x, L.y + 10);
@@ -384,7 +447,50 @@ if (TOPO) {
     renderView('edge-hi', T.X(u, T.hi(u) - 120), T.Y(u, T.hi(u) - 120));
     const uf = FAR.x + FAR.y;
     renderView('far', T.X(uf, T.road(uf)), T.Y(uf, T.road(uf)));
-  } else {
+  } else if (T.kind === 'quilt') {
+    // The Bloomvale's quilt (29 October 2026): the nearest orchard, hay field without a landmark,
+    // avenue tree and tulip field, a circle sown in a crop field about 800 px out, and a field far off.
+    const ps = [];
+    for (let k = -8; k <= 8; k++) T.bandPlots(k, -4000, 4000, (p) => ps.push(p));
+    ps.sort(byNear);
+    const orch = ps.find((p) => p.kind === 'orchard'), hay = ps.find((p) => p.kind === 'hay' && !p.lm), tul = ps.find((p) => p.kind === 'crop' && p.crop === 'tulips');
+    if (orch) renderView('orchard', orch.x, orch.y);
+    if (hay) renderView('hay', hay.x, hay.y);
+    const av = T.features(-3000, -3000, 3000, 3000).landmarks.find((L) => L.kind === 'avenue');
+    const tree = av && av.props.filter((q) => Math.hypot(q.x - ST.x, q.y - ST.y) > 300).sort(byNear)[0];
+    if (tree) renderView('avenue', tree.x, tree.y);
+    if (tul) renderView('tulips', tul.x, tul.y);
+    const sp = ps.filter((p) => p.kind === 'crop' && p.key !== 0).sort((a, b) => Math.abs(Math.hypot(a.x, a.y) - 800) - Math.abs(Math.hypot(b.x, b.y) - 800))[0];
+    if (sp) {
+      const xs = [], ys = [];
+      for (let q = 0; q < 40; q++) {
+        const a = (q / 40) * TAU, r = 70 * (1 + 0.08 * Math.sin(3 * a + 1) + 0.05 * Math.sin(5 * a));
+        xs.push(sp.x + Math.cos(a) * r);
+        ys.push(sp.y + Math.sin(a) * r);
+      }
+      SOWN = { xs, ys, cx: sp.x, cy: sp.y, r: 90 };
+      renderView('sown', sp.x, sp.y);
+      SOWN = null;
+    }
+    const fp = T.plotAt(67 * D, 47 * D);
+    renderView('far', fp.x, fp.y);
+  } else if (T.kind === 'plates') {
+    // The Abyss's fault plates (29 October 2026): the nearest walkway, ford and lake, a shattered field
+    // (a coarse cell split 3x3) and a node's heart far off.
+    const { geoms, polys } = T.near(ST.x - 2500, ST.y - 2500, ST.x + 2500, ST.y + 2500, 0);
+    const d = (x, y) => Math.hypot(x - ST.x, y - ST.y), mid = (g) => [g.xs[g.xs.length >> 1], g.ys[g.xs.length >> 1]];
+    const walk = T.decksNear(ST.x - 2500, ST.y - 2500, ST.x + 2500, ST.y + 2500).map((B) => [(B.x1 + B.x2) / 2, (B.y1 + B.y2) / 2]).sort((a, b) => d(...a) - d(...b))[0];
+    if (walk) renderView('walkway', walk[0], walk[1]);
+    const ford = geoms.filter((g) => g.e.crossing === 'ford').map(mid).sort((a, b) => d(...a) - d(...b))[0];
+    if (ford) renderView('ford', ford[0], ford[1]);
+    const lake = polys.filter((p) => p.kind === 'lake').sort((a, b) => d(a.x, a.y) - d(b.x, b.y))[0];
+    if (lake) renderView('lake', lake.x, lake.y);
+    let shat = null;
+    for (let cj = -10; cj <= 10; cj++) for (let ci = -10; ci <= 10; ci++) for (const S of T.sitesOf(ci, cj)) if (S.n === 3 && (!shat || d(S.x, S.y) < d(shat.x, shat.y))) shat = S;
+    if (shat) renderView('shattered', shat.x, shat.y);
+    const fh = T.home(FAR.x, FAR.y);
+    renderView('far', fh.x, fh.y);
+  } else if (T.kind === 'islands') {
     const links = [];
     for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) for (const d of [0, 1]) if (T.link(i, j, d)) links.push(T.link(i, j, d));
     const mid = (L) => L.pts[(L.mA + L.mB) >> 1];
@@ -476,6 +582,29 @@ lap('checks');
 
 // ---- 7. Report --------------------------------------------------------------------------------
 const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+// The quilt's shares of the ground over 24 x 24 chunks round the start, every 8 px: flowers, lanes, the
+// headlands, orchards and hay.
+function quiltShares() {
+  const n = { crop: 0, lane: 0, head: 0, orchard: 0, hay: 0 };
+  let all = 0;
+  for (let cy = -12; cy < 12; cy++) {
+    for (let cx = -12; cx < 12; cx++) {
+      const tc = TOPO.terrain(cx, cy);
+      for (let j = 0; j < TN - 1; j += 2) {
+        for (let i = 0; i < TN - 1; i += 2) {
+          const c = j * TN + i, p = tc.plots[tc.plot[c]];
+          all++;
+          if (tc.edge[c] < 0) n.lane++;
+          else if (p.kind !== 'crop') n[p.kind]++;
+          else if (tc.bloom[c] > 0) n.crop++;
+          else n.head++;
+        }
+      }
+    }
+  }
+  const f = (v) => `${((100 * v) / all).toFixed(1)}%`;
+  return `flowers ${f(n.crop)}, lanes ${f(n.lane)}, headlands and cuts ${f(n.head)}, orchards ${f(n.orchard)}, hay ${f(n.hay)}`;
+}
 const pct = (a, q) => [...a].sort((x, y) => x - y)[Math.floor(q * (a.length - 1))];
 const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
 if (TOPO) {
@@ -484,7 +613,7 @@ if (TOPO) {
   const sh = T.shrinesNear(ST.x, ST.y, 12000).map(from).sort((a, b) => a - b);
   const ms = (a) => `${pct(a, 0.5).toFixed(2)} ms median, ${pct(a, 0.9).toFixed(2)} ms at the 90th percentile, ${Math.max(...a).toFixed(2)} ms at most`;
   console.log(`
-${T.kind === 'corridor' ? `A corridor along ${T.axis}` : `Islands over ${T.variant}`}; the start at ${ST.x}, ${ST.y}
+${T.kind === 'corridor' ? `A corridor along ${T.axis}` : T.kind === 'quilt' ? `A quilt of fields ${T.T.col} x ${T.T.band} px, ${quiltShares()}` : T.kind === 'plates' ? `Fault plates over ${T.variant}` : `Islands over ${T.variant}`}; the start at ${ST.x}, ${ST.y}
 Crypts from the start: ${cr.slice(0, 6).join(', ')} px (the nearest two ${cr.slice(0, 2).map((d) => Math.round(d / SPEED)).join(' and ')} s of walking at ${SPEED} px/s)
 Shrines from the start: ${sh.slice(0, 6).join(', ')} px${T.kind === 'corridor' ? `
 Sharpest bend near the start ${Math.round((bend.turn * 180) / Math.PI)}° over 200 px; ${T.patchesNear(ST.x, ST.y, 50000).length} patches within 50,000 px` : ''}

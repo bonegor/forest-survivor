@@ -2,20 +2,22 @@
 // before the dark ones. The owner's (28 October 2026): "another would be sort of like a bright
 // flower, colorful map." So the brightest night of the five: a midsummer fae twilight that never
 // gets truly dark, lavender-pink where the Darkwood's is blue (its light about 0.73 luminance at
-// midnight, the Darkwood's 0.45), over lush light greens. Meadows in bloom where the Darkwood has
-// its oak meadows, their flowers in carpets; blossom groves where it has its pinewoods, pink and
-// white cups in their grass; lavender in flower where its woods are cursed; pale paths strewn with
-// petals for its roads. Blossom trees stand where its oaks and three in four of its pines stand,
-// giant mushrooms in the rest (an accent among the blossom), vine-wrapped trees where its dead ones
-// do (the flora, art/flora-meadow.js); clumps of sunflowers, tulips and bluebells lie where most of
-// its stones and stumps do, and its glowing mushrooms are kept. No gallows here.
+// midnight, the Darkwood's 0.45), over lush light greens. Since 29 October 2026 its land is its
+// own, the fae's flower farm (game/topology/quilt.js, the `quilt` topology): an endless patchwork of
+// fields, each one colour of flowers in rows (rose pink, cornflower blue, lavender, white daisies,
+// coral and striped tulip beds), with grassy farm lanes, blossom-tree avenues, orchards and hay fields
+// between; no woods, no X of roads, no walls and nothing that slows anyone. The hero starts in a
+// pressed straw circle ringed by moonblooms in a blue field. As he walks through the flowers he
+// trails the Fae Thread (game/fae.js): walk a circle, cross it, and the fae sow it. The blossom trees
+// are the topology's (in the oaks' slots), the scatter's flowering bushes, flower clumps and
+// toadstools dot the hay fields (the flora, art/flora-meadow.js). No gallows here.
 //
 // The fields are game/biomes.js's (its header says what each one is); this file is the Bloomvale's
 // alone, so its look can be refined without touching another map's.
 
 import { GROUND } from '../darkwood.js';
 import { PC, P, tones, H } from './kit.js';
-import { FAE, clearAt } from '../fae-rings.js';
+import { THREAD } from '../fae-thread.js';
 
 // Light, saturated greens (their red and blue kept low, so the lavender light leaves them green
 // instead of greying them), and over them the colours of flowers. The meadows' flowers come in
@@ -76,8 +78,57 @@ const weather = {
 export const MEADOW = {
   id: 'meadow',
   ground,
-  // More flowering bushes, and twice the stones and stumps, most of them clumps of flowers here.
-  density: { standing: 0.8, bushes: 1.8, rocks: 2, stumps: 2, graves: 1 },
+  // The fae's flower farm (29 October 2026, game/topology/quilt.js): no grove of the Darkwood's stands
+  // anywhere (every tree is the quilt's own: its avenues, orchards and lone blossom trees), and the
+  // scatter's flowering bushes, flower clumps and toadstools dot only the hay fields (topo.canStand).
+  density: { standing: 0, bushes: 1.0, rocks: 1.4, stumps: 1.4, graves: 0 },
+  // Its ground (29 October 2026): the owner's "bright flower, colorful map" of 28 October taken at his
+  // word, an endless patchwork of fields, each one colour of flowers in rows, grassy farm lanes between
+  // them, avenues of blossom trees along some, orchards and hay fields here and there (one holding each
+  // landmark). East-west lanes `band` px apart, wavy; north-south lanes `col` apart within each band,
+  // slanted a little, `drop` of them left out (a double field). The start's camp stands in a pressed
+  // straw disc in a cornflower field, ringed by moonblooms.
+  topology: {
+    kind: 'quilt',
+    band: 440, bandJit: 50, wave: [16, 36], waveLen: [1600, 2800], // east-west lanes
+    col: 480, colJit: 56, slant: 0.16, drop: 0.15, // north-south lanes
+    // Avenues on half the north-south lanes and on about a third of the east-west ones' length, a lone
+    // tree in four crop fields of five, orchards one field in eight: so about one point of flowers in
+    // six is within 48 px of a tree (the Druid's Grove Warden; counted 29 October 2026: 16.6%, with
+    // the spec's first 0.25 / 0.60 / 0.5 / 0.10 it was 8.9%), and still 68% of the ground in flower.
+    lane: { hw: [7, 10], headland: 6, avenue: 22, avenueNs: 0.5, avenueEw: [0.48, 0.56, 0.54], treeEvery: 48, treeJit: 6, treeOff: 11 },
+    kinds: { crop: 0.78, orchard: 0.12 }, // the rest hay
+    crops: ['cornflower', 'coral', 'lavender', 'tulips', 'daisy', 'pinks'],
+    tulips: ['pinks', 'daisy', 'lavender', 'coral', 'cornflower'],
+    rows: { pitch: 8, furrow: 3, bed: 4 },
+    lone: 0.8, orchard: { pitch: 44, jit: 4, inset: 26 }, hay: { bales: [2, 4], scarecrow: 0.5 },
+    spacing: 1500, stray: 0.2, landmark: 0.55, landmarks: ['circle', 'ruins', 'woodcamp', 'glade', 'ruins', 'circle'],
+    cut: { plaza: 32, walk: 9, apron: 34, pad: 4 },
+    start: { disc: 84, blooms: 12, bloomR: 96, lone: [-120, 140] },
+  },
+  // The quilt's palette (topology/paint-quilt.js), colours and numbers only. Each crop's flowers dark
+  // to light (`bloom`), the leaf of its furrows (kept within about 0.15 luminance of its flowers, so
+  // the rows read as a block of colour, not stripes), the 1 px rim where its flowers meet the
+  // headland. No crop is red, gold, yellow, magenta or yellow-green, so no gem, coin, potion or fury
+  // orb is lost on one; the headlands and lanes are a teal green, away from the green gem; the straw,
+  // ruts and hay stay far less saturated than the gold gem.
+  terrain: {
+    crops: {
+      cornflower: { bloom: tones(['#4c66c0', '#6482d8', '#8ea6ec']), leaf: tones(['#3a7464', '#447e6e']), rim: H('#2e3e80') },
+      coral: { bloom: tones(['#e87862', '#f4927a', '#fcae98']), leaf: tones(['#5b9271', '#649979']), rim: H('#a04a3c') },
+      lavender: { bloom: tones(['#9070d0', '#a68ae0', '#c0aaee']), leaf: tones(['#4f8270', '#5c8e7a']), rim: H('#5a4490') },
+      daisy: { bloom: tones(['#d0d6c4', '#e4e8da', '#f4f6ec']), leaf: tones(['#9cc8a8', '#a8d2b2']), rim: H('#6a8a64'), heart: H('#e6d48a') },
+      pinks: { bloom: tones(['#d8709c', '#e88ab4', '#f4a8c8']), leaf: tones(['#4f8f6c', '#5c9c78']), rim: H('#9c4a72') },
+      tulips: { leaf: tones(['#4f8f6c', '#5c9c78']) }, // each bed in that crop's flowers and rim
+    },
+    headland: tones(['#4f9a6a', '#5aa676', '#66b282']),
+    lane: { crown: tones(['#78ae8a', '#86ba96']), ruts: tones(['#c8b494', '#b8a484']), edge: H('#4f9a6a') },
+    straw: tones(['#ead4aa', '#e0c694', '#d2b27e']), strawRim: H('#b08a62'), // circles and the start's disc
+    tread: tones(['#e0c89a', '#d4b888']), // the walked track's stamp (game/fae.js)
+    orchard: { mown: tones(['#58a070', '#62ac7a']), petals: tones(['#ffb8d8', '#ffffff', '#ffd6ea']) },
+    hay: tones(['#a4a868', '#b2b474', '#c0c082']), windrow: H('#8e945a'), stubble: H('#ccc892'),
+    litter: { headland: 0.05, lane: 0.03 }, // the share of pixels strewn with a petal of the field's flowers
+  },
   props: {
     oak1: ['bloom_tree1', 'bloom_tree2', 'bloom_tree3'],
     oak2: ['bloom_tree2', 'bloom_tree3', 'bloom_tree1'],
@@ -143,14 +194,13 @@ export const MEADOW = {
   crypt: { door: 'crypt_meadow', inside: null, kinds: ['Barrow', 'Hollow'] },
   flicker: ['fire'],
   lightK: { cyan: 0.55, pink: 0.6 },
-  // The fae court (game/fae-rings.js, game/fae.js). The owner's (28 October 2026): "Meadow, IDK what
-  // to do with meadow, you guys figure out something, have some good game design idea how to make
-  // meadow not be identical to forest." So fae rings stand all over it, circles of ten moonblooms
-  // that wake about once a minute and dance: the horde that crosses one goes round the hero for a
-  // while instead of at him, then breaks wild when the music stops (from 8:00 the Unseelie Hour,
-  // crueller). The only thing the rings change of the land is what stands: nothing in a ring's
-  // clearing (clearAt, biomes.js biomeProp). Its trees stay as thick as they were (density above):
-  // the Druid's Grove Warden finds as many here as he did.
-  fae: FAE,
-  clearAt,
+  // The fae court: the Fae Thread (game/fae-thread.js THREAD, game/fae.js; 29 October 2026). The
+  // owner's (28 October 2026): "Meadow, IDK what to do with meadow, you guys figure out something,
+  // have some good game design idea how to make meadow not be identical to forest." The rings that
+  // woke on a clock of their own did not register, so the rings are the hero's own now: walking
+  // through the crop fields he trails a silver thread, and a circle walked and crossed is sown by the
+  // fae. What it holds falls asleep for 2 s, its gems fly to him and a crop circle stays pressed into
+  // the field; then 8 s of rest. It changes nothing that stands: the land's trees are the topology's
+  // own (avenues, orchards, a lone tree in half the crop fields), for the Druid's Grove Warden.
+  fae: THREAD,
 };

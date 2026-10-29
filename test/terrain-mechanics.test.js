@@ -1,8 +1,11 @@
 // What a Survival map's own ground does to the hero (player.js QUICKSAND, ICE, FROST; 28 October 2026).
-// The owner's words that day: the Sunscorch's "quicksand, hero steps in and cannot move for a few
-// seconds"; the Frostfell's "hero steps on the ice and continues sliding until reaches regular ground.
-// If hits wall while sliding will stop and can decide where to slide next", and its "gusts here and
-// there freeze monsters or hero". Each hold is short, drawn, and followed by a grace to walk out in; his
+// The owner's words that day: the Frostfell's "hero steps on the ice and continues sliding until reaches
+// regular ground. If hits wall while sliding will stop and can decide where to slide next", and its
+// "gusts here and there freeze monsters or hero"; and the Sunscorch's quicksand, which held him at first
+// ("hero steps in and cannot move for a few seconds") until the owner's of 29 October 2026: "make it so
+// that it doesnt exactly stop the hero, but only greatly slows him down, for like 2/3 slower". So the
+// quicksand slows him to a third of his pace, easing in at its rim, and sinks him a little as the tell,
+// but never holds him; a gust's hold is short, drawn, and followed by a grace to walk out in; his
 // weapons fire on through it; the monsters cross the mountains and the gaps at WALL_PACE and are slowed
 // by neither quicksand nor ice; and the Darkwood, which has no such ground, is exactly as it was.
 //
@@ -19,8 +22,9 @@ await mod('tools/headless.mjs');
 const { Game } = await mod('public/js/game/game.js');
 const { QUICKSAND, ICE, FROST } = await mod('public/js/game/player.js');
 const { WALL_PACE } = await mod('public/js/game/enemies.js');
+const { CROWD } = await mod('public/js/game/crowd.js');
 const { SURFACE, FOE_SLOWED, HERO_BLOCKED, TMAX } = await mod('public/js/game/topology/index.js');
-const { TINTS } = await mod('public/js/engine/sprites.js');
+const { TINTS, SPR } = await mod('public/js/engine/sprites.js');
 const { input } = await mod('public/js/engine/input.js');
 const { mulberry32 } = await mod('public/js/engine/util.js');
 const P = await mod('public/js/shared/profile.js');
@@ -88,76 +92,125 @@ const steps = (p, n) => {
   for (let i = 0; i < n; i++) p.update(DT);
 };
 
-test('the ground holds the hero, never the horde: quicksand and ice slow no monster, walls and gaps slow a walker', () => {
+test('the ground slows or holds the hero, never the horde: quicksand and ice slow no monster, walls and gaps slow a walker', () => {
   assert.equal(HERO_BLOCKED[SURFACE.QUICKSAND], 0, 'quicksand is walked onto');
   assert.equal(HERO_BLOCKED[SURFACE.ICE], 0, 'and so is ice');
   for (const s of [SURFACE.QUICKSAND, SURFACE.ICE, SURFACE.GROUND, SURFACE.ROAD, SURFACE.BRIDGE]) assert.equal(FOE_SLOWED[s], 0, `${s} slows no monster`);
   assert.equal(FOE_SLOWED[SURFACE.WALL], 1);
   assert.equal(FOE_SLOWED[SURFACE.GAP], 1);
-  assert.deepEqual(QUICKSAND, { hold: 2.5, grace: 1.5, sink: 4, enter: 2 });
+  assert.deepEqual(QUICKSAND, { pace: 1 / 3, enter: 4, sink: 4, settle: 0.35 });
   assert.deepEqual(ICE, { speed: 1.25, start: 12, enter: 1, leave: -1, block: 0.5 });
   assert.deepEqual(FROST, { hold: 1.5, grace: 1.5 });
 });
 
-test('quicksand: he is held 2.5 s whatever is pressed, sinking, his weapons firing on; then 1.5 s in which it takes him not', () =>
+test('quicksand: wading he walks on at a third of his pace, sinking as he goes, never held; out of it his pace and his feet are his again', () =>
   gameCase((g, p) => {
-    const x0 = p.x + 40;
-    stubGround(g, band(SURFACE.QUICKSAND, x0, x0 + 60));
+    const x0 = p.x + 40, x1 = x0 + 160;
+    stubGround(g, band(SURFACE.QUICKSAND, x0, x1));
+    const said = [];
+    g.numbers.text = (x, y, s) => said.push(s);
     input.bot = { x: 1, y: 0 };
-    let n = 0;
-    while (!p.held && n++ < 300) g.update(DT);
-    assert.ok(p.held, 'taken');
-    assert.equal(p.held.kind, 'sand');
-    assert.ok(p.x - x0 > QUICKSAND.enter && p.x - x0 < QUICKSAND.enter + 4, `once his feet are ${QUICKSAND.enter} px in (${(p.x - x0).toFixed(2)})`);
-    assert.equal(p.vx, 0);
-    // A Ghoul in his sword's reach, on the side he faces.
-    const foe = g.spawnEnemy('zombie', p.x + 14, p.y, { instant: true, always: true });
-    const at = [p.x, p.y], hp0 = foe.hp;
-    // Held: no step whichever way he is steered, and his weapons fire on.
-    const ways = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0.7, y: -0.7 }];
-    let held = 0;
-    while (p.held && held < 400) {
-      input.bot = ways[held % ways.length];
-      g.update(DT);
-      held++;
-      if (p.held) {
-        assert.deepEqual([p.x, p.y], at, 'he does not move');
-        assert.equal(p.moving, false, 'nor walk');
-      }
-      if (held === Math.round(0.4 / DT)) assert.equal(p.sink, QUICKSAND.sink, 'sunk in');
-    }
-    assert.ok(Math.abs(held * DT - QUICKSAND.hold) <= 2 * DT, `held ${(held * DT).toFixed(3)} s`);
-    assert.ok(foe.dead || foe.hp < hp0, 'his sword struck the Ghoul while he was held');
-    // Free: he walks (the frame that lets him go moves him on).
-    assert.ok(p.x !== at[0] || p.y !== at[1], 'he walks again');
-    assert.equal(p.sink, 0);
-    // Standing in the pool through his grace, it takes him not; then it does again.
-    input.bot = { x: 0, y: 0 };
-    let free = 0;
-    while (!p.held && free < 400) {
+    const full = p.moveSpeed, most = (QUICKSAND.sink / QUICKSAND.settle) * DT;
+    // In, well past its rim: he never stops, and he sinks a little at a time.
+    let n = 0, sink = p.sink;
+    while (p.x < x0 + QUICKSAND.enter + 24 && n++ < 600) {
       p.update(DT);
-      free++;
+      assert.equal(p.held, null, 'never held');
+      assert.equal(p.moving, true, 'walking on');
+      assert.ok(Math.abs(p.sink - sink) <= most + 1e-9, 'sinking, eased');
+      sink = p.sink;
     }
-    assert.ok(Math.abs(free * DT - QUICKSAND.grace) <= 3 * DT, `taken again after ${(free * DT).toFixed(3)} s`);
+    assert.ok(p.x >= x0 + QUICKSAND.enter + 24, 'through the rim and on');
+    assert.equal(p.wade, 1, 'wading');
+    assert.equal(p.sink, QUICKSAND.sink, 'sunk in');
+    // Wading: a third of his pace, the way he is steered.
+    const xa = p.x;
+    steps(p, 30);
+    const v = (p.x - xa) / (30 * DT);
+    assert.ok(Math.abs(v / full - QUICKSAND.pace) < 0.01, `wading at ${(v / full).toFixed(3)} of his pace`);
+    input.bot = { x: 0, y: 1 };
+    const ya = p.y;
+    steps(p, 30);
+    assert.ok(p.y > ya && p.y - ya < full * QUICKSAND.pace * 30 * DT + 1e-9, 'turning as he likes, no faster');
+    // Out the far side: his pace again, rising out of it as he sank.
+    input.bot = { x: 1, y: 0 };
+    sink = p.sink;
+    while (p.x < x1 + 60 && n++ < 2000) {
+      p.update(DT);
+      assert.equal(p.held, null);
+      assert.ok(Math.abs(p.sink - sink) <= most + 1e-9, 'rising, eased');
+      sink = p.sink;
+    }
+    assert.ok(p.x >= x1 + 60, 'out');
+    assert.deepEqual([p.wade, p.sink, p.sandPace], [0, 0, 1], 'on his own feet');
+    assert.ok(Math.abs(p.vx - full) < full * 1e-3, 'his own pace');
+    assert.ok(!said.includes('Quicksand!'), 'no word over him: it never holds him');
   }));
 
-test('quicksand takes no hero in the air, and none where the map has no ground of its own', () =>
+test("quicksand's rim eases the slow in, so it never snaps: none at the rim, all of it QUICKSAND.enter px in", () =>
+  gameCase((g, p) => {
+    const at = (d) => {
+      stubGround(g, () => [d > 0 ? SURFACE.QUICKSAND : SURFACE.GROUND, d]);
+      p.groundUnder(g, false, DT);
+      return p.sandPace;
+    };
+    assert.equal(at(-3), 1, 'beside it');
+    assert.equal(at(0), 1, 'at its rim');
+    assert.ok(Math.abs(at(QUICKSAND.enter / 2) - (1 + QUICKSAND.pace) / 2) < 1e-9, 'half of it half way');
+    assert.ok(Math.abs(at(QUICKSAND.enter) - QUICKSAND.pace) < 1e-9, 'all of it');
+    assert.ok(Math.abs(at(40) - QUICKSAND.pace) < 1e-9, 'and no more deeper in');
+    let last = 1;
+    for (let d = 0.25; d <= QUICKSAND.enter; d += 0.25) {
+      const k = at(d);
+      assert.ok(k < last, `slower ${d} px in`);
+      last = k;
+    }
+  }));
+
+test('quicksand slows no hero in the air, and none where the map has no ground of its own; a leap carries him its whole way', () =>
   gameCase((g, p) => {
     stubGround(g, () => [SURFACE.QUICKSAND, 30]);
     // No topology (the Darkwood, Ranked, the road by day): the same stubs, and nothing.
     g.world.topo = null;
     input.bot = { x: 1, y: 0 };
     steps(p, 30);
-    assert.equal(p.held, null, 'the Darkwood has no quicksand');
+    assert.deepEqual([p.wade, p.sink, p.sandPace], [0, 0, 1], 'the Darkwood has no quicksand');
+    assert.ok(Math.abs(p.vx - p.moveSpeed) < p.moveSpeed * 1e-3, 'his own pace');
     g.world.topo = PLAIN;
-    // Mid-leap (the Twin Axes'), not until he comes down.
-    p.leapTo(p.x + 30, p.y, () => {}, 0.2);
+    steps(p, 30);
+    assert.equal(p.wade, 1, 'wading');
+    assert.equal(p.held, null);
+    // Mid-leap (the Twin Axes'), unslowed: it lands where it was aimed, as far as ever.
+    const to = p.x + 30;
+    let landed = null;
+    assert.equal(p.leapTo(to, p.y, () => (landed = p.x), 0.2), true, 'he leaps out of it');
     p.update(DT);
-    assert.equal(p.held, null, 'not in the air');
+    assert.equal(p.wade, 0, 'not in the air');
+    assert.equal(p.sandPace, 1);
     steps(p, 30);
     assert.equal(p.leap, null);
-    assert.equal(p.held?.kind, 'sand', 'taken where he lands');
+    assert.ok(Math.abs(landed - to) < 1e-9, 'its whole way');
+    assert.equal(p.held, null, 'never held');
+    assert.equal(p.wade, 1, 'wading again where he lands');
   }));
+
+test('wading, the crowd on him eases him off it no faster than he wades', () => {
+  const eased = (surface) =>
+    gameCase((g, p) => {
+      stubGround(g, () => [surface, 30]);
+      steps(p, 30);
+      for (let i = 0; i < 6; i++) g.spawnEnemy('skeleton', p.x + 2 + i * 0.5, p.y + 1, { instant: true, always: true });
+      g.state = 'play';
+      const x = p.x, y = p.y;
+      g.separate(DT);
+      return Math.hypot(p.x - x, p.y - y);
+    });
+  const dry = eased(SURFACE.GROUND), wet = eased(SURFACE.QUICKSAND);
+  assert.ok(dry > 0, 'eased off them on dry sand');
+  assert.ok(dry <= CROWD.hero.most * DT + 1e-9, 'never as fast as he walks');
+  assert.ok(wet <= CROWD.hero.most * DT * QUICKSAND.pace + 1e-9, `wading, at most a third of that (${wet.toFixed(4)} px)`);
+  assert.ok(wet < dry);
+});
 
 test("held, he can't leap: the Twin Axes chop where he stands", () =>
   gameCase((g, p) => {
@@ -279,7 +332,7 @@ test('frozen: held 1.5 s in the ice tint, then 1.5 s in which no gust freezes hi
     assert.equal(p.freeze(), true);
   }));
 
-test('sunk in quicksand he is drawn lower, his feet cut, so they stay at the sand; the Darkwood draws him whole', () =>
+test('sunk in quicksand he is drawn lower, his feet cut, so they stay at the sand, the swirl under him and no clock; the Darkwood draws him whole', () =>
   gameCase((g, p) => {
     const recorder = () => {
       const calls = [];
@@ -296,7 +349,8 @@ test('sunk in quicksand he is drawn lower, his feet cut, so they stay at the san
     g.drawHero(ctx, g.cam);
     const plain = calls.find((c) => c[0] === 'drawImage' && c[1] === whole[6]);
     assert.deepEqual(plain.slice(2), whole.slice(0, 4), 'whole, as ever');
-    p.held = { kind: 'sand', t: 1, max: QUICKSAND.hold };
+    assert.ok(!calls.some((c) => c[0] === 'ellipse'), 'nothing round his feet');
+    p.sink = QUICKSAND.sink;
     g.placePlayer(g.cam);
     const sunk = p._rect, cut = Math.round(QUICKSAND.sink * S);
     assert.equal(sunk[8], QUICKSAND.sink);
@@ -305,7 +359,17 @@ test('sunk in quicksand he is drawn lower, his feet cut, so they stay at the san
     g.drawHero(ctx, g.cam);
     const img = sunk[6], drawn = calls.find((c) => c[0] === 'drawImage' && c[1] === img);
     assert.deepEqual(drawn.slice(2), [0, 0, img.width, img.height - QUICKSAND.sink, sunk[0], sunk[1], sunk[2], sunk[3] - cut], 'his feet cut');
+    const swirl = new Set(SPR.fx_quicksand.frames.map((f) => f.c));
+    assert.ok(calls.some((c) => c[0] === 'drawImage' && swirl.has(c[1])), 'the swirl he wades in');
+    assert.ok(!calls.some((c) => c[0] === 'ellipse'), 'no clock: it never holds him (29 October 2026)');
+    // Frozen by a gust: the hold's clock round his feet, as ever.
+    p.sink = 0;
+    assert.equal(p.freeze(FROST.hold), true);
+    g.placePlayer(g.cam);
+    ({ ctx, calls } = recorder());
+    g.drawHero(ctx, g.cam);
     assert.ok(calls.some((c) => c[0] === 'ellipse'), "the hold's clock round his feet");
+    assert.ok(!calls.some((c) => c[0] === 'drawImage' && swirl.has(c[1])), 'and no swirl');
   }));
 
 test("a level-up's cards stop the hold's clock; a crypt below and the forest above let every hold go; the ultimate goes off held", () =>
@@ -325,15 +389,16 @@ test("a level-up's cards stop the hold's clock; a crypt below and the forest abo
     assert.ok(g.ultLaunch, 'launched');
     assert.equal(p.fury, 0);
     g.ultLaunch = null;
-    // Down a crypt's steps: every hold of the ground left up here.
+    // Down a crypt's steps: every hold of the ground left up here, and the quicksand he waded.
     const set = () => {
-      p.held = { kind: 'sand', t: 2, max: QUICKSAND.hold };
-      p.sandFree = 1;
+      p.held = { kind: 'frost', t: 2, max: FROST.hold };
       p.frostFree = 1;
+      p.wade = 1;
+      p.sink = QUICKSAND.sink;
       p.slide = { x: 1, y: 0 };
       p.onIce = true;
     };
-    const clear = (where) => assert.deepEqual([p.held, p.sandFree, p.frostFree, p.slide, p.onIce], [null, 0, 0, null, false], where);
+    const clear = (where) => assert.deepEqual([p.held, p.frostFree, p.wade, p.sink, p.slide, p.onIce], [null, 0, 0, 0, null, false], where);
     const door = { key: '2,0', x: p.x, y: p.y - 40, depth: 1, crypt: true, sealed: false, t: 0 };
     g.crypts.push(door);
     set();

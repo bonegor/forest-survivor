@@ -20,7 +20,21 @@
 // charred wood and at the thorns' points, the lava in the spires, the vents' fire, the gate's
 // stairs. Those are the ember keys, unlit (def.emissive): R the coolest, then O, o and y, f the
 // hottest. No other part of a sprite here is drawn in a key it glows in. (The black thorns' edges
-// catch a warm rim too, d and b, lit as the rest of them: so they read on the ash in the dark.)
+// catch a rim too, A and b, lit as the rest of them: so they read on the ash in the dark.)
+//
+// Grey since round 3 (29 October 2026). The owner's: "the setup should be more like grey and the floow
+// should resemble act 4 of diablo 2". So the wood, the glass and the stone here are charcoal and grey
+// (V W Q, palette.js), never the violets (q p j) nor the warm near-blacks (h m a) they were: the embers,
+// the sulphur, the bone and the gate's fire stay, the only colour on the ground as fire, bone and blood
+// are in Act IV. And the forest's slots are thinned for ruins (biomes/hell.js density.standing 0.25):
+//   hell_pillar1, 2, 3              broken pillar stumps, 30, 42 and 55 px                 (pine, bush)
+//   hell_drum                       a fallen column drum                                   (bush)
+//   hell_wall1, hell_wall2          wall ends, a short and a long one                      (ruins)
+//   hell_arch                       a ruined arch                                          (ruins)
+//   hell_stake                      an iron stake, a skull on it                           (dead tree)
+//   hell_seal                       a rune stone, its seal burning red                     (circle)
+//   hell_post_iron                  an iron post at a walkway's landing (topology/places.js bridgehead)
+// Their solids are art/landmarks.js LANDMARK_SOLIDS, their trunks biomes/hell.js's.
 
 import { makeBuf } from '../engine/pixels.js';
 import { packedPalette } from './palette.js';
@@ -141,7 +155,7 @@ function genCharredTree(seed = 1, o = {}) {
   const W = 34, H = 44;
   const buf = makeBuf(W, H);
   const mask = new Uint8Array(W * H);
-  const WOOD = [pal.k, pal.h, pal.m, pal.a];
+  const WOOD = [pal.k, pal.V, pal.W, pal.Q]; // charcoal (29 October 2026), not warm brown
   const lean = o.lean || 0;
   const top = o.top ?? 24; // where the crown splits from the trunk
   const tips = [];
@@ -161,7 +175,7 @@ function genCharredTree(seed = 1, o = {}) {
     let x = Math.round(at(H - 4) - 2.5 + rng.range(0, 2.5));
     for (let y = H - 2 - rng.int(0, 4), n = rng.int(4, 8); n > 0 && y > top; y--, n--) {
       if (rng() < 0.25) x += rng() < 0.5 ? -1 : 1;
-      if (mask[y * W + x] && get(buf, x, y) !== pal.k) set(buf, x, y, get(buf, x, y) === pal.a ? pal.m : pal.h);
+      if (mask[y * W + x] && get(buf, x, y) !== pal.k) set(buf, x, y, get(buf, x, y) === pal.Q ? pal.W : pal.V);
     }
   }
   // The crown: heavy limbs, each forking into lighter ones, the twigs burnt to stubs. It keeps
@@ -179,7 +193,7 @@ function genCharredTree(seed = 1, o = {}) {
     if (w >= 1.5) limb(buf, x, y, x1, y1, w, Math.max(1, w * 0.62), WOOD, { mask, lift: 0.1 });
     else {
       for (const [px, py] of linePts(x, y, x1, y1)) {
-        set(buf, px, py, Math.cos(ang) < -0.3 ? pal.m : pal.h);
+        set(buf, px, py, Math.cos(ang) < -0.3 ? pal.W : pal.V);
         mask[py * W + px] = 1;
       }
     }
@@ -280,7 +294,7 @@ function genObsidianSpire(seed = 1) {
   const W = 26, H = 46;
   const buf = makeBuf(W, H);
   const mask = new Uint8Array(W * H);
-  const GLASS = [pal.k, pal.q, pal.p, pal.j];
+  const GLASS = [pal.k, pal.V, pal.W, pal.Q]; // a grey basalt shard since 29 October 2026, not violet glass
   const cx = W / 2;
   // Back shards first, then the tallest, then the small ones in front.
   const shards = [
@@ -294,11 +308,11 @@ function genObsidianSpire(seed = 1) {
   const draw = (i) => shard(buf, ...shards[i], GLASS, { mask: i === 2 ? mask : null, ridge: ridges[i] });
   [0, 1, 2].forEach(draw);
   // A glint high on the tall shard's ridge.
-  const gx = [...Array(W).keys()].find((i) => get(buf, i, 11) === pal.j);
+  const gx = [...Array(W).keys()].find((i) => get(buf, i, 11) === pal.Q);
   if (gx !== undefined) set(buf, gx, 11, pal.G);
   // A lava vein in the tall shard's dark face, faint: winding up its middle from above the foot,
   // never in the lowest rows (the horde walks in front of those, and the glow is drawn over them).
-  const dark = (x, y) => mask[y * W + x] === 2 && get(buf, x, y) !== pal.j && get(buf, x, y) !== pal.G;
+  const dark = (x, y) => mask[y * W + x] === 2 && get(buf, x, y) !== pal.Q && get(buf, x, y) !== pal.G;
   const y0 = H - 11, y1 = H - 31;
   for (let y = y0; y >= y1; y--) {
     const xs = [...Array(W).keys()].filter((x) => dark(x, y));
@@ -315,7 +329,7 @@ function genObsidianSpire(seed = 1) {
     blobs.push({ x: cx - 6 + i * 4 + rng.range(-0.5, 0.5), y: H - r * 0.8, rx: r, ry: r * 0.75, lobes: 3, phase: rng() * 6 });
   }
   blobs.sort((a, b) => a.y - b.y);
-  paintBlobs(buf, blobs, [pal.k, pal.q, pal.p], rng, { wobble: 0.05, dither: 0.2, lift: -0.1 });
+  paintBlobs(buf, blobs, [pal.k, pal.V, pal.W], rng, { wobble: 0.05, dither: 0.2, lift: -0.1 });
   return buf;
 }
 
@@ -409,7 +423,7 @@ function genThornTree(seed = 1, kind = 'claw') {
   const W = 28, H = 38;
   const buf = makeBuf(W, H);
   const mask = new Uint8Array(W * H);
-  const BLACK = [pal.k, pal.h, pal.m, pal.a], DARK = { lift: -0.12 };
+  const BLACK = [pal.k, pal.V, pal.W, pal.Q], DARK = { lift: -0.12 }; // charcoal (29 October 2026)
   const j = (v) => v + rng.range(-0.6, 0.6);
   const runs = []; // [points along it, thorns on it (-1: only its pale point)]
   if (kind === 'claw') {
@@ -456,7 +470,7 @@ function genThornTree(seed = 1, kind = 'claw') {
       if (!mask[y * W + x] || c === pal.k || c === pal.Z || (open(x + 1, y) && open(x, y + 1))) continue;
       const up = open(x, y - 1);
       if (!up && !open(x - 1, y)) continue;
-      rim.push([x, y, up && depth(x, y, 0, 1) >= 3 ? pal.d : pal.b]);
+      rim.push([x, y, up && depth(x, y, 0, 1) >= 3 ? pal.A : pal.b]);
     }
   }
   for (const [x, y, c] of rim) set(buf, x, y, c);
@@ -479,7 +493,7 @@ function genThornTree(seed = 1, kind = 'claw') {
       for (let k = 1; k <= 2; k++) {
         const px = Math.round(x + Math.cos(ta) * (off + k - 0.5)), py = Math.round(y + Math.sin(ta) * (off + k - 0.5));
         if (px < 0 || py < 0 || px >= W || py >= H || mask[py * W + px]) continue;
-        set(buf, px, py, k === 2 ? pal.A : pal.h);
+        set(buf, px, py, k === 2 ? pal.A : pal.V);
       }
       side = -side;
     }
@@ -537,7 +551,7 @@ function genThornBush(seed = 1, berries = false) {
     { x: 4.6, y: H - 2.6, rx: 2.9, ry: 2.5, lobes: 7, phase: rng() * 6 },
     { x: W - 4.6, y: H - 2.6, rx: 2.9, ry: 2.5, lobes: 7, phase: rng() * 6 },
   ];
-  paintBlobs(buf, blobs, [pal.k, pal.h, pal.m, pal.a], rng, { wobble: 0.14, speckle: 0.12, lift: -0.16, dither: 0.3 });
+  paintBlobs(buf, blobs, [pal.k, pal.V, pal.W, pal.Q], rng, { wobble: 0.14, speckle: 0.12, lift: -0.16, dither: 0.3 });
   for (let i = 0; i < W * H; i++) if (buf.d[i]) mask[i] = 1;
   // Twigs fanning out of its foot, through the tangle and two or three pixels past its edge as
   // thorns: rust where the light catches them (up and to the left), pale at their points.
@@ -554,12 +568,12 @@ function genThornBush(seed = 1, berries = false) {
       if (x < 0 || y < 0 || x >= W || y >= H) break;
       if (!mask[y * W + x]) {
         if (++out > reach) break;
-        set(buf, x, y, out === reach ? pal.A : lit ? pal.b : pal.h); // past the edge: a thorn
+        set(buf, x, y, out === reach ? pal.A : lit ? pal.b : pal.V); // past the edge: a thorn
         if (out === reach) points.push([x, y, last]);
         last = [x, y];
         continue;
       }
-      if (y < H - 2 && rng() < 0.6) set(buf, x, y, lit ? pal.a : pal.m);
+      if (y < H - 2 && rng() < 0.6) set(buf, x, y, lit ? pal.Q : pal.W);
     }
   }
   // The rim: the dome's edge (not under a thorn) as lit as it faces the light, from the middle of
@@ -572,7 +586,7 @@ function genThornBush(seed = 1, berries = false) {
       if (get(buf, x, y - 1) && get(buf, x - 1, y)) continue;
       const nx = x + 0.5 - cx, ny = (y + 0.5 - cy) * 1.2, l = Math.hypot(nx, ny) || 1;
       const lit = (nx * LX + ny * LY) / l;
-      if (lit > 0.62) rim.push([x, y, pal.d]);
+      if (lit > 0.62) rim.push([x, y, pal.A]);
       else if (lit > 0.05) rim.push([x, y, pal.b]);
     }
   }
@@ -612,7 +626,7 @@ function genObsidianRock(seed = 1, size = 1) {
   const rng = mulberry32(seed);
   const W = Math.round(12 * size + 2), H = Math.round(9 * size + 2);
   const buf = makeBuf(W, H);
-  const GLASS = [pal.k, pal.q, pal.p, pal.j];
+  const GLASS = [pal.k, pal.V, pal.W, pal.Q]; // a grey slate lump since 29 October 2026
   // The lump: a squat dome, a little lopsided, its foot on the bottom row.
   const cx = W / 2 + rng.range(-0.5, 0.5), cy = H - 1, rx = W / 2 - 0.4, ry = H - 1.2;
   const ph = rng() * 6;
@@ -656,14 +670,14 @@ function genObsidianRock(seed = 1, size = 1) {
       const other = r >= 0 && r !== f ? r : d >= 0 && d !== f ? d : -1;
       if (other < 0) continue;
       const hi = Math.max(seeds[f][2], seeds[other][2]);
-      if (seeds[f][2] >= seeds[other][2] && hi > 0.5) set(buf, x, y, hi > 0.66 ? pal.j : pal.p);
+      if (seeds[f][2] >= seeds[other][2] && hi > 0.5) set(buf, x, y, hi > 0.66 ? pal.g : pal.Q);
       else if (seeds[f][2] < 0.45) set(buf, x, y, pal.k);
     }
   }
   // A glint on the brightest face.
   let gi = -1, gl = 0;
   for (let i = 0; i < W * H; i++) if (face[i] >= 0 && seeds[face[i]][2] > gl) [gl, gi] = [seeds[face[i]][2], i];
-  if (gi >= 0 && size >= 1) buf.d[gi] = pal.G;
+  if (gi >= 0 && size >= 1) buf.d[gi] = pal.g;
   return buf;
 }
 
@@ -683,7 +697,7 @@ function genBrimstone(seed = 1, size = 1, crust = 0.5) {
     blobs.push({ x: W / 2 + s * rng.range(2.6, 3.4) * size, y: H - r * 0.78 - 0.4, rx: r, ry: r * 0.76, lobes: 3, phase: rng() * 6 });
   }
   blobs.sort((a, b) => a.y - b.y);
-  paintBlobs(buf, blobs, [pal.k, pal.h, pal.a, pal.A], rng, { wobble: 0.08, dither: 0.22, separator: pal.k, lift: -0.06 });
+  paintBlobs(buf, blobs, [pal.k, pal.V, pal.W, pal.Q], rng, { wobble: 0.08, dither: 0.22, separator: pal.k, lift: -0.06 });
   // The crust: over the top of every stone in the heap (to the dark seam where a stone in front
   // meets the one behind), thick in drifts and thin between, lit on the upper left.
   const SULPHUR = [pal.D, pal.C, pal.Y, pal.T];
@@ -725,15 +739,16 @@ const BONES = [
 ];
 
 // A vent in the brimstone: a squat chimney of crusted rock, sulphur running down it from the lip,
-// the fire in its mouth and a jet of flame leaping out (three frames, for a light's anim).
+// the fire in its mouth and a jet of flame leaping out (three frames, for a light's anim). Its rock
+// charcoal since 29 October 2026 (V W Q for h a A), its sulphur and fire as they were.
 const VENT_BASE = [
   '....TYffyCD...',
   '...TCoyyoCD...',
-  '..AaCDRRDCah..',
-  '..AaaDCCDaah..',
-  '.AaaaaDaaaahh.',
-  'hAaaaaaaaahhhh',
-  '.hhhhhhhhhhhh.',
+  '..QWCDRRDCWV..',
+  '..QWWDCCDWWV..',
+  '.QWWWWDWWWWVV.',
+  'VQWWWWWWWWVVVV',
+  '.VVVVVVVVVVVV.',
 ];
 const ventFrame = (flame) => [...flame, ...VENT_BASE];
 const VENT = [
@@ -764,66 +779,418 @@ const VENT = [
 // falls on them and orange where the fire below does, the same 26x29 as props.js crypt
 // (forest.js CRYPT_BOX goes by it). Open, its stairs burn up out of the dark, the deeper the
 // hotter, and the sigil over the door burns with them (o and y glow, def.emissive); sealed, a
-// door of black iron shuts it, banded, with a seal of blood on it, and the sigil is cold.
+// door of black iron shuts it, banded, with a seal of blood on it, and the sigil is cold. Grey masonry
+// since 29 October 2026 (W Q V for its red-black m b R): the stairs' fire, the sigil and the seal kept.
 const gateTop = (sigil) => [
   '...........kkkk...........',
-  '.........kkRbbRkk.........',
-  '.......kkRbbmmbbRkk.......',
-  `.....kkRbbmm${sigil[0]}mmbbRkk.....`,
-  `...kkRbbmmmm${sigil[1]}mmmmbbRkk...`,
-  '.kkRbbmmmmmmmmmmmmmmbbRkk.',
-  'kRRbRRRRRRRRRRRRRRRRRRbRRk',
+  '.........kkVQQVkk.........',
+  '.......kkVQQWWQQVkk.......',
+  `.....kkVQQWW${sigil[0]}WWQQVkk.....`,
+  `...kkVQQWWWW${sigil[1]}WWWWQQVkk...`,
+  '.kkVQQWWWWWWWWWWWWWWQQVkk.',
+  'kVVQVVVVVVVVVVVVVVVVVVQVVk',
   'khhhhhhhhhhhhhhhhhhhhhhhhk',
 ];
 const GATE_FOOT = [
-  'kRRRRRRRRRRRRRRRRRRRRRRRRk',
-  'kbmmmmmmmmmmmmmmmmmmmmmmbk',
+  'kVVVVVVVVVVVVVVVVVVVVVVVVk',
+  'kQWWWWWWWWWWWWWWWWWWWWWWQk',
   'khhhhhhhhhhhhhhhhhhhhhhhhk',
   '.kkkkkkkkkkkkkkkkkkkkkkkk.',
 ];
 const CRYPT_HELL = [
   [
     ...gateTop(['yo', 'oO']),
-    '.kbmhkmmmmmmmmmmmmmmkbmhk.',
-    '.kbmhkmmmmmkkkkmmmmmkbmhk.',
-    '.kbmhkmmmmkhhhhkmmmmkbmhk.',
-    '.kbmhkmmmkhhhhhhkmmmkbmhk.',
-    '.kbmhkmmkhhhhhhhhkmmkbmhk.',
-    '.kbmhkmmkhhhhhhhhkmmkbmhk.',
-    '.kbmhkhhkhhhhhhhhkhhkbmhk.',
-    '.kbmhkmmkhhhhhhhhkmmkbmhk.',
-    '.kbmhkmmkhhhhhhhhkmmkbmhk.',
-    '.kbmhkmmkmmmmmmmmkmmkbmhk.',
-    '.kbmhkhhkmmmmmmmmkhhkbmhk.',
-    '.kbmhkmmkRRRRRRRRkmmkbmhk.',
-    '.kbmhkmmkRRRRRRRRkmmkbmhk.',
-    '.kbOhkmmkOOOOOOOOkmmkbmhk.',
-    '.kOOhkmmkyyyyyyyykmmkbOhk.',
-    '.kOOhkmOkOOOOOOOOkOmkOOhk.',
-    'kRRRRRRRkooooooookRRRRRRRk',
+    '.kQWhkWWWWWWWWWWWWWWkQWhk.',
+    '.kQWhkWWWWWkkkkWWWWWkQWhk.',
+    '.kQWhkWWWWkhhhhkWWWWkQWhk.',
+    '.kQWhkWWWkhhhhhhkWWWkQWhk.',
+    '.kQWhkWWkhhhhhhhhkWWkQWhk.',
+    '.kQWhkWWkhhhhhhhhkWWkQWhk.',
+    '.kQWhkhhkhhhhhhhhkhhkQWhk.',
+    '.kQWhkWWkhhhhhhhhkWWkQWhk.',
+    '.kQWhkWWkhhhhhhhhkWWkQWhk.',
+    '.kQWhkWWkWWWWWWWWkWWkQWhk.',
+    '.kQWhkhhkWWWWWWWWkhhkQWhk.',
+    '.kQWhkWWkRRRRRRRRkWWkQWhk.',
+    '.kQWhkWWkRRRRRRRRkWWkQWhk.',
+    '.kQOhkWWkOOOOOOOOkWWkQWhk.',
+    '.kOOhkWWkyyyyyyyykWWkQOhk.',
+    '.kOOhkWOkOOOOOOOOkOWkOOhk.',
+    'kVVVVVVVkooooooookVVVVVVVk',
     ...GATE_FOOT,
   ],
   [
     ...gateTop(['RR', 'Rb']),
-    '.kbmhkmmmmmmmmmmmmmmkbmhk.',
-    '.kbmhkmmmmmkkkkmmmmmkbmhk.',
-    '.kbmhkmmmmkVVVVkmmmmkbmhk.',
-    '.kbmhkmmmkVWWWWVkmmmkbmhk.',
-    '.kbmhkmmkVWWWWWWVkmmkbmhk.',
-    '.kbmhkmmkVQQQQQQVkmmkbmhk.',
-    '.kbmhkhhkVWWWWWWVkhhkbmhk.',
-    '.kbmhkmmkVWWRRWWVkmmkbmhk.',
-    '.kbmhkmmkVWRrRRWVkmmkbmhk.',
-    '.kbmhkmmkVWRRRRWVkmmkbmhk.',
-    '.kbmhkhhkVWWRRWWVkhhkbmhk.',
-    '.kbmhkmmkVWWWWWWVkmmkbmhk.',
-    '.kbmhkmmkVQQQQQQVkmmkbmhk.',
-    '.kbmhkmmkVWWWWWWVkmmkbmhk.',
-    '.kbmhkmmkVWWWWWWVkmmkbmhk.',
-    '.kbmhkmmkVVVVVVVVkmmkbmhk.',
-    'kRRRRRRRkVVVVVVVVkRRRRRRRk',
+    '.kQWhkWWWWWWWWWWWWWWkQWhk.',
+    '.kQWhkWWWWWkkkkWWWWWkQWhk.',
+    '.kQWhkWWWWkVVVVkWWWWkQWhk.',
+    '.kQWhkWWWkVWWWWVkWWWkQWhk.',
+    '.kQWhkWWkVWWWWWWVkWWkQWhk.',
+    '.kQWhkWWkVQQQQQQVkWWkQWhk.',
+    '.kQWhkhhkVWWWWWWVkhhkQWhk.',
+    '.kQWhkWWkVWWRRWWVkWWkQWhk.',
+    '.kQWhkWWkVWRrRRWVkWWkQWhk.',
+    '.kQWhkWWkVWRRRRWVkWWkQWhk.',
+    '.kQWhkhhkVWWRRWWVkhhkQWhk.',
+    '.kQWhkWWkVWWWWWWVkWWkQWhk.',
+    '.kQWhkWWkVQQQQQQVkWWkQWhk.',
+    '.kQWhkWWkVWWWWWWVkWWkQWhk.',
+    '.kQWhkWWkVWWWWWWVkWWkQWhk.',
+    '.kQWhkWWkVVVVVVVVkWWkQWhk.',
+    'kVVVVVVVkVVVVVVVVkVVVVVVVk',
     ...GATE_FOOT,
   ],
+];
+
+// ---------------------------------------------------------------- the ruins (29 October 2026) --
+
+// Act IV's masonry, studied for its style only (the Outer Steppes: "ruined arches, rows of cracked
+// pillars, and crumbling walls"), in our own keys: charcoal and slate (V W Q, g where the sky lights a
+// top), the joints dark, lit from the top left as everything here is, a rough top where it broke and
+// rubble at its foot. 1.5 to 2.5 heroes tall, as the study measured.
+const slate = () => {
+  const pal = packedPalette();
+  return [pal.k, pal.V, pal.W, pal.Q, pal.g];
+};
+
+// Rubble: n chunks of stone, 1.2-2.2 px round, about (x, y), spread `sx` across, sitting on row `foot`.
+function rubble(buf, rng, x, foot, n, sx) {
+  const pal = packedPalette(), blobs = [];
+  for (let i = 0; i < n; i++) {
+    const r = rng.range(1.2, 2.2);
+    blobs.push({ x: x + rng.range(-sx, sx), y: foot + 0.6 - r * 0.7, rx: r, ry: r * 0.8, lobes: 3, phase: rng() * 6 });
+  }
+  blobs.sort((a, b) => a.y - b.y);
+  paintBlobs(buf, blobs, [pal.V, pal.W, pal.Q, pal.g], rng, { wobble: 0.1, dither: 0.2, separator: pal.k, lift: -0.08 });
+}
+
+// A broken pillar stump: a fluted shaft of stacked drums (a dark joint between them, the drum below
+// lit along its edge) on a square plinth whose top shows in front of it, snapped off in a jagged break
+// falling `slope` px across (a notch bitten out of it, its rough top in the light), a crack running down
+// from the notch, rubble at its foot. W x H; `drum`: a drum's height.
+function genPillar(seed, W, H, o = {}) {
+  const pal = packedPalette(), rng = mulberry32(seed), S = slate();
+  const buf = makeBuf(W, H);
+  const foot = H - 1, plinth = 5, x0 = 2, x1 = W - 3, sw = x1 - x0 + 1, shaftFoot = foot - plinth;
+  const slope = o.slope ?? 4, notch = rng.int(x0 + 2, x1 - 2), drum = o.drum ?? 11;
+  const topAt = [];
+  for (let x = x0; x <= x1; x++) {
+    const u = (x - x0) / (sw - 1);
+    let t = 1 + (slope > 0 ? u : 1 - u) * Math.abs(slope) + rng.range(-1, 1);
+    if (Math.abs(x - notch) <= 1) t += 2.5 - Math.abs(x - notch);
+    topAt[x] = Math.max(0, Math.round(t));
+  }
+  const joints = new Set();
+  for (let y = shaftFoot - drum; y > 6; y -= drum) joints.add(y);
+  for (let x = x0; x <= x1; x++) {
+    const u = (x - x0 + 0.5) / sw;
+    // Round, in clean bands (lit, face, shade), a flute a band darker every third column.
+    const band = x === x0 ? 0.66 : u < 0.3 ? 0.84 : u < 0.62 ? 0.7 : u < 0.85 ? 0.5 : 0.32;
+    const flute = (x - x0) % 3 === 2 && x < x1 - 1 ? -0.18 : 0;
+    for (let y = topAt[x]; y <= shaftFoot; y++) {
+      let lum = band + flute + bayer(x, y) * 0.05;
+      const d = y - topAt[x];
+      if (d === 0) lum = 0.98 - u * 0.2; // the break's rough top, under the sky
+      else if (d === 1) lum = 0.78 - u * 0.3;
+      else if (joints.has(y)) lum = 0.25;
+      else if (joints.has(y - 1)) lum += 0.12;
+      else if (joints.has(y + 1)) lum -= 0.14;
+      set(buf, x, y, tone(S, Math.max(0.21, lum)));
+    }
+  }
+  // The crack from the notch, wandering down a few drums' worth.
+  let cx = notch;
+  for (let y = topAt[notch] + 2, n = rng.int(6, 11); n > 0 && y < shaftFoot - 1; y++, n--) {
+    if (rng() < 0.35) cx = clamp(cx + (rng() < 0.5 ? -1 : 1), x0 + 1, x1 - 1);
+    set(buf, cx, y, pal.V);
+    if (get(buf, cx - 1, y) !== pal.V && rng() < 0.5) set(buf, cx - 1, y, pal.Q);
+  }
+  // The plinth: its top in front of the shaft (two rows, lit), its face, its shadowed foot; a corner chipped.
+  const chip = rng() < 0.5 ? 1 : W - 2;
+  for (let x = 1; x <= W - 2; x++) {
+    const u = (x - 1) / (W - 3);
+    for (let y = shaftFoot + 1; y <= foot; y++) {
+      const r = y - shaftFoot - 1;
+      let lum = r === 0 ? 0.96 - u * 0.15 : r === 1 ? 0.84 - u * 0.2 : y === foot ? 0.3 : 0.72 - u * 0.3 + bayer(x, y) * 0.05;
+      if (x === 1 && r > 1) lum += 0.1;
+      if (x === chip && r < 2) continue;
+      set(buf, x, y, tone(S, Math.max(0.21, lum)));
+    }
+  }
+  rubble(buf, rng, chip === 1 ? 1.5 : W - 2.5, foot, 2, 1.2);
+  rubble(buf, rng, chip === 1 ? W - 2 : 2, foot, 1, 0.6);
+  return buf;
+}
+
+// A column's drum fallen on its side: its end turned to the light (a ring cut round it, the dowel hole
+// in its middle), its round body lit along the top and fluted along its length, its far end broken off.
+function genDrum(seed) {
+  const pal = packedPalette(), rng = mulberry32(seed), S = slate();
+  const W = 20, H = 10, buf = makeBuf(W, H);
+  const cy = 4.6, ry = 4.4, ex = 3.4, erx = 3.1;
+  for (let y = 0; y < H; y++) {
+    const v = (y + 0.5 - cy) / ry;
+    if (Math.abs(v) > 1) continue;
+    const end = W - 2 - (y % 3 === 0 ? rng.int(0, 2) : rng.int(0, 1));
+    for (let x = Math.floor(ex); x <= end; x++) {
+      let lum = 0.86 - 0.5 * ((v + 1) / 2) + bayer(x, y) * 0.05;
+      if (Math.round(y + 0.5 - cy) % 3 === 0 && Math.abs(v) < 0.9) lum -= 0.12; // the flutes
+      if (x === end) lum = 0.24; // the break, away from the light
+      set(buf, x, y, tone(S, Math.max(0.21, lum)));
+    }
+  }
+  // Its end: a flat disc facing the light.
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < 8; x++) {
+      const nx = (x + 0.5 - ex) / erx, ny = (y + 0.5 - cy) / ry, d = Math.hypot(nx, ny);
+      if (d > 1) continue;
+      let lum = 0.86 - ny * 0.08 + bayer(x, y) * 0.1;
+      if (d > 0.72) lum = nx < 0.2 && ny < 0.3 ? 0.96 : 0.56; // its rim: lit where it faces up and left
+      else if (Math.abs(d - 0.5) < 0.12) lum = 0.62; // the ring cut round it
+      if (d < 0.16) lum = 0.24; // the dowel hole
+      set(buf, x, y, tone(S, lum));
+    }
+  }
+  // A crack across the body.
+  for (let y = 1, x = rng.int(9, 12); y < H - 1; y++) {
+    if (get(buf, x, y)) set(buf, x, y, pal.V);
+    if (rng() < 0.5) x++;
+  }
+  return buf;
+}
+
+// Masonry in courses: whether (x, y) of a W-wide wall standing on row `foot` is a joint, and the block's
+// own tone. Courses `ch` rows high counted up from the foot, the blocks 6-10 long, staggered by course.
+function courses(W, foot, ch, rng) {
+  const rows = [];
+  for (let c = 0; c * ch < foot + 1; c++) {
+    const cuts = [];
+    for (let x = -rng.int(0, 5); x < W; x += rng.int(6, 10)) cuts.push(x);
+    rows.push({ cuts, tones: cuts.map(() => (rng() < 0.25 ? -0.2 : rng.range(-0.03, 0.05))) });
+  }
+  return (x, y) => {
+    const c = Math.floor((foot - y) / ch), r = (foot - y) % ch; // r: 0 the course's lowest row
+    const row = rows[c];
+    if (!row) return null;
+    let b = 0;
+    while (b + 1 < row.cuts.length && row.cuts[b + 1] <= x) b++;
+    const joint = r === ch - 1 || x === row.cuts[b];
+    return { c, r, b, joint, lit: x === row.cuts[b] + 1, tone: row.tones[b], top: r === ch - 2, low: r === 0 };
+  };
+}
+
+// The pixel of a block of masonry at (x, y): its joint dark, the block's top row and left column lit,
+// its lowest row in shade, the whole a little darker away from the light (u: 0..1 across).
+function blockLum(m, x, y, u) {
+  if (m.joint) return 0.26;
+  let lum = 0.7 + m.tone - u * 0.08 + bayer(x, y) * 0.04;
+  if (m.top || m.lit) lum += 0.12;
+  if (m.low) lum -= 0.16;
+  return lum;
+}
+
+// A wall end: courses of dressed stone standing to its full height at one end and crumbling toward the
+// other in steps of whole blocks, the top of what is left lit (two rows: the wall's thickness seen from
+// above), the end where it stops in shade, fallen blocks and rubble at its foot. W x H, ch: a course's
+// height; flip: the tall end on the right.
+function genWall(seed, W, H, o = {}) {
+  const pal = packedPalette(), rng = mulberry32(seed), S = slate();
+  const buf = makeBuf(W, H), foot = H - 1, ch = o.ch ?? 5;
+  const n = Math.floor((H - 2) / ch); // courses at the tall end
+  const at = courses(W, foot, ch, rng);
+  // How many courses stand over each block: all at the tall end, fewer toward the other, one or two
+  // at least, by whole blocks.
+  const kept = new Map();
+  const standing = (m, x) => {
+    const key = m.c + ',' + m.b;
+    if (!kept.has(key)) {
+      const u = (o.flip ? W - 1 - x : x) / (W - 1);
+      kept.set(key, m.c < Math.max(1, Math.round(n * (1 - 0.75 * u ** 1.8) + rng.range(-1.2, 0.9))));
+    }
+    return kept.get(key);
+  };
+  const top = new Array(W).fill(H);
+  for (let x = 0; x < W; x++) {
+    for (let y = foot; y >= H - n * ch; y--) {
+      const m = at(x, y);
+      if (!m || !standing(m, x)) break;
+      top[x] = y;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    const u = x / (W - 1);
+    for (let y = top[x]; y <= foot; y++) set(buf, x, y, tone(S, Math.max(0.21, blockLum(at(x, y), x, y, u))));
+    // Its top: the thickness of the wall seen from above, two rows, lit.
+    if (top[x] < H) {
+      set(buf, x, top[x] - 1, tone(S, 0.8 - u * 0.12 + bayer(x, top[x]) * 0.1));
+      set(buf, x, top[x] - 2, tone(S, 0.96 - u * 0.15));
+    }
+  }
+  // Where it steps down, the face of the step (turned from the light on the tall end's side) in shade.
+  for (let x = 1; x < W; x++) {
+    const hi = o.flip ? x : x - 1, lo = o.flip ? x - 1 : x;
+    for (let y = top[hi] - 2; y < top[lo] - 2; y++) if (get(buf, lo, y) === 0) set(buf, hi, y, y < top[hi] ? pal.Q : pal.V);
+  }
+  const end = o.flip ? 0 : W - 1;
+  for (let y = top[end]; y < foot; y++) set(buf, end, y, pal.V);
+  // A block fallen at the low end, and rubble.
+  const bx = o.flip ? rng.int(1, 4) : W - rng.int(6, 9);
+  for (let y = foot - 2; y <= foot; y++) for (let x = bx; x < bx + 5; x++) set(buf, x, y, tone(S, y === foot - 2 ? 0.92 : y === foot ? 0.24 : x === bx ? 0.78 : 0.6));
+  rubble(buf, rng, o.flip ? 7 : W - 9, foot, 3, 3);
+  rubble(buf, rng, o.flip ? W - 4 : 3, foot, 2, 2);
+  return buf;
+}
+
+// A ruined arch: two piers of coursed stone on plinths and between them a ring of wedge-shaped stones
+// (eleven, the keystone cracked), the wall over it standing on the left and fallen away on the right
+// down to the ring, so the ring's own top shows there, lit; rubble at the piers' feet and a fallen stone
+// under it. 40 x 46.
+const ARCH = { w: 40, h: 46, piers: [[2, 10], [29, 37]] };
+function genArch(seed) {
+  const pal = packedPalette(), rng = mulberry32(seed), S = slate();
+  const { w: W, h: H } = ARCH, buf = makeBuf(W, H), foot = H - 1;
+  const cx = 20, cy = 21, ri = 9, ro = 15, N = 11, wedge = Math.PI / N;
+  const at = courses(W, foot - 3, 5, rng);
+  // The wall over the ring: standing to row 3 on the left, falling to the ring on the right.
+  const wallTop = (x) => (x < 12 ? 3 + Math.floor(x / 7) * 2 : x < 18 ? 8 : x < 23 ? 13 : 99);
+  const ring = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 2; x <= 37; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy, r = Math.hypot(dx, dy);
+      const u = (x - 2) / 35;
+      if (dy < 0 && r >= ri && r < ro) {
+        // A stone of the ring: radial joints, its outer edge lit where it faces up and to the left, its
+        // inner edge (the underside) in shade.
+        const th = Math.atan2(-dy, dx), k = Math.floor(th / wedge), f = th - k * wedge;
+        let lum = 0.72 + Math.sin(k * 12.9 + seed) * 0.05 - u * 0.08 + bayer(x, y) * 0.04;
+        if (Math.min(f, wedge - f) * r < 0.7) lum = 0.22;
+        else if (r < ri + 1) lum = 0.3;
+        else if (r >= ro - 1 && (dx < 4 || dy < -ro + 3)) lum = 0.92;
+        if (k === (N - 1) / 2 && Math.abs(dx) < 0.8 && r < ro - 2) lum = 0.22; // the keystone's crack
+        set(buf, x, y, tone(S, Math.max(0.21, lum)));
+        ring.push([x, y]);
+        continue;
+      }
+      const pier = ARCH.piers.find(([a, b]) => x >= a && x <= b);
+      const inOpening = (dy >= 0 && x > 10 && x < 29) || (dy < 0 && r < ri);
+      if (inOpening || y > foot - 4) continue;
+      if (dy < 0 && !pier && y < wallTop(x)) continue;
+      if (dy < 0 && pier && x > 28 && r >= ro) continue; // fallen away down to the ring on the right
+      if (dy < 0 && x <= 10 && y < wallTop(x)) continue;
+      set(buf, x, y, tone(S, Math.max(0.21, blockLum(at(x, y), x, y, u))));
+    }
+  }
+  // The tops of what stands, lit: the wall's (two rows) and the ring's where nothing stands over it.
+  for (let x = 2; x <= 37; x++) {
+    let y = 0;
+    while (y < H && !get(buf, x, y)) y++;
+    if (y >= H - 4) continue;
+    const u = (x - 2) / 35;
+    if (y > 0) set(buf, x, y - 1, tone(S, 0.97 - u * 0.15));
+    if (get(buf, x, y) !== pal.V || x > 22) set(buf, x, y, tone(S, 0.82 - u * 0.12));
+  }
+  // The piers' inner faces: the left one's turned from the light, the right one's toward it.
+  for (let y = cy; y < foot - 3; y++) {
+    set(buf, 10, y, pal.V);
+    set(buf, 29, y, pal.Q);
+  }
+  // The plinths, their tops lit, their feet in shade.
+  for (const [a, b] of ARCH.piers) {
+    for (let x = a - 1; x <= b + 1; x++) {
+      const u = (x - a + 1) / (b - a + 2);
+      for (let y = foot - 3; y <= foot; y++) {
+        const r = y - foot + 3;
+        set(buf, x, y, tone(S, r === 0 ? 0.95 - u * 0.2 : r === 1 ? 0.78 - u * 0.2 : y === foot ? 0.24 : 0.62 - u * 0.3 + bayer(x, y) * 0.1));
+      }
+    }
+    rubble(buf, rng, a > 20 ? b + 1 : a - 0.5, foot, 2, 1);
+  }
+  // A stone of the ring fallen under it, lying on its side.
+  for (let y = foot - 2; y <= foot; y++) for (let x = 22; x < 27; x++) set(buf, x, y, tone(S, y === foot - 2 ? 0.92 : y === foot ? 0.24 : x === 22 ? 0.8 : 0.6));
+  rubble(buf, rng, 17, foot, 3, 2.5);
+  return buf;
+}
+
+// An impaling stake of black iron, a skull run onto it near its point, a drop of old blood under the
+// jaw, driven into a heap of rubble with a bone in it. Readable, not gory.
+const STAKE = [
+  '....g....',
+  '....Q....',
+  '...gQ....',
+  '...QQV...',
+  '..zzQzZ..',
+  '.zzzzzzZ.',
+  '.zzzzzZZ.',
+  '.zkkzkkZ.',
+  '.zkkzkkZ.',
+  '..zZkZZ..',
+  '..ZkZkZ..',
+  '...QRV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '..gQQWV..',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '..gQQWV..',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '...QWV...',
+  '..QQWVV..',
+  '.QWQWVWV.',
+  'zZWVVWQVV',
+  'VWQWVVWVV',
+];
+
+// A seal stone: a short slab of slate, its top chipped, a rune cut in its face burning red (x its
+// core, r its strokes: emissive), on a plinth. The study's "glowing seals" of a sanctuary, ours.
+const SEAL = [
+  '....gggQ....',
+  '...gQQQQV...',
+  '..QQWWWWWV..',
+  '..QrWWWWrV..',
+  '..QWrWWrWV..',
+  '..QWWrrWWV..',
+  '..QWWxxWWV..',
+  '..QrrxxrrV..',
+  '..QWWxxWWV..',
+  '..QWWxxWWV..',
+  '..QWrWWrWV..',
+  '..QrWWWWrV..',
+  '..QWWWWWWV..',
+  '..QWWWWWVV..',
+  '.ggQQQQQQQV.',
+  '.QQWWWWWWWV.',
+  'QQWWWWWWWVVV',
+  '.VVVVVVVVVV.',
+];
+
+// A walkway's landing post in black iron (topology/places.js bridgehead, an iron deck's): a spiked
+// cap on a flange, a riveted square post, a band, a broad foot. Lit from the top left.
+const POST_IRON = [
+  '....g....',
+  '...gQV...',
+  '..gQQWV..',
+  'gQQQQWWVV',
+  'VVVVVVVVV',
+  '.QgWWWVV.',
+  '.QQWWWVV.',
+  '.QQWWWVV.',
+  'gQQQWWWVV',
+  'VWWVVVVVV',
+  '.QQWWWVV.',
+  '.QgWWWVV.',
+  '.QQWWWVV.',
+  'gQQQWWWVV',
+  'VVVVVVVVV',
 ];
 
 // ---------------------------------------------------------------- the defs --
@@ -846,4 +1213,18 @@ export const FLORA_HELL = {
   hell_bones: { frames: [BONES] },
   hell_vent: { emissive: EMBERS, frames: VENT },
   crypt_hell: { emissive: 'oy', frames: CRYPT_HELL },
+  // The ruins of 29 October 2026 (their solids: art/landmarks.js LANDMARK_SOLIDS).
+  hell_pillar1: { gen: () => [genPillar(3, 12, 30, { slope: 5, drum: 9 })] },
+  hell_pillar2: { gen: () => [genPillar(11, 14, 42, { slope: -4, drum: 11 })] },
+  hell_pillar3: { gen: () => [genPillar(17, 14, 55, { slope: 3, drum: 12 })] },
+  hell_drum: { gen: () => [genDrum(5)] },
+  hell_wall1: { gen: () => [genWall(21, 26, 22, { ch: 5 })] },
+  hell_wall2: { gen: () => [genWall(33, 40, 26, { ch: 6, flip: true })] },
+  hell_arch: { gen: () => [genArch(9)] },
+  hell_stake: { frames: [STAKE] },
+  hell_seal: { emissive: 'rx', frames: [SEAL] },
+  hell_post_iron: { frames: [POST_IRON] },
 };
+
+// Where the ruins' piers stand, for their solids (art/landmarks.js): [left, right] columns of each.
+export const HELL_ARCH = ARCH;

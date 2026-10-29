@@ -162,22 +162,41 @@ export const FROZEN = {
   // Its ground (game/topology/corridor.js, 28 October 2026). The owner's: "The frost map goes up and
   // down feel free to add details to it like ice here and there - hero steps on the ice and continues
   // sliding until reaches regular ground ... Entrance to crypts are iglus here and there, some 2
-  // minutes apart." An endless corridor along y: open snow `band` px across (x about -750 to 750), ice
-  // cliffs and rock either side; a road winding up and down it; igloos beside the road (`off` px off
-  // its middle) a minute's walk from the start each way, then every two minutes' walk; a shrine every
-  // 35 s of walking; landmarks between; ice sheets and frozen ponds off the road (`patches`: 50-260 px
-  // across), half of them with rocks frozen in and at their rims (art/terrain.js: solid to the hero, so
-  // a slide stops on one); spires of rock and ice on the cliffs. Its fields are the Sunscorch's (its
-  // header says what each one is).
+  // minutes apart." An endless corridor along y: open snow `band` px across, ice cliffs and rock
+  // either side; a road winding up and down it; igloos beside the road (`off` px off its middle) a
+  // minute's walk from the start each way, then every two minutes' walk; a shrine every 35 s of
+  // walking; landmarks between; ice sheets and frozen ponds off the road (`patches`), half of them
+  // with rocks frozen in and at their rims (art/terrain.js: solid to the hero, so a slide stops on
+  // one); spires of rock and ice on the cliffs. Its fields are the Sunscorch's (its header says what
+  // each one is).
+  // Narrowed from 1,500 px to about 520 on 29 October 2026, the owner's, of the Sunscorch first: "make
+  // the desert map narrower, like (on average) the space, make it be slightly narrower than avg
+  // computer screen", then: "ok, also, then the frozen map must be made narrower." Its band runs
+  // across the screen's width, so by the same rule it is a little narrower than the view is wide
+  // (about 570-640 world px: engine/view.js), and both cliffs show at the screen's edges most of the
+  // time. Its faces swell `face.amp` px slowly and wobble `face.rough` finely, so the snow runs about
+  // 445-600 px across, 520 on average (x about -260 to 260; `band` is 514, as the swells lean a little
+  // outward on the whole). The road bends up to about a third of
+  // it (`road.amp`, about 170 px off its middle) and `hug`s the cliffs as they stand, never nearer
+  // either than `road.keep` (its edge about 85 px), easing in over its last `knee` px; an igloo whose
+  // own side of the road leaves it less than `crypts.room` px to the cliff stands across the road
+  // instead; each landmark is `fit` across beside the road (corridor.js fitLandmark: its props' feet
+  // `foot` px round, `road` px past the road's edge, `face` px short of the cliff, `pass` px of snow
+  // left past it across the road, so none ever closes the band), and the ice sheets and ponds are
+  // smaller (50-170 px across, 50-260 before), `fromFace` px off the cliffs, never alongside a
+  // landmark, a way of 120 px or more always left past them, their rocks as they were. About 16
+  // ice sheets and 2 landmarks every 10,000 px, as before. Its spires stand 30-120 px into the rock
+  // (40-220 before), on the strip of cliff the screen shows. Its gusts and the ice's slide are as they
+  // were; only the room changed.
   topology: {
-    kind: 'corridor', axis: 'y', band: 1500,
-    face: { amp: 80, wave: 1200, rough: 20, grain: 150, ridge: 260 },
-    road: { amp: 330, periods: [2700, 1600], wobble: 0.35, seg: 1024, keep: 200 },
-    crypts: { first: 4500, every: 9000, jitter: 1000, at: 'road', off: [70, 100], face: 'igloo' },
+    kind: 'corridor', axis: 'y', band: 514,
+    face: { amp: 68, wave: 1200, rough: 16, grain: 150, ridge: 260 },
+    road: { amp: 150, periods: [2700, 1600], wobble: 0.35, seg: 1024, keep: 90, hug: true, knee: 32 },
+    crypts: { first: 4500, every: 9000, jitter: 1000, at: 'road', off: [70, 100], room: 40, face: 'igloo' },
     shrines: { every: 2240, jitter: 250 },
-    landmarks: { share: 0.5, side: [180, 320], kinds: ['circle', 'woodcamp', 'ruins', 'graveyard'] },
-    patches: { kind: 'ice', cell: 800, per: [1, 1, 2], r: [25, 130], aspect: [0.55, 1], amp: 0.16, offRoad: 30, clear: 150, fromFace: 50, rocks: { share: 0.5, n: [1, 3], names: ['ice_rock1', 'ice_rock2', 'ice_rock3'] } },
-    spires: { name: ['ice_spire1', 'ice_spire2'], every: 140, depth: [40, 220] },
+    landmarks: { share: 0.5, kinds: ['circle', 'woodcamp', 'ruins', 'graveyard'], fit: { foot: 8, road: 10, face: 16, pass: 120 } },
+    patches: { kind: 'ice', cell: 800, per: [1, 1, 2], r: [25, 85], aspect: [0.55, 1], amp: 0.16, offRoad: 30, clear: 150, fromFace: 36, rocks: { share: 0.5, n: [1, 3], names: ['ice_rock1', 'ice_rock2', 'ice_rock3'] } },
+    spires: { name: ['ice_spire1', 'ice_spire2'], every: 140, depth: [30, 120] },
   },
   // How its ground is painted beyond darkwood.js's (game/topology/paint.js), by day: the cliffs' rock
   // (six tones of blue-grey, darker than the snow so the walls read), a band of face along them, snow

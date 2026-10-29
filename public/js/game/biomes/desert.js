@@ -191,27 +191,41 @@ export const DESERT = {
   // Its ground (game/topology/corridor.js, 28 October 2026). The owner's: "The desert map should be
   // long left to right map that has a mountain range at top and bottom. At the top, there is an
   // entrance of a cave every once in a while 2 mins walk apart roughly and that is basicallly the
-  // crypt. feel free to add quicksand". An endless corridor along x: open sand `band` px across (y
-  // about -600 to 600, the faces wobbling `face.amp` px slowly and `face.rough` px finely), the ranges
-  // beyond it; a caravan road winding along it, bending both ways up to `road.amp` px, never nearer
-  // a face than `road.keep`; caves a minute's walk from the start each way (`crypts.first` px, a bare
-  // Knight walking about 64 px/s on Normal), then every two minutes' walk (`every`, ± `jitter`), each
-  // down a footpath from the road; a shrine on the road every `shrines.every` px (35 s of walking);
-  // landmarks between the shrines (`share` of the gaps, `side` px off the road: ruins, a giant's
-  // bones, a stone circle, an oasis); quicksand pools (`patches`: per cell of `cell` px along x, one
-  // of `per`, `r` px round, `offRoad` px off its edge, `clear` px from a place, `fromFace` from a
-  // range), and spires on the ridges every `spires.every` px. Its jitters were made a little tighter
-  // than first planned (the shrines' 250, the caves' 1,000), so two shrines stand 1,700-2,800 px apart
-  // and two caves 7,000-11,000 (test/topology.test.js).
+  // crypt. feel free to add quicksand". An endless corridor along x: open sand `band` px across, the
+  // ranges beyond it; a caravan road winding along it; caves a minute's walk from the start each way
+  // (`crypts.first` px, a bare Knight walking about 64 px/s on Normal), then every two minutes' walk
+  // (`every`, ± `jitter`), each down a footpath from the road; a shrine on the road every
+  // `shrines.every` px (35 s of walking); landmarks between the shrines (`share` of the gaps: ruins,
+  // a giant's bones, a stone circle, an oasis); quicksand pools (`patches`: per cell of `cell` px
+  // along x, one of `per`, `r` px round, `offRoad` px off its edge, `clear` px from a place,
+  // `fromFace` from a range), and spires on the ridges every `spires.every` px. Its jitters were made
+  // a little tighter than first planned (the shrines' 250, the caves' 1,000), so two shrines stand
+  // 1,700-2,800 px apart and two caves 7,000-11,000 (test/topology.test.js).
+  // Narrowed from 1,200 px to 300 on 29 October 2026, the owner's: "make the desert map narrower,
+  // like (on average) the space, make it be slightly narrower than avg computer screen" (the view is
+  // about 320-360 world px tall: engine/view.js). Its faces swell `face.amp` px slowly and wobble
+  // `face.rough` finely, so the band runs about 220-370 px, 300 on average (y about -150 to 150);
+  // the road bends up to about 95 px off its middle (`road.amp`, every 1,100 and 1,900 px so it
+  // never runs straight for long in the narrow band) and `hug`s the faces as they stand, never
+  // nearer either than `road.keep` (its edge about 45 px), easing in over its last `knee` px; each
+  // landmark is `fit` across beside the road where it has room (its props' feet `foot` px round,
+  // `road` px past the road's edge, `face` px short of its range, and `pass` px of sand left past it
+  // across the road, so none ever closes the band: an oasis's water `pool` px round), and the pools
+  // are smaller (24-48 px across, 30-70 before), nearer the road and the ranges, never alongside a
+  // landmark. About 10 pools and 3 landmarks every 10,000 px (corridor.js fitLandmark, patchCell).
+  // Since the ranges are dry stone (the same day, game/topology/stone.js) the spires stand one or two
+  // to each `every` px on the ledges of its tiers in view, the upper ones first (`ledge`: stone.js
+  // spireFoot), never on a wall or a cap line; `depth` is the Frostfell's way, kept for the look's
+  // shape.
   topology: {
-    kind: 'corridor', axis: 'x', band: 1200,
-    face: { amp: 70, wave: 1100, rough: 18, grain: 160, ridge: 260 },
-    road: { amp: 300, periods: [2900, 1700], wobble: 0.35, seg: 1024, keep: 180 },
+    kind: 'corridor', axis: 'x', band: 300,
+    face: { amp: 58, wave: 1000, rough: 14, grain: 140, ridge: 260 },
+    road: { amp: 80, periods: [1900, 1100], wobble: 0.35, seg: 1024, keep: 56, hug: true, knee: 28 },
     crypts: { first: 4500, every: 9000, jitter: 1000, at: 'top', face: 'cliff' },
     shrines: { every: 2240, jitter: 250 },
-    landmarks: { share: 0.6, side: [160, 280], kinds: ['ruins', 'bones', 'circle', 'ruins', 'oasis', 'bones'] },
-    patches: { kind: 'quicksand', cell: 900, per: [0, 1, 1, 2], r: [15, 35], aspect: [0.8, 1], amp: 0.22, offRoad: 40, clear: 160, fromFace: 60, rocks: null },
-    spires: { name: ['mtn_spire1', 'mtn_spire2'], every: 120, depth: [40, 220] },
+    landmarks: { share: 0.6, kinds: ['ruins', 'bones', 'circle', 'ruins', 'oasis', 'bones'], pool: [18, 26], fit: { foot: 8, road: 10, face: 12, pass: 100 } },
+    patches: { kind: 'quicksand', cell: 900, per: [0, 1, 1, 2], r: [12, 24], aspect: [0.8, 1], amp: 0.22, offRoad: 26, clear: 160, fromFace: 28, rocks: null },
+    spires: { name: ['mtn_spire1', 'mtn_spire2'], every: 120, depth: [40, 220], ledge: true },
   },
   // How its ground is painted beyond darkwood.js's (game/topology/paint.js), by day: the ranges' rock
   // (six tones, dark to light: a red sandstone, darker and redder than any sand so the ranges never
@@ -220,11 +234,28 @@ export const DESERT = {
   // (five, all darker than the darkest sand by more than 0.12 in lightness, so a pool reads at a
   // glance), its pale dry rim and wet dark ring; an oasis's water (four); and the tell's colour, the
   // line drawn round a pool over the horde near the hero (Forest.drawTerrainTells).
+  //
+  // Since 29 October 2026 the ranges are dry stone (game/topology/stone.js), the owner's: "the mountain
+  // ridge looks kind of bad. It doesn't really look like a mountain. I provided you with example of what
+  // it could look like." His picture's style in our own tones: `stone` the walls' rounded stones (their
+  // outline first, then dark to light: a warm grey-brown, half as saturated as the sand and darker, so a
+  // wall never reads as a dune), `cap` the flat cobbles along every edge (the bottom range's dark lip at
+  // the band, their joints, then dark to pale), `top` the bare rock of the tiers (varnished red rock, dark
+  // to light, always darker than any sand: the high ground is never the walkable ground's colour) and
+  // `boulder` the outcrops and boulders on them (a rosier rock).
+  // `rock`, `face`, `lip` and `foot` are kept for what still reads them: the overview's preview
+  // (tools/mapgen/endless.mjs) colours a range `foot` along its edge and `rock` deeper in, so those two
+  // are now the walls' stone and the tops' red rock, and the map reads as the ranges drawn.
   terrain: {
-    rock: tones(['#4e2c1e', '#74412b', '#8c5234', '#a6643e', '#c07a4c', '#d89462']),
+    style: 'drystone',
+    stone: tones(['#2b1b1c', '#3a2622', '#46302a', '#54392f', '#61463a', '#7d5e4a', '#9b7c60', '#b89b7a']),
+    cap: tones(['#46302a', '#7d5e4a', '#8b6d55', '#9b7c60', '#a98b6d', '#b89b7a']),
+    top: tones(['#2e1b1d', '#4f2b25', '#6d3b2c', '#8a4d33', '#a3623f', '#ba7a50']),
+    boulder: tones(['#2e1b1d', '#4a2c28', '#5c3a33', '#6c463b', '#7d5244', '#8e6050', '#9e6d58', '#bf8d72']),
+    rock: tones(['#6d3b2c', '#7a4430', '#8a4d33', '#965738', '#a3623f', '#ba7a50']),
     face: tones(['#4a2a1c', '#5a3424', '#6c402a', '#7e4c32', '#925a3a']),
     lip: H('#e8b07a'),
-    foot: H('#2e1a12'),
+    foot: H('#61463a'),
     quicksand: tones(['#4a3424', '#57402b', '#634a31', '#705437', '#7c5d3c']),
     qsRim: H('#d9bf8e'),
     qsWet: H('#3a2618'),

@@ -17,7 +17,7 @@ import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE, LOCK_KIND, LOCK_GAP 
 import { view } from '../engine/view.js';
 import { input, padKey } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
-import { Player, ULT_DURATION, FURY, COOLDOWN_FLOOR } from './player.js';
+import { Player, ULT_DURATION, FURY, COOLDOWN_FLOOR, QUICKSAND } from './player.js';
 import { rangerPose } from './ranger-animation.js';
 import { faceAlong } from './facing.js';
 import { Weapon, aimAt } from './weapons.js';
@@ -1524,8 +1524,8 @@ export class Game {
       new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, look: cryptLookFor(d.key, this.look), lords: cryptLords(minute, d.depth) });
       p.x = this.world.start.x;
       p.y = this.world.start.y;
-      // Whatever of the map's ground held or carried him (quicksand, a gust's frost, a slide) stays up
-      // here: he goes down on his own feet (Player.clearTerrain, 28 October 2026).
+      // Whatever of the map's ground slowed, held or carried him (quicksand, a gust's frost, a slide)
+      // stays up here: he goes down on his own feet (Player.clearTerrain, 28 October 2026).
       p.clearTerrain();
       this.gatherMinions();
       this.snapCam();
@@ -2569,11 +2569,13 @@ export class Game {
         }
       }
     }
-    // Held by quicksand or frozen by a gust (28 October 2026, the owner's "hero steps in and cannot
-    // move for a few seconds"), the crowd moves him no more than his steering does (Player.update),
-    // as a boss never does; the foes on him are eased off alone. Never held in the Darkwood.
+    // Frozen by a gust (28 October 2026), the crowd moves him no more than his steering does
+    // (Player.update), as a boss never does; the foes on him are eased off alone. Wading in quicksand
+    // (29 October 2026: it slows him, never holds him) they ease him only as much slower as he walks
+    // (Player.sandPace), so the horde never carries him through it faster than he could wade. Never
+    // held nor wading in the Darkwood.
     if (live && !p.dead && !p.held && (sx || sy)) {
-      const H = CROWD.hero, k = 1 - Math.exp(-H.rate * dt), most = H.most * dt;
+      const H = CROWD.hero, k = 1 - Math.exp(-H.rate * dt), most = H.most * dt * p.sandPace;
       let mx = sx * k, my = sy * k;
       const m = Math.hypot(mx, my);
       if (m > most) {
@@ -2936,8 +2938,9 @@ export class Game {
   // Where the hero stands on the screen this frame and in which picture, unless he has fallen:
   // p._rect, [X, Y, w, h, frame, flip, picture, alpha, sink]. On a Survival map's ground (28 October
   // 2026): frozen by a gust, his standing frame in the frozen foes' ice tint (TINTS.frozen), still;
-  // sliding on ice, his standing frame, no bob; held in quicksand, sunk `sink` px into it, as many rows
-  // cut off his feet as he is drawn lower (heroImage), so his feet stay at the sand's top.
+  // sliding on ice, his standing frame, no bob; wading in quicksand (29 October 2026), walking on,
+  // sunk `sink` px into it (Player.sink, easing in and out), as many rows cut off his feet as he is
+  // drawn lower (heroImage), so his feet stay at the sand's top.
   placePlayer(c) {
     const p = this.player;
     const S = c.S;
@@ -3021,32 +3024,35 @@ export class Game {
     if (p.dead || !p._rect) return;
     const r = p._rect;
     if (this.heroCovered && !(p.ult && p.ult.type === 'shadowdance')) this.drawHeroRing(ctx, c, 0.8);
-    if (p.held) this.drawHold(ctx, c);
+    if (p.held || p.sink > 0) this.drawHold(ctx, c);
     ctx.globalAlpha = r[7];
     heroImage(ctx, r[6], r, c.S);
     ctx.globalAlpha = 1;
     this.drawPlayerEmissive(ctx);
   }
 
-  // A Survival map's hold on the hero (Player.held, 28 October 2026), drawn just under him so no crowd
-  // hides it: its clock, an arc round his feet running down as the hold does, in the sand's colour or
-  // the ice's (REQS2: every trap readable, and how long it holds him too); and in quicksand the sinking
-  // swirl he stands in (art/terrain.js fx_quicksand).
+  // What a Survival map's ground does to the hero, drawn just under him so no crowd hides it (REQS2:
+  // every trap readable). Wading in quicksand, the sinking swirl he wades in (art/terrain.js
+  // fx_quicksand), as strong as he is sunk (Player.sink); it slows him and never holds him (29 October
+  // 2026), so it has no clock. Frozen by a gust (Player.held, 28 October 2026), the hold's clock, an arc
+  // round his feet running down as the hold does, in the ice's colour (how long it holds him too).
   drawHold(ctx, c) {
     const p = this.player, h = p.held, S = c.S, M = HERO_MARK, lw = Math.max(1, Math.round(S));
     const sx = (p.x - c.x) * S, sy = (p.y + 1 - c.y) * S;
-    const spr = h.kind === 'sand' && SPR.fx_quicksand;
+    const spr = p.sink > 0 && SPR.fx_quicksand;
     if (spr) {
       const img = spr.frames[Math.floor(this.clock * (spr.fps || 5)) % spr.frames.length].c, w = img.width * S, hh = img.height * S;
-      ctx.globalAlpha = 0.8;
+      ctx.globalAlpha = 0.8 * Math.min(1, p.sink / QUICKSAND.sink);
       ctx.drawImage(img, Math.round(sx - w / 2), Math.round(sy - hh / 2), w, hh);
     }
-    ctx.globalAlpha = 0.9;
-    ctx.strokeStyle = h.kind === 'sand' ? '#c28569' : '#9ee7ff';
-    ctx.lineWidth = lw;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, (M.rx + 3) * S, (M.ry + 2) * S, 0, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(h.t / h.max, 0, 1));
-    ctx.stroke();
+    if (h) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#9ee7ff';
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, (M.rx + 3) * S, (M.ry + 2) * S, 0, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(h.t / h.max, 0, 1));
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -3108,8 +3114,8 @@ function standsOver(o, p) {
 }
 
 // The hero's picture, or its glowing parts, at his rectangle r (Game.placePlayer): whole; or, sunk in
-// quicksand (r[8] px, 28 October 2026), with that many rows cut off its foot and drawn that much
-// shorter, as he is drawn that much lower, so his feet stay at the sand's top.
+// quicksand as he wades (r[8] px, 28 and 29 October 2026), with that many rows cut off its foot and
+// drawn that much shorter, as he is drawn that much lower, so his feet stay at the sand's top.
 function heroImage(ctx, img, r, S) {
   const sink = r[8] || 0;
   if (!sink) {

@@ -1,17 +1,31 @@
 // How game/topology's ground is painted (28 October 2026): after darkwood.js paintChunk has painted a
 // chunk's ground, roads, tufts and pebbles (and its cracks' glow), this overpaints what the terrain
 // makes of it, from the very fields that hold the hero (topology/terrain.js), so the edge seen is the
-// edge felt. The Sunscorch's ranges (ridged rock lit from the top left, a cliff face under the top
-// range with its cave mouths' recesses) and its quicksand and oases; the Frostfell's cliffs (snow on
-// their ridges) and ice; the Abyss's lava (crust at its edges, a short dark cliff under each island's
-// south rim, glowing into the night's light) or the void (black, a speck here and there, strata
-// fading into the dark under the south rims, a lit lip on the others), and its bridges' decks of
-// planks, bone or stone, each casting its shade on what is below. Pure, on packed pixels as paintChunk:
-// slow noise on an 8 px grid per chunk, never a noise call per pixel. The palettes are the look's own
-// (look.terrain, biomes/<look>.js).
+// edge felt. The Sunscorch's ranges (since 29 October 2026 in dry stone, topology/stone.js: walls of
+// rounded stones in tiers, the band's own under the top range with its cave mouths' arches) and its
+// quicksand and oases; the Frostfell's cliffs (snow on their ridges) and ice; the Abyss's lava (crust at
+// its edges, a short dark cliff under each island's south rim, glowing into the night's light) or the
+// void (black, a speck here and there, strata fading into the dark under the south rims, a lit lip on
+// the others), and its bridges' decks of planks, bone or stone, each casting its shade on what is below.
+// Pure, on packed pixels as paintChunk: slow noise on an 8 px grid per chunk, never a noise call per
+// pixel. The palettes are the look's own (look.terrain, biomes/<look>.js).
 
 import { fbm, valueNoise, hash2 } from '../../engine/util.js';
 import { TN, TSTEP, TMAX, TCHUNK, SURFACE } from './terrain.js';
+import { paintStone, groundRows as stoneRows } from './stone.js';
+import { paintQuilt } from './paint-quilt.js';
+import { paintAbyss } from './abyss.js';
+
+// The rows of a chunk whose ground below must be painted, [a, b), for darkwood.js paintChunk (its
+// `rows`), or null for all of them: the Sunscorch's dry-stone ranges (29 October 2026) paint every
+// pixel above the top range's face and below the bottom range's over whole, so the sand there would
+// never be seen (about a third of a chunk's time, on a chunk of the ranges). Every other look's
+// terrain keeps the ground it paints over at its edges, so it gets all of it. The Abyss's floor (29
+// October 2026, topology/abyss.js) paints every pixel of its chunks: none.
+export function groundRows(tc, look, topo) {
+  if (tc && tc.any && look.terrain?.style === 'abyss') return [0, 0];
+  return tc && tc.any && look.terrain?.style === 'drystone' ? stoneRows(tc.x0, tc.y0, topo) : null;
+}
 
 const CH = TCHUNK, N8 = CH / 8 + 1;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5);
@@ -56,14 +70,19 @@ const at8 = (a, x, y) => {
 export function paintTerrain(tc, px, glow, look, topo) {
   if (!look.terrain || !tc.any) return;
   const P = signed(look.terrain);
-  // (The Bloomvale's own surfaces, when it has them (world spec 6c), are painted here by its own
-  // function: `if (look.id === 'meadow') paintMeadow(tc, px, glow, look, topo);`.)
+  // The Abyss's grey Act IV floor (29 October 2026) is painted whole by its own function.
+  if (P.style === 'abyss') return paintAbyss(tc, px, glow, P, topo);
+  // The Bloomvale's quilt of flower fields (29 October 2026) is painted by its own function.
+  if (topo && topo.kind === 'quilt') return paintQuilt(tc, px, P, topo);
   const { x0, y0, open: O, patch: PT, deck: DK } = tc, gap = tc.blocked === SURFACE.GAP;
   const lava = gap && topo.variant === 'lava', s = topo.s || 0;
+  // The Sunscorch's ranges are dry stone (29 October 2026, topology/stone.js): painted after the rest,
+  // over every pixel of rock; this loop keeps only its oases and quicksand.
+  const stone = P.style === 'drystone';
   let minOpen = TMAX;
   if (O) for (let c = 0; c < O.length; c++) if (O[c] < minOpen) minOpen = O[c];
   // Slow noise, only where it is wanted.
-  const rock = !gap && minOpen < 0;
+  const rock = !gap && minOpen < 0 && !stone;
   // The ranges' ridges on the 8 px grid, and how each point of it faces the light (from its neighbours
   // 8 px either side, one point past the chunk's edge so the next chunk's agree along the seam).
   let ridgeG = null, litG = null;
@@ -95,8 +114,30 @@ export function paintTerrain(tc, px, glow, look, topo) {
   if (decks) mapDecks(tc);
   // The pools (an oasis's water) and caves near this chunk.
   const pools = tc.pools, caves = tc.caves;
+  // A corridor's faces along the chunk, every 4 px of u (its lo, hi and their slopes: corridor.js
+  // terrain()'s very formula), for its rock past the field's reach. The fields stop at TMAX px into the
+  // rock, so there its terraces ran out along a straight line and the side face's band fell away (the
+  // field flat, no way out of it); the Frostfell, narrowed to about 520 px on 29 October 2026, shows
+  // that line whenever the hero is near a cliff. Past DEEP_IN px in, its depth and the way out of the
+  // land are worked out from the faces themselves, so the terraces run on as they began.
+  let FL = null;
+  if (rock && topo && topo.kind === 'corridor') {
+    const ax = topo.axis === 'x', u0 = ax ? x0 : y0, L = new Float32Array(TN + 2), H = new Float32Array(TN + 2);
+    for (let m = 0; m < TN + 2; m++) {
+      L[m] = topo.lo(u0 + (m - 1) * TSTEP);
+      H[m] = topo.hi(u0 + (m - 1) * TSTEP);
+    }
+    FL = new Float32Array(TN * 4);
+    for (let a = 0; a < TN; a++) {
+      FL[a * 4] = L[a + 1];
+      FL[a * 4 + 1] = H[a + 1];
+      FL[a * 4 + 2] = (L[a + 2] - L[a]) / 8;
+      FL[a * 4 + 3] = (H[a + 2] - H[a]) / 8;
+    }
+  }
+  const DEEP_IN = TMAX - 8, axX = topo && topo.axis === 'x';
 
-  for (let y = 0; y < CH; y++) {
+  for (let y = 0; y < (stone && !pools.length && !PT ? 0 : CH); y++) {
     const j = y >> 2, fy = (y & 3) * 0.25, wy = y0 + y;
     for (let x = 0; x < CH; x++) {
       const i = x >> 2, fx = (x & 3) * 0.25, c = j * TN + i, wx = x0 + x, k = y * CH + x;
@@ -139,7 +180,7 @@ export function paintTerrain(tc, px, glow, look, topo) {
         continue;
       }
       if (o < 0) {
-        const h = -o;
+        let h = -o;
         // An oasis's water: lighter 2 px in from its edge.
         let pool = false;
         for (let q = 0; q < pools.length && !pool; q++) {
@@ -154,6 +195,20 @@ export function paintTerrain(tc, px, glow, look, topo) {
           px[k] = gapPixel(P, lava, h, nxo, nyo, wx, wy, bay, lavaG, x, y, glow, k);
           continue;
         }
+        if (stone) continue;
+        // Past the field's reach in a corridor's rock: its depth and way out from the faces (FL above).
+        let rx = nxo, ry = nyo;
+        if (FL && h > DEEP_IN) {
+          const a = axX ? x : y, q = (a >> 2) * 4, t = (a & 3) * 0.25, v = axX ? wy : wx;
+          const l = FL[q] + (FL[q + 4] - FL[q]) * t, hv = FL[q + 1] + (FL[q + 5] - FL[q + 1]) * t;
+          const sl = FL[q + 2] + (FL[q + 6] - FL[q + 2]) * t, sh = FL[q + 3] + (FL[q + 7] - FL[q + 3]) * t;
+          const nl = 1 / Math.sqrt(1 + sl * sl), nh = 1 / Math.sqrt(1 + sh * sh), dl = (l - v) * nl, dh = (v - hv) * nh;
+          // Out of the land, along u and across v: (sl, -1) x nl past the lo face, (-sh, 1) x nh past the hi.
+          const ou = dl >= dh ? sl * nl : -sh * nh, ov = dl >= dh ? -nl : nh;
+          h = Math.max(h, dl, dh);
+          rx = axX ? ou : ov;
+          ry = axX ? ov : ou;
+        }
         const ci = (y >> 3) * N8 + (x >> 3), tx = (x & 7) / 8, ty = (y & 7) / 8, w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
         const ridge = ridgeG[ci] * w00 + ridgeG[ci + 1] * w10 + ridgeG[ci + N8] * w01 + ridgeG[ci + N8 + 1] * w11;
         const lit = litG[ci] * w00 + litG[ci + 1] * w10 + litG[ci + N8] * w01 + litG[ci + N8 + 1] * w11;
@@ -165,7 +220,7 @@ export function paintTerrain(tc, px, glow, look, topo) {
         // little face where it looks south, a shadow line where it does not), a lit lip at its top, the
         // step's top lit from the top left by the ridges' slope and lighter the higher it stands, dark
         // crevices along the ridges' valleys; snow on the Frostfell's ledges and high ridges.
-        const f = Math.max(0, Math.min(1, (-nyo - 0.35) / 0.3)), side = Math.max(0, Math.min(1, (Math.abs(nxo) - 0.5) / 0.3));
+        const f = Math.max(0, Math.min(1, (-ry - 0.35) / 0.3)), side = Math.max(0, Math.min(1, (Math.abs(rx) - 0.5) / 0.3));
         const fh = FACE_H * Math.max(f, 0.42 * side);
         let col;
         if (h < fh) {
@@ -180,7 +235,7 @@ export function paintTerrain(tc, px, glow, look, topo) {
         } else if (fh < 14 && h < fh + 2.4) col = h < fh + 1.2 ? P.lip : P.rock[5];
         else if (ridge < 0.05 + bay * 0.03) col = P.rock[0]; // a crevice
         else {
-          const fs = Math.max(0, Math.min(1, (-nyo - 0.05) / 0.4)); // how much a step's riser shows
+          const fs = Math.max(0, Math.min(1, (-ry - 0.05) / 0.4)); // how much a step's riser shows
           const q = (h - fh + ridge * 36) / 22, step = Math.floor(q), fr = q - step, riser = 0.07 + 0.2 * fs;
           if (fr < riser) {
             if (fs < 0.3) col = P.rock[0];
@@ -221,11 +276,13 @@ export function paintTerrain(tc, px, glow, look, topo) {
       if (gap) {
         if (lava && o < 6) px[k] = mix(px[k], P.lava.crust[1], (1 - o / 6) * 0.45);
         else if (!lava && o < 1.5 && nyo < 0.35) px[k] = P.lip;
-      } else if (o < 3 && (nxo < -0.3 || nyo < -0.3)) px[k] = shade(px[k], 0.78 + o * 0.05);
+      } else if (!stone && o < 3 && (nxo < -0.3 || nyo < -0.3)) px[k] = shade(px[k], 0.78 + o * 0.05);
     }
   }
-  // The caves' recesses, cut into the cliff round their doors (the door's sprite covers its middle).
-  for (const cv of caves) paintCave(P, cv, x0, y0, px);
+  // The caves' recesses, cut into the cliff round their doors (the door's sprite covers its middle);
+  // the Sunscorch's ranges and its caves' arches in dry stone.
+  if (stone) paintStone(tc, px, P, topo);
+  else for (const cv of caves) paintCave(P, cv, x0, y0, px);
   // A deck's shade on the lava or the void just south of it.
   if (decks && DK && BOX[2] >= 0) {
     for (let y = BOX[1]; y <= Math.min(CH - 1, BOX[3] + 3); y++) {

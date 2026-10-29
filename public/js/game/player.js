@@ -89,13 +89,19 @@ export const RIME = { r: 50, base: 1, per: 0.2, rest: 7, cut: 0.6 };
 // `every` s.
 export const GROVE = { near: 48, every: 0.25 };
 // What a Survival map's own ground does to him (game/topology, 28 October 2026), only where the map
-// has such ground (g.world.topo: never in the Darkwood, Ranked, a crypt or on the road by day). Each
-// hold is short, drawn (Game.drawHero: a timer arc round his feet) and followed by a grace to walk out
-// in (REQS2: every trap readable and fair); his weapons fire on through all of it, and he can be hit.
-// The Sunscorch's quicksand, the owner's "feel free to add quicksand, hero steps in and cannot move for
-// a few seconds": held `hold` s, sinking `sink` px; then `grace` s in which no quicksand takes him, to
-// walk out. It takes him once his feet are `enter` px inside its rim.
-export const QUICKSAND = { hold: 2.5, grace: 1.5, sink: 4, enter: 2 };
+// has such ground (g.world.topo: never in the Darkwood, Ranked, a crypt or on the road by day). Every
+// trap is readable and fair (REQS2): a hold (a gust's frost) is short, drawn (Game.drawHero: a timer
+// arc round his feet) and followed by a grace to walk out in; his weapons fire on through all of it,
+// and he can be hit.
+// The Sunscorch's quicksand. It held him at first, the owner's "feel free to add quicksand, hero steps
+// in and cannot move for a few seconds" (2.5 s, then a grace); then the owner's of 29 October 2026:
+// "quicksand, make it so that it doesnt exactly stop the hero, but only greatly slows him down, for
+// like 2/3 slower". So it never holds him: wading in it he walks at `pace` of his pace, once his feet
+// are `enter` px inside its rim, the slow easing in over those px from the rim (and out over them as
+// he wades out), so its edge never snaps (Player.wade, sandPace). He sinks `sink` px into it over
+// `settle` s and rises out as fast once he is out, the tell that it has him. A leap carries him over
+// it unslowed, and the horde crosses it freely.
+export const QUICKSAND = { pace: 1 / 3, enter: 4, sink: 4, settle: 0.35 };
 // The Frostfell's ice, the owner's "hero steps on the ice and continues sliding until reaches regular
 // ground. If hits wall while sliding will stop and can decide where to slide next": a slide at `speed`
 // times his walking speed along the way he came on, the player's steering ignored; begun by walking on
@@ -167,9 +173,10 @@ export class Player {
     this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
     this.groveT = 0;
     // A Survival map's ground (QUICKSAND, ICE, FROST): none of it ever set in the Darkwood.
-    this.held = null; // { kind: 'sand' | 'frost', t, max }: HELD in quicksand or FROZEN by a gust; he can't move
-    this.sandFree = 0; // s left in which no quicksand takes him
+    this.held = null; // { kind: 'frost', t, max }: FROZEN by a gust; he can't move
     this.frostFree = 0; // s left in which no gust freezes him
+    this.wade = 0; // WADING: how deep his feet are in quicksand, 0 (out of it) to 1 (QUICKSAND.enter px in)
+    this.sink = 0; // and how far he has sunk into it, px (Game.placePlayer cuts that much off his feet)
     this.slide = null; // { x, y }: SLIDING, the unit heading of a slide on ice under way
     this.onIce = false; // standing on ice, not sliding (a direction pressed starts a slide)
     this.sprayT = 0; // the ice thrown up as he slides (update)
@@ -291,9 +298,10 @@ export class Player {
 
   // The Twin Axes' leap (weapons.js LEAP): to (x, y) over LEAP.dur s, onLand then. The leap is his
   // own blow carrying him, never a blow shoving him, and it only goes where the weapon found open.
-  // Held by quicksand or a gust's frost (28 October 2026) he can't leap out of it: the blow falls
-  // where he stands (onLand at once), so the axes keep chopping while he is held, as every other
-  // weapon keeps firing. A leap from a slide ends the slide (he lands standing: update). Whether he leapt.
+  // Frozen by a gust's frost (28 October 2026) he can't leap out of it: the blow falls where he
+  // stands (onLand at once), so the axes keep chopping while he is held, as every other weapon keeps
+  // firing. Out of quicksand he leaps as far as ever, as it never holds him (29 October 2026). A leap
+  // from a slide ends the slide (he lands standing: update). Whether he leapt.
   leapTo(x, y, onLand, dur = 0.16) {
     if (this.held) {
       onLand();
@@ -321,55 +329,51 @@ export class Player {
   // he comes back to by its door start him on his own feet.
   clearTerrain() {
     this.held = null;
-    this.sandFree = 0;
     this.frostFree = 0;
+    this.wade = 0;
+    this.sink = 0;
     this.slide = null;
     this.onIce = false;
   }
 
-  // How far he has sunk into quicksand, in px (Game.placePlayer cuts that much off his feet): down
-  // to QUICKSAND.sink over his first 0.35 s in it.
-  get sink() {
-    const h = this.held;
-    return h && h.kind === 'sand' ? QUICKSAND.sink * Math.min(1, (h.max - h.t) / 0.35) : 0;
+  // The share of his pace the quicksand leaves him (QUICKSAND): all of it out of it, QUICKSAND.pace
+  // wading in it, between the two at its rim. Exactly 1 wherever there is no quicksand.
+  get sandPace() {
+    return 1 - (1 - QUICKSAND.pace) * this.wade;
   }
 
-  // The ground's clocks: the graces run down, and a hold run out lets him go into its own grace
-  // (QUICKSAND.grace, FROST.grace), to walk out of the sand or away from where the gust blew. They
-  // stand still with everything else under a level-up's cards, a chest, a find or the pause (Game.update).
+  // The ground's clocks: the gust's grace runs down, and its hold run out lets him go into the grace
+  // (FROST.grace), to walk away from where the gust blew. They stand still with everything else under
+  // a level-up's cards, a chest, a find or the pause (Game.update). Quicksand has no clock: it never
+  // holds him (29 October 2026).
   holdClock(dt) {
-    if (this.sandFree > 0) this.sandFree -= dt;
     if (this.frostFree > 0) this.frostFree -= dt;
     const h = this.held;
     if (h && (h.t -= dt) <= 0) {
       this.held = null;
-      if (h.kind === 'sand') this.sandFree = QUICKSAND.grace;
-      else this.frostFree = FROST.grace;
+      this.frostFree = FROST.grace;
     }
   }
 
   // What the ground under his feet does to him, on a Survival map's own ground (g.world.topo; the
-  // world's surfaceAt and patchDepth, game/topology). Quicksand takes him once his feet are
-  // QUICKSAND.enter px in, out of its grace and not in the air; ice carries him on at the pace he came
-  // on with (a leap comes down standing on it), and once he is ICE.leave px off it his steering is his
-  // again, his pace easing from the slide's. `landed`: a leap came down this frame.
-  groundUnder(g, landed) {
+  // world's surfaceAt and patchDepth, game/topology). Quicksand slows him by how deep his feet are in
+  // it (wade: smoothly from nothing at its rim to all of it QUICKSAND.enter px in), never in the air,
+  // and he sinks into it as he wades and rises out after, QUICKSAND.sink px in QUICKSAND.settle s
+  // (sink); ice carries him on at the pace he came on with (a leap comes down standing on it), and
+  // once he is ICE.leave px off it his steering is his again, his pace easing from the slide's.
+  // `landed`: a leap came down this frame.
+  groundUnder(g, landed, dt) {
     const w = g.world, s = w.surfaceAt(this.x, this.y);
-    if (s !== SURFACE.QUICKSAND && s !== SURFACE.ICE && !this.slide && !this.onIce) return;
-    const pd = w.patchDepth(this.x, this.y);
-    if (s === SURFACE.QUICKSAND) {
-      if (pd > QUICKSAND.enter && this.sandFree <= 0 && !this.held && !this.leap) {
-        this.held = { kind: 'sand', t: QUICKSAND.hold, max: QUICKSAND.hold };
-        this.vx = 0;
-        this.vy = 0;
-        this.moving = false;
-        this.slide = null;
-        this.onIce = false;
-        g.numbers.text(this.x, this.y - 22, 'Quicksand!', 'gold');
-        sfx('thunk');
-      }
-      return;
+    if (s === SURFACE.QUICKSAND && !this.leap) {
+      const k = clamp(w.patchDepth(this.x, this.y) / QUICKSAND.enter, 0, 1);
+      this.wade = k * k * (3 - 2 * k);
+    } else this.wade = 0;
+    if (this.sink || this.wade) {
+      const to = QUICKSAND.sink * this.wade, most = (QUICKSAND.sink / QUICKSAND.settle) * dt;
+      this.sink = this.sink < to ? Math.min(to, this.sink + most) : Math.max(to, this.sink - most);
     }
+    if (s !== SURFACE.ICE && !this.slide && !this.onIce) return;
+    const pd = w.patchDepth(this.x, this.y);
     if (s === SURFACE.ICE && pd > ICE.enter && !this.slide && !this.held && !this.leap) {
       const v = Math.hypot(this.vx, this.vy);
       if (v > ICE.start && !landed) this.slide = { x: this.vx / v, y: this.vy / v };
@@ -430,9 +434,9 @@ export class Player {
         if (id === 'mirror') this.recompute(); // the extra shot goes
       }
     }
-    // Movement. A Survival map's ground may hold him (HELD in quicksand, FROZEN by a gust) or carry
-    // him (SLIDING on ice): its clocks first, then the player's steering, unless the ground has him.
-    // In the Darkwood none of it is ever set, and he steers exactly as he always did.
+    // Movement. A Survival map's ground may slow him (WADING in quicksand), hold him (FROZEN by a
+    // gust) or carry him (SLIDING on ice): its clocks first, then the player's steering, unless the
+    // ground has him. In the Darkwood none of it is ever set, and he steers exactly as he always did.
     this.holdClock(dt);
     const ax = input.axis();
     const sp = this.moveSpeed;
@@ -464,8 +468,11 @@ export class Player {
       this.vy = 0;
       this.moving = false;
     } else {
-      this.vx = damp(this.vx, ax.x * sp, 16, dt);
-      this.vy = damp(this.vy, ax.y * sp, 16, dt);
+      // Walking; wading in quicksand, at as little as QUICKSAND.pace of his pace (sandPace: 1 out of it,
+      // so the Darkwood's steps are exactly as they were).
+      const pace = sp * this.sandPace;
+      this.vx = damp(this.vx, ax.x * pace, 16, dt);
+      this.vy = damp(this.vy, ax.y * pace, 16, dt);
       this.moving = pressed;
       if (this.moving) {
         this.aim = Math.atan2(ax.y, ax.x);
@@ -514,16 +521,23 @@ export class Player {
       }
     }
     // What the ground under him does, where the map has ground of its own (never in the Darkwood).
-    if (g.world.topo) this.groundUnder(g, landed);
+    if (g.world.topo) this.groundUnder(g, landed, dt);
+    else this.wade = this.sink = 0;
     const spd = Math.hypot(this.vx, this.vy);
     this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
-    if (this.slide) {
+    if (this.slide && this.id !== 'rogue') {
       // Sliding: ice thrown up from under him instead of dust, and no step heard.
       if ((this.sprayT -= dt) <= 0) {
         this.sprayT = 0.06;
         g.particles.emit(this.x + rand(-3, 3), this.y, 0, -this.vx * 0.2 + rand(-10, 10), -this.vy * 0.2 + rand(-5, 5), rand(10, 20), 0.35, 1, rand(1) < 0.5 ? PC.w : PC.c, P.FADE | P.GROUND, 3, 60);
       }
-    } else if (this.moving) {
+    } else if (this.moving && this.id !== 'rogue') {
+      // Wading in quicksand: the wet sand he churns thrown up about his shins, as often however slowly
+      // he goes (29 October 2026). Never out of it, so the Darkwood's dice fall as they did.
+      if (this.wade > 0.5 && (this.sprayT -= dt) <= 0) {
+        this.sprayT = 0.1;
+        g.particles.emit(this.x + rand(-4, 4), this.y + rand(-1, 1), 0, rand(-12, 12), rand(-4, 4), rand(14, 26), 0.35, 1, rand(1) < 0.5 ? PC.b : PC.S, P.FADE | P.GROUND, 3, 80);
+      }
       this.stepT -= dt * spd;
       if (this.stepT <= 0) {
         this.stepT = 22;
