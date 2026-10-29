@@ -1,6 +1,6 @@
 // Plumed knight by Mattz Art: https://xzany.itch.io/free-knight-2d-pixel-art
 // The exact normalized frames selected in the comparer, in the colours picked in
-// the Sprite Lab (recoloured.js; data.js keeps the original colours).
+// the Sprite Lab (recoloured.js; the original is archived outside the published game).
 // Asset terms are preserved in public/assets/knight-plumed/LICENSE.txt.
 import data from '../../assets/knight-plumed/recoloured.js';
 

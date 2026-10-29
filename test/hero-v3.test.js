@@ -1,4 +1,4 @@
-// Active sprite review regressions: V3 survives as Paladin/Berserker's baseline.
+// Production animation regressions for the single approved roster.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -11,35 +11,11 @@ import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
-const heroes = Object.values(HEROES).filter(h => h.skins);
-const proposals = heroes.flatMap(h => h.skins.slice(1).map(s => ({ h, skin: s.id })));
+const heroes = Object.values(HEROES).filter(h => h.id !== 'knight');
+const proposals = heroes.map(h => ({ h, skin: 'selected' }));
 const settingsFor = (id, skin) => ({ diff: 'easy', numbers: false, skins: { [id]: skin } });
 
-function silhouette(spr, index) {
-  const f = spr.frames[index], points = new Set();
-  for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) {
-    if (f.buf.d[y * f.w + x] >>> 24) points.add(`${x - f.w / 2},${y - spr.anchorY}`);
-  }
-  return points;
-}
-
-test('all sixteen options change model geometry and expose visible matching menu poses', () => {
-  assert.equal(proposals.length, 16);
-  for (const { h, skin } of proposals) {
-    const look = heroLook(h.id, { [h.id]: skin }), original = SPR[h.id], next = SPR[look.sprite];
-    assert.notEqual(look.sprite, h.id);
-    const a = silhouette(original, original.idle[0]), b = silhouette(next, next.idle[0]);
-    const changed = [...a].filter(p => !b.has(p)).length + [...b].filter(p => !a.has(p)).length;
-    assert.ok(changed > 0, `${h.id}/${skin}: geometry changes, not just recolouring or padding`);
-    assert.ok(SPR[look.pose]?.frames.every(f => f.buf.d.some(c => c >>> 24)), `${h.id}/${skin}: visible matching menu pose`);
-  }
-  for (const h of heroes) {
-    const a = SPR[heroLook(h.id, { [h.id]: 'v4a' }).sprite], b = SPR[heroLook(h.id, { [h.id]: 'v4b' }).sprite];
-    assert.notDeepEqual(silhouette(a, a.idle[0]), silhouette(b, b.idle[0]), h.id + ': A and B are distinct models');
-  }
-});
-
-test('all proposals draw complete idle, walk and attack cycles in both directions without clipping', () => {
+test('all selected heroes draw complete idle, walk and attack cycles in both directions without clipping', () => {
   const box = { x: 12, y: 16, w: 220, h: 200 };
   for (const { h, skin } of proposals) {
     const label = `${h.id}/${skin}`, profile = defaultProfile(), snapshot = JSON.stringify(profile), settings = settingsFor(h.id, skin);
@@ -65,14 +41,14 @@ test('all proposals draw complete idle, walk and attack cycles in both direction
   }
 });
 
-test('proposals preserve stats, weapons, movement, animation cadence and strike damage timing', () => {
+test('selected sprites preserve stats, weapons, movement, animation cadence and strike damage timing', () => {
   const profile = defaultProfile();profile.up = { vitality: 2, might: 2, armor: 1 };
   const meta = metaBonuses(profile);
   for (const { h, skin } of proposals) {
     const label = `${h.id}/${skin}`, options = { hero: h.id, mode: 's15', diff: 'easy', meta, crypts: false };
-    const original = new Game({ ...options, settings: settingsFor(h.id, h.skins[0].id) }), next = new Game({ ...options, settings: settingsFor(h.id, skin) });
+    const original = new Game({ ...options, settings: settingsFor(h.id, 'original') }), next = new Game({ ...options, settings: settingsFor(h.id, skin) });
     const a = SPR[original.player.hero.sprite], b = SPR[next.player.hero.sprite];
-    assert.equal(next.player.hero.skin, skin);
+    assert.equal(next.player.hero.sprite, h.id);
     assert.deepEqual(next.player.derived(), original.player.derived(), label + ': combat stats');
     assert.equal(next.player.moveSpeed, original.player.moveSpeed, label + ': movement speed');
     assert.equal(strikeClip(b)?.delay, strikeClip(a)?.delay, label + ': strike damage timing');
@@ -83,11 +59,11 @@ test('proposals preserve stats, weapons, movement, animation cadence and strike 
   }
 });
 
-test('Paladin baseline and proposals keep helmet, neck and chest joined through all poses', () => {
+test('the selected Paladin keep helmet, neck and chest joined through all poses', () => {
   const anchors = [[0,0],[0,0],[0,0],[0,1],[0,1],[0,1],[0,0],[0,0],
     [1,1],[1,1],[1,0],[1,0],[1,1],[1,1],[1,0],[1,0],
     [0,0],[-1,0],[1,0],[2,1],[2,1],[1,0]];
-  for (const skin of ['v3', 'v4a', 'v4b']) {
+  for (const skin of ['selected']) {
     const frames = SPR[heroLook('paladin', { paladin: skin }).sprite].frames;
     assert.equal(frames.length, anchors.length);
     for (const [i, [ux, by]] of anchors.entries()) {
@@ -107,10 +83,10 @@ test('Paladin baseline and proposals keep helmet, neck and chest joined through 
   }
 });
 
-test('both Ranger proposals release projectiles on running bow-release frames in both directions', () => {
+test('the selected Ranger release projectiles on running bow-release frames in both directions', () => {
   const previous = input.bot;
   try {
-    for (const skin of ['v4a', 'v4b']) for (const face of [-1, 1]) {
+    for (const skin of ['selected']) for (const face of [-1, 1]) {
       input.bot = { x: face, y: 0 };
       const g = new Game({ hero: 'archer', mode: 's15', meta: metaBonuses(defaultProfile()), settings: settingsFor('archer', skin), crypts: false });
       g.spawner.update = () => {};g.player.devGod = true;
@@ -133,11 +109,11 @@ test('both Ranger proposals release projectiles on running bow-release frames in
   } finally { input.bot = previous; }
 });
 
-test('all three Shadows hover at rest and moving without footstep dust', () => {
+test('the selected Shadow hover at rest and moving without footstep dust', () => {
   const previous = input.bot;
   try {
     input.bot = { x: 1, y: 0 };
-    for (const skin of ['original', 'v4a', 'v4b']) {
+    for (const skin of ['selected']) {
       const g = new Game({ hero: 'rogue', mode: 's15', meta: metaBonuses(defaultProfile()), settings: settingsFor('rogue', skin), crypts: false });
       const p = g.player, spr = SPR[p.hero.sprite];
       assert.deepEqual(spr.walk, spr.idle, skin + ': one continuous float loop');

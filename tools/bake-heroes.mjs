@@ -54,7 +54,7 @@ function entryFor(pick) {
   throw new Error(`${pick}: not in the lab's catalogue or versions`);
 }
 
-const out = join(root, 'public/assets/heroes');
+const out = join(root, 'tools/art-v4/archive/heroes');
 mkdirSync(out, { recursive: true });
 for (const [name, pick] of Object.entries(BAKE)) {
   const e = entryFor(pick);

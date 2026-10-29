@@ -11,18 +11,18 @@ const { HeroShowcase } = await import('../../public/js/ui/hero-showcase.js');
 const { defaultProfile } = await import('../../public/js/shared/profile.js');
 buildSprites();
 const profile = defaultProfile();
-const baseline = process.argv.includes('--baseline');
-const out = baseline ? 'output/hero-v4/baseline' : 'output/hero-v4/review';
+const baseline = process.argv.includes('--still');
+const out = 'output/hero-v4/selected';
 mkdirSync(out, { recursive: true });
-const ids = Object.keys(HEROES).filter(id => id !== 'knight');
-const labels = ['PLUMED KNIGHT', 'KEPT BASELINE', 'OPTION A', 'OPTION B'];
+const ids = Object.keys(HEROES);
+const labels = ['SELECTED'];
 const w = 240, h = 220;
-const overview = createCanvas(w * 4, (h + 28) * ids.length), oc = overview.getContext('2d');
+const overview = createCanvas(w * 3, (h + 28) * Math.ceil(ids.length / 3)), oc = overview.getContext('2d');
 oc.imageSmoothingEnabled = false;
 const report = {};
 for (const [row, id] of ids.entries()) {
-  const choices = baseline ? ['original', ['paladin','berserker'].includes(id) ? 'v3' : 'original'] : [HEROES[id].skins[0].id, 'v4a', 'v4b'];
-  const shows = ['knight', ...choices.map(() => id)].map((hero, col) => {
+  const choices = ['selected'];
+  const shows = [id].map((hero, col) => {
     const settings = { diff: 'easy', numbers: false, skins: { [hero]: choices[col - 1] } };
     return { hero, settings, show: new HeroShowcase(hero, profile, settings), seen: {} };
   });
@@ -36,11 +36,11 @@ for (const [row, id] of ids.entries()) {
       show.update(baseline ? 0 : 1 / 60);
       show.draw(ctx, { x: col * w, y: 28, w, h }, false, settings);
       ctx.fillStyle = '#e5d3ac'; ctx.font = '13px sans-serif';
-      ctx.fillText(`${col ? HEROES[id].title + ' / ' : ''}${baseline ? (col === 0 ? 'KNIGHT' : choices[col - 1]) : labels[col]}`, col * w + 12, 19);
+      ctx.fillText(HEROES[id].title + ' / SELECTED', col * w + 12, 19);
       const spr = SPR[show.game.player.hero.sprite], key = `${show.action.kind}:${show.game.player.face}`;
       (seen[key] ??= new Set()).add(spr.frames.indexOf(show.game.player._rect[4]));
     }
-    if (frame === 0) oc.drawImage(canvas, 0, row * (h + 28));
+    if (frame === 0) oc.drawImage(canvas, (row % 3) * w, Math.floor(row / 3) * (h + 28));
     if (!baseline && frame % 3 === 0) writeFileSync(`${out}/${id}/${String(frame / 3).padStart(3, '0')}.png`, canvas.toBuffer('image/png'));
   }
   report[id] = shows.map(({ hero, show, seen }) => ({ hero, sprite: show.game.player.hero.sprite,

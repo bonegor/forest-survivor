@@ -1,6 +1,4 @@
-// A hero's looks (data/heroes.js skins), chosen on the hero screen and remembered with the
-// settings. The approved defaults ship without a browser preference; retained
-// baselines and both review options remain selectable.
+// Only the owner-selected sprite is available; legacy settings cannot replace it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
@@ -10,11 +8,9 @@ import { SPR } from '../public/js/engine/sprites.js';
 import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
-test('every hero has an original and optional look with complete sprites and poses', () => {
+test('every selected hero has complete sprites and poses without alternative looks', () => {
   for (const h of Object.values(HEROES)) {
-    if (h.id === 'knight') assert.equal(h.skins, undefined);
-    else assert.deepEqual(h.skins.map(s => s.id), [['paladin','berserker'].includes(h.id) ? 'v3' : 'original', 'v4a', 'v4b'], h.id);
-    for (const skin of h.skins || []) assert.ok(SPR[skin.sprite] && SPR[skin.pose], `${h.id}: ${skin.id} art`);
+    assert.equal(h.skins, undefined, h.id + ": no alternative looks");
     assert.ok(SPR[h.sprite] && SPR[h.pose], `${h.id}: its sprite and pose`);
   }
   const p = SPR[HEROES.paladin.sprite];
@@ -35,7 +31,7 @@ test('a run remembered in a look that is gone is played in the hero\'s own', () 
   try {
     const meta = metaBonuses(defaultProfile());
     const g = new Game({ hero: 'paladin', mode: 's15', meta, settings: { numbers: false, skins: { paladin: 'd' } }, crypts: false });
-    assert.equal(g.player.hero.sprite, 'paladin_v4a', 'a retired look resolves to approved Iron Vow');
+    assert.equal(g.player.hero.sprite, 'paladin', 'a retired look resolves to approved Iron Vow');
     for (let i = 0; i < 120; i++) g.update(1 / 60); // swings and walks in it without trouble
     assert.ok(!g.player.dead);
   } finally {

@@ -2,24 +2,20 @@ import { buildSprites } from '../js/engine/sprites.js';
 import { initView, view, presentUI } from '../js/engine/view.js';
 import { initInput, input } from '../js/engine/input.js';
 import { Game } from '../js/game/game.js';
-import { HEROES, heroLook } from '../js/data/heroes.js';
+import { HEROES } from '../js/data/heroes.js';
 import { defaultProfile, metaBonuses } from '../js/shared/profile.js';
 const query = new URLSearchParams(location.search), id = HEROES[query.get('hero')] ? query.get('hero') : 'paladin';
-const canvas = document.querySelector('canvas'), choose = document.querySelector('#look');
+const canvas = document.querySelector('canvas');
 buildSprites(); initView(canvas); initInput(canvas);
-const options = HEROES[id].skins || [{ id: 'original', name: 'Plumed Knight' }];
-for (const look of options) choose.add(new Option(look.name, look.id));
-choose.value = options.some(o => o.id === query.get('look')) ? query.get('look') : options[0].id;
 document.querySelector('#name').textContent = HEROES[id].title;
 document.querySelector('#back').href = `./?hero=${id}`;
 let game, paused = false;
 function reset() {
   game = new Game({ hero: id, mode: 's15', diff: 'easy', meta: metaBonuses(defaultProfile()), crypts: false,
-    settings: { numbers: false, screenshake: false, skins: { [id]: choose.value } } });
+    settings: { numbers: false, shake: false } });
   game.player.devGod = true;
   game.syncCam(); game.cam.x = game.player.x - game.cam.W / 2; game.cam.y = game.player.y - 8 - game.cam.H / 2;
 }
-choose.addEventListener('change', () => { game.player.hero = heroLook(id, { [id]: choose.value }); game.settings.skins[id] = choose.value; });
 document.querySelector('#reset').addEventListener('click', reset);
 const pause = document.querySelector('#pause');
 pause.addEventListener('click', () => { paused = !paused; pause.textContent = paused ? 'Play' : 'Pause'; });

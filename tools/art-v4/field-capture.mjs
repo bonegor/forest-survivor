@@ -39,9 +39,9 @@ function action(t) {
 }
 const oldRandom = Math.random, oldBot = input.bot;
 try {
-  for (const id of ids) for (const option of ['a', 'b']) {
+  for (const id of ids) for (const option of ['selected']) {
     Math.random = mulberry32(29471);
-    const settings = { diff: 'easy', numbers: true, softFlash: true, skins: { [id]: `v4${option}` } };
+    const settings = { diff: 'easy', numbers: true, softFlash: true, skins: {} };
     const g = new Game({ hero: id, mode: 's15', map: process.env.FIELD_MAP || 'forest', diff: 'easy', meta: metaBonuses(profile), settings, crypts: false });
     // Staged targets give every weapon combat to display within this short take.
     // They use the real Enemy and weapon systems; only the random waves are quiet.
@@ -87,7 +87,7 @@ try {
         const x = card % 4 * W, y = Math.floor(card / 4) * (H + 24);
         mc.fillStyle = '#151923'; mc.fillRect(x, y, W, H + 24);
         mc.fillStyle = '#e5d3ac'; mc.font = '14px sans-serif';
-        mc.fillText(`${HEROES[id].title} / option ${option.toUpperCase()} / real combat`, x + 10, y + 17);
+        mc.fillText(`${HEROES[id].title} / approved sprite / real combat`, x + 10, y + 17);
         mc.drawImage(canvas, x, y + 24);
       }
     }

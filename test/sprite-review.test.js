@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {readFileSync, existsSync} from 'node:fs';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 
-// The hero sprite review published at gamevibe.si/97sjbk94u6md/ (public/97sjbk94u6md/).
+// The hero sprite review published at gamevibe.si/97sjbk94u6md/ (tools/art-v4/archive/review-oct15/).
 const root = fileURLToPath(new URL('../',import.meta.url));
 const mod = file => import(pathToFileURL(root + '/' + file).href);
 const {readPng} = await mod('tools/png.mjs');
-const R = await mod('public/97sjbk94u6md/recolour.js');
-const manifest = JSON.parse(readFileSync(root + 'public/97sjbk94u6md/heroes.json', 'utf8'));
+const R = await mod('tools/art-v4/archive/review-oct15/recolour.js');
+const manifest = JSON.parse(readFileSync(root + 'tools/art-v4/archive/review-oct15/heroes.json', 'utf8'));
 
 // The Sprite Lab's colour bar, its pure part, without the game's sprite classes it also imports.
 const labSource = readFileSync(root + 'gms/3001/lib/recolour.js', 'utf8')
@@ -16,7 +16,7 @@ const labSource = readFileSync(root + 'gms/3001/lib/recolour.js', 'utf8')
 const Lab = await import('data:text/javascript;base64,' + Buffer.from(labSource).toString('base64'));
 
 test('the page tunes colours exactly as the Sprite Lab does', () => {
-  const pic = readPng(root + 'public/97sjbk94u6md/heroes/mage/game.png');
+  const pic = readPng(root + 'tools/art-v4/archive/review-oct15/heroes/mage/game.png');
   const looks = [
     R.neutral(),
     {...R.neutral(), hue: 40, sat: 30},
@@ -40,7 +40,7 @@ test("a saved look's code names the hero, the version and the sliders moved, and
   assert.equal(R.parsePickCode('hello'), null);
 });
 
-test('the ranger, the sorcerer and the necromancer each have the sprite in the game and at least three new versions', () => {
+test('the ranger, the sorcerer and the necromancer each have the archived baseline and at least three historical versions', () => {
   assert.deepEqual(manifest.heroes.map(h => h.id), ['archer', 'mage', 'necromancer']);
   for (const h of manifest.heroes) {
     const kinds = h.versions.map(v => v.kind);
@@ -48,7 +48,7 @@ test('the ranger, the sorcerer and the necromancer each have the sprite in the g
     assert.ok(kinds.filter(k => k === 'new').length >= 3, `${h.id}: ${kinds.filter(k => k === 'new').length} new versions`);
     assert.equal(new Set(h.versions.map(v => v.id)).size, h.versions.length, `${h.id}: ids are unique`);
     for (const v of h.versions) {
-      const file = root + 'public/97sjbk94u6md/' + v.file;
+      const file = root + 'tools/art-v4/archive/review-oct15/' + v.file;
       assert.ok(existsSync(file), v.file);
       const pic = readPng(file);
       assert.deepEqual([pic.w, pic.h], [48, 48], v.file);
@@ -59,5 +59,5 @@ test('the ranger, the sorcerer and the necromancer each have the sprite in the g
       for (const g of v.glow) assert.ok(colours.has(g), `${v.file}: glows in ${g}, a colour it has`);
     }
   }
-  assert.ok(existsSync(root + 'public/97sjbk94u6md/' + manifest.knight.file), 'the knight, for scale');
+  assert.ok(existsSync(root + 'tools/art-v4/archive/review-oct15/' + manifest.knight.file), 'the knight, for scale');
 });

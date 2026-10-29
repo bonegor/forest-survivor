@@ -4,7 +4,6 @@ import { KNIGHT_PLUMED } from './knight-plumed.js';
 import { ARCHER_SHEET, ARCHER_POSE, MAGE_SHEET, MAGE_POSE, NECROMANCER_SHEET, NECROMANCER_POSE, ROGUE_SHEET, ROGUE_POSE,
   PALADIN_SHEET, PALADIN_POSE, DRUID_SHEET, DRUID_POSE, BERSERKER_SHEET, BERSERKER_POSE, WITCHHUNTER_SHEET, WITCHHUNTER_POSE } from './hero-sheets.js';
 import { KNIGHT_PORTRAIT_V2 } from './knight-portrait-v2.js';
-import { HERO_REVIEW_ART } from './hero-review.js';
 
 export const HERO_ART = {
   // Mattz Art's plumed knight, selected from the free online sprite packs.
@@ -14,8 +13,7 @@ export const HERO_ART = {
   // their own sheet (background.js).
   knight_pose: KNIGHT_PORTRAIT_V2,
 
-  // Retained originals, except Paladin and Berserker which use their unchanged V3.
-  // Their menu poses are their own idle loops; two review alternatives follow below.
+  // Only the owner-approved sprite for each hero. Menu poses use the same model.
   archer: ARCHER_SHEET,
   archer_pose: ARCHER_POSE,
   mage: MAGE_SHEET,
@@ -33,5 +31,3 @@ export const HERO_ART = {
   witchhunter: WITCHHUNTER_SHEET,
   witchhunter_pose: WITCHHUNTER_POSE,
 };
-
-Object.assign(HERO_ART, HERO_REVIEW_ART);

@@ -31,7 +31,7 @@ export function renderSource(file, name) {
 
 export async function bake(id, file, animation) {
   const rendered = renderSource(file, animation);
-  const base = id === 'knight' ? {} : (await import(pathToFileURL(resolve(`public/assets/heroes/${id}.js`)))).default;
+  const base = id === 'knight' ? {} : (await import(pathToFileURL(resolve(`tools/art-v4/archive/heroes/${id}.js`)))).default;
   const palette = [0], indexes = new Map([[0, 0]]);
   const raw = rendered.frames.map(b => [...b.d].map(c => {
     if (!indexes.has(c)) { indexes.set(c, palette.length);palette.push(c); }
@@ -42,7 +42,7 @@ export async function bake(id, file, animation) {
   const data = { ...base, ...rendered.metadata, pick: `v3:${id}`, name: `${id} V3`, w: rendered.frames[0].w, h: rendered.frames[0].h,
     ...(rendered.glow ? { glow: rendered.glow } : {}), palette, indexBytes, frames };
   if (data.glow) data.glow = data.glow.filter(c => indexes.has(c));
-  const target = resolve(`public/assets/heroes-v3/${id}.js`);
+  const target = resolve(`tools/art-v4/archive/heroes-v3/${id}.js`);
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, `// V3 structural redraw. Source: ${file.replaceAll('\\', '/')}\n// Rebuild: node tools/art-v3/bake.mjs ${id} ${file.replaceAll('\\', '/')} ${animation}\nexport default ${JSON.stringify(data)};\n`);
   console.log(`${id}: ${frames.length} frames, ${palette.length - 1} colours → ${target}`);

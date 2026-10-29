@@ -1,6 +1,5 @@
 import { input, padKey } from '../engine/input.js';
 import { SPR, idleFrame } from '../engine/sprites.js';
-import { saveSettings } from '../engine/storage.js';
 import { sfx, playAfterJingle } from '../engine/audio.js';
 import { clamp, fmtTime } from '../engine/util.js';
 import { HEROES, HERO_ORDER, heroLook, startWeapons } from '../data/heroes.js';
@@ -9,7 +8,7 @@ import { PROGRESS } from '../shared/progress.js';
 import { MAP_LADDER } from '../data/maps.js';
 import { nextHeroUnlock, nextGoal, openFor, HERO_UNLOCK_TIME } from '../shared/profile.js';
 import { SLOTS, SLOT_NAMES, itemName, itemLines, RARITIES } from '../shared/items.js';
-import { panel, button, stepper, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
+import { panel, button, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { heroCrop, mix } from './scenes.js';
 import { goalText, featStars } from './ladder.js';
 import { flank } from './skin.js';
@@ -137,15 +136,8 @@ export class HeroScreen {
   }
 
   appearance(ctx, ui, h, box, locked) {
-    const skins = HEROES[h.id].skins, app = this.app;
-    if (skins && !locked) {
-      const cur = skins.find(s => s.id === app.settings.skins?.[h.id]) || skins.find(s => s.id === HEROES[h.id].skin) || skins[0];
-      const d = stepper(ctx, ui, 'look', box.x + 3, box.y + box.h - 16, box.w - 6, 'LOOK', cur.name.toUpperCase());
-      if (d) {
-        app.settings.skins = { ...app.settings.skins, [h.id]: skins[(skins.indexOf(cur) + d + skins.length) % skins.length].id };
-        saveSettings(app.settings);sfx('select');
-      }
-    } else {
+    const app = this.app;
+    {
       // Every star he has earned, each in its colour (ladder.js featStars: the wins, then their marks).
       const earned = featStars(app.store.profile, h.id).filter(s => s[2]);
       // Ready for the night, on whichever Survival map it falls (28 October 2026).

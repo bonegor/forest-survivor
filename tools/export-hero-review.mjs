@@ -19,7 +19,7 @@ const { writePng } = await mod('tools/png.mjs');
 const oct14 = (await mod('gms/3001/sprites/lab/src/standing-oct14.js'));
 if (!SPR.knight) buildSprites();
 
-const OUT = join(ROOT, 'public/97sjbk94u6md');
+const OUT = join(ROOT, 'tools/art-v4/archive/review-oct15');
 // Written afresh each time, so a version dropped from a source leaves no picture behind.
 rmSync(join(OUT, 'heroes'), { recursive: true, force: true });
 const pal = packedPalette();

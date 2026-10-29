@@ -155,7 +155,7 @@ The clock keeps **real time**: the 15-minute night takes 15 minutes, and the 5:0
 
 ### The unlock ladder
 
-1. You start with the **Knight** and **15-minute Survival** in the Sunscorch only. The approved **Plumed Knight** stays unchanged. Each other hero has its retained baseline and two new sprite proposals, selected with **LOOK** beneath the hero preview: Paladin and Berserker retain V3; Ranger, Sorcerer, Shadow, Necromancer, Druid and Witch Hunter retain their originals. The approved defaults are Moonsteel Huntress, Ember Sage, Nightveil, Bone Regent, Iron Vow, Oakwarden and Red Fang; Witch Hunter keeps Original. Missing or retired LOOK settings use these approved defaults. Compare the proposals at `/skins/`, or run `npm run lab` and open `http://localhost:3001/game/skins/` for an isolated review. See `tools/art-v4/README.md` for native sources, captures and rebuilding.
+1. You start with the **Knight** and **15-minute Survival** in the Sunscorch only. Each hero has exactly one approved sprite: Plumed Knight, Moonsteel Huntress, Ember Sage, Nightveil, Bone Regent, Iron Vow, Oakwarden, Red Fang and the original Witch Hunter. There is no LOOK selector; old appearance settings cannot restore discarded variants. View the approved roster at `/skins/`. Source studies are archived outside `public/` and are not published.
 2. Last **5 minutes** on the clock with a hero to unlock the next hero, free. A banner says so at 5:00, and the hero is yours when the run ends, whether you win, fall or quit.
 3. Surviving the night with the **Necromancer** opens the **Dungeon**, for the Knight only at first.
 4. **Beat the Dungeon** with a hero to bring the next hero into it.
