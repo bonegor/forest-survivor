@@ -8,7 +8,7 @@
 //
 // What goes in (releaseFiles): the page and its icon, the game's code without the developer panel
 // (js/dev) and the bots (js/bots), the art (assets/), and of the music only the pieces
-// audio/music/tracks.json plays, with their credits and licences, and the recorded sound effects
+// audio/music/tracks.json plays and the combat selector's short previews, with their credits and licences, and the recorded sound effects
 // (audio/sfx/). Not the menu-music candidates,
 // the unlisted pages, nor anything else in public/. Every module the game imports must be in the
 // copy, or the build fails (checkImports).
@@ -37,8 +37,12 @@ function walk(pub, dir) {
 
 export function releaseFiles(pub = PUBLIC) {
   const tracks = JSON.parse(readFileSync(join(pub, MUSIC, 'tracks.json'), 'utf8'));
-  const music = Object.values(tracks).map((e) => MUSIC + (typeof e === 'string' ? e : e.file));
-  for (const f of music) if (!existsSync(join(pub, f))) throw new Error(`tracks.json lists ${f}, which isn't there`);
+  const previewManifest = MUSIC + 'combat/previews/manifest.json';
+  const previewFiles = existsSync(join(pub, previewManifest))
+    ? [previewManifest, ...JSON.parse(readFileSync(join(pub, previewManifest), 'utf8')).tracks.map((e) => MUSIC + 'combat/previews/' + e.file)]
+    : [];
+  const music = [...Object.values(tracks).map((e) => MUSIC + (typeof e === 'string' ? e : e.file)), ...previewFiles];
+  for (const f of music) if (!existsSync(join(pub, f))) throw new Error(`Music manifest lists ${f}, which isn't there`);
   const files = [
     'index.html',
     'favicon.svg',

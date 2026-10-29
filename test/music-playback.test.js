@@ -49,19 +49,19 @@ async function player(t, options = {}) {
     cancelScheduledValues(time) { this.events.push(['cancel', time]); }
     setValueAtTime(value, time) { this.value = value; this.events.push(['set', value, time]); }
     linearRampToValueAtTime(value, time) { this.events.push(['ramp', value, time]); }
-    setTargetAtTime(value, time, constant) { this.events.push(['target', value, time, constant]); }
+    setTargetAtTime(value, time, constant) { this.value = value; this.events.push(['target', value, time, constant]); }
   }
-  const node = () => ({ connect() {}, disconnect() {} });
+  const node = () => ({ connections: [], connect(target) { this.connections.push(target); }, disconnect() {} });
   let context;
   class Context {
-    constructor() { context = this; this.sampleRate = 10; this.state = 'running'; this.destination = node(); this.resumes = 0; }
+    constructor() { context = this; this.sampleRate = 10; this.state = 'running'; this.destination = node(); this.resumes = 0; this.gains = []; this.mediaSources = []; }
     get currentTime() { return ms / 1000; }
-    createGain() { return { ...node(), gain: new Param() }; }
+    createGain() { const gain = { ...node(), gain: new Param() }; this.gains.push(gain); return gain; }
     createDynamicsCompressor() {
       return { ...node(), ...Object.fromEntries(['threshold', 'knee', 'ratio', 'attack', 'release'].map((name) => [name, { value: 0 }])) };
     }
     createBuffer(channels, frames) { return { getChannelData: () => new Float32Array(frames) }; }
-    createMediaElementSource() { return node(); }
+    createMediaElementSource(el) { const source = node(); this.mediaSources.push({ el, source }); return source; }
     resume() { this.resumes++; this.state = 'running'; return Promise.resolve(); }
   }
   const media = [];
@@ -76,7 +76,17 @@ async function player(t, options = {}) {
     set currentTime(value) { this.time = value; this.seeks.push(value); if (value < this.duration) this.ended = false; }
     addEventListener(name, fn) { this.listeners.set(name, fn); }
     emit(name) { this.listeners.get(name)?.(); }
-    play() { this.plays++; this.paused = false; return Promise.resolve(); }
+    play() {
+      this.plays++; this.paused = false;
+      if (this.src.includes('/previews/')) {
+        if (options.previewPlay === 'reject') return Promise.reject(new Error('Blocked or missing preview'));
+        if (options.previewPlay === 'deferred') return new Promise((resolve, reject) => {
+          this.begin = () => { this.paused = false; resolve(); };
+          this.fail = reject;
+        });
+      }
+      return Promise.resolve();
+    }
     pause() { this.pauses++; this.paused = true; }
     load() {}
   }
@@ -107,8 +117,8 @@ async function player(t, options = {}) {
 
 const combatManifest = Object.fromEntries(COMBAT_MUSIC.map((track) => [track.piece, { file: track.file, gapless: true }]));
 
-test('combat music settings accept only the four published choices and default to Clockwork Charge', () => {
-  assert.equal(COMBAT_MUSIC.length, 4);
+test('combat music settings accept only the eight published choices and default to Clockwork Charge', () => {
+  assert.equal(COMBAT_MUSIC.length, 8);
   assert.equal(DEFAULT_COMBAT_MUSIC, 'clockwork-charge');
   for (const track of COMBAT_MUSIC) assert.equal(normalizeCombatMusic(track.id), track.id);
   for (const stale of [undefined, null, '', 'old-song', '__proto__', { id: 'spark-rush' }]) {
@@ -355,4 +365,188 @@ test('legacy MP3s retain two players and their lead-in crossfade, while jingles 
   jingle.voices[0].el.emit('ended');
   assert.equal(api.musicState().piece, 'title');
   assert.equal(api.musicState().after, null);
+});
+
+test('a preview plays only its short middle excerpt for ten seconds and restores the menu without restarting it', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  api.playMusic('title');
+  const title = media[0]; title.currentTime = 72;
+  api.previewCombatMusic('steel-tread');
+  await Promise.resolve();
+  const excerpt = media[1];
+  assert.equal(excerpt.src, 'audio/music/combat/previews/steel-tread-10s.mp3');
+  assert.equal(excerpt.loop, false);
+  assert.equal(excerpt.currentTime, 0);
+  assert.equal(media.length, 2, 'browsing does not load any full combat recordings');
+  assert.deepEqual(api.combatMusicPreview(), { id: 'steel-tread', playing: true, seconds: 10, sourceStart: 445 });
+  assert.equal(api.musicState().backgroundGain, 0);
+  assert.equal(api.musicState().piece, 'title');
+  tick(9999);
+  assert.equal(excerpt.paused, false);
+  tick(1);
+  assert.equal(excerpt.paused, true);
+  assert.equal(api.combatMusicPreview(), null);
+  assert.equal(api.musicState().backgroundGain, 1);
+  assert.equal(title.currentTime, 72);
+  assert.equal(title.plays, 1);
+});
+
+test('confirmed combat choices wait for the preview to finish, then start the selected full recording', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  api.playMusic('forest');
+  const old = media[0]; old.currentTime = 283;
+  api.previewCombatMusic('bootheel-loop');
+  api.setCombatMusic('bootheel-loop');
+  await Promise.resolve();
+  assert.equal(api.musicState().piece, 'combat-clockwork-charge');
+  assert.equal(api.musicState().combatMusic, 'bootheel-loop');
+  assert.equal(media.length, 2, 'there is no full-recording burst before the excerpt');
+  tick(10000);
+  assert.equal(api.musicState().piece, 'combat-bootheel-loop');
+  assert.equal(media.length, 3);
+  assert.equal(media[2].src, 'audio/music/combat/bootheel-loop-v2-15m.mp3');
+  assert.equal(media[2].currentTime, 0);
+  tick(300);
+  assert.equal(old.paused, true);
+});
+
+test('browsing a different track without confirming it restores the existing combat recording and position', async (t) => {
+  const { api, media } = await player(t, { manifest: combatManifest });
+  api.playMusic('forest');
+  const original = media[0]; original.currentTime = 164;
+  api.previewCombatMusic('neon-motor');
+  await Promise.resolve();
+  api.stopCombatMusicPreview();
+  assert.equal(api.musicState().combatMusic, 'clockwork-charge');
+  assert.equal(api.musicState().piece, 'combat-clockwork-charge');
+  assert.equal(original.currentTime, 164);
+  assert.equal(original.plays, 1);
+  assert.equal(api.musicState().backgroundGain, 1);
+});
+
+test('rapid previews replace each other and stale playing or ended callbacks cannot revive an old excerpt', async (t) => {
+  const { api, tick, media } = await player(t, { previewPlay: 'deferred' });
+  api.previewCombatMusic('steel-tread');
+  const old = media[0];
+  api.previewCombatMusic('neon-motor');
+  const current = media[1];
+  assert.equal(old.paused, true);
+  old.begin(); old.emit('playing'); old.emit('ended');
+  await Promise.resolve();
+  assert.equal(old.paused, true);
+  assert.equal(api.combatMusicPreview().id, 'neon-motor');
+  assert.equal(api.musicState().backgroundGain, 0);
+  current.begin(); await Promise.resolve();
+  tick(5000);
+  api.previewCombatMusic('neon-motor');
+  assert.equal(media.length, 2, 'drawing the same focused option does not restart it');
+  tick(5000);
+  assert.equal(api.combatMusicPreview(), null);
+  assert.equal(current.paused, true);
+});
+
+test('the ten-second limit starts with actual playback, not the initial loading request', async (t) => {
+  const { api, tick, media } = await player(t, { previewPlay: 'deferred' });
+  api.previewCombatMusic('lantern-guard');
+  const excerpt = media[0];
+  tick(4000);
+  assert.equal(api.combatMusicPreview().playing, false);
+  excerpt.begin(); await Promise.resolve();
+  tick(9999);
+  assert.equal(api.combatMusicPreview().playing, true);
+  tick(1);
+  assert.equal(api.combatMusicPreview(), null);
+});
+
+test('preview failure and missing-media errors restore music, and obsolete failure callbacks do not stop a new preview', async (t) => {
+  const { api, media } = await player(t, { previewPlay: 'deferred' });
+  api.playMusic('title');
+  api.previewCombatMusic('steel-tread');
+  const old = media[1];
+  api.previewCombatMusic('neon-motor');
+  const current = media[2];
+  old.fail(new Error('Late failed request')); await Promise.resolve();
+  assert.equal(api.combatMusicPreview().id, 'neon-motor');
+  current.emit('error');
+  assert.equal(api.combatMusicPreview(), null);
+  assert.equal(api.musicState().backgroundGain, 1);
+  assert.equal(api.musicState().piece, 'title');
+  assert.equal(media[0].plays, 1);
+});
+
+test('buffering does not consume the remaining preview, and playback resumes with only its remaining seconds', async (t) => {
+  const { api, tick, media } = await player(t);
+  api.previewCombatMusic('neon-motor'); await Promise.resolve();
+  const excerpt = media[0];
+  excerpt.currentTime = 4;
+  tick(4000); excerpt.emit('waiting');
+  tick(8000);
+  assert.equal(api.combatMusicPreview().playing, false);
+  excerpt.emit('playing');
+  tick(5999);
+  assert.equal(api.combatMusicPreview().playing, true);
+  tick(1);
+  assert.equal(api.combatMusicPreview(), null);
+});
+
+test('a request that never starts times out safely and its late play resolution stays silent', async (t) => {
+  const { api, tick, media } = await player(t, { previewPlay: 'deferred' });
+  api.previewCombatMusic('spark-rush');
+  const excerpt = media[0];
+  tick(15000);
+  assert.equal(api.combatMusicPreview(), null);
+  assert.equal(api.musicState().backgroundGain, 1);
+  excerpt.begin(); await Promise.resolve();
+  assert.equal(excerpt.paused, true);
+});
+
+test('previews share the music volume and mute bus while leaving sound effects alone', async (t) => {
+  const { api, context, media } = await player(t);
+  api.setVolumes(.4, .7);
+  api.previewCombatMusic('steel-tread'); await Promise.resolve();
+  const source = context.mediaSources.find((entry) => entry.el === media[0]).source;
+  const gain = source.connections[0], musicBus = gain.connections[0];
+  assert.equal(musicBus, context.gains[2]);
+  assert.equal(musicBus.gain.value, .2);
+  assert.equal(context.gains[1].gain.value, .7 * .8);
+  api.toggleMute();
+  assert.equal(musicBus.gain.value, 0);
+  api.stopCombatMusicPreview();
+  assert.equal(musicBus.gain.value, 0, 'ending a preview cannot undo mute');
+  api.toggleMute();
+  assert.equal(musicBus.gain.value, .2);
+});
+
+test('real game cues cancel previews immediately and no timer changes the new playback later', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  api.previewCombatMusic('steel-tread'); await Promise.resolve();
+  api.setCombatMusic('steel-tread');
+  api.playMusic('forest');
+  assert.equal(api.combatMusicPreview(), null);
+  assert.equal(media[0].paused, true);
+  assert.equal(api.musicState().piece, 'combat-steel-tread');
+  tick(12000);
+  assert.equal(api.musicState().piece, 'combat-steel-tread');
+  for (const action of [() => api.cutToMusic('boss'), () => api.playJingle('victory'), () => api.stopMusic()]) {
+    api.previewCombatMusic('lantern-guard'); await Promise.resolve();
+    action();
+    assert.equal(api.combatMusicPreview(), null);
+    assert.equal(api.musicState().backgroundGain, 1);
+  }
+});
+
+test('preview before audio unlock and a late manifest never starts a full recording until audition ends', async (t) => {
+  const { api, media, finishManifest } = await player(t, { manifest: combatManifest, deferManifest: true, init: false });
+  api.playMusic('forest');
+  api.previewCombatMusic('steel-tread');
+  api.setCombatMusic('steel-tread');
+  await Promise.resolve();
+  assert.equal(media.length, 1);
+  assert.equal(media[0].src, 'audio/music/combat/previews/steel-tread-10s.mp3');
+  await finishManifest();
+  api.initAudio();
+  assert.equal(media.length, 1, 'manifest arrival/unlock leaves the preview in control');
+  api.stopCombatMusicPreview();
+  assert.equal(media.length, 2);
+  assert.equal(api.musicState().piece, 'combat-steel-tread');
 });

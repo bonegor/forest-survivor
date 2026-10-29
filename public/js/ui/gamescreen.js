@@ -2,7 +2,7 @@
 // (level up, treasure chests, gear found, pause, results) on top.
 
 import { input, padKey } from '../engine/input.js';
-import { sfx, playMusic } from '../engine/audio.js';
+import { sfx, playMusic, stopCombatMusicPreview } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
@@ -24,6 +24,7 @@ import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas
 import { buttonFace } from './skin.js';
 import { OptionsScreen, codexBar } from './screens.js';
 import { saveSettings, seenBox } from '../engine/storage.js';
+import { MusicMenu } from './music-menu.js';
 
 export class GameScreen {
   enter(app, params = {}) {
@@ -73,6 +74,7 @@ export class GameScreen {
   }
 
   leave() {
+    stopCombatMusicPreview();
     input.joystickEnabled = false;
     input.touchRegions = null;
     input.stick.active = false;
@@ -1544,12 +1546,20 @@ export class PauseOverlay {
     this.gs = gs;
     this.g = gs.game;
     this.options = null;
+    this.musicMenu = null;
     this.confirm = false;
     gs.app.ui.focusId = 'resume';
   }
 
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, g = this.g, app = this.gs.app;
+    if (this.musicMenu) {
+      if (this.musicMenu.draw(ctx, W, H, dt) === 'close') {
+        this.musicMenu = null;
+        ui.focus('music');
+      }
+      return null;
+    }
     if (this.options) {
       const r = this.options.draw(ctx, W, H, dt, true);
       if (r === 'close') {
@@ -1563,7 +1573,7 @@ export class PauseOverlay {
     const p = g.player, auto = FILLERS[g.autoPick]?.short;
     // As tall as the build it shows (its longer column), the buttons and, if any, the ALWAYS line.
     const listed = Math.max(1, p.weapons.length, p.passives.size);
-    const pw = Math.min(W - 16, 320), ph = Math.min(H - 20, 26 + 12 + listed * 15 + 8 + 58 + (auto ? 18 : 0));
+    const pw = Math.min(W - 16, 320), ph = Math.min(H - 20, 26 + 12 + listed * 15 + 8 + 76 + (auto ? 18 : 0));
     const x = Math.round(W / 2 - pw / 2), y = Math.round(H / 2 - ph / 2) + 4;
     panel(ctx, x, y, pw, ph, { title: 'PAUSED' });
     // The run so far along the top (the clock as the HUD showed it: in a timed run, the time left),
@@ -1601,9 +1611,9 @@ export class PauseOverlay {
     ctx.fillStyle = '#3a4466';
     ctx.fillRect(mid, top, 1, Math.max(wy, ry) - top - 4);
     ui.begin(dt);
-    // RESUME, OPTIONS and QUIT RUN one under another at the foot (the owner's, 23 October 2026:
+    // RESUME, MUSIC, OPTIONS and QUIT RUN one under another at the foot (the owner's, 23 October 2026:
     // menus that "respect left, right, up, down"), the way out last.
-    const bw = 110, bx = Math.round(W / 2 - bw / 2), row = (k) => y + ph - 20 - (2 - k) * 18;
+    const bw = 110, bx = Math.round(W / 2 - bw / 2), row = (k) => y + ph - 20 - (3 - k) * 18;
     // The filler every level-up takes since the player ticked ALWAYS on it, and the way back to
     // being asked (Game.autoPick).
     if (auto) {
@@ -1620,13 +1630,14 @@ export class PauseOverlay {
       g.state = 'play';
       return 'close';
     }
-    if (button(ctx, ui, 'opts', bx, row(1), bw, 13, 'OPTIONS')) {
+    if (button(ctx, ui, 'music', bx, row(1), bw, 13, 'MUSIC')) this.musicMenu = new MusicMenu(app);
+    if (button(ctx, ui, 'opts', bx, row(2), bw, 13, 'OPTIONS')) {
       this.options = new OptionsScreen();
       this.options.enter(app, { back: null });
     }
     // One way out of a run: it ends, with its results and gold. (A run is never saved to pick
     // up again.)
-    if (button(ctx, ui, 'quit', bx, row(2), bw, 13, this.confirm ? 'SURE? QUIT RUN' : 'QUIT RUN', { color: '#e43b44' })) {
+    if (button(ctx, ui, 'quit', bx, row(3), bw, 13, this.confirm ? 'SURE? QUIT RUN' : 'QUIT RUN', { color: '#e43b44' })) {
       if (this.confirm) {
         g.finish(false);
         this.gs.open(new ResultsOverlay(this.gs));

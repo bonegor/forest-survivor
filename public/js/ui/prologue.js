@@ -5,6 +5,8 @@ import { saveSettings } from '../engine/storage.js';
 import { clamp } from '../engine/util.js';
 import { FIRST_MAP } from '../data/maps.js';
 import { button, panel, dim, drawText, wrapText, textWidth } from './ui.js';
+import { MusicMenu } from './music-menu.js';
+import { stopCombatMusicPreview } from '../engine/audio.js';
 
 export class PrologueScreen {
   enter(app, params = {}) {
@@ -12,6 +14,7 @@ export class PrologueScreen {
     this.replay = !!params.replay;
     this.game = new Prologue({ settings: app.settings });
     this.paused = false;
+    this.musicMenu = null;
     this.arrival = null;
     this.finished = false;
     app.ui.lock(0.4);
@@ -26,6 +29,7 @@ export class PrologueScreen {
   }
 
   leave() {
+    stopCombatMusicPreview();
     input.joystickEnabled = false;
     input.touchRegions = null;
     input.releaseTouches();
@@ -55,7 +59,7 @@ export class PrologueScreen {
     const { app, game: g } = this, ui = app.ui;
     // Left behind (input.away): paused, as Esc would.
     const away = input.away && !this.paused && g.state === 'play' && this.arrival === null;
-    if (away || (input.pressed('pause') && ui.lockT <= 0 && this.arrival === null && (g.state === 'play' || this.paused))) {
+    if (away || (!this.musicMenu && input.pressed('pause') && ui.lockT <= 0 && this.arrival === null && (g.state === 'play' || this.paused))) {
       this.paused = !this.paused;
       g.state = this.paused ? 'paused' : 'play';
       input.releaseTouches();
@@ -141,10 +145,17 @@ export class PrologueScreen {
 
   drawPause(ctx, W, H, dt) {
     const { app, game: g } = this, ui = app.ui, fallen = g.state === 'over';
+    if (this.musicMenu) {
+      if (this.musicMenu.draw(ctx, W, H, dt) === 'close') {
+        this.musicMenu = null;
+        ui.focus('road_music');
+      }
+      return;
+    }
     dim(ctx, W, H, 0.6);
     const w = Math.min(250, W - 20), x = (W - w) / 2;
     const lines = wrapText(fallen ? 'Try the road again, or go on to the Sunscorch.' : 'A short journey before the first fight.', w - 16);
-    const h = 88 + lines.length * 11, y = H / 2 - h / 2, by = y + 32 + lines.length * 11;
+    const h = 111 + lines.length * 11, y = H / 2 - h / 2, by = y + 32 + lines.length * 11;
     panel(ctx, x, y, w, h, { title: fallen ? 'Back on your feet' : 'The road can wait' });
     lines.forEach((s, i) => drawText(ctx, s, W / 2, y + 22 + i * 11, { align: 'center', color: '#c0cbdc' }));
     ui.begin(dt);
@@ -152,7 +163,8 @@ export class PrologueScreen {
       if (fallen) this.game = new Prologue({ settings: app.settings });
       this.paused = false; this.game.state = 'play'; ui.lock(0.2);
     }
-    if (button(ctx, ui, 'road_leave', W / 2 - 65, by + 23, 130, 15, this.replay ? 'RETURN TO CAMP' : 'SKIP THE ROAD')) this.finish();
+    if (button(ctx, ui, 'road_music', W / 2 - 65, by + 23, 130, 15, 'MUSIC')) this.musicMenu = new MusicMenu(app);
+    if (button(ctx, ui, 'road_leave', W / 2 - 65, by + 46, 130, 15, this.replay ? 'RETURN TO CAMP' : 'SKIP THE ROAD')) this.finish();
     ui.end();
   }
 }

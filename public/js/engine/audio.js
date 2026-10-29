@@ -11,7 +11,7 @@
 const ONCE = new Set(['victory', 'gameover']);
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
-import { DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, combatMusicPiece, isCombatMusicCue } from './combat-music.js';
+import { COMBAT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, combatMusicPiece, isCombatMusicCue } from './combat-music.js';
 
 const MUSIC_DIR = 'audio/music/';
 // Recorded music is mastered loud; this keeps it level with the sound effects.
@@ -31,6 +31,8 @@ const A = {
   master: null,
   sfxBus: null,
   musicBus: null,
+  backgroundMusicBus: null, // normal recordings can be quiet while a short preview uses the music bus
+  preview: null,
   duck: null, // between the music and the mix: what duckMusic lowers
   comp: null,
   noiseBuf: null,
@@ -54,7 +56,7 @@ if (typeof fetch === 'function' && typeof document !== 'undefined' && typeof Aud
       A.files = list && typeof list === 'object' ? list : {};
       menuOverride();
       if (A.requestedMusic) A.songName = resolveMusic(A.requestedMusic);
-      if (A.ctx && A.songName && A.files[A.songName]) startPiece(A.songName);
+      if (A.ctx && !A.preview && A.songName && A.files[A.songName]) startPiece(A.songName);
     })
     .catch(() => (A.files = {}));
 }
@@ -92,6 +94,8 @@ export function initAudio() {
   A.master.gain.value = 0.9;
   A.sfxBus = ctx.createGain();
   A.musicBus = ctx.createGain();
+  A.backgroundMusicBus = ctx.createGain();
+  A.backgroundMusicBus.connect(A.musicBus);
   A.sfxBus.connect(A.comp);
   A.duck = ctx.createGain();
   A.musicBus.connect(A.duck);
@@ -104,7 +108,7 @@ export function initAudio() {
   const d = A.noiseBuf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   loadSamples();
-  if (A.songName) startPiece(A.songName);
+  if (A.songName && !A.preview && !A.startingPreview) startPiece(A.songName);
   globalThis.document?.addEventListener?.('visibilitychange', wake);
 }
 
@@ -817,8 +821,114 @@ export function setCombatMusic(id) {
   const selected = normalizeCombatMusic(id);
   if (selected === A.combatMusic) return selected;
   A.combatMusic = selected;
-  if (isCombatMusicCue(A.requestedMusic)) playMusic(A.requestedMusic);
+  if (!A.preview && isCombatMusicCue(A.requestedMusic)) playMusic(A.requestedMusic);
   return selected;
+}
+
+function previewBackground(quiet) {
+  if (!A.backgroundMusicBus) return;
+  const gain = A.backgroundMusicBus.gain, now = A.ctx.currentTime;
+  gain.cancelScheduledValues(now);
+  if (quiet) gain.setValueAtTime(0, now);
+  else gain.setTargetAtTime(1, now, .04);
+}
+
+function disposePreview(preview) {
+  if (preview.disposed) return;
+  preview.disposed = true;
+  clearTimeout(preview.timer);
+  clearTimeout(preview.loadingTimer);
+  preview.el.pause();
+  preview.el.removeAttribute?.('src');
+  preview.el.load?.();
+  preview.source.disconnect();
+  preview.gain.disconnect();
+}
+
+function finishPreview(preview, restore = true) {
+  if (A.preview !== preview) return;
+  A.preview = null;
+  disposePreview(preview);
+  if (!restore) return;
+  // Selecting a new combat recording while auditioning changes its saved choice,
+  // but its full recording waits until the preview ends or the picker is left.
+  const piece = A.requestedMusic ? resolveMusic(A.requestedMusic) : A.songName;
+  if (piece && A.files?.[piece] && (piece !== A.songName || !piecePlaying(piece))) {
+    A.songName = piece;
+    startPiece(piece, .2);
+  }
+  previewBackground(false);
+}
+
+function cancelPreviewForMusic() {
+  if (!A.preview) return;
+  finishPreview(A.preview, false);
+  previewBackground(false);
+}
+
+// These are small, pre-cut excerpts centred on the recording's midpoint. No
+// fifteen-minute file is fetched or sought just to browse a different song.
+export function previewCombatMusic(id) {
+  const selected = normalizeCombatMusic(id);
+  if (A.preview?.id === selected) return combatMusicPreview();
+  if (typeof Audio !== 'function' || typeof window === 'undefined') return null;
+  if (!A.ctx) {
+    A.startingPreview = true;
+    try { initAudio(); } finally { A.startingPreview = false; }
+  } else initAudio();
+  if (!A.ctx) return null;
+  if (A.preview) finishPreview(A.preview, false);
+  clearTimeout(A.cutTimer);
+  const choice = COMBAT_MUSIC.find((entry) => entry.id === selected);
+  const el = new Audio(MUSIC_DIR + (choice.preview || `combat/previews/${selected}-10s.mp3`));
+  el.preload = 'auto';
+  el.loop = false;
+  const gain = A.ctx.createGain();
+  const file = A.files?.[choice.piece];
+  gain.gain.value = FILE_LEVEL * (file?.gain > 0 ? file.gain : .9);
+  const source = A.ctx.createMediaElementSource(el);
+  source.connect(gain);
+  gain.connect(A.musicBus);
+  const preview = A.preview = { id: selected, el, gain, source, playing: false,
+    seconds: choice.previewSeconds || 10, sourceStart: choice.previewStart ?? 445,
+    timer: 0, loadingTimer: 0, disposed: false };
+  previewBackground(true);
+  const started = () => {
+    // A delayed play promise or event belongs only to its own audition.
+    if (A.preview !== preview) { el.pause(); return; }
+    if (preview.playing) return;
+    preview.playing = true;
+    clearTimeout(preview.loadingTimer);
+    const remaining = Math.max(0, preview.seconds - (Number(el.currentTime) || 0));
+    preview.timer = setTimeout(() => finishPreview(preview), remaining * 1000);
+  };
+  el.addEventListener('playing', started);
+  el.addEventListener('waiting', () => {
+    if (A.preview !== preview || !preview.playing) return;
+    preview.playing = false;
+    clearTimeout(preview.timer);
+    preview.loadingTimer = setTimeout(() => finishPreview(preview), 15000);
+  });
+  el.addEventListener('ended', () => finishPreview(preview));
+  el.addEventListener('error', () => finishPreview(preview));
+  // A broken or blocked request must not leave normal music quiet indefinitely.
+  preview.loadingTimer = setTimeout(() => finishPreview(preview), 15000);
+  try {
+    const playing = el.play();
+    if (playing?.then) playing.then(started, () => finishPreview(preview));
+  } catch {
+    finishPreview(preview);
+  }
+  return combatMusicPreview();
+}
+
+export function stopCombatMusicPreview() {
+  if (A.preview) finishPreview(A.preview);
+}
+
+export function combatMusicPreview() {
+  const p = A.preview;
+  return p ? { id: p.id, playing: p.playing, seconds: p.seconds, sourceStart: p.sourceStart } : null;
 }
 
 // A music file playing through the music bus, so volume and mute apply. `gain` fades the
@@ -831,7 +941,7 @@ function track(name) {
   const level = FILE_LEVEL * (entry && entry.gain > 0 ? entry.gain : 1);
   const gain = A.ctx.createGain();
   gain.gain.value = 0;
-  gain.connect(A.musicBus);
+  gain.connect(A.backgroundMusicBus);
   const gapless = entry?.gapless === true;
   t = { gain, level, gapless, once: !gapless && ONCE.has(name), voices: [], cur: 0, playing: false, fadeTimer: 0 };
   for (let i = t.once || gapless ? 1 : 2; i > 0; i--) {
@@ -864,7 +974,10 @@ function track(name) {
       if (A.after) {
         const next = A.after;
         A.after = null;
-        playMusic(next);
+        if (A.preview) {
+          A.requestedMusic = next;
+          A.songName = resolveMusic(next);
+        } else playMusic(next);
       }
     });
     t.voices.push({ el, g });
@@ -969,6 +1082,7 @@ const piecePlaying = (name) => A.songName === name && A.tracks.get(name) && A.tr
 
 // o.fade: seconds to cross over (0.9 by default; a boss's fall eases back over longer).
 export function playMusic(name, o = {}) {
+  cancelPreviewForMusic();
   A.after = null;
   clearTimeout(A.cutTimer);
   A.requestedMusic = name;
@@ -980,6 +1094,7 @@ export function playMusic(name, o = {}) {
 
 // A boss's arrival: the music cut to silence for `gap` s, then the piece slams in at full.
 export function cutToMusic(name, gap = 0.4) {
+  cancelPreviewForMusic();
   A.after = null;
   clearTimeout(A.cutTimer);
   A.requestedMusic = name;
@@ -995,12 +1110,14 @@ export function cutToMusic(name, gap = 0.4) {
 }
 
 export function stopMusic() {
+  cancelPreviewForMusic();
   A.songName = null;
   A.requestedMusic = null;
   if (A.ctx) fadeFiles(null, 0.6);
 }
 
 export function playJingle(name) {
+  cancelPreviewForMusic();
   if (!A.ctx || !(A.files && A.files[name])) return;
   A.songName = null;
   A.requestedMusic = null;
@@ -1011,6 +1128,7 @@ export function playJingle(name) {
 // A piece that waits for the jingle playing now (the victory's, say) to end, so the jingle is
 // heard in full; at once if none is playing.
 export function playAfterJingle(name) {
+  cancelPreviewForMusic();
   const playing = [...A.tracks.values()].some((t) => t.once && t.playing && !t.voices[0].el.ended);
   if (!A.ctx || !playing) return playMusic(name);
   A.after = name;
@@ -1018,7 +1136,9 @@ export function playAfterJingle(name) {
 
 // What the music is doing, for the developer panel and tests: the piece, and each file's players.
 export function musicState() {
-  return { piece: A.songName, requestedPiece: A.requestedMusic, combatMusic: A.combatMusic, after: A.after, files: A.files, tracks: A.tracks, duck: A.duck ? A.duck.gain.value : 1 };
+  return { piece: A.songName, requestedPiece: A.requestedMusic, combatMusic: A.combatMusic, after: A.after, files: A.files, tracks: A.tracks,
+    preview: combatMusicPreview(), backgroundGain: A.backgroundMusicBus?.gain.value ?? 1,
+    duck: A.duck ? A.duck.gain.value : 1 };
 }
 
 export function audioReady() {

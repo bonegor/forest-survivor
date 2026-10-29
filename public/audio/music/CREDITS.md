@@ -192,7 +192,7 @@ The compositions by Pachelbel and Ravel, and the anonymous Romance, are in the p
 
 ## Fifteen-minute combat selections (29 October 2026)
 
-The pre-run music selector offers four original, programmed compositions for
+The music selectors offer eight original, programmed compositions for
 Forest Survivor, each exactly 15:00. The MP3s below are unchanged copies of their
 published listening versions. Their source scores, selected version names,
 levels and hashes are listed in `combat/manifest.json`; editable compositions
@@ -220,6 +220,28 @@ and MIDI are in `tools/music/handmade-fight/` in the repository.
   FluidR3Mono by Michael Cowgill (c) 2014-17; adaptation by S. Christian Collins
   (c) 2018-19. MIT licence and font source:
   https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/.
+
+- **combat/steel-tread-v2-15m.mp3 — Steel Tread v2:** original repeating metal
+  riffs and variations, with two distinct Shreddage 3 Stratus FREE guitar
+  parts through Guitar Rig 7 Player heavy amps, Cakewalk SI-Bass Guitar and
+  SI-Drum Kit.
+- **combat/bootheel-loop-v2-15m.mp3 — Bootheel Loop v2:** original country
+  patterns and arrangement, with Ample Guitar M Lite acoustic guitar,
+  Shreddage 3 Stratus FREE through a Guitar Rig 7 Player clean amp, Cakewalk
+  SI-Bass Guitar and SI-Drum Kit, and MuseScore_General banjo (bank 0,
+  program 105). The MuseScore_General MIT notices listed for Dusty Trail
+  Stampede above also apply to this recording.
+- **combat/neon-motor-v2-15m.mp3 — Neon Motor v2** and
+  **combat/breakbeat-circuit-v2-15m.mp3 — Breakbeat Circuit v2:** original
+  synth bass, chord stabs, counter-pulses and electronic percussion, with
+  Cakewalk SI-Drum Kit. The broken-beat pattern is original MIDI, with no
+  borrowed drum-break recording.
+
+**combat/previews/*-10s.mp3:** ten-second excerpts centred on 7:30 of the
+eight recordings above, with 50 ms opening and 200 ms closing fades. Their
+compositions, instruments and sample notices are the same as the full
+recordings. The exact source version, source hash, excerpt bounds and
+measured output details are in `combat/previews/manifest.json`.
 
 The existing title, results and ending music retains its separate credits.
 Earlier combat files remain archived with their licences above.

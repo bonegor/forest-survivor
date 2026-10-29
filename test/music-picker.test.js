@@ -12,7 +12,8 @@ function pickerAt(rect = { x: 126, y: 206, w: 228, h: 13 }, W = 480, H = 270) {
   input.endFrame();
   input.pad.buttons = []; input.pad.prev = []; input.pad.nav = null;
   Object.assign(input.mouse, { x: -1, y: -1 });
-  const picker = new CombatMusicPicker(), ui = new UI(), choices = [];
+  const previews = [], stops = [];
+  const picker = new CombatMusicPicker({ preview: (id) => previews.push(id), stop: () => stops.push(true) }), ui = new UI(), choices = [];
   let selected = 'clockwork-charge';
   const frame = (dt = 0.2) => {
     ui.begin(dt);
@@ -27,7 +28,7 @@ function pickerAt(rect = { x: 126, y: 206, w: 228, h: 13 }, W = 480, H = 270) {
   const press = (key) => { input.justDown.add(key); frame(); };
   const click = (it) => { Object.assign(input.mouse, { x: it.x + 2, y: it.y + 2, clicked: true }); frame(); };
   frame();
-  return { picker, ui, frame, press, click, choices, selected: () => selected };
+  return { picker, ui, frame, press, click, choices, previews, stops, selected: () => selected };
 }
 
 test('music dropdown opens on Enter, keeps hover/browsing separate from selection, and returns focus after selection', () => {
@@ -84,10 +85,25 @@ test('gamepad navigation stays within the menu and A confirms the focused track'
   p.ui.focusId = 'combat_music';
   p.press('Enter'); p.frame();
   input.pad.nav = 'up'; p.frame(); input.pad.nav = null;
-  assert.equal(p.ui.focusId, 'music_dusty-trail-stampede', 'up wraps to the final option');
+  assert.equal(p.ui.focusId, 'music_' + COMBAT_MUSIC.at(-1).id, 'up wraps to the final option');
   input.pad.buttons = [true]; input.pad.prev = [false]; p.frame();
   input.pad.buttons = []; input.pad.prev = [];
-  assert.deepEqual(p.choices, ['dusty-trail-stampede']);
+  assert.deepEqual(p.choices, [COMBAT_MUSIC.at(-1).id]);
+});
+
+test('the pre-run list previews focused tracks, stops on cancel, and keeps a confirmed preview playing', () => {
+  const p = pickerAt();
+  p.ui.focusId = 'combat_music'; p.press('Enter'); p.frame();
+  assert.deepEqual(p.previews, ['clockwork-charge']);
+  p.press('ArrowDown'); p.frame();
+  assert.equal(p.previews.at(-1), 'lantern-guard');
+  assert.deepEqual(p.choices, [], 'previewing is not a saved choice');
+  p.press('Enter');
+  assert.deepEqual(p.choices, ['lantern-guard']);
+  assert.equal(p.stops.length, 0, 'confirming leaves the ten-second sample playing');
+  p.frame(); p.ui.focusId = 'combat_music'; p.press('Enter'); p.frame();
+  p.press('Escape');
+  assert.equal(p.stops.length, 1, 'cancelling stops the sample');
 });
 
 test('dropdown stays inside short landscape and narrow portrait viewports and opens above a low control', () => {

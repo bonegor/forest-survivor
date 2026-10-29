@@ -1,7 +1,7 @@
 // Menu screens: title, hero select, trial select, armory, records, options.
 
 import { input, padKey } from '../engine/input.js';
-import { sfx, playMusic, playAfterJingle, setVolumes, initAudio, setCombatMusic } from '../engine/audio.js';
+import { sfx, playMusic, playAfterJingle, setVolumes, initAudio, setCombatMusic, stopCombatMusicPreview } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
 import { saveSettings, DEBUG, seenBox } from '../engine/storage.js';
 import { presentBackdrop } from '../engine/view.js';
@@ -22,6 +22,7 @@ import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
 import { needsPrologue } from '../game/prologue.js';
 import { normalizeCombatMusic } from '../engine/combat-music.js';
 import { CombatMusicPicker } from './music-picker.js';
+import { MusicMenu } from './music-menu.js';
 
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
@@ -305,6 +306,10 @@ export function shownMap(profile, chosen) {
 const MAP_ROW = 17;
 
 export class ModeScreen {
+  leave() {
+    stopCombatMusicPreview();
+  }
+
   enter(app, params = {}) {
     this.app = app;
     this.t = 0;
@@ -511,6 +516,7 @@ export class ModeScreen {
     const beginX = beside ? musicX + musicW + 8 : Math.round(W / 2 - 50);
     this.musicPicker.draw(ctx, ui, { x: musicX, y: baseBeginY, w: musicW, h: 15 }, app.settings.combatMusic);
     if (button(ctx, ui, 'begin', beginX, beginY, 100, 15, 'BEGIN', { color: '#fee761' })) {
+      stopCombatMusicPreview();
       // The map shown is the one played: chosen now where the one shown by default isn't the
       // Darkwood's (a run without a map is the Darkwood's), or where the one chosen has shut since.
       if (mode === 's15' && (app.choice.map ?? 'forest') !== map) app.choice.map = map;
@@ -1037,6 +1043,7 @@ export class OptionsScreen {
     this.app = app;
     this.back = params.back || 'title';
     this.confirmReset = false;
+    this.musicMenu = null;
     app.ui.lock(0.2);
     app.ui.focusId = 'o_music';
   }
@@ -1047,6 +1054,13 @@ export class OptionsScreen {
       app.scene.draw(ctx, W, H, dt, { campfire: false });
       dim(ctx, W, H, 0.55);
     } else dim(ctx, W, H, 0.7);
+    if (this.musicMenu) {
+      if (this.musicMenu.draw(ctx, W, H, dt) === 'close') {
+        this.musicMenu = null;
+        ui.focus('o_tracks');
+      }
+      return null;
+    }
     header(ctx, W, 'Options');
     if (this.dialog) {
       const action = this.dialog.draw(ctx, ui, W, H, dt);
@@ -1057,23 +1071,25 @@ export class OptionsScreen {
     ui.begin(dt);
     const w = Math.min(220, W - 30), x = Math.round(W / 2 - w / 2);
     let y = 36;
-    // Nine rows 17 apart, and RESET PROGRESS below them, run into CONTROLS and CREDITS at H - 44 on
+    // Ten rows, and RESET PROGRESS below them, must stay clear of CONTROLS and CREDITS at H - 44 on
     // a short window (27 October 2026: an 854x480 itch.io embed is 240 high), so a short screen
     // packs the rows down to 14 apart and then narrows the spacer before RESET PROGRESS, and the
     // column ends two pixels above the footer buttons.
-    const foot = H - 46, rows = 9;
-    const step = clamp(Math.floor((foot - y - 13 - (embedded ? 0 : 8)) / (embedded ? rows - 1 : rows)), 14, 17);
+    const foot = H - 46, rows = 10;
+    const step = clamp(Math.floor((foot - y - 13 - (embedded ? 0 : 8)) / (embedded ? rows - 1 : rows)), 13, 17);
     const gap = clamp(foot - y - 13 - rows * step, 2, 8);
     const changed = () => {
       saveSettings(s);
       setVolumes(s.music, s.sfx);
       app.applySettings();
     };
-    let d = stepper(ctx, ui, 'o_music', x, y, w, 'MUSIC', `${Math.round(s.music * 100)}%`);
+    let d = stepper(ctx, ui, 'o_music', x, y, w, 'MUSIC VOLUME', `${Math.round(s.music * 100)}%`);
     if (d) {
       s.music = clamp(Math.round(s.music * 10 + d) / 10, 0, 1);
       changed();
     }
+    y += step;
+    if (button(ctx, ui, 'o_tracks', x, y, w, 13, 'CHOOSE MUSIC')) this.musicMenu = new MusicMenu(app);
     y += step;
     d = stepper(ctx, ui, 'o_sfx', x, y, w, 'SOUND EFFECTS', `${Math.round(s.sfx * 100)}%`);
     if (d) {
@@ -1115,7 +1131,7 @@ export class OptionsScreen {
     }
     if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
       this.dialog = new MenuDialog('Credits', [
-        'Combat music: Clockwork Charge, Lantern Guard, Spark Rush and Dusty Trail Stampede. Choose a soundtrack before BEGIN. Full music and archived soundtrack credits: audio/music/CREDITS.md',
+        'Choose combat music before BEGIN, in Options, or from the paused game. Browsing plays a ten-second preview from the middle. Full music and archived soundtrack credits: audio/music/CREDITS.md',
         'Sound effects: 0 A.D. by Wildfire Games, Flare, UFO: Alien Invasion, MegaGlest, Ardentryst, HyperRogue (CC BY-SA); OpenClonk by K-Pone (CC BY); artisticdude, Ogrebane, Jan Schupke, Stendhal, Endless Sky, M.A.R.S. (CC0 / public domain)',
         'UI: Foozle Lucifer RPG UI and Kenney Fantasy UI Borders (CC0).',
         'Fonts: Pixtura12 by eishiya; Jacquard by Sarah Cadigan-Fried (SIL OFL).',
@@ -1125,5 +1141,9 @@ export class OptionsScreen {
     keysHint(ctx, W, H, 'ARROWS adjust · ENTER select · ESC back');
     ui.end();
     return null;
+  }
+
+  leave() {
+    this.musicMenu?.close();
   }
 }

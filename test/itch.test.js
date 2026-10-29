@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { buildItch, releaseFiles, zipFiles, crc32 } from '../tools/build-itch.mjs';
+import { COMBAT_MUSIC } from '../public/js/engine/combat-music.js';
 
 const jar = new Map();
 globalThis.document = {
@@ -71,6 +72,7 @@ test('the release holds the game and its music, not the developer\'s tools, the 
   const files = releaseFiles();
   const tracks = JSON.parse(readFileSync(new URL('../public/audio/music/tracks.json', import.meta.url), 'utf8'));
   for (const e of Object.values(tracks)) assert.ok(files.includes('audio/music/' + (typeof e === 'string' ? e : e.file)), JSON.stringify(e));
+  for (const track of COMBAT_MUSIC) assert.ok(files.includes('audio/music/' + track.preview), track.name + ' preview ships with the release');
   for (const f of ['index.html', 'favicon.svg', 'js/main.js', 'js/engine/build.js', 'audio/music/CREDITS.md', 'audio/sfx/CREDITS.md', 'audio/sfx/rain.ogg', 'assets/ui/CREDITS.md', 'assets/art/vfx.js', 'assets/art/VFX-CREDITS.md']) assert.ok(files.includes(f), f);
   for (const f of files) {
     assert.ok(/^(index\.html|favicon\.svg|js\/|assets\/|audio\/(music|sfx)\/)/.test(f), `${f}: only the game's own folders`);

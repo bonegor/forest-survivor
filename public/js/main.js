@@ -5,7 +5,7 @@ import { initInput, input } from './engine/input.js';
 import { buildSprites } from './engine/sprites.js';
 import { store, loadSettings, saveSettings, DEBUG } from './engine/storage.js';
 import { RELEASE } from './engine/build.js';
-import { initAudio, setVolumes, setCombatMusic } from './engine/audio.js';
+import { initAudio, setVolumes, setCombatMusic, stopCombatMusicPreview } from './engine/audio.js';
 import { drawText } from './engine/font.js';
 import { makeCanvas } from './engine/util.js';
 import { UI } from './ui/ui.js';
@@ -38,6 +38,7 @@ const app = {
   audioUnlocked: false,
 
   go(name, params = {}) {
+    stopCombatMusicPreview();
     if (this.screen && this.screen.leave) this.screen.leave();
     const S = SCREENS[name];
     this.screen = new S();
