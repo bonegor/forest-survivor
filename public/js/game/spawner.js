@@ -232,7 +232,7 @@ export class Spawner {
     // rest of it, data/enemies.js group: a Goblin with two more, all three counted). The night's or
     // floor's first comes with the difficulty's headStart seconds' worth (zero on Normal), or
     // HORDE_RATE.head / .headLate by default. Its experience is the difficulty's and its map's: more where
-    // fewer come, as Normal's NORMAL_XP.
+    // fewer come (data/maps.js foe xp); Normal now pays base monster XP.
     if (this.acc > 0) this.acc -= dt;
     else {
       const R = HORDE_RATE, rate = this.waveRate(phase);

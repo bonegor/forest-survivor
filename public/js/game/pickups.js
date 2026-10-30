@@ -12,7 +12,7 @@ import { PC, P } from './particles.js';
 const GEM_TIERS = [
   [100, 'gem4', '#feae34', 'gold', 'Y'],
   [25, 'gem3', '#e43b44', 'red', 'r'],
-  [5, 'gem2', '#63c74d', 'green', 'l'],
+  [5, 'gem2', '#9ee562', 'green', 'l'],
   [0, 'gem1', '#2ce8f5', 'cyan', 'c'],
 ];
 // Soul gems are drawn half again their sprites' size; their shadow, glow and twinkles grow with them.
@@ -376,14 +376,15 @@ export class Pickup {
   }
 
   // Soul gems, casino style: a glow that beats like marquee lights, a glint that twinkles across
-  // the facets (the richer the gem, the more often), and twinkles circling the two richest.
+  // the facets (the richer the gem, the more often), and twinkles circling the richer gems.
   drawBling(ctx, S, sx, sy) {
     const r = this.rank, t = this.t, G = S * GEM_SIZE, rect = this._rect;
     // Around the gem as drawn, bob and all.
     if (rect) sy = rect[1] + rect[3] / 2;
-    const beat = Math.sin(t * 7);
-    const s = (12 + r * 3) * G * (1 + 0.12 * beat);
-    ctx.globalAlpha = 0.42 + 0.2 * beat;
+    const beat = Math.sin(t * 7), green = r === 1;
+    // Green needs a brighter, wider halo and a pale sparkle to stand apart from grass.
+    const s = (12 + r * 3 + (green ? 3 : 0)) * G * (1 + 0.12 * beat);
+    ctx.globalAlpha = green ? 0.68 + 0.16 * beat : 0.42 + 0.2 * beat;
     ctx.drawImage(this.glowSprite(), sx - s / 2, sy - s / 2, s, s);
     const k = Math.max(1, Math.round(S));
     if (rect) {
@@ -395,13 +396,13 @@ export class Pickup {
         glint(ctx, X + w * 0.38, Y + h * 0.3, G * (1 + 2.5 * a), k);
       }
     }
-    for (let i = 0; i < r - 1; i++) {
+    for (let i = 0; i < (green ? 1 : r - 1); i++) {
       const ang = t * 2.4 + i * Math.PI, tw = Math.abs(Math.sin(t * 9 + i * 1.7));
       ctx.globalAlpha = 0.45 + 0.55 * tw;
-      glint(ctx, sx + Math.cos(ang) * 6 * G, sy + Math.sin(ang) * 3.5 * G, G * (0.5 + tw), k, i ? '#ffffff' : '#fee761');
+      glint(ctx, sx + Math.cos(ang) * 6 * G, sy + Math.sin(ang) * 3.5 * G, G * (0.5 + tw), k, green ? '#e4ffbf' : i ? '#ffffff' : '#fee761');
     }
     ctx.globalAlpha = 1;
-    if (this.value >= 5) this.g.light(this.x, this.y, 26, this.lightKey, 0.8);
+    if (this.value >= 5) this.g.light(this.x, this.y, green ? 34 : 26, this.lightKey, green ? 1 : 0.8);
   }
 
   // Its glow (fxsprites.js glow), looked up again only when its colour changes (setLook).

@@ -415,9 +415,8 @@ test('Normal starts with no burst and accumulates its boosted steady spawns; oth
   }
 });
 
-// The 27 October 2026 review (D5): Normal meets Veteran's bosses and champions, left as they are,
-// on an eighth of its horde, so its horde pays NORMAL_XP times the experience; and its "Wolves on
-// the hunt!" brought two wolves.
+// The horde's difficulty reward flows through every spawn path; Normal's old sixfold boost
+// was removed on 30 October 2026 to restore blue opening gems. Packs still have a minimum size.
 test('Normal\'s horde pays NORMAL_XP times the experience; champions, crypts and bosses as ever; a pack is at least PACK_LEAST', () => {
   assert.equal(NORMAL.xp, NORMAL_XP);
   assert.equal(VETERAN.xp, 1);

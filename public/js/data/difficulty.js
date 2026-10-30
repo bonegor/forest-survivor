@@ -27,10 +27,10 @@ export const VETERAN_CROWD = 2 / 3, ELITE_CROWD = 2 * VETERAN_CROWD;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
-// Normal's smaller horde originally left too little experience before its unchanged bosses
-// (27 October 2026 review, D5), so its monsters pay six times the experience. That reward stays
-// independent of the later steady-rate boost below; timed swarms and packs keep their small size.
-export const NORMAL_XP = 6;
+// Normal pays the base monster experience. The old sixfold compensation for its sparse horde
+// made even opening rats and bats drop green gems (5+ XP). With the steady spawn rate tripled,
+// restore blue opening drops and reserve richer gems for stronger monsters (30 October 2026).
+export const NORMAL_XP = 1;
 
 // Elite (Veteran until 23 October 2026, the owner's: "the veteran difficulty will become elite"):
 // the old Hard, made harder as above. Multipliers on the base monster
@@ -120,7 +120,7 @@ export const NORMAL = {
   pace: VETERAN.pace * 0.7,
   foePace: VETERAN.foePace * 0.9,
   xp: NORMAL_XP, // its horde's experience (above)
-  desc: `A steady stream with smaller swarms, each monster worth six times the experience; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
+  desc: `A steady stream with smaller swarms; everyone moves 30% slower, the monsters slower still. Gold x${DIFF_GOLD.easy}.`,
 };
 
 // By id, as a run report and the profile's wins keep it.
