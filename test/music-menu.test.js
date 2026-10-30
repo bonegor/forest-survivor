@@ -4,10 +4,11 @@ import '../tools/headless.mjs';
 import { MusicMenu } from '../public/js/ui/music-menu.js';
 import { OptionsScreen } from '../public/js/ui/screens.js';
 import { PauseOverlay } from '../public/js/ui/gamescreen.js';
+import { Game } from '../public/js/game/game.js';
 import { PrologueScreen } from '../public/js/ui/prologue.js';
 import { COMBAT_MUSIC } from '../public/js/engine/combat-music.js';
 import { loadSettings } from '../public/js/engine/storage.js';
-import { defaultProfile } from '../public/js/shared/profile.js';
+import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 import { UI } from '../public/js/ui/ui.js';
 import { input } from '../public/js/engine/input.js';
 import { view } from '../public/js/engine/view.js';
@@ -124,10 +125,10 @@ test('Options exposes a keyboard-reachable music browser and its compact control
   }
 });
 
-test('Pause MUSIC keeps the run paused through selection and back, and only RESUME continues it', () => {
+for (const completed of [false, true]) test(`Pause MUSIC keeps ${completed ? 'loot collection' : 'the run'} paused through selection and back, and only RESUME continues it`, () => {
   reset(); const a = app(); a.settings.combatMusic = 'neon-motor';
-  const g = { state: 'paused', mode: 's15', duration: 900, time: 120, kills: 5, gold: 3, autoPick: null,
-    player: { level: 1, weapons: [], passives: new Map() }, numbers: { enabled: true } };
+  const g = new Game({ hero: 'knight', mode: 's15', diff: 'easy', meta: metaBonuses(a.store.profile), settings: a.settings, headless: true });
+  Object.assign(g, { state: 'paused', time: 120, kills: 5, gold: 3, levelComplete: completed });
   const pause = new PauseOverlay({ app: a, game: g });
   const h = harness(pause.draw.bind(pause)); h.frame();
   h.click(item(a, 'music')); assert.ok(pause.musicMenu);
@@ -144,7 +145,7 @@ test('Pause MUSIC keeps the run paused through selection and back, and only RESU
   h.frame(); assert.equal(a.ui.focusId, 'music');
   h.press('Escape');
   assert.equal(h.result(), 'close');
-  assert.equal(g.state, 'play');
+  assert.equal(g.state, completed ? 'cleared' : 'play');
 });
 
 test('the first journey offers MUSIC and Escape from it does not unpause or advance the road', () => {
