@@ -62,9 +62,13 @@ export class GameScreen {
     this.seen = seenBox.read();
     this.offeredNew = [];
     this.overlay = null;
+    this.finishShown = false;
+    this.finishRect = null;
     this.away = false; // the game was left; the run pauses once it is back in play (frame)
     // The touch buttons in play: the pause button and the fury orb (touchFor).
     this.regions = (x, y) => {
+      const r = this.finishRect;
+      if (this.game.state === 'cleared' && r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return 'finish-level';
       const W = view.W, H = view.H;
       if (x > W / 2 - 14 && x < W / 2 + 14 && y > H - 22) return 'pause';
       if (x > W - 56 && y > H - 56) return 'ult';
@@ -94,7 +98,7 @@ export class GameScreen {
   // left the horde hitting a hero who couldn't move, and quitting ends the run (no saved runs).
   // Only in play: a screen already up holds the run still.
   pause(quiet = false) {
-    if (this.overlay || this.game.state !== 'play') return false;
+    if (this.overlay || this.game.state !== this.game.playState) return false;
     this.game.state = 'paused';
     this.open(new PauseOverlay(this));
     if (!quiet) sfx('back');
@@ -124,7 +128,7 @@ export class GameScreen {
       if (!app.devHold) g.update(dt); // the developer panel can freeze the action
       // Nothing opens while a big beat plays out (Game.moment); then level-ups, chests and gear,
       // in that order. Levels the run's auto-pick takes need no screen (Game.resolveAutoLevels).
-      const ready = g.state === 'play' && !g.momentRunning;
+      const ready = g.state === g.playState && !g.momentRunning;
       if (ready && g.pendingLevels > 0) g.resolveAutoLevels();
       if (ready && g.pendingLevels > 0) {
         g.state = 'levelup';
@@ -147,6 +151,7 @@ export class GameScreen {
     const ctx = view.uctx, W = view.W, H = view.H;
     ctx.clearRect(0, 0, W, H);
     if (g.state !== 'over' || !this.overlay) g.hud.draw(ctx, W, H, g.clock, dt); // the clock that keeps going in crypts
+    if (!this.overlay && g.state === 'cleared') this.drawFinish(ctx, W, H, dt);
     if (this.overlay) {
       const r = this.overlay.draw(ctx, W, H, dt);
       if (r === 'close') {
@@ -155,6 +160,30 @@ export class GameScreen {
         this.touchFor(null);
       }
     }
+  }
+
+  drawFinish(ctx, W, H, dt) {
+    const ui = this.app.ui;
+    // Enter / gamepad A are deliberate completion actions; a held ultimate never dismisses loot.
+    ui.noSpace = true;
+    if (!this.finishShown) {
+      this.finishShown = true;
+      ui.focusId = 'finish-level';
+      ui.lock(0.35);
+    }
+    const bh = input.device === 'touch' ? 32 : 18;
+    const pw = Math.min(260, W - 20), x = Math.round((W - pw) / 2), y = H - bh - 70;
+    panel(ctx, x, y, pw, bh + 44, { title: 'LEVEL COMPLETE' });
+    drawText(ctx, 'Collect loot, then finish to bank rewards', W / 2, y + 15, { align: 'center', color: '#c0cbdc' });
+    ui.begin(dt);
+    const label = input.device === 'touch' ? 'FINISH LEVEL' : `FINISH · ${input.device === 'pad' ? padKey('A') : 'ENTER'}`;
+    this.finishRect = { x: Math.round(W / 2 - 70), y: H - bh - 32, w: 140, h: bh };
+    const r = this.finishRect;
+    const finish = button(ctx, ui, 'finish-level', r.x, r.y, r.w, r.h, label) || (ui.lockT <= 0 && input.pressed('finish-level'));
+    if (finish && this.game.finishLevel()) {
+      this.open(new ResultsOverlay(this));
+    }
+    ui.end();
   }
 }
 
@@ -487,7 +516,7 @@ export class LevelUpOverlay {
     g.pendingLevels = Math.max(0, g.pendingLevels - 1); // never below none (draw: levels taken elsewhere)
     this.taken++;
     sfx('pick');
-    g.state = 'play';
+    g.state = g.playState;
     if (g.hints) g.hints.levelClosed = true; // the first-run hint on weapons and gems comes next
     if (g.resolveAutoLevels()) return 'close';
     g.state = 'levelup';
@@ -538,7 +567,7 @@ export class LevelUpOverlay {
     // Its levels were taken while it was up (a bot's __fs.sim settles the cards itself), or the run
     // ended: nothing is left to choose, and the game screen goes on from there.
     if (g.state !== 'levelup' || g.pendingLevels <= 0) {
-      if (g.state === 'levelup') g.state = 'play';
+      if (g.state === 'levelup') g.state = g.playState;
       return 'close';
     }
     this.t += dt;
@@ -1191,7 +1220,7 @@ export class ChestOverlay {
     const done = this.goldShown && t >= tl.end;
     if (done) {
       if (button(ctx, ui, 'take', Math.round(W / 2 - 40), H - 22, 80, 14, 'COLLECT') || input.pressed('back')) {
-        this.g.state = 'play';
+        this.g.state = this.g.playState;
         g.hud.held = null;
         res = 'close';
       }
@@ -1534,7 +1563,7 @@ class ItemOverlay {
       if (!res && button(ctx, ui, 'sell_' + slot, x1 + cw - 46, y + 8, 40, 10, `+${itemPrice(w)}`, { color: '#feae34', pointer: false })) g.sellWorn(slot);
     });
     ui.end();
-    if (res) g.state = 'play';
+    if (res) g.state = g.playState;
     return res;
   }
 }
@@ -1627,7 +1656,7 @@ export class PauseOverlay {
     }
     // Start, Esc or P, or a pad's B (back), as every other screen goes back.
     if (button(ctx, ui, 'resume', bx, row(0), bw, 13, 'RESUME') || ((input.pressed('pause') || input.pressed('back')) && ui.lockT <= 0)) {
-      g.state = 'play';
+      g.state = g.playState;
       return 'close';
     }
     if (button(ctx, ui, 'music', bx, row(1), bw, 13, 'MUSIC')) this.musicMenu = new MusicMenu(app);
@@ -1637,7 +1666,13 @@ export class PauseOverlay {
     }
     // One way out of a run: it ends, with its results and gold. (A run is never saved to pick
     // up again.)
-    if (button(ctx, ui, 'quit', bx, row(3), bw, 13, this.confirm ? 'SURE? QUIT RUN' : 'QUIT RUN', { color: '#e43b44' })) {
+    if (button(ctx, ui, 'quit', bx, row(3), bw, 13, g.levelComplete ? 'FINISH LEVEL' : this.confirm ? 'SURE? QUIT RUN' : 'QUIT RUN', { color: g.levelComplete ? '#fee761' : '#e43b44' })) {
+      if (g.levelComplete) {
+        g.state = g.playState;
+        if (!g.finishLevel()) return 'close';
+        this.gs.open(new ResultsOverlay(this.gs));
+        return null;
+      }
       if (this.confirm) {
         g.finish(false);
         this.gs.open(new ResultsOverlay(this.gs));
@@ -1885,6 +1920,7 @@ class ResultsOverlay {
     this.gs.app.store.submitRun({
       mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
+      effort: res.effort,
     }).then((r) => {
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
       // reason (on static hosting a refused run comes back as a bare zero), and the screen says so.

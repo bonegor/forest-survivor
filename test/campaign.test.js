@@ -34,6 +34,25 @@ test('the Armory is bought by tiers, cheapest first, saving for the tier', () =>
   assert.deepEqual(shop({ ...P.defaultProfile(), gold: 400 }, parseOrder('might')).bought, ['might', 'might']);
 });
 
+test('a map-ladder campaign advances only after wins, through every map, with real progression reports', () => {
+  const maps = [];
+  const winningRun = (o) => {
+    maps.push(o.map);
+    assert.ok(P.mapOpen(o.profile, o.map));
+    const report = { mode: 's15', map: o.map, diff: o.diff, hero: o.hero, victory: true, time: 900, realTime: 900, kills: 100, level: 20, gold: 50 };
+    return { outcome: 'win', time: 900, level: 20, kills: 100, weapons: [], passives: [], ms: 0, report };
+  };
+  const c = playCampaign({ goal: 'maps', runs: 6 }, winningRun);
+  assert.deepEqual(maps, P.PROGRESS.mapLadder);
+  assert.deepEqual(c.runs.map(r => r.map), maps);
+  assert.equal(c.won, 1, 'the first win keeps its original meaning');
+  assert.equal(c.completed, true);
+  assert.ok(maps.every(id => P.mapWon(c.profile, id)));
+  maps.length = 0;
+  assert.equal(playCampaign({ runs: 6 }, winningRun).runs.length, 1, 'default goal remains the first win');
+  assert.throws(() => playCampaign({ goal: 'typo' }, winningRun), /goal/);
+});
+
 test('the command line prints a campaign report', () => {
   const cli = fileURLToPath(new URL('../tools/campaign.mjs', import.meta.url));
   const out = execFileSync(process.execPath, [cli, '--runs=1', '--campaigns=2', '--max=20', '--jobs=2'], { encoding: 'utf8' });

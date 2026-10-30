@@ -1,7 +1,7 @@
 // Enemies: AI, status effects and drawing. Breakable props and bosses share
 // this class; boss behaviour lives in bosses.js.
 
-import { ENEMIES, STANDS_FOR } from '../data/enemies.js';
+import { ENEMIES, STANDS_FOR, CRYPT_LORD } from '../data/enemies.js';
 import { WEAPON_SPRITES } from '../data/weapons.js';
 import { HEROES } from '../data/heroes.js';
 import { UPGRADES } from '../shared/profile.js';
@@ -272,6 +272,7 @@ export class Enemy {
     this.thaw = 0;
     this.burnT = 0; // how long the sunrise has burned it (Game.burnBoss)
     this.lord = !!o.lord; // one of a crypt's named bosses, each asleep in a room of its own
+    this.lordEnraged = false;
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
     this.summoned = !!o.summoned; // called up round the hero by a boss (Game.summonRing)
     this.steady = !!o.steady; // the steady horde's (Spawner.update): let go when left far behind (Game.relocate)
@@ -721,6 +722,10 @@ export class Enemy {
     // warns of it, hidden under the ice tint: draw) waits for the thaw, and its cooldown with it (27 October 2026).
     if (this.freezeT > 0) return aim(0, 0, 0);
     const g = this.g, p = g.player, s = this.def.shot;
+    if (this.lord && !this.lordEnraged && this.hp <= this.maxHp * CRYPT_LORD.enrageAt) {
+      this.lordEnraged = true;
+      g.numbers.text(this.x, this.y - this.h - 8, 'ENRAGED', 'fire');
+    }
     const dx = p.x - this.x, dy = p.y - this.y;
     const dist = Math.hypot(dx, dy) || 1;
     this.cdT -= dt;
@@ -728,9 +733,14 @@ export class Enemy {
       this.stateT -= dt;
       if (this.stateT <= 0) {
         this.state = 'move';
-        this.cdT = s.cd * rand(0.8, 1.2);
+        this.cdT = s.cd * rand(0.8, 1.2) * (this.lordEnraged ? CRYPT_LORD.cooldown : 1);
         const ang = Math.atan2(dy, dx);
-        g.eshots.push(new EnemyShot(g, this.x, this.y - 2, ang, s.spd, s.dmg * g.dmgScale, s.kind, { by: shotName(this, s.kind), boss: bossOf(this) }));
+        const arrows = this.lordEnraged ? CRYPT_LORD.arrows : 1;
+        for (let i = 0; i < arrows; i++) {
+          const a = ang + (i - (arrows - 1) / 2) * CRYPT_LORD.spread;
+          const dmg = s.dmg * g.dmgScale * (this.lord ? CRYPT_LORD.damage : 1);
+          g.eshots.push(new EnemyShot(g, this.x, this.y - 2, a, s.spd, dmg, s.kind, { by: shotName(this, s.kind), boss: bossOf(this) }));
+        }
         sfx('enemyshot', { pan: clamp((this.x - p.x) / 200, -1, 1) });
       }
       return aim(0, 0, 0);

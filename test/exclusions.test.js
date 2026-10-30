@@ -63,9 +63,9 @@ test('kills accumulate across runs; slot thresholds are totals, not extra kills'
   assert.equal(entry.need, 'Slay 3,000 monsters, counted as on Veteran');
 });
 
-// The review of 27 October 2026: Normal's eighth of the horde crawled to the kill milestones, and
-// Elite and a Nightmare rushed them. Each kill counts as Veteran's horde over its own.
-test("kills count toward the milestones as Veteran's: a Normal one as eight, Elite's as half, a Nightmare's as a sixth", () => {
+// Normal now follows the live rate curve, including the tripled steady horde and soft cap.
+// A legacy report without per-kill credit is valued at its end-of-run rate.
+test("Normal kill milestones follow the current curve; Elite and Nightmare keep their credit", () => {
   const base = { mode: 's15', hero: 'knight', victory: false, time: 300, realTime: 300, gold: 0, level: 1, floor: 1 };
   let p = P.defaultProfile();
   for (const o of [{ diff: 'medium', kills: 600 }, { diff: 'easy', kills: 100 }, { diff: 'hard', kills: 600 }, { diff: 'hard', nightmare: true, kills: 600 }]) {
@@ -73,7 +73,7 @@ test("kills count toward the milestones as Veteran's: a Normal one as eight, Eli
     assert.ok(r.ok);
     p = r.profile;
   }
-  assert.deepEqual([p.kills, p.effort], [1900, 1800]);
+  assert.deepEqual([p.kills, p.effort], [1900, 1220]); // 600 + 220 for Normal's 100 at 5:00 + 300 + 100
   assert.equal(P.sanitizeProfile({ v: 4, kills: 4321 }).effort, 4321, 'a save from before starts from its kills');
 });
 

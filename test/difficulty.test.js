@@ -13,7 +13,7 @@ import { Spawner, isFew, minuteMore, WAVE, waveAt, PACK_LEAST } from '../public/
 import { armored, BASE_SPEED } from '../public/js/game/player.js';
 import { NORMAL, VETERAN, ELITE, GAME_SPEED, HARDER, CROWD, VETERAN_CROWD, ELITE_CROWD, NORMAL_XP, moveFor } from '../public/js/data/difficulty.js';
 import { monsterHp, nightHpScale, hpScale } from '../public/js/data/waves.js';
-import { ENEMIES } from '../public/js/data/enemies.js';
+import { ENEMIES, CRYPT_LORD } from '../public/js/data/enemies.js';
 import { MAPS } from '../public/js/data/maps.js';
 import { mulberry32, fmtTime } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses, runReward, DIFF_GOLD, HERO_UNLOCK_TIME } from '../public/js/shared/profile.js';
@@ -168,7 +168,7 @@ test('on Veteran every monster has 70% less health than on Elite: the horde, cha
   const hp = { hard: healths('hard'), medium: healths('medium') };
   for (const k of Object.keys(hp.hard)) tenth(hp.medium[k], hp.hard[k], k);
   assert.equal(hp.hard.floor, game({ mode: 'dungeon' }).world.guardian.maxHp, 'a floor\'s own guardian as counted');
-  assert.equal(hp.hard.lord, 600 * HARDER, 'a lord on Elite: its own 600, and the last round\'s +20%');
+  assert.equal(hp.hard.lord, 600 * HARDER * CRYPT_LORD.health, 'a lord on Elite includes the crypt-specific health multiplier');
   assert.ok(Math.abs(VETERAN.health / ELITE.health - 0.3) < 1e-12);
 });
 
@@ -199,7 +199,7 @@ test('the round of 20 October 2026: every monster on both difficulties has 20% m
 
 // A Holy Relic purges the horde on screen, but bosses, crypt lords and champions only take a
 // heavy blow. On Veteran they have 70% less health, so the blow is 70% lighter too: a flat 200
-// would all but fell a crypt lord (216), there and in every crypt with a relic among its boxes.
+// would take too large a share of a weakened crypt lord, there and in crypts with a relic among their boxes.
 test('a Holy Relic leaves a crypt lord standing, the same share of it gone on Veteran as on Elite', () => {
   const share = {};
   for (const diff of ['medium', 'hard']) {
@@ -217,7 +217,7 @@ test('a Holy Relic leaves a crypt lord standing, the same share of it gone on Ve
     assert.ok(!lord.dead && lord.hp > 0, `${diff}: the lord stands (${lord.hp} of ${lord.maxHp})`);
     share[diff] = 1 - lord.hp / lord.maxHp;
   }
-  assert.ok(share.hard > 0.25, `a heavy blow on Elite as before: ${share.hard}`);
+  assert.ok(share.hard > 0.15 && share.hard < 0.25, `the same relic takes a smaller share of the stronger lord: ${share.hard}`);
   // (A blow lands as a whole number, so the shares differ by the rounding alone.)
   assert.ok(Math.abs(share.medium - share.hard) < 0.01, `the same share on Veteran: ${share.medium} against ${share.hard}`);
 });

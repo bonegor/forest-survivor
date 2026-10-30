@@ -1,4 +1,6 @@
 import { DIFF_GOLD, NIGHTMARE_GOLD } from '../shared/profile.js';
+import { POPULATION, NIGHTMARE_MORE } from '../shared/population.js';
+export { CROWD, VETERAN_CROWD, ELITE_CROWD } from '../shared/population.js';
 
 // How much tougher than the old Hard monsters are, round on round of tuning:
 // their numbers (+10%, +10%, +20%), health (+10%, +10%, +10%, +20%) and
@@ -10,20 +12,17 @@ import { DIFF_GOLD, NIGHTMARE_GOLD } from '../shared/profile.js';
 // health (below).
 const BUMPS = 2;
 export const HARDER = 1.2;
-const MORE = 1.1 * 1.1 * 1.2;
 // The owner's, the same day after another test (20 October 2026): "the thing is even a bit too easy.
 // Double the amount of monsters". The steady horde and the timed swarms, rings and packs, on both
 // difficulties and a Dungeon Run's floors; a Nightmare multiplies that again (hordeMore). The crypts'
 // sleeping packs, champions, thieves, bosses and their summons come as they did.
 // Then, once more (20 October 2026): "double the number of monsters on all difficulties": 4.
-export const CROWD = 4;
 // The owner's (21 October 2026): "Reduce the numbers of monsters on normal by 3 times what it is rn.
 // Then veteran is double, nightmare is tripple veteran". Normal sends a third of what both sent
 // (NORMAL_CROWD), Veteran twice Normal's (VETERAN_CROWD: two thirds), a Nightmare three times
 // Veteran's (NIGHTMARE.more). The steady horde and the timed swarms, rings and packs alike.
 // Then, the same day: "Double the amount of monsters on all difficulties": both twice that.
 // (Since 23 October 2026 that Normal is Veteran and that Veteran Elite: the names below.)
-export const VETERAN_CROWD = 2 / 3, ELITE_CROWD = 2 * VETERAN_CROWD;
 const TOUGHER = 1.1 * 1.1 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 const DEADLIER = 1.1 * 1.1 * 1.2 * 1.1 * 1.2 * 1.1 ** BUMPS * HARDER;
 
@@ -51,8 +50,8 @@ export const ELITE = {
   name: 'Elite',
   hp: 1.9 * TOUGHER,
   dmg: 1.65 * DEADLIER,
-  spawn: 1.15 * MORE * CROWD * ELITE_CROWD,
-  horde: MORE * CROWD * ELITE_CROWD,
+  spawn: POPULATION.hard.spawn,
+  horde: POPULATION.hard.horde,
   speed: 1.12,
   elite: 1.35,
   hurt: 1,
@@ -69,7 +68,6 @@ export const ELITE = {
 // the night (a Dungeon Run floor's own clock maps onto it: waves.js minuteOf) the steady horde
 // and the timed swarms, rings and packs are 30% bigger.
 const VETERAN_HEALTH = 0.3;
-const VETERAN_LATE = { from: 9, more: 1.3 };
 
 // Veteran (the user's, of it as Normal: "all the monsters have their damage cause reduced by 50% and
 // the number of ranged monsters spawn + wolver + any other monsters that lunges is reduced to 1/3"):
@@ -84,10 +82,10 @@ export const VETERAN = {
   hurt: 0.5,
   few: 1 / 3,
   health: ELITE.health * VETERAN_HEALTH,
-  late: VETERAN_LATE,
+  late: POPULATION.medium.late,
   // Half Elite's numbers: a third of what both difficulties sent before (VETERAN_CROWD).
-  spawn: ELITE.spawn * (VETERAN_CROWD / ELITE_CROWD),
-  horde: ELITE.horde * (VETERAN_CROWD / ELITE_CROWD),
+  spawn: POPULATION.medium.spawn,
+  horde: POPULATION.medium.horde,
   // The owner's (21 October 2026): "reduce the speed on normal by 20%". On Veteran the hero and the
   // monsters move at 0.8 of the game's speed (GAME_SPEED, moveFor); the clock is real time anyway.
   pace: 0.8,
@@ -113,10 +111,10 @@ export const NORMAL = {
   ...VETERAN,
   id: 'easy',
   name: 'Normal',
-  spawn: VETERAN.spawn * 0.125,
-  horde: VETERAN.horde * 0.125,
-  steadyMore: 3,
-  headStart: 0, // seconds of steady spawns sent at once; also zero on a new dungeon floor
+  spawn: POPULATION.easy.spawn,
+  horde: POPULATION.easy.horde,
+  steadyMore: POPULATION.easy.steadyMore,
+  headStart: POPULATION.easy.headStart, // seconds of steady spawns sent at once; also zero on a new dungeon floor
   pace: VETERAN.pace * 0.7,
   foePace: VETERAN.foePace * 0.9,
   xp: NORMAL_XP, // its horde's experience (above)
@@ -138,7 +136,7 @@ export const diffFor = (mode, id) => (mode === 'ranked' ? ELITE : DIFFS[id] || E
 // the profile's to weigh (shared/profile.js NIGHTMARE_GOLD).
 export const NIGHTMARE = {
   name: 'Nightmare',
-  more: 3,
+  more: NIGHTMARE_MORE,
   desc: `Nightmare: three times as many monsters. Gold x${NIGHTMARE_GOLD} on top of Elite's.`,
 };
 
@@ -160,7 +158,7 @@ export const moveFor = (mode, id) => GAME_SPEED * (diffFor(mode, id).pace ?? 1);
 export const MODES = {
   // Survival's night is spent on one of the maps since 28 October 2026 (data/maps.js), each telling
   // its own under the trials (ui/screens.js ModeScreen); the mode's own words name none of them.
-  s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Hold out for fifteen minutes.' },
+  s15: { id: 's15', name: 'Survival', sub: '15 minutes', minutes: 15, desc: 'Survive fifteen minutes and defeat the final boss.' },
   dungeon: { id: 'dungeon', name: 'Dungeon Run', sub: '3 floors', desc: 'Slay each floor\'s guardian and descend. Defeat the Demon Lord.' },
   // Ranked, as the owner named it: shown as Endless for a day (the 27 October 2026 review, D10, as a
   // player reading "Ranked" might look for a leaderboard), its name back on 28 October 2026. Its

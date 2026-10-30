@@ -13,6 +13,7 @@ import { BOTS, botFrom, parseSpec } from '../public/js/bots/strategies.js';
 import { PICKS } from '../public/js/bots/picks.js';
 import { HEROES } from '../public/js/data/heroes.js';
 import { MODES } from '../public/js/data/difficulty.js';
+import { MAPS } from '../public/js/data/maps.js';
 import { UPGRADES } from '../public/js/shared/profile.js';
 import { fmtTime } from '../public/js/engine/util.js';
 import { BUFFS } from './buffs.mjs';
@@ -25,6 +26,7 @@ const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options
   --pick=LIST   level-up policy when the bot doesn't pick: ${Object.keys(PICKS).join(', ')} (default: build)
   --hero=LIST   ${Object.keys(HEROES).join(', ')} (default: knight)
   --mode=LIST   ${Object.keys(MODES).join(', ')} (default: s15)
+  --map=ID      Survival map: ${Object.keys(MAPS).join(', ')} (default: forest)
   --runs=N      games per combination (default: 3); run i plays seed + i
   --seed=N      first seed (default: 1)
   --max=TIME    stop a game after this much game time, seconds or m:ss (default: 60:00)
@@ -81,6 +83,8 @@ async function main(argv) {
   const relics = opts.relics === undefined ? undefined : Number(opts.relics);
   if (relics !== undefined && !(Number.isInteger(relics) && relics >= 0 && relics <= 6)) fail('--relics must be 0 to 6');
   const diff = { normal: 'easy', veteran: 'medium', elite: 'hard' }[opts.diff ?? 'elite'] ?? fail('--diff must be normal, veteran or elite');
+  const map = opts.map ?? 'forest';
+  if (!Object.hasOwn(MAPS, map)) fail(`Unknown map "${map}" (${Object.keys(MAPS).join(', ')})`);
   const nightmare = opts.nightmare === undefined ? false : opts.nightmare === true || fail('--nightmare takes no value');
   if (nightmare && diff !== 'hard') fail('--nightmare is an Elite modifier: it needs --diff=elite');
   if (opts.json === true) fail('--json needs a file name: --json=tools/out/bots.json');
@@ -96,7 +100,7 @@ async function main(argv) {
     combos.push({ bot, pick, hero, mode });
   }
   const jobs = [];
-  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, seed: seed0 + i, hz, max, armory, buff, slots, relics, diff, nightmare });
+  for (const c of combos) for (let i = 0; i < runs; i++) jobs.push({ ...c, map, seed: seed0 + i, hz, max, armory, buff, slots, relics, diff, nightmare });
 
   const cores = os.availableParallelism ? os.availableParallelism() : os.cpus().length;
   const workers = Math.max(1, Math.min(jobs.length, posInt(opts.jobs ?? Math.max(1, cores - 1), 'jobs')));
@@ -113,6 +117,7 @@ async function main(argv) {
   const dims = ['bot', 'pick', 'hero', 'mode'];
   const varying = dims.filter((k) => new Set(combos.map((c) => c[k])).size > 1);
   const same = dims.filter((k) => !varying.includes(k)).map((k) => (k === 'pick' ? 'pick ' : '') + combos[0][k]);
+  if (modes.includes('s15')) same.push(`map ${map}`);
   const seeds = runs > 1 ? `seeds ${seed0}-${seed0 + runs - 1}` : `seed ${seed0}`;
   const arm = Object.keys(armory).length ? 'armory ' + Object.entries(armory).map(([k, r]) => k + ':' + r).join(',') : 'no armory';
   const buffs = Object.keys(buff).length ? ['buff ' + Object.entries(buff).map(([k, x]) => `${k} +${x}%`).join(', ')] : [];
@@ -136,7 +141,7 @@ async function main(argv) {
   if (opts.json) {
     const file = resolve(String(opts.json));
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify({ options: { bots, picks, heroes, modes, runs, seed: seed0, hz, max, armory, buff, nightmare }, results }, null, 1));
+    writeFileSync(file, JSON.stringify({ options: { bots, picks, heroes, modes, map, diff, runs, seed: seed0, hz, max, armory, buff, nightmare }, results }, null, 1));
     console.log(`\nWrote ${results.length} results to ${file}`);
   }
 }
@@ -256,7 +261,7 @@ function listStrategies() {
 // --------------------------------------------------------------- options --
 
 function parseArgs(argv) {
-  const known = ['bot', 'pick', 'hero', 'mode', 'runs', 'seed', 'max', 'hz', 'armory', 'buff', 'slots', 'relics', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
+  const known = ['bot', 'pick', 'hero', 'mode', 'map', 'runs', 'seed', 'max', 'hz', 'armory', 'buff', 'slots', 'relics', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
   const opts = {};
   for (const a of argv) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(a);

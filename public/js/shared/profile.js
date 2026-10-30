@@ -35,6 +35,7 @@ import { RARITIES, LEGENDARY, MAX_LORDS, SLOTS, POOLS, sanitizeGear, packGear, s
 import { FLOORS } from '../data/waves.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from './progress.js';
+import { killCredit } from './population.js';
 
 export { PROGRESS, needText };
 
@@ -160,7 +161,7 @@ function phaseAt(mode, time) {
 // How many more monsters a Survival map sends than the Darkwood, where it sends more (data/maps.js
 // foe.horde, the Abyss's; 28 October 2026): a night there may slay that many more (sanitizeRun's
 // kills, countedKills) and pick up that much more of the horde's gold (goldCap). Their caps were
-// set for the Darkwood's horde, and a Normal night counts each kill eight times over (effort): one
+// set for the Darkwood's horde, and Normal's kills count for more (effort): one
 // in the Abyss with every Cursed Skull, slaying all that came, could have come near the counted
 // kills' cap. Copied, as this file can't import data/maps.js (MAP_IDS); test/profile.test.js keeps
 // each at least what maps.js sends.
@@ -744,6 +745,7 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
     gold: int(raw.gold, 0, goldCap({ mode: raw.mode, time, realTime, found, map }, armoryGreed)),
     claim: int(raw.gold, 0, 1e9),
     kills,
+    effort: countedKills(kills, time, diff, nightmare, map, raw.effort, raw.mode),
     // His longest kill streak (Game.stats.maxCombo), for the record: never more than his kills.
     combo: int(raw.combo, 0, kills),
     level: int(raw.level, 1, 999),
@@ -775,14 +777,15 @@ export function runReward(run) {
   return { gold: run.gold, collected, wage, bonus, total: collected + wage + bonus, multiplier };
 }
 
-// What a run's kills count as, in Veteran's (PROGRESS.effort): each the difficulty's, a Nightmare's
-// divided again by its three times the horde; and all of them at most what Veteran's horde could
-// give in its time (sanitizeRun's kills): a forged Normal report, held to the kills a run of its
-// length could make, would count eight times that (27 October 2026). From the plain numbers, so the
-// game measures a lock's kills as it goes (Game.lockReached) with no object made each frame; map: the
-// Survival map's id, whose more monsters (MAP_MORE) raise that most (none: the Darkwood's).
-export const countedKills = (kills, time, diff, nightmare, map) => Math.min(Math.round(kills * PROGRESS.effort[diff] * (nightmare ? PROGRESS.nightmareEffort : 1)), 50 + time * 240 * mapMore(map));
-const effortFor = (run) => countedKills(run.kills, run.time, run.diff, run.nightmare, run.map);
+// Modern runs accumulate credit at each kill, so a changing rate never takes back progress.
+// Older reports without that total use the end-of-run rate. Both are bounded by the nominal
+// population ratio and the run's time, as live milestone banners are (Game.lockReached).
+export function countedKills(kills, time, diff, nightmare, map, effort, mode = 's15') {
+  const most = kills * PROGRESS.effort[diff] * (nightmare ? PROGRESS.nightmareEffort : 1);
+  const credit = Number.isFinite(effort) ? Math.max(0, effort) : kills * killCredit(phaseAt(mode, time), diff, nightmare, mode);
+  return Math.min(Math.round(Math.min(credit, most)), 50 + time * 240 * mapMore(map));
+}
+const effortFor = (run) => run.effort;
 
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);

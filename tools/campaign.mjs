@@ -2,7 +2,8 @@
 // (shared/profile.js defaultProfile), plays a night with it (tools/headless.mjs, the save's Armory,
 // slots, rerolls, banishes and unlocks), banks the run as the server does (applyRun: gold, wage,
 // records, milestones), spends the gold in the Armory as the server does (buyUpgrade) by a buying
-// order, and plays the next night, until a night is won or --runs have been played.
+// order, and plays the next night on the newest unlocked map, until a night is won or --runs have
+// been played. --goal=maps continues through every map instead of stopping at the first win.
 //   node tools/campaign.mjs --hero=knight --campaigns=2 --runs=40
 // A campaign is sequential, so the worker pool plays whole campaigns (hero × bot × campaign) side
 // by side. Campaign c plays seed + 1000·c + i on its run i, so a seed always replays the same campaigns.
@@ -43,7 +44,8 @@ const HELP = `Usage: node tools/campaign.mjs [options]
                 in the ladder is given to the fresh save
   --bot=LIST    strategies (default: gems); gems and autopilot play best
   --diff=X      normal, veteran or elite (default: veteran)
-  --runs=N      most runs in a campaign (default: 60); it stops at its first night won
+  --runs=N      most runs in a campaign (default: 60)
+  --goal=X      first-win (default) or maps: keep playing through the full Survival map ladder
   --campaigns=N independent campaigns for each hero and bot, on other seeds (default: 3)
   --seed=N      first seed (default: 1); campaign c plays seed + 1000c + i on its run i
   --order=X     the Armory's buying order: ${Object.keys(ORDERS).join(', ')} (default: survival),
@@ -95,30 +97,33 @@ export function shop(profile, tiers) {
 
 // One campaign, run by run. playGame: tools/headless.mjs's; onRun: called after each run.
 export function playCampaign(o, playGame, onRun = () => {}) {
-  const { hero = 'knight', bot = 'gems', diff = 'medium', runs = 60, seed = 1, order = 'survival', max = 1200, pick = 'build' } = o;
+  const { hero = 'knight', bot = 'gems', diff = 'medium', runs = 60, seed = 1, order = 'survival', max = 1200, pick = 'build', goal = 'first-win' } = o;
+  if (!['first-win', 'maps'].includes(goal)) throw new Error('--goal must be first-win or maps');
   const tiers = Array.isArray(order) ? order : parseOrder(order);
   let profile = P.defaultProfile();
   if (!profile.heroes.includes(hero)) profile.heroes.push(hero);
   const log = [];
-  let won = 0;
-  for (let i = 1; i <= runs && !won; i++) {
+  let won = 0, completed = false;
+  for (let i = 1; i <= runs && !completed; i++) {
     const armory = { ...profile.up }; // the ranks this run is played with
-    const g = playGame({ profile, hero, bot, pick, diff, mode: 's15', seed: seed + i - 1, max });
+    const map = P.PROGRESS.mapLadder.filter(id => P.mapOpen(profile, id)).at(-1);
+    const g = playGame({ profile, hero, bot, pick, diff, mode: 's15', map, seed: seed + i - 1, max });
     const r = P.applyRun(profile, g.report);
     if (!r.ok) throw new Error(`Run ${i} was refused: ${r.error}`);
     const s = shop(r.profile, tiers);
     profile = s.profile;
-    if (g.outcome === 'win') won = i;
+    if (g.outcome === 'win' && !won) won = i;
+    completed = goal === 'maps' ? P.PROGRESS.mapLadder.every(id => P.mapWon(profile, id)) : won > 0;
     const unlocked = [...r.reward.unlocked.map((u) => `${u.type}:${u.id}`), ...r.reward.unlocks];
     const entry = {
-      run: i, seed: seed + i - 1, outcome: g.outcome, time: g.time, level: g.level, kills: g.kills, cause: g.cause ?? null,
+      run: i, seed: seed + i - 1, map, outcome: g.outcome, time: g.time, level: g.level, kills: g.kills, cause: g.cause ?? null,
       gold: g.report.gold, collected: r.reward.collected, wage: r.reward.wage, bonus: r.reward.bonus, banked: r.reward.total,
       armory, bought: s.bought, unlocked, goldLeft: profile.gold, up: { ...profile.up }, weapons: g.weapons, passives: g.passives, ms: g.ms,
     };
     log.push(entry);
     onRun(entry);
   }
-  return { hero, bot, diff, seed, order: tiers.map((t) => t.join(',')).join('/'), won, runs: log, profile };
+  return { hero, bot, diff, seed, goal, completed, order: tiers.map((t) => t.join(',')).join('/'), won, runs: log, profile };
 }
 
 // --------------------------------------------------------------- main --
@@ -144,11 +149,13 @@ async function main(argv) {
   const order = parseOrder(opts.order ?? 'survival');
   const block = posInt(opts.block ?? 5, 'block');
   const max = parseTime(opts.max ?? '20:00');
+  const goal = opts.goal ?? 'first-win';
+  if (!['first-win', 'maps'].includes(goal)) fail('--goal must be first-win or maps');
   if (opts.json === true) fail('--json needs a file name: --json=tools/out/campaign.json');
 
   const jobs = [];
   for (const hero of heroes) for (const bot of bots) for (let c = 0; c < campaigns; c++) {
-    jobs.push({ hero, bot, diff, runs, seed: seed0 + 1000 * c, order, max, campaign: c + 1 });
+    jobs.push({ hero, bot, diff, runs, seed: seed0 + 1000 * c, order, max, goal, campaign: c + 1 });
   }
   const cores = os.availableParallelism ? os.availableParallelism() : os.cpus().length;
   const workers = Math.max(1, Math.min(jobs.length, posInt(opts.jobs ?? Math.max(1, cores - 1), 'jobs')));
@@ -164,6 +171,7 @@ async function main(argv) {
   const orderName = ORDERS[opts.order ?? 'survival'] ? opts.order ?? 'survival' : 'custom';
   console.log(`\nBot campaigns · ${{ easy: 'Normal', medium: 'Veteran', hard: 'Elite' }[diff]} · ${campaigns} campaign${campaigns > 1 ? 's' : ''} each of up to ${runs} runs (seeds from ${seed0}) · cap ${fmtTime(max)} · buying ${orderName}`);
   console.log(`  order: ${order.map((t) => t.join(',')).join(' / ')}`);
+  if (goal === 'maps') console.log('  goal: win every Survival map, advancing as each opens');
   console.log(`${played} runs on ${workers} worker${workers > 1 ? 's' : ''} in ${secs.toFixed(1)} s`);
 
   for (const hero of heroes) for (const bot of bots) {
@@ -178,7 +186,7 @@ async function main(argv) {
   if (opts.json) {
     const file = resolve(String(opts.json));
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify({ options: { heroes, bots, diff, runs, campaigns, seed: seed0, order: order.map((t) => t.join(',')).join('/'), max }, campaigns: results.map(({ profile, ...c }) => c) }, null, 1));
+    writeFileSync(file, JSON.stringify({ options: { heroes, bots, diff, runs, campaigns, seed: seed0, order: order.map((t) => t.join(',')).join('/'), max, goal }, campaigns: results.map(({ profile, ...c }) => c) }, null, 1));
     console.log(`\nWrote ${results.length} campaigns to ${file}`);
   }
 }
@@ -254,8 +262,9 @@ function report(cs, title, maxRuns, block, each) {
   // The gold over the whole campaign, and the Armory the first win was played with (or the one at the end).
   for (const c of ok) {
     const total = c.runs.reduce((s, r) => s + r.banked, 0), last = c.runs[c.runs.length - 1];
-    const spent = c.won ? `won on run ${c.won} with Armory: ${ranks(last.armory)}` : `no win in ${c.runs.length}; Armory at the end: ${ranks(last.up)}`;
+    const spent = c.won ? `won on run ${c.won} with Armory: ${ranks(c.runs[c.won - 1].armory)}` : `no win in ${c.runs.length}; Armory at the end: ${ranks(last.up)}`;
     console.log(`  campaign ${c.campaign}: ${total} gold banked, ${last.goldLeft} unspent; ${spent}`);
+    if (c.goal === 'maps') console.log(`    maps won: ${c.runs.filter(r => r.outcome === 'win').map(r => r.map).join(', ') || 'none'}; ladder ${c.completed ? 'complete' : 'incomplete'}`);
   }
 
   // When each unlock came: the run, in each campaign.
@@ -278,7 +287,7 @@ function report(cs, title, maxRuns, block, each) {
     for (const r of c.runs) {
       const out = { win: 'WON  ', dead: 'DIED ', alive: 'ALIVE' }[r.outcome];
       const extra = [r.bought.length ? `bought ${r.bought.join(' ')}` : '', r.unlocked.length ? `unlocked ${r.unlocked.join(' ')}` : ''].filter(Boolean).join('; ');
-      console.log(`  ${String(r.run).padStart(3)} ${out} ${fmtTime(r.time)} L${r.level} ${r.kills} kills  +${r.banked} (${r.collected} + wage ${r.wage}${r.bonus ? ` + win ${r.bonus}` : ''}) -> ${r.goldLeft} left${extra ? '  ' + extra : ''}${r.cause ? `  killed by ${r.cause}` : ''}`);
+      console.log(`  ${String(r.run).padStart(3)} ${out} ${r.map} ${fmtTime(r.time)} L${r.level} ${r.kills} kills  +${r.banked} (${r.collected} + wage ${r.wage}${r.bonus ? ` + win ${r.bonus}` : ''}) -> ${r.goldLeft} left${extra ? '  ' + extra : ''}${r.cause ? `  killed by ${r.cause}` : ''}`);
     }
   }
 }
@@ -286,7 +295,7 @@ function report(cs, title, maxRuns, block, each) {
 // --------------------------------------------------------------- options --
 
 function parseArgs(argv) {
-  const known = ['hero', 'bot', 'diff', 'runs', 'campaigns', 'seed', 'order', 'block', 'max', 'jobs', 'each', 'json', 'help'];
+  const known = ['hero', 'bot', 'diff', 'runs', 'campaigns', 'seed', 'order', 'block', 'max', 'goal', 'jobs', 'each', 'json', 'help'];
   const opts = {};
   for (const a of argv) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(a);

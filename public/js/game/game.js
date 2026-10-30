@@ -8,6 +8,7 @@ import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { mapFor } from '../data/maps.js';
 import { RANKS, HERO_UNLOCK_TIME, countedKills } from '../shared/profile.js';
+import { killCredit } from '../shared/population.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx, playMusic, stopMusic, cutToMusic } from '../engine/audio.js';
@@ -64,8 +65,8 @@ export const BANNERS_MOST = 2;
 // world slows and drains to grey and dark over `drain`; he flashes white for `flash` and tips
 // over in `fall`, still in colour; "Slain by …" fades in from `name` (Hud); the results at `end`.
 export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
-// A boss still standing at dawn (the Lich, outlasted) burns away in sight over `boss` s, where it
-// had vanished at random like any foe (the 27 October 2026 review, D15; burnBoss).
+// Any earlier boss left when the timer and final-boss objectives are met burns away during
+// the victory transition. The final boss itself must be slain (burnBoss).
 export const DAWN_BURN = { boss: 2.5 };
 // The options' FLASHES: SOFT (27 October 2026): no white flash over the screen or a boss's bar
 // brighter than this, crits in one steady gold, no white pulse.
@@ -261,10 +262,14 @@ export class Game {
     this.time = 0;
     this.floorTime = 0;
     this.frame = 0;
-    this.state = 'play'; // play | levelup | chest | item | paused | dying | dawn | descend | travel | over
+    this.state = 'play'; // play | levelup | chest | item | paused | dying | dawn | cleared | descend | travel | over
+    this.levelComplete = false;
+    this.finalBossDefeated = false;
+    this.overtimeWarned = false;
     this.timeScale = 1;
     this.bossPower = 1;
     this.kills = 0;
+    this.killEffort = 0; // fractional progression credit, fixed at each kill's population rate
     this.gold = 0;
     this.stats = { damage: 0, damageTaken: 0, gold: 0, bosses: 0, chests: 0, maxCombo: 0, minHp: 1, fromBoss: 0, fromMobs: 0, fromShots: 0, bossLog: [], killedBy: null, wounds: {} };
     // wounds: the damage taken by who dealt it, a foe by its kind, a boss by his name, a shot as its
@@ -405,7 +410,7 @@ export class Game {
     this.cam.y = this.player.y - this.cam.H / 2;
     // The map's name over its night (The Darkwood's as it always was).
     // A map spent in the sun (its look's sun: 28 October 2026) has no dawn to wait for.
-    if (this.mode === 's15') this.banner(this.map.name, this.look.sun ? 'Survive 15 minutes' : 'Survive 15 minutes until dawn', this.map.color, 3.5);
+    if (this.mode === 's15') this.banner(this.map.name, 'Survive 15 minutes and defeat the final boss', this.map.color, 3.5);
     else if (this.mode === 'ranked') {
       this.banner('The Endless Night', 'No dawn will come. Last as long as you can.', '#f6757a', 3.5);
       this.rankIdx = RANKS.findLastIndex(([min]) => this.time >= min * 60);
@@ -427,7 +432,7 @@ export class Game {
       const m = this.time / 60;
       return m <= 15 ? m * 1.4 : 21 + (m - 15) * 0.9;
     }
-    if (this.mode === 's15') return (this.time / 60) * 1.4;
+    if (this.mode === 's15') return (Math.min(this.time, this.duration) / 60) * 1.4;
     const f = FLOORS[this.floor - 1];
     return Math.min(f.cap, f.phase0 + (this.floorTime / 60) * f.rate);
   }
@@ -537,6 +542,11 @@ export class Game {
       const bosses = this.map.bosses;
       sp.bossIdx = 0;
       while (sp.bossIdx < bosses.length && bosses[sp.bossIdx].at <= t) sp.bossIdx++;
+      // A clock jump may skip optional arrivals, but cannot skip the boss required to finish.
+      const final = bosses.at(-1);
+      if (final && t >= final.at && !this.finalBossDefeated && !this.enemies.some(e => !e.dead && e.type === final.id)) {
+        sp.bossIdx = Math.min(sp.bossIdx, bosses.length - 1);
+      }
     }
     return t;
   }
@@ -1132,6 +1142,7 @@ export class Game {
     }
     const p = this.player;
     this.kills++;
+    this.killEffort += killCredit(this.phase, this.diffId, this.nightmare, this.mode);
     if (this.ultRun && ultBlow(o)) this.ultRun.kills++;
     this.combo++;
     this.comboT = COMBO.hold;
@@ -1329,6 +1340,7 @@ export class Game {
 
   bossDefeated(e) {
     const p = this.player;
+    if (this.mode === 's15' && e.type === this.map.bosses.at(-1)?.id) this.finalBossDefeated = true;
     this.stats.bosses++;
     const log = this.stats.bossLog.find((b) => b.id === e.type && b.kill === undefined);
     if (log) log.kill = Math.round(this.time - log.t);
@@ -1901,7 +1913,7 @@ export class Game {
     // Bosses, crypt lords and champions only take a heavy blow: a relic is no way past them. The
     // blow grows and shrinks with their health (difficulty.js health, and the map's: data/maps.js foe
     // hp), so it takes the same share of them on Normal as on Veteran, in the Sunscorch as in the
-    // Abyss: a flat 200 would all but fell a Normal crypt lord (216).
+    // Abyss: a flat 200 would take too large a share of a weakened Normal crypt lord.
     for (const e of this.enemiesOnScreen()) {
       if (e.boss || e.elite) this.hitEnemy(e, 200 * this.diff.health * this.map.foe.hp, { type: 'holy' });
       else this.killEnemy(e, { noSplit: true });
@@ -2169,7 +2181,7 @@ export class Game {
         return this.stats.bosses >= l.at;
       case 'kills':
         // Held as the report will be (sanitizeRun), its map's more monsters too (the Abyss's).
-        return l.from + countedKills(this.kills, t, this.diffId, this.nightmare, this.map.id) >= l.at;
+        return l.from + countedKills(this.kills, t, this.diffId, this.nightmare, this.map.id, this.killEffort, this.mode) >= l.at;
       case 'evolution':
         for (const w of p.weapons) if (w.evolved && w.id === l.of) return true;
         return false;
@@ -2211,19 +2223,32 @@ export class Game {
   }
 
   victory(kind) {
-    if (this.state === 'dawn' || this.state === 'over') return;
+    if (this.levelComplete || this.state === 'over') return false;
+    if (kind === 'survival' && (this.mode !== 's15' || this.time < this.duration || !this.finalBossDefeated)) return false;
+    this.levelComplete = true;
     this.state = 'dawn';
     this.dawnT = 0;
     this.calm = 1;
     this.victoryKind = kind;
     // A boss still standing burns in the sunrise (burnBoss), and the dawn says so. On a map spent in
     // the sun (its look's sun, 28 October 2026) the horde breaks instead, the boss fleeing the field.
-    const lord = this.enemies.find((e) => e.boss && !e.dead);
-    if (kind === 'survival' && this.look.sun) this.banner('The horde breaks!', lord ? `${lord.def.title || lord.def.name} flees the field` : 'You held out', '#fee761', 4);
-    else if (kind === 'survival') this.banner('Dawn breaks!', lord ? `${lord.def.title || lord.def.name} burns in the sunrise` : 'You survived the night', '#fee761', 4);
+    if (kind === 'survival' && this.look.sun) this.banner('The horde breaks!', 'The final boss is slain. You held out.', '#fee761', 4);
+    else if (kind === 'survival') this.banner('Dawn breaks!', 'The final boss is slain. You survived the night.', '#fee761', 4);
     else this.banner('Victory!', 'The Lord of Cinders is no more', '#fee761', 4);
     sfx('bell');
     playMusic('results');
+    return true;
+  }
+
+  // Reward screens and pause return to safe collection once the level has been completed.
+  get playState() {
+    return this.levelComplete ? 'cleared' : 'play';
+  }
+
+  finishLevel() {
+    if (!this.levelComplete || this.state !== 'cleared' || this.pendingLevels || this.chestQueue.length || this.itemQueue.length) return false;
+    this.finish(true);
+    return true;
   }
 
   // A boss caught by the sunrise (the dawn's update): it fades and flickers over DAWN_BURN.boss s,
@@ -2261,6 +2286,23 @@ export class Game {
     this.gold += paid;
     this.stats.gold += paid;
     this.result = {
+      ...this.runReport(victory, died),
+      weapons: p.weapons.map((w) => ({ id: w.id, level: w.level, dmg: Math.round(w.dmgDealt), kills: w.kills, since: w.since })),
+      stats: { ...this.stats },
+      crypts: this.cleared.size,
+    };
+  }
+
+  // The same progression report for the browser and headless tools. A capped simulation reports
+  // its progress without claiming a win or death; an ended run keeps its actual outcome.
+  runReport(victory = this.result?.victory === true, died = this.result?.died === true) {
+    if (this.result) {
+      const report = { ...this.result };
+      for (const key of ['weapons', 'stats', 'crypts']) delete report[key];
+      return report;
+    }
+    const p = this.player;
+    return {
       victory,
       died, // for the Consecration's milestone (shared/progress.js deaths)
       mode: this.mode,
@@ -2268,20 +2310,18 @@ export class Game {
       diff: this.diffId,
       nightmare: this.nightmare,
       hero: p.id,
-      time: Math.floor(this.time),
+      time: Math.floor(this.mode === 's15' ? Math.min(this.time, this.duration) : this.time),
       gold: this.gold,
       kills: this.kills,
+      effort: this.killEffort,
       level: p.level,
       bosses: this.stats.bosses, // bosses and crypt lords slain, for the milestones (shared/progress.js)
       combo: this.stats.maxCombo, // his longest kill streak, for the record (shared/profile.js best.combo)
       evolved: this.signatureEvolved(), // and his signature evolved
       evos: p.weapons.filter((w) => w.evolved).map((w) => w.id), // and every evolution he held
       floor: this.floor,
-      weapons: p.weapons.map((w) => ({ id: w.id, level: w.level, dmg: Math.round(w.dmgDealt), kills: w.kills, since: w.since })),
-      stats: { ...this.stats },
       gear: this.gear,
       realTime: Math.floor(this.clock),
-      crypts: this.cleared.size,
       found: this.itemsFound,
     };
   }
@@ -2442,7 +2482,12 @@ export class Game {
       }
       for (const e of this.enemies) if (e.boss && !e.dead) this.burnBoss(e, rdt);
       p.update(dt);
-      if (this.dawnT > 5) this.finish(true);
+      if (this.dawnT > 5) {
+        for (const e of this.enemies) if (!e.prop) e.dead = true;
+        this.state = 'cleared';
+      }
+    } else if (this.state === 'cleared') {
+      p.update(dt);
     }
 
     this.world.update(dt);
@@ -2501,6 +2546,13 @@ export class Game {
       s.t += dt;
       if (!s.used && this.state === 'play' && Math.hypot(p.x - s.x, p.y - s.y) < 13) this.useShrine(s);
     }
+    // Resolve a completed Survival level before a doorway can start another journey.
+    if (this.state === 'play' && this.mode === 's15' && this.time >= this.duration && !this.inCrypt) {
+      if (!this.victory('survival') && !this.overtimeWarned) {
+        this.overtimeWarned = true;
+        this.banner('Time survived!', 'Defeat the final boss to complete the level', '#fee761', 3.5);
+      }
+    }
     // Crypt doors: on the steps, pushing up for CRYPT_PUSH goes in (cryptDoor: the one he is on,
     // for the HUD's prompt).
     this.cryptDoor = null;
@@ -2524,7 +2576,6 @@ export class Game {
     if (Math.abs(c.x - tx) > c.W) c.x = tx;
     if (Math.abs(c.y - ty) > c.H) c.y = ty;
 
-    if (this.state === 'play' && this.mode !== 'dungeon' && this.time >= this.duration) this.victory('survival');
     // The last guardian's gear is chosen before the dawn, and nothing fells the hero meanwhile.
     if (this.gearThenWin) {
       if (this.state === 'play' && !this.itemQueue.length) {

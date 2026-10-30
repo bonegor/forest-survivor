@@ -94,7 +94,7 @@ journey and its reminder.
 
 ### Modes
 
-- **Survival — 15 minutes.** Endless land, night falls darker, three bosses arrive on a schedule. Survive until dawn to win. It is played on five maps, each opened by a night won on the one before it (below).
+- **Survival — 15 minutes and the final boss.** Endless land, night falls darker, three bosses arrive on a schedule. Both the timer and the final boss must be completed to win. If the timer ends first, the remaining fight continues without fresh regular hordes. Once both objectives are met, the level becomes safe: collect the remaining loot, open chests and choose gear, then use **FINISH** (Enter, gamepad A or the on-screen button) to bank the rewards. It is played on five maps, each opened by a win on the one before it (below).
 - **Dungeon Run — 3 floors.** Each floor's guardian sleeps iced over behind a seal until you've slain enough foes and spent long enough on the floor; the blows you land on it thaw the seal too (it loses no health), breaking it in as little as half the time. Kill it, take the stairs, and defeat the Demon Lord on floor 3. Your build carries over between floors.
 - **Ranked — endless.** No dawn. The night keeps getting deadlier, the four lords return in rotation every 4½ minutes, and past the half-hour a blood moon rises. Your score is how long you last, kept as a personal best per hero with a rank title (Peasant, Squire, Knight, Champion, Paladin, Warlord, Hero at 30 minutes, Legend at 40, Mythic at 50, Immortal at an hour). Its records are personal bests, not a shared leaderboard. The first time it is chosen, a note says it is always played on Elite, and the next goal asks for a night won on Elite before it.
 
@@ -369,9 +369,16 @@ node tools/bots.mjs --bot=kite:r=40,kite:r=60 --hero=all --max=10:00 --each
 node tools/bots.mjs --bot=gems --pick=all --armory=max --json=tools/out/gems.json
 node tools/bots.mjs --bot=gems --nightmare                # Elite, three times the monsters
 node tools/bots.mjs --list                      # strategies, their parameters and the level-up policies
+node tools/bots.mjs --bot=autopilot --diff=normal --map=desert --runs=2 --jobs=2
+node tools/campaign.mjs --diff=normal --goal=maps --campaigns=1 --runs=20 --jobs=1 --each
+node tools/pressure.mjs --diff=normal --map=desert --json=tools/out/pressure-normal.json
 ```
 
-Every option takes a comma list (or `all`) and the report gets a row per combination; run *i* of every row plays seed *seed + i*, so rows compare like for like. Games step at a fixed 60 Hz (`--hz`), run on all cores but one (`--jobs`) and stop at `--max` game time (an hour by default). `--each` adds a line per game (build, damage by source, what killed it) and `--json=FILE` keeps every result. For example, `npm run bots -- --runs=5` (30 full nights in about 80 s):
+The bot, pick, hero and mode options take comma lists (or `all`), and the report gets a row per combination; run *i* of every row plays seed *seed + i*, so rows compare like for like. `--map=ID` selects one Survival map; Ranked and Dungeon Run keep their forest rules. Games step at a fixed 60 Hz (`--hz`), run on all cores but one (`--jobs`) and stop at `--max` game time (an hour by default). Use `--jobs=1` or `--jobs=2` for a small CPU budget. `--each` adds a line per game (build, damage by source, what killed it) and `--json=FILE` keeps every result.
+
+Campaigns use the fresh save's actual slots, unlocks and worn gear, start on the desert, and bank the same death, evolution, gear and map report as the browser. They stop at the first win by default; `--goal=maps` continues onto each newly opened map until the ladder is won or the run limit is reached. Capped simulations do not claim a death or victory. The importable pressure calculator (`pressureTable` in `tools/pressure.mjs`) estimates arrivals without playing a night and shares the live spawner's opening delay and head-start policy, including Normal's zero opening burst.
+
+For example, `npm run bots -- --runs=5` (historical results, 30 full nights in about 80 s):
 
 ```
 bot        won  died  median   mean        range  kills  level  dmg/min  bosses  killed by

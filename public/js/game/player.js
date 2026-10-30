@@ -606,7 +606,7 @@ export class Player {
       this.ult.t -= dt;
       g.updateUlt(this.ult, dt);
       if (this.ult.t <= 0) this.ult = null;
-    } else if (this.fury >= 100 && !this.ultLocked && input.pressed('ult') && !g.ultLaunch) {
+    } else if (g.state === 'play' && this.fury >= 100 && !this.ultLocked && input.pressed('ult') && !g.ultLaunch) {
       // Spent at once, so the press can't be doubled; the launch plays first (Game.launchUlt).
       this.fury = 0;
       g.launchUlt(this.hero.ult);

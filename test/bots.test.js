@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { playGame } from '../tools/headless.mjs';
 import { BOTS, botFrom, parseSpec } from '../public/js/bots/strategies.js';
 import { PICKS } from '../public/js/bots/picks.js';
+import * as P from '../public/js/shared/profile.js';
 
 const strip = ({ ms, ...r }) => r; // wall time is all that may differ between replays
 
@@ -40,6 +41,24 @@ test('a death ends the run and names the killer', () => {
   assert.equal(r.outcome, 'dead');
   assert.ok(r.time < 120 && r.hp === 0);
   assert.equal(typeof r.cause, 'string');
+  assert.equal(r.report.died, true, 'the campaign can credit death milestones');
+  for (const key of ['combo', 'evolved', 'evos', 'gear', 'found', 'effort']) assert.ok(Object.hasOwn(r.report, key), key);
+});
+
+test('headless runs honor map selection and a profile starts on its newest unlocked map', () => {
+  assert.equal(playGame({ map: 'frozen', max: 0 }).report.map, 'frozen');
+  assert.equal(playGame({ max: 0 }).report.map, 'forest', 'unrestricted tools preserve their default');
+  const profile = P.defaultProfile();
+  assert.equal(playGame({ profile, max: 0 }).report.map, 'desert');
+  profile.gear.knight = { ring: { slot: 'ring', rarity: 0, stats: { crit: 2 }, power: null, seed: 1 } };
+  const geared = playGame({ profile, max: 0 });
+  assert.deepEqual(geared.report.gear, profile.gear.knight, 'the simulation actually wears the save’s gear');
+  assert.equal(geared.banked, P.applyRun(profile, geared.report).reward.total, 'the tool uses the save’s actual reward rules');
+  const won = P.applyRun(profile, { mode: 's15', map: 'desert', diff: 'easy', hero: 'knight', victory: true, time: 900 }).profile;
+  assert.equal(playGame({ profile: won, max: 0 }).report.map, 'frozen');
+  assert.equal(playGame({ mode: 'ranked', map: 'desert', max: 0 }).report.map, null);
+  assert.throws(() => playGame({ map: 'constructor', max: 0 }), /Unknown map/);
+  assert.throws(() => playGame({ profile, map: 'hell', max: 0 }), /locked/);
 });
 
 test('strategies of your own, and their parameters', () => {
@@ -59,7 +78,8 @@ test('strategies of your own, and their parameters', () => {
 test('the command line prints a comparison table', () => {
   const cli = fileURLToPath(new URL('../tools/bots.mjs', import.meta.url));
   // A test buff of five times the health keeps a bare Knight standing the 10 s.
-  const out = execFileSync(process.execPath, [cli, '--bot=idle,kite', '--runs=2', '--max=10', '--jobs=2', '--buff=life:400'], { encoding: 'utf8' });
+  const out = execFileSync(process.execPath, [cli, '--bot=idle,kite', '--map=forest', '--runs=2', '--max=10', '--jobs=2', '--buff=life:400'], { encoding: 'utf8' });
+  assert.match(out, /map forest/);
   assert.match(out, /buff life \+400%/);
   assert.match(out, /^bot\s+won\s+died\s+alive\s+median/m);
   assert.match(out, /^idle\s+0\s+0\s+2\s+00:10/m);

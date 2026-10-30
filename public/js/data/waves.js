@@ -61,7 +61,7 @@ export const pocketAt = (minute, pockets = POCKETS) => pockets.find((p) => minut
 // their way back), the screen empty for as long as they take, and the steady horde comes all the
 // same, each in the place of the farthest off the screen (the owner's of 27 October 2026, "it looks
 // like I am without monsters" at 10:00 on an Elite Nightmare).
-export const HORDE_RATE = { turn: 20, early: 30, settle: 4, knee: 100, head: 30, headLate: 8, carry: 1, perFrame: 6, room: 200, thin: 150 };
+export const HORDE_RATE = { turn: 20, early: 30, settle: 4, knee: 100, delay: 0.6, head: 30, headLate: 8, carry: 1, perFrame: 6, room: 200, thin: 150 };
 export function hordeRate(phase) {
   const R = HORDE_RATE, m = minuteOf(phase);
   const turn = R.turn + (R.early - R.turn) * Math.max(0, 1 - m / R.settle);

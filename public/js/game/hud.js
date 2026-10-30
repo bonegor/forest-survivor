@@ -654,7 +654,7 @@ export class Hud {
       const remain = clockTime(g);
       const c = textCanvas(fmtTime(remain), remain < 60 ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
       ctx.drawImage(c, cx - c.width, 9, c.width * 2, c.height * 2);
-      const u = g.time / g.duration, B = nightBarHalf(cx), at = (s) => cx - B + 1 + Math.round((2 * B - 2) * Math.min(1, s / g.duration));
+      const u = clamp(g.time / g.duration, 0, 1), B = nightBarHalf(cx), at = (s) => cx - B + 1 + Math.round((2 * B - 2) * Math.min(1, s / g.duration));
       ctx.fillStyle = '#181425';
       ctx.fillRect(cx - B, 30, 2 * B, 4);
       ctx.fillStyle = u > 0.9 ? '#f6757a' : '#5a6988';
@@ -683,6 +683,10 @@ export class Hud {
     }
     // In a crypt the clock above stands still.
     if (g.inCrypt) drawText(ctx, `${g.inCrypt.name.toUpperCase()} · TIME STANDS STILL`, cx, 38, { align: 'center', color: '#b55088' });
+    else if (g.mode === 's15') {
+      const objective = g.levelComplete ? 'LEVEL COMPLETE' : g.finalBossDefeated ? 'BOSS SLAIN' : g.time >= g.duration ? 'DEFEAT FINAL BOSS' : 'FINAL BOSS REQUIRED';
+      drawText(ctx, objective, cx, 38, { align: 'center', color: g.levelComplete || g.finalBossDefeated ? '#fee761' : '#c0cbdc' });
+    }
     // Kills and gold.
     let y = 10;
     const right = W - 4;

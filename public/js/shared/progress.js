@@ -9,8 +9,10 @@
 // Insight, Exile: shared/profile.js UPGRADES); weapons, relics and ultimates open by milestones;
 // a new player starts with three weapon slots.
 //
-// Every number is here, in PROGRESS, to be retuned in one place. Nothing here imports anything:
+// Progression thresholds are here; population weights come from the shared spawning rules:
 // shared/profile.js reads it (applyRun, sanitizeProfile, metaBonuses, openFor, progressList).
+
+import { KILL_CREDIT, NIGHTMARE_MORE } from './population.js';
 
 export const PROGRESS = {
   // Slots a new player has; each rank of the Armory's Arsenal or Reliquary adds one, to the
@@ -32,13 +34,10 @@ export const PROGRESS = {
   // five at most (the review of 27 October 2026: a slot at every doubling from 10 gave seven after
   // one run, then asked 327,680 kills for the sixteenth).
   exclusionAt: [10, 500, 3000, 10000, 30000],
-  // A kill counts toward the 'kills' milestones and the exclusion slots as one of Veteran's (27
-  // October 2026): a difficulty's as Veteran's horde over its own (data/difficulty.js VETERAN.spawn
-  // / spawn), so Normal's eighth of the horde opens as fast as Veteran's whole one, and a
-  // Nightmare's divided again by its NIGHTMARE.more. This file imports nothing, so the numbers are
-  // copied here; test/progress.test.js keeps them equal to difficulty.js.
-  effort: { easy: 8, medium: 1, hard: 0.5 },
-  nightmareEffort: 1 / 3,
+  // Nominal kill-credit bounds, derived from the spawning rules. Normal's live credit also
+  // follows the soft cap (population.js killCredit), including its tripled steady rate.
+  effort: KILL_CREDIT,
+  nightmareEffort: 1 / NIGHTMARE_MORE,
   // Open from the first run; every hero's signature weapon(s) always are too (data/heroes.js unique).
   // The owner's (22 October 2026): five to start with, the hero's own among them (the boomerang and
   // the spikes too), Frost Nova a run away (1:00), Consecration after ten falls, then the ladder;

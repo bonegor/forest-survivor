@@ -374,10 +374,9 @@ test('Consecration opens on the tenth fall: a run quit or won is no fall', () =>
   assert.ok(P.openFor(r.profile, 'knight').weapons.includes('aura'));
 });
 
-// shared/progress.js imports nothing, so a kill's worth as Veteran's is copied there from
-// data/difficulty.js: Veteran's horde over each difficulty's, and a Nightmare's three times it.
-test("a kill counts as Veteran's horde over its difficulty's, as difficulty.js has the hordes", () => {
-  for (const [id, d] of Object.entries(DIFFS)) assert.ok(Math.abs(PROGRESS.effort[id] - VETERAN.spawn / d.spawn) < 1e-9, id);
+// Nominal bounds include boosts applied after the spawn-rate cap, not just raw spawn factors.
+test("kill-credit bounds follow the shared population rules, including Normal's steady boost", () => {
+  for (const [id, d] of Object.entries(DIFFS)) assert.ok(Math.abs(PROGRESS.effort[id] - VETERAN.spawn / (d.spawn * (d.steadyMore ?? 1))) < 1e-9, id);
   assert.equal(PROGRESS.nightmareEffort, 1 / NIGHTMARE.more);
 });
 

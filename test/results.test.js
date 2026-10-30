@@ -96,6 +96,8 @@ test('winning starts results music at dawn and keeps it on the results screen', 
   app.startRun();
   const gs = app.screen;
   playMusic('boss');
+  gs.game.time = gs.game.duration;
+  gs.game.finalBossDefeated = true;
   gs.game.victory('survival');
   assert.equal(musicState().piece, 'results');
   gs.game.finish(true);

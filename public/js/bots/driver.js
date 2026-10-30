@@ -20,6 +20,7 @@ export class Driver {
     this.ticks = 0;
     this.hits = 0;
     this.cause = null; // what dealt the killing blow
+    this.collectedClear = false;
     this.bot = botFrom(o.bot ?? 'autopilot', o.params, o.label);
     this.pickName = o.pick || 'build';
     this.policy = PICKS[this.pickName];
@@ -68,7 +69,7 @@ export class Driver {
   run(seconds) {
     const g = this.g, end = g.time + seconds;
     // The clock stops while dying, at dawn and on the stairs: bound the frames too.
-    for (let n = Math.ceil(seconds * this.hz * 4) + 600; n > 0 && g.time < end && this.step(); n--);
+    for (let n = Math.ceil(seconds * this.hz * 4) + 600; n > 0 && (g.time < end || g.levelComplete) && this.step(); n--);
     return this;
   }
 
@@ -76,8 +77,14 @@ export class Driver {
   // game waits on the cards), else one treasure chest, else one piece of gear.
   settle() {
     const g = this.g;
-    if (g.state === 'chest') g.state = 'play';
-    if ((g.state === 'play' || g.state === 'levelup') && g.pendingLevels > 0) {
+    if (g.state === 'cleared' && !this.collectedClear) {
+      // A bot banks the clear's remaining loot without spending simulated minutes walking the
+      // safe map. People choose when to finish on GameScreen's completion button.
+      this.collectedClear = true;
+      g.sweepLoot();
+    }
+    if (g.state === 'chest') g.state = g.playState;
+    if ((g.state === g.playState || g.state === 'levelup') && g.pendingLevels > 0) {
       // The run's auto-pick first, as the game screen does (a bot's run never sets one).
       g.resolveAutoLevels();
       while (g.pendingLevels > 0) {
@@ -85,16 +92,17 @@ export class Driver {
         g.applyChoice(cards[this.choose(cards)]);
         g.pendingLevels--;
       }
-      g.state = 'play';
-    } else if (g.state === 'play' && g.chestQueue.length) {
+      g.state = g.playState;
+    } else if (g.state === g.playState && g.chestQueue.length) {
       // The roll gives what it holds, an evolution and its gold too, as the chest screen's does.
       g.rollChest(g.chestQueue.shift());
-    } else if (g.state === 'play' && g.itemQueue.length) {
+    } else if (g.state === g.playState && g.itemQueue.length) {
       // Wear it unless something rarer is worn there.
       const it = g.itemQueue.shift(), worn = g.gear[it.slot];
       if (!worn || it.rarity >= worn.rarity) g.wearItem(it);
       else g.sellItem(it);
     }
+    if (g.state === 'cleared') g.finishLevel();
   }
 
   // The bot's own pick if it makes a valid one, else the policy's.
@@ -118,7 +126,7 @@ export class Driver {
   // How the run went (so far).
   summary() {
     const g = this.g, p = g.player, s = g.stats;
-    const won = g.result ? g.result.victory : g.state === 'dawn';
+    const won = g.result ? g.result.victory : g.levelComplete;
     return {
       outcome: won ? 'win' : p.dead ? 'dead' : 'alive',
       time: Math.round(g.time * 10) / 10,

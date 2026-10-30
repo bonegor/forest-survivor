@@ -2,13 +2,14 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, hordeRate, monsterHp, minuteOf, pocketAt, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, monsterHp, minuteOf, pocketAt, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
-import { ENEMIES, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
+import { ENEMIES, CRYPT_LORD, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
 import { rand, randi, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
 import { NIGHTMARE } from '../data/difficulty.js';
+import { steadyRate, minuteMore, lateMore } from '../shared/population.js';
 import { PACE_OF } from './enemies.js';
 
 const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
@@ -20,13 +21,12 @@ export const isFew = (type) => !!(ENEMIES[type]?.shot || ENEMIES[type]?.charge);
 // How many times the night's monsters the rules send at a phase: Normal's late horde, 30% more
 // from minute 9 of the night on (difficulty.js late), in the steady horde and the timed swarms,
 // rings and packs alike. Veteran (and so Ranked) never.
-export const lateMore = (diff, phase) => (diff.late && minuteOf(phase) >= diff.late.from ? diff.late.more : 1);
+export { lateMore } from '../shared/population.js';
 
 // The owner's (21 October 2026): "late game should have more monsters ... for every minute passed,
 // increase the monster generation by 5%": the horde grows by PER_MINUTE of its first size each
 // minute of the night (1.75 times it at 15:00), the steady horde and the timed swarms alike.
-export const PER_MINUTE = 0.05;
-export const minuteMore = (phase) => 1 + PER_MINUTE * minuteOf(phase);
+export { PER_MINUTE, minuteMore } from '../shared/population.js';
 
 // All the more the run sends: a minute's growth (minuteMore), Normal's late horde (lateMore) and,
 // on a Nightmare, three times as many again (difficulty.js NIGHTMARE), on Veteran only. Never on
@@ -104,7 +104,7 @@ export function waveAt(t) {
 export class Spawner {
   constructor(g) {
     this.g = g;
-    this.acc = 0.6; // how long yet before the steady horde starts coming
+    this.acc = HORDE_RATE.delay; // how long yet before the steady horde starts coming
     this.owed = null; // the steady horde's monsters due and not yet come (null: its head start yet to come)
     this.eventIdx = 0;
     this.eliteT = 95;
@@ -211,9 +211,7 @@ export class Spawner {
   // 330 at 15:00, far past any hero's killing: the cap would have held the field full all night,
   // the standing horde again.
   rate(phase) {
-    const g = this.g, grow = minuteMore(phase), knee = HORDE_RATE.knee * grow;
-    const x = hordeRate(phase) * g.diff.spawn * (g.mode === 'dungeon' ? 0.9 : 1) * grow * lateMore(g.diff, phase);
-    return (x / (1 + x / knee)) * runMore(g) * (g.diff.steadyMore ?? 1);
+    return steadyRate(phase, this.g.diff, this.g.mode) * runMore(this.g);
   }
 
   // The rate right now: rate, and more while a wave is on (waveAt).
@@ -221,9 +219,20 @@ export class Spawner {
     return this.rate(phase) * waveAt(this.g.time);
   }
 
+  // Used by the live spawner and the pressure calculator, including floors that start late.
+  initialOwed(phase) {
+    return this.rate(phase) * (this.g.diff.headStart ?? (phase < 1 ? HORDE_RATE.head : HORDE_RATE.headLate));
+  }
+
   update(dt) {
     const g = this.g;
     if (g.calm > 0 || g.inCrypt) return; // e.g. dawn, descending, a crypt
+    // Once Survival's clock is done, finish the boss fight without an endless fresh horde.
+    // A boss whose placement failed still gets retried, so the victory condition stays reachable.
+    if (g.mode === 's15' && g.time >= g.duration) {
+      this.survivalBosses();
+      return;
+    }
     const phase = g.phase;
 
     // Steady horde, in waves: waveRate a second, never minding how many stand (the owner's of 26
@@ -236,7 +245,7 @@ export class Spawner {
     if (this.acc > 0) this.acc -= dt;
     else {
       const R = HORDE_RATE, rate = this.waveRate(phase);
-      if (this.owed === null) this.owed = this.rate(phase) * (g.diff.headStart ?? (phase < 1 ? R.head : R.headLate));
+      if (this.owed === null) this.owed = this.initialOwed(phase);
       // At most `carry` seconds' worth wait (a head start may be more, and only runs down).
       this.owed = Math.min(this.owed + rate * dt, Math.max(this.owed, 1 + rate * R.carry));
       // Room kept for what is sent at the hero (HORDE_RATE.room): what was due doesn't come, unless
@@ -340,15 +349,21 @@ export class Spawner {
       }
       // Survival's night brings its map's three (data/maps.js bosses; the Darkwood's are data/waves.js
       // SURVIVAL_BOSSES.s15). Something stirs in the dark ARRIVAL.stir real seconds before each comes.
-      const bosses = g.mode === 's15' ? g.map.bosses : null;
-      if (bosses && this.bossIdx < bosses.length && g.stirFor !== this.bossIdx && g.time >= bosses[this.bossIdx].at - ARRIVAL.stir * g.pace) {
-        g.stirFor = this.bossIdx;
-        g.bossStir(bosses[this.bossIdx].id);
-      }
-      if (bosses && this.bossIdx < bosses.length && g.time >= bosses[this.bossIdx].at) {
-        const pt = g.world.spawnPoint(g, 30);
-        if (pt && g.spawnBoss(bosses[this.bossIdx].id, pt.x, pt.y)) this.bossIdx++;
-      }
+      this.survivalBosses();
+    }
+  }
+
+  survivalBosses() {
+    const g = this.g, bosses = g.mode === 's15' ? g.map.bosses : null;
+    if (!bosses || this.bossIdx >= bosses.length) return;
+    const next = bosses[this.bossIdx];
+    if (g.stirFor !== this.bossIdx && g.time >= next.at - ARRIVAL.stir * g.pace) {
+      g.stirFor = this.bossIdx;
+      g.bossStir(next.id);
+    }
+    if (g.time >= next.at) {
+      const pt = g.world.spawnPoint(g, 30);
+      if (pt && g.spawnBoss(next.id, pt.x, pt.y)) this.bossIdx++;
     }
   }
 
@@ -497,8 +512,8 @@ export class Spawner {
     const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone'));
     const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)} ${pick(CHAMPION_TITLE)}`;
     const e = g.spawnEnemy('skeletonarcher', x, y, {
-      hpMul: g.diff.health * g.map.foe.hp,
-      dmgMul: 1.5,
+      hpMul: g.diff.health * g.map.foe.hp * CRYPT_LORD.health,
+      dmgMul: 1.5 * CRYPT_LORD.damage,
       elite: true,
       lord: true,
       mod,

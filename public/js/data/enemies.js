@@ -7,6 +7,10 @@
 // steady horde (Spawner.update; it was the Goblin's id, his three); wicked, the casters the Witch
 // Hunter's bolts seek out first (game/effects.js wicked; it was the Cultist's id).
 
+// Crypt lords keep the archer's readable wind-up, but take longer to defeat and enter a
+// three-arrow second phase. These multipliers apply only to crypt lords, not other casters.
+export const CRYPT_LORD = { health: 2, damage: 1.25, enrageAt: 0.5, cooldown: 0.75, spread: 0.2, arrows: 3 };
+
 export const ENEMIES = {
   bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, dmg: 3, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true, fry: true },
   rat: { name: 'Plague Rat', sprite: 'rat', hp: 2.5, spd: 44, dmg: 3, r: 4, xp: 1, ai: 'walker', mass: 0.6, anim: 8, death: 'blood', fry: true },
@@ -38,10 +42,9 @@ export const ENEMIES = {
   ogre: { name: 'Cyclops Ogre', sprite: 'ogre', hp: 300, spd: 24, dmg: 20, r: 10, xp: 30, ai: 'walker', mass: 8, anim: 3, death: 'blood', kbRes: 0.9 },
   deathknight: { name: 'Death Knight', sprite: 'deathknight', hp: 190, spd: 40, dmg: 15, r: 6, xp: 22, ai: 'walker', mass: 4, anim: 4, death: 'dark', kbRes: 0.8 },
   // Each of a crypt's lords (Spawner.spawnLord), boss-sized: it keeps its distance and shoots.
-  // 600 health lasts about six strikes of a fully grown sword (two of its slashes
-  // land on one foe, about 105 damage a strike since 27 October 2026). Veteran makes it 720
-  // (difficulty.js health, the owner's +20% of 20 October 2026), about seven; Normal takes it
-  // down to 216, about two.
+  // The archetype's base health is 600. spawnLord applies CRYPT_LORD.health before difficulty
+  // and map scaling: 1,440 in the Darkwood on Elite, about fourteen strikes of a fully grown
+  // sword; Normal and Veteran keep their 70% health reduction.
   skeletonarcher: {
     name: 'Skeleton Archer', sprite: 'skeletonarcher', hp: 600, spd: 34, dmg: 8, r: 8, xp: 60, ai: 'caster', mass: 30, anim: 4, death: 'bones', kbRes: 0.95,
     shot: { range: 175, cd: 1.7, spd: 170, dmg: 8, kind: 'arrow', wind: 0.5 },

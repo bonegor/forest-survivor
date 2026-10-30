@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
-import { Game, DAWN_BURN } from '../public/js/game/game.js';
+import { Game } from '../public/js/game/game.js';
 import { EVENTS, SWARM_BATCH, LAST_STAND, kindsBy, kindWeightsBy, SURVIVAL_BOSSES } from '../public/js/data/waves.js';
 import { minuteMore, RING } from '../public/js/game/spawner.js';
 import { ELITE } from '../public/js/data/difficulty.js';
@@ -282,6 +282,7 @@ test('the last stand: every kind of the night in a ring, and a pack of champions
   game((g) => {
     const sp = g.spawner;
     g.setTime((LAST_STAND.at / 1.4) * 60 - 4 * g.pace);
+    sp.bossIdx = g.map.bosses.length; // isolate the ring; a clock jump now preserves the required final arrival
     for (const e of g.enemies) e.dead = true;
     // Only the event comes meanwhile: no steady horde, jolt, champion or thief.
     sp.acc = Infinity;
@@ -335,24 +336,17 @@ test('the night\'s last batch is in before 14:50, none of it lost to dawn', () =
   }
 });
 
-test('at dawn a boss still standing burns away in sight, slowly: no kill, no loot', () => {
+test('the timer never burns away the final boss; victory waits for its actual defeat', () => {
   game((g, p) => {
-    const subs = [], banner = g.banner.bind(g);
-    g.banner = (title, sub, ...rest) => {
-      subs.push(sub);
-      return banner(title, sub, ...rest);
-    };
     const lich = g.spawnBoss('lich', p.x + 80, p.y, { sleeping: true });
     g.setTime(g.duration - 0.01);
-    for (let f = 0; f < 60 && g.state !== 'dawn'; f++) g.update(1 / 60);
+    for (let f = 0; f < 4 * 60; f++) g.update(1 / 60);
+    assert.equal(g.state, 'play');
+    assert.ok(!lich.dead && !g.levelComplete, 'the final boss must be fought');
+    g.killEnemy(lich);
+    g.update(1 / 60);
     assert.equal(g.state, 'dawn');
-    assert.ok(subs.includes('The Lich burns in the sunrise'), 'the dawn says so');
-    const kills = g.kills, pickups = g.pickups.length;
-    for (let f = 0; f < 60; f++) g.update(1 / 60);
-    assert.ok(!lich.dead && lich.alpha < 1, `still burning after a second (alpha ${lich.alpha})`);
-    for (let f = 0; f < (DAWN_BURN.boss - 1 + 0.3) * 60; f++) g.update(1 / 60);
-    assert.ok(lich.dead, 'burned away');
-    assert.equal(g.kills, kills, 'not a kill');
-    assert.ok(g.pickups.length <= pickups, 'and nothing dropped');
+    assert.equal(g.finalBossDefeated, true);
+    assert.ok(g.pickups.some(pk => pk.kind === 'chest'), 'the boss leaves its real loot');
   });
 });
