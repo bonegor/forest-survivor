@@ -1,5 +1,5 @@
 // The big beats get their own seconds (Game.moment): after a boss, a crypt lord or a revive no
-// card, chest or gear screen opens until the beat has played out, then they come in order; a
+// card or chest opens until the beat has played out, then they come in order; a
 // dropped chest is seen on the ground before it can be opened; flashes, shake and slow motion run
 // out under the cards instead of freezing there; the HUD doesn't give a chest away before it is
 // shown, and takes its gold coin by coin; and a fallen boss's bar holds, flashes and breaks up
@@ -54,7 +54,7 @@ const frame = (gs, n = 1) => {
 };
 const overlay = (gs) => gs.overlay?.constructor.name || null;
 
-test('after a boss falls nothing opens for its beat; then the level-up, the chest and the gear, in that order', () =>
+test('after a boss falls its beat precedes level-ups and chests; gear stays sealed', () =>
   run((gs, g) => {
     frame(gs, 10);
     const p = g.player;
@@ -65,7 +65,7 @@ test('after a boss falls nothing opens for its beat; then the level-up, the ches
     // Everything waiting at once: a level, a chest, a piece of gear.
     g.pendingLevels = 1;
     g.chestQueue.push('elite');
-    g.itemQueue.push(rollItem(mulberry32(4), { minute: 5 }));
+    g.queueItem(rollItem(mulberry32(4), { minute: 5 }));
     for (let f = 0; f < 72; f++) {
       frame(gs);
       assert.equal(overlay(gs), null, `nothing opens at ${((f + 1) / 60).toFixed(2)} s`);
@@ -82,7 +82,9 @@ test('after a boss falls nothing opens for its beat; then the level-up, the ches
     frame(gs, 2);
     input.virtual.add('back');
     frame(gs, 2);
-    assert.equal(overlay(gs), 'ItemOverlay', 'then the gear');
+    assert.equal(overlay(gs), null, 'equipment does not open an in-run overlay');
+    assert.equal(g.collectedGear.length, 1);
+    assert.equal(g.itemQueue.length, 0);
   }));
 
 test('a crypt lord and a revive hold the screens back too', () =>

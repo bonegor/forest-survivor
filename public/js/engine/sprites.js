@@ -224,8 +224,8 @@ export function buildSprite(name, def) {
   if (def.palette && def.burst !== false) for (const to of Object.values(def.palette)) addColour(px.hexPack(to));
   return { name, frames, walk: def.walk || null, idle: def.idle || null,
     motionRate: def.motionRate || 1, idleRate: def.idleRate ?? 4,
-    attack: def.attack || null, attackFps: def.attackFps || 0, selfBob: !!def.selfBob,
-    attackRelease: def.attackRelease ?? null, attackWalk: def.attackWalk || null,
+    attack: def.attack || null, attackFps: def.attackFps || 0, selfBob: !!def.selfBob, floating: !!def.floating,
+    attackRelease: def.attackRelease ?? null, attackWalk: def.attackWalk || null, manualDelay: def.manualDelay,
     // A boss's: its poses as it strikes (frame lists at poseFps), the rows of art below its feet
     // (a blow sweeping low) and its body's [w, h] (what its shadow and glow go by).
     poses: def.poses || null, poseFps: def.poseFps || 0, below: def.below || 0, body: def.body || null,

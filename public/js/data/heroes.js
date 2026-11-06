@@ -6,6 +6,8 @@
 // (startWeapons). Relics are shared by all.
 
 import { WEAPONS } from './weapons.js';
+import { RECRUITS } from '../expansion/roster.js';
+import { SIGNATURES } from '../expansion/signatures.js';
 
 // The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
 // wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
@@ -181,6 +183,14 @@ export const HEROES = {
     ultDesc: 'For 4s foes are slowed by half; every bolt flies three at once and bursts.',
   },
 };
+
+for (const recruit of RECRUITS) {
+  const { id, name, title, short = title, stats, perk, color, ultimate, floating } = recruit;
+  const signature = SIGNATURES[id];
+  const { ult, ultName, ultDesc } = HEROES[ultimate];
+  HEROES[id] = { id, name, title, short, sprite: id, pose: id + '_pose',
+    stats, perk, color, ult, ultName, ultDesc, floating, weapon: signature.id, unique: [signature.id] };
+}
 
 // The light line drawn round a hero that has one (line: the Shadow) on the menus; none in play.
 export const HERO_LINE = '#d8e2f0';

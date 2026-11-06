@@ -7,7 +7,7 @@ import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/pa
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { mapFor } from '../data/maps.js';
-import { RANKS, HERO_UNLOCK_TIME, countedKills } from '../shared/profile.js';
+import { RANKS, heroUnlockTime, countedKills } from '../shared/profile.js';
 import { killCredit } from '../shared/population.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
@@ -19,7 +19,8 @@ import { view } from '../engine/view.js';
 import { input, padKey } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
 import { Player, ULT_DURATION, FURY, COOLDOWN_FLOOR, QUICKSAND } from './player.js';
-import { rangerPose } from './ranger-animation.js';
+import { heroAttackPose } from './hero-animation.js';
+import { runSpoils } from '../shared/spoils.js';
 import { faceAlong } from './facing.js';
 import { Weapon, aimAt } from './weapons.js';
 import { Enemy, makeEnemyPool, drawNightEdge, THIEF_LOOT } from './enemies.js';
@@ -206,8 +207,10 @@ export const MAX_SKULLS = 3;
 // middle frame. Null for a sprite with no attack.
 export function strikeClip(spr) {
   if (!spr.attack || !spr.attack.length || !spr.attackFps) return null;
-  const hit = spr.attackRelease ?? Math.floor(spr.attack.length / 2), from = Math.max(0, hit - 2);
-  return { from, hit, delay: (hit - from) / spr.attackFps };
+  const hit = spr.attackRelease ?? Math.floor(spr.attack.length / 2);
+  const delay = spr.manualDelay ?? Math.min(2, hit) / spr.attackFps;
+  const from = Math.max(0, hit - Math.ceil(delay * spr.attackFps - 1e-6));
+  return { from, hit, delay };
 }
 
 // What a hand-struck weapon is called on to do, for the crypt's banner (Game.enterCrypt).
@@ -340,8 +343,10 @@ export class Game {
     // Gear worn into the run (kept between runs), and the crypts off the forest roads.
     this.gear = sanitizeGear(o.gear);
     this.itemQueue = [];
+    this.sealedGear = o.sealedGear === true;
+    this.collectedGear = [];
     this.itemsFound = 0; // pieces of gear dropped this run; the server keeps no more new ones than this
-    this.gearThenWin = false; // the Dungeon's last guardian is down: the victory waits for his gear's screen (bossDefeated)
+    this.gearThenWin = false; // the Dungeon's last guardian is down; finish after its reward beat
     this.crypts = [];
     this.cleared = new Set();
     this.lost = new Set(); // crypts the hero left before their last lord fell, or fainted in: shut to him
@@ -405,6 +410,7 @@ export class Game {
       playMusic(this.map.music);
     }
     for (const id of startWeapons(HEROES[o.hero])) this.addWeapon(id);
+    this.syncGearWeapons();
     this.syncCam();
     this.cam.x = this.player.x - this.cam.W / 2;
     this.cam.y = this.player.y - this.cam.H / 2;
@@ -490,7 +496,32 @@ export class Game {
     w.level = WEAPONS[id].evolved ? MAX_WEAPON_LEVEL : level;
     w.recompute();
     this.player.weapons.push(w);
+    if (this.player.gearWeapons.some(extra => extra.id === id)) this.syncGearWeapons();
     return w;
+  }
+
+  syncGearWeapons() {
+    const p = this.player, grants = p.gearRanks.weapons;
+    for (let i = p.gearWeapons.length - 1; i >= 0; i--) {
+      const w = p.gearWeapons[i];
+      if (grants.has(w.id) && !this.ownsWeapon(w.id)) continue;
+      p.gearWeapons.splice(i, 1);
+      this.freeSrc.push(w.src);
+      this.effects = this.effects.filter(effect => effect.w !== w);
+      this.minions = this.minions.filter(minion => minion.w !== w);
+      for (let j = this.projectiles.length - 1; j >= 0; j--) {
+        const shot = this.projectiles[j];
+        if (shot.w !== w) continue;
+        this.projectiles.splice(j, 1);
+        releaseProjectile(shot);
+      }
+      for (const enemy of this.enemies) enemy.hitT[w.src] = 0;
+    }
+    for (const id of grants) {
+      if (!this.ownsWeapon(id) && !p.gearWeapons.some(w => w.id === id) && this.freeSrc.length) {
+        p.gearWeapons.push(new Weapon(this, id, this.freeSrc.shift(), true));
+      }
+    }
   }
 
   // The developer panel's (dev/panel.js): a weapon taken away (by its id, or the id it evolved
@@ -514,6 +545,7 @@ export class Game {
       s.life = Math.min(s.life, 0.15);
     }
     for (const m of this.minions) if (m.w === w) m.life = Math.min(m.life, 0.6);
+    this.syncGearWeapons();
     return true;
   }
 
@@ -557,7 +589,7 @@ export class Game {
   }
 
   ownsWeapon(id) {
-    return this.player.weapons.some((w) => w.id === id || (w.def.evolved && WEAPONS[id].evo && WEAPONS[id].evo.into === w.id));
+    return this.player.weapons.some((w) => w.id === id || (w.def.evolved && WEAPONS[id]?.evo?.into === w.id));
   }
 
   // Everything a level-up card or a chest can still give, each with its weight (CARD_WEIGHT): a
@@ -578,7 +610,7 @@ export class Game {
       if (!w.maxed && !out('weapon', w.id)) pool.push({ type: 'weapon', id: w.id, level: w.level + 1, weight: sig(w.id) ? CARD_WEIGHT.signature : CARD_WEIGHT.held });
     }
     if (p.weapons.length < this.maxWeapons) {
-      for (const id of weaponsFor(p.hero)) if (this.weaponOpen(id) && !this.ownsWeapon(id) && !out('weapon', id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: sig(id) ? CARD_WEIGHT.signature : CARD_WEIGHT.fresh });
+      for (const id of weaponsFor(p.hero)) if (this.weaponOpen(id) && !this.ownsWeapon(id) && !p.gearRanks.weapons.has(id) && !out('weapon', id)) pool.push({ type: 'weapon', id, level: 1, isNew: true, weight: sig(id) ? CARD_WEIGHT.signature : CARD_WEIGHT.fresh });
     }
     for (const [id, rank] of p.passives) {
       if (rank < PASSIVES[id].max && !out('passive', id)) pool.push({ type: 'passive', id, level: rank + 1, weight: (PASSIVES[id].weight || 1) * CARD_WEIGHT.relic });
@@ -586,7 +618,7 @@ export class Game {
     if (p.passives.size < this.maxRelics) {
       const partner = (id) => p.weapons.some((w) => !w.evolved && w.def.evo?.with === id);
       for (const id of PASSIVE_IDS) {
-        if (!p.passives.has(id) && this.relicOpen(id) && this.relicOffered(id) && !out('passive', id)) {
+        if (!p.passives.has(id) && !p.gearRanks.passives.has(id) && this.relicOpen(id) && this.relicOffered(id) && !out('passive', id)) {
           pool.push({ type: 'passive', id, level: 1, isNew: true, weight: (PASSIVES[id].weight || 1) * CARD_WEIGHT.freshRelic * (partner(id) ? CARD_WEIGHT.partner : 1) });
         }
       }
@@ -775,10 +807,11 @@ export class Game {
     if (c.type === 'weapon') {
       const w = p.weapons.find((x) => x.id === c.id);
       if (w) w.levelUp();
-      else if (!this.ownsWeapon(c.id) && p.weapons.length < this.maxWeapons && this.weaponOpen(c.id)) this.addWeapon(c.id);
+      else if (!this.ownsWeapon(c.id) && !p.gearRanks.weapons.has(c.id) && p.weapons.length < this.maxWeapons && this.weaponOpen(c.id)) this.addWeapon(c.id);
     } else if (c.type === 'passive') {
-      if (!p.passives.has(c.id) && (!this.relicOpen(c.id) || p.passives.size >= this.maxRelics)) return;
-      p.passives.set(c.id, (p.passives.get(c.id) || 0) + 1);
+      const rank = p.passives.get(c.id) || 0, def = PASSIVES[c.id];
+      if (!def || rank >= def.max || (!rank && (p.gearRanks.passives.has(c.id) || !this.relicOpen(c.id) || p.passives.size >= this.maxRelics))) return;
+      p.passives.set(c.id, rank + 1);
       p.recompute();
     } else if (c.type === 'gold') {
       this.gold += c.value;
@@ -1156,7 +1189,7 @@ export class Game {
       if (o.w.onKill) o.w.onKill(e);
     }
     // Weapons that watch every foe fall, whoever struck it (Weapon.onFoeDeath).
-    for (const w of p.weapons) w.onFoeDeath(e);
+    for (const w of p.combatWeapons) w.onFoeDeath(e);
     this.deathFx(e, fr);
     // Loot.
     if (e.xp > 0) this.dropGem(e.x, e.y, e.xp);
@@ -1368,23 +1401,21 @@ export class Game {
     for (let i = 0; i < 18; i++) this.addPickup('coin', at.x, at.y, 2);
     this.addPickup('goldpile', at.x, at.y, 60);
     this.addPickup('elixir', at.x + rand(-10, 10), at.y + rand(-10, 10));
-    // A Dungeon Run guardian's piece of gear (GUARDIAN_GEAR): straight to its screen, which opens
-    // once the moment has played out, rather than on the ground.
+    // A Dungeon Run guardian's gear is secured directly, without a pickup on the ground.
     let gear = null;
     if (this.mode === 'dungeon') {
       gear = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), GUARDIAN_GEAR[this.floor - 1]);
       this.itemsFound++;
-      this.itemQueue.push(gear);
+      this.queueItem(gear);
     }
     const R = gear && RARITIES[gear.rarity];
-    this.banner(`${e.def.name} is slain!`, gear ? `${R.name} ${SLOT_NAMES[gear.slot].toLowerCase()} won` : e.def.title, gear ? R.color : '#fee761', 3.2);
+    this.banner(`${e.def.name} is slain!`, gear ? this.sealedGear ? 'Sealed gear secured' : `${R.name} ${SLOT_NAMES[gear.slot].toLowerCase()} won` : e.def.title, gear && !this.sealedGear ? R.color : '#fee761', 3.2);
     if (this.mode === 'dungeon') {
       if (this.floor < 3) {
         this.world.openStairs(at.x, at.y);
         this.objective = 'Descend the stairs';
       } else {
-        // The victory waits for his gear's screen to close (update), and from this blow on nothing
-        // fells the hero: the shots and touches still to come this frame are spent on his grace.
+        // Give the guardian's reward beat room, with grace from its remaining shots and touches.
         this.objective = '';
         this.gearThenWin = true;
         this.player.invuln = Math.max(this.player.invuln, 0.2);
@@ -1431,9 +1462,9 @@ export class Game {
     }
     if (drop.chest) this.addPickup('chest', chestAt.x, chestAt.y, 0, { kind: 'lord' });
     const R = it && RARITIES[it.rarity];
-    const what = it ? `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()}${drop.chest ? ' and a chest' : ''}` : 'A chest';
+    const what = it ? `${this.sealedGear ? 'Sealed gear' : R.name + ' ' + SLOT_NAMES[it.slot].toLowerCase()}${drop.chest ? ' and a chest' : ''}` : 'A chest';
     const rest = left ? `. ${LORDS_WORD[left] || left} ${left === 1 ? 'lord remains' : 'lords remain'}` : '';
-    this.banner(`${e.name} is slain!`, `${what} dropped${rest}`, it ? R.color : '#feae34', 3.2);
+    this.banner(`${e.name} is slain!`, `${what} dropped${rest}`, it && !this.sealedGear ? R.color : '#feae34', 3.2);
     if (!left && this.world.lightWayOut) this.world.lightWayOut();
     if (!next) playMusic('crypt');
   }
@@ -1474,7 +1505,7 @@ export class Game {
   strike() {
     const p = this.player, w = this.mainWeapon();
     if (!w || w.cd > 0 || p.dead) return false;
-    const melee = w.def.kind === 'sword';
+    const melee = w.def.kind === 'sword' || w.def.directional;
     const t = this.nearestEnemy(p.x, p.y, w.reach, melee && p.moving ? (e) => (e.x - p.x) * p.face >= 0 : null);
     const ang = aimAt(p, t, !melee ? p.aim : p.face < 0 ? Math.PI : 0);
     const delay = strikeClip(SPR[p.hero.sprite])?.delay ?? 0;
@@ -1545,7 +1576,7 @@ export class Game {
       this.banner(name, `Here the night stands still. ${LORDS_WORD[this.world.lordCount] || this.world.lordCount} lords sleep below`, '#b55088', 3.2);
       // The other weapons wait outside: their blades and auras go out until he is back.
       const main = this.mainWeapon();
-      for (const w of p.weapons) {
+      for (const w of p.combatWeapons) {
         if (w === main || !w.fx) continue;
         w.fx.dead = true;
         w.fx = null;
@@ -1648,7 +1679,7 @@ export class Game {
         const v = Math.max(1, Math.round(pk.value * p.greed * (p.buff('fortune') ? 2 : 1)));
         this.gold += v;
         this.stats.gold += v;
-      } else if (pk.kind === 'item') this.itemQueue.push(pk.opts.item);
+      } else if (pk.kind === 'item') this.queueItem(pk.opts.item);
       else if (pk.kind === 'chest') this.openChest(pk.opts);
       else if (pk.kind === 'elixir' && !this.inCrypt) p.heal(p.maxHp);
       pk.dead = true;
@@ -1661,7 +1692,7 @@ export class Game {
     if (p.ult && WORLD_ULTS.has(p.ult.type)) p.ult = null;
     // Leech Chains' (Blood Tether's) hold on foes in the world he leaves: their effects go below,
     // and a chain kept in w.chains would hold its slot until that foe died.
-    for (const w of p.weapons) if (w.chains) w.chains = [];
+    for (const w of p.combatWeapons) if (w.chains) w.chains = [];
     for (const pr of this.projectiles) releaseProjectile(pr);
     this.projectiles.length = 0;
     this.eshots.length = 0;
@@ -1693,6 +1724,11 @@ export class Game {
         o.aware = true;
       }
     }
+  }
+
+  queueItem(it) {
+    if (!this.sealedGear) this.itemQueue.push(it);
+    this.collectedGear.push(it);
   }
 
   // Gear from the pickup screen: wear it (selling what it replaces), or sell it, or sell what is worn.
@@ -2113,7 +2149,7 @@ export class Game {
   // A lock reached with him (Ram's Horn, also at 5:00) comes LOCK_GAP after, with its own sting
   // (checkLocks; 28 October 2026): in the same frame the unlock's limit dropped his.
   heroMilestone() {
-    if (!this.unlocks || this.time < HERO_UNLOCK_TIME) return;
+    if (!this.unlocks || this.time < heroUnlockTime(this.unlocks)) return;
     const h = HEROES[this.unlocks];
     this.unlocks = null;
     this.banner(`${h.title} unlocked!`, `${h.name} can join your next run`, h.color, 3.5);
@@ -2276,7 +2312,7 @@ export class Game {
     // The Dungeon Run won: the last floor's guardian falls as dawn comes, its chest and gold still
     // lying where it fell, and they are his (sweepLoot). Then what still waits for its screen, which
     // never opens now, pays all the same: a chest its gold (chestGold; its draws go unseen, so none
-    // is made), a piece of gear its price, as if sold.
+    // is made), legacy unclaimed gear its price. Sealed gear stays in the results ledger.
     if (victory && this.mode === 'dungeon') this.sweepLoot(false);
     let paid = 0;
     for (const kind of this.chestQueue) paid += this.chestGold(kind);
@@ -2321,6 +2357,8 @@ export class Game {
       evos: p.weapons.filter((w) => w.evolved).map((w) => w.id), // and every evolution he held
       floor: this.floor,
       gear: this.gear,
+      spoils: runSpoils(this.collectedGear, this.gear, this.sealedGear),
+      ...(this.sealedGear && { sealedGear: true }),
       realTime: Math.floor(this.clock),
       found: this.itemsFound,
     };
@@ -2509,7 +2547,7 @@ export class Game {
       if (this.caveStrike) {
         this.mainWeapon()?.update(dt, true);
         if (this.boxBlowAt !== null && this.clock >= this.boxBlowAt - 1e-6) this.breakBoxes();
-      } else for (const w of p.weapons) w.update(dt);
+      } else for (const w of p.combatWeapons) w.update(dt);
       updateList(this.minions, dt);
     }
     updateList(this.projectiles, dt, releaseProjectile);
@@ -2576,9 +2614,11 @@ export class Game {
     if (Math.abs(c.x - tx) > c.W) c.x = tx;
     if (Math.abs(c.y - ty) > c.H) c.y = ty;
 
-    // The last guardian's gear is chosen before the dawn, and nothing fells the hero meanwhile.
+    // The last guardian's chest and any level-ups can finish before the results.
     if (this.gearThenWin) {
-      if (this.state === 'play' && !this.itemQueue.length) {
+      const ready = this.state === 'play' && !this.itemQueue.length;
+      const presenting = this.sealedGear && (this.momentRunning || this.pendingLevels > 0 || this.chestQueue.length);
+      if (ready && !presenting) {
         this.gearThenWin = false;
         this.victory('dungeon');
       } else this.player.invuln = Math.max(this.player.invuln, 0.2);
@@ -3000,19 +3040,18 @@ export class Game {
     const frozen = !!p.held && p.held.kind === 'frost', still = frozen || !!p.slide;
     // Walk cycles step a little faster so planted feet slide less against the ground.
     const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
-    // Walk/idle remains the base. In the forest the ranger draws before the bow is ready and
-    // releases with its real projectile; in a crypt every hero plays his attack for a blow
-    // struck by hand, when it is struck the way he faces (on the move a shot may fly behind
-    // him), the ranger his shot on the move too.
+    // Walking remains the base. Authored moving attacks keep the gait underneath the
+    // arms/equipment. Imported art without that clip keeps walking with its world-space
+    // weapon effect; stationary blows can use the full attack pose.
     let fr = still ? idleFrame(spr, 0) : moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate));
     const clip = this.caveStrike && p.strikeAt !== null ? strikeClip(spr) : null;
-    if (clip && faceAlong(p.face, Math.cos(p.strikeAng), Math.sin(p.strikeAng)) === p.face) {
-      const k = clip.from + Math.floor((this.clock - p.strikeAt) * spr.attackFps + 1e-6);
+    if (clip && !still && (!moving || spr.attackWalk || spr.floating) && faceAlong(p.face, Math.cos(p.strikeAng), Math.sin(p.strikeAng)) === p.face) {
+      const k = Math.max(0, clip.hit + Math.floor((this.clock - p.strikeAt - clip.delay) * spr.attackFps + 1e-6));
       if (k < spr.attack.length) fr = spr.frames[moving && spr.attackWalk ? spr.attackWalk[k][step % spr.walk.length] : spr.attack[k]];
     }
-    const bowPose = this.caveStrike ? null : rangerPose(this, spr, step);
-    if (bowPose) fr = bowPose.frame;
-    const flip = bowPose ? bowPose.flip : p.face < 0;
+    const attackPose = this.caveStrike || still ? null : heroAttackPose(this, spr, step);
+    if (attackPose) fr = attackPose.frame;
+    const flip = attackPose ? attackPose.flip : p.face < 0;
     let img = p.flash > 0 ? fr.white(flip) : frozen ? fr.variant('frozen', TINTS.frozen, flip) : fr.get(flip);
     // Walk cycles carry their own body bob; two-frame sprites hop on alternate steps.
     const bob = spr.selfBob || still ? 0 : moving ? (spr.walk ? 0 : -(step % 2)) : Math.sin(p.anim * 2) > 0.6 ? -1 : 0;

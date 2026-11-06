@@ -7,6 +7,8 @@
 // each class's signature comes first in its section, then shared weapons. An evolution is better
 // than its weapon at level 8 on every stat it has (test/signature-weapons.test.js).
 
+import { EXPANSION_WEAPONS } from '../expansion/signatures.js';
+
 export const MAX_WEAPON_LEVEL = 8;
 // How many weapons and how many relics a hero carries at most (Game.upgradePool, the HUD's slots).
 export const MAX_WEAPONS = 6, MAX_RELICS = 6;
@@ -37,6 +39,7 @@ export const WEAPON_SPRITES = {
 export const BRAND_TIME = 3;
 
 export const WEAPONS = {
+  ...EXPANSION_WEAPONS,
   // ------------------------------- the Knight's signature, then shared weapons
   sword: {
     name: 'Longsword',

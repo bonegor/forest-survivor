@@ -47,7 +47,7 @@ export function codexSummary(e) {
   if (!e.open) return shortNeed(e.need);
   if (e.type === 'weapon') return WEAPON_SUMMARY[e.id] || WEAPONS[e.id].desc;
   if (e.type === 'relic') return RELIC_SUMMARY[e.id] || PASSIVES[e.id].desc.replace(/[{}]/g, '');
-  return HERO_SUMMARY[e.id][1];
+  return HERO_SUMMARY[e.id]?.[1] ?? HEROES[e.id].ultDesc;
 }
 
 // How the kills that open things are counted (shared/progress.js effort, 27 October 2026), for the

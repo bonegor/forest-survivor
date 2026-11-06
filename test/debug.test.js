@@ -63,7 +63,7 @@ test('at the debug flag every hero and mode is open, in a save of its own', asyn
   assert.deepEqual(p.up, { arsenal: 3, reliquary: 3, phoenix: 1 });
   const open = P.openFor(p, 'knight');
   const all = (type) => P.progressList(p).filter((l) => l.type === type).length;
-  assert.ok(open.ult && open.weapons.length === all('weapon') && open.relics.length === all('relic') && all('weapon') === 23 && all('relic') === 22, 'everything open');
+  assert.ok(open.ult && open.weapons.length === all('weapon') && open.relics.length === all('relic') && all('weapon') === 23 && all('relic') === 25, 'everything open');
   assert.ok(P.progressList(p).every((l) => l.open));
   // Every Survival map too (28 October 2026), none of them won.
   for (const m of P.PROGRESS.maps) assert.ok(P.mapOpen(p, m), m);

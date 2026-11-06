@@ -7,7 +7,7 @@ import { input, padKey } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
-import { RANKS, HERO_UNLOCK_TIME } from '../shared/profile.js';
+import { RANKS, heroUnlockTime } from '../shared/profile.js';
 import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
@@ -547,20 +547,36 @@ export class Hud {
       if (lit) this.litMark(ctx, x, y + 21, litK(lit, 'r', i));
       x += 18;
     }
+    // Worn rank grants have their own strip; the two build rows keep their learned ranks.
+    const ranks = p.gearRanks, grants = [];
+    if (ranks && !held && !lit && cols === MAX_WEAPONS) {
+      if (ranks.allWeapons) grants.push('i_sword');
+      if (ranks.allPassives) grants.push('i_cooldown');
+      for (const id of ranks.weapons) grants.push(WEAPONS[id].icon);
+      for (const id of ranks.passives) grants.push(PASSIVES[id].icon);
+    }
+    if (grants.length) {
+      const gy = y + 42, gx = 8 + textWidth('GEAR +1');
+      ctx.fillStyle = '#221c2b';
+      ctx.fillRect(3, gy, gx - 1 + grants.length * 14, 13);
+      drawText(ctx, 'GEAR +1', 5, gy + 3, { color: '#cdb3ee' });
+      grants.forEach((icon, i) => ctx.drawImage(SPR[icon].frames[0].c, gx + i * 14, gy, 12, 12));
+    }
     // Shrine buffs.
+    const buffY = y + 42 + (grants.length ? 15 : 0);
     let bx = 3;
     for (const [id, b] of p.buffs) {
       const col = SHRINE_COLORS[id] || '#ffffff';
       ctx.fillStyle = '#181425';
-      ctx.fillRect(bx, y + 42, 26, 9);
+      ctx.fillRect(bx, buffY, 26, 9);
       ctx.fillStyle = col;
-      ctx.fillRect(bx + 1, y + 43, Math.round(24 * (b.t / b.max)), 7);
+      ctx.fillRect(bx + 1, buffY + 1, Math.round(24 * (b.t / b.max)), 7);
       const icon = SPR['i_' + id];
       if (icon) {
         // A found power-up: its icon and the seconds left, not a shrine's name.
-        ctx.drawImage(icon.frames[0].c, bx + 1, y + 42, 9, 9);
-        drawText(ctx, String(Math.ceil(b.t)), bx + 18, y + 43, { align: 'center', color: '#181425', outline: null });
-      } else drawText(ctx, id.slice(0, 4).toUpperCase(), bx + 13, y + 43, { align: 'center', color: '#181425', outline: null });
+        ctx.drawImage(icon.frames[0].c, bx + 1, buffY, 9, 9);
+        drawText(ctx, String(Math.ceil(b.t)), bx + 18, buffY + 1, { align: 'center', color: '#181425', outline: null });
+      } else drawText(ctx, id.slice(0, 4).toUpperCase(), bx + 13, buffY + 1, { align: 'center', color: '#181425', outline: null });
       bx += 28;
     }
   }
@@ -669,9 +685,10 @@ export class Hud {
         const slain = g.stats.bossLog.some((l) => l.id === m.id && l.kill !== undefined);
         drawSkull(ctx, at(m.at), 29, slain ? '#fee761' : g.time >= m.at ? '#e43b44' : '#8b9bb4');
       }
-      const head = g.unlocks && g.time < HERO_UNLOCK_TIME ? heroHead(g.unlocks) : null;
+      const recruitAt = heroUnlockTime(g.unlocks);
+      const head = g.unlocks && g.time < recruitAt ? heroHead(g.unlocks) : null;
       if (head) {
-        const hx = at(HERO_UNLOCK_TIME);
+        const hx = at(recruitAt);
         ctx.fillStyle = HEROES[g.unlocks].color || '#c0cbdc';
         ctx.fillRect(hx - 4, 34, 8, 8);
         ctx.fillStyle = '#181425';

@@ -15,6 +15,7 @@ import { BIOMES, biomeProp } from '../public/js/game/biomes.js';
 import { MAPS } from '../public/js/data/maps.js';
 import { makeTopology } from '../public/js/game/topology/index.js';
 import { HERO_ART } from '../public/js/art/heroes.js';
+import { RELIC_EXPANSION_ART } from '../public/js/art/expansion-relics.js';
 import { MONSTER_ART } from '../public/js/art/monsters.js';
 import { BOSS_ART } from '../public/js/art/bosses.js';
 import { PICKUP_ART, PROJECTILE_ART, ICON_ART } from '../public/js/art/items.js';
@@ -94,7 +95,7 @@ test("a bud or a wilted moonbloom doesn't glow; an open or a bright one does, in
 });
 
 test('no name is in two of the art tables', () => {
-  const tables = [HERO_ART, MONSTER_ART, BOSS_ART, PICKUP_ART, PROJECTILE_ART, ICON_ART, PROC_ART, PROP_ART, LANDMARK_ART,
+  const tables = [HERO_ART, MONSTER_ART, BOSS_ART, PICKUP_ART, PROJECTILE_ART, ICON_ART, RELIC_EXPANSION_ART, PROC_ART, PROP_ART, LANDMARK_ART,
     PALADIN_ITEMS, DRUID_ITEMS, BERSERKER_ITEMS, WITCHHUNTER_ITEMS, MAP_MONSTER_ART, MAP_BOSS_ART,
     FLORA_DESERT, FLORA_FROZEN, FLORA_MEADOW, FLORA_HELL, TERRAIN_ART];
   const seen = new Map();

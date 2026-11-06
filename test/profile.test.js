@@ -24,8 +24,7 @@ test('encode/decode round-trips and rejects junk', () => {
   assert.equal(P.decodeState('a'.repeat(P.MAX_STATE + 1)), null, 'longer than any cookie of ours');
 });
 
-// With runs never saved, this is the biggest cookie the game writes.
-test('every hero in six legendaries, and every record at its most, still fits the cookie', () => {
+test('every hero in six legendaries, and every record at its most, round-trips through static storage', () => {
   const p = P.defaultProfile();
   Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, deaths: 1e7, heroes: [...P.HERO_ORDER] });
   p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999, time: 14400, gold: 1e9, bosses: 9999, combo: 1e7 };
@@ -59,12 +58,10 @@ test('every hero in six legendaries, and every record at its most, still fits th
   assert.deepEqual(P.packProfile(clean).feats, clean.feats, 'his marks kept as an object (28 October 2026)');
   assert.deepEqual(clean.gear, p.gear, 'all of it is valid');
   const json = JSON.stringify(P.packProfile(clean));
-  // The server seals at most about 3 000 characters of JSON into a 4 096-character cookie.
-  assert.ok(json.length <= 2900, `${json.length} characters`);
   assert.deepEqual(P.sanitizeProfile(JSON.parse(json)), clean, 'packed, then read back');
-  // The static game's plain cookie (and an old signed one the server upgrades) is read back by
-  // decodeState, whose cap keeps a quarter spare over this, the worst case.
+  // The expanded save exceeds the old single-cookie limit in static hosting.
   const plain = P.encodeState(P.packProfile(clean));
+  assert.ok(plain.length > 4000);
   assert.ok(plain.length * 1.25 <= P.MAX_STATE, `${plain.length} characters encoded, cap ${P.MAX_STATE}`);
   assert.deepEqual(P.sanitizeProfile(P.decodeState(plain)), clean, 'encoded, decoded, the same profile');
 });
@@ -243,7 +240,7 @@ test('Second Wind cannot be bought past its cap', () => {
   assert.equal(P.buyUpgrade(p, 'revival').ok, false);
 });
 
-test('five minutes on the clock with a hero unlock the next, in order and for free', () => {
+test('each hero recruits the next at the listed time, in order and for free', () => {
   let p = P.defaultProfile();
   assert.deepEqual(p.heroes, ['knight']);
   const run = (hero, time) => {
@@ -257,7 +254,9 @@ test('five minutes on the clock with a hero unlock the next, in order and for fr
   for (const [i, h] of P.HERO_ORDER.slice(0, -1).entries()) {
     const next = P.HERO_ORDER[i + 1];
     assert.equal(P.unlocksNext(p, h), next);
-    const r = run(h, P.HERO_UNLOCK_TIME);
+    const need = P.heroUnlockTime(next);
+    assert.deepEqual(run(h, need - 1).reward.unlocks, [], `${h}: a second short`);
+    const r = run(h, need);
     assert.deepEqual(r.reward.unlocks, ['hero:' + next], h);
     assert.ok(p.heroes.includes(next));
     assert.equal(r.reward.collected + r.reward.bonus, 0, 'no gold changes hands (but the wage for the time)');
@@ -320,7 +319,9 @@ test('the full ladder: nights survived, then the Dungeon hero by hero, then Rank
   for (const [i, h] of P.LADDER.slice(0, -1).entries()) {
     assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: h, unlocks: P.LADDER[i + 1] });
     const r = run({ mode: 'dungeon', hero: h, time: 1200 });
-    assert.deepEqual(r.reward.unlocks, ['dungeon:' + P.LADDER[i + 1]]);
+    assert.deepEqual(r.reward.unlocks, i === 0
+      ? ['achievement:quartermaster', 'dungeon:' + P.LADDER[i + 1]]
+      : ['dungeon:' + P.LADDER[i + 1]]);
   }
   // An extra's clear is a win like any other, and brings nothing in.
   assert.deepEqual(run({ mode: 'dungeon', hero: 'paladin', time: 1200 }).reward.unlocks, []);

@@ -1,5 +1,9 @@
 // Passive relics (`stat` is added per rank), and the level-up's filler cards.
 
+export const BULWARK_SEAL = { heavy: 0.1, rest: 8, reduction: 0.08 };
+export const WAR_DRUM_FURY = 0.07;
+export const PILGRIM_CORD = { distance: 150, heal: 0.005 };
+
 export const PASSIVES = {
   might: { name: 'Gauntlets of Might', icon: 'i_might', max: 5, desc: 'Damage {+10%}.', stat: { might: 0.1 } },
   armor: { name: 'Plate Armor', icon: 'i_armor', max: 5, desc: 'Armor {+1}: shrugs off blows.', stat: { armor: 1 } },
@@ -33,6 +37,21 @@ export const PASSIVES = {
     name: 'Phoenix Heart', icon: 'i_revival', // placeholder (tools/handoff-art.md)
     max: 1, desc: 'Rise {once} from death. Any weapon at its peak {evolves}, with or without its relic.',
     stat: { revivals: 1 }, weight: 0.35, evolvesAny: true, afterSignature: true, again: 5, sure: 2,
+  },
+  bulwarkseal: {
+    name: 'Bulwark Seal', icon: 'i_bulwarkseal', max: 5,
+    desc: `Hits of ${BULWARK_SEAL.heavy * 100}% max HP or more deal {${BULWARK_SEAL.reduction * 100}%} less per rank. ${BULWARK_SEAL.rest}s rest.`,
+    stat: { wardReduction: BULWARK_SEAL.reduction },
+  },
+  wardrum: {
+    name: 'War Drum', icon: 'i_wardrum', max: 4,
+    desc: `Kills and hits on strong foes give {+${Math.round(WAR_DRUM_FURY * 100)}%} Fury per rank.`,
+    stat: { battleFury: WAR_DRUM_FURY },
+  },
+  pilgrimcord: {
+    name: "Pilgrim's Cord", icon: 'i_pilgrimcord', max: 5,
+    desc: `Heal {${PILGRIM_CORD.heal * 100}%} max HP per rank every ${PILGRIM_CORD.distance} px walked.`,
+    stat: { marchHeal: PILGRIM_CORD.heal },
   },
 };
 

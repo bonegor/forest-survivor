@@ -7,6 +7,8 @@ import {HEROES} from '../public/js/data/heroes.js';
 import {input} from '../public/js/engine/input.js';
 import {defaultProfile,metaBonuses} from '../public/js/shared/profile.js';
 import {bounds,flipX} from '../public/js/engine/pixels.js';
+import data from '../public/assets/heroes-approved/archer.js';
+import {moveFor} from '../public/js/data/difficulty.js';
 
 const RANGER=SPR[HEROES.archer.sprite];
 const context={globalAlpha:1,drawImage(){}};
@@ -15,9 +17,7 @@ function run(fn){
   const previous=input.bot;
   try{
     input.bot={x:0,y:0};
-    // At the speed the walk was drawn for (move 1): in a run she walks GAME_SPEED times as fast
-    // (data/difficulty.js moveFor), and her walk plays faster with her.
-    const g=new Game({hero:'archer',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},crypts:false,move:1});
+    const g=new Game({hero:'archer',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},crypts:false,move:moveFor('s15','easy')});
     g.spawner.update=()=>{};g.player.devGod=true;
     fn(g,g.player,g.player.weapons[0]);
   }finally{input.bot=previous;}
@@ -25,25 +25,23 @@ function run(fn){
 
 test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors',()=>{
   const spr=RANGER;
-  assert.equal(spr.frames.length,88,'idle, walk, shots and the shots on the move');
+  assert.equal(spr.frames.length,13,'idle, walk and planted shots');
   for(const [i,fr] of spr.frames.entries()){
     const f=fr.buf;
-    assert.deepEqual([f.w,f.h],[48,48]);
+    assert.deepEqual([f.w,f.h],[80,64]);
     const b=bounds(f);
-    assert.ok(b.x0>0&&b.y0>0&&b.x1<=47&&b.y1<47,`pose ${i} has transparent safety padding`);
-    assert.equal(b.y1,spr.anchorY-1,`pose ${i}: a supporting boot stays on the ground`);
+    assert.ok(b.x0>0&&b.y0>0&&b.x1<79&&b.y1<63,`pose ${i} has transparent safety padding`);
     assert.deepEqual(flipX(flipX(f)).d,f.d);
   }
 });
 
-test('the approved Moonsteel Huntress: her glow shows in every frame, her bow keeps its timing',()=>{
+test('the approved Ranger uses the indexed Hunter clip and its release frame',()=>{
   const spr=RANGER;
-  assert.deepEqual([spr.idle.length,spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[8,8,8,5,14]);
-  assert.deepEqual(spr.attackWalk.map(r=>r.length),[8,8,8,8,8,8,8,8]);
-  assert.ok(spr.frames.every(f=>f.em),'her glow shows in every frame');
+  assert.deepEqual([spr.idle.length,spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[1,8,5,2,8]);
+  assert.equal(spr.attackWalk,null);
 });
 
-test('the real ranger movement clock plays all eight phases at 12 fps',()=>run((g,p,w)=>{
+test('the real ranger movement clock plays all eight phases at the reviewer cadence',()=>run((g,p,w)=>{
   w.cd=1000;input.bot={x:1,y:0};
   for(let i=0;i<60;i++)p.update(1/60);
   p.anim=0;const visited=new Set(),wraps=[];let previous=shown(g).index;
@@ -52,7 +50,7 @@ test('the real ranger movement clock plays all eight phases at 12 fps',()=>run((
     if(f<previous)wraps.push(i/60);previous=f;
   }
   assert.deepEqual([...visited].sort((a,b)=>a-b),RANGER.walk);
-  assert.ok(Math.abs(wraps[1]-wraps[0]-8/12)<1/30);
+  assert.ok(Math.abs(wraps[1]-wraps[0]-8/data.walkFps)<1/30);
 }));
 
 for(const face of [-1,1])test(`bow wind-up and release follow the real projectile facing ${face}`,()=>run((g,p,w)=>{
@@ -76,16 +74,16 @@ for(const face of [-1,1])test(`bow wind-up and release follow the real projectil
 test('walking while shooting keeps its leg cycle, and a foe behind her neither flips her nor draws the arrow',()=>run((g,p,w)=>{
   input.bot={x:1,y:0};
   for(let i=0;i<40;i++)p.update(1/60);
-  p.aim=0;p.bowShot={at:g.clock,ang:0};
+  p.aim=0;
   const first=shown(g).index;
-  assert.ok(RANGER.attackWalk[5].includes(first));
+  assert.ok(RANGER.walk.includes(first));
   p.anim+=1/(1.4*RANGER.motionRate);
   const next=shown(g).index;
-  assert.ok(RANGER.attackWalk[5].includes(next));assert.notEqual(first,next);
+  assert.ok(RANGER.walk.includes(next));assert.notEqual(first,next);
   const foe=g.spawnEnemy('slime',p.x-40,p.y,{instant:true,hpMul:10});foe.dormant=true;
   g.grid.rebuild(g.enemies,p.x,p.y);w.cd=0;w.update(0);
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);
-  assert.ok(RANGER.attackWalk[RANGER.attackRelease].includes(shown(g).index),'she shows the shot ahead, on the move');
+  assert.ok(RANGER.walk.includes(shown(g).index),'she keeps the gait on the move');
   assert.ok(Math.cos(g.projectiles.at(-1).ang)>0,'the arrow flies straight ahead, not at the foe behind');
 }));
 

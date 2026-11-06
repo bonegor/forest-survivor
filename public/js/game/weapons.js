@@ -11,6 +11,8 @@ import { fxBurst, vfxPrewarm } from './fxart.js';
 import { gust, gustFoes, GALE_R, Hook, Hollow, thickest, toll, tollFoes, BELL_R } from './crowdfx.js';
 import { PC, P } from './particles.js';
 import { reachesBody } from './hitbox.js';
+import { recordHeroAttack } from './hero-animation.js';
+import { EXPANSION_BEHAVIORS } from '../expansion/weapon-behaviors.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
 const STAT_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
@@ -59,9 +61,11 @@ function prewarm(w) {
 }
 
 export class Weapon {
-  constructor(g, id, src) {
+  constructor(g, id, src, fromGear = false) {
     this.g = g;
     this.id = id;
+    this.baseId = id;
+    this.fromGear = fromGear;
     this.def = WEAPONS[id];
     this.level = 1;
     this.src = src; // per-weapon hit-cooldown channel on enemies
@@ -91,8 +95,14 @@ export class Weapon {
     return this.evolved || this.level >= MAX_WEAPON_LEVEL;
   }
 
+  effectiveRank(level = this.level) {
+    const ranks = this.g.player.gearRanks;
+    const boost = ranks && !this.fromGear && !this.evolved && (ranks.allWeapons || ranks.weapons.has(this.baseId));
+    return Math.min(MAX_WEAPON_LEVEL, level + Number(!!boost));
+  }
+
   recompute() {
-    this.s = heroStats(this.def, this.level, this.g.player);
+    this.s = heroStats(this.def, this.effectiveRank(), this.g.player);
     if (this.fx && this.fx.refresh) this.fx.refresh();
     prewarm(this);
   }
@@ -190,6 +200,10 @@ export class Weapon {
   // as far as the weapon looks for one by itself.
   get reach() {
     return KINDS[this.def.kind].reach ?? 34 * this.s.area + 26;
+  }
+
+  previewTarget() {
+    return KINDS[this.def.kind].previewTarget?.(this);
   }
 
   // One blow struck by hand (Game.strike), its first slash landing or first shot leaving delay
@@ -322,7 +336,10 @@ export function leapSpot(g, p, t) {
 const CHOP_GAP = 0.12;
 function chops(w) {
   const g = w.g;
-  const one = () => g.effects.push(new Chop(g, w, CHOP_R * w.s.area, w.s.dmg));
+  const one = () => {
+    recordHeroAttack(w);
+    g.effects.push(new Chop(g, w, CHOP_R * w.s.area, w.s.dmg));
+  };
   one();
   for (let i = 1; i < w.s.amount; i++) {
     g.effects.push({ t: -i * CHOP_GAP, update(dt) {
@@ -341,6 +358,7 @@ export const sideways = (p) => (p.face < 0 ? Math.PI : 0);
 export const SWORD_ARC = Math.PI / 4;
 
 export const KINDS = {
+  ...EXPANSION_BEHAVIORS,
   ...KINDS_LIGHT, // the Lantern, Runestone, Scythe and Starfall (weapons-light.js)
   sword: {
     fire(w) {
@@ -361,6 +379,7 @@ export const KINDS = {
       g.effects.push(new Slash(g, w, ang, 30 * w.s.area, SWORD_ARC, w.s.dmg, holy));
       // No slash turns him, not even one at a foe behind him (facing.js).
       p.swing(ang);
+      recordHeroAttack(w, ang);
       if (holy) {
         spawnProjectile(g, {
           kind: 'wave', x: p.x, y: p.y, z: 7, ang, speed: 200, life: 0.6, r: 11 * w.s.area, dmg: w.s.dmg * 0.6,
@@ -391,7 +410,7 @@ export const KINDS = {
       // The ranger's release is recorded at the actual shot, including every
       // arrow in a volley. This is visual state; projectile timing is unchanged.
       // No arrow turns him, not even one at a foe behind him (facing.js).
-      if (p.id === 'archer') p.bowShot = { at: g.clock, ang };
+      recordHeroAttack(w, ang);
       // Drawn and struck with at a quarter over the outlined 14x5 sprite (17.5x6.25 px, the hit
       // 8.75 px either side of its centre and 3.75 to either side of its line): still short of
       // her bow, about 21 px tip to tip.
@@ -425,6 +444,7 @@ export const KINDS = {
       const g = w.g, p = g.player;
       const t = stillTarget(w, i);
       const ang = t ? aimAt(p, t) : p.aim + rand(-0.4, 0.4);
+      recordHeroAttack(w, ang);
       spawnProjectile(g, {
         kind: 'fireball', sprite: 'fireball', x: p.x, y: p.y, z: 8, ang, speed: 150 * w.s.speed, life: 1.6, r: 4,
         dmg: w.s.dmg, pierce: 0, kb: w.s.kb, w, explodeR: 24 * w.s.area, type: 'fire',
@@ -445,6 +465,7 @@ export const KINDS = {
         const ty = t ? t.y + rand(-8, 8) : p.y + rand(-80, 80);
         g.effects.push(new Meteor(g, w, tx, ty, 34 * w.s.area, w.s.dmg, i * 0.16, { pool: w.s.dur, tick: w.s.tick }));
       }
+      recordHeroAttack(w);
     },
   },
 
@@ -620,6 +641,7 @@ export const KINDS = {
       const g = w.g, p = g.player;
       const n = w.s.amount;
       const ang = w.s.radial ? w.baseAng + (i / n) * TAU : w.baseAng + fan(i, 0.05);
+      if (i === 0) recordHeroAttack(w, w.s.radial ? p.aim : ang);
       const off = w.s.radial ? 0 : (i - (n - 1) / 2) * 3;
       shadowBlade(g, w, p.x - Math.sin(ang) * off, p.y - 1 + Math.cos(ang) * off, ang, w.s.dmg, 0.75);
       if (i % 2 === 0) sfx('dagger', { pitch: rand(0.9, 1.2) });
@@ -778,6 +800,7 @@ export const KINDS = {
         g.minions.push(new Minion(g, spot.x, spot.y, { w, dmg: w.s.dmg, dur: w.s.dur * p.summonDur, speed: w.s.speed, knight: !!w.s.knights, burst: !!w.s.burst }));
       }
       g.effects.push(new Ring(g, p.x, p.y, 4, 34, 0.45, '#9ee562', true));
+      recordHeroAttack(w);
       sfx('bones', { pitch: 0.7 });
     },
   },
@@ -924,6 +947,7 @@ export const KINDS = {
       const foes = mightiest(g, p.x, p.y, w.reach, w.s.amount, w.handTarget);
       if (!foes.length) return false;
       foes.forEach((e, i) => g.effects.push(new Pillar(g, w, e, i * 0.08)));
+      recordHeroAttack(w, aimAt(p, foes[0]));
     },
   },
 
@@ -938,6 +962,7 @@ export const KINDS = {
       if (t && !t.dead && !foes.includes(t)) foes.unshift(t);
       if (!foes.length) return false;
       foes.slice(0, w.s.amount).forEach((e, i) => g.effects.push(new Burrow(g, w, p.x, p.y + 1, e, i * 0.06)));
+      recordHeroAttack(w, aimAt(p, foes[0]));
       sfx('wood', { pitch: rand(0.3, 0.4) });
     },
   },
@@ -993,6 +1018,7 @@ export const KINDS = {
       const g = w.g, p = g.player;
       const t = w.targets.length ? stillTarget(w, i % w.targets.length) : null;
       const ang = t ? aimAt(p, t) : w.baseAng;
+      recordHeroAttack(w, ang);
       const purge = !!(p.ult && p.ult.type === 'purge');
       const o = { dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, speed: w.s.speed, bane: w.s.bane, nova: !!w.s.nova || purge, ult: purge };
       silverBolt(g, w, p.x, p.y, ang, o);

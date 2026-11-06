@@ -50,10 +50,10 @@ test('mouse hover does not change mode or saved difficulty', () => {
   }
 });
 
-test('all nine ranked records remain accessible on short and narrow screens', () => {
+test('all ranked records remain accessible on short and narrow screens', () => {
   for(const [W,H] of [[480,270],[640,360],[390,844],[293,633]]) {
     const a=app(),s=new RecordsScreen();s.enter(a);s.tab='ranked';draw(s,a,W,H);
-    const rows=a.ui.items.filter(i=>i.id.startsWith('record_'));assert.equal(rows.length,9);
+    const rows=a.ui.items.filter(i=>i.id.startsWith('record_'));assert.equal(rows.length,HERO_ORDER.length);
     for(const r of rows) assert.ok(r.y>=54 && r.y+r.h<H-20);
   }
 });

@@ -31,11 +31,13 @@
 // by milestones, kept as bits (ul: PROGRESS.locks in order; uu: HERO_ORDER in order); weapon and
 // relic slots are Armory ranks (Arsenal, Reliquary), as are all rerolls and banishes.
 
-import { RARITIES, LEGENDARY, MAX_LORDS, SLOTS, POOLS, sanitizeGear, packGear, sameItem, itemPrice, statRange } from './items.js';
+import { RARITIES, LEGENDARY, MAX_LORDS, SLOTS, POOLS, sanitizeGear, sanitizeItem, packGear, sameItem, itemPrice, powerWorn, statRange } from './items.js';
 import { FLOORS } from '../data/waves.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from './progress.js';
 import { killCredit } from './population.js';
+import { MAX_CLAIMS, packSpoils, partitionRunSpoils, settledSpoils, unpackSpoils, validRunId } from './spoils.js';
+import { RECRUITS } from '../expansion/roster.js';
 
 export { PROGRESS, needText };
 
@@ -48,12 +50,15 @@ export const MODES = ['s15', 'dungeon', 'ranked'];
 export const WIN_MODES = ['s15', 'dungeon']; // Ranked has no victory, only a time
 // Heroes unlock in this order: a run with one that lasts this long on the clock (seconds)
 // brings in the next.
-export const HERO_ORDER = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
+const LEGACY_HEROES = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
+export const HERO_ORDER = [...LEGACY_HEROES, ...RECRUITS.map(h => h.id)];
 // The ladder's five, whose Dungeon clears each bring the next one into it and the last opens
 // Ranked; the heroes after them are extras (canPlay, nextGoal).
 export const LADDER = HERO_ORDER.slice(0, 5);
 export const BASE_HEROES = ['knight'];
 export const HERO_UNLOCK_TIME = 5 * 60;
+const recruitmentTime = new Map(RECRUITS.map(h => [h.id, h.minutes * 60]));
+export const heroUnlockTime = (id) => recruitmentTime.get(id) ?? HERO_UNLOCK_TIME;
 // The Survival maps by id, in the order the save keeps their bits (mo, mw), and in the order they
 // open in: the first open from the start, each after it once a night is won on the one before it.
 // The ids only, from shared/progress.js, which imports nothing: data/maps.js (the maps themselves,
@@ -218,6 +223,7 @@ export function defaultProfile() {
     // C4): the hero screen, the results' NEXT bar and the Codex's ultimate bars.
     bt: {},
     gear: {}, // hero -> slot -> the item that hero wears there (shared/items.js)
+    gearRev: {}, // incremented by transfers to reject outdated gear submissions
     ev: [], // the evolutions a lock waits on (need 'evolution') that a run has reached
     ek: 0, // every evolution a run has made: bit i is PROGRESS.evolutions[i] (knownEvos)
     home: [], // the shared weapons left at home: never offered in a run (setHome, the Codex)
@@ -280,7 +286,9 @@ export function sanitizeProfile(raw) {
   // (saves from when the next hero was bought with gold, after a night survived).
   for (const h of HERO_ORDER) {
     const next = unlocksNext(p, h);
-    if (next && p.heroes.includes(h) && (hasFeat(p, h, FEAT.survivalHard) || (p.ranked[h] || 0) >= HERO_UNLOCK_TIME)) p.heroes.push(next);
+    if (next && p.heroes.includes(h) && (hasFeat(p, h, FEAT.survivalHard) ||
+        (p.ranked[h] || 0) >= heroUnlockTime(next) ||
+        (recruitmentTime.has(next) && (p.bt[h] || 0) >= heroUnlockTime(next)))) p.heroes.push(next);
   }
   // Each hero's own gear. Saves from before (2) kept one set for every hero: each hero keeps a
   // copy of it.
@@ -291,6 +299,10 @@ export function sanitizeProfile(raw) {
     }
   } else if (Object.keys(sanitizeGear(raw.gear)).length) {
     for (const h of p.heroes) p.gear[h] = sanitizeGear(raw.gear);
+  }
+  for (const h of HERO_ORDER) {
+    const rev = int(perHero(raw.gearRev, h), 0, 1e9);
+    if (rev) p.gearRev[h] = rev;
   }
   const v = int(raw.v, 0, 99);
   if (v >= 1 && v < 4) fromBefore(p);
@@ -313,6 +325,8 @@ export function sanitizeProfile(raw) {
   // Whatever the records have earned is open (a milestone retuned lower opens for all who passed it).
   p.ul = orBits(p.ul, earnedBits(p));
   for (const h of p.heroes) if (ultEarned(p, h)) p.uu |= heroBit(h);
+  const lastRun = sanitizeReceipt(raw.lastRun, p.runs);
+  if (lastRun) p.lastRun = lastRun;
   return p;
 }
 
@@ -533,6 +547,8 @@ export function packProfile(p) {
   const { ev, ...rest } = p;
   const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), ranked: packPerHero(p.ranked), bt: packPerHero(p.bt), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
   if (!out.home?.length) delete out.home;
+  if (Object.keys(p.gearRev || {}).length) out.gearRev = packPerHero(p.gearRev);
+  else delete out.gearRev;
   return out;
 }
 
@@ -551,6 +567,42 @@ const perHero = (raw, h) => (typeof raw === 'string' ? parseInt(raw.slice(0, 200
 // ------------------------------------------------------------- the ladder --
 
 export const hasFeat = (p, hero, bit) => ((p.feats?.[hero] || 0) & bit) !== 0;
+
+export const TRANSFER_ACHIEVEMENT = 'Quartermaster · Clear the Dungeon with any hero';
+export const transferUnlocked = (p) => HERO_ORDER.some(h => hasFeat(p, h, FEAT.dungeon));
+export const gearRevision = (p, hero) => p.gearRev?.[hero] || 0;
+
+export function transferQuote(p, from, to, slot) {
+  const item = p.gear[from]?.[slot];
+  const cost = item && SLOTS.includes(slot) ? 10 * itemPrice(item) : 0;
+  let error = null;
+  if (!transferUnlocked(p)) error = 'Earn Quartermaster to transfer gear';
+  else if (from === to) error = 'Choose a different hero';
+  else if (!p.heroes.includes(from) || !p.heroes.includes(to)) error = 'Both heroes must be recruited';
+  else if (!item || !SLOTS.includes(slot)) error = 'There is no item in that slot';
+  else if (p.gear[to]?.[slot]) error = 'Recipient already has gear in that slot';
+  else if (powerWorn(p.gear[to], item.power, slot)) error = 'Recipient already wears that legendary power';
+  else if (p.gold < cost) error = 'Insufficient gold';
+  return { item, cost, error, ok: !error };
+}
+
+export function transferItem(profile, action) {
+  const p = sanitizeProfile(profile);
+  const { from, to, slot, expected, fromRev, toRev } = action || {};
+  const quote = transferQuote(p, from, to, slot);
+  if (!quote.ok) return { ...quote, profile: p };
+  if (gearRevision(p, from) !== fromRev || gearRevision(p, to) !== toRev ||
+      !sameItem(quote.item, sanitizeItem(expected, slot))) {
+    return { ok: false, profile: p, error: 'Equipment changed. Review the transfer again.' };
+  }
+  p.gold -= quote.cost;
+  delete p.gear[from][slot];
+  if (!Object.keys(p.gear[from]).length) delete p.gear[from];
+  (p.gear[to] ??= {})[slot] = quote.item;
+  p.gearRev[from] = fromRev + 1;
+  p.gearRev[to] = toRev + 1;
+  return { ok: true, profile: p, cost: quote.cost };
+}
 const prevHero = (id) => HERO_ORDER[HERO_ORDER.indexOf(id) - 1] || null;
 
 export function modeUnlocked(p, mode) {
@@ -570,7 +622,8 @@ export function canPlay(p, mode, hero) {
 
 // The hero that five minutes with `hero` would bring in, or null.
 export function unlocksNext(p, hero) {
-  const next = HERO_ORDER[HERO_ORDER.indexOf(hero) + 1];
+  const i = HERO_ORDER.indexOf(hero);
+  const next = i >= 0 ? HERO_ORDER[i + 1] : null;
   return next && !p.heroes.includes(next) ? next : null;
 }
 
@@ -581,7 +634,7 @@ export const wonElite = (p) => (p.wins.s15[DIFFICULTIES.indexOf('hard')] || 0) >
 //   { type: 'survive' | 'survivalHard' | 'dungeon' | 'elite', hero, unlocks, minutes? }
 export function nextGoal(p) {
   const next = nextHeroUnlock(p);
-  const survive = next && { type: 'survive', hero: prevHero(next), unlocks: next, minutes: HERO_UNLOCK_TIME / 60 };
+  const survive = next && { type: 'survive', hero: prevHero(next), unlocks: next, minutes: heroUnlockTime(next) / 60 };
   // The ladder's five come first; the extras after them wait until the Dungeon and Ranked are open.
   if (next && LADDER.includes(next)) return survive;
   if (!modeUnlocked(p, 'dungeon')) return { type: 'survivalHard', hero: 'necromancer', unlocks: 'dungeon' };
@@ -598,6 +651,7 @@ export function nextGoal(p) {
 // Everything currently open, as keys; applyRun diffs these to announce unlocks.
 function openings(p) {
   const out = p.heroes.filter((h) => !BASE_HEROES.includes(h)).map((h) => 'hero:' + h);
+  if (transferUnlocked(p)) out.push('achievement:quartermaster');
   for (const m of MODES) if (m !== 's15' && modeUnlocked(p, m)) out.push('mode:' + m);
   if (modeUnlocked(p, 'dungeon')) {
     for (const h of LADDER.slice(1)) if (canPlay(p, 'dungeon', h)) out.push('dungeon:' + h);
@@ -787,8 +841,133 @@ export function countedKills(kills, time, diff, nightmare, map, effort, mode = '
 }
 const effortFor = (run) => run.effort;
 
+function sanitizeReceipt(raw, runs) {
+  if (!validRunId(raw?.id) || !HERO_ORDER.includes(raw.hero) || !Number.isInteger(raw.from) ||
+      raw.from < 0 || raw.from >= runs || !raw.reward || typeof raw.reward !== 'object') return null;
+  const r = raw.reward;
+  const reward = Object.fromEntries(['gold', 'collected', 'wage', 'bonus', 'total'].map(key => [key, int(r[key], 0, 1e9)]));
+  reward.multiplier = [0.75, 1, 1.5, 2.25].includes(r.multiplier) ? r.multiplier : 1;
+  if (r.gearConflict === true) reward.gearConflict = true;
+  if (r.spoilsGold > 0) reward.spoilsGold = int(r.spoilsGold, 0, 1e9);
+  reward.unlocks = Array.isArray(r.unlocks) ? r.unlocks.slice(0, HERO_ORDER.length + 10).filter(key => {
+    if (typeof key !== 'string') return false;
+    const [type, id, extra] = key.split(':');
+    if (extra !== undefined) return false;
+    if (type === 'hero' || type === 'dungeon') return HERO_ORDER.includes(id);
+    if (type === 'mode') return MODES.includes(id);
+    if (type === 'map') return MAP_IDS.includes(id);
+    return (type === 'achievement' || type === 'feature') && /^[a-z0-9_]{2,32}$/.test(id || '');
+  }) : [];
+  reward.unlocked = [];
+  for (const entry of Array.isArray(r.unlocked) ? r.unlocked.slice(0, LOCKS.length + 1) : []) {
+    if (entry?.type === 'ult' && entry.id === raw.hero) {
+      reward.unlocked.push({ type: 'ult', id: raw.hero, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero' });
+      continue;
+    }
+    const lock = LOCKS.find(l => l.type === entry?.type && l.id === entry?.id);
+    if (lock && !lock.retired) reward.unlocked.push({ type: lock.type, id: lock.id, need: needText(lock), ...(lock.buy ? { buy: true } : {}) });
+  }
+  if (r.ranked) {
+    const time = int(r.ranked.time, 0, MAX_TIME.ranked), best = int(r.ranked.best, time, MAX_TIME.ranked);
+    reward.ranked = { time, best, personalBest: r.ranked.personalBest === true, title: rankTitle(time) };
+  }
+  const pending = raw.pending === true;
+  const claims = pending ? packSpoils(unpackSpoils(raw.claims, MAX_CLAIMS).filter(e => e.state !== 'found')) : '';
+  return {
+    id: raw.id, from: raw.from, hero: raw.hero, pending, reward,
+    spoils: pending ? packSpoils(unpackSpoils(raw.spoils)) : '',
+    ...(claims && { claims }),
+    ...(pending && raw.truncated === true ? { truncated: true } : {}),
+  };
+}
+
+export function acknowledgeReveal(profile, id) {
+  const p = sanitizeProfile(profile), receipt = p.lastRun;
+  if (!validRunId(id) || receipt?.id !== id) return { ok: false, profile: p, error: 'That run receipt is unavailable' };
+  if (unpackSpoils(receipt.claims, MAX_CLAIMS).some(e => e.state === 'sealed')) {
+    return { ok: false, profile: p, error: 'Equip or sell every sealed item first' };
+  }
+  receipt.pending = false;
+  receipt.spoils = '';
+  delete receipt.truncated;
+  delete receipt.claims;
+  return { ok: true, profile: p };
+}
+
+export function resolveSpoil(profile, { id, index, action, expectedGearRev } = {}) {
+  const p = sanitizeProfile(profile), receipt = p.lastRun;
+  if (!validRunId(id) || receipt?.id !== id || !receipt.pending) {
+    return { ok: false, profile: p, error: 'That run receipt is unavailable' };
+  }
+  const entries = unpackSpoils(receipt.claims, MAX_CLAIMS), entry = entries[index];
+  if (!Number.isInteger(index) || !entry || (action !== 'equip' && action !== 'sell')) {
+    return { ok: false, profile: p, error: 'Choose an item and a valid action' };
+  }
+  const state = action === 'equip' ? 'worn' : 'sold';
+  if (entry.state === state) return { ok: true, profile: p, repeated: true };
+  if (entry.state !== 'sealed') return { ok: false, profile: p, error: 'That item was already settled' };
+  const item = entry.item, hero = receipt.hero, gear = p.gear[hero] || {};
+  let gold = itemPrice(item);
+  if (action === 'equip') {
+    const revision = gearRevision(p, hero), worn = gear[item.slot];
+    if (expectedGearRev !== revision) return { ok: false, profile: p, error: 'Equipment changed. Review this slot again.' };
+    if (powerWorn(gear, item.power, item.slot)) return { ok: false, profile: p, error: 'That legendary power is already equipped' };
+    gold = worn ? itemPrice(worn) : 0;
+    p.gear[hero] = { ...gear, [item.slot]: item };
+    p.gearRev[hero] = revision + 1;
+  }
+  p.gold = int(p.gold + gold, 0, 1e9);
+  entry.state = state;
+  receipt.claims = packSpoils(entries);
+  return { ok: true, profile: p };
+}
+
+const sameSlot = (a, b) => !a && !b || sameItem(a, b);
+
+function settleRunGear(p, run, raw) {
+  const soldOnConflict = [];
+  if (!run.gear) return { soldOnConflict };
+  const current = p.gear[run.hero] || {};
+  const stale = (raw.gearRev ?? 0) !== gearRevision(p, run.hero);
+  if (stale && !raw.gearStart) return { gearConflict: true, soldOnConflict };
+  const start = stale ? sanitizeGear(raw.gearStart) : current;
+  const changed = SLOTS.filter(slot => !sameSlot(start[slot], run.gear[slot]));
+  if (changed.filter(slot => run.gear[slot]).length > run.found) return { gearConflict: stale, soldOnConflict };
+
+  const next = { ...current };
+  let legitimateSales = 0, disputedSales = 0, gearConflict = false;
+  const collected = stale ? unpackSpoils(raw.spoils, run.found) : [];
+  for (const slot of changed) {
+    const incoming = run.gear[slot], previous = start[slot];
+    const conflict = stale && (!sameSlot(current[slot], previous) || (incoming && powerWorn(next, incoming.power, slot)));
+    if (conflict) {
+      gearConflict = true;
+      if (previous) disputedSales += itemPrice(previous);
+      if (incoming && collected.some(e => e.state === 'worn' && sameItem(e.item, incoming))) soldOnConflict.push(incoming);
+      continue;
+    }
+    if (previous) legitimateSales += itemPrice(previous);
+    if (incoming) next[slot] = incoming;
+    else delete next[slot];
+  }
+  const claim = Math.max(0, run.claim - disputedSales);
+  run.gold = Math.min(claim, run.gold + legitimateSales) + soldOnConflict.reduce((n, it) => n + itemPrice(it), 0);
+  if (Object.keys(next).length) p.gear[run.hero] = next;
+  else delete p.gear[run.hero];
+  return { gearConflict, soldOnConflict };
+}
+
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
+  const modern = rawRun?.runId !== undefined || rawRun?.runFrom !== undefined;
+  if (modern) {
+    const { runId, runFrom } = rawRun;
+    if (!validRunId(runId) || !Number.isSafeInteger(runFrom) || runFrom < 0) return { ok: false, profile: p, error: 'Invalid run receipt' };
+    if (p.lastRun?.id === runId && p.lastRun.from === runFrom) return { ok: true, profile: p, reward: p.lastRun.reward, repeated: true };
+    // A retry of an older receipt must never become a second reward after a new run settles.
+    if (p.runs !== runFrom || p.runs >= 1e7) return { ok: false, profile: p, error: 'Progress changed before this run could be saved' };
+    if (p.lastRun?.pending) return { ok: false, profile: p, error: 'Reveal the previous run spoils first' };
+  }
   // The caps at this save's own Armory Greed, and at its map's horde (MAP_MORE) only where that map is
   // open to it: a report from one still shut, which marks no map (below), is held to the Darkwood's,
   // as no night this save could have played sent more (the review of 28 October 2026).
@@ -800,20 +979,13 @@ export function applyRun(profile, rawRun) {
   // The gear the hero wears at the end is theirs to keep, as long as no more of it is new than
   // the run found; whatever they wore coming in that is gone was sold, and its price may be in
   // the gold. Other heroes' gear is theirs alone.
-  if (run.gear) {
-    const worn = Object.values(p.gear[run.hero] || {}), end = Object.values(run.gear);
-    const fresh = end.filter((it) => !worn.some((w) => sameItem(w, it))).length;
-    if (fresh <= run.found) {
-      const sold = worn.filter((w) => !end.some((it) => sameItem(w, it))).reduce((s, w) => s + itemPrice(w), 0);
-      run.gold = Math.min(run.claim, run.gold + sold);
-      if (end.length) p.gear[run.hero] = run.gear;
-      else delete p.gear[run.hero];
-    }
-  }
+  const sealed = modern && rawRun.sealedGear === true;
+  const { gearConflict, soldOnConflict } = sealed ? {} : settleRunGear(p, run, rawRun);
   // Five minutes on the clock bring in the next hero.
   const next = unlocksNext(p, run.hero);
-  if (next && run.time >= HERO_UNLOCK_TIME) p.heroes.push(next);
+  if (next && run.time >= heroUnlockTime(next)) p.heroes.push(next);
   const reward = runReward(run);
+  if (gearConflict) reward.gearConflict = true;
   p.gold = int(p.gold + reward.total, 0, 1e9);
   p.runs = int(p.runs + 1, 0, 1e7);
   p.kills = int(p.kills + run.kills, 0, 1e12);
@@ -868,6 +1040,16 @@ export function applyRun(profile, rawRun) {
   });
   if ((p.uu & ~uu0) !== 0) reward.unlocked.push({ type: 'ult', id: run.hero, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero' });
   if (run.mode === 'ranked') reward.ranked = { time: run.time, best: p.ranked[run.hero] || 0, personalBest, title: rankTitle(run.time) };
+  if (modern) {
+    const { claims, history, overflowGold } = sealed
+      ? partitionRunSpoils(rawRun.spoils, run.found)
+      : { history: settledSpoils(rawRun.spoils, run.found, p.gear[run.hero], soldOnConflict) };
+    if (overflowGold) {
+      p.gold = int(p.gold + overflowGold, 0, 1e9);
+      reward.spoilsGold = overflowGold;
+    }
+    p.lastRun = { id: rawRun.runId, from: rawRun.runFrom, hero: run.hero, pending: !!(claims || history), spoils: history, reward, ...(claims && { claims }) };
+  }
   return { ok: true, profile: p, reward, run };
 }
 
@@ -905,13 +1087,9 @@ export function metaBonuses(profile) {
   };
 }
 
-// The longest state decodeState reads. It must fit the biggest cookie the game writes, the
-// profile with all nine heroes in six legendaries (packProfile): about 3 200 characters encoded
-// since the Survival maps (test/profile.test.js measures it and keeps a quarter spare, with about
-// two characters to go: a new field needs room made first; test/server.test.js seals it). A
-// browser keeps at most 4096 bytes a cookie, its name included, so nothing longer than this can
-// be one of ours.
-export const MAX_STATE = 4000;
+// Browser storage holds the expanded roster and the last run's compact spoils ledger.
+// The server separately bounds and compresses its encrypted cookie.
+export const MAX_STATE = 128 * 1024;
 
 // base64url(JSON). Our JSON is plain ASCII, so btoa/atob are safe here and
 // exist both in browsers and in Node >= 16.

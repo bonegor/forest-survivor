@@ -42,8 +42,13 @@ const SIGNATURES = {
 };
 
 test('each class has its signature weapon, and every other weapon is shared by all', () => {
+  const unique = new Set();
   for (const [id, h] of Object.entries(HEROES)) {
-    assert.deepEqual(h.unique, SIGNATURES[id], id);
+    assert.deepEqual(h.unique, SIGNATURES[id] ?? [h.weapon], id);
+    for (const weapon of h.unique) {
+      assert.ok(WEAPONS[weapon] && !unique.has(weapon), `${id}: unique signature ${weapon}`);
+      unique.add(weapon);
+    }
     assert.ok(h.unique.includes(h.weapon), `${id}: the weapon he strikes with in a crypt is his own`);
     for (const w of startWeapons(h)) assert.ok(h.unique.includes(w), `${id} starts with ${w}, his own`);
     assert.deepEqual(weaponsFor(h), [...h.unique, ...SHARED_WEAPONS], `${id}: his own and the shared`);

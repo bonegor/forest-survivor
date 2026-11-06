@@ -1,9 +1,9 @@
-import { Game } from '../game/game.js';
+import { Game, strikeClip } from '../game/game.js';
 import { Player, BASE_SPEED } from '../game/player.js';
 import { SPR } from '../engine/sprites.js';
 import { bounds, rimRing } from '../engine/pixels.js';
 import { clamp } from '../engine/util.js';
-import { HEROES, HERO_ORDER, heroLook } from '../data/heroes.js';
+import { HERO_ORDER, heroLook } from '../data/heroes.js';
 import { metaBonuses } from '../shared/profile.js';
 import { moveFor } from '../data/difficulty.js';
 import { pixelEllipse, portraitBackdrop, mix } from './scenes.js';
@@ -65,9 +65,9 @@ export class HeroShowcase {
     p.moving = action.kind === 'walk';
     // Same animation clock as Player.update, including the hero's movement-speed multiplier.
     p.anim += dt * (p.moving ? 7 * clamp(p.moveSpeed / BASE_SPEED, 0.6, 1.6) : 1.6);
-    if (action.kind === 'attack' && spr.attack) {
-      const from = Math.max(0, (spr.attackRelease ?? Math.floor(spr.attack.length / 2)) - 2);
-      p.strike(p.face < 0 ? Math.PI : 0, this.time - action.local + from / spr.attackFps);
+    const clip = strikeClip(spr);
+    if (action.kind === 'attack' && clip) {
+      p.strike(p.face < 0 ? Math.PI : 0, this.time - action.local + clip.hit / spr.attackFps - clip.delay);
     } else p.strikeAt = null;
   }
 
@@ -107,17 +107,6 @@ export class HeroShowcase {
       ctx.globalAlpha = 0.5;
       ctx.drawImage(frame.variant('showcase-edge', b => rimRing(b, '#d8e2f0', 1), flip), dx - scale, dy - scale, dw + scale * 2, dh + scale * 2);
       ctx.globalAlpha = 1;
-    }
-    // The Shadow's accepted float has no humanoid attack sheet. Show its signature blades
-    // around the hovering body, using the existing native icon and rotation cache.
-    if (p.id === 'rogue' && this.action?.kind === 'attack' && !locked) {
-      const blade = SPR.i_shadowblade.frames[0];
-      for (let i = 0; i < 2; i++) {
-        const a = this.action.local * 10 + i * Math.PI;
-        const img = blade.rotated(a);
-        const bx = center + Math.cos(a) * 15 * scale, by = foot - 17 * scale + Math.sin(a) * 7 * scale;
-        ctx.drawImage(img, Math.round(bx - img.width * scale / 2), Math.round(by - img.height * scale / 2), img.width * scale, img.height * scale);
-      }
     }
     ctx.restore();
   }

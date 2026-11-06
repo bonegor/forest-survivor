@@ -55,6 +55,7 @@ export function lockReason(p, mode, hero, map) {
 
 // Announcements for keys returned in reward.unlocks.
 export function unlockText(key) {
+  if (key === 'achievement:quartermaster') return 'Quartermaster earned · gear transfers unlocked!';
   const [kind, id] = key.split(':');
   if (kind === 'hero') return `${cap(title(id))} is unlocked!`;
   if (kind === 'dungeon') return `${cap(title(id))} may now enter the Dungeon!`;

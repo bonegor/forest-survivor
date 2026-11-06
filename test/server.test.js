@@ -326,13 +326,13 @@ test('npm run dev opens developer mode without a key', async () => {
   }, { devOpen: true });
 });
 
-// All nine heroes (the four of 20 October 2026 too) in six legendaries each, every record at its
-// most: the biggest profile there is, sealed by the server into its cookie, still a cookie a
-// browser keeps (4 096 bytes, its name included), and read back whole.
-test('a maximal save of all nine heroes fits the sealed cookie and reads back whole', async () => {
+// The expanded roster with distinct gear rolls and rank affixes must fit an encrypted
+// compressed cookie and read back whole.
+test('a maximal save of all 21 heroes fits the sealed cookie and reads back whole', async () => {
   const P = await import('../public/js/shared/profile.js');
   const I = await import('../public/js/shared/items.js');
-  assert.equal(P.HERO_ORDER.length, 9);
+  const { MAX_CLAIMS, packSpoils } = await import('../public/js/shared/spoils.js');
+  assert.equal(P.HERO_ORDER.length, 21);
   const p = P.defaultProfile();
   Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, deaths: 1e7, heroes: [...P.HERO_ORDER] });
   p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999 };
@@ -343,25 +343,55 @@ test('a maximal save of all nine heroes fits the sealed cookie and reads back wh
   p.mo = 2 ** P.PROGRESS.maps.length - 1;
   p.mw = 2 ** (3 * P.PROGRESS.maps.length) - 1;
   p.home = ['lightning', 'runestone', 'caltrops', 'starfall', 'lantern'];
+  let seed = 291790;
+  const next = n => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed % n;
+  };
+  const grants = ['weapons', 'passives', 'weapon:raise', 'weapon:swordbearer_marchsteel', 'passive:might', 'passive:duration'];
   const legend = (slot) => {
     const stats = {};
-    for (const id of I.POOLS[slot].slice(-4)) stats[id] = I.statRange(id, I.LEGENDARY)[1];
-    return { slot, rarity: I.LEGENDARY, stats, power: 'undying', seed: 999999 };
+    const pool = [...I.POOLS[slot]];
+    for (let i = 0; i < 4; i++) {
+      const [id] = pool.splice(next(pool.length), 1);
+      const [lo, hi] = I.statRange(id, I.LEGENDARY);
+      stats[id] = lo + next(hi - lo + 1);
+    }
+    const powers = Object.keys(I.POWERS);
+    return { slot, rarity: I.LEGENDARY, stats, power: powers[next(powers.length)], seed: next(1e6),
+      grant: grants[next(grants.length)] };
   };
   for (const h of P.HERO_ORDER) {
     p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
     p.bt[h] = 14400; // his longest run (28 October 2026)
     p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+    p.gearRev[h] = 1 + next(1e5);
   }
   await withServer(async (base) => {
     const c = client(base);
     const res = await c.post('/api/dev/profile', { profile: p });
     assert.equal(res.status, 200);
     const line = res.headers.getSetCookie().find((s) => s.startsWith('fs_profile='));
+    assert.match(c.jar.fs_profile, /^e2\./);
     const pair = line.split(';')[0];
     assert.ok(pair.length <= 4096 - 256, `${pair.length} bytes, with room to spare under 4 096`);
     const back = await (await c.get('/api/state')).json();
     assert.deepEqual(back.profile, P.sanitizeProfile(p), 'every hero, every piece, read back');
+
+    const entries = (n, state) => Array.from({ length: n }, (_, i) => ({ item: legend(I.SLOTS[i % I.SLOTS.length]), state }));
+    const claims = packSpoils(entries(MAX_CLAIMS, 'sealed'));
+    p.lastRun = {
+      id: 'a0b1c2d3e4f5a0b1c2d3e4f5', from: p.runs - 1, hero: 'knight', pending: true, reward: {},
+      claims, spoils: packSpoils(entries(300, 'sold')),
+    };
+    const overflowing = await c.post('/api/dev/profile', { profile: p });
+    assert.equal(overflowing.status, 200);
+    assert.ok(overflowing.headers.getSetCookie()[0].length <= 4096);
+    const saved = (await (await c.get('/api/state')).json()).profile;
+    assert.deepEqual(saved.gear, back.profile.gear);
+    assert.equal(saved.lastRun.pending, true);
+    assert.equal(saved.lastRun.claims, claims, 'all unresolved items remain in the encrypted cookie');
+    assert.equal(saved.lastRun.truncated, true, 'only the cosmetic history was compacted');
   }, { devOpen: true });
 });

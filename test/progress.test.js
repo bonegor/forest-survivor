@@ -119,10 +119,11 @@ test('the server keeps the milestones a run reached, and the ultimate of the her
     assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['weapon:frost']);
     assert.equal(P.openFor(data.profile, 'knight').ult, false, '1:59 is not enough');
     data = await post('/api/run', { ...RUN, time: 200 });
-    assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['ult:knight']);
+    assert.deepEqual(data.reward.unlocked.map((u) => u.type + ':' + u.id), ['relic:wardrum', 'ult:knight']);
     data = await (await fetch(base + '/api/state', { headers: { cookie } })).json();
     const open = P.openFor(data.profile, 'knight');
     assert.ok(open.ult && open.weapons.includes('frost') && open.weapons.includes('flask'), 'kept in the sealed cookie');
+    assert.ok(open.relics.includes('wardrum'), 'the three-minute relic persists too');
     assert.equal(P.openFor(data.profile, 'archer').ult, false, 'the Knight\'s alone');
     // A forged save is sanitized: no bits beyond the table's.
     data = await post('/api/run', { ...RUN, time: 10, bosses: 'lots', level: 'x' });

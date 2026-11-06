@@ -3,6 +3,9 @@
 // shared by the browser and the Node server, which checks every item it saves.
 // Every function here is pure and treats its input as untrusted.
 
+import { WEAPONS } from '../data/weapons.js';
+import { PASSIVES } from '../data/passives.js';
+
 // What each of a crypt's lords leaves besides its coins and gold, rolled lord by lord, every
 // lord alike and whatever the hero's luck (Game.lordDefeated): the user's "50% both a gear item
 // and a champion's chest, 25% item only, 25% chest only" (16 October 2026). The odds add up to 1.
@@ -74,6 +77,41 @@ export const POWERS = {
   titan: { text: '+20% health and +2 armor', stat: { maxHp: 0.2, armor: 2 } },
 };
 
+const RANK_CHANCE = [0, 0, 0.045, 0.08, 0.32];
+const rankWeapons = Object.keys(WEAPONS).filter(id => !WEAPONS[id].evolved);
+const rankPassives = Object.keys(PASSIVES).filter(id => !PASSIVES[id].stat.revivals);
+
+export function rankGrant(raw, rarity) {
+  if (rarity < 2 || typeof raw !== 'string') return null;
+  if (raw === 'weapons' || raw === 'passives') return rarity === LEGENDARY ? raw : null;
+  const [kind, id, extra] = raw.split(':');
+  if (extra !== undefined) return null;
+  if (kind === 'weapon' && rankWeapons.includes(id) || kind === 'passive' && rankPassives.includes(id)) return raw;
+  return null;
+}
+
+export function rankGrantName(grant) {
+  if (grant === 'weapons') return 'All held weapons';
+  if (grant === 'passives') return 'All held relics';
+  const [kind, id] = grant.split(':');
+  return (kind === 'weapon' ? WEAPONS : PASSIVES)[id].name;
+}
+
+export function gearRanks(gear) {
+  const weapons = new Set(), passives = new Set();
+  let allWeapons = false, allPassives = false;
+  for (const it of Object.values(gear || {})) {
+    const grant = rankGrant(it.grant, it.rarity);
+    if (grant === 'weapons') allWeapons = true;
+    else if (grant === 'passives') allPassives = true;
+    else if (grant) {
+      const [kind, id] = grant.split(':');
+      (kind === 'weapon' ? weapons : passives).add(id);
+    }
+  }
+  return { allWeapons, allPassives, weapons, passives };
+}
+
 const BASES = {
   helm: ['Leather Cap', 'Iron Helm', 'Barbute', 'Great Helm'],
   armor: ['Padded Jerkin', 'Chain Shirt', 'Scale Mail', 'Plate Armor'],
@@ -130,7 +168,16 @@ export function rollItem(rng, { minute = 0, depth = 1, slot = null } = {}) {
     stats[id] = rng.int(lo, hi);
   }
   const names = Object.keys(POWERS);
-  return { slot, rarity, stats, power: rarity === LEGENDARY ? names[rng.int(0, names.length - 1)] : null, seed: rng.int(0, 999999) };
+  const item = { slot, rarity, stats, power: rarity === LEGENDARY ? names[rng.int(0, names.length - 1)] : null, seed: rng.int(0, 999999) };
+  if (RANK_CHANCE[rarity] && rng() < RANK_CHANCE[rarity]) {
+    const weapon = rng() < 0.5;
+    if (rarity === LEGENDARY && rng() < 0.5) item.grant = weapon ? 'weapons' : 'passives';
+    else {
+      const ids = weapon ? rankWeapons : rankPassives;
+      item.grant = `${weapon ? 'weapon' : 'passive'}:${ids[rng.int(0, ids.length - 1)]}`;
+    }
+  }
+  return item;
 }
 
 export function itemName(it) {
@@ -151,6 +198,7 @@ export function statText(id, v) {
 export function itemLines(it) {
   const out = Object.entries(it.stats).map(([id, v]) => statText(id, v));
   if (it.power) out.push(POWERS[it.power].text);
+  if (it.grant) out.push(`+1 rank · ${rankGrantName(it.grant)}`);
   return out;
 }
 
@@ -200,7 +248,9 @@ export function sanitizeItem(raw, slot = null) {
   }
   const power = r === LEGENDARY ? raw.power : null;
   if (r === LEGENDARY ? !Object.hasOwn(POWERS, power) : raw.power != null) return null;
-  return { slot: s, rarity: r, stats, power, seed };
+  const grant = rankGrant(raw.grant, r);
+  if (raw.grant != null && !grant) return null;
+  return { slot: s, rarity: r, stats, power, seed, ...(grant && { grant }) };
 }
 
 // Takes gear as objects, or packed: a slot's item as an array (packItem, the cookies written
@@ -229,14 +279,21 @@ export function packItem(it) {
 // empties at the end left off), each item its packItem numbers in base 36 split by '.'. Six
 // legendaries take about 150 characters, a third less than they took as arrays.
 export const packGear = (gear) =>
-  SLOTS.map((s) => (gear && gear[s] ? packItem(gear[s]).map((n) => n.toString(36)).join('.') : '')).join('|').replace(/\|+$/, '');
+  SLOTS.map(s => {
+    const it = gear?.[s];
+    if (!it) return '';
+    const packed = packItem(it).map(n => n.toString(36)).join('.');
+    return it.grant ? `${packed}~${it.grant}` : packed;
+  }).join('|').replace(/\|+$/, '');
 // Back to a slot -> packed item table for sanitizeGear to check (anything malformed is no item).
 function unpackGear(str) {
   const out = {};
   if (str.length > 600) return out;
   str.split('|').forEach((part, i) => {
-    if (i >= SLOTS.length || !/^-?[0-9a-z]+(\.-?[0-9a-z]+)*$/.test(part)) return;
-    out[SLOTS[i]] = part.split('.').map((n) => parseInt(n, 36));
+    const [packed, grant, extra] = part.split('~');
+    if (i >= SLOTS.length || extra !== undefined || !/^-?[0-9a-z]+(\.-?[0-9a-z]+)*$/.test(packed)) return;
+    const item = unpackItem(packed.split('.').map(n => parseInt(n, 36)), SLOTS[i]);
+    if (item) out[SLOTS[i]] = grant === undefined ? item : { ...item, grant };
   });
   return out;
 }
@@ -254,7 +311,8 @@ function unpackItem(a, slot) {
 }
 
 export function sameItem(a, b) {
-  if (!a || !b || a.slot !== b.slot || a.rarity !== b.rarity || a.seed !== b.seed || a.power !== b.power) return false;
+  if (!a || !b || a.slot !== b.slot || a.rarity !== b.rarity || a.seed !== b.seed || a.power !== b.power ||
+      (a.grant ?? null) !== (b.grant ?? null)) return false;
   const ka = Object.keys(a.stats), kb = Object.keys(b.stats);
   return ka.length === kb.length && ka.every((k) => a.stats[k] === b.stats[k]);
 }

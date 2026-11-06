@@ -24,7 +24,7 @@ const STALE_RUN_COOKIE = 'fs_run';
 const DEV_COOKIE = 'fs_dev';
 const DEV_SESSION = 12 * 60 * 60 * 1000; // a developer login lasts 12 hours
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 400; // browsers cap cookie lifetime at ~400 days
-const MAX_BODY = 8 * 1024;
+const MAX_BODY = 96 * 1024;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -80,6 +80,7 @@ function loadSecret(root) {
 // Cookies from before encryption (base64 JSON + HMAC signature) are still
 // accepted once and re-issued encrypted.
 const SEALED = 'e1.';
+const COMPRESSED_SEAL = 'e2.';
 const IV_LEN = 12;
 const TAG_LEN = 16;
 const MAX_COOKIE = 4096;
@@ -90,25 +91,31 @@ function sealer(secret) {
   const bad = { status: 'bad', data: null };
   return {
     seal(name, obj) {
+      const json = Buffer.from(JSON.stringify(obj), 'utf8');
+      const compressed = json.length > 2800;
+      const format = compressed ? COMPRESSED_SEAL : SEALED;
+      const payload = compressed ? zlib.deflateRawSync(json) : json;
       const iv = randomBytes(IV_LEN);
       const c = createCipheriv('aes-256-gcm', key, iv);
-      c.setAAD(Buffer.from(name));
-      const ct = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final()]);
-      return SEALED + Buffer.concat([iv, ct, c.getAuthTag()]).toString('base64url');
+      c.setAAD(Buffer.from(compressed ? name + format : name));
+      const ct = Buffer.concat([c.update(payload), c.final()]);
+      return format + Buffer.concat([iv, ct, c.getAuthTag()]).toString('base64url');
     },
     // status: 'none' (no cookie), 'ok', 'legacy' (old signed format, valid) or 'bad'.
     open(name, value) {
       if (!value) return { status: 'none', data: null };
       if (value.length > MAX_COOKIE) return bad;
-      if (value.startsWith(SEALED)) {
+      const compressed = value.startsWith(COMPRESSED_SEAL);
+      if (compressed || value.startsWith(SEALED)) {
         const buf = Buffer.from(value.slice(SEALED.length), 'base64url');
         if (buf.length <= IV_LEN + TAG_LEN) return bad;
         try {
           const d = createDecipheriv('aes-256-gcm', key, buf.subarray(0, IV_LEN));
-          d.setAAD(Buffer.from(name));
+          d.setAAD(Buffer.from(compressed ? name + COMPRESSED_SEAL : name));
           d.setAuthTag(buf.subarray(buf.length - TAG_LEN));
-          const json = Buffer.concat([d.update(buf.subarray(IV_LEN, buf.length - TAG_LEN)), d.final()]).toString('utf8');
-          return { status: 'ok', data: JSON.parse(json) };
+          const payload = Buffer.concat([d.update(buf.subarray(IV_LEN, buf.length - TAG_LEN)), d.final()]);
+          const json = compressed ? zlib.inflateRawSync(payload, { maxOutputLength: MAX_BODY }) : payload;
+          return { status: 'ok', data: JSON.parse(json.toString('utf8')) };
         } catch {
           return bad;
         }
@@ -284,7 +291,17 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
 
   const openCookie = (req, name) => box.open(name, parseCookies(req.headers.cookie)[name]);
   const readProfile = (req) => P.sanitizeProfile(openCookie(req, PROFILE_COOKIE).data);
-  const profileCookie = (req, p) => cookieHeader(req, PROFILE_COOKIE, box.seal(PROFILE_COOKIE, P.packProfile(p)));
+  const profileCookie = (req, p) => {
+    const packed = P.packProfile(p);
+    let header = cookieHeader(req, PROFILE_COOKIE, box.seal(PROFILE_COOKIE, packed));
+    if (header.length > MAX_COOKIE && packed.lastRun?.spoils) {
+      const { lastRun } = packed;
+      packed.lastRun = { ...lastRun, truncated: true, spoils: lastRun.spoils.split('|').slice(-6).join('|') };
+      header = cookieHeader(req, PROFILE_COOKIE, box.seal(PROFILE_COOKIE, packed));
+    }
+    if (header.length > MAX_COOKIE) throw Error('Encrypted profile exceeds the cookie size limit');
+    return header;
+  };
 
   async function api(req, res, route) {
     if (req.method === 'GET' && route === 'state') {
@@ -337,10 +354,20 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
         if (!r.ok) return sendJson(res, 400, { error: r.error });
         return sendJson(res, 200, { profile: r.profile, reward: r.reward }, [profileCookie(req, r.profile)]);
       }
+      case 'spoils': {
+        const r = body.action === undefined ? P.acknowledgeReveal(profile, body.id) : P.resolveSpoil(profile, body);
+        if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });
+        return sendJson(res, 200, { profile: r.profile }, [profileCookie(req, r.profile)]);
+      }
       case 'buy': {
         const r = P.buyUpgrade(profile, body.id);
         if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });
         return sendJson(res, 200, { profile: r.profile }, [profileCookie(req, r.profile)]);
+      }
+      case 'transfer': {
+        const r = P.transferItem(profile, body);
+        if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });
+        return sendJson(res, 200, { profile: r.profile, cost: r.cost }, [profileCookie(req, r.profile)]);
       }
       case 'home': {
         const r = P.setHome(profile, body.id, body.on === true);

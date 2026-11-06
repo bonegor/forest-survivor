@@ -92,7 +92,8 @@ test('in a crypt the knight has his sword alone, and it waits for the player', (
 test('a strike plays the attack, and the blade lands on its blow frame', () => gameCase((g, p) => {
   enterStartCrypt(g, p);
   const spr = SPR.knight, clip = strikeClip(spr), w = g.mainWeapon();
-  assert.deepEqual([clip.from, clip.hit], [1, 3], 'two frames of wind-up, then the sweep');
+  assert.equal(clip.hit, spr.attackRelease, 'the new Sentinel clip lands at its authored release');
+  assert.equal(clip.delay, 0.2, 'the original Longsword strike latency is preserved');
   const foe = g.spawnEnemy('skeleton', p.x - 18, p.y, { instant: true });
   foe.dormant = true;
   step(g);
@@ -123,7 +124,7 @@ test('a strike plays the attack, and the blade lands on its blow frame', () => g
   assert.ok(!spr.attack.includes(shown(g)), 'and then he stands');
 }));
 
-test('back in the forest every weapon fights by itself again, and he only walks', () => gameCase((g, p) => {
+test('back in the forest every weapon fights by itself again, with the signature attack animated', () => gameCase((g, p) => {
   g.addWeapon('bow');
   g.addWeapon('aura');
   enterStartCrypt(g, p);
@@ -131,14 +132,15 @@ test('back in the forest every weapon fights by itself again, and he only walks'
   for (let i = 0; i < 120 && g.inCrypt; i++) step(g);
   assert.equal(g.inCrypt, null);
   g.mainWeapon().cd = 0;
-  let swung = false, shot = false;
+  let swung = false, shot = false, animated = false;
   for (let i = 0; i < 150; i++) {
     step(g);
     swung ||= slashes(g) > 0;
     shot ||= g.projectiles.some((pr) => pr.kind === 'arrow');
-    assert.ok(!SPR.knight.attack.includes(shown(g)), 'no attack frames outside');
+    animated ||= SPR.knight.attack.includes(shown(g));
   }
   assert.ok(swung, 'the sword swings by itself');
+  assert.ok(animated, 'the real automatic sword attack has a visible pose');
   assert.ok(shot, 'the bow is back');
   assert.ok(g.effects.some((e) => e.persistent && e.w?.id === 'aura'), 'and the aura');
 }));
@@ -240,7 +242,7 @@ test('the ranger shoots a foe 200 px off, one behind her too, and on the move sh
     step(g);
     assert.equal(p.face, 1, 'she keeps facing the way she walks');
     const fr = shown(g);
-    assert.ok(!spr.attack.includes(fr) && !spr.attackWalk.flat().includes(fr), 'no shot ahead is shown');
+    assert.ok(spr.walk.includes(fr), 'the imported planted shot does not interrupt the walk');
     back ||= g.projectiles.find((pr) => pr.kind === 'arrow');
   }
   input.bot = { x: 0, y: 0 };

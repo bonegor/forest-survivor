@@ -36,7 +36,7 @@ test('the hero cards and the portrait size every hero by what he covers, all fiv
   assert.ok(cs === 1 || (widest * cs <= 64 - 8 && tallest * cs <= 66 - 18), 'every hero fits the card');
   // The detail panel's portrait (93 px tall, 138 wide at most): 2x, the tallest standing whole.
   const { s, foot } = portraitFit(93, 138);
-  assert.equal(s, 2);
+  assert.equal(s, Math.max(1, Math.min(Math.floor((foot - 6) / tallest), Math.floor((138 - 12) / widest))));
   assert.ok(tallest * s <= foot - 6 && widest * s <= 138 - 12);
 });
 

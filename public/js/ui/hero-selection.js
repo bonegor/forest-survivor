@@ -6,8 +6,8 @@ import { HEROES, HERO_ORDER, heroLook, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PROGRESS } from '../shared/progress.js';
 import { MAP_LADDER } from '../data/maps.js';
-import { nextHeroUnlock, nextGoal, openFor, HERO_UNLOCK_TIME } from '../shared/profile.js';
-import { SLOTS, SLOT_NAMES, itemName, itemLines, RARITIES } from '../shared/items.js';
+import { nextHeroUnlock, nextGoal, openFor, heroUnlockTime, transferUnlocked, transferQuote, gearRevision, TRANSFER_ACHIEVEMENT } from '../shared/profile.js';
+import { SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, RARITIES } from '../shared/items.js';
 import { panel, button, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { heroCrop, mix } from './scenes.js';
 import { goalText, featStars } from './ladder.js';
@@ -17,12 +17,13 @@ import { HeroShowcase } from './hero-showcase.js';
 
 export function heroSelectionLayout(W, H) {
   const width = Math.min(608, W - 24), x = Math.round((W - width) / 2);
-  const cols = W >= 440 ? 9 : 5, rows = Math.ceil(HERO_ORDER.length / cols);
-  const gap = 4, cardW = Math.floor((width - (cols - 1) * gap) / cols), cardH = 40;
+  const stacked = W < 440 && H >= 430;
+  const cols = W >= 440 ? 9 : stacked ? 5 : 7, rows = Math.ceil(HERO_ORDER.length / cols);
+  const gap = 4, cardW = Math.floor((width - (cols - 1) * gap) / cols), cardH = H < 335 ? 31 : 36;
   const top = 28 + rows * (cardH + gap) + 3;
-  const stacked = W < 440, bottom = H - (stacked ? 54 : 34);
+  const bottom = H - (stacked ? 54 : 34);
   const height = bottom - top;
-  const stageW = Math.round(width * 0.38), stageH = Math.min(320, Math.max(110, height - 210));
+  const stageW = Math.round(width * 0.38), stageH = clamp(height * 0.43, 72, 320);
   return {
     x, width, cols, rows, cardW, cardH, gap, stacked,
     stage: { x, y: top, w: stacked ? width : stageW, h: stacked ? stageH : height },
@@ -71,8 +72,13 @@ export class HeroScreen {
     dim(ctx, W, H, 0.62);
     heading(ctx, W);
     if (this.dialog) {
-      if (this.dialog.draw(ctx, ui, W, H, dt)) {
-        this.dialog = null;ui.focus('h_' + this.lastHero);ui.lock(0.2);
+      const action = this.dialog.draw(ctx, ui, W, H, dt);
+      if (action) {
+        const handle = this.dialogAction;
+        this.dialog = this.dialogAction = null;
+        ui.focus('h_' + this.lastHero);
+        ui.lock(0.2);
+        handle?.(action);
       }
       return;
     }
@@ -87,18 +93,20 @@ export class HeroScreen {
       if (activated && !locked) { app.choice.hero = id;ui.focus('hero_continue'); }
       const on = this.lastHero === id;
       panel(ctx, x, y, L.cardW, L.cardH, { rivets: false, fill: on ? '#292330' : '#14131f', trim: on ? ['#fee761', '#be4a2f'] : ['#3a4466', '#262b44'] });
-      const spr = SPR[h.sprite], crop = heroCrop(spr), frame = idleFrame(spr, Math.floor(this.t * spr.idleRate));
-      const portraitH = Math.min(23, crop.h);
+      const spr = SPR[h.sprite], crop = heroCrop(spr), frame = idleFrame(spr, Math.floor(this.t * SPR[h.pose].fps));
+      const portraitW = Math.min(L.cardW - 4, crop.w);
+      const portraitH = Math.min(L.cardH - 16, crop.h);
       ctx.globalAlpha = locked ? 0.22 : 1;
-      ctx.drawImage(frame.c, crop.x, crop.y, crop.w, portraitH, Math.round(x + (L.cardW - crop.w) / 2), y + 3, crop.w, portraitH);
+      ctx.drawImage(frame.c, crop.x + Math.floor((crop.w - portraitW) / 2), crop.y, portraitW, portraitH,
+        Math.round(x + (L.cardW - portraitW) / 2), y + 3, portraitW, portraitH);
       ctx.globalAlpha = 1;
       const label = locked ? id === next ? 'NEXT' : 'LOCKED' : h.short.toUpperCase();
-      drawText(ctx, label, x + L.cardW / 2, y + L.cardH - 10, { align: 'center', color: on ? '#fee761' : locked ? '#687186' : '#c0cbdc' });
+      drawText(ctx, fit(label, L.cardW - 3), x + L.cardW / 2, y + L.cardH - 10, { align: 'center', color: on ? '#fee761' : locked ? '#687186' : '#c0cbdc' });
       // The next hero's card fills toward his five minutes with the hero before him: that hero's
       // longest run (profile bt, the review's C4, 28 October 2026), the real distance only. Between
       // the portrait (y + 26 at most) and the label.
       if (locked && id === next) {
-        const k = clamp((profile.bt?.[HERO_ORDER[i - 1]] || 0) / HERO_UNLOCK_TIME, 0, 1), bw = L.cardW - 12;
+        const k = clamp((profile.bt?.[HERO_ORDER[i - 1]] || 0) / heroUnlockTime(id), 0, 1), bw = L.cardW - 12;
         if (k > 0) {
           ctx.fillStyle = '#262b44';
           ctx.fillRect(x + 6, y + L.cardH - 13, bw, 2);
@@ -155,8 +163,10 @@ export class HeroScreen {
     const perk = wrapText(PERK_COPY[h.id] || h.perk, inner);
     const ult = wrapText(h.ultDesc, inner);
     const weapons = wrapText(startWeapons(h).map(id => WEAPONS[id].name).join(' + '), inner - 20);
+    const weaponDesc = wrapText(WEAPONS[h.weapon].desc, inner);
     const ownedUltimate = openFor(profile, h.id).ult;
-    const weaponY = 70, perkY = weaponY + Math.max(16, weapons.length * 9) + 7;
+    const weaponY = 70, descriptionY = weaponY + Math.max(16, weapons.length * 9) + 4;
+    const perkY = descriptionY + weaponDesc.length * 9 + 6;
     const ultimateY = perkY + perk.length * 9 + 10;
     const goalY = ultimateY + 13 + ult.length * 9 + 7;
     const next = nextHeroUnlock(profile), prev = HERO_ORDER[HERO_ORDER.indexOf(h.id) - 1];
@@ -164,7 +174,7 @@ export class HeroScreen {
     // the next hero's note tells the one before him's, a hero of the save his own under the note.
     const longest = (hid) => profile.bt?.[hid] || 0;
     const prevRun = locked && h.id === next && longest(prev) ? ` Longest run with the ${HEROES[prev].title}: ${fmtTime(longest(prev))}.` : '';
-    const note = locked ? (h.id === next ? `Survive ${HERO_UNLOCK_TIME / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : 'Recruit the earlier heroes to continue this path.') : !ownedUltimate ? `Unlock ${h.ultName}: survive ${fmtTime(PROGRESS.ultTime)} with this hero.` : goalText(nextGoal(profile));
+    const note = locked ? `Survive ${heroUnlockTime(h.id) / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : !ownedUltimate ? `Unlock ${h.ultName}: survive ${fmtTime(PROGRESS.ultTime)} with this hero.` : goalText(nextGoal(profile));
     const notes = wrapText(note, inner);
     const runs = !locked && longest(h.id) ? wrapText(`Longest run with this hero: ${fmtTime(longest(h.id))}`, inner) : [];
     const total = goalY + (notes.length + runs.length) * 9 + 8;
@@ -191,6 +201,7 @@ export class HeroScreen {
     const wy = weaponY;
     ctx.drawImage(SPR[WEAPONS[h.weapon].icon].frames[0].c, tx, top + wy);
     weapons.forEach((line, i) => drawText(ctx, line, tx + 20, top + wy + 3 + i * 9, { color: '#fee761' }));
+    weaponDesc.forEach((line, i) => drawText(ctx, line, tx, top + descriptionY + i * 9, { color: '#c0cbdc' }));
     perk.forEach((line, i) => drawText(ctx, line, tx, top + perkY + i * 9, { color: '#c0cbdc' }));
     drawText(ctx, fit(h.ultName.toUpperCase() + (ownedUltimate ? '' : ' · LOCKED'), inner), tx, top + ultimateY, { color: ownedUltimate ? '#f6757a' : '#b39aac' });
     ult.forEach((line, i) => drawText(ctx, line, tx, top + ultimateY + 11 + i * 9, { color: '#c0cbdc' }));
@@ -207,23 +218,93 @@ export class HeroScreen {
   }
 
   equipment(id) {
-    const gear = this.app.store.profile.gear[id] || {};
+    const profile = this.app.store.profile, gear = profile.gear[id] || {};
     const lines = [{ text: `${HEROES[id].title}'s equipment · kept between runs`, color: '#fee761' }];
     for (const slot of SLOTS) {
       const it = gear[slot];
       lines.push({ text: it ? itemName(it) : `${SLOT_NAMES[slot]} · empty`, color: it ? RARITIES[it.rarity].color : '#8b9bb4' });
       if (it) lines.push(...itemLines(it));
     }
-    lines.push('Find equipment in crypts. Each hero keeps their own gear.'); // a crypt is on every map
-    this.dialog = new MenuDialog('Equipment', lines);
-    this.app.ui.focus('detail_close');this.app.ui.lock(0.2);
+    const unlocked = transferUnlocked(profile);
+    lines.splice(1, 0, unlocked
+      ? 'Quartermaster earned. Transfer equipped gear to a recruit with a free slot for ten times its sale value.'
+      : `Transfer locked. ${TRANSFER_ACHIEVEMENT}.`);
+    const actions = [{ id: 'transfer', label: 'TRANSFER GEAR', disabled: !unlocked || !Object.keys(gear).length }];
+    this.gearDialog('Equipment', lines, actions, action => {
+      if (action === 'transfer') this.transferSlots(id);
+    });
+  }
+
+  gearDialog(title, lines, actions, handle) {
+    this.dialog = new MenuDialog(title, lines, actions);
+    this.dialogAction = handle;
+    this.app.ui.focus('detail_close');
+    this.app.ui.lock(0.2);
+  }
+
+  transferSlots(from, page = 0) {
+    const gear = this.app.store.profile.gear[from] || {};
+    const slots = SLOTS.filter(slot => gear[slot]);
+    if (!slots.length) return this.equipment(from);
+    const visible = slots.slice(page * 3, page * 3 + 3);
+    const lines = [`Choose an equipped item from ${HEROES[from].title}.`];
+    const actions = visible.map(slot => {
+      const it = gear[slot], cost = itemPrice(it) * 10;
+      lines.push(`${SLOT_NAMES[slot]} · ${itemName(it)} · ${cost} gold`);
+      return { id: slot, label: SLOT_NAMES[slot].toUpperCase() };
+    });
+    if (slots.length > 3) actions.push({ id: 'page', label: page ? 'FIRST ITEMS' : 'MORE ITEMS' });
+    this.gearDialog('Transfer gear', lines, actions, action => {
+      if (action === 'page') this.transferSlots(from, 1 - page);
+      else if (action === 'close') this.equipment(from);
+      else this.transferRecipients(from, action);
+    });
+  }
+
+  transferRecipients(from, slot, page = 0) {
+    const p = this.app.store.profile, it = p.gear[from]?.[slot];
+    if (!it) return this.equipment(from);
+    const heroes = HERO_ORDER.filter(id => id !== from && p.heroes.includes(id));
+    const pages = Math.ceil(heroes.length / 3);
+    const lines = [`${itemName(it)} · ${itemPrice(it) * 10} gold · You have ${p.gold} gold`];
+    if (!heroes.length) lines.push('Recruit another hero to transfer this item.');
+    const actions = heroes.slice(page * 3, page * 3 + 3).map(id => {
+      const quote = transferQuote(p, from, id, slot);
+      lines.push(`${HEROES[id].title} · ${quote.error || 'Eligible'}`);
+      return { id, label: HEROES[id].title.toUpperCase(), disabled: !quote.ok };
+    });
+    if (pages > 1) actions.push({ id: 'page', label: `NEXT RECIPIENTS · ${page + 1}/${pages}` });
+    this.gearDialog('Choose a recipient', lines, actions, action => {
+      if (action === 'page') this.transferRecipients(from, slot, (page + 1) % pages);
+      else if (action === 'close') this.transferSlots(from);
+      else this.confirmTransfer(from, action, slot);
+    });
+  }
+
+  confirmTransfer(from, to, slot) {
+    const p = this.app.store.profile, quote = transferQuote(p, from, to, slot);
+    if (!quote.ok) return this.transferRecipients(from, slot);
+    const details = { from, to, slot, expected: quote.item, fromRev: gearRevision(p, from), toRev: gearRevision(p, to) };
+    this.gearDialog('Confirm transfer', [
+      `${itemName(quote.item)} · ${HEROES[from].title} → ${HEROES[to].title}`,
+      `Pay ${quote.cost} gold. ${p.gold - quote.cost} gold will remain.`,
+    ], [{ id: 'confirm', label: `TRANSFER · ${quote.cost} GOLD` }], async action => {
+      if (action !== 'confirm') return this.transferRecipients(from, slot);
+      this.gearDialog('Transferring', ['Checking the recipient and moving the item.'], [], null);
+      const result = await this.app.store.transfer(details);
+      const line = result.ok
+        ? `${HEROES[to].title} received ${itemName(quote.item)}. ${quote.cost} gold paid.`
+        : result.error;
+      const lines = result.kept === false ? [line, 'This browser could not save the change.'] : [line];
+      this.gearDialog(result.ok ? 'Transfer complete' : 'Transfer unavailable', lines, [], () => this.equipment(from));
+    });
   }
 
   journey() {
     const p = this.app.store.profile;
     this.dialog = new MenuDialog('Your journey', [
       { text: goalText(nextGoal(p)), color: '#fee761' },
-      `${p.heroes.length} of ${HERO_ORDER.length} heroes recruited. Survive 5 minutes with a hero to recruit the next.`,
+      `${p.heroes.length} of ${HERO_ORDER.length} heroes recruited. Survive the time listed on each recruit's card.`,
       // The Survival maps in the order they open (data/maps.js; 28 October 2026).
       `Win a night in Survival to open the next land: ${MAP_LADDER.map((m) => m.name.replace(/^The /, 'the ')).join(', ').replace(/, (?=[^,]*$)/, ', then ')}.`,
       'Survive the night with the Necromancer to open the Dungeon for the Knight.',

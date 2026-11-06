@@ -6,10 +6,8 @@ import { HEROES, heroLook } from '../public/js/data/heroes.js';
 import { HERO_ART } from '../public/js/art/heroes.js';
 import { SPR } from '../public/js/engine/sprites.js';
 import { releaseFiles } from '../tools/build-itch.mjs';
-
-const approved = { knight:'knight-plumed/recoloured', archer:'archer-b', mage:'mage-a',
-  rogue:'rogue-a', necromancer:'necromancer-a', paladin:'paladin-a', druid:'druid-a',
-  berserker:'berserker-a', witchhunter:'witchhunter' };
+import approved from '../public/assets/heroes-approved/index.js';
+import { APPROVED_DESIGNS } from '../public/js/expansion/roster.js';
 
 test('the only registered hero art is the selected roster and its matching poses', () => {
   assert.deepEqual(Object.keys(HERO_ART).sort(), Object.keys(HEROES).flatMap(id => [id, id+'_pose']).sort());
@@ -21,23 +19,27 @@ test('the only registered hero art is the selected roster and its matching poses
   }
 });
 
-test('every shipped frame is pixel-identical to the exact approved sprite', async () => {
-  for (const [id, source] of Object.entries(approved)) {
-    const path = id==='knight' ? `../public/assets/${source}.js`
-      : id==='witchhunter' ? '../tools/art-v4/archive/heroes/witchhunter.js'
-      : `../tools/art-v4/archive/heroes-v4/${source}.js`;
-    const data=(await import(path)).default, spr=SPR[id];
+test('every shipped frame reconstructs the registered native pixels and anchor', () => {
+  for (const [id, data] of Object.entries(approved)) {
+    assert.equal(data.design, APPROVED_DESIGNS[id]);
+    assert.match(data.sha256, /^[a-f0-9]{64}$/);
+    const spr = SPR[id];
     assert.equal(spr.frames.length,data.frames.length,id);
-    for (const [index,encoded] of data.frames.entries()) {
+    for (const [index,[x,y,w,h,encoded]] of data.frames.entries()) {
       const bytes=Buffer.from(encoded,'base64'), expected=new Uint32Array(data.w*data.h);
-      for(let p=0;p<expected.length;p++)expected[p]=data.palette[data.indexBytes===2?bytes.readUInt16LE(p*2):bytes[p]];
+      assert.equal(bytes.length, w * h * data.indexBytes);
+      for (let p = 0; p < w * h; p++) {
+        const color = bytes.readUIntLE(p * data.indexBytes, data.indexBytes);
+        expected[(y + Math.floor(p / w)) * data.w + x + p % w] = data.palette[color];
+      }
       assert.deepEqual(spr.frames[index].buf.d,expected,`${id}: approved frame ${index}`);
     }
   }
 });
 
 test('discarded sprite files, loaders and selection controls are absent from the shipped game', () => {
-  assert.deepEqual(readdirSync(new URL('../public/assets/heroes/',import.meta.url)).sort(),Object.keys(approved).filter(id=>id!=='knight').map(id=>id+'.js').sort());
+  assert.deepEqual(readdirSync(new URL('../public/assets/heroes-approved/',import.meta.url)).sort(), ['index.js', ...Object.keys(approved).map(id=>id+'.js')].sort());
+  assert.ok(!Object.values(approved).some(data => data.design === 'heroes7-brute'));
   for(const path of ['assets/heroes-v3','assets/heroes-v4','assets/knight-plumed/data.js','js/art/hero-review.js','js/art/hero-skins.js','js/art/hero-v3.js','97sjbk94u6md/heroes']) {
     assert.equal(existsSync(new URL('../public/'+path,import.meta.url)),false,path);
     assert.ok(!releaseFiles().some(f=>f===path||f.startsWith(path+'/')),path+': absent from release');

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { buildSprites, SPR } from '../public/js/engine/sprites.js';
 import { HEROES } from '../public/js/data/heroes.js';
+import approved from '../public/assets/heroes-approved/index.js';
 
 const opaque = (f) => f.buf.d.some((c) => c >>> 24);
 
@@ -21,16 +22,15 @@ test('every hero is drawn: frames of one size, animations that list them, feet i
   }
 });
 
-test('the heroes picked in the Sprite Lab play as the lab plays them, and their glow lights up', () => {
+test('the approved sheets carry all indexed clips, exact dimensions and release timing', () => {
   buildSprites();
-  for (const id of ['mage', 'necromancer']) {
-    const s = SPR[id];
-    assert.equal(s.w, 48);
-    assert.equal(s.frames.length, 22);
-    assert.deepEqual([s.idle.length, s.walk.length, s.attack.length], [8, 8, 6]);
-    assert.ok(s.frames.some((f) => f.em), `${id}: what burns on him glows in the dark`);
+  for (const [id, data] of Object.entries(approved)) {
+    const spr = SPR[id];
+    for (const key of ['w', 'h', 'anchorY', 'idle', 'walk', 'attack', 'attackRelease', 'attackFps', 'floating']) {
+      assert.deepEqual(spr[key], data[key], `${id}: ${key}`);
+    }
+    assert.equal(spr.frames.length, data.frames.length);
+    assert.equal(SPR[id + '_pose'].fps, data.idleFps);
   }
-  const rogue = SPR.rogue;
-  assert.deepEqual([rogue.w, rogue.h, rogue.frames.length], [40, 40, 9]);
-  assert.deepEqual(rogue.idle, rogue.walk, 'the wraith floats: it idles and walks through the same frames');
+  assert.deepEqual(Object.keys(approved).filter(id => approved[id].idle.length > 1), ['rogue', 'wraith']);
 });

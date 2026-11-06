@@ -2,7 +2,7 @@
 
 import { HEROES, heroLook } from '../data/heroes.js';
 import { PASSIVES, BLESSING } from '../data/passives.js';
-import { gearBonuses } from '../shared/items.js';
+import { gearBonuses, gearRanks } from '../shared/items.js';
 import { input } from '../engine/input.js';
 import { sfx } from '../engine/audio.js';
 import { clamp, damp, rand, lerp } from '../engine/util.js';
@@ -10,6 +10,7 @@ import { PC, P } from './particles.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { foeName } from './names.js';
 import { SURFACE } from './topology/index.js';
+import { pilgrimStep, sealDamage } from './expansion-relics.js';
 
 export const BASE_SPEED = 70;
 export const BASE_MAGNET = 42;
@@ -143,6 +144,7 @@ export class Player {
     this.hastes = 0; // and the Blessings of Haste and Reach taken (data/passives.js BLESSING)
     this.reaches = 0;
     this.weapons = [];
+    this.gearWeapons = [];
     this.strikeAt = null; // when the last blow struck by hand began (Game.strike)
     this.strikeAng = 0; // and which way it was struck
     this.strikeBuf = 0; // a strike pressed before the weapon was ready, kept a moment
@@ -169,7 +171,10 @@ export class Player {
     this.trickled = 0; // what drops of healing mended since the last green number (TRICKLE)
     this.trickleT = 0;
     this.rimeCd = 0; // Rimeheart's rest between freezes
+    this.sealReadyAt = 0;
+    this.pilgrimDistance = 0;
     this.leap = null; // a leap of the Twin Axes under way (leapTo)
+    this.heroAttack = null; // the signature weapon's last real release, for its field animation
     this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
     this.groveT = 0;
     // A Survival map's ground (QUICKSAND, ICE, FROST): none of it ever set in the Darkwood.
@@ -189,9 +194,22 @@ export class Player {
     let v = 0;
     for (const [id, rank] of passives) {
       const s = PASSIVES[id].stat[key];
-      if (s) v += s * rank;
+      if (s) v += s * this.effectivePassiveRank(id, rank);
+    }
+    for (const id of this.gearRanks.passives) {
+      if (!passives.has(id)) v += PASSIVES[id].stat[key] || 0;
     }
     return v;
+  }
+
+  effectivePassiveRank(id, rank = this.passives.get(id) || 0) {
+    const def = PASSIVES[id];
+    const bonus = this.gearRanks.passives.has(id) || (rank > 0 && this.gearRanks.allPassives && !def.stat.revivals);
+    return Math.min(def.max, rank + Number(bonus));
+  }
+
+  get combatWeapons() {
+    return this.gearWeapons.length ? this.weapons.concat(this.gearWeapons) : this.weapons;
   }
 
   // The hero's stats as his relics, worn gear (gearB, as recompute last took it), the Armory and
@@ -234,18 +252,22 @@ export class Player {
       knock: bonus('knock'),
       fang: bonus('fang'),
       rime: bonus('rime'),
+      wardReduction: bonus('wardReduction'),
+      battleFury: bonus('battleFury'),
+      marchHeal: bonus('marchHeal'),
       critMult: 2 + q.critMult,
     };
   }
 
   recompute() {
     this.gearB = gearBonuses(this.g.gear);
+    this.gearRanks = gearRanks(this.g.gear);
     const oldMax = this.maxHp || 0;
     Object.assign(this, this.derived());
     // More health to have brings the health with it; less (gear sold) caps it.
     if (oldMax && this.maxHp > oldMax) this.hp += this.maxHp - oldMax;
     if (this.hp > this.maxHp) this.hp = this.maxHp;
-    for (const w of this.weapons) w.recompute();
+    for (const w of this.combatWeapons) w.recompute();
   }
 
   // Revives left: the Second Winds counted down in `revivals`, and those relics give while held
@@ -258,6 +280,7 @@ export class Player {
   gearChanged() {
     const before = this.gearB.revival;
     this.recompute();
+    this.g.syncGearWeapons?.();
     this.revivals = Math.max(0, this.revivals + this.gearB.revival - before);
   }
 
@@ -501,6 +524,7 @@ export class Player {
       this.x += this.vx * dt;
       this.y += this.vy * dt;
       g.world.collide(this);
+      if (this.marchHeal && this.moving && !this.slide) pilgrimStep(this, this.x - x0, this.y - y0);
       // A step of a slide that covered less than ICE.block of its way along it struck something
       // solid (the world held him: a cliff, a rock, a trunk, an igloo's walls): he stops there, on
       // the ice, and a direction pressed sends him off again.
@@ -526,13 +550,14 @@ export class Player {
     const spd = Math.hypot(this.vx, this.vy);
     this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
     // Shadow hovers: ground still affects gameplay, but it leaves no walking particles or sounds.
-    if (this.slide && this.id !== 'rogue') {
+    const floating = this.id === 'rogue' || this.hero.floating;
+    if (this.slide && !floating) {
       // Sliding: ice thrown up from under him instead of dust, and no step heard.
       if ((this.sprayT -= dt) <= 0) {
         this.sprayT = 0.06;
         g.particles.emit(this.x + rand(-3, 3), this.y, 0, -this.vx * 0.2 + rand(-10, 10), -this.vy * 0.2 + rand(-5, 5), rand(10, 20), 0.35, 1, rand(1) < 0.5 ? PC.w : PC.c, P.FADE | P.GROUND, 3, 60);
       }
-    } else if (this.moving && this.id !== 'rogue') {
+    } else if (this.moving && !floating) {
       // Wading in quicksand: the wet sand he churns thrown up about his shins, as often however slowly
       // he goes (29 October 2026). Never out of it, so the Darkwood's dice fall as they did.
       if (this.wade > 0.5 && (this.sprayT -= dt) <= 0) {
@@ -637,7 +662,7 @@ export class Player {
     if (this.buff('protection')) dmg *= 0.5;
     if (this.ult && this.ult.type === 'whirlwind') dmg *= 0.5;
     // Normal halves what he takes, after all of that (difficulty.js hurt). A blow always lands.
-    dmg = Math.max(1, Math.round(dmg * g.diff.hurt));
+    dmg = sealDamage(this, Math.max(1, Math.round(dmg * g.diff.hurt)));
     this.hp -= dmg;
     this.lastBlow = by || (src ? foeName(src) : null);
     // A moment's grace before the next blow can land: 0.22 s (the owner's, 23 October 2026; 0.6 s
@@ -748,17 +773,18 @@ export class Player {
   // A kill's charge: a boss's, a lord's or a champion's is fixed, one of the horde's shrinks with
   // the pace of the killing (killShare).
   furyKill(e) {
-    if (e.boss) return this.addFury(FURY.boss);
-    if (e.lord) return this.addFury(FURY.lord);
-    if (e.elite) return this.addFury(FURY.champion);
-    this.addFury(FURY.kill * this.killShare);
+    const charge = 1 + this.battleFury;
+    if (e.boss) return this.addFury(FURY.boss * charge);
+    if (e.lord) return this.addFury(FURY.lord * charge);
+    if (e.elite) return this.addFury(FURY.champion * charge);
+    this.addFury(FURY.kill * this.killShare * charge);
     this.recentKills++;
   }
 
   // A blow of dmg on a boss, a lord or a champion: the share of its health it took.
   furyHit(e, dmg) {
     const k = e.boss ? FURY.hit.boss : e.lord ? FURY.hit.lord : e.elite ? FURY.hit.champion : 0;
-    if (k) this.addFury((k * dmg) / e.maxHp);
+    if (k) this.addFury((k * dmg * (1 + this.battleFury)) / e.maxHp);
   }
 }
 

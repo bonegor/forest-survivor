@@ -1,5 +1,5 @@
 // The in-game screen: runs a Game and layers the HUD and modal overlays
-// (level up, treasure chests, gear found, pause, results) on top.
+// (level up, treasure chests, pause, results and gear reveals) on top.
 
 import { input, padKey } from '../engine/input.js';
 import { sfx, playMusic, stopCombatMusicPreview } from '../engine/audio.js';
@@ -18,18 +18,25 @@ import { MODES, NIGHTMARE } from '../data/difficulty.js';
 import { MAPS } from '../data/maps.js';
 import { BIOMES } from '../game/biomes.js';
 import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText, runLocks } from '../shared/profile.js';
-import { SLOTS, SLOT_NAMES, RARITIES, STATS, BONUS_KEYS, itemName, itemLines, itemPrice, gearBonuses, powerWorn } from '../shared/items.js';
+import { rankGrantName } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
 import { buttonFace } from './skin.js';
 import { OptionsScreen, codexBar } from './screens.js';
 import { saveSettings, seenBox } from '../engine/storage.js';
 import { MusicMenu } from './music-menu.js';
+import { MenuDialog } from './menu-dialog.js';
+import { makeRunId } from '../shared/spoils.js';
+import { SpoilsReveal, drawRewardReel, reelProgress } from './reward-reels.js';
 
 export class GameScreen {
   enter(app, params = {}) {
     this.app = app;
     const { hero, mode } = app.choice;
+    this.runId = makeRunId();
+    this.runFrom = app.store.profile.runs;
+    this.gearRev = app.store.profile.gearRev?.[hero] || 0;
+    this.gearStart = app.store.profile.gear[hero] || {};
     this.game = new Game({
       hero,
       mode,
@@ -48,7 +55,8 @@ export class GameScreen {
       locks: runLocks(app.store.profile, hero).map((l) => ({ ...l, name: codexName(l) })),
       meta: metaBonuses(app.store.profile),
       open: openFor(app.store.profile, hero), // the weapons, relics and ultimate opened so far
-      gear: app.store.profile.gear[hero], // this hero's own
+      gear: this.gearStart, // this hero's own
+      sealedGear: true,
       unlocks: unlocksNext(app.store.profile, hero),
       settings: app.settings,
       hints: true,
@@ -126,8 +134,8 @@ export class GameScreen {
       if (input.pressed('map') && (g.mode === 'dungeon' || g.inCrypt)) g.showMap = !g.showMap;
       if (input.pressed('fps')) app.settings.fps = !app.settings.fps;
       if (!app.devHold) g.update(dt); // the developer panel can freeze the action
-      // Nothing opens while a big beat plays out (Game.moment); then level-ups, chests and gear,
-      // in that order. Levels the run's auto-pick takes need no screen (Game.resolveAutoLevels).
+      // Nothing opens during a big beat. Afterwards, level-ups come before chests.
+      // Equipment remains sealed until Results.
       const ready = g.state === g.playState && !g.momentRunning;
       if (ready && g.pendingLevels > 0) g.resolveAutoLevels();
       if (ready && g.pendingLevels > 0) {
@@ -136,9 +144,6 @@ export class GameScreen {
       } else if (ready && g.chestQueue.length) {
         g.state = 'chest';
         this.open(new ChestOverlay(this, g.chestQueue.shift()));
-      } else if (ready && g.itemQueue.length) {
-        g.state = 'item';
-        this.open(new ItemOverlay(this, g.itemQueue.shift()));
       }
       if (g.state === 'over') this.open(new ResultsOverlay(this));
     } else if (!app.devHold) {
@@ -270,6 +275,9 @@ const RELIC_LINE = {
   fang: ['Heals', (s) => s.fang * s.healMul, (v) => `${(v * 100).toFixed(1)}%`],
   amount: ['Extra projectiles', (s) => s.amount, flat],
   growth: ['Experience', (s) => s.growth, mul],
+  wardReduction: ['Heavy hit guarded', (s) => s.wardReduction, pct],
+  battleFury: ['Combat Fury', (s) => 1 + s.battleFury, mul],
+  marchHeal: ['Walking heal', (s) => s.marchHeal, (v) => `${(v * 100).toFixed(1)}%`],
 };
 // The owner's (27 October 2026): one before → after line on an upgrade card, as this hero has
 // it ("Damage 46 → 48 (+4%)", "Health a second 0.3 → 0.9"); null for a NEW weapon, a filler, or a
@@ -281,7 +289,9 @@ export function cardChange(g, c) {
     const row = lv && WEAPON_LINE.find(([k]) => k in lv);
     if (!row) return null;
     const [k, label, as, fmt] = row;
-    const a = as(heroStats(def, c.level - 1, p)[k], p), b = as(heroStats(def, c.level, p)[k], p);
+    const weapon = p.weapons?.find(w => w.id === c.id);
+    const a = as(heroStats(def, weapon?.effectiveRank(c.level - 1) ?? c.level - 1, p)[k], p);
+    const b = as(heroStats(def, weapon?.effectiveRank(c.level) ?? c.level, p)[k], p);
     return `${label} ${fmt(a)} → {${fmt(b)}}${k === 'dmg' && a > 0 ? ` (+${Math.round((b / a - 1) * 100)}%)` : ''}`;
   }
   if (c.type === 'passive') {
@@ -1163,7 +1173,7 @@ export class ChestOverlay {
       if (it.type !== 'evolve') sfx('reveal', { pitch: SCALE[Math.min(SCALE.length - 1, this.revealed - 1)] });
     }
     if (ceremony) this.drawCeremony(ctx, W, H, t - this.evoAt);
-    else if (opened) {
+    else {
       // At twice the size where they fit (chestLayout), today's where they don't (phones). Each
       // place (chestSlots) shows its last thing shown; fillers alike share one, whose count climbs.
       const k = lay.k, slots = this.slots;
@@ -1171,24 +1181,23 @@ export class ChestOverlay {
       const rowW = slot * slots.length;
       slots.forEach((ix, si) => {
         const n = ix.filter((j) => j < this.revealed).length; // shown so far (they are shown in order)
-        if (!n) return;
-        const last = ix[n - 1], it = items[last];
+        const last = ix[Math.max(0, n - 1)], it = items[last];
         const x = Math.round(W / 2 - rowW / 2 + (si + 0.5) * slot);
         const info = chestItemInfo(g, it);
+        const reelW = Math.min(slot - 4, 52 * k);
+        const progress = n ? 1 : reelProgress(t, 0, tl.at[last]);
+        drawRewardReel(ctx, { x: x - reelW / 2, y: iy, w: reelW, h: 31 * k, progress, icon: info.icon, color: info.color, seed: si });
+        if (!n) return;
         // Purses together: their gold added up (counted with the chest's own, goldTotal).
         if (it.type === 'gold' && n > 1) info.sub = `+${ix.slice(0, n).reduce((sum, j) => sum + items[j].value, 0)}`;
-        const { icon, name, sub, color } = info;
-        const pop = t - tl.at[last] < 0.12 ? 1.3 : 1; // and again at each one shown in a shared place
-        const big = smoothScaled(SPR[icon].frames[0], 1), bw = big.width * k * pop, bh = big.height * k * pop;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(big, Math.round(x - bw / 2), Math.round(iy - (bh - big.height * k) / 2), Math.round(bw), Math.round(bh));
+        const { name, sub, color } = info;
         const lines = wrapText(name, Math.floor((slot - 6) / k));
         lines.forEach((ln, j) => drawScaled(ctx, ln, x, iy + 34 * k + j * 9 * k, k, color));
         drawScaled(ctx, sub, x, iy + 34 * k + lines.length * 9 * k, k, it.type === 'evolve' || it.isNew ? '#fee761' : '#8b9bb4');
         // A shared place: how many of them so far, on the icon's lower right.
         if (ix.length > 1) {
-          const c = textCanvas(`×${n}`, ['#ffffff', '#fee761', '#feae34'], '#181425'), s2 = k * pop;
-          ctx.drawImage(c, Math.round(x + (big.width * k) / 2 - c.width * s2 * 0.75), Math.round(iy + big.height * k - c.height * s2 * 0.75), Math.round(c.width * s2), Math.round(c.height * s2));
+          const c = textCanvas(`×${n}`, ['#ffffff', '#fee761', '#feae34'], '#181425');
+          ctx.drawImage(c, Math.round(x + reelW / 2 - c.width * k - 3), iy + 29 * k - c.height * k, c.width * k, c.height * k);
         }
       });
       if (evoLogo) ctx.drawImage(evoLogo.L, evoLogo.x, evoLogo.y, evoLogo.w, evoLogo.h);
@@ -1399,173 +1408,11 @@ function chestItemInfo(g, it) {
   return { icon, name, color, sub: FILLERS[it.type]?.count ? `x${it.level}` : it.type === 'gold' ? `+${it.value}` : `+${Math.round(it.value * 100)}%` };
 }
 
-// ------------------------------------------------------------------- gear --
-
-// How a Rare or better is told on the gear screen: the frame and title climb a rarity every `step`
-// seconds; an Epic and a Legendary hold on near-black at least `hold` seconds, then slam in.
-export const GEAR_CLIMB = { step: 0.12, hold: [0, 0, 0, 0.36, 0.5] };
-
-// Each rarity's title colours, light to dark.
-const RARITY_LOGO = [
-  ['#ffffff', '#e8eef6', '#c0cbdc', '#8b9bb4', '#5a6988'],
-  ['#ffffff', '#c8f4b0', '#63c74d', '#3e8948', '#265c42'],
-  ['#ffffff', '#c0f8ff', '#2ce8f5', '#0099db', '#124e89'],
-  ['#ffffff', '#f4c4e4', '#b55088', '#68386c', '#3b2346'],
-  ['#ffffff', '#fee761', '#feae34', '#f77622', '#be4a2f'],
-];
-const POWER_NAMES = { amount: 'projectile', revival: 'revive' };
-
-// What wearing `it` instead of whatever is in its slot changes, as [text, better?] lines.
-function gearDiff(gear, it) {
-  const now = gearBonuses(gear), next = gearBonuses({ ...gear, [it.slot]: it });
-  const out = [];
-  for (const k of BONUS_KEYS) {
-    const d = next[k] - now[k];
-    if (Math.abs(d) < 1e-9) continue;
-    const s = STATS[k];
-    if (!s) {
-      out.push(k === 'critMult' ? [`${d > 0 ? '+' : '-'}${Math.round(Math.abs(d) * 100)}% crit damage`, d > 0] : [`${d > 0 ? '+' : '-'}${Math.abs(d)} ${POWER_NAMES[k]}`, d > 0]);
-      continue;
-    }
-    const v = s.unit === 'flat' ? Math.abs(d) : s.unit === 'tenth' ? (Math.abs(d)).toFixed(1) : Math.round(Math.abs(d) * 100);
-    const good = s.minus ? d < 0 : d > 0;
-    // A cooldown cut is shown as a minus; any other gain as a plus.
-    const sign = good === !s.minus ? '+' : '-';
-    out.push([`${sign}${v}${s.unit ? '' : '%'} ${s.name}`, good]);
-  }
-  return out;
-}
-
 // Text cut to fit a width, with an ellipsis.
 function fitText(s, w) {
   if (textWidth(s) <= w) return s;
   while (s.length > 1 && textWidth(s + '…') > w) s = s.slice(0, -1);
   return s + '…';
-}
-
-// A piece of gear picked up: wear it or sell it, next to everything already worn, any of which can be sold.
-class ItemOverlay {
-  constructor(gs, item) {
-    this.gs = gs;
-    this.g = gs.game;
-    this.item = item;
-    this.t = 0;
-    this.lockTime = 0.5;
-    this.noSpace = true; // as with level-ups: no wearing or selling by a mashed Space
-    gs.app.ui.focusId = 'wear';
-    // A Rare or better climbs the rarities first (GEAR_CLIMB) and is told at slamAt; the rest at once.
-    this.slamAt = item.rarity >= 2 ? Math.max(item.rarity * GEAR_CLIMB.step, GEAR_CLIMB.hold[item.rarity]) : 0;
-    this.lockTime = Math.max(0.5, this.slamAt + 0.2);
-    if (item.rarity <= 1) sfx('pick');
-  }
-
-  // The rarity the frame and title show now: climbing a step every GEAR_CLIMB.step seconds from
-  // Common, stopping on the true one (never past it).
-  shownRarity() {
-    return Math.min(this.item.rarity, Math.floor(this.t / GEAR_CLIMB.step));
-  }
-
-  draw(ctx, W, H, dt) {
-    const ui = this.gs.app.ui, g = this.g, it = this.item, R = RARITIES[it.rarity];
-    this.t += dt;
-    const told = this.t >= this.slamAt, shown = told ? it.rarity : this.shownRarity(), RS = RARITIES[shown];
-    // An Epic or a Legendary is drawn out on near-black until it is told.
-    dim(ctx, W, H, told || it.rarity < 3 ? 0.72 : 0.94);
-    if (told && !this.slammed && it.rarity >= 2) {
-      this.slammed = true;
-      sfx(it.rarity === 4 ? 'legendary' : it.rarity === 3 ? 'epic' : 'reveal', { pitch: 1.5 });
-      if (it.rarity === 4) this.g.shake(0.3);
-    }
-    const L = logo(RS.name.toUpperCase() + (shown >= 3 ? '!' : ''), RARITY_LOGO[shown]);
-    // Told: the title pops in, a Legendary's slamming down from twice its size, an Epic's less.
-    const since = this.t - this.slamAt, big = it.rarity === 4 ? 1.2 : it.rarity === 3 ? 0.7 : 0.5;
-    const pop = since >= 0 && since < 0.25 ? 1 + big * (1 - ease.outBack(since / 0.25)) : 1;
-    const s = Math.min(1, (W - 40) / L.width) * pop;
-    ctx.globalAlpha = told ? 1 : 0.55;
-    ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), Math.round(8 - (L.height * (s - 1)) / 2), Math.round(L.width * s), Math.round(L.height * s));
-    ctx.globalAlpha = 1;
-    const top = Math.round(12 + L.height);
-    if (!told) {
-      // The frame alone, climbing.
-      const cw = Math.min(180, Math.floor((W - 22) / 2)), x0 = Math.round(W / 2 - cw - 3);
-      panel(ctx, x0, top, cw, H - top - 6, { trim: [RS.color, '#262b44'] });
-      ui.begin(dt); // the lock (lockTime, from the moment it opens) runs down while the rarity climbs
-      return null;
-    }
-    const gap = 6, cw = Math.min(180, Math.floor((W - 16 - gap) / 2));
-    const x0 = Math.round(W / 2 - cw - gap / 2), x1 = x0 + cw + gap;
-    const ph = Math.min(240, H - top - 6);
-    ui.begin(dt);
-    let res = null;
-    // The find.
-    panel(ctx, x0, top, cw, ph, { trim: [R.color, '#262b44'] });
-    const icon = smoothScaled(SPR['g_' + it.slot].frames[0], 1);
-    ctx.drawImage(icon, x0 + 7, top + 7);
-    let ty = top + 8;
-    for (const ln of wrapText(itemName(it), cw - 50)) {
-      drawText(ctx, ln, x0 + 43, ty, { color: R.color });
-      ty += 9;
-    }
-    drawText(ctx, `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()}`, x0 + 43, ty, { color: '#8b9bb4' });
-    ty = Math.max(ty + 13, top + 44);
-    const dupe = powerWorn(g.gear, it.power, it.slot);
-    itemLines(it).forEach((ln, i) => {
-      const power = it.power && i === Object.keys(it.stats).length;
-      drawText(ctx, ln, x0 + 8, ty, { color: power ? (dupe ? '#8b9bb4' : '#feae34') : '#c0cbdc' });
-      ty += 9;
-      if (power && dupe) {
-        drawText(ctx, fitText('Already worn: a power counts once', cw - 16), x0 + 8, ty, { color: '#8b9bb4' });
-        ty += 9;
-      }
-    });
-    const worn = g.gear[it.slot];
-    ty += 5;
-    for (const ln of wrapText(worn ? `Instead of ${itemName(worn)}:` : `No ${SLOT_NAMES[it.slot].toLowerCase()} worn yet:`, cw - 16)) {
-      drawText(ctx, ln, x0 + 8, ty, { color: '#8b9bb4' });
-      ty += 9;
-    }
-    for (const [txt, good] of gearDiff(g.gear, it)) {
-      drawText(ctx, txt, x0 + 12, ty, { color: good ? '#63c74d' : '#e43b44' });
-      ty += 9;
-    }
-    const by = top + ph - 34, bw = cw - 16;
-    // Every lord of a crypt may drop a piece, so several can be picked up at once (climbing out
-    // with them, say): each is shown in turn, and the one shown says how many wait.
-    const more = g.itemQueue.length;
-    if (more && ty <= by - 11) drawText(ctx, fitText(`${more} more piece${more > 1 ? 's' : ''} to see after this`, cw - 16), x0 + 8, by - 11, { color: '#8b9bb4' });
-    if (button(ctx, ui, 'wear', x0 + 8, by, bw, 13, worn ? `WEAR · OLD ONE +${itemPrice(worn)}` : 'WEAR')) {
-      g.wearItem(it);
-      sfx('pick');
-      res = 'close';
-    }
-    if (!res && button(ctx, ui, 'sell', x0 + 8, by + 17, bw, 13, `SELL · +${itemPrice(it)} GOLD`, { color: '#feae34' })) {
-      g.sellItem(it);
-      res = 'close';
-    }
-    // Everything worn; any of it can be sold.
-    panel(ctx, x1, top, cw, ph, { title: 'WORN' });
-    const rowH = Math.floor((ph - 12) / SLOTS.length);
-    SLOTS.forEach((slot, i) => {
-      const y = top + 9 + i * rowH, w = g.gear[slot];
-      if (slot === it.slot) {
-        ctx.globalAlpha = 0.14;
-        ctx.fillStyle = R.color;
-        ctx.fillRect(x1 + 3, y - 2, cw - 6, rowH - 1);
-        ctx.globalAlpha = 1;
-      }
-      ctx.drawImage(SPR['g_' + slot].frames[0].c, x1 + 5, y);
-      if (!w) {
-        drawText(ctx, `no ${SLOT_NAMES[slot].toLowerCase()}`, x1 + 24, y + 4, { color: '#5a6988' });
-        return;
-      }
-      drawText(ctx, fitText(itemName(w), cw - 30), x1 + 24, y, { color: RARITIES[w.rarity].color });
-      drawText(ctx, fitText(itemLines(w)[0], cw - 74), x1 + 24, y + 9, { color: '#8b9bb4' });
-      if (!res && button(ctx, ui, 'sell_' + slot, x1 + cw - 46, y + 8, 40, 10, `+${itemPrice(w)}`, { color: '#feae34', pointer: false })) g.sellWorn(slot);
-    });
-    ui.end();
-    if (res) g.state = g.playState;
-    return res;
-  }
 }
 
 // ------------------------------------------------------------------ pause --
@@ -1582,6 +1429,13 @@ export class PauseOverlay {
 
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, g = this.g, app = this.gs.app;
+    if (this.rankGear) {
+      if (this.rankGear.draw(ctx, ui, W, H, dt)) {
+        this.rankGear = null;
+        ui.focus('rank_gear');
+      }
+      return null;
+    }
     if (this.musicMenu) {
       if (this.musicMenu.draw(ctx, W, H, dt) === 'close') {
         this.musicMenu = null;
@@ -1663,6 +1517,14 @@ export class PauseOverlay {
     if (button(ctx, ui, 'opts', bx, row(2), bw, 13, 'OPTIONS')) {
       this.options = new OptionsScreen();
       this.options.enter(app, { back: null });
+    }
+    const grants = [...new Set(Object.values(g.gear || {}).map(it => it.grant).filter(Boolean))];
+    if (grants.length && button(ctx, ui, 'rank_gear', x + pw - 71, row(2), 62, 13, 'GEAR RANKS', { color: '#cdb3ee' })) {
+      const lines = grants.map(grant => `+1 rank · ${rankGrantName(grant)}`);
+      lines.push('Gear ranks respect rank caps. A specific grant works without a learned slot. Evolutions use learned ranks and relics.');
+      this.rankGear = new MenuDialog('Worn rank grants', lines);
+      ui.focus('detail_close');
+      ui.lock(0.2);
     }
     // One way out of a run: it ends, with its results and gold. (A run is never saved to pick
     // up again.)
@@ -1917,11 +1779,13 @@ class ResultsOverlay {
   submit() {
     const res = this.res;
     this.reward = null;
-    this.gs.app.store.submitRun({
+    this.report ??= {
       mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
       effort: res.effort,
-    }).then((r) => {
+      spoils: res.spoils, sealedGear: res.sealedGear, runId: this.gs.runId, runFrom: this.gs.runFrom, gearRev: this.gs.gearRev, gearStart: this.gs.gearStart,
+    };
+    this.gs.app.store.submitRun(this.report).then((r) => {
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
       // reason (on static hosting a refused run comes back as a bare zero), and the screen says so.
       this.reward = !r.unsaved && !r.total && (res.gold > 0 || res.victory) ? { ...r, unsaved: true } : r;
@@ -1990,6 +1854,19 @@ class ResultsOverlay {
 
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, app = this.gs.app, res = this.res;
+    const pending = !this.reveal && this.landed ? app.store.pendingReveal : null;
+    if (pending && pending.id === this.gs.runId) {
+      this.reveal = new SpoilsReveal(app, pending);
+    }
+    if (this.reveal && !this.reveal.done) {
+      this.backdrop(ctx, W, H);
+      this.reveal.draw(ctx, W, H, dt);
+      if (this.reveal.done) {
+        ui.focus('camp');
+        ui.lock(0.3);
+      }
+      return null;
+    }
     this.t += dt;
     // Any key, click or tap before the end shows it all.
     if (!this.landed && this.t > 0.3 && (input.anyKey || input.mouse.clicked)) {
@@ -2022,6 +1899,8 @@ class ResultsOverlay {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
       for (const k of this.reward.unlocks || []) notes.push([unlockText(k), '#fee761']);
+      if (this.reward.gearConflict) notes.push(['Gear moved during the run. Current slots kept.', '#c28569']);
+      if (this.reward.spoilsGold) notes.push([`Excess gear sold · +${fmtNum(this.reward.spoilsGold)} gold`, '#feae34']);
       // The first night won reveals the second circle (the review's C5, 28 October 2026): told here,
       // its weapons marked NEW in the Codex (ui/ladder.js isNewEntry).
       const circle = this.firstNight && !this.reward.unsaved;
@@ -2195,19 +2074,20 @@ class ResultsOverlay {
         }
         drawText(ctx, text, bx + bw + 4, ny, { color: '#feae34' });
       } else drawText(ctx, fitText('NEXT: ' + goalText(goal), pw - 12), W / 2, ny, { align: 'center', color: '#feae34' });
-      drawText(ctx, fitText(armoryLine(prof), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
+      drawText(ctx, fitText(this.reward.volatile ? 'Progress kept for this session only' : armoryLine(prof), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
     }
     ui.begin(dt);
     if (unsaved && this.reward.down && button(ctx, ui, 'resubmit', Math.round(W / 2 - 50), gy + 10, 100, 13, 'SAVE AGAIN')) this.submit();
     const by = Math.min(H - 20, y + ph + 6);
+    const beforeSpoils = this.landed && !this.reveal && !!this.gs.runId && app.store.pendingReveal?.id === this.gs.runId;
     // Return to this hero or spend the spoils. Before the tally lands, a press only reveals it.
-    if (button(ctx, ui, 'camp', Math.round(W / 2 - 106), by, 100, 14, 'RETURN TO CAMP', { color: this.landed ? '#fee761' : '#8b9bb4' })) {
+    if (button(ctx, ui, 'camp', Math.round(W / 2 - 106), by, 100, 14, 'RETURN TO CAMP', { color: this.landed ? '#fee761' : '#8b9bb4', disabled: beforeSpoils })) {
       if (this.landed) {
         app.choice.hero = res.hero;
         app.go('hero', { again: true });
       } else this.skip();
     }
-    if (button(ctx, ui, 'upgrades', Math.round(W / 2 + 6), by, 100, 14, 'UPGRADES', { disabled: !this.landed || !this.reward || unsaved })) app.go('armory');
+    if (button(ctx, ui, 'upgrades', Math.round(W / 2 + 6), by, 100, 14, 'UPGRADES', { disabled: !this.landed || !this.reward || unsaved || beforeSpoils })) app.go('armory');
     ui.end();
     return null;
   }

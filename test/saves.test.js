@@ -87,6 +87,7 @@ async function hosting(kind, fn) {
 const settings = { numbers: false };
 async function playRun(mode, seconds) {
   const oldRandom = Math.random, oldBot = input.bot;
+  const startWrites = written.length;
   Math.random = mulberry32(5);
   input.bot = { x: 0, y: 0 };
   const gs = new GameScreen();
@@ -108,6 +109,8 @@ async function playRun(mode, seconds) {
       if (mode === 'dungeon' && g.floor === 1 && t > 2) g.enterFloor(2); // down the stairs
     }
     if (mode === 'dungeon') assert.equal(g.floor, 2);
+    assert.ok(!written.slice(startWrites).some(name => RUN_COOKIES.includes(name) || name === 'fs_spoils'),
+      'neither a checkpoint nor a results outbox is written during play');
     p.devGod = false;
     p.invuln = 0;
     p.revivals = 0;
@@ -141,10 +144,12 @@ test('no run cookie is written while a run lasts, on the game server or on stati
         assert.equal(store.profile.runs, runs + 1, `${kind}, ${mode}: and counted`);
       }
       for (const name of RUN_COOKIES) assert.ok(!written.includes(name), `${kind}: ${name} was never written`);
-      // Besides the profile, the first run's end notes once in the settings cookie that its
-      // first-run hints have been shown (hints.js); nothing else.
+      // A finished report is kept in the outbox until its settlement is confirmed. This
+      // run found no sealed equipment, so the outbox is cleared at once.
       assert.ok(written.filter((n) => n === 'fs_settings').length <= 1, `${kind}: the settings at most once`);
-      assert.deepEqual([...new Set(written)].filter((n) => n !== 'fs_settings'), [kind === 'server' ? 'fs_profile' : 'fs_lprofile'], `${kind}: only the profile, as each run ended`);
+      assert.deepEqual([...new Set(written)].filter((n) => n !== 'fs_settings'),
+        ['fs_spoils', kind === 'server' ? 'fs_profile' : 'fs_lprofile'], `${kind}: only finished reports and profiles are written`);
+      assert.ok(!jar.page.has('fs_spoils'), `${kind}: successful settlement clears the outbox`);
     });
   }
 });

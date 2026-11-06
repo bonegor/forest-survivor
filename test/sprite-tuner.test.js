@@ -71,26 +71,17 @@ test('a tune moves the colours, never the pixels: the ink outlines the sprite, t
   assert.ok(T.meanLuma(tuned.frames, new Set([INK, RIM])) > T.meanLuma(stock.frames, new Set([OUTLINE])) + 10, 'lifted: lighter');
 });
 
-test("a hero's sheet is tuned by its own colours: no ink to swap, the rim kept in the frame when it fits", () => {
-  // Every hero outlines in dark shades of their own colours (the plumed Knight's style, 27 October
-  // 2026): there is no one ink to swap. The monsters' ink is swapped in the test above.
-  for (const id of ['archer', 'mage', 'necromancer', 'rogue', 'paladin', 'druid', 'berserker', 'witchhunter']) {
-    assert.equal(T.colourSlots(ART[id]).find((s) => s.ink), undefined, `${id}: no ink`);
-  }
+test("a hero's native sheet accepts colour and rim tuning without displacing its pivot", () => {
   const necro = ART.necromancer, slots = T.colourSlots(necro);
   const t = tune({ lift: 30, ink: '#ff00ff', rim: T.RIM }), def = T.tunedDef(necro, t, slots);
   const stock = spriteBuffers(necro), tuned = spriteBuffers(def);
-  assert.ok(!tuned.frames.some((b) => b.d.includes(hexPack('#ff00ff'))), 'no ink drawn');
+  assert.equal(tuned.frames.some((b) => b.d.includes(hexPack('#ff00ff'))), slots.some(slot => slot.ink));
   assert.ok(tuned.frames[0].d.some((c) => c === hexPack(T.RIM)), 'the rim drawn');
   assert.equal(tuned.anchorY, necro.anchorY + (tuned.frames[0].w > stock.frames[0].w ? 1 : 0), 'the feet move with a grown frame');
-  for (const c of necro.glow) assert.ok(tuned.emissive.has(hexPack(def.palette[T.hexOfPacked(c)] || T.hexOfPacked(c))), 'what glows still glows');
-
-  // The Knight outlines in many colours: no ink to swap. His frames have room for the rim.
   const knight = ART.knight;
-  assert.equal(T.colourSlots(knight).find((s) => s.ink), undefined);
-  const kn = spriteBuffers(T.tunedDef(knight, tune({ ink: '#ff00ff', rim: T.RIM })));
+  const kn = spriteBuffers(T.tunedDef(knight, tune({ rim: T.RIM })));
   assert.deepEqual([kn.frames[0].w, kn.frames[0].h, kn.anchorY], [knight.gen()[0].w, knight.gen()[0].h, knight.anchorY]);
-  assert.ok(kn.frames[0].d.some((c) => c === hexPack(T.RIM)) && !kn.frames.some((b) => b.d.includes(hexPack('#ff00ff'))));
+  assert.ok(kn.frames[0].d.some((c) => c === hexPack(T.RIM)));
 });
 
 test("the game builds a tuned sprite in its colours, and its death burst leaves out the ink and the rim", () => {

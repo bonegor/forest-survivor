@@ -14,7 +14,7 @@ test('every selected hero has complete sprites and poses without alternative loo
     assert.ok(SPR[h.sprite] && SPR[h.pose], `${h.id}: its sprite and pose`);
   }
   const p = SPR[HEROES.paladin.sprite];
-  assert.ok(p.frames.length === 22 && p.idle.length && p.walk.length && p.attack.length, 'the Paladin, idle, walk and attack');
+  assert.equal(p.frames.length, p.idle.length + p.walk.length + p.attack.length, 'the approved Justicar has indexed idle, walk and attack');
   assert.equal(SPR.paladin_d, undefined, 'her Style D is gone');
 });
 
@@ -31,7 +31,7 @@ test('a run remembered in a look that is gone is played in the hero\'s own', () 
   try {
     const meta = metaBonuses(defaultProfile());
     const g = new Game({ hero: 'paladin', mode: 's15', meta, settings: { numbers: false, skins: { paladin: 'd' } }, crypts: false });
-    assert.equal(g.player.hero.sprite, 'paladin', 'a retired look resolves to approved Iron Vow');
+    assert.equal(g.player.hero.sprite, 'paladin', 'a retired look resolves to the approved Justicar');
     for (let i = 0; i < 120; i++) g.update(1 / 60); // swings and walks in it without trouble
     assert.ok(!g.player.dead);
   } finally {

@@ -18,9 +18,19 @@ import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
 import { DEFAULT_COMBAT_MUSIC, normalizeCombatMusic } from './combat-music.js';
+import { partitionRunSpoils, settledSpoils, validRunId } from '../shared/spoils.js';
 
 export const DEBUG = !RELEASE && !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
 const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
+const RUN_OUTBOX = DEBUG ? 'fs_dspoils' : 'fs_spoils';
+let queuedProfileWrite = Promise.resolve();
+
+export function withProfileLock(callback) {
+  if (globalThis.navigator?.locks) return navigator.locks.request(LOCAL_PROFILE, callback);
+  const result = queuedProfileWrite.then(callback);
+  queuedProfileWrite = result.catch(() => {});
+  return result;
+}
 // The game once kept a run to pick up again in these (the server's own, fs_run, it deletes
 // itself); one a player still has is deleted when the game loads, so nothing lingers.
 const STALE_RUNS = ['fs_lrun', 'fs_drun'];
@@ -39,7 +49,7 @@ const MAX_AGE = 60 * 60 * 24 * 400;
 
 function readCookie(name) {
   if (!globalThis.document) return null;
-  const m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+  const m = document.cookie?.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
   return m ? m[1] : null;
 }
 
@@ -48,6 +58,38 @@ function writeCookie(name, value) {
   const secure = globalThis.location?.protocol === 'https:' ? '; Secure' : '';
   if (value == null) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
   else document.cookie = `${name}=${value}; Path=/; Max-Age=${MAX_AGE}; SameSite=Lax${secure}`;
+}
+
+const COOKIE_PART = 3700, MAX_COOKIE_PARTS = 3;
+const partsHeader = /^parts-([01])-([23])$/;
+const partName = (name, bank, i) => `${name}_${bank}_${i}`;
+
+function readCookieSave(name) {
+  const head = readCookie(name), parts = head?.match(partsHeader);
+  if (!parts) return head;
+  const values = Array.from({ length: Number(parts[2]) }, (_, i) => readCookie(partName(name, parts[1], i)));
+  return values.every(Boolean) ? values.join('') : head; // an incomplete save is reported as unreadable
+}
+
+function writeCookieSave(name, value) {
+  const old = readCookie(name)?.match(partsHeader);
+  if (value == null || value.length <= COOKIE_PART) writeCookie(name, value);
+  else {
+    const count = Math.ceil(value.length / COOKIE_PART);
+    if (count > MAX_COOKIE_PARTS) return;
+    const bank = old?.[1] === '1' ? '0' : '1';
+    for (let i = 0; i < count; i++) {
+      const key = partName(name, bank, i), part = value.slice(i * COOKIE_PART, (i + 1) * COOKIE_PART);
+      writeCookie(key, part);
+      if (readCookie(key) !== part) return;
+    }
+    const header = `parts-${bank}-${count}`;
+    writeCookie(name, header);
+    if (readCookie(name) !== header) return;
+  }
+  if (old && readCookie(name) !== old[0]) {
+    for (let i = 0; i < Number(old[2]); i++) writeCookie(partName(name, old[1], i), null);
+  }
 }
 
 // The save without the server, and the settings: in localStorage where the browser lets the page
@@ -73,11 +115,11 @@ export const saveBox = {
         if (v != null) return v;
       } catch {}
     }
-    const c = readCookie(name);
+    const c = readCookieSave(name);
     if (c != null && s) {
       try {
         s.setItem(name, c);
-        writeCookie(name, null);
+        writeCookieSave(name, null);
       } catch {} // full, or refused: it stays in its cookie
     }
     return c;
@@ -88,11 +130,11 @@ export const saveBox = {
       try {
         if (value == null) s.removeItem(name);
         else s.setItem(name, value);
-        if (value == null && readCookie(name) != null) writeCookie(name, null);
+        if (value == null && readCookie(name) != null) writeCookieSave(name, null);
         return;
       } catch {}
     }
-    writeCookie(name, value);
+    writeCookieSave(name, value);
   },
 };
 
@@ -154,6 +196,13 @@ async function api(path, body) {
 // host with no game API, which answers 404 or with something that isn't ours.
 const serverDown = (e) => (e.status ? e.status >= 500 : e instanceof TypeError);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const unsavedRun = (error, down = false) => ({ collected: 0, bonus: 0, total: 0, multiplier: 1, unsaved: true, down, error });
+
+function savedReport() {
+  const raw = saveBox.read(RUN_OUTBOX);
+  const run = raw && P.decodeState(raw);
+  return validRunId(run?.runId) && Number.isSafeInteger(run.runFrom) && run.runFrom >= 0 ? run : null;
+}
 // The game opened on this machine (localhost, 127.x.x.x, [::1]), not as a published site.
 export const onThisMachine = (host = globalThis.location?.hostname || '') =>
   /^(?:(?:[^.]+\.)*localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i.test(host);
@@ -166,6 +215,41 @@ export const store = {
   offline: false, // the game's server can't be reached: nothing can be loaded or saved
   watching: false, // another tab's saving is heard (init)
   kept: true, // this tab's last save is what the browser now holds (saveLocal)
+  runOutbox: null,
+
+  waitingReport() {
+    return savedReport() || this.runOutbox;
+  },
+
+  clearReport(id) {
+    if (this.runOutbox?.runId === id) this.runOutbox = null;
+    if (savedReport()?.runId === id) saveBox.write(RUN_OUTBOX, null);
+  },
+
+  get pendingRun() {
+    const run = this.waitingReport();
+    return run && (this.profile.lastRun?.id !== run.runId || this.profile.lastRun?.from !== run.runFrom) ? run : null;
+  },
+
+  get pendingReveal() {
+    const receipt = this.profile.lastRun;
+    if (!receipt?.pending) return null;
+    if (receipt.truncated) {
+      const run = this.waitingReport();
+      if (run?.runId === receipt.id && run.runFrom === receipt.from) {
+        const spoils = run.sealedGear
+          ? partitionRunSpoils(run.spoils, run.found).history
+          : settledSpoils(run.spoils, run.found, this.profile.gear[receipt.hero]);
+        if (spoils) return { ...receipt, spoils, truncated: false };
+      }
+    }
+    return receipt;
+  },
+
+  async resumeRun() {
+    const report = this.pendingRun;
+    return report ? this.submitRun(report) : null;
+  },
 
   async init() {
     for (const name of STALE_RUNS) if (readCookie(name) != null) writeCookie(name, null);
@@ -244,58 +328,149 @@ export const store = {
   // The run's reward. When the server doesn't take the run nothing changes, and the reward
   // comes back with unsaved set (down: worth trying again) for the results screen to say so.
   async submitRun(run) {
-    if (this.mode === 'server') {
-      try {
-        const data = await api('run', run);
-        this.profile = P.sanitizeProfile(data.profile);
-        this.lastReward = data.reward;
-        return data.reward;
-      } catch (e) {
-        return { collected: 0, bonus: 0, total: 0, multiplier: 1, unsaved: true, down: serverDown(e), error: e.message };
+    return withProfileLock(async () => {
+      this.reload();
+      const modern = validRunId(run?.runId);
+      if (modern) {
+        const waiting = this.pendingRun;
+        if (waiting && waiting.runId !== run.runId) return unsavedRun('Another run is waiting to be saved');
+        // Write before making any request. Until the reveal is acknowledged, this also
+        // supplies the full gear ledger when a server cookie could only fit its tail.
+        this.runOutbox = run;
+        saveBox.write(RUN_OUTBOX, P.encodeState(run));
       }
-    }
-    this.reload();
-    const r = P.applyRun(this.profile, run);
-    if (r.ok) {
+      if (this.mode === 'server') {
+        try {
+          const data = await api('run', run);
+          if (!data.profile || !data.reward || modern && data.profile.lastRun?.id !== run.runId) {
+            throw new TypeError('The run receipt was interrupted');
+          }
+          this.profile = P.sanitizeProfile(data.profile);
+          this.lastReward = data.reward;
+          if (modern && !this.profile.lastRun?.pending) this.clearReport(run.runId);
+          return data.reward;
+        } catch (e) {
+          const down = serverDown(e);
+          if (modern && !down) this.clearReport(run.runId);
+          return unsavedRun(e.message, down);
+        }
+      }
+      const r = P.applyRun(this.profile, run);
+      if (!r.ok) {
+        if (modern) this.clearReport(run.runId);
+        return unsavedRun(r.error);
+      }
       this.profile = r.profile;
       this.saveLocal();
       this.lastReward = r.reward;
-      return r.reward;
-    }
-    return { collected: 0, bonus: 0, total: 0, multiplier: 1 };
+      if (modern && this.kept && !this.profile.lastRun?.pending) this.clearReport(run.runId);
+      return this.kept ? r.reward : { ...r.reward, volatile: true };
+    });
+  },
+
+  async acknowledgeReveal(id) {
+    return withProfileLock(async () => {
+      this.reload();
+      if (this.mode === 'server') {
+        const data = await api('spoils', { id });
+        if (data.profile?.lastRun?.id !== id || data.profile.lastRun.pending !== false) return false;
+        this.profile = P.sanitizeProfile(data.profile);
+        this.clearReport(id);
+        return true;
+      }
+      const r = P.acknowledgeReveal(this.profile, id);
+      if (!r.ok) return false;
+      const previous = this.profile, wasKept = this.kept;
+      this.profile = r.profile;
+      this.saveLocal();
+      if (this.kept) this.clearReport(id);
+      else if (wasKept) {
+        this.profile = previous;
+        this.kept = wasKept;
+        return false;
+      }
+      return true;
+    });
+  },
+
+  async resolveSpoil(decision) {
+    return withProfileLock(async () => {
+      this.reload();
+      if (this.mode === 'server') {
+        try {
+          const data = await api('spoils', decision);
+          if (data.profile?.lastRun?.id !== decision.id) return { ok: false, error: 'Receipt interrupted. Try again.' };
+          this.profile = P.sanitizeProfile(data.profile);
+          return { ok: true };
+        } catch (error) {
+          if (error.data?.profile) this.profile = P.sanitizeProfile(error.data.profile);
+          return { ok: false, error: serverDown(error) ? 'Could not save. Try again.' : error.message };
+        }
+      }
+      const r = P.resolveSpoil(this.profile, decision);
+      if (!r.ok) return { ok: false, error: r.error };
+      const previous = this.profile, wasKept = this.kept;
+      this.profile = r.profile;
+      this.saveLocal();
+      if (wasKept && !this.kept) {
+        this.profile = previous;
+        this.kept = wasKept;
+        return { ok: false, error: 'Could not save. Try again.' };
+      }
+      return { ok: true };
+    });
   },
 
   async buy(id) {
-    if (this.mode === 'server') {
-      // No answer (a dropped connection, a 5xx) is a failure too, never a purchase.
-      const data = await api('buy', { id }).catch((e) => ({ ...e.data, error: e.data?.error || e.message || "The game server can't be reached" }));
-      if (data.profile) this.profile = P.sanitizeProfile(data.profile);
-      return !data.error;
-    }
-    this.reload();
-    const r = P.buyUpgrade(this.profile, id);
-    if (r.ok) {
-      this.profile = r.profile;
+    return withProfileLock(async () => {
+      if (this.mode === 'server') {
+        // No answer (a dropped connection, a 5xx) is a failure too, never a purchase.
+        const data = await api('buy', { id }).catch((e) => ({ ...e.data, error: e.data?.error || e.message || "The game server can't be reached" }));
+        if (data.profile) this.profile = P.sanitizeProfile(data.profile);
+        return !data.error;
+      }
+      this.reload();
+      const r = P.buyUpgrade(this.profile, id);
+      if (r.ok) {
+        this.profile = r.profile;
+        this.saveLocal();
+      }
+      return r.ok;
+    });
+  },
+
+  async transfer(action) {
+    return withProfileLock(async () => {
+      if (this.mode === 'server') {
+        const data = await api('transfer', action).catch(e => ({ ...e.data, error: e.data?.error || e.message }));
+        if (data.profile) this.profile = P.sanitizeProfile(data.profile);
+        return { ok: !!data.profile && !data.error, error: data.error || (!data.profile ? 'The transfer response was interrupted' : null), cost: data.cost };
+      }
+      this.reload();
+      const result = P.transferItem(this.profile, action);
+      if (!result.ok) return result;
+      this.profile = result.profile;
       this.saveLocal();
-    }
-    return r.ok;
+      return { ...result, kept: this.kept };
+    });
   },
 
   // A shared weapon left at home (on) or taken along again (shared/profile.js setHome).
   async setHome(id, on) {
-    if (this.mode === 'server') {
-      // No answer (a dropped connection, a 5xx) is a failure too, never a change.
-      const data = await api('home', { id, on }).catch((e) => ({ ...e.data, error: e.data?.error || e.message || "The game server can't be reached" }));
-      if (data.profile) this.profile = P.sanitizeProfile(data.profile);
-      return !data.error;
-    }
-    this.reload();
-    const r = P.setHome(this.profile, id, on);
-    if (r.ok) {
-      this.profile = r.profile;
-      this.saveLocal();
-    }
-    return r.ok;
+    return withProfileLock(async () => {
+      if (this.mode === 'server') {
+        const data = await api('home', { id, on }).catch((e) => ({ ...e.data, error: e.data?.error || e.message || "The game server can't be reached" }));
+        if (data.profile) this.profile = P.sanitizeProfile(data.profile);
+        return !data.error;
+      }
+      this.reload();
+      const r = P.setHome(this.profile, id, on);
+      if (r.ok) {
+        this.profile = r.profile;
+        this.saveLocal();
+      }
+      return r.ok;
+    });
   },
 
   // Debug only (the debug flag): upgrades set to any ranks, { id: rank }, at no cost.
@@ -314,16 +489,18 @@ export const store = {
   },
 
   async refund() {
-    if (this.mode === 'server') {
-      const data = await api('refund', {});
-      this.profile = P.sanitizeProfile(data.profile);
-      return data.refunded;
-    }
-    this.reload();
-    const r = P.refundUpgrades(this.profile);
-    this.profile = r.profile;
-    this.saveLocal();
-    return r.refunded;
+    return withProfileLock(async () => {
+      if (this.mode === 'server') {
+        const data = await api('refund', {});
+        this.profile = P.sanitizeProfile(data.profile);
+        return data.refunded;
+      }
+      this.reload();
+      const r = P.refundUpgrades(this.profile);
+      this.profile = r.profile;
+      this.saveLocal();
+      return r.refunded;
+    });
   },
 
   // ------------------------------------------------------ developer mode --
@@ -366,6 +543,8 @@ export const store = {
 
   async reset() {
     seenBox.clear(); // a fresh start's NEW marks start afresh (the title fills them again)
+    this.runOutbox = null;
+    saveBox.write(RUN_OUTBOX, null);
     if (this.mode === 'server') {
       const data = await api('reset', {});
       this.profile = P.sanitizeProfile(data.profile);

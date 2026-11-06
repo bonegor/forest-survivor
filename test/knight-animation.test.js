@@ -11,7 +11,7 @@ const context={globalAlpha:1,drawImage(){}};
 function game(){return new Game({hero:'knight',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},move:1});}
 function shown(g){g.drawPlayer(context,g.cam);return SPR.knight.frames.indexOf(g.player._rect[4]);}
 
-test('the real player clock visits the complete plumed walk at its imported cadence',()=>{
+test('the real player clock visits the complete Sentinel walk at its imported cadence',()=>{
   const g=game(),p=g.player,old=input.bot;
   try{
     input.bot={x:1,y:0};
@@ -52,5 +52,5 @@ test('idle breath comes from the authored poses and keeps the foot anchor stable
     p.anim=anim;shown(g);ys.push(g.player._rect[1]);
   }
   assert.equal(new Set(ys).size,1,'do not add the renderer bob on top of the authored idle');
-  assert.equal(SPR.knight.anchorY,47,'transparent slash padding must not float the boots above ground');
+  assert.equal(SPR.knight.anchorY,56,'use the approved sheet anchor with its transparent padding');
 });

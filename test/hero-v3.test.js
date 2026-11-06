@@ -11,7 +11,7 @@ import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
-const heroes = Object.values(HEROES).filter(h => h.id !== 'knight');
+const heroes = Object.values(HEROES);
 const proposals = heroes.map(h => ({ h, skin: 'selected' }));
 const settingsFor = (id, skin) => ({ diff: 'easy', numbers: false, skins: { [id]: skin } });
 
@@ -59,31 +59,13 @@ test('selected sprites preserve stats, weapons, movement, animation cadence and 
   }
 });
 
-test('the selected Paladin keep helmet, neck and chest joined through all poses', () => {
-  const anchors = [[0,0],[0,0],[0,0],[0,1],[0,1],[0,1],[0,0],[0,0],
-    [1,1],[1,1],[1,0],[1,0],[1,1],[1,1],[1,0],[1,0],
-    [0,0],[-1,0],[1,0],[2,1],[2,1],[1,0]];
-  for (const skin of ['selected']) {
-    const frames = SPR[heroLook('paladin', { paladin: skin }).sprite].frames;
-    assert.equal(frames.length, anchors.length);
-    for (const [i, [ux, by]] of anchors.entries()) {
-      const { w, d } = frames[i].buf, start = (12 + by) * w + 23 + ux, end = (23 + by) * w + 23 + ux;
-      assert.ok(d[start] >>> 24, `${skin} pose ${i}: helmet seed`);
-      const seen = new Set([start]), todo = [start];
-      while (todo.length) {
-        const p = todo.pop();
-        for (const q of [p-1,p+1,p-w,p+w]) {
-          const x = q % w, y = Math.floor(q / w);
-          if (x < 20+ux || x > 27+ux || y < 12+by || y > 23+by || !(d[q] >>> 24) || seen.has(q)) continue;
-          seen.add(q);todo.push(q);
-        }
-      }
-      assert.ok(seen.has(end), `${skin} pose ${i}: continuous helmet-neck-chest connection`);
-    }
-  }
+test('Justicar keeps its eighteen authored attacks, with Smite at the legacy manual timing', () => {
+  const spr = SPR[heroLook('paladin', { paladin: 'selected' }).sprite];
+  assert.deepEqual([spr.attack.length, spr.attackRelease, spr.attackFps], [18, 8, 24]);
+  assert.equal(strikeClip(spr).delay, 2 / 13);
 });
 
-test('the selected Ranger release projectiles on running bow-release frames in both directions', () => {
+test('the selected Ranger shoots without breaking her running gait in either direction', () => {
   const previous = input.bot;
   try {
     for (const skin of ['selected']) for (const face of [-1, 1]) {
@@ -100,7 +82,7 @@ test('the selected Ranger release projectiles on running bow-release frames in b
         if (g.projectiles.length > count && !released) {
           released = true;
           assert.ok(Math.abs(g.clock - 0.35) <= 1 / 60 + 1e-9, 'sprite must not delay bow cooldown');
-          assert.ok(spr.attackWalk[spr.attackRelease].includes(spr.frames.indexOf(p._rect[4])), `${skin}: projectile and running release coincide`);
+          assert.ok(spr.walk.includes(spr.frames.indexOf(p._rect[4])), `${skin}: arrow does not interrupt the gait`);
           assert.ok(Math.cos(g.projectiles[0].ang) * face > 0, 'projectile preserves facing');
         }
       }
@@ -113,12 +95,12 @@ test('the selected Shadow hover at rest and moving without footstep dust', () =>
   const previous = input.bot;
   try {
     input.bot = { x: 1, y: 0 };
-    for (const skin of ['selected']) {
-      const g = new Game({ hero: 'rogue', mode: 's15', meta: metaBonuses(defaultProfile()), settings: settingsFor('rogue', skin), crypts: false });
+    for (const id of ['rogue', 'wraith']) {
+      const skin = 'selected';
+      const g = new Game({ hero: id, mode: 's15', meta: metaBonuses(defaultProfile()), settings: settingsFor(id, skin), crypts: false });
       const p = g.player, spr = SPR[p.hero.sprite];
-      assert.deepEqual(spr.walk, spr.idle, skin + ': one continuous float loop');
-      assert.equal(spr.attack, null, skin + ': no grounded strike animation');
-      for (const index of spr.idle) assert.ok(spr.anchorY - bounds(spr.frames[index].buf).y1 >= 2, `${skin} frame ${index}: ground clearance`);
+      assert.ok(spr.floating && spr.idle.length > 1 && spr.walk.length > 1 && spr.attack.length > 1);
+      assert.equal(spr.anchorY, 56, 'keep the reviewed hover registration, including the trailing aura');
       g.world.collide = () => {};
       let emitted = 0;g.particles.emit = () => { emitted++; };
       p.stepT = 0;

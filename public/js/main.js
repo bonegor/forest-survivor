@@ -13,6 +13,7 @@ import { MenuScene } from './ui/background.js';
 import { TitleScreen, HeroScreen, ModeScreen, ArmoryScreen, CodexScreen, RecordsScreen, OptionsScreen } from './ui/screens.js';
 import { GameScreen } from './ui/gamescreen.js';
 import { PrologueScreen } from './ui/prologue.js';
+import { SpoilsScreen } from './ui/reward-reels.js';
 import { MAPS } from './data/maps.js';
 
 const SCREENS = {
@@ -25,6 +26,7 @@ const SCREENS = {
   options: OptionsScreen,
   game: GameScreen,
   prologue: PrologueScreen,
+  spoils: SpoilsScreen,
 };
 
 const app = {
@@ -38,6 +40,7 @@ const app = {
   audioUnlocked: false,
 
   go(name, params = {}) {
+    if ((name === 'game' || name === 'prologue') && (this.store.pendingRun || this.store.pendingReveal)) name = 'spoils';
     stopCombatMusicPreview();
     if (this.screen && this.screen.leave) this.screen.leave();
     const S = SCREENS[name];
@@ -156,7 +159,7 @@ async function boot() {
   for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, unlock, { passive: true });
   document.getElementById('loading')?.remove();
   canvas.focus();
-  app.go('title');
+  app.go(!store.unreadable && (store.pendingRun || store.pendingReveal) ? 'spoils' : 'title');
   requestAnimationFrame(loop);
   // Developer panel: loaded on demand with ` (or straight away with ?dev, for its DEV button),
   // where developer mode is on (the server's --dev or DEV_KEY, or the static game on this
