@@ -1,24 +1,41 @@
-// Attack receipts never change combat timing or facing. Only manual crypt strikes
-// may select an attack sprite; automatic field attacks keep the idle/walk cycle.
+// Attack receipts select the signature's release/recovery poses without changing
+// combat timing or facing. Manual crypt strikes also show their existing wind-up.
 import { faceAlong } from './facing.js';
 
 export function recordHeroAttack(w, ang = w.g.player.aim) {
   if (w.g.mainWeapon?.() !== w || w.g.caveStrike) return;
-  w.g.player.heroAttack = { at: w.g.clock, ang, weapon: w };
+  const g = w.g, p = g.player;
+  // Some weapons fire on cooldown even in an empty clearing. Keep those gameplay
+  // effects, but reserve the combat gesture for a nearby foe so rest stays idle.
+  if (!g.nearestEnemy(p.x, p.y, w.reach)) return;
+  p.heroAttack = { at: g.clock, ang, weapon: w };
 }
 
 export function heroAttackPose(g, spr, step) {
   const p = g.player;
-  const preview = !!g.inCrypt?.preview;
-  if (!g.inCrypt || p.strikeAt === null || !preview && g.clock < p.strikeAt) return null;
   const clip = strikeClip(spr);
   if (!clip) return null;
-  // Imported sheets without a moving attack retain their gait; the real world-space
-  // weapon effect still shows the blow. A planted pose must not make a walker skate.
+  let k, ang;
+  if (g.inCrypt) {
+    const preview = !!g.inCrypt.preview;
+    if (p.strikeAt === null || !preview && g.clock < p.strikeAt) return null;
+    k = Math.max(preview ? 0 : clip.from, clip.hit + Math.floor((g.clock - p.strikeAt - clip.delay) * spr.attackFps + 1e-6));
+    ang = p.strikeAng;
+  } else {
+    const receipt = p.heroAttack;
+    if (!receipt || receipt.weapon !== g.mainWeapon?.()) return null;
+    const elapsed = g.clock - receipt.at;
+    if (elapsed < 0) return null;
+    // A successful release is the source of truth: waiting for a target cannot
+    // animate a false cast, and the sprite never postpones a projectile or hit.
+    k = clip.hit + Math.floor(elapsed * spr.attackFps + 1e-6);
+    ang = receipt.ang;
+  }
+  // A moving attack keeps the current leg phase underneath its arms/equipment.
+  // Older optional sheets without a moving clip retain their ordinary gait.
   if (p.moving && !spr.attackWalk && !spr.floating) return null;
-  const k = Math.max(preview ? 0 : clip.from, clip.hit + Math.floor((g.clock - p.strikeAt - clip.delay) * spr.attackFps + 1e-6));
   if (k < 0 || k >= spr.attack.length) return null;
-  const face = faceAlong(p.face, Math.cos(p.strikeAng), Math.sin(p.strikeAng));
+  const face = faceAlong(p.face, Math.cos(ang), Math.sin(ang));
   if (face !== p.face) return null;
   const index = p.moving && spr.attackWalk ? spr.attackWalk[k][step % spr.walk.length] : spr.attack[k];
   return { frame: spr.frames[index], flip: p.face < 0 };

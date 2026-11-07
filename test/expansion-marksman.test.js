@@ -15,7 +15,7 @@ function encounter(def = data.weapon, level = 1, amount = 0) {
   p.crit = 0;
   g.enemies.length = 0;
   g.world.solid = () => false;
-  const w = { g, s: heroStats(def, level, p), dmgDealt: 0 };
+  const w = { g, s: heroStats(def, level, p), reach: behavior.reach, dmgDealt: 0 };
   g.mainWeapon = () => w;
   const foe = (x, y) => g.spawnEnemy('zombie', p.x + x, p.y + y, { instant: true, hpMul: 100 });
   return { g, p, w, foe };

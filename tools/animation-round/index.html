@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forest Survivor · Animation review</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#11151a;color:#ded9ca;font:15px system-ui,sans-serif}main{max-width:1440px;margin:auto;padding:24px}h1{font:600 28px Georgia,serif;margin:0 0 6px}p{color:#aeb4b6;margin:8px 0 18px}button,select{font:inherit;background:#252c32;color:#e6dfce;border:1px solid #515a60;border-radius:4px;padding:9px 12px;cursor:pointer}button.active{background:#645334;border-color:#c7a66a}nav{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}.panel{background:#191f25;border:1px solid #3a444c;border-radius:6px;padding:14px}.panel h2{font-size:17px;margin:0 0 12px}.world{width:100%;height:auto;image-rendering:pixelated;display:block}.detail{display:flex;align-items:center;justify-content:space-around;gap:12px;margin-top:12px}.crop{width:192px;height:192px;image-rendering:pixelated;background:#11151a}.selection{width:128px;height:180px;image-rendering:pixelated}.note{font-size:13px;color:#adb9bc;max-width:180px}#roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px;margin-top:22px}#status{font-variant-numeric:tabular-nums;color:#d5bc86;min-height:24px}footer{margin-top:20px;color:#9ea8ad;font-size:13px}@media(max-width:850px){main{padding:12px}.pair{grid-template-columns:1fr}.crop{width:160px;height:160px}}
+</style>
+<main>
+  <h1>Forest Survivor · Animation review</h1>
+  <p>Every hero, in the real game. Compare quiet idle motion, complete strides and attacks in both directions.</p>
+  <nav>
+    <select id="hero" aria-label="Hero"></select>
+    <select id="setting" aria-label="Scene"><option value="day">Daylight</option><option value="forest">Forest</option><option value="crypt">Crypt</option></select>
+    <button data-action="idle" class="active">Idle</button><button data-action="right">Walk →</button><button data-action="left">Walk ←</button><button data-action="diagonal">Diagonal</button><button data-action="attack">Attack</button><button data-action="attack-walk">Walk + attack</button><button data-action="tour">Full tour</button>
+    <button id="face">Face ←</button><button id="pause">Pause</button><button id="step">One frame</button><button id="reset">Restart</button>
+  </nav>
+  <div id="status">Loading sprites…</div>
+  <div class="pair">
+    <section class="panel"><h2>Before</h2><canvas id="world0" class="world" width="480" height="300"></canvas><div class="detail"><canvas id="crop0" class="crop" width="96" height="96"></canvas><canvas id="selection0" class="selection" width="128" height="180"></canvas><div class="note" id="note0"></div></div></section>
+    <section class="panel"><h2>Updated</h2><canvas id="world1" class="world" width="480" height="300"></canvas><div class="detail"><canvas id="crop1" class="crop" width="96" height="96"></canvas><canvas id="selection1" class="selection" width="128" height="180"></canvas><div class="note" id="note1"></div></div></section>
+  </div>
+  <div id="roster"></div>
+  <footer>Local review only · In-memory heroes · Your saved progression is untouched. Selection stages follow their full idle, walk and attack demonstration.</footer>
+</main>
+<script type="module" src="/review.js"></script>
+</html>

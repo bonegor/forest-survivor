@@ -376,10 +376,11 @@ export const KINDS = {
       if (i % 2 === 1) ang += Math.PI;
       if (i >= 2) ang += i % 4 < 2 ? 0.55 : -0.55;
       const holy = !!w.s.wave;
+      // Record the combat gesture before the impact can kill the final target.
+      recordHeroAttack(w, ang);
       g.effects.push(new Slash(g, w, ang, 30 * w.s.area, SWORD_ARC, w.s.dmg, holy));
       // No slash turns him, not even one at a foe behind him (facing.js).
       p.swing(ang);
-      recordHeroAttack(w, ang);
       if (holy) {
         spawnProjectile(g, {
           kind: 'wave', x: p.x, y: p.y, z: 7, ang, speed: 200, life: 0.6, r: 11 * w.s.area, dmg: w.s.dmg * 0.6,

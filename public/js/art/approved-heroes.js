@@ -32,7 +32,7 @@ for (const [id, data] of Object.entries(sheets)) {
   let worldFrames, portraitFrames;
   APPROVED_HERO_ART[id] = {
     gen: () => (worldFrames ??= data.frames.map(frame => unpack(data, frame, { x: 0, y: 0, w, h }))),
-    anchorY, idle, walk, attack, attackRelease, attackFps, floating, manualDelay: manualDelay[id],
+    anchorY, idle, walk, attack, attackRelease, attackFps, floating, attackWalk: data.attackWalk, manualDelay: manualDelay[id] ?? data.manualDelay,
     motionRate: walkFps / (7 * 1.4 * normalSpeed),
     idleRate: idleFps / 1.6,
     selfBob: true, outline: false,

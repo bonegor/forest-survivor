@@ -73,6 +73,7 @@ test('the selected Ranger shoots without breaking her running gait in either dir
       const g = new Game({ hero: 'archer', mode: 's15', meta: metaBonuses(defaultProfile()), settings: settingsFor('archer', skin), crypts: false });
       g.spawner.update = () => {};g.player.devGod = true;
       const p = g.player, spr = SPR[p.hero.sprite], bow = p.weapons.find(w => w.def.kind === 'bow');
+      const target = g.spawnEnemy('skeleton', p.x + face * 100, p.y, { instant: true, always: true, hpMul: 1000 }); target.speed = 0;
       p.aim = face < 0 ? Math.PI : 0;p.face = face;bow.cd = 0.35;
       let released = false;
       for (let i = 0; i < 50; i++) {
@@ -82,7 +83,7 @@ test('the selected Ranger shoots without breaking her running gait in either dir
         if (g.projectiles.length > count && !released) {
           released = true;
           assert.ok(Math.abs(g.clock - 0.35) <= 1 / 60 + 1e-9, 'sprite must not delay bow cooldown');
-          assert.ok(spr.walk.includes(spr.frames.indexOf(p._rect[4])), `${skin}: arrow does not interrupt the gait`);
+          assert.ok(spr.attackWalk[spr.attackRelease].includes(spr.frames.indexOf(p._rect[4])), `${skin}: the bow releases over the current gait phase`);
           assert.ok(Math.cos(g.projectiles[0].ang) * face > 0, 'projectile preserves facing');
         }
       }

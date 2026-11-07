@@ -7,8 +7,8 @@ import { HEROES } from '../public/js/data/heroes.js';
 import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 import { heroAttackPose, strikeClip } from '../public/js/game/hero-animation.js';
+import baseline from '../tools/animation-round/baseline/index.js';
 
-const changed = ['knight', 'mage', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
 function run(id, fn) {
   const before = input.bot;
   try {
@@ -20,54 +20,94 @@ function run(id, fn) {
   } finally { input.bot = before; }
 }
 
-for (const id of Object.keys(HEROES)) test(`${id}: automatic field attacks preserve idle and walk in both directions`, () => {
+test('new pose counts preserve every hero\'s original manual hit delay', () => {
+  const legacy = { knight: 2/10, archer: 2/14, mage: 2/12, rogue: 0, necromancer: 2/12, paladin: 2/13, druid: 2/12, berserker: 2/12, witchhunter: 2/12 };
+  for (const [id, data] of Object.entries(baseline)) {
+    const expected = legacy[id] ?? Math.min(2, data.attackRelease) / data.attackFps;
+    assert.equal(strikeClip(SPR[id]).delay, expected, `${id}: artwork cannot change the damage schedule`);
+  }
+});
+
+for (const id of Object.keys(HEROES)) test(`${id}: an empty clearing plays quiet idle and walk loops`, () => run(id, (g, p, w, spr) => {
+  for (const moving of [false, true]) {
+    input.bot = { x: moving ? 1 : 0, y: 0 };
+    const seen = new Set();
+    for (let i = 0; i < 180; i++) {
+      g.update(1/60); g.placePlayer(g.cam);
+      const index = spr.frames.indexOf(p._rect[4]);
+      assert.ok((moving ? spr.walk : spr.idle).includes(index), 'automatic effects cannot replace quiet locomotion with a combat pose');
+      seen.add(index);
+    }
+    assert.ok(seen.size >= 3, `${moving ? 'walk' : 'idle'} really animates`);
+  }
+}));
+
+test('the attack remains visible when the sword kills the final nearby foe', () => run('knight', (g, p, w, spr) => {
+  const e = g.spawnEnemy('skeleton', p.x + 24, p.y, { instant: true, always: true });
+  e.hp = 1; g.grid.rebuild(g.enemies, p.x, p.y);
+  w.cd = 0; w.update(0); g.placePlayer(g.cam);
+  assert.ok(e.dead);
+  assert.equal(p._rect[4], spr.frames[spr.attack[spr.attackRelease]]);
+}));
+
+for (const id of Object.keys(HEROES)) test(`${id}: successful field attacks animate, then recover, in both directions`, () => {
   for (const face of [-1, 1]) for (const moving of [false, true]) run(id, (g, p, w) => {
     const spr = SPR[p.hero.sprite];
     p.face = face; p.aim = face < 0 ? Math.PI : 0;
     input.bot = { x: moving ? face : 0, y: 0 };
     const e = g.spawnEnemy('skeleton', p.x + face * 24, p.y, { instant: true, always: true, hpMul: 1000 });
     e.speed = 0;
-    let fired = false;
-    for (let i = 0; i < 120; i++) {
+    let fired = false, attacked = false, recovered = false;
+    for (let i = 0; i < 180; i++) {
+      e.x = p.x + face * 24; e.y = p.y;
       g.update(1 / 60);
       g.placePlayer(g.cam);
       const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
-      const expected = p.moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate));
-      assert.equal(p._rect[4], expected, 'field renderer always selects idle or walk');
-      assert.equal(heroAttackPose(g, spr, step), null);
+      const pose = heroAttackPose(g, spr, step);
+      const expected = pose?.frame ?? (p.moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate)));
+      assert.equal(p._rect[4], expected, 'production renderer selects the attack or current locomotion phase');
+      assert.equal(p._rect[5], face < 0);
+      if (pose) {
+        attacked = true;
+        const frames = p.moving && spr.attackWalk ? spr.attackWalk.flat() : spr.attack;
+        assert.ok(frames.includes(spr.frames.indexOf(pose.frame)), 'the signature uses an authored attack');
+      } else if (attacked) recovered = true;
       if (!p.heroAttack) continue;
       fired = true;
+      w.cd = 1000; w.queue = 0; // one real release followed by its complete recovery
       assert.equal(p.face, face, 'animation never changes facing');
     }
     assert.ok(fired, 'the signature weapon actually fired');
+    assert.ok(attacked, 'the attack is visible');
+    assert.ok(recovered, 'the hero returns to idle or walk after the attack');
   });
 });
 
-test('every authored moving attack retains eight distinct lower-body phases and its ground anchor', () => {
-  for (const id of changed.filter(id => id !== 'knight')) run(id, (g, p, w, spr) => {
-    if (!spr.attackWalk) return; // Imported sheets use their walk clip during a moving strike.
+test('every grounded hero keeps its gait through all attack phases', () => {
+  for (const id of Object.keys(HEROES)) run(id, (g, p, w, spr) => {
+    if (spr.floating) return;
+    assert.ok(spr.attackWalk, `${id}: moving attack clip`);
     assert.equal(spr.attackWalk.length, spr.attack.length);
-    p.moving = true;
+    p.moving = true; p.face = 1;
     g.inCrypt = {};
     p.strikeAng = 0;
     const clip = strikeClip(spr);
-    for (let k = 0; k < spr.attack.length; k++) {
-      const legs = new Set();
+    for (let k = clip.from; k < spr.attack.length; k++) {
+      assert.equal(spr.attackWalk[k].length, spr.walk.length);
+      const poses = new Set();
       for (let j = 0; j < spr.walk.length; j++) {
         const frame = spr.frames[spr.attackWalk[k][j]], b = frame.buf;
-        legs.add([...b.d.slice(33 * b.w, 40 * b.w)].join(','));
-        assert.ok([...b.d.slice((spr.anchorY - 1) * b.w, spr.anchorY * b.w)].some(c => c >>> 24), `${id}/${k}/${j}: supporting foot`);
-        if (k >= spr.attackRelease) {
-          p.strikeAt = g.clock - clip.delay - (k - clip.hit + .1) / spr.attackFps;
-          assert.equal(heroAttackPose(g, spr, j).frame, frame);
-        }
+        assert.ok(b.d.some(c => c >>> 24), `${id}/${k}/${j}: nonempty pose`);
+        poses.add([...b.d].join(','));
+        p.strikeAt = g.clock - Math.max(0, clip.delay + (k - clip.hit + .1) / spr.attackFps);
+        assert.equal(heroAttackPose(g, spr, j).frame, frame);
       }
-      assert.ok(legs.size >= 6, `${id}/${k}: legs continue stepping`);
+      assert.ok(poses.size >= 4, `${id}/${k}: the moving attack keeps distinct gait phases`);
     }
   });
 });
 
-test('rear shots, failed casts and imported moving attacks cannot replace the gait with a planted pose', () => {
+test('rear shots and failed casts never invent a forward attack or turn the hero', () => {
   for (const id of ['mage', 'paladin', 'druid', 'witchhunter']) run(id, (g, p, w, spr) => {
     g.inCrypt = {};
     p.moving = true; p.face = 1;
@@ -81,23 +121,25 @@ test('rear shots, failed casts and imported moving attacks cannot replace the ga
     g.update(.15);
     assert.equal(p.heroAttack, null, 'a failed attempt is not a release');
   });
-  run('knight', (g, p, w, spr) => {
-    p.moving = true; p.heroAttack = { at: g.clock, ang: 0, weapon: w };
-    assert.equal(heroAttackPose(g, spr, 0), null);
-    g.inCrypt = {}; p.strikeAt = g.clock; p.strikeAng = 0;
-    g.placePlayer(g.cam);
-    assert.ok(spr.walk.includes(spr.frames.indexOf(p._rect[4])), 'crypt strike keeps the imported walk');
+  for (const id of Object.keys(HEROES)) run(id, (g, p, w, spr) => {
+    p.face = 1; p.heroAttack = { at: g.clock, ang: Math.PI, weapon: w };
+    assert.equal(heroAttackPose(g, spr, 0), null, 'a rear release does not fake a forward attack');
+    p.heroAttack = { at: g.clock + 1, ang: 0, weapon: w };
+    assert.equal(heroAttackPose(g, spr, 0), null, 'a future receipt cannot play early');
+    assert.equal(p.face, 1);
   });
 });
 
 test('secondary weapons cannot trigger the signature pose; evolved signature weapons can', () => run('mage', (g, p, w, spr) => {
+  g.spawnEnemy('skeleton', p.x + 100, p.y, { instant: true, always: true, hpMul: 1000 });
+  g.grid.rebuild(g.enemies, p.x, p.y);
   g.addWeapon('sword');
   const sword = p.weapons.find(w => w.id === 'sword');
   w.cd = 100; sword.cd = 0; sword.update(.01);
   assert.equal(p.heroAttack, null);
   w.evolve(); w.cd = 0; w.update(.01);
   assert.equal(p.heroAttack.weapon, w);
-  assert.equal(heroAttackPose(g, spr, 0), null, 'even evolved field attacks keep the idle pose');
+  assert.equal(heroAttackPose(g, spr, 0).frame, spr.frames[spr.attack[spr.attackRelease]], 'the evolved signature shows its release at the real firing time');
 }));
 
 for (const id of Object.keys(HEROES)) test(`${id}: crypt strikes animate only after a manual attack, then return to idle`, () => {

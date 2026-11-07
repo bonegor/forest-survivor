@@ -174,7 +174,7 @@ export class Player {
     this.sealReadyAt = 0;
     this.pilgrimDistance = 0;
     this.leap = null; // a leap of the Twin Axes under way (leapTo)
-    this.heroAttack = null; // signature weapon release receipt; field sprites keep walking/idle
+    this.heroAttack = null; // successful signature release; drives field attack recovery poses
     this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
     this.groveT = 0;
     // A Survival map's ground (QUICKSAND, ICE, FROST): none of it ever set in the Darkwood.

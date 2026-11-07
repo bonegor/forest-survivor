@@ -14,7 +14,7 @@ test('every selected hero has complete sprites and poses without alternative loo
     assert.ok(SPR[h.sprite] && SPR[h.pose], `${h.id}: its sprite and pose`);
   }
   const p = SPR[HEROES.paladin.sprite];
-  assert.equal(p.frames.length, p.idle.length + p.walk.length + p.attack.length, 'the approved Justicar has indexed idle, walk and attack');
+  assert.ok(p.idle.length > 1 && p.walk.length > 1 && p.attack.length > 1 && p.attackWalk.length === p.attack.length, 'the approved Justicar has independent idle, walk, attack and moving attack clips');
   assert.equal(SPR.paladin_d, undefined, 'her Style D is gone');
 });
 

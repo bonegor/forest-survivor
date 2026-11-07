@@ -25,7 +25,7 @@ function run(fn){
 
 test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors',()=>{
   const spr=RANGER;
-  assert.equal(spr.frames.length,13,'idle, walk and planted shots');
+  assert.equal(spr.frames.length,data.frames.length,'all authored idle, walk and attack combinations reach the engine');
   for(const [i,fr] of spr.frames.entries()){
     const f=fr.buf;
     assert.deepEqual([f.w,f.h],[80,64]);
@@ -37,8 +37,9 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
 
 test('the approved Ranger uses the indexed Hunter clip and its release frame',()=>{
   const spr=RANGER;
-  assert.deepEqual([spr.idle.length,spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[1,8,5,2,8]);
-  assert.equal(spr.attackWalk,null);
+  assert.ok(spr.idle.length>=4);
+  assert.deepEqual([spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[8,5,2,8]);
+  assert.equal(spr.attackWalk.length,spr.attack.length);
 });
 
 test('the real ranger movement clock plays all eight phases at the reviewer cadence',()=>run((g,p,w)=>{
@@ -53,21 +54,23 @@ test('the real ranger movement clock plays all eight phases at the reviewer cade
   assert.ok(Math.abs(wraps[1]-wraps[0]-8/data.walkFps)<1/30);
 }));
 
-for(const face of [-1,1])test(`automatic bow shots keep idle art and their real projectile timing facing ${face}`,()=>run((g,p,w)=>{
+for(const face of [-1,1])test(`automatic bow shots show the release at their real projectile timing facing ${face}`,()=>run((g,p,w)=>{
   p.aim=face===1?0:Math.PI;p.face=face;w.cd=.35;
+  const target=g.spawnEnemy('skeleton',p.x+face*100,p.y,{instant:true,always:true,hpMul:1000});target.speed=0;
   const poses=new Set();let fired=false;
   for(let i=0;i<65;i++){
     const before=g.projectiles.length;g.update(1/60);
     const s=shown(g);poses.add(s.index);assert.equal(s.flip,face<0);
     if(g.projectiles.length>before&&!fired){
       fired=true;
-      assert.ok(RANGER.idle.includes(s.index));
+      assert.equal(s.index,RANGER.attack[RANGER.attackRelease]);
       assert.ok(g.clock>=.35-1/60&&g.clock<=.35+1/60,'art must not delay the existing shot');
       assert.ok(Math.cos(g.projectiles[0].ang)*face>0,'arrow follows the selected facing');
     }
   }
   assert.ok(fired);
-  assert.deepEqual([...poses],RANGER.idle,'automatic attacks only use the idle cycle');
+  assert.ok([...poses].some(i=>RANGER.idle.includes(i)),'idle between volleys');
+  assert.ok([...poses].some(i=>RANGER.attack.includes(i)),'visible shot recovery');
 }));
 
 // The owner, 16 October 2026: the bow fires straight, the way she faces; it seeks no foe.
@@ -83,7 +86,7 @@ test('walking while shooting keeps its leg cycle, and a foe behind her neither f
   const foe=g.spawnEnemy('slime',p.x-40,p.y,{instant:true,hpMul:10});foe.dormant=true;
   g.grid.rebuild(g.enemies,p.x,p.y);w.cd=0;w.update(0);
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);
-  assert.ok(RANGER.walk.includes(shown(g).index),'she keeps the gait on the move');
+  assert.ok(RANGER.attackWalk[RANGER.attackRelease].includes(shown(g).index),'the release retains a walking lower body');
   assert.ok(Math.cos(g.projectiles.at(-1).ang)>0,'the arrow flies straight ahead, not at the foe behind');
 }));
 
@@ -95,7 +98,7 @@ test('standing, the ranger shoots straight the way she faces, a foe behind her o
   assert.ok(Math.abs(g.projectiles.at(-1).ang)<1e-9,'the first arrow flies straight ahead, not at the nearer foe behind');
   assert.equal(p.face,1,'without turning her');
   assert.equal(shown(g).flip,false);
-  assert.ok(RANGER.idle.includes(shown(g).index),'and keeps the idle pose while the arrow shows the shot');
+  assert.equal(shown(g).index,RANGER.attack[RANGER.attackRelease],'the pose releases with the arrow');
   w.update(.07);
   assert.ok(Math.abs(Math.abs(g.projectiles.at(-1).ang)-0.06)<1e-9,'the second fans out just beside it: one volley');
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);
