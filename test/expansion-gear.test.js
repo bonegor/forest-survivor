@@ -186,7 +186,7 @@ test('static cookie fallback reads expanded profiles and removes all chunks afte
     const p = defaultProfile();
     p.heroes = [...HERO_ORDER];
     for (const h of HERO_ORDER) {
-      p.gear[h] = Object.fromEntries(Object.keys(POOLS).map(slot => [slot, item(slot, 4, 'weapons')]));
+      p.gear[h] = Object.fromEntries(['helm', 'armor', 'gloves', 'boots', 'amulet', 'ring'].map(slot => [slot, item(slot, 4, 'weapons')]));
     }
     const encoded = encodeState(packProfile(p));
     assert.ok(encoded.length > 4096);

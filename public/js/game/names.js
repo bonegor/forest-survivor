@@ -5,7 +5,7 @@
 export const foeName = (e) => (e.boss ? `${e.def.name}, ${e.def.title}` : e.name || e.def.name);
 
 // What each kind of shot is called after its shooter's name ("Frost Witch's shard", "Sylvaine's thorn").
-export const SHOT_NOUN = { darkbolt: 'bolt', arrow: 'arrow', bone: 'bone', skullbolt: 'skull', firebolt: 'firebolt', iceshard: 'shard', thornbolt: 'thorn', queenthorn: 'thorn' };
+export const SHOT_NOUN = { darkbolt: 'bolt', arrow: 'arrow', bone: 'bone', skullbolt: 'skull', firebolt: 'firebolt', cryptfireball: 'fireball', iceshard: 'shard', thornbolt: 'thorn', queenthorn: 'thorn' };
 
 // A shot as its shooter's ("Cultist's bolt", a boss's by its name alone: "King Ossarian's bone").
 export const shotName = (e, kind) => `${e.boss ? e.def.name : e.name || e.def.name}'s ${SHOT_NOUN[kind] || 'shot'}`;

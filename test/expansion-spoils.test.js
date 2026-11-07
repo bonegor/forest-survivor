@@ -5,7 +5,7 @@ import { createServer } from '../server.js';
 import { store } from '../public/js/engine/storage.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { Game } from '../public/js/game/game.js';
-import { rollItem, itemPrice } from '../public/js/shared/items.js';
+import { rollItem, itemPrice, RARITIES } from '../public/js/shared/items.js';
 import { acknowledgeReveal, applyRun, decodeState, defaultProfile, encodeState, metaBonuses, packProfile, resolveSpoil, sanitizeProfile } from '../public/js/shared/profile.js';
 import { MAX_CLAIMS, makeRunId, packSpoils, unpackSpoils } from '../public/js/shared/spoils.js';
 import { reelPosition, reelProgress } from '../public/js/ui/reward-reels.js';
@@ -56,13 +56,14 @@ test('the saved receipt survives reload, rejects old replays, and acknowledgment
   assert.equal(next.profile.runs, 2);
 });
 
-test('sealed pickups hide their rarity, keep current equipment in play, and settle exactly once after the run', () => {
+test('collected pickups show their slot and rarity, keep current equipment in play, and settle exactly once after the run', () => {
   const p = defaultProfile();
   p.gear.knight = { ring: gear[1] };
   const g = new Game({ hero: 'knight', mode: 's15', gear: p.gear.knight, sealedGear: true, meta: metaBonuses(p), settings: {}, headless: true });
   const pickup = g.addPickup('item', g.player.x, g.player.y, 0, { item: gear[0], pop: false });
-  assert.equal(pickup.sprite.name, 'crate');
-  assert.equal(pickup.lightKey, null);
+  assert.equal(pickup.sprite.name, 'g_ring');
+  assert.equal(pickup.glowColor, RARITIES[gear[0].rarity].color);
+  assert.equal(pickup.lightKey, 'gold');
   pickup.collect();
   g.queueItem(gear[2]);
   g.itemsFound = 2;
@@ -79,7 +80,8 @@ test('sealed pickups hide their rarity, keep current equipment in play, and sett
   assert.equal(resolveSpoil(saved.profile, { ...equip, expectedGearRev: 1 }).ok, false);
   const equipped = resolveSpoil(saved.profile, equip);
   assert.deepEqual(equipped.profile.gear.knight.ring, gear[0]);
-  assert.equal(equipped.profile.gold, saved.profile.gold + itemPrice(gear[1]));
+  assert.equal(equipped.profile.gold, saved.profile.gold);
+  assert.deepEqual(equipped.profile.stash, [gear[1]], 'replaced gear is kept for a later sell decision');
   const restored = sanitizeProfile(decodeState(encodeState(packProfile(equipped.profile))));
   assert.deepEqual(resolveSpoil(restored, equip).profile, restored, 'lost equip response can be retried');
   assert.equal(resolveSpoil(restored, { ...equip, action: 'sell' }).ok, false);

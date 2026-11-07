@@ -124,7 +124,7 @@ test('a strike plays the attack, and the blade lands on its blow frame', () => g
   assert.ok(!spr.attack.includes(shown(g)), 'and then he stands');
 }));
 
-test('back in the forest every weapon fights by itself again, with the signature attack animated', () => gameCase((g, p) => {
+test('back in the forest every weapon fights by itself again while the stationary hero idles', () => gameCase((g, p) => {
   g.addWeapon('bow');
   g.addWeapon('aura');
   enterStartCrypt(g, p);
@@ -132,15 +132,14 @@ test('back in the forest every weapon fights by itself again, with the signature
   for (let i = 0; i < 120 && g.inCrypt; i++) step(g);
   assert.equal(g.inCrypt, null);
   g.mainWeapon().cd = 0;
-  let swung = false, shot = false, animated = false;
+  let swung = false, shot = false;
   for (let i = 0; i < 150; i++) {
     step(g);
     swung ||= slashes(g) > 0;
     shot ||= g.projectiles.some((pr) => pr.kind === 'arrow');
-    animated ||= SPR.knight.attack.includes(shown(g));
+    assert.ok(SPR.knight.idle.includes(shown(g)), 'automatic attacks leave the stationary hero idle');
   }
   assert.ok(swung, 'the sword swings by itself');
-  assert.ok(animated, 'the real automatic sword attack has a visible pose');
   assert.ok(shot, 'the bow is back');
   assert.ok(g.effects.some((e) => e.persistent && e.w?.id === 'aura'), 'and the aura');
 }));

@@ -174,7 +174,7 @@ export class Player {
     this.sealReadyAt = 0;
     this.pilgrimDistance = 0;
     this.leap = null; // a leap of the Twin Axes under way (leapTo)
-    this.heroAttack = null; // the signature weapon's last real release, for its field animation
+    this.heroAttack = null; // signature weapon release receipt; field sprites keep walking/idle
     this.inGrove = false; // a tree near him, for Grove Warden (GROVE)
     this.groveT = 0;
     // A Survival map's ground (QUICKSAND, ICE, FROST): none of it ever set in the Darkwood.
@@ -260,8 +260,8 @@ export class Player {
   }
 
   recompute() {
-    this.gearB = gearBonuses(this.g.gear);
-    this.gearRanks = gearRanks(this.g.gear);
+    this.gearB = gearBonuses(this.g.gear, this.id);
+    this.gearRanks = gearRanks(this.g.gear, this.id);
     const oldMax = this.maxHp || 0;
     Object.assign(this, this.derived());
     // More health to have brings the health with it; less (gear sold) caps it.

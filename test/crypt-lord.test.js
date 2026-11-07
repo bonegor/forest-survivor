@@ -41,7 +41,7 @@ function enterStartCrypt(g, p, keep = false) {
   return door;
 }
 
-test('a crypt is ten rooms or so, its lords boss-sized Skeleton Archers, each in a room of its own with its guard', () => gameCase((g, p) => {
+test('a crypt has boss-sized Skeleton Archers and Mages, each in a room of its own with its guard', () => gameCase((g, p) => {
   enterStartCrypt(g, p, true);
   const w = g.world, T = 16;
   assert.deepEqual([w.W, w.H], [70, 56]);
@@ -51,11 +51,12 @@ test('a crypt is ten rooms or so, its lords boss-sized Skeleton Archers, each in
   assert.equal(lords.length, 2, 'two at dusk');
   assert.ok(lords.includes(w.guardian) && roomOf(w.guardian) === w.guardRoom, 'one in the farthest room');
   assert.equal(new Set(lords.map(roomOf)).size, 2, 'each in a room of its own');
+  assert.deepEqual(new Set(lords.map(e => e.type)), new Set(['skeletonarcher', 'skeletonmage']), 'both ranged lord types appear');
   for (const lord of lords) {
-    assert.equal(lord.type, 'skeletonarcher');
     assert.ok(lord.lord && lord.elite && lord.sleeping && lord.name);
     assert.equal(lord.maxHp, 600 * ELITE.health * CRYPT_LORD.health, 'a crypt lord has its dedicated health multiplier');
     assert.notEqual(lord.mod.id, 'stone', 'never Stoneskin');
+    assert.notEqual(lord.mod.id, 'swift', 'never an unexpectedly faster variant');
     assert.equal(lord.scale, 1, 'drawn at its own size');
     const guard = g.enemies.filter((e) => e.dormant && e.pack === lord.pack);
     assert.ok(guard.length && guard.every((e) => roomOf(e) === roomOf(lord)), 'its guard asleep about it');
@@ -72,8 +73,8 @@ test('a crypt is ten rooms or so, its lords boss-sized Skeleton Archers, each in
   assert.ok(!other.sleeping, 'and wakes with its guard');
 }));
 
-// The crypt-specific multiplier doubles the previous seven-strike fight on Elite.
-test('it lasts about fourteen strikes of a fully grown sword', () => gameCase((g, p) => {
+// Ten times the previous fourteen-strike fight on Elite.
+test('it lasts about one hundred forty strikes of a fully grown sword', () => gameCase((g, p) => {
   enterStartCrypt(g, p);
   const w = g.mainWeapon(), lord = g.world.guardian;
   while (w.level < 8) w.levelUp();
@@ -81,7 +82,7 @@ test('it lasts about fourteen strikes of a fully grown sword', () => gameCase((g
   p.devGod = true;
   lord.ai = () => [0, 0, 0];
   let strikes = 0;
-  while (!lord.dead && strikes < 30) {
+  while (!lord.dead && strikes < 180) {
     lord.x = p.x + 20;
     lord.y = p.y;
     lord.state = 'move';
@@ -95,12 +96,12 @@ test('it lasts about fourteen strikes of a fully grown sword', () => gameCase((g
     }
   }
   assert.ok(lord.dead, 'it falls');
-  assert.ok(strikes >= 12 && strikes <= 16, `${strikes} strikes`);
+  assert.ok(strikes >= 120 && strikes <= 160, `${strikes} strikes`);
 }));
 
 test('awake, it draws its bow and shoots arrows at the hero', () => gameCase((g, p) => {
   enterStartCrypt(g, p);
-  const lord = g.world.guardian;
+  const lord = g.enemies.find(e => e.lord && e.type === 'skeletonarcher');
   p.devGod = true;
   lord.x = p.x + 120;
   lord.y = p.y;

@@ -507,11 +507,12 @@ export class Spawner {
   // weighs it (difficulty.js health: 20% more, as every monster since 20 October 2026, and on
   // Normal 70% less on top) and its map (data/maps.js foe hp), and never Stoneskin, which would take
   // a third off every blow.
-  spawnLord(x, y) {
+  spawnLord(x, y, type = 'skeletonarcher') {
     const g = this.g;
-    const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone'));
+    // No Stoneskin damage cut or Swift variant that outruns the calibrated pace.
+    const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone' && m.id !== 'swift'));
     const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)} ${pick(CHAMPION_TITLE)}`;
-    const e = g.spawnEnemy('skeletonarcher', x, y, {
+    const e = g.spawnEnemy(type, x, y, {
       hpMul: g.diff.health * g.map.foe.hp * CRYPT_LORD.health,
       dmgMul: 1.5 * CRYPT_LORD.damage,
       elite: true,

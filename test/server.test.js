@@ -328,13 +328,13 @@ test('npm run dev opens developer mode without a key', async () => {
 
 // The expanded roster with distinct gear rolls and rank affixes must fit an encrypted
 // compressed cookie and read back whole.
-test('a maximal save of all 21 heroes fits the sealed cookie and reads back whole', async () => {
+test('a maximal save of all 21 heroes, eight equipment slots and a full inventory fits the sealed cookie', async () => {
   const P = await import('../public/js/shared/profile.js');
   const I = await import('../public/js/shared/items.js');
   const { MAX_CLAIMS, packSpoils } = await import('../public/js/shared/spoils.js');
   assert.equal(P.HERO_ORDER.length, 21);
   const p = P.defaultProfile();
-  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, deaths: 1e7, heroes: [...P.HERO_ORDER] });
+  Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, deaths: 1e7, identifications: 1e7, heroes: [...P.HERO_ORDER] });
   p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999 };
   for (const m of P.WIN_MODES) p.wins[m] = [1e6, 1e6, 1e6];
   for (const u of P.UPGRADES) p.up[u.id] = u.max;
@@ -349,7 +349,7 @@ test('a maximal save of all 21 heroes fits the sealed cookie and reads back whol
     return seed % n;
   };
   const grants = ['weapons', 'passives', 'weapon:raise', 'weapon:swordbearer_marchsteel', 'passive:might', 'passive:duration'];
-  const legend = (slot) => {
+  const legend = (slot, hero = 'knight') => {
     const stats = {};
     const pool = [...I.POOLS[slot]];
     for (let i = 0; i < 4; i++) {
@@ -358,16 +358,20 @@ test('a maximal save of all 21 heroes fits the sealed cookie and reads back whol
       stats[id] = lo + next(hi - lo + 1);
     }
     const powers = Object.keys(I.POWERS);
-    return { slot, rarity: I.LEGENDARY, stats, power: powers[next(powers.length)], seed: next(1e6),
-      grant: grants[next(grants.length)] };
+    const baseId = slot === 'weapon' ? 'might' : ['ring', 'amulet'].includes(slot) ? null : 'armor';
+    const base = baseId ? { [baseId]: I.baseStatRange(slot, I.LEGENDARY)[1] } : {};
+    return { slot, rarity: I.LEGENDARY, stats, base, identified: next(2) === 1,
+      ...(slot === 'weapon' && { weaponType: I.weaponClass(hero) }),
+      power: powers[next(powers.length)], seed: next(1e6), grant: grants[next(grants.length)] };
   };
   for (const h of P.HERO_ORDER) {
     p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
     p.bt[h] = 14400; // his longest run (28 October 2026)
-    p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+    p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s, h)]));
     p.gearRev[h] = 1 + next(1e5);
   }
+  p.stash = Array.from({ length: P.MAX_STASH }, (_, i) => legend(I.SLOTS[i % I.SLOTS.length]));
   await withServer(async (base) => {
     const c = client(base);
     const res = await c.post('/api/dev/profile', { profile: p });

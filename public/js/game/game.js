@@ -9,7 +9,7 @@ import { FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../da
 import { mapFor } from '../data/maps.js';
 import { RANKS, heroUnlockTime, countedKills } from '../shared/profile.js';
 import { killCredit } from '../shared/population.js';
-import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop } from '../shared/items.js';
+import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop, itemName, itemLines, canEquipItem } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
 import { sfx, playMusic, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
@@ -19,9 +19,9 @@ import { view } from '../engine/view.js';
 import { input, padKey } from '../engine/input.js';
 import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
 import { Player, ULT_DURATION, FURY, COOLDOWN_FLOOR, QUICKSAND } from './player.js';
-import { heroAttackPose } from './hero-animation.js';
+import { heroAttackPose, strikeClip } from './hero-animation.js';
+export { strikeClip } from './hero-animation.js';
 import { runSpoils } from '../shared/spoils.js';
-import { faceAlong } from './facing.js';
 import { Weapon, aimAt } from './weapons.js';
 import { Enemy, makeEnemyPool, drawNightEdge, THIEF_LOOT } from './enemies.js';
 import { maskHorde, maskBosses, keepHorde, putHorde } from './horde-over.js';
@@ -201,17 +201,6 @@ export const POWER_UPS = {
 };
 // The most Cursed Skulls one run can take (Game.cursedSkull).
 export const MAX_SKULLS = 3;
-
-// A blow struck by hand on the hero's sprite: its attack from two frames before the blow frame,
-// where the blade lands or the shot leaves (delay seconds in): the bow's release, else the
-// middle frame. Null for a sprite with no attack.
-export function strikeClip(spr) {
-  if (!spr.attack || !spr.attack.length || !spr.attackFps) return null;
-  const hit = spr.attackRelease ?? Math.floor(spr.attack.length / 2);
-  const delay = spr.manualDelay ?? Math.min(2, hit) / spr.attackFps;
-  const from = Math.max(0, hit - Math.ceil(delay * spr.attackFps - 1e-6));
-  return { from, hit, delay };
-}
 
 // What a hand-struck weapon is called on to do, for the crypt's banner (Game.enterCrypt).
 const STRIKE_VERB = { bow: 'shoot', fireball: 'cast', meteor: 'cast', daggers: 'throw', summon: 'raise the dead', smite: 'smite', roots: 'call the roots', leap: 'leap', crossbow: 'shoot' };
@@ -1404,12 +1393,12 @@ export class Game {
     // A Dungeon Run guardian's gear is secured directly, without a pickup on the ground.
     let gear = null;
     if (this.mode === 'dungeon') {
-      gear = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), GUARDIAN_GEAR[this.floor - 1]);
+      gear = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { ...GUARDIAN_GEAR[this.floor - 1], hero: this.player.id });
       this.itemsFound++;
       this.queueItem(gear);
     }
     const R = gear && RARITIES[gear.rarity];
-    this.banner(`${e.def.name} is slain!`, gear ? this.sealedGear ? 'Sealed gear secured' : `${R.name} ${SLOT_NAMES[gear.slot].toLowerCase()} won` : e.def.title, gear && !this.sealedGear ? R.color : '#fee761', 3.2);
+    this.banner(`${e.def.name} is slain!`, gear ? `${R.name} ${SLOT_NAMES[gear.slot].toLowerCase()} secured` : e.def.title, gear ? R.color : '#fee761', 3.2);
     if (this.mode === 'dungeon') {
       if (this.floor < 3) {
         this.world.openStairs(at.x, at.y);
@@ -1456,15 +1445,15 @@ export class Game {
     const [gearAt, chestAt] = drop.item && drop.chest ? this.dropSpots(e.x, e.y) : [e, e];
     let it = null;
     if (drop.item) {
-      it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1 });
+      it = rollItem(mulberry32((Math.random() * 2 ** 32) >>> 0), { minute: c ? c.minute : minuteOf(this.phase), depth: c ? c.depth : 1, hero: this.player.id });
       this.itemsFound++;
       this.addPickup('item', gearAt.x, gearAt.y, 0, { item: it });
     }
     if (drop.chest) this.addPickup('chest', chestAt.x, chestAt.y, 0, { kind: 'lord' });
     const R = it && RARITIES[it.rarity];
-    const what = it ? `${this.sealedGear ? 'Sealed gear' : R.name + ' ' + SLOT_NAMES[it.slot].toLowerCase()}${drop.chest ? ' and a chest' : ''}` : 'A chest';
+    const what = it ? `${R.name} ${SLOT_NAMES[it.slot].toLowerCase()}${drop.chest ? ' and a chest' : ''}` : 'A chest';
     const rest = left ? `. ${LORDS_WORD[left] || left} ${left === 1 ? 'lord remains' : 'lords remain'}` : '';
-    this.banner(`${e.name} is slain!`, `${what} dropped${rest}`, it && !this.sealedGear ? R.color : '#feae34', 3.2);
+    this.banner(`${e.name} is slain!`, `${what} dropped${rest}`, it ? R.color : '#feae34', 3.2);
     if (!left && this.world.lightWayOut) this.world.lightWayOut();
     if (!next) playMusic('crypt');
   }
@@ -1729,14 +1718,18 @@ export class Game {
   queueItem(it) {
     if (!this.sealedGear) this.itemQueue.push(it);
     this.collectedGear.push(it);
+    const base = itemLines(it).find(line => line.startsWith('+') || line.startsWith('-'));
+    this.banner(`${itemName(it)} collected`, `${base ? base + ' · ' : ''}${this.collectedGear.length} found · Manage after the match`, RARITIES[it.rarity].color, 3.2);
   }
 
   // Gear from the pickup screen: wear it (selling what it replaces), or sell it, or sell what is worn.
   wearItem(it) {
+    if (!canEquipItem(it, this.player.id)) return false;
     const old = this.gear[it.slot];
     if (old) this.earnGold(itemPrice(old));
     this.gear[it.slot] = it;
     this.player.gearChanged();
+    return true;
   }
 
   sellItem(it) {
@@ -3044,12 +3037,7 @@ export class Game {
     // arms/equipment. Imported art without that clip keeps walking with its world-space
     // weapon effect; stationary blows can use the full attack pose.
     let fr = still ? idleFrame(spr, 0) : moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate));
-    const clip = this.caveStrike && p.strikeAt !== null ? strikeClip(spr) : null;
-    if (clip && !still && (!moving || spr.attackWalk || spr.floating) && faceAlong(p.face, Math.cos(p.strikeAng), Math.sin(p.strikeAng)) === p.face) {
-      const k = Math.max(0, clip.hit + Math.floor((this.clock - p.strikeAt - clip.delay) * spr.attackFps + 1e-6));
-      if (k < spr.attack.length) fr = spr.frames[moving && spr.attackWalk ? spr.attackWalk[k][step % spr.walk.length] : spr.attack[k]];
-    }
-    const attackPose = this.caveStrike || still ? null : heroAttackPose(this, spr, step);
+    const attackPose = still ? null : heroAttackPose(this, spr, step);
     if (attackPose) fr = attackPose.frame;
     const flip = attackPose ? attackPose.flip : p.face < 0;
     let img = p.flash > 0 ? fr.white(flip) : frozen ? fr.variant('frozen', TINTS.frozen, flip) : fr.get(flip);

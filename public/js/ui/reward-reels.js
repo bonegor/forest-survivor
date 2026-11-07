@@ -2,8 +2,8 @@ import { input } from '../engine/input.js';
 import { sfx } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
 import { clamp, ease } from '../engine/util.js';
-import { RARITIES, SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, powerWorn } from '../shared/items.js';
-import { gearRevision } from '../shared/profile.js';
+import { RARITIES, SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, powerWorn, itemIdentified, canEquipItem, itemIcon } from '../shared/items.js';
+import { gearRevision, identificationCost, MAX_STASH } from '../shared/profile.js';
 import { unpackSpoils } from '../shared/spoils.js';
 import { button, dim, drawText, logo, panel, wrapText } from './ui.js';
 
@@ -77,6 +77,7 @@ export class SpoilsReveal {
     }
     this.t = 0;
     this.claimLanded = false;
+    this.detailScroll = {};
     this.spinTick = null;
     this.app.ui.focusId = 'claim_skip';
     this.app.ui.lock(0.2);
@@ -116,7 +117,7 @@ export class SpoilsReveal {
     const top = start + titleH + 24, foot = top + cardsH + 15;
     ctx.drawImage(title, Math.round(W / 2 - title.width * titleScale / 2), start, Math.round(title.width * titleScale), titleH);
     const summary = this.claims.length
-      ? `${this.claims.filter(e => e.state === 'worn').length} equipped · ${this.claims.filter(e => e.state === 'sold').length} sold`
+      ? `${this.claims.filter(e => e.state === 'worn').length} equipped · ${this.claims.filter(e => e.state === 'stashed').length} stored · ${this.claims.filter(e => e.state === 'sold').length} sold`
       : `${entries.length} collected`;
     drawText(ctx, pages > 1 ? `${summary} · ${this.page + 1}/${pages}` : summary, W / 2, start + titleH + 7, { align: 'center', color: '#c0cbdc' });
     if (!shown.length) drawText(ctx, 'All gear decisions saved', W / 2, top + Math.round(h / 2), { align: 'center', color: '#fee761' });
@@ -133,7 +134,7 @@ export class SpoilsReveal {
     shown.forEach(({ item, state }, i) => {
       const row = Math.floor(i / cols), cells = Math.min(cols, shown.length - row * cols);
       const x = Math.round((W - cells * w - (cells - 1) * gap) / 2) + (i % cols) * (w + gap), y = top + row * (h + gap);
-      const rarity = RARITIES[item.rarity], icon = 'g_' + item.slot;
+      const rarity = RARITIES[item.rarity], icon = itemIcon(item);
       const p = reelProgress(this.t, 0, SPIN + i * GAP), landed = p >= 1;
       panel(ctx, x, y, w, h, { fill: '#171421', trim: [landed ? rarity.color : '#5a3f3a', '#302238'], rivets: false });
       drawRewardReel(ctx, { x: x + Math.round((w - 40) / 2), y: y + 4, w: 40, h: 34, progress: p, icon, color: rarity.color, seed: i + this.page * PAGE, gear: true });
@@ -179,7 +180,9 @@ export class SpoilsReveal {
     const { app, receipt, claim } = this, ui = app.ui;
     const { item } = this.claims[claim];
     const rarity = RARITIES[item.rarity], center = Math.round(W / 2), gear = app.store.profile.gear[receipt.hero] || {};
-    const worn = gear[item.slot], duplicate = powerWorn(gear, item.power, item.slot);
+    const worn = gear[item.slot], duplicate = itemIdentified(item) && powerWorn(gear, item.power, item.slot);
+    const compatible = canEquipItem(item, receipt.hero), cost = identificationCost(app.store.profile);
+    const full = app.store.profile.stash.length >= MAX_STASH;
     const revision = gearRevision(app.store.profile, receipt.hero);
     this.t += dt;
     const progress = reelProgress(this.t, 0, SPIN), landed = progress >= 1;
@@ -195,14 +198,14 @@ export class SpoilsReveal {
       sfx(item.rarity === 4 ? 'legendary' : item.rarity === 3 ? 'epic' : 'reveal');
     }
     dim(ctx, W, H, 0.9);
-    const title = logo('SEALED GEAR');
+    const title = logo('COLLECTED GEAR');
     const scale = Math.min(1, (W - 16) / title.width), titleH = Math.round(title.height * scale);
-    const cardW = Math.min(150, Math.floor((W - 24) / 2)), cardH = Math.min(116, H - titleH - 100);
-    const start = Math.max(5, Math.round((H - titleH - cardH - 94) / 2));
+    const cardW = Math.min(150, Math.floor((W - 24) / 2)), cardH = Math.min(116, H - titleH - 142);
+    const start = Math.max(5, Math.round((H - titleH - cardH - 126) / 2));
     ctx.drawImage(title, Math.round(center - title.width * scale / 2), start, Math.round(title.width * scale), titleH);
-    drawText(ctx, `OPENING ${claim + 1} OF ${this.claims.length}`, center, start + titleH + 5, { align: 'center', color: '#c0cbdc' });
+    drawText(ctx, `${claim + 1} OF ${this.claims.length} · ${app.store.profile.gold} GOLD`, center, start + titleH + 5, { align: 'center', color: '#c0cbdc' });
     const reelY = start + titleH + 17;
-    drawRewardReel(ctx, { x: center - 30, y: reelY, w: 60, h: 37, progress, icon: 'g_' + item.slot, color: rarity.color, seed: claim, gear: true });
+    drawRewardReel(ctx, { x: center - 30, y: reelY, w: 60, h: 37, progress, icon: itemIcon(item), color: rarity.color, seed: claim, gear: true });
     const top = reelY + 42, left = center - cardW - 3, right = center + 3;
     ui.begin(dt);
     if (!landed) {
@@ -210,44 +213,62 @@ export class SpoilsReveal {
       ui.end();
       return;
     }
-    this.claimCard(ctx, left, top, cardW, cardH, 'NEW ' + rarity.name.toUpperCase(), item);
-    this.claimCard(ctx, right, top, cardW, cardH, `WORN ${SLOT_NAMES[item.slot].toUpperCase()}`, worn);
+    this.claimCard(ctx, left, top, cardW, cardH, 'NEW ' + rarity.name.toUpperCase(), item, 'new');
+    this.claimCard(ctx, right, top, cardW, cardH, `WORN ${SLOT_NAMES[item.slot].toUpperCase()}`, worn, 'worn');
     const foot = top + cardH + 14;
-    const message = this.claimError || (duplicate ? 'That legendary power is already equipped' : worn ? `Equipping sells the old item for ${itemPrice(worn)} gold` : '');
+    const message = this.claimError || (!compatible ? 'This weapon belongs to another fighting style' : duplicate ? 'That legendary power is already equipped' : worn ? 'Replaced equipment goes to your inventory' : !itemIdentified(item) ? 'Equip now for base bonuses; identify to reveal magic' : '');
     if (message) {
       const line = wrapText(message, W - 12)[0];
       drawText(ctx, line, center, foot - 10, { align: 'center', color: this.claimError || duplicate ? '#f6757a' : '#c0cbdc' });
     }
-    if (button(ctx, ui, 'claim_equip', left, foot, cardW, 15, this.saving ? 'SAVING…' : 'EQUIP', { disabled: duplicate || this.saving, color: '#fee761' })) this.resolveClaim('equip', revision);
+    if (button(ctx, ui, 'claim_equip', left, foot, cardW, 15, this.saving ? 'SAVING…' : 'EQUIP', { disabled: duplicate || !compatible || full && !!worn || this.saving, color: '#fee761' })) this.resolveClaim('equip', revision);
     if (button(ctx, ui, 'claim_sell', right, foot, cardW, 15, `SELL +${itemPrice(item)}`, { disabled: this.saving, color: '#feae34' })) this.resolveClaim('sell', revision);
+    if (button(ctx, ui, 'claim_identify', left, foot + 21, cardW, 15, itemIdentified(item) ? 'IDENTIFIED' : `IDENTIFY ${cost} GOLD`, { disabled: this.saving || itemIdentified(item) || app.store.profile.gold < cost, color: '#63b8ff' })) this.resolveClaim('identify', revision, cost);
+    if (button(ctx, ui, 'claim_stash', right, foot + 21, cardW, 15, full ? 'INVENTORY FULL' : `STASH ${app.store.profile.stash.length}/${MAX_STASH}`, { disabled: this.saving || full })) this.resolveClaim('stash', revision);
     ui.end();
   }
 
-  claimCard(ctx, x, y, w, h, heading, item) {
+  claimCard(ctx, x, y, w, h, heading, item, key) {
     const color = item ? RARITIES[item.rarity].color : '#8b9bb4';
     panel(ctx, x, y, w, h, { fill: '#171421', trim: [color, '#302238'], rivets: false });
     drawText(ctx, heading, x + w / 2, y + 5, { align: 'center', color: '#c28569' });
     const lines = item ? wrapText(itemName(item), w - 10) : ['Empty slot'];
     lines.forEach((line, i) => drawText(ctx, line, x + w / 2, y + 16 + i * 9, { align: 'center', color }));
     if (!item) return;
-    const dy = 19 + lines.length * 9, rows = Math.max(0, Math.floor((h - 6 - dy) / 8));
-    itemLines(item).flatMap(line => wrapText(line, w - 10)).slice(0, rows).forEach((line, i) => {
-      drawText(ctx, line, x + w / 2, y + dy + i * 8, { align: 'center', color: '#c0cbdc' });
+    const dy = 19 + lines.length * 9, rows = Math.max(1, Math.floor((h - 6 - dy) / 8));
+    let details = itemLines(item).flatMap(line => wrapText(line, w - 10));
+    const overflow = details.length > rows;
+    if (overflow) details = itemLines(item).flatMap(line => wrapText(line, w - 29));
+    const most = Math.max(0, details.length - rows), mouse = input.mouse;
+    this.detailScroll ??= {};
+    let scroll = this.detailScroll[key] || 0;
+    if (mouse.x >= x && mouse.x < x + w && mouse.y >= y && mouse.y < y + h) scroll += Math.sign(mouse.wheel || 0) * 2;
+    if (overflow) {
+      const ui = this.app.ui;
+      if (button(ctx, ui, `claim_${key}_up`, x + w - 20, y + dy, 15, 12, '↑', { disabled: scroll <= 0 })) scroll -= 2;
+      if (button(ctx, ui, `claim_${key}_down`, x + w - 20, y + h - 18, 15, 12, '↓', { disabled: scroll >= most })) scroll += 2;
+    }
+    scroll = this.detailScroll[key] = clamp(scroll, 0, most);
+    details.slice(scroll, scroll + rows).forEach((line, i) => {
+      drawText(ctx, line, x + (w - (overflow ? 18 : 0)) / 2, y + dy + i * 8, { align: 'center', color: '#c0cbdc' });
     });
   }
 
-  async resolveClaim(action, expectedGearRev) {
+  async resolveClaim(action, expectedGearRev, expectedCost) {
     if (this.saving) return;
     this.saving = true;
     const store = this.app.store, { id } = this.receipt;
-    const r = await store.resolveSpoil({ id, index: this.claim, action, expectedGearRev })
+    const r = await store.resolveSpoil({ id, index: this.claim, action, expectedGearRev, expectedCost })
       .catch(() => ({ ok: false, error: 'Could not save. Try again.' }));
     this.saving = false;
     this.claimError = r.error;
     const receipt = store.pendingReveal;
     if (receipt?.id === id && (r.ok || receipt.claims !== this.receipt.claims)) {
       if (r.ok) sfx(action === 'sell' ? 'coin' : 'pick');
-      this.loadClaims(receipt);
+      if (action === 'identify' && r.ok) {
+        this.receipt = receipt;
+        this.claims = unpackSpoils(receipt.claims);
+      } else this.loadClaims(receipt);
     } else if (r.ok && !receipt) this.done = true;
   }
 

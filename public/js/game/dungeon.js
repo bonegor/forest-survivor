@@ -5,7 +5,7 @@
 //
 // The same builds the crypts off the forest roads: ten rooms or so, with no horde and no
 // seal. Packs of the night's foes sleep in the rooms, and two to four lords (named Skeleton
-// Archers, cryptLords) each in a room of its own, a pack about it as its guard. The stairs
+// Archers and Mages, cryptLords) each in a room of its own, a pack about it as its guard. The stairs
 // you came down lead back up whenever you like. Once the last lord falls, the wall nearest
 // the hero (at least HOLE_AWAY tiles' walk away) breaks open on a way up, and moonlight runs
 // along the shortest walk there (A*).
@@ -17,6 +17,7 @@ import { bakedBuffers } from '../art/baked.js';
 import CRYPT_ART from '../../assets/art/crypts.js';
 import { FLOORS, PROP_SITES } from '../data/waves.js';
 import { MAX_LORDS } from '../shared/items.js';
+import { CRYPT_LORD_TYPES } from '../data/enemies.js';
 import { PC, P } from './particles.js';
 import { glow } from './fxsprites.js';
 import { sfx } from '../engine/audio.js';
@@ -991,7 +992,7 @@ export class Dungeon {
         if (this.tile(x, y) !== FLOOR) continue;
         g.spawnEnemy(g.spawner.pickType(phase), x * T + T / 2, y * T + T / 2, { ...st, instant: true, dormant: true, pack });
       }
-      const lord = lordly && g.spawner.spawnLord(r.cx * T + T / 2, r.cy * T + T / 2);
+      const lord = lordly && g.spawner.spawnLord(r.cx * T + T / 2, r.cy * T + T / 2, CRYPT_LORD_TYPES[this.lordCount % CRYPT_LORD_TYPES.length]);
       if (!lord) continue;
       lord.pack = pack;
       this.lordCount++;

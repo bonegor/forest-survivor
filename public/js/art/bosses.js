@@ -3,6 +3,7 @@
 import BAKED from '../../assets/art/bosses.js';
 import { bakedDef } from './baked.js';
 import { hexPack } from '../engine/pixels.js';
+import { SKELETON_MAGE_ART } from './skeleton-mage.js';
 
 // A baked boss: outlined (so his rim can burn in his colour at night), his glow colours packed,
 // and his main colours named as his own (drawn as they are) so that his death bursts into them.
@@ -13,6 +14,7 @@ const baked = (data, own) => bakedDef(data, {
 });
 
 export const BOSS_ART = {
+  skeletonmage: SKELETON_MAGE_ART,
   // King Ossarian, the Bone King: Foozle's Ancient Skeleton, crowned in his gilded horns
   // (tools/art/bosses.mjs). His poses play as he strikes (game/bosses.js).
   boneking: baked(BAKED.boneking, ['#5f6367', '#869598', '#3a3b3d', '#a29d6b', '#836b3f', '#28221f']),

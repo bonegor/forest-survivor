@@ -359,6 +359,11 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
         if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });
         return sendJson(res, 200, { profile: r.profile }, [profileCookie(req, r.profile)]);
       }
+      case 'inventory': {
+        const r = P.manageInventory(profile, body);
+        if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });
+        return sendJson(res, 200, { profile: r.profile }, [profileCookie(req, r.profile)]);
+      }
       case 'buy': {
         const r = P.buyUpgrade(profile, body.id);
         if (!r.ok) return sendJson(res, 400, { error: r.error, profile: r.profile });

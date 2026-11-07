@@ -399,6 +399,7 @@ const SHOT_LOOK = {
   bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, reach: 9, r: 4 },
   skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green', through: true },
   firebolt: { sprite: 'firebolt', glow: '#f77622', light: 'fire' },
+  cryptfireball: { sprite: 'fireball', glow: '#f77622', light: 'fire', scale: 1.5, r: 4, burst: [PC.o, PC.y, PC.Y] },
   arrow: { sprite: 'arrow', glow: null, light: null },
   // The new maps' (28 October 2026). The Frost Witch's, in the Cultist's place: his big, slow orb in
   // black ice round a cold heart, spiked with rime, dark enough to read on snow, bursting in ice.
@@ -448,6 +449,7 @@ export class EnemyShot {
     this.homing = opts.homing || 0;
     this.by = opts.by || null; // its shooter's, as the results name it (names.js shotName)
     this.boss = opts.boss || null; // a boss's name alone, for the results' wounds (names.js bossOf)
+    this.swept = opts.swept === true; // fast crypt shots test the space crossed, not only the endpoint
   }
 
   update(dt) {
@@ -467,12 +469,16 @@ export class EnemyShot {
       this.vx *= k;
       this.vy *= k;
     }
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
     this.rot += (this.look.spin || 0) * dt;
-    if (g.world.solid(this.x, this.y) && !this.look.through) this.dead = true;
-    if (!this.dead && this.touches(p)) {
-      if (p.hurt(this.dmg, null, this.by, this.boss) > 0 || !p.untouchable) this.dead = true;
+    const steps = this.swept ? Math.max(1, Math.ceil(Math.hypot(this.vx, this.vy) * dt / 4)) : 1;
+    for (let i = 0; i < steps; i++) {
+      this.x += this.vx * dt / steps;
+      this.y += this.vy * dt / steps;
+      if (g.world.solid(this.x, this.y) && !this.look.through) this.dead = true;
+      if (!this.dead && this.touches(p)) {
+        if (p.hurt(this.dmg, null, this.by, this.boss) > 0 || !p.untouchable) this.dead = true;
+      }
+      if (this.dead) break;
     }
     if (this.dead || this.life <= 0) {
       g.particles.burst(this.x, this.y, this.z, 6, this.look.burst || SHOT_BURST, 40, 0.3, 1, P.FADE | P.GLOW, {});

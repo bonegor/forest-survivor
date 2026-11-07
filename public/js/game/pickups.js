@@ -107,9 +107,9 @@ export class Pickup {
       this.twinkle = PC[tier[4]];
     } else if (this.kind === 'item') {
       const it = this.opts.item;
-      this.sprite = this.g.sealedGear ? SPR.crate : SPR['g_' + it.slot];
-      this.glowColor = this.g.sealedGear ? '#c28569' : RARITIES[it.rarity].color;
-      this.lightKey = this.g.sealedGear ? null : GEAR_LIGHT[it.rarity];
+      this.sprite = SPR['g_' + it.slot];
+      this.glowColor = RARITIES[it.rarity].color;
+      this.lightKey = GEAR_LIGHT[it.rarity];
     } else if (this.kind === 'chest') {
       // Its tier's colours (chests.js): a champion's bronze, a lord's silver, a boss's gold.
       const T = tierOf(this.opts.kind);
@@ -152,7 +152,7 @@ export class Pickup {
         // A piece of gear landing rings out by its rarity (sfx 'gear').
         if (this.kind === 'item' && !this.landed) {
           this.landed = true;
-          sfx('gear', { size: g.sealedGear ? 1 : this.opts.item.rarity, pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
+          sfx('gear', { size: this.opts.item.rarity, pan: Math.max(-1, Math.min(1, (this.x - p.x) / 200)) });
         }
         // A champion's chest landing, or the thief's: a thud and a glint off its lid (CHEST_LAND).
         // A boss's and a crypt lord's land inside their own beat (its sting, flash and slow
@@ -270,10 +270,7 @@ export class Pickup {
         break;
       case 'item':
         g.queueItem(this.opts.item);
-        if (g.sealedGear) {
-          g.banner('Sealed gear collected', 'Open it after the run', '#c28569', 1.8);
-          sfx('pick');
-        } else sfx('chestopen');
+        sfx(g.sealedGear ? 'pick' : 'chestopen');
         break;
       default:
         break;
@@ -341,7 +338,7 @@ export class Pickup {
     if (this.kind === 'gem') return this.drawBling(ctx, S, sx, sy);
     const big = this.kind === 'chest' || this.kind === 'relic' || this.kind === 'elixir' || this.kind === 'item';
     const s = (big ? 40 * (this.scale || 1) : this.kind === 'gem' ? 12 : 14) * S;
-    if (this.kind === 'item' && !this.g.sealedGear) this.drawPillar(ctx, cam, sx, sy);
+    if (this.kind === 'item') this.drawPillar(ctx, cam, sx, sy);
     // EVOLVE READY: while a weapon waits on a chest to evolve, every chest lying about glows orange.
     const ready = this.kind === 'chest' && this.g.evoReady.length > 0;
     ctx.globalAlpha = big ? (ready ? 0.7 + 0.3 * Math.sin(this.t * 8) : 0.55 + 0.15 * Math.sin(this.t * 5)) : 0.45;

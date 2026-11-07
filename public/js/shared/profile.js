@@ -31,7 +31,7 @@
 // by milestones, kept as bits (ul: PROGRESS.locks in order; uu: HERO_ORDER in order); weapon and
 // relic slots are Armory ranks (Arsenal, Reliquary), as are all rerolls and banishes.
 
-import { RARITIES, LEGENDARY, MAX_LORDS, SLOTS, POOLS, sanitizeGear, sanitizeItem, packGear, sameItem, itemPrice, powerWorn, statRange } from './items.js';
+import { RARITIES, LEGENDARY, MAX_LORDS, SLOTS, POOLS, sanitizeGear, sanitizeItem, packGear, sameItem, itemPrice, powerWorn, statRange, itemIdentified, canEquipItem } from './items.js';
 import { FLOORS } from '../data/waves.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from './progress.js';
@@ -40,6 +40,9 @@ import { MAX_CLAIMS, packSpoils, partitionRunSpoils, settledSpoils, unpackSpoils
 import { RECRUITS } from '../expansion/roster.js';
 
 export { PROGRESS, needText };
+
+export const MAX_STASH = 12;
+export const identificationCost = (p) => 10 * ((p.identifications || 0) + 1);
 
 // 4: progression (unlocks by milestone, slots bought); a save from before keeps all it had
 // (sanitizeProfile, fromBefore). 3: each hero's own gear, and heroes unlocked by time (2: one set
@@ -224,6 +227,8 @@ export function defaultProfile() {
     bt: {},
     gear: {}, // hero -> slot -> the item that hero wears there (shared/items.js)
     gearRev: {}, // incremented by transfers to reject outdated gear submissions
+    stash: [], // shared inventory, including items whose enchantments remain unknown
+    identifications: 0, // every successful identification raises the next price by ten gold
     ev: [], // the evolutions a lock waits on (need 'evolution') that a run has reached
     ek: 0, // every evolution a run has made: bit i is PROGRESS.evolutions[i] (knownEvos)
     home: [], // the shared weapons left at home: never offered in a run (setHome, the Codex)
@@ -234,6 +239,9 @@ export function sanitizeProfile(raw) {
   const p = defaultProfile();
   if (!raw || typeof raw !== 'object') return p;
   p.gold = int(raw.gold, 0, 1e9);
+  p.identifications = int(raw.identifications, 0, 1e7);
+  p.stash = (typeof raw.stash === 'string' ? unpackSpoils(raw.stash, MAX_STASH).map(e => e.item) : Array.isArray(raw.stash) ? raw.stash : [])
+    .slice(0, MAX_STASH).map(it => sanitizeItem(it)).filter(Boolean);
   for (const m of WIN_MODES) {
     for (let i = 0; i < 3; i++) p.wins[m][i] = int(raw.wins?.[m]?.[i], 0, 1e6);
   }
@@ -547,6 +555,9 @@ export function packProfile(p) {
   const { ev, ...rest } = p;
   const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), ranked: packPerHero(p.ranked), bt: packPerHero(p.bt), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
   if (!out.home?.length) delete out.home;
+  if (p.stash?.length) out.stash = packSpoils(p.stash.map(item => ({ item, state: 'found' })));
+  else delete out.stash;
+  if (!p.identifications) delete out.identifications;
   if (Object.keys(p.gearRev || {}).length) out.gearRev = packPerHero(p.gearRev);
   else delete out.gearRev;
   return out;
@@ -581,7 +592,8 @@ export function transferQuote(p, from, to, slot) {
   else if (!p.heroes.includes(from) || !p.heroes.includes(to)) error = 'Both heroes must be recruited';
   else if (!item || !SLOTS.includes(slot)) error = 'There is no item in that slot';
   else if (p.gear[to]?.[slot]) error = 'Recipient already has gear in that slot';
-  else if (powerWorn(p.gear[to], item.power, slot)) error = 'Recipient already wears that legendary power';
+  else if (!canEquipItem(item, to)) error = 'That weapon does not fit this hero';
+  else if (itemIdentified(item) && powerWorn(p.gear[to], item.power, slot)) error = 'Recipient already wears that legendary power';
   else if (p.gold < cost) error = 'Insufficient gold';
   return { item, cost, error, ok: !error };
 }
@@ -885,7 +897,7 @@ export function acknowledgeReveal(profile, id) {
   const p = sanitizeProfile(profile), receipt = p.lastRun;
   if (!validRunId(id) || receipt?.id !== id) return { ok: false, profile: p, error: 'That run receipt is unavailable' };
   if (unpackSpoils(receipt.claims, MAX_CLAIMS).some(e => e.state === 'sealed')) {
-    return { ok: false, profile: p, error: 'Equip or sell every sealed item first' };
+    return { ok: false, profile: p, error: 'Equip, stash or sell every collected item first' };
   }
   receipt.pending = false;
   receipt.spoils = '';
@@ -894,31 +906,101 @@ export function acknowledgeReveal(profile, id) {
   return { ok: true, profile: p };
 }
 
-export function resolveSpoil(profile, { id, index, action, expectedGearRev } = {}) {
+export function resolveSpoil(profile, { id, index, action, expectedGearRev, expectedCost } = {}) {
   const p = sanitizeProfile(profile), receipt = p.lastRun;
   if (!validRunId(id) || receipt?.id !== id || !receipt.pending) {
     return { ok: false, profile: p, error: 'That run receipt is unavailable' };
   }
   const entries = unpackSpoils(receipt.claims, MAX_CLAIMS), entry = entries[index];
-  if (!Number.isInteger(index) || !entry || (action !== 'equip' && action !== 'sell')) {
+  if (!Number.isInteger(index) || !entry || !['equip', 'sell', 'stash', 'identify'].includes(action)) {
     return { ok: false, profile: p, error: 'Choose an item and a valid action' };
   }
-  const state = action === 'equip' ? 'worn' : 'sold';
-  if (entry.state === state) return { ok: true, profile: p, repeated: true };
+  const state = action === 'equip' ? 'worn' : action === 'stash' ? 'stashed' : 'sold';
+  if (action === 'identify' && itemIdentified(entry.item)) return { ok: true, profile: p, repeated: true };
+  if (action !== 'identify' && entry.state === state) return { ok: true, profile: p, repeated: true };
   if (entry.state !== 'sealed') return { ok: false, profile: p, error: 'That item was already settled' };
   const item = entry.item, hero = receipt.hero, gear = p.gear[hero] || {};
+  if (action === 'identify') {
+    const checked = identifyOwned(p, item, expectedCost);
+    if (checked.error) return { ok: false, profile: p, error: checked.error };
+    entry.item = checked.item;
+    receipt.claims = packSpoils(entries);
+    return { ok: true, profile: p, cost: checked.cost };
+  }
+  if (action === 'stash') {
+    if (p.stash.length >= MAX_STASH) return { ok: false, profile: p, error: 'Inventory full. Sell or equip a stored item first.' };
+    p.stash.push(item);
+    entry.state = state;
+    receipt.claims = packSpoils(entries);
+    return { ok: true, profile: p };
+  }
   let gold = itemPrice(item);
   if (action === 'equip') {
     const revision = gearRevision(p, hero), worn = gear[item.slot];
     if (expectedGearRev !== revision) return { ok: false, profile: p, error: 'Equipment changed. Review this slot again.' };
-    if (powerWorn(gear, item.power, item.slot)) return { ok: false, profile: p, error: 'That legendary power is already equipped' };
-    gold = worn ? itemPrice(worn) : 0;
+    if (!canEquipItem(item, hero)) return { ok: false, profile: p, error: 'That weapon does not fit this hero' };
+    if (itemIdentified(item) && powerWorn(gear, item.power, item.slot)) return { ok: false, profile: p, error: 'That legendary power is already equipped' };
+    // Keep replaced equipment so the player chooses what to sell at camp.
+    if (worn && p.stash.length >= MAX_STASH) return { ok: false, profile: p, error: 'Inventory full. Make room for the equipped item first.' };
+    if (worn) p.stash.push(worn);
+    gold = 0;
     p.gear[hero] = { ...gear, [item.slot]: item };
     p.gearRev[hero] = revision + 1;
   }
   p.gold = int(p.gold + gold, 0, 1e9);
   entry.state = state;
   receipt.claims = packSpoils(entries);
+  return { ok: true, profile: p };
+}
+
+function identifyOwned(p, item, expectedCost) {
+  const cost = identificationCost(p);
+  if (itemIdentified(item)) return { error: 'That item is already identified' };
+  if (expectedCost !== undefined && expectedCost !== cost) return { error: 'Identification price changed. Review the item again.' };
+  if (p.gold < cost) return { error: `Identification costs ${cost} gold` };
+  p.gold -= cost;
+  p.identifications++;
+  return { item: { ...item, identified: true }, cost };
+}
+
+// Inventory changes use the exact inspected item to reject stale tabs and duplicate sales.
+export function manageInventory(profile, { hero, source, index, slot, expected, action, expectedGearRev, expectedCost } = {}) {
+  const p = sanitizeProfile(profile);
+  if (!p.heroes.includes(hero) || !['stash', 'gear'].includes(source) || !['identify', 'equip', 'sell', 'stash'].includes(action)) {
+    return { ok: false, profile: p, error: 'Choose an item and a valid action' };
+  }
+  const gear = p.gear[hero] || {}, revision = gearRevision(p, hero);
+  const item = source === 'stash' && Number.isInteger(index) ? p.stash[index] : source === 'gear' ? gear[slot] : null;
+  if (!item || !sameItem(item, sanitizeItem(expected)) || expectedGearRev !== revision) {
+    return { ok: false, profile: p, error: 'Inventory changed. Review the item again.' };
+  }
+  if (action === 'identify') {
+    const checked = identifyOwned(p, item, expectedCost);
+    if (checked.error) return { ok: false, profile: p, error: checked.error };
+    if (source === 'stash') p.stash[index] = checked.item;
+    else {
+      p.gear[hero] = { ...gear, [slot]: checked.item };
+      p.gearRev[hero] = revision + 1;
+    }
+    return { ok: true, profile: p, cost: checked.cost };
+  }
+  if (action === 'equip') {
+    if (source !== 'stash' || !canEquipItem(item, hero)) return { ok: false, profile: p, error: 'That weapon does not fit this hero' };
+    if (itemIdentified(item) && powerWorn(gear, item.power, item.slot)) return { ok: false, profile: p, error: 'That legendary power is already equipped' };
+    p.stash.splice(index, 1);
+    if (gear[item.slot]) p.stash.push(gear[item.slot]);
+    p.gear[hero] = { ...gear, [item.slot]: item };
+    p.gearRev[hero] = revision + 1;
+  } else {
+    if (action === 'stash' && (source !== 'gear' || p.stash.length >= MAX_STASH)) return { ok: false, profile: p, error: 'Inventory full' };
+    if (source === 'stash') p.stash.splice(index, 1);
+    else {
+      delete gear[slot];
+      p.gearRev[hero] = revision + 1;
+    }
+    if (action === 'stash') p.stash.push(item);
+    else p.gold = int(p.gold + itemPrice(item), 0, 1e9);
+  }
   return { ok: true, profile: p };
 }
 

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as P from '../public/js/shared/profile.js';
 import * as I from '../public/js/shared/items.js';
 
+const LEGACY_SLOTS = ['helm', 'armor', 'gloves', 'boots', 'amulet', 'ring'];
+
 test('sanitizeProfile repairs garbage into a valid default profile', () => {
   for (const raw of [null, 42, 'x', [], { gold: -5, wins: 'nope', up: { might: 99, bogus: 3 } }]) {
     const p = P.sanitizeProfile(raw);
@@ -47,7 +49,7 @@ test('every hero in six legendaries, and every record at its most, round-trips t
     p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
     p.bt[h] = 14400; // his longest run (28 October 2026)
-    p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+    p.gear[h] = Object.fromEntries(LEGACY_SLOTS.map((s) => [s, legend(s)]));
   }
   const clean = P.sanitizeProfile(p);
   assert.deepEqual([clean.mo, clean.mw, clean.deaths, clean.home.length], [2 ** P.PROGRESS.maps.length - 1, p.mw, 1e7, 5], 'every map open and won, every fall, a full home: all kept');
@@ -75,7 +77,7 @@ test('gear packed the old way (an array an item) reads back, and the new way is 
     for (const id of I.POOLS[slot].slice(-4)) stats[id] = I.statRange(id, I.LEGENDARY)[1];
     return { slot, rarity: I.LEGENDARY, stats, power: 'titan', seed: 123456 };
   };
-  const gear = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+  const gear = Object.fromEntries(LEGACY_SLOTS.map((s) => [s, legend(s)]));
   const common = { slot: 'boots', rarity: 0, stats: { speed: 3 }, power: null, seed: 7 };
   const old = { v: 3, heroes: ['knight', 'archer'], gear: { knight: Object.fromEntries(Object.entries(gear).map(([s, it]) => [s, I.packItem(it)])), archer: { boots: I.packItem(common) } } };
   const p = P.sanitizeProfile(JSON.parse(JSON.stringify(old)));
@@ -100,7 +102,7 @@ test('the largest run report, six legendaries worn and every find the bound allo
     for (const id of I.POOLS[slot].slice(-4)) stats[id] = I.statRange(id, I.LEGENDARY)[1];
     return { slot, rarity: I.LEGENDARY, stats, power: 'undying', seed: 999999 };
   };
-  const gear = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s)]));
+  const gear = Object.fromEntries(LEGACY_SLOTS.map((s) => [s, legend(s)]));
   // A night's report names its Survival map since 28 October 2026 (ui/gamescreen.js submit): one
   // of the longest of their ids.
   const report = { mode: 's15', map: 'meadow', diff: 'hard', hero: 'necromancer', victory: true, time: 960, gold: 1e9, kills: 1e12, level: 999, floor: 3, gear, realTime: 7200, found: 1e9 };

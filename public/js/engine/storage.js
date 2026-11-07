@@ -421,6 +421,34 @@ export const store = {
     });
   },
 
+  async manageInventory(decision) {
+    return withProfileLock(async () => {
+      this.reload();
+      if (this.mode === 'server') {
+        try {
+          const data = await api('inventory', decision);
+          if (!data.profile) return { ok: false, error: 'Inventory response interrupted. Try again.' };
+          this.profile = P.sanitizeProfile(data.profile);
+          return { ok: true };
+        } catch (error) {
+          if (error.data?.profile) this.profile = P.sanitizeProfile(error.data.profile);
+          return { ok: false, error: serverDown(error) ? 'Could not save. Try again.' : error.message };
+        }
+      }
+      const r = P.manageInventory(this.profile, decision);
+      if (!r.ok) return { ok: false, error: r.error };
+      const previous = this.profile, wasKept = this.kept;
+      this.profile = r.profile;
+      this.saveLocal();
+      if (wasKept && !this.kept) {
+        this.profile = previous;
+        this.kept = wasKept;
+        return { ok: false, error: 'Could not save. Try again.' };
+      }
+      return { ok: true };
+    });
+  },
+
   async buy(id) {
     return withProfileLock(async () => {
       if (this.mode === 'server') {

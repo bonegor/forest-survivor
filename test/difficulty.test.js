@@ -217,7 +217,7 @@ test('a Holy Relic leaves a crypt lord standing, the same share of it gone on Ve
     assert.ok(!lord.dead && lord.hp > 0, `${diff}: the lord stands (${lord.hp} of ${lord.maxHp})`);
     share[diff] = 1 - lord.hp / lord.maxHp;
   }
-  assert.ok(share.hard > 0.15 && share.hard < 0.25, `the same relic takes a smaller share of the stronger lord: ${share.hard}`);
+  assert.ok(share.hard > 0.015 && share.hard < 0.025, `the same relic takes a smaller share of the tenfold stronger lord: ${share.hard}`);
   // (A blow lands as a whole number, so the shares differ by the rounding alone.)
   assert.ok(Math.abs(share.medium - share.hard) < 0.01, `the same share on Veteran: ${share.medium} against ${share.hard}`);
 });

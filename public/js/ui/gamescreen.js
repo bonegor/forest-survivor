@@ -18,7 +18,7 @@ import { MODES, NIGHTMARE } from '../data/difficulty.js';
 import { MAPS } from '../data/maps.js';
 import { BIOMES } from '../game/biomes.js';
 import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText, runLocks } from '../shared/profile.js';
-import { rankGrantName } from '../shared/items.js';
+import { rankGrantName, itemIdentified, canEquipItem } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
 import { buttonFace } from './skin.js';
@@ -1518,7 +1518,7 @@ export class PauseOverlay {
       this.options = new OptionsScreen();
       this.options.enter(app, { back: null });
     }
-    const grants = [...new Set(Object.values(g.gear || {}).map(it => it.grant).filter(Boolean))];
+    const grants = [...new Set(Object.values(g.gear || {}).filter(it => itemIdentified(it) && canEquipItem(it, g.player.id)).map(it => it.grant).filter(Boolean))];
     if (grants.length && button(ctx, ui, 'rank_gear', x + pw - 71, row(2), 62, 13, 'GEAR RANKS', { color: '#cdb3ee' })) {
       const lines = grants.map(grant => `+1 rank · ${rankGrantName(grant)}`);
       lines.push('Gear ranks respect rank caps. A specific grant works without a learned slot. Evolutions use learned ranks and relics.');

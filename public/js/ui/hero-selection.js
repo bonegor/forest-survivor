@@ -6,8 +6,8 @@ import { HEROES, HERO_ORDER, heroLook, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PROGRESS } from '../shared/progress.js';
 import { MAP_LADDER } from '../data/maps.js';
-import { nextHeroUnlock, nextGoal, openFor, heroUnlockTime, transferUnlocked, transferQuote, gearRevision, TRANSFER_ACHIEVEMENT } from '../shared/profile.js';
-import { SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, RARITIES } from '../shared/items.js';
+import { nextHeroUnlock, nextGoal, openFor, heroUnlockTime, transferUnlocked, transferQuote, gearRevision, TRANSFER_ACHIEVEMENT, identificationCost, MAX_STASH } from '../shared/profile.js';
+import { SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, RARITIES, itemIdentified, canEquipItem } from '../shared/items.js';
 import { panel, button, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { heroCrop, mix } from './scenes.js';
 import { goalText, featStars } from './ladder.js';
@@ -229,9 +229,57 @@ export class HeroScreen {
     lines.splice(1, 0, unlocked
       ? 'Quartermaster earned. Transfer equipped gear to a recruit with a free slot for ten times its sale value.'
       : `Transfer locked. ${TRANSFER_ACHIEVEMENT}.`);
-    const actions = [{ id: 'transfer', label: 'TRANSFER GEAR', disabled: !unlocked || !Object.keys(gear).length }];
+    lines.splice(1, 0, `${profile.gold} gold · Next identification: ${identificationCost(profile)} gold`, `Inventory: ${profile.stash.length}/${MAX_STASH}. Replaced equipment is stored here.`);
+    const actions = [
+      { id: 'inventory', label: 'INVENTORY / STASH' },
+      { id: 'inspect', label: 'MANAGE WORN GEAR', disabled: !Object.keys(gear).length },
+      { id: 'transfer', label: 'TRANSFER GEAR', disabled: !unlocked || !Object.keys(gear).length },
+    ];
     this.gearDialog('Equipment', lines, actions, action => {
       if (action === 'transfer') this.transferSlots(id);
+      else if (action === 'inventory') this.inventory(id);
+      else if (action === 'inspect') this.inventory(id, 'gear');
+    });
+  }
+
+  inventory(hero, source = 'stash', page = 0) {
+    const profile = this.app.store.profile, gear = profile.gear[hero] || {};
+    const items = source === 'stash' ? profile.stash.map((item, index) => ({ item, index })) : SLOTS.filter(slot => gear[slot]).map(slot => ({ item: gear[slot], slot }));
+    const pages = Math.max(1, Math.ceil(items.length / 3));
+    page = Math.min(page, pages - 1);
+    const shown = items.slice(page * 3, page * 3 + 3);
+    const lines = [`${HEROES[hero].title} · ${profile.gold} gold`, `Next identification: ${identificationCost(profile)} gold. Hidden magic activates only after identification.`];
+    if (!items.length) lines.push('No items stored yet. Choose STASH after a run to keep a find.');
+    shown.forEach(({ item }) => lines.push({ text: `${SLOT_NAMES[item.slot]} · ${itemName(item)}`, color: RARITIES[item.rarity].color }));
+    const actions = shown.map((entry, i) => ({ id: String(i), label: `${SLOT_NAMES[entry.item.slot].toUpperCase()} · INSPECT`, color: RARITIES[entry.item.rarity].color }));
+    if (pages > 1) actions.push({ id: 'page', label: `NEXT ITEMS · ${page + 1}/${pages}` });
+    this.gearDialog(source === 'stash' ? `Inventory ${items.length}/${MAX_STASH}` : 'Worn equipment', lines, actions, action => {
+      if (action === 'page') this.inventory(hero, source, (page + 1) % pages);
+      else if (action === 'close') this.equipment(hero);
+      else if (shown[Number(action)]) this.inspectOwned(hero, source, shown[Number(action)], page);
+    });
+  }
+
+  inspectOwned(hero, source, entry, page) {
+    const profile = this.app.store.profile, { item } = entry, cost = identificationCost(profile);
+    const lines = [{ text: itemName(item), color: RARITIES[item.rarity].color }, ...itemLines(item), `${profile.gold} gold · Sell value ${itemPrice(item)} gold`];
+    if (!canEquipItem(item, hero)) lines.push('This weapon belongs to another fighting style.');
+    if (!itemIdentified(item)) lines.push(`Identify for ${cost} gold. The next identification then costs ${cost + 10} gold.`);
+    const actions = [
+      { id: 'identify', label: itemIdentified(item) ? 'IDENTIFIED' : `IDENTIFY · ${cost} GOLD`, disabled: itemIdentified(item) || profile.gold < cost, color: '#63b8ff' },
+      source === 'stash' ? { id: 'equip', label: 'EQUIP', disabled: !canEquipItem(item, hero) } : { id: 'stash', label: 'MOVE TO INVENTORY', disabled: profile.stash.length >= MAX_STASH },
+      { id: 'sell', label: `SELL · +${itemPrice(item)} GOLD`, color: '#feae34' },
+    ];
+    const decision = { hero, source, index: entry.index, slot: entry.slot, expected: item, expectedGearRev: gearRevision(profile, hero), expectedCost: cost };
+    this.gearDialog('Inspect item', lines, actions, async action => {
+      if (action === 'close') return this.inventory(hero, source, page);
+      this.gearDialog('Saving inventory', ['Keeping your decision…'], [], () => this.inventory(hero, source, page));
+      const result = await this.app.store.manageInventory({ ...decision, action }).catch(() => ({ ok: false, error: 'Could not save. Try again.' }));
+      if (result.ok) {
+        this.preview = null;
+        sfx(action === 'sell' ? 'coin' : 'pick');
+        this.inventory(hero, source, page);
+      } else this.gearDialog('Inventory unchanged', [result.error], [], () => this.inventory(hero, source, page));
     });
   }
 
@@ -246,6 +294,7 @@ export class HeroScreen {
     const gear = this.app.store.profile.gear[from] || {};
     const slots = SLOTS.filter(slot => gear[slot]);
     if (!slots.length) return this.equipment(from);
+    const pages = Math.ceil(slots.length / 3);
     const visible = slots.slice(page * 3, page * 3 + 3);
     const lines = [`Choose an equipped item from ${HEROES[from].title}.`];
     const actions = visible.map(slot => {
@@ -253,9 +302,9 @@ export class HeroScreen {
       lines.push(`${SLOT_NAMES[slot]} · ${itemName(it)} · ${cost} gold`);
       return { id: slot, label: SLOT_NAMES[slot].toUpperCase() };
     });
-    if (slots.length > 3) actions.push({ id: 'page', label: page ? 'FIRST ITEMS' : 'MORE ITEMS' });
+    if (pages > 1) actions.push({ id: 'page', label: `NEXT ITEMS · ${page + 1}/${pages}` });
     this.gearDialog('Transfer gear', lines, actions, action => {
-      if (action === 'page') this.transferSlots(from, 1 - page);
+      if (action === 'page') this.transferSlots(from, (page + 1) % pages);
       else if (action === 'close') this.equipment(from);
       else this.transferRecipients(from, action);
     });

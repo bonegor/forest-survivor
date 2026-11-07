@@ -707,6 +707,7 @@ export class Hud {
     // Kills and gold.
     let y = 10;
     const right = W - 4;
+    if (g.collectedGear.length) drawText(ctx, `LOOT ${g.collectedGear.length}`, right, y, { align: 'right', color: '#c0cbdc' });
     const k = fmtNum(g.kills);
     drawText(ctx, k, right, y + 10, { align: 'right', color: '#c0cbdc' });
     ctx.drawImage(SPR.h_skull.frames[0].c, right - textWidth(k) - 11, y + 9);

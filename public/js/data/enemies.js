@@ -7,9 +7,10 @@
 // steady horde (Spawner.update; it was the Goblin's id, his three); wicked, the casters the Witch
 // Hunter's bolts seek out first (game/effects.js wicked; it was the Cultist's id).
 
-// Crypt lords keep the archer's readable wind-up, but take longer to defeat and enter a
-// three-arrow second phase. These multipliers apply only to crypt lords, not other casters.
-export const CRYPT_LORD = { health: 2, damage: 1.25, enrageAt: 0.5, cooldown: 0.75, spread: 0.2, arrows: 3 };
+// Crypt lords: ten times their previous health, chasing at 90% of an unequipped
+// Knight's pace. Below half health they fire three-shot spreads more frequently.
+export const CRYPT_LORD = { health: 20, pace: 0.9, damage: 1.25, enrageAt: 0.5, cooldown: 0.75, spread: 0.2, arrows: 3 };
+export const CRYPT_LORD_TYPES = ['skeletonarcher', 'skeletonmage'];
 
 export const ENEMIES = {
   bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, dmg: 3, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true, fry: true },
@@ -43,11 +44,15 @@ export const ENEMIES = {
   deathknight: { name: 'Death Knight', sprite: 'deathknight', hp: 190, spd: 40, dmg: 15, r: 6, xp: 22, ai: 'walker', mass: 4, anim: 4, death: 'dark', kbRes: 0.8 },
   // Each of a crypt's lords (Spawner.spawnLord), boss-sized: it keeps its distance and shoots.
   // The archetype's base health is 600. spawnLord applies CRYPT_LORD.health before difficulty
-  // and map scaling: 1,440 in the Darkwood on Elite, about fourteen strikes of a fully grown
-  // sword; Normal and Veteran keep their 70% health reduction.
+  // and map scaling: 14,400 in the Darkwood on Elite, 4,320 on Normal/Veteran.
+  // Their shots travel twice as fast, with cooldown and preparation each 30% shorter.
   skeletonarcher: {
     name: 'Skeleton Archer', sprite: 'skeletonarcher', hp: 600, spd: 34, dmg: 8, r: 8, xp: 60, ai: 'caster', mass: 30, anim: 4, death: 'bones', kbRes: 0.95,
-    shot: { range: 175, cd: 1.7, spd: 170, dmg: 8, kind: 'arrow', wind: 0.5 },
+    shot: { range: 175, cd: 1.7 * 0.7, spd: 170 * 2, dmg: 8, kind: 'arrow', wind: 0.5 * 0.7 },
+  },
+  skeletonmage: {
+    name: 'Skeleton Mage', sprite: 'skeletonmage', hp: 600, spd: 34, dmg: 8, r: 8, xp: 60, ai: 'caster', mass: 30, anim: 4, death: 'bones', kbRes: 0.95,
+    shot: { range: 175, cd: 1.7 * 0.7, spd: 170 * 2, dmg: 8, kind: 'cryptfireball', wind: 0.5 * 0.7 },
   },
   // It runs and strolls at a share of the hero's own pace (game/enemies.js THIEF), not at spd.
   // kbRes 1: no blow shoves him; he only runs and strolls at his own pace (22 October 2026).

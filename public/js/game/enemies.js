@@ -107,7 +107,7 @@ export const PACE_CLASS = { swift: 1, quick: 0.9, steady: 0.8, slow: 0.7 };
 export const PACE_OF = {
   bat: 'swift', rat: 'swift', imp: 'swift', hellhound: 'swift',
   wolf: 'quick', spider: 'quick', goblin: 'quick', slimelet: 'quick',
-  skeleton: 'steady', ghost: 'steady', deathknight: 'steady', slime: 'steady', skeletonarcher: 'steady',
+  skeleton: 'steady', ghost: 'steady', deathknight: 'steady', slime: 'steady', skeletonarcher: 'steady', skeletonmage: 'steady',
   zombie: 'slow', ogre: 'slow', orc: 'slow', cultist: 'slow',
 };
 // The new maps' kinds walk in the class of the Darkwood kind each stands for (data/enemies.js
@@ -382,8 +382,10 @@ export class Enemy {
     }
 
     // The horde walks its class's speed (hordePace), a Nightmare's faster; the rest scale by the difficulty.
-    // Both at the run's walking speed (data/difficulty.js moveFor), as the hero's; on Normal 10% slower (foePace).
-    let sp = (this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed) * g.move * (g.diff.foePace ?? 1);
+    // Crypt lords instead chase at 90% of the fresh Knight's pace, independent of upgrades.
+    // All use the run's walking clock (moveFor); ordinary foes also apply foePace.
+    let sp = this.lord ? KNIGHT_PACE * CRYPT_LORD.pace * g.move
+      : (this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed) * g.move * (g.diff.foePace ?? 1);
     if (this.slowT > 0) sp *= 1 - this.slowF;
     if (this.freezeT > 0 || this.rootT > 0 || this.lullT > 0) sp = 0;
     if (this.holdCd > 0) this.holdCd -= dt;
@@ -739,7 +741,10 @@ export class Enemy {
         for (let i = 0; i < arrows; i++) {
           const a = ang + (i - (arrows - 1) / 2) * CRYPT_LORD.spread;
           const dmg = s.dmg * g.dmgScale * (this.lord ? CRYPT_LORD.damage : 1);
-          g.eshots.push(new EnemyShot(g, this.x, this.y - 2, a, s.spd, dmg, s.kind, { by: shotName(this, s.kind), boss: bossOf(this) }));
+          g.eshots.push(new EnemyShot(g, this.x, this.y - 2, a, s.spd, dmg, s.kind, {
+            by: shotName(this, s.kind), boss: bossOf(this), swept: this.lord,
+            z: s.kind === 'cryptfireball' ? 18 : 8, // the mage casts from its raised hand
+          }));
         }
         sfx('enemyshot', { pan: clamp((this.x - p.x) / 200, -1, 1) });
       }
@@ -779,6 +784,7 @@ export class Enemy {
   frameIndex() {
     const s = this.spr;
     if (s.attack && this.state === 'wind') return s.attack[0];
+    if (s.idle?.length && (this.sleeping || this.dormant || this.spawnT > 0)) return s.idle[Math.floor(this.life * IDLE_FPS) % s.idle.length];
     if (s.poses) {
       const seq = this.pose && s.poses[this.pose];
       if (seq) {

@@ -53,7 +53,7 @@ test('the real ranger movement clock plays all eight phases at the reviewer cade
   assert.ok(Math.abs(wraps[1]-wraps[0]-8/data.walkFps)<1/30);
 }));
 
-for(const face of [-1,1])test(`bow wind-up and release follow the real projectile facing ${face}`,()=>run((g,p,w)=>{
+for(const face of [-1,1])test(`automatic bow shots keep idle art and their real projectile timing facing ${face}`,()=>run((g,p,w)=>{
   p.aim=face===1?0:Math.PI;p.face=face;w.cd=.35;
   const poses=new Set();let fired=false;
   for(let i=0;i<65;i++){
@@ -61,13 +61,13 @@ for(const face of [-1,1])test(`bow wind-up and release follow the real projectil
     const s=shown(g);poses.add(s.index);assert.equal(s.flip,face<0);
     if(g.projectiles.length>before&&!fired){
       fired=true;
-      assert.equal(s.index,RANGER.attack[RANGER.attackRelease]);
+      assert.ok(RANGER.idle.includes(s.index));
       assert.ok(g.clock>=.35-1/60&&g.clock<=.35+1/60,'art must not delay the existing shot');
       assert.ok(Math.cos(g.projectiles[0].ang)*face>0,'arrow follows the selected facing');
     }
   }
   assert.ok(fired);
-  for(const index of RANGER.attack)assert.ok(poses.has(index),`missing shooting pose ${index}`);
+  assert.deepEqual([...poses],RANGER.idle,'automatic attacks only use the idle cycle');
 }));
 
 // The owner, 16 October 2026: the bow fires straight, the way she faces; it seeks no foe.
@@ -95,7 +95,7 @@ test('standing, the ranger shoots straight the way she faces, a foe behind her o
   assert.ok(Math.abs(g.projectiles.at(-1).ang)<1e-9,'the first arrow flies straight ahead, not at the nearer foe behind');
   assert.equal(p.face,1,'without turning her');
   assert.equal(shown(g).flip,false);
-  assert.ok(RANGER.attack.includes(shown(g).index),'and shows the shot');
+  assert.ok(RANGER.idle.includes(shown(g).index),'and keeps the idle pose while the arrow shows the shot');
   w.update(.07);
   assert.ok(Math.abs(Math.abs(g.projectiles.at(-1).ang)-0.06)<1e-9,'the second fans out just beside it: one volley');
   assert.equal(p.face,1);assert.equal(shown(g).flip,false);
