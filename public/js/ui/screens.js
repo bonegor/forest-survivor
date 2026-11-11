@@ -161,8 +161,10 @@ export class TitleScreen {
       y += bh + gap;
     }
     const goal = nextGoal(app.store.profile);
-    if (goal && y + 25 < H - 40) {
-      wrapText(goalText(goal), Math.min(320, W - 32)).forEach((line, i) => drawText(ctx, line, W / 2, y + 7 + i * 10, { align: 'center', color: '#c0cbdc' }));
+    if (goal && y + 13 < H - 17) {
+      const width = Math.min(320, W - 24), text = `NEXT · ${goalText(goal)}`;
+      const lines = y + 23 < H - 17 ? wrapText(text, width).slice(0, 2) : [fitLine(text, width)];
+      lines.forEach((line, i) => drawText(ctx, line, W / 2, y + 5 + i * 10, { align: 'center', color: '#fee761' }));
     }
     ui.end();
     // Footer.
@@ -577,9 +579,10 @@ export function upgradeEffect(p, id) {
   return `${pct >= 0 ? '+' : ''}${pct}%`;
 }
 export class ArmoryScreen {
-  enter(app) {
-    this.app = app;this.tab = 'power';this.selected = 'might';this.busy = false;
-    app.ui.lock(0.2);app.ui.focusId = 'u_might';playMusic('title');
+  enter(app, { focus } = {}) {
+    const group = UPGRADE_GROUPS.find(([, , ids]) => ids.includes(focus));
+    this.app = app;this.tab = group?.[0] || 'power';this.selected = group ? focus : 'might';this.busy = false;
+    app.ui.lock(0.2);app.ui.focusId = 'u_' + this.selected;playMusic('title');
   }
   inspect(u) {
     const p = this.app.store.profile, rank = p.up[u.id] || 0, maxed = rank >= u.max;
@@ -1050,6 +1053,11 @@ export class OptionsScreen {
 
   draw(ctx, W, H, dt, embedded = false) {
     const app = this.app, ui = app.ui, s = app.settings;
+    const changed = () => {
+      saveSettings(s);
+      setVolumes(s.music, s.sfx);
+      app.applySettings();
+    };
     if (!embedded) {
       app.scene.draw(ctx, W, H, dt, { campfire: false });
       dim(ctx, W, H, 0.55);
@@ -1065,6 +1073,11 @@ export class OptionsScreen {
     if (this.dialog) {
       const action = this.dialog.draw(ctx, ui, W, H, dt);
       if (action === 'reset') app.store.reset();
+      if (action === 'low' || action === 'standard') {
+        const low = action === 'low';
+        Object.assign(s, { softFlash: low, shake: !low, numbers: !low, weather: !low });
+        changed();
+      }
       if (action) { this.dialog = null;ui.focus('o_music');ui.lock(0.2); }
       return null;
     }
@@ -1078,11 +1091,6 @@ export class OptionsScreen {
     const foot = H - 46, rows = 10;
     const step = clamp(Math.floor((foot - y - 13 - (embedded ? 0 : 8)) / (embedded ? rows - 1 : rows)), 13, 17);
     const gap = clamp(foot - y - 13 - rows * step, 2, 8);
-    const changed = () => {
-      saveSettings(s);
-      setVolumes(s.music, s.sfx);
-      app.applySettings();
-    };
     let d = stepper(ctx, ui, 'o_music', x, y, w, 'MUSIC VOLUME', `${Math.round(s.music * 100)}%`);
     if (d) {
       s.music = clamp(Math.round(s.music * 10 + d) / 10, 0, 1);
@@ -1112,7 +1120,16 @@ export class OptionsScreen {
       }
       y += step;
     }
-    if (button(ctx, ui, 'o_full', x, y, w, 13, document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN')) app.toggleFullscreen();
+    const half = Math.floor((w - 4) / 2);
+    if (button(ctx, ui, 'o_full', x, y, half, 13, document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN')) app.toggleFullscreen();
+    if (button(ctx, ui, 'o_effects', x + half + 4, y, w - half - 4, 13, 'EFFECTS PRESETS')) {
+      this.dialog = new MenuDialog('Effects presets', [
+        'Low effects softens flashes and turns off shake, damage numbers, and ambient weather.',
+        'Enemy warnings and reward information stay visible. Each setting can be adjusted afterward.',
+      ], [{ id: 'low', label: 'LOW EFFECTS' }, { id: 'standard', label: 'STANDARD EFFECTS' }]);
+      ui.focus('detail_close');
+      ui.lock(0.2);
+    }
     y += step;
     // Erasing everything stands apart from the rest, so a press too many down the list can't land on it.
     y += gap;

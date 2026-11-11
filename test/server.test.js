@@ -387,7 +387,7 @@ test('a maximal save of all 21 heroes, eight equipment slots and a full inventor
     const claims = packSpoils(entries(MAX_CLAIMS, 'sealed'));
     p.lastRun = {
       id: 'a0b1c2d3e4f5a0b1c2d3e4f5', from: p.runs - 1, hero: 'knight', pending: true, reward: {},
-      claims, spoils: packSpoils(entries(300, 'sold')),
+      claims, claimIndices: Array.from({ length: MAX_CLAIMS }, (_, i) => 301 + i - MAX_CLAIMS), spoils: packSpoils(entries(300, 'sold')),
     };
     const overflowing = await c.post('/api/dev/profile', { profile: p });
     assert.equal(overflowing.status, 200);
@@ -396,6 +396,7 @@ test('a maximal save of all 21 heroes, eight equipment slots and a full inventor
     assert.deepEqual(saved.gear, back.profile.gear);
     assert.equal(saved.lastRun.pending, true);
     assert.equal(saved.lastRun.claims, claims, 'all unresolved items remain in the encrypted cookie');
+    assert.deepEqual(saved.lastRun.claimIndices, p.lastRun.claimIndices);
     assert.equal(saved.lastRun.truncated, true, 'only the cosmetic history was compacted');
   }, { devOpen: true });
 });

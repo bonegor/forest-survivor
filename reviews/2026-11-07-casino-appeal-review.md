@@ -2,6 +2,8 @@
 
 Reviewed 7 November 2026. Assessment of the current working tree, including the new unidentified equipment and post-match inventory system. Companion review: [Game design review](2026-11-07-game-design-review.md).
 
+Changes made after these reviews are recorded in the [implementation follow-up](2026-11-07-game-design-review.md#implementation-follow-up--9-november-2026).
+
 ## Overall assessment
 
 Forest Survivor already has a convincing foundation for reward-driven entertainment: a recognizable medieval fantasy, constant small pickups, build choices, surprising chest sizes, weapon transformations, optional crypt expeditions, permanent equipment and an expanding collection of heroes and maps. Its strongest moments connect spectacle to a change the player can understand. Excalibur is a good example: the weapon changes identity, the ceremony names it, and the screen explains its damage, slash count and area improvements.

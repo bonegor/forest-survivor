@@ -77,7 +77,8 @@ export const POOLS = {
 const RANGED_HEROES = new Set(['archer', 'mage', 'necromancer', 'druid', 'witchhunter', 'marksman',
   'trailblazer', 'thornkeeper', 'gravebinder', 'arcanist', 'boltguard']);
 export const weaponClass = hero => RANGED_HEROES.has(typeof hero === 'string' ? hero : hero?.id) ? 'ranged' : 'melee';
-export const itemIdentified = it => it?.identified !== false;
+// Modern common gear has no affixes. Legacy common gear can still hide one.
+export const itemIdentified = it => it?.identified !== false || (it.rarity === 0 && it.base !== undefined);
 export const canEquipItem = (it, hero) => !!it && (it.slot !== 'weapon' || !hero || !it.weaponType || it.weaponType === weaponClass(hero));
 export const itemIcon = it => it.slot === 'weapon' && it.weaponType === 'ranged' ? 'g_bow' : 'g_' + it.slot;
 
@@ -201,7 +202,7 @@ export function rollItem(rng, { minute = 0, depth = 1, slot = null, hero = null 
   const names = Object.keys(POWERS);
   const base = {}, baseRange = baseStatRange(slot, rarity);
   if (baseRange) base[BASE_STAT[slot]] = rng.int(...baseRange);
-  const item = { slot, rarity, stats, base, identified: false,
+  const item = { slot, rarity, stats, base, identified: rarity === 0,
     ...(slot === 'weapon' && { weaponType: hero ? weaponClass(hero) : rng() < 0.5 ? 'melee' : 'ranged' }),
     power: rarity === LEGENDARY ? names[rng.int(0, names.length - 1)] : null, seed: rng.int(0, 999999) };
   if (rarity === LEGENDARY) {
@@ -238,9 +239,9 @@ export function statText(id, v) {
 
 export function itemLines(it) {
   const out = Object.entries(it.base || {}).map(([id, v]) => statText(id, v));
+  if (it.weaponType) out.push(`${it.weaponType === 'ranged' ? 'Ranged' : 'Melee'} classes`);
   if (!itemIdentified(it)) {
-    if (it.weaponType) out.push(`${it.weaponType === 'ranged' ? 'Ranged' : 'Melee'} classes`);
-    out.push(it.rarity === 0 ? 'Unidentified · base bonus active' : 'Unidentified · enchantments dormant');
+    out.push('Unidentified · enchantments dormant');
     return out;
   }
   out.push(...Object.entries(it.stats).map(([id, v]) => statText(id, v)));

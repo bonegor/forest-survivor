@@ -18,7 +18,7 @@ import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
 import { DEFAULT_COMBAT_MUSIC, normalizeCombatMusic } from './combat-music.js';
-import { partitionRunSpoils, settledSpoils, validRunId } from '../shared/spoils.js';
+import { MAX_CLAIMS, partitionRunSpoils, sealedFinds, settledSpoils, validRunId } from '../shared/spoils.js';
 
 export const DEBUG = !RELEASE && !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
 const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
@@ -238,7 +238,7 @@ export const store = {
       const run = this.waitingReport();
       if (run?.runId === receipt.id && run.runFrom === receipt.from) {
         const spoils = run.sealedGear
-          ? partitionRunSpoils(run.spoils, run.found).history
+          ? partitionRunSpoils(run.spoils, P.sanitizeRun(run)?.found ?? 0, receipt.claimIndices)?.history
           : settledSpoils(run.spoils, run.found, this.profile.gear[receipt.hero]);
         if (spoils) return { ...receipt, spoils, truncated: false };
       }
@@ -246,8 +246,7 @@ export const store = {
     return receipt;
   },
 
-  async resumeRun() {
-    const report = this.pendingRun;
+  async resumeRun(report = this.pendingRun) {
     return report ? this.submitRun(report) : null;
   },
 
@@ -332,12 +331,18 @@ export const store = {
       this.reload();
       const modern = validRunId(run?.runId);
       if (modern) {
-        const waiting = this.pendingRun;
-        if (waiting && waiting.runId !== run.runId) return unsavedRun('Another run is waiting to be saved');
+        const waiting = this.waitingReport();
+        if (waiting && waiting.runId !== run.runId && this.pendingRun) return unsavedRun('Another run is waiting to be saved');
+        if (waiting?.runId === run.runId && waiting.runFrom === run.runFrom && waiting.claimIndices !== undefined) run = waiting;
         // Write before making any request. Until the reveal is acknowledged, this also
         // supplies the full gear ledger when a server cookie could only fit its tail.
         this.runOutbox = run;
-        saveBox.write(RUN_OUTBOX, P.encodeState(run));
+        const packed = P.encodeState(run);
+        saveBox.write(RUN_OUTBOX, packed);
+        if (run.sealedGear === true && run.selectSpoils === true && run.claimIndices === undefined) {
+          const finds = sealedFinds(run.spoils, P.sanitizeRun(run)?.found ?? 0);
+          if (finds.length > MAX_CLAIMS) return { chooseSpoils: finds, volatile: saveBox.read(RUN_OUTBOX) !== packed };
+        }
       }
       if (this.mode === 'server') {
         try {

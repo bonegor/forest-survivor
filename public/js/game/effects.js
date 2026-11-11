@@ -1227,15 +1227,12 @@ export class Telegraph {
   drawGround(ctx, cam) {
     const o = this.o, S = cam.S;
     const u = this.t / o.dur;
-    const blink = 0.55 + 0.45 * Math.sin(this.t * 30);
     if (o.shape === 'circle') {
       const [sx, sy] = toScreen(cam, o.x, o.y);
       ctx.globalAlpha = 0.18 + 0.2 * u;
       blitCentered(ctx, ringSprite(o.r, o.color || '#e43b44', 99), sx, sy, S);
       ctx.globalAlpha = 0.35 + 0.4 * u;
       blitCentered(ctx, ringSprite(Math.max(1, o.r * u), '#ff0044', 99), sx, sy, S);
-      ctx.globalAlpha = blink;
-      blitCentered(ctx, ringSprite(o.r, '#ff0044', 1), sx, sy, S);
     } else if (o.shape === 'line') {
       const [ax, ay] = toScreen(cam, o.x, o.y);
       const ang = o.ang, len = o.len * S, wid = o.w * S;
@@ -1248,12 +1245,27 @@ export class Telegraph {
       ctx.globalAlpha = 0.45;
       ctx.fillStyle = '#ff0044';
       ctx.fillRect(0, -wid / 2, len * u, wid);
-      ctx.globalAlpha = blink * 0.8;
-      ctx.fillRect(0, -wid / 2, len, S);
-      ctx.fillRect(0, wid / 2 - S, len, S);
       ctx.restore();
     }
     ctx.globalAlpha = 1;
+  }
+
+  drawThreat(ctx, cam) {
+    const o = this.o, S = cam.S;
+    const [x, y] = toScreen(cam, o.x, o.y);
+    ctx.save();
+    ctx.globalAlpha = this.g.settings.softFlash ? 0.9 : 0.65 + 0.35 * Math.sin(this.t * 30);
+    if (o.shape === 'circle') {
+      blitCentered(ctx, ringSprite(o.r, '#ff0044', 1), x, y, S);
+    } else if (o.shape === 'line') {
+      const half = o.w * S / 2, length = o.len * S;
+      ctx.translate(x, y);
+      ctx.rotate(o.ang);
+      ctx.fillStyle = '#ff0044';
+      ctx.fillRect(0, -half, length, S);
+      ctx.fillRect(0, half - S, length, S);
+    }
+    ctx.restore();
   }
 }
 

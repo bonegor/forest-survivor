@@ -13,6 +13,8 @@ import { UI } from '../public/js/ui/ui.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
+import { WEAPONS } from '../public/js/data/weapons.js';
+import { PASSIVES } from '../public/js/data/passives.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
@@ -122,9 +124,12 @@ test("the first run's hints come once each, and a second run shows none", () => 
     // The first level-up screen closes: the weapons' hint.
     g.pendingLevels = 1;
     frames(gs, 2);
+    const choice = gs.overlay.choices[0];
+    const def = (choice.type === 'weapon' ? WEAPONS : PASSIVES)[choice.id];
     gs.overlay.choose(0);
     frames(gs, 2);
-    assert.ok(said(g).includes('Your weapons strike by themselves'));
+    const followup = g.banners.find(b => b.title === 'Your weapons strike by themselves');
+    assert.ok(followup?.sub.includes(def.name), 'the first hint names what the player chose');
     playOut(g, 'Your weapons strike by themselves');
     assert.equal(settings.hints.levelup, 1, "a card taken from the first level-up screen: its footer's said");
     g.player.addFury(100);

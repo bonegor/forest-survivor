@@ -532,7 +532,7 @@ test('gear rolls only within its rarity, and nothing else passes the server', ()
   for (let k = 0; k < 3000; k++) {
     const it = I.rollItem(rng, {minute: k % 16, depth: 1 + (k % 3)});
     assert.deepEqual(I.sanitizeItem(it), it);
-    assert.ok(I.itemName(it).length > 3 && I.itemLines(it).length >= 1);
+    assert.ok(I.itemName(it).length >= 3 && I.itemLines(it).length >= 1);
   }
   const good = {slot:'helm', rarity:2, stats:{maxHp:10, armor:1, regen:2}, power:null, seed:5};
   assert.ok(I.sanitizeItem(good));

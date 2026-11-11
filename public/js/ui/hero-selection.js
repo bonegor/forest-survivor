@@ -7,12 +7,14 @@ import { WEAPONS } from '../data/weapons.js';
 import { PROGRESS } from '../shared/progress.js';
 import { MAP_LADDER } from '../data/maps.js';
 import { nextHeroUnlock, nextGoal, openFor, heroUnlockTime, transferUnlocked, transferQuote, gearRevision, TRANSFER_ACHIEVEMENT, identificationCost, MAX_STASH } from '../shared/profile.js';
-import { SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, RARITIES, itemIdentified, canEquipItem } from '../shared/items.js';
+import { SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, RARITIES, itemIdentified, canEquipItem, sameItem } from '../shared/items.js';
 import { panel, button, dim, drawText, wrapText, textWidth, textCanvas } from './ui.js';
 import { heroCrop, mix } from './scenes.js';
 import { goalText, featStars } from './ladder.js';
 import { flank } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
+import { IDENTIFICATION_RULE } from './menu-copy.js';
+import { gearPreview } from './gear-preview.js';
 import { HeroShowcase } from './hero-showcase.js';
 
 export function heroSelectionLayout(W, H) {
@@ -44,6 +46,30 @@ function fit(text, width) {
   return text + '…';
 }
 
+const FIELD_TARGETING = {
+  knight: 'Starts with a slash in front',
+  archer: 'Fires along your last movement direction',
+  mage: 'Fires at nearby foes and bursts on impact',
+  rogue: 'Seeks the nearest foe',
+  necromancer: 'Summons allies that seek foes',
+  paladin: 'Prioritizes the strongest nearby foe',
+  druid: 'Roots the nearest foe',
+  berserker: 'Leaps at a foe ahead',
+  witchhunter: 'Prioritizes strong foes',
+  footman: 'Cuts the lead foe in front',
+  marksman: 'Fires at the nearest foe',
+  templar: 'Sets a short ward in front',
+  trailblazer: 'Fires at a nearby foe and leaves a tripline',
+  thornkeeper: 'Converges on a nearby foe',
+  wraith: 'Cuts in front and from the previous shade',
+  gravebinder: 'Targets a foe and siphons weaker foes nearby',
+  arcanist: 'Sweeps at a foe’s distance',
+  praetorian: 'Cuts a narrow front rank',
+  seraph: 'Cleaves ahead and sweeps the flanks',
+  boltguard: 'Fires toward the nearest visible foe',
+  swordbearer: 'Cuts ahead. Momentum follows your stride',
+};
+
 const PERK_COPY = {
   knight: 'Bulwark: +1 armor. All regeneration is doubled.',
   berserker: 'Bloodrage: up to +30% damage and +15% attack speed at low health.',
@@ -73,7 +99,7 @@ export class HeroScreen {
     heading(ctx, W);
     if (this.dialog) {
       const action = this.dialog.draw(ctx, ui, W, H, dt);
-      if (action) {
+      if (action && !this.inventorySaving) {
         const handle = this.dialogAction;
         this.dialog = this.dialogAction = null;
         ui.focus('h_' + this.lastHero);
@@ -87,25 +113,26 @@ export class HeroScreen {
     const next = nextHeroUnlock(profile);
     for (const [i, id] of HERO_ORDER.entries()) {
       const h = heroLook(id, app.settings.skins), locked = !profile.heroes.includes(id);
+      const nextRecruit = locked && id === next;
       const x = L.x + i % L.cols * (L.cardW + L.gap), y = 28 + Math.floor(i / L.cols) * (L.cardH + L.gap);
       const activated = ui.item('h_' + id, x, y, L.cardW, L.cardH, { group: 'heroes', home: id === this.lastHero });
       if (ui.focused('h_' + id)) this.lastHero = id;
       if (activated && !locked) { app.choice.hero = id;ui.focus('hero_continue'); }
       const on = this.lastHero === id;
-      panel(ctx, x, y, L.cardW, L.cardH, { rivets: false, fill: on ? '#292330' : '#14131f', trim: on ? ['#fee761', '#be4a2f'] : ['#3a4466', '#262b44'] });
+      panel(ctx, x, y, L.cardW, L.cardH, { rivets: false, fill: on ? '#292330' : '#14131f', trim: on ? ['#fee761', '#be4a2f'] : nextRecruit ? ['#feae34', '#59422f'] : ['#3a4466', '#262b44'] });
       const spr = SPR[h.sprite], crop = heroCrop(spr), frame = idleFrame(spr, Math.floor(this.t * SPR[h.pose].fps));
       const portraitW = Math.min(L.cardW - 4, crop.w);
       const portraitH = Math.min(L.cardH - 16, crop.h);
-      ctx.globalAlpha = locked ? 0.22 : 1;
+      ctx.globalAlpha = nextRecruit ? 0.65 : locked ? 0.22 : 1;
       ctx.drawImage(frame.c, crop.x + Math.floor((crop.w - portraitW) / 2), crop.y, portraitW, portraitH,
         Math.round(x + (L.cardW - portraitW) / 2), y + 3, portraitW, portraitH);
       ctx.globalAlpha = 1;
-      const label = locked ? id === next ? 'NEXT' : 'LOCKED' : h.short.toUpperCase();
-      drawText(ctx, fit(label, L.cardW - 3), x + L.cardW / 2, y + L.cardH - 10, { align: 'center', color: on ? '#fee761' : locked ? '#687186' : '#c0cbdc' });
+      const label = locked ? nextRecruit ? 'NEXT' : 'LOCKED' : h.short.toUpperCase();
+      drawText(ctx, fit(label, L.cardW - 3), x + L.cardW / 2, y + L.cardH - 10, { align: 'center', color: on || nextRecruit ? '#fee761' : locked ? '#687186' : '#c0cbdc' });
       // The next hero's card fills toward his five minutes with the hero before him: that hero's
       // longest run (profile bt, the review's C4, 28 October 2026), the real distance only. Between
       // the portrait (y + 26 at most) and the label.
-      if (locked && id === next) {
+      if (nextRecruit) {
         const k = clamp((profile.bt?.[HERO_ORDER[i - 1]] || 0) / heroUnlockTime(id), 0, 1), bw = L.cardW - 12;
         if (k > 0) {
           ctx.fillStyle = '#262b44';
@@ -163,10 +190,11 @@ export class HeroScreen {
     const perk = wrapText(PERK_COPY[h.id] || h.perk, inner);
     const ult = wrapText(h.ultDesc, inner);
     const weapons = wrapText(startWeapons(h).map(id => WEAPONS[id].name).join(' + '), inner - 20);
+    const targeting = wrapText(`Field targeting · ${FIELD_TARGETING[h.id]}`, inner);
     const weaponDesc = wrapText(WEAPONS[h.weapon].desc, inner);
     const ownedUltimate = openFor(profile, h.id).ult;
     const weaponY = 70, descriptionY = weaponY + Math.max(16, weapons.length * 9) + 4;
-    const perkY = descriptionY + weaponDesc.length * 9 + 6;
+    const perkY = descriptionY + (targeting.length + weaponDesc.length) * 9 + 6;
     const ultimateY = perkY + perk.length * 9 + 10;
     const goalY = ultimateY + 13 + ult.length * 9 + 7;
     const next = nextHeroUnlock(profile), prev = HERO_ORDER[HERO_ORDER.indexOf(h.id) - 1];
@@ -174,7 +202,7 @@ export class HeroScreen {
     // the next hero's note tells the one before him's, a hero of the save his own under the note.
     const longest = (hid) => profile.bt?.[hid] || 0;
     const prevRun = locked && h.id === next && longest(prev) ? ` Longest run with the ${HEROES[prev].title}: ${fmtTime(longest(prev))}.` : '';
-    const note = locked ? `Survive ${heroUnlockTime(h.id) / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : !ownedUltimate ? `Unlock ${h.ultName}: survive ${fmtTime(PROGRESS.ultTime)} with this hero.` : goalText(nextGoal(profile));
+    const note = locked ? `Survive ${heroUnlockTime(h.id) / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : !ownedUltimate ? `Survive ${fmtTime(PROGRESS.ultTime)} with this hero to use ${h.ultName} next run.` : goalText(nextGoal(profile));
     const notes = wrapText(note, inner);
     const runs = !locked && longest(h.id) ? wrapText(`Longest run with this hero: ${fmtTime(longest(h.id))}`, inner) : [];
     const total = goalY + (notes.length + runs.length) * 9 + 8;
@@ -201,7 +229,8 @@ export class HeroScreen {
     const wy = weaponY;
     ctx.drawImage(SPR[WEAPONS[h.weapon].icon].frames[0].c, tx, top + wy);
     weapons.forEach((line, i) => drawText(ctx, line, tx + 20, top + wy + 3 + i * 9, { color: '#fee761' }));
-    weaponDesc.forEach((line, i) => drawText(ctx, line, tx, top + descriptionY + i * 9, { color: '#c0cbdc' }));
+    targeting.forEach((line, i) => drawText(ctx, line, tx, top + descriptionY + i * 9, { color: '#ead4aa' }));
+    weaponDesc.forEach((line, i) => drawText(ctx, line, tx, top + descriptionY + (targeting.length + i) * 9, { color: '#c0cbdc' }));
     perk.forEach((line, i) => drawText(ctx, line, tx, top + perkY + i * 9, { color: '#c0cbdc' }));
     drawText(ctx, fit(h.ultName.toUpperCase() + (ownedUltimate ? '' : ' · LOCKED'), inner), tx, top + ultimateY, { color: ownedUltimate ? '#f6757a' : '#b39aac' });
     ult.forEach((line, i) => drawText(ctx, line, tx, top + ultimateY + 11 + i * 9, { color: '#c0cbdc' }));
@@ -229,7 +258,7 @@ export class HeroScreen {
     lines.splice(1, 0, unlocked
       ? 'Quartermaster earned. Transfer equipped gear to a recruit with a free slot for ten times its sale value.'
       : `Transfer locked. ${TRANSFER_ACHIEVEMENT}.`);
-    lines.splice(1, 0, `${profile.gold} gold · Next identification: ${identificationCost(profile)} gold`, `Inventory: ${profile.stash.length}/${MAX_STASH}. Replaced equipment is stored here.`);
+    lines.splice(1, 0, `${profile.gold} gold · Next identification: ${identificationCost(profile)} gold`, IDENTIFICATION_RULE, `Inventory: ${profile.stash.length}/${MAX_STASH}. Replaced equipment is stored here.`);
     const actions = [
       { id: 'inventory', label: 'INVENTORY / STASH' },
       { id: 'inspect', label: 'MANAGE WORN GEAR', disabled: !Object.keys(gear).length },
@@ -248,7 +277,7 @@ export class HeroScreen {
     const pages = Math.max(1, Math.ceil(items.length / 3));
     page = Math.min(page, pages - 1);
     const shown = items.slice(page * 3, page * 3 + 3);
-    const lines = [`${HEROES[hero].title} · ${profile.gold} gold`, `Next identification: ${identificationCost(profile)} gold. Hidden magic activates only after identification.`];
+    const lines = [`${HEROES[hero].title} · ${profile.gold} gold`, `Next identification: ${identificationCost(profile)} gold`, IDENTIFICATION_RULE];
     if (!items.length) lines.push('No items stored yet. Choose STASH after a run to keep a find.');
     shown.forEach(({ item }) => lines.push({ text: `${SLOT_NAMES[item.slot]} · ${itemName(item)}`, color: RARITIES[item.rarity].color }));
     const actions = shown.map((entry, i) => ({ id: String(i), label: `${SLOT_NAMES[entry.item.slot].toUpperCase()} · INSPECT`, color: RARITIES[entry.item.rarity].color }));
@@ -260,27 +289,50 @@ export class HeroScreen {
     });
   }
 
-  inspectOwned(hero, source, entry, page) {
+  inspectOwned(hero, source, entry, page, { revealed = false, error } = {}) {
     const profile = this.app.store.profile, { item } = entry, cost = identificationCost(profile);
-    const lines = [{ text: itemName(item), color: RARITIES[item.rarity].color }, ...itemLines(item), `${profile.gold} gold · Sell value ${itemPrice(item)} gold`];
+    const accent = item.power || item.grant ? '#fee761' : '#63b8ff';
+    const ordinary = Object.keys(item.base || {}).length + Number(!!item.weaponType);
+    const effects = itemLines(item).map((text, i) => revealed && i >= ordinary ? { text, color: accent } : text);
+    const lines = [{ text: itemName(item), color: RARITIES[item.rarity].color }, ...effects, `${profile.gold} gold · Sell value ${itemPrice(item)} gold`];
     if (!canEquipItem(item, hero)) lines.push('This weapon belongs to another fighting style.');
-    if (!itemIdentified(item)) lines.push(`Identify for ${cost} gold. The next identification then costs ${cost + 10} gold.`);
+    if (!itemIdentified(item)) lines.splice(1, 0, IDENTIFICATION_RULE);
+    if (error) lines.unshift({ text: error, color: '#f6757a' });
     const actions = [
       { id: 'identify', label: itemIdentified(item) ? 'IDENTIFIED' : `IDENTIFY · ${cost} GOLD`, disabled: itemIdentified(item) || profile.gold < cost, color: '#63b8ff' },
       source === 'stash' ? { id: 'equip', label: 'EQUIP', disabled: !canEquipItem(item, hero) } : { id: 'stash', label: 'MOVE TO INVENTORY', disabled: profile.stash.length >= MAX_STASH },
       { id: 'sell', label: `SELL · +${itemPrice(item)} GOLD`, color: '#feae34' },
+      { id: 'compare', label: 'NEXT RUN STATS' },
     ];
     const decision = { hero, source, index: entry.index, slot: entry.slot, expected: item, expectedGearRev: gearRevision(profile, hero), expectedCost: cost };
-    this.gearDialog('Inspect item', lines, actions, async action => {
+    this.gearDialog(revealed ? 'Magic revealed' : 'Inspect item', lines, actions, async action => {
       if (action === 'close') return this.inventory(hero, source, page);
-      this.gearDialog('Saving inventory', ['Keeping your decision…'], [], () => this.inventory(hero, source, page));
-      const result = await this.app.store.manageInventory({ ...decision, action }).catch(() => ({ ok: false, error: 'Could not save. Try again.' }));
+      const { store } = this.app;
+      if (action === 'compare') {
+        this.gearDialog(`Next run · ${HEROES[hero].title}`, gearPreview(store.profile, hero, item, source === 'gear'), [],
+          () => this.inspectOwned(hero, source, entry, page, { revealed, error }));
+        return;
+      }
+      this.inventorySaving = true;
+      this.gearDialog('Saving inventory', ['Keeping your decision…'], []);
+      const result = await store.manageInventory({ ...decision, action }).catch(() => ({ ok: false, error: 'Could not save. Try again.' }));
+      this.inventorySaving = false;
+      if (action === 'identify') {
+        const current = source === 'stash' ? store.profile.stash[entry.index] : store.profile.gear[hero]?.[entry.slot];
+        if (sameItem(current, { ...item, identified: true })) {
+          this.preview = null;
+          sfx(current.power || current.grant ? 'legendary' : 'reveal');
+          return this.inspectOwned(hero, source, { ...entry, item: current }, page, { revealed: true });
+        }
+        if (!result.ok && sameItem(current, item)) return this.inspectOwned(hero, source, { ...entry, item: current }, page, { error: result.error });
+      }
       if (result.ok) {
         this.preview = null;
         sfx(action === 'sell' ? 'coin' : 'pick');
         this.inventory(hero, source, page);
       } else this.gearDialog('Inventory unchanged', [result.error], [], () => this.inventory(hero, source, page));
     });
+    if (revealed) this.app.ui.lock(0);
   }
 
   gearDialog(title, lines, actions, handle) {

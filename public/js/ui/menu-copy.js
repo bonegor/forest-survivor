@@ -1,8 +1,10 @@
 // Short labels for browsing; mechanics and full descriptions stay in the game data.
-import { WEAPONS } from '../data/weapons.js';
+import { MAX_WEAPON_LEVEL, WEAPONS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
-import { knownEvos } from '../shared/profile.js';
+import { IDENTIFICATION_STEP, knownEvos } from '../shared/profile.js';
+
+export const IDENTIFICATION_RULE = `Account-wide price · +${IDENTIFICATION_STEP} gold each time`;
 
 const WEAPON_SUMMARY = {
   axe: 'Arcing axes', blades: 'Orbiting swords', aura: 'Burns nearby foes',
@@ -66,6 +68,7 @@ export function evolutionRecipe(e, prof) {
   if (e.hidden || e.type !== 'weapon') return null;
   const evo = WEAPONS[e.id].evo;
   if (!evo) return null;
-  if (!knownEvos(prof).includes(evo.into)) return 'Evolves at level 8 with a relic yet unknown';
-  return `Level 8 + ${PASSIVES[evo.with].name} + chest → ${WEAPONS[evo.into].name}`;
+  const rank = `Learned rank ${MAX_WEAPON_LEVEL}`;
+  if (!knownEvos(prof).includes(evo.into)) return `${rank} + unknown relic + chest. Leave a relic slot free to experiment.`;
+  return `${rank} + ${PASSIVES[evo.with].name} + chest → ${WEAPONS[evo.into].name}`;
 }

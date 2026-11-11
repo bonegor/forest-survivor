@@ -36,13 +36,14 @@ import { FLOORS } from '../data/waves.js';
 import { PASSIVES } from '../data/passives.js';
 import { PROGRESS, needText } from './progress.js';
 import { killCredit } from './population.js';
-import { MAX_CLAIMS, packSpoils, partitionRunSpoils, settledSpoils, unpackSpoils, validRunId } from './spoils.js';
+import { MAX_CLAIMS, packSpoils, partitionRunSpoils, settledSpoils, unpackSpoils, validClaimIndices, validRunId } from './spoils.js';
 import { RECRUITS } from '../expansion/roster.js';
 
 export { PROGRESS, needText };
 
 export const MAX_STASH = 12;
-export const identificationCost = (p) => 10 * ((p.identifications || 0) + 1);
+export const IDENTIFICATION_STEP = 10;
+export const identificationCost = (p) => IDENTIFICATION_STEP * ((p.identifications || 0) + 1);
 
 // 4: progression (unlocks by milestone, slots bought); a save from before keeps all it had
 // (sanitizeProfile, fromBefore). 3: each hero's own gear, and heroes unlocked by time (2: one set
@@ -889,6 +890,7 @@ function sanitizeReceipt(raw, runs) {
     id: raw.id, from: raw.from, hero: raw.hero, pending, reward,
     spoils: pending ? packSpoils(unpackSpoils(raw.spoils)) : '',
     ...(claims && { claims }),
+    ...(pending && validClaimIndices(raw.claimIndices) && { claimIndices: [...raw.claimIndices] }),
     ...(pending && raw.truncated === true ? { truncated: true } : {}),
   };
 }
@@ -903,6 +905,7 @@ export function acknowledgeReveal(profile, id) {
   receipt.spoils = '';
   delete receipt.truncated;
   delete receipt.claims;
+  delete receipt.claimIndices;
   return { ok: true, profile: p };
 }
 
@@ -964,14 +967,22 @@ function identifyOwned(p, item, expectedCost) {
 }
 
 // Inventory changes use the exact inspected item to reject stale tabs and duplicate sales.
-export function manageInventory(profile, { hero, source, index, slot, expected, action, expectedGearRev, expectedCost } = {}) {
+export function manageInventory(profile, { hero, source, index, slot, expected, action, expectedGearRev, expectedCost, expectedStashSize, claim } = {}) {
   const p = sanitizeProfile(profile);
   if (!p.heroes.includes(hero) || !['stash', 'gear'].includes(source) || !['identify', 'equip', 'sell', 'stash'].includes(action)) {
     return { ok: false, profile: p, error: 'Choose an item and a valid action' };
   }
+  if (claim !== undefined) {
+    const receipt = p.lastRun;
+    if (source !== 'stash' || action !== 'sell' || !receipt?.pending || receipt.id !== claim?.id || receipt.hero !== hero ||
+        !Number.isInteger(claim.index) || unpackSpoils(receipt.claims, MAX_CLAIMS)[claim.index]?.state !== 'sealed') {
+      return { ok: false, profile: p, error: 'That find is no longer pending.' };
+    }
+  }
   const gear = p.gear[hero] || {}, revision = gearRevision(p, hero);
   const item = source === 'stash' && Number.isInteger(index) ? p.stash[index] : source === 'gear' ? gear[slot] : null;
-  if (!item || !sameItem(item, sanitizeItem(expected)) || expectedGearRev !== revision) {
+  if (!item || !sameItem(item, sanitizeItem(expected)) || expectedGearRev !== revision ||
+      source === 'stash' && expectedStashSize !== undefined && expectedStashSize !== p.stash.length) {
     return { ok: false, profile: p, error: 'Inventory changed. Review the item again.' };
   }
   if (action === 'identify') {
@@ -1062,6 +1073,8 @@ export function applyRun(profile, rawRun) {
   // the run found; whatever they wore coming in that is gone was sold, and its price may be in
   // the gold. Other heroes' gear is theirs alone.
   const sealed = modern && rawRun.sealedGear === true;
+  const sealedSpoils = sealed && partitionRunSpoils(rawRun.spoils, run.found, rawRun.claimIndices, rawRun.selectSpoils === true);
+  if (sealed && !sealedSpoils) return { ok: false, profile: p, error: 'Choose which collected items to keep first' };
   const { gearConflict, soldOnConflict } = sealed ? {} : settleRunGear(p, run, rawRun);
   // Five minutes on the clock bring in the next hero.
   const next = unlocksNext(p, run.hero);
@@ -1124,13 +1137,14 @@ export function applyRun(profile, rawRun) {
   if (run.mode === 'ranked') reward.ranked = { time: run.time, best: p.ranked[run.hero] || 0, personalBest, title: rankTitle(run.time) };
   if (modern) {
     const { claims, history, overflowGold } = sealed
-      ? partitionRunSpoils(rawRun.spoils, run.found)
+      ? sealedSpoils
       : { history: settledSpoils(rawRun.spoils, run.found, p.gear[run.hero], soldOnConflict) };
     if (overflowGold) {
       p.gold = int(p.gold + overflowGold, 0, 1e9);
       reward.spoilsGold = overflowGold;
     }
     p.lastRun = { id: rawRun.runId, from: rawRun.runFrom, hero: run.hero, pending: !!(claims || history), spoils: history, reward, ...(claims && { claims }) };
+    if (sealed && history && rawRun.claimIndices !== undefined) p.lastRun.claimIndices = [...rawRun.claimIndices];
   }
   return { ok: true, profile: p, reward, run };
 }

@@ -17,7 +17,7 @@ import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
 import { MAPS } from '../data/maps.js';
 import { BIOMES } from '../game/biomes.js';
-import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, affordableRanks, PROGRESS, needText, runLocks } from '../shared/profile.js';
+import { metaBonuses, openFor, rankTitle, unlocksNext, nextGoal, UPGRADES, upgradeCost, upgradeOpen, PROGRESS, needText, runLocks } from '../shared/profile.js';
 import { rankGrantName, itemIdentified, canEquipItem } from '../shared/items.js';
 import { unlockText, goalText, nearestLocks, codexName, codexRecord, codexIcon } from './ladder.js';
 import { panel, button, dim, drawText, drawRich, wrapText, textWidth, textCanvas, logo } from './ui.js';
@@ -27,7 +27,7 @@ import { saveSettings, seenBox } from '../engine/storage.js';
 import { MusicMenu } from './music-menu.js';
 import { MenuDialog } from './menu-dialog.js';
 import { makeRunId } from '../shared/spoils.js';
-import { SpoilsReveal, drawRewardReel, reelProgress } from './reward-reels.js';
+import { SpoilsReveal, SpoilsSelection, drawRewardReel, reelProgress } from './reward-reels.js';
 
 export class GameScreen {
   enter(app, params = {}) {
@@ -209,7 +209,7 @@ const relicNeed = (id) => {
 function evoHint(g, id) {
   const s = g.evoState(id);
   if (!s) return null;
-  if (s.state === 'unknown') return { unknown: true, name: 'A relic yet unknown', icon: null, word: 'unknown', line1: 'Evolves with a relic', line2: 'yet unknown', color: '#8b9bb4' };
+  if (s.state === 'unknown') return { unknown: true, name: `Rank ${MAX_WEAPON_LEVEL} + pair + chest`, icon: null, word: 'unknown', line1: `Learned rank ${MAX_WEAPON_LEVEL}`, line2: 'Matching relic + chest', short: 'Pair + chest', color: '#8b9bb4' };
   const r = PASSIVES[s.relic], need = s.state === 'locked' ? relicNeed(s.relic) : '';
   const [word, line2, color, short] = {
     owned: ['owned', 'Partner owned', '#feae34'],
@@ -520,6 +520,8 @@ export class LevelUpOverlay {
     if (always && this.fillersOnly) g.autoPick = c.type;
     g.applyChoice(c);
     if (this.teach) {
+      const def = c.type === 'weapon' ? WEAPONS[c.id] : c.type === 'passive' ? PASSIVES[c.id] : null;
+      if (def) g.hints.firstChoice = c.isNew ? `${def.name} learned` : `${def.name} reached rank ${c.level}`;
       g.hints.mark('levelup');
       this.teach = false;
     }
@@ -688,6 +690,7 @@ export class LevelUpOverlay {
     }
     this.rects = [];
     const shown = this.choices;
+    let firstOutcome;
     for (let i = 0; i < n; i++) {
       if (result || this.choices !== shown) break; // a card was taken: the next level's cards come next frame
       const c = this.choices[i], info = choiceInfo(g, c);
@@ -731,6 +734,11 @@ export class LevelUpOverlay {
       }
       const f = ui.focused(id);
       if (f) this.lastCard = id;
+      if (f && this.teach && !held) {
+        if (c.type === 'weapon' && c.isNew) firstOutcome = `Add ${info.name} to your attacks`;
+        else if (c.type === 'passive' && c.isNew) firstOutcome = `Gain ${info.name} for this run`;
+        else if (c.type === 'weapon' || c.type === 'passive') firstOutcome = `Raise ${info.name} to rank ${c.level}`;
+      }
       // The ready highlight: lifted, framed white in its colour, pulsing, a ring round it; armed
       // to banish, the ring and frame are red (a filler, which can't be, keeps its own).
       const lit = f && !held, red = lit && this.banishing && this.canBanish(c);
@@ -941,6 +949,7 @@ export class LevelUpOverlay {
       else if (ui.focusId === 'reroll') tip = fit(['REROLL: all new cards', 'REROLL']);
       else if (this.teach) {
         tip = fit([
+          ...(firstOutcome ? [`${firstOutcome} · ${take[1]}`] : []),
           `Your first level: a new weapon or relic, or a rank of one you hold · ${take[1]}`,
           `A new weapon or relic, or a rank of one held · ${take[1]}`,
           `Take a card · ${take[1]}`,
@@ -1559,19 +1568,21 @@ export class PauseOverlay {
 export const TALLY = { rows: 0.6, row: 0.16, weapon: 0.08, gap: 0.3, goldMin: 1.5, goldMax: 2.5, beat: 0.35, countMin: 0.6, page: 2.4 };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
-// What gold buys at the Armory now: how many ranks are affordable (affordableRanks: for sale, not at
-// their top), or how far the cheapest one for sale is.
-export function armoryLine(p) {
-  const n = affordableRanks(p);
-  if (n) return `${n} Armory rank${n > 1 ? 's' : ''} affordable`;
-  let near = null;
+function cheapestArmoryRank(p) {
+  let cheapest = null;
   for (const u of UPGRADES) {
     const rank = p.up[u.id] || 0;
     if (rank >= u.max || !upgradeOpen(p, u)) continue;
     const cost = upgradeCost(u.id, rank);
-    if (cost > p.gold && (!near || cost - p.gold < near.need)) near = { need: cost - p.gold, name: `${u.name} ${ROMAN[rank] || rank + 1}` };
+    if (!cheapest || cost < cheapest.cost) cheapest = { id: u.id, cost, name: `${u.name} ${ROMAN[rank] || rank + 1}`, desc: u.desc };
   }
-  return near ? `+${fmtNum(near.need)} gold to ${near.name}` : 'The Armory is complete';
+  return cheapest;
+}
+
+export function armoryLine(p, next = cheapestArmoryRank(p)) {
+  if (!next) return 'The Armory is complete';
+  if (next.cost > p.gold) return `+${fmtNum(next.cost - p.gold)} gold to ${next.name}`;
+  return `${next.name} · ${fmtNum(next.cost)} gold · ${next.desc}`;
 }
 
 // The review's C4 (28 October 2026): when the next goal is a time with the hero just played (the
@@ -1776,16 +1787,24 @@ class ResultsOverlay {
     return rows;
   }
 
-  submit() {
+  submit(claimIndices) {
     const res = this.res;
     this.reward = null;
     this.report ??= {
       mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found,
       effort: res.effort,
-      spoils: res.spoils, sealedGear: res.sealedGear, runId: this.gs.runId, runFrom: this.gs.runFrom, gearRev: this.gs.gearRev, gearStart: this.gs.gearStart,
+      spoils: res.spoils, sealedGear: res.sealedGear, selectSpoils: true, runId: this.gs.runId, runFrom: this.gs.runFrom, gearRev: this.gs.gearRev, gearStart: this.gs.gearStart,
     };
+    if (claimIndices !== undefined) this.report.claimIndices = claimIndices;
     this.gs.app.store.submitRun(this.report).then((r) => {
+      if (r.chooseSpoils) {
+        this.selection = new SpoilsSelection(this.gs.app.ui, r.chooseSpoils, indices => {
+          this.selection = null;
+          this.submit(indices);
+        }, r.volatile);
+        return;
+      }
       // Nothing paid for a run that found gold or won: the store didn't take it, whatever the
       // reason (on static hosting a refused run comes back as a bare zero), and the screen says so.
       this.reward = !r.unsaved && !r.total && (res.gold > 0 || res.victory) ? { ...r, unsaved: true } : r;
@@ -1854,6 +1873,11 @@ class ResultsOverlay {
 
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, app = this.gs.app, res = this.res;
+    if (this.selection) {
+      this.backdrop(ctx, W, H);
+      this.selection.draw(ctx, W, H, dt);
+      return null;
+    }
     const pending = !this.reveal && this.landed ? app.store.pendingReveal : null;
     if (pending && pending.id === this.gs.runId) {
       this.reveal = new SpoilsReveal(app, pending);
@@ -2057,9 +2081,10 @@ class ResultsOverlay {
       const c = textCanvas(`+${fmtNum(Math.floor(this.shown))} GOLD`, hot ? ['#ffffff', '#ffffff', '#fee761'] : ['#fff3a8', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(W / 2 - c.width), gy + 9, c.width * 2, c.height * 2);
     } else if (!this.reward) drawText(ctx, 'Counting your spoils…', W / 2, gy + 6, { align: 'center', color: '#8b9bb4' });
+    const prof = app.store.profile;
+    const armoryRank = this.landed && this.reward ? cheapestArmoryRank(prof) : null;
     if (this.landed && this.reward) {
       // What next: the next goal, and what the gold buys.
-      const prof = app.store.profile;
       nearLines(near.slice(0, nNear), pw - 12).forEach((line, i) => drawText(ctx, line, W / 2, y + ph - 20 - (nNear - i) * 10, { align: 'center', color: '#c28569' }));
       const goal = nextGoal(prof), bw = 40, bar = heroGoalBar(goal, res, pw - 12 - bw - 4), ny = y + ph - 20;
       if (bar) {
@@ -2074,7 +2099,7 @@ class ResultsOverlay {
         }
         drawText(ctx, text, bx + bw + 4, ny, { color: '#feae34' });
       } else drawText(ctx, fitText('NEXT: ' + goalText(goal), pw - 12), W / 2, ny, { align: 'center', color: '#feae34' });
-      drawText(ctx, fitText(this.reward.volatile ? 'Progress kept for this session only' : armoryLine(prof), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
+      drawText(ctx, fitText(this.reward.volatile ? 'Progress kept for this session only' : armoryLine(prof, armoryRank), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
     }
     ui.begin(dt);
     if (unsaved && this.reward.down && button(ctx, ui, 'resubmit', Math.round(W / 2 - 50), gy + 10, 100, 13, 'SAVE AGAIN')) this.submit();
@@ -2087,7 +2112,9 @@ class ResultsOverlay {
         app.go('hero', { again: true });
       } else this.skip();
     }
-    if (button(ctx, ui, 'upgrades', Math.round(W / 2 + 6), by, 100, 14, 'UPGRADES', { disabled: !this.landed || !this.reward || unsaved || beforeSpoils })) app.go('armory');
+    if (button(ctx, ui, 'upgrades', Math.round(W / 2 + 6), by, 100, 14, 'UPGRADES', { disabled: !this.landed || !this.reward || unsaved || beforeSpoils })) {
+      app.go('armory', armoryRank?.cost <= prof.gold ? { focus: armoryRank.id } : undefined);
+    }
     ui.end();
     return null;
   }

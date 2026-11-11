@@ -10,6 +10,8 @@ import { Game, DEATH } from '../public/js/game/game.js';
 import { EnemyShot } from '../public/js/game/projectiles.js';
 import { shotName } from '../public/js/game/names.js';
 import { armoryLine } from '../public/js/ui/gamescreen.js';
+import { ArmoryScreen } from '../public/js/ui/screens.js';
+import { UI } from '../public/js/ui/ui.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
@@ -95,6 +97,13 @@ test('the results tell what the gold buys at the Armory', () => {
   p.gold = 0;
   // Every first rank at half price (shared/progress.js firstRank).
   assert.equal(armoryLine(p), '+50 gold to Magnetism I', 'the cheapest rank, and how far it is');
-  p.gold = 260;
-  assert.equal(armoryLine(p), '17 Armory ranks affordable'); // Arsenal (200) among them; not Echo or Second Wind
+  p.gold = 50;
+  assert.equal(armoryLine(p), 'Magnetism I · 50 gold · +20% pickup range');
+  p.up.magnet = 1;
+  p.gold = 70;
+  assert.equal(armoryLine(p), 'Recovery I · 60 gold · +0.1 health per second', 'the recommendation updates after a purchase');
+  const app = { ui: new UI() }, screen = new ArmoryScreen();
+  screen.enter(app, { focus: 'magnet' });
+  assert.equal(screen.tab, 'preparation');
+  assert.equal(app.ui.focusId, 'u_magnet');
 });

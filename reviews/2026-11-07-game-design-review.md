@@ -2,6 +2,41 @@
 
 Reviewed 7 November 2026. This assessment covers the current working tree, including the new crypt animation rules, unidentified equipment, eight equipment slots, identification costs and post-match inventory. It is independent of the older October reviews.
 
+## Implementation follow-up · 9 November 2026
+
+This log tracks the combined actions from this review and the [casino appeal review](2026-11-07-casino-appeal-review.md).
+
+1. **Full stash recovery — implemented and reviewed.** Collected Gear opens the stash when it is full. Players inspect a stored item and explicitly sell it, then return to the same find. The sale checks the pending claim, inspected item and stash size before mutating the save. A headless UI regression covers recovery, equipment replacement, stale claims and repeat sales. The independent review also exercised paging and sale at 320×240.
+2. **Overflow choices — implemented and reviewed.** Runs with more than 12 finds open a chooser before banking. Rarity suggests the initial set. Players can change it and confirm exactly how many items will sell and for how much. The browser outbox resumes the chooser after reload when storage is available, and retries use the confirmed selection. Older saved reports keep their original policy. Focused tests and independent review covered the thirteenth find, invalid selections, reload, duplicate submissions, and reconstruction after the server trims cosmetic history.
+3. **Common identification — implemented and reviewed.** Modern common gear starts identified, and existing copies become identified without a gold charge or counter increase. Legacy common gear with a hidden affix can still be identified. Targeted generation, migration, and transaction tests passed.
+4. **Identification pricing — implemented and reviewed.** Camp and post-run claims show the current quote and explain that the price rises by 10 gold across the account. Both views share the price rule. The reviewer checked the compact claim layout and existing stale-price protection.
+5. **In-place reveal — implemented and reviewed.** Collected Gear opens directly on the item comparison. Identifying gear highlights newly visible effects on the same item and plays a short reveal cue in camp and after a run. The player can act immediately. Tests covered single charging, the same-item reveal, and action availability at 320×240.
+6. **Hero-specific comparisons — implemented and reviewed.** Next Run Stats compares the hero’s actual level-one stats and ranks in camp and after a run. The comparison calls out incompatible gear, duplicate grants, dormant magic, and rank caps. Review caught missing pickup range, luck, and gold deltas. The fix has a regression for an enchanted ring that changes only those stats.
+7. **Post-run loot overview — implemented and reviewed.** Multiple finds open in a grid. Every item can be inspected, and modern common items show their visible base bonus and a direct sell action. Magic and legacy affixed items go through inspection. Tests covered returning to the overview and selling a common find without settling the magical one.
+8. **First upgrade and next purchase — implemented and reviewed.** The prologue previews the gem-to-card loop. The first real level-up explains the focused card and confirms the selected upgrade. Results name and price the cheapest eligible Armory rank, and the Upgrades button focuses it when affordable. Review caught a confirmation subtitle that clipped on narrow screens, so it now shows the outcome alone.
+9. **Targeting and crypt readiness — implemented and reviewed.** Hero previews describe field targeting. The crypt HUD shows the strike control, cooldown, and an aim cue driven by the strike targeting logic. Review corrected the touch instruction and removed misleading arrows for hidden targets, summons, and meteors. The cave-strike, touch, and menu tests passed.
+10. **Evolution clues and next unlock — implemented and reviewed.** Codex and card hints explain the learned-rank, matching-relic, and chest requirements while concealing undiscovered recipes. The title emphasizes the current goal, the roster highlights its next recruit, and the hero panel states when the ultimate becomes usable. Review checked progression rules, undiscovered recipes, and compact copy.
+11. **Threat visibility and effects presets — implemented and reviewed.** Options provides Low and Standard effects presets in camp and during a paused run. Low softens flashes and turns off shake, damage numbers, and ambient weather. Boss warning outlines render above spell glows, pickups, and weather and stay steady with soft flashes. Review identified that the solid fill could cover enemies, so the fill stays on the ground. Focused HUD, options, and telegraph tests passed.
+12. **Opening, hero balance, and identification costs — automated playtests complete and reviewed.** Six fresh Knight runs on Normal ended at 61.5–663.7 seconds and banked 25–1,264 gold. Three earned enough for the cheapest initial Armory rank at 50 gold. The established and full-Armory samples below used the same map, difficulty, strategy, and initial seed across five heroes. Human onboarding, reward comprehension, and long-term purchase behavior still need playtesting.
+
+### Automated playtest results
+
+All 16 runs used `tools/headless.mjs` on the Sunscorch, without the prologue, gear, or crypts. Fresh runs used Autopilot and gem seeking on seeds 1–3. The Veteran runs used Autopilot on seed 1 and open pools. Established saves had one rank in Arsenal, Reliquary, Phoenix, Swiftness, and Wisdom and two ranks in Might, Armor, and Vitality. Full saves had every Armory rank.
+
+| Hero | Established · time and gold banked | Full Armory · time and gold banked |
+| --- | --- | --- |
+| Knight | Fell at 90.8 s · 72 | Won at 900 s · 8,701 |
+| Ranger | Fell at 130.6 s · 128 | Won at 900 s · 16,308 |
+| Sorcerer | Fell at 727.9 s · 1,760 | Fell at 731.5 s · 2,623 |
+| Necromancer | Fell at 270.6 s · 423 | Won at 900 s · 6,963 |
+| Swordbearer | Fell at 14.1 s · 7 | Fell at 569.5 s · 2,374 |
+
+Full-Armory median income was 6,963 gold. After 0, 10, 25, 50, and 100 prior identifications, the next quotes were 10, 110, 260, 510, and 1,010 gold. The last quote uses about 15% of the median sampled payout. Enchanted and legendary items sell for 120 and 750 gold respectively. The comparison uses gross run income before purchases. The Veteran samples provide one run per hero and stage, so balance decisions need more seeds and observed players.
+
+The 9 November suite passed 941 of 942 tests. The final telegraph layering adjustment passed all 19 focused HUD, options, and boss tests.
+
+On 11 November, the portrait generator received briefs for Footman and the other eleven recruits based on their shipping sprites. Offline preparation exported 21 prompt and reference pairs. The full local suite passed all 942 tests.
+
 ## Overall assessment
 
 Forest Survivor has a strong central identity: a vulnerable medieval hero survives an increasingly crowded battlefield, assembles a build, takes optional trips into dangerous crypts and returns with permanent progress. Its best feature is the contrast between large-scale automatic combat and small, manually fought crypt encounters. The maps also contain real mechanical differences, rather than relying entirely on different colors and enemy names.

@@ -18,6 +18,7 @@ import { WARN, RECORD_GRACE } from './events.js';
 import { RANKED_BOSS_EVERY } from '../data/waves.js';
 import { HEROES } from '../data/heroes.js';
 import { THIEF } from './enemies.js';
+import { faceAttack } from './facing.js';
 
 // Beside the clock on a Nightmare (three times the monsters; never Ranked).
 const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
@@ -436,6 +437,7 @@ export class Hud {
     this.drawOrbs(ctx, W, H, p, t);
     this.drawBoss(ctx, W, dt);
     this.drawNames(ctx, W, H);
+    this.drawCryptStrike(ctx, W, H);
     this.drawCryptDoor(ctx, W);
     this.drawIndicators(ctx, W, H, t);
     this.drawSpeech(ctx, W, H);
@@ -1109,6 +1111,47 @@ export class Hud {
       ctx.fillStyle = f < 0.3 ? '#ff0044' : '#e43b44';
       ctx.fillRect(x - 8, y + 1, Math.round(16 * f), 2);
     }
+  }
+
+  drawCryptStrike(ctx, W, H) {
+    const g = this.g, p = g.player;
+    if (!g.caveStrike || p.dead) return;
+    const weapon = g.mainWeapon();
+    if (!weapon) return;
+    const cam = g.cam, z = cam.S / view.S;
+    const x = Math.round((p.x - cam.x) * z), y = Math.round((p.y - cam.y) * z);
+    const ready = weapon.cd <= 0;
+    const key = input.device === 'touch' ? '2ND FINGER' : input.device === 'pad' ? padKey('RB') : 'X / SHIFT';
+    const label = `${key} · ${ready ? 'READY' : 'RECOVERING'}`;
+    const width = textWidth(label) + 10, left = Math.round(clamp(x - width / 2, 2, W - width - 2));
+    const top = Math.round(clamp(y + 12, 0, H - 17));
+    const color = ready ? '#fee761' : '#c0cbdc';
+    ctx.fillStyle = '#181425';
+    ctx.fillRect(left, top, width, 13);
+    drawText(ctx, label, left + width / 2, top + 2, { align: 'center', color });
+    ctx.fillStyle = '#3a4466';
+    ctx.fillRect(left + 3, top + 11, width - 6, 1);
+    ctx.fillStyle = color;
+    ctx.fillRect(left + 3, top + 11, Math.round((width - 6) * clamp(1 - weapon.cd / weapon.s.cd, 0, 1)), 1);
+
+    if (weapon.def.kind === 'summon' || weapon.def.kind === 'meteor') return;
+    let { target, angle } = g.strikeAim(weapon);
+    if (target && !g.inView(target)) return;
+    if (weapon.def.kind === 'sword') angle = faceAttack(p.face, p.moving, Math.cos(angle), Math.sin(angle)) < 0 ? Math.PI : 0;
+    ctx.save();
+    ctx.translate(Math.round(x + Math.cos(angle) * 16), Math.round(y - 8 + Math.sin(angle) * 16));
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(-2, -4);
+    ctx.lineTo(3, 0);
+    ctx.lineTo(-2, 4);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#181425';
+    ctx.stroke();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.restore();
   }
 
   // On a crypt's steps: over its door its name, what lies below, and a bar that fills while the

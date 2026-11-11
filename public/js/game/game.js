@@ -1486,6 +1486,14 @@ export class Game {
     return this.player.weapons.find((w) => w.id === id || w.id === into) || null;
   }
 
+  strikeAim(w) {
+    const p = this.player;
+    const melee = w.def.kind === 'sword' || w.def.directional;
+    const target = this.nearestEnemy(p.x, p.y, w.reach, melee && p.moving ? e => (e.x - p.x) * p.face >= 0 : null);
+    const fallback = !melee ? p.aim : p.face < 0 ? Math.PI : 0;
+    return { target, angle: aimAt(p, target, fallback) };
+  }
+
   // A blow struck by the player (Player.update reads the keys), once the weapon is ready: at
   // the nearest foe in its reach (Weapon.reach; a sword on the move, only one ahead of him, as
   // he keeps facing the way he walks), else straight ahead, or for a shot the way he last
@@ -1494,12 +1502,10 @@ export class Game {
   strike() {
     const p = this.player, w = this.mainWeapon();
     if (!w || w.cd > 0 || p.dead) return false;
-    const melee = w.def.kind === 'sword' || w.def.directional;
-    const t = this.nearestEnemy(p.x, p.y, w.reach, melee && p.moving ? (e) => (e.x - p.x) * p.face >= 0 : null);
-    const ang = aimAt(p, t, !melee ? p.aim : p.face < 0 ? Math.PI : 0);
+    const { target, angle } = this.strikeAim(w);
     const delay = strikeClip(SPR[p.hero.sprite])?.delay ?? 0;
-    p.strike(ang, this.clock);
-    w.strike(ang, delay, t);
+    p.strike(angle, this.clock);
+    w.strike(angle, delay, target);
     this.boxBlowAt = this.clock + delay;
     return true;
   }
@@ -1571,7 +1577,7 @@ export class Game {
         w.fx = null;
         w.cd = Math.min(w.cd, 0.35);
       }
-      const keys = input.device === 'pad' ? padKey('RB') : input.device === 'touch' ? 'Tap a second finger' : 'X or Shift';
+      const keys = input.device === 'touch' ? 'Tap a second finger' : `Press or hold ${input.device === 'pad' ? padKey('RB') : 'X or Shift'}`;
       this.banner(`Your ${main ? main.def.name : 'weapon'} alone`, `${keys} to ${STRIKE_VERB[main?.def.kind] || 'strike'}`, '#feae34', 4);
       playMusic('crypt');
     });
@@ -2946,6 +2952,8 @@ export class Game {
     ctx.globalCompositeOperation = 'source-over';
 
     if (this.world.daylight) this.drawSkies(ctx, c);
+    // Hostile warning outlines stay readable over spell glows, pickups and weather.
+    for (const e of this.effects) if (e.drawThreat) e.drawThreat(ctx, c);
     // The foes' shots over everything, unlit: none can be lost behind a tree, in the horde or
     // in the dark.
     for (const s of this.eshots) s.draw(ctx, c);

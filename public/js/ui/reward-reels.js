@@ -2,9 +2,13 @@ import { input } from '../engine/input.js';
 import { sfx } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
 import { clamp, ease } from '../engine/util.js';
+import { HEROES } from '../data/heroes.js';
 import { RARITIES, SLOTS, SLOT_NAMES, itemName, itemLines, itemPrice, powerWorn, itemIdentified, canEquipItem, itemIcon } from '../shared/items.js';
 import { gearRevision, identificationCost, MAX_STASH } from '../shared/profile.js';
-import { unpackSpoils } from '../shared/spoils.js';
+import { MAX_CLAIMS, unpackSpoils } from '../shared/spoils.js';
+import { MenuDialog } from './menu-dialog.js';
+import { IDENTIFICATION_RULE } from './menu-copy.js';
+import { gearPreview } from './gear-preview.js';
 import { button, dim, drawText, logo, panel, wrapText } from './ui.js';
 
 const CHEST_SYMBOLS = ['i_sword', 'i_bow', 'i_area', 'i_might', 'i_luck', 'i_greed'];
@@ -57,6 +61,67 @@ export function drawRewardReel(ctx, { x, y, w, h, progress, icon, color, seed, g
   }
 }
 
+// Choose the retained set before committing a run that exceeds the receipt's capacity.
+export class SpoilsSelection {
+  constructor(ui, finds, submit, volatile = false) {
+    this.ui = ui;
+    this.finds = finds;
+    this.submit = submit;
+    this.volatile = volatile;
+    const byRarity = finds.map((entry, i) => ({ rarity: entry.item.rarity, i })).sort((a, b) => b.rarity - a.rarity);
+    this.kept = new Set(byRarity.slice(0, MAX_CLAIMS).map(({ i }) => i));
+    this.page = 0;
+    ui.focus('select_spoils_next');
+    ui.lock(0.2);
+  }
+
+  draw(ctx, W, H, dt) {
+    const { ui, finds, kept, page } = this;
+    if (this.confirm) {
+      const action = this.confirm.draw(ctx, ui, W, H, dt);
+      if (action === 'sell') this.submit([...kept].sort((a, b) => a - b));
+      if (action === 'close') {
+        this.confirm = null;
+        ui.focus('select_spoils_review');
+        ui.lock(0.2);
+      }
+      return;
+    }
+    const perPage = 3, pages = Math.ceil(finds.length / perPage);
+    const first = page * perPage, shown = finds.slice(first, first + perPage);
+    const w = Math.min(W - 20, 340), x = Math.round((W - w) / 2), y = Math.max(2, Math.round((H - 158) / 2));
+    dim(ctx, W, H, 0.88);
+    panel(ctx, x, y, w, 158, { title: 'CHOOSE FINDS TO KEEP', fill: '#15131f' });
+    drawText(ctx, `Keep up to ${MAX_CLAIMS}. Unmarked finds sell for gold.`, W / 2, y + 12, { align: 'center', color: '#c0cbdc' });
+    drawText(ctx, `${kept.size}/${MAX_CLAIMS} marked to keep · Page ${page + 1}/${pages}`, W / 2, y + 23, { align: 'center', color: '#fee761' });
+    if (this.volatile) drawText(ctx, 'Keep this tab open until the run saves.', W / 2, y + 123, { align: 'center', color: '#feae34' });
+    ui.begin(dt);
+    shown.forEach(({ item }, offset) => {
+      const index = first + offset, keep = kept.has(index), row = y + 34 + offset * 29;
+      const rarity = RARITIES[item.rarity];
+      if (button(ctx, ui, `select_spoils_${offset}`, x + 9, row, w - 18, 15, `${keep ? 'KEEP' : 'SELL'} · ${itemName(item)}`, { color: rarity.color, disabled: !keep && kept.size >= MAX_CLAIMS })) {
+        if (keep) kept.delete(index);
+        else kept.add(index);
+      }
+      const base = itemLines(item).filter(line => !line.startsWith('Unidentified')).slice(0, 2);
+      drawText(ctx, `${rarity.name} · ${[...base, `${itemPrice(item)} gold`].join(' · ')}`, W / 2, row + 16, { align: 'center', color: '#c0cbdc' });
+    });
+    if (button(ctx, ui, 'select_spoils_prev', x + 9, y + 134, 26, 15, '<', { disabled: page === 0 })) this.page--;
+    if (button(ctx, ui, 'select_spoils_next', x + w - 35, y + 134, 26, 15, '>', { disabled: page === pages - 1 })) this.page++;
+    if (button(ctx, ui, 'select_spoils_review', W / 2 - 56, y + 134, 112, 15, 'REVIEW SALE', { color: '#fee761' })) {
+      const gold = finds.reduce((sum, { item }, i) => sum + (kept.has(i) ? 0 : itemPrice(item)), 0);
+      const count = finds.length - kept.size;
+      this.confirm = new MenuDialog('Confirm overflow sale', [
+        `${kept.size} marked finds will remain available to equip, identify, stash or sell.`,
+        `${count} unmarked finds will be sold for ${gold} gold.`,
+      ], [{ id: 'sell', label: `SELL ${count} FOR ${gold} GOLD`, color: '#feae34' }]);
+      ui.focus('detail_close');
+      ui.lock(0.2);
+    }
+    ui.end();
+  }
+}
+
 export class SpoilsReveal {
   constructor(app, receipt) {
     this.app = app;
@@ -71,15 +136,29 @@ export class SpoilsReveal {
     this.receipt = receipt;
     this.claims = unpackSpoils(receipt.claims);
     this.claim = this.claims.findIndex(e => e.state === 'sealed');
+    const remaining = this.claims.filter(e => e.state === 'sealed').length;
     if (this.claim < 0) {
       this.openPage(0);
       return;
     }
-    this.t = 0;
-    this.claimLanded = false;
+    if (remaining > 1 || this.overviewPage !== undefined) this.openOverview(this.claim);
+    else this.openClaim(this.claim);
+  }
+
+  openClaim(index) {
+    this.claim = index;
+    this.overview = false;
+    this.claimError = null;
+    this.claimReady = false;
+    this.revealedMagic = false;
     this.detailScroll = {};
-    this.spinTick = null;
-    this.app.ui.focusId = 'claim_skip';
+    this.app.ui.lock(0.2);
+  }
+
+  openOverview(index) {
+    this.overview = true;
+    this.overviewPage ??= 0;
+    this.app.ui.focus(`find_${index}`);
     this.app.ui.lock(0.2);
   }
 
@@ -93,6 +172,7 @@ export class SpoilsReveal {
   }
 
   draw(ctx, W, H, dt) {
+    if (this.claim >= 0 && this.overview) return this.drawOverview(ctx, W, H, dt);
     if (this.claim >= 0) return this.drawClaim(ctx, W, H, dt);
     const ui = this.app.ui, entries = this.entries;
     this.t += dt;
@@ -176,47 +256,87 @@ export class SpoilsReveal {
     ui.end();
   }
 
+  drawOverview(ctx, W, H, dt) {
+    const { ui, store } = this.app;
+    const finds = this.claims.flatMap(({ item, state }, index) => state === 'sealed' ? [{ item, index }] : []);
+    const cols = W >= 440 ? 3 : 2, step = 36;
+    const perPage = cols * Math.max(1, Math.floor((H - 66) / step));
+    const pages = Math.ceil(finds.length / perPage), page = this.overviewPage = Math.min(this.overviewPage, pages - 1);
+    const shown = finds.slice(page * perPage, (page + 1) * perPage);
+    const w = Math.min(510, W - 16), h = Math.ceil(shown.length / cols) * step + 60;
+    const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2), gap = 4;
+    const cardW = Math.floor((w - 16 - (cols - 1) * gap) / cols);
+    dim(ctx, W, H, 0.9);
+    panel(ctx, x, y, w, h, { title: 'COLLECTED GEAR', fill: '#15131f' });
+    const status = this.saving ? 'Saving decision…' : this.claimError || `${finds.length} finds remaining · ${store.profile.gold} gold`;
+    drawText(ctx, wrapText(status, w - 12)[0], W / 2, y + 16, { align: 'center', color: this.claimError ? '#f6757a' : '#c0cbdc' });
+    ui.begin(dt);
+    for (const [i, { item, index }] of shown.entries()) {
+      const bx = x + 8 + i % cols * (cardW + gap), by = y + 29 + Math.floor(i / cols) * step;
+      const rarity = RARITIES[item.rarity];
+      const routine = item.rarity === 0 && item.base !== undefined;
+      const half = Math.floor((cardW - 3) / 2);
+      drawText(ctx, wrapText(itemName(item), cardW)[0], bx + cardW / 2, by, { align: 'center', color: rarity.color });
+      drawText(ctx, routine ? itemLines(item)[0] : rarity.name, bx + cardW / 2, by + 9, { align: 'center', color: '#c0cbdc' });
+      if (button(ctx, ui, `find_${index}`, bx, by + 18, routine ? half : cardW, 14, 'INSPECT', { color: rarity.color, disabled: this.saving })) this.openClaim(index);
+      if (routine && button(ctx, ui, `quick_sell_${index}`, bx + half + 3, by + 18, cardW - half - 3, 14, `SELL +${itemPrice(item)}`, { color: '#feae34', disabled: this.saving })) {
+        this.claim = index;
+        this.resolveClaim('sell');
+      }
+    }
+    if (pages > 1) {
+      const foot = y + h - 24, center = Math.round(W / 2);
+      if (button(ctx, ui, 'finds_prev', center - 52, foot, 24, 15, '<', { disabled: this.saving || page === 0 })) this.overviewPage--;
+      if (button(ctx, ui, 'finds_next', center + 28, foot, 24, 15, '>', { disabled: this.saving || page === pages - 1 })) this.overviewPage++;
+      drawText(ctx, `${page + 1}/${pages}`, center, foot + 3, { align: 'center', color: '#c0cbdc' });
+    }
+    ui.end();
+  }
+
   drawClaim(ctx, W, H, dt) {
     const { app, receipt, claim } = this, ui = app.ui;
+    if (this.claimDialog) {
+      const action = this.claimDialog.draw(ctx, ui, W, H, dt);
+      if (action && !this.saving) this.claimDialogAction(action);
+      return;
+    }
     const { item } = this.claims[claim];
     const rarity = RARITIES[item.rarity], center = Math.round(W / 2), gear = app.store.profile.gear[receipt.hero] || {};
     const worn = gear[item.slot], duplicate = itemIdentified(item) && powerWorn(gear, item.power, item.slot);
     const compatible = canEquipItem(item, receipt.hero), cost = identificationCost(app.store.profile);
     const full = app.store.profile.stash.length >= MAX_STASH;
     const revision = gearRevision(app.store.profile, receipt.hero);
-    this.t += dt;
-    const progress = reelProgress(this.t, 0, SPIN), landed = progress >= 1;
-    const tick = Math.floor(reelPosition(progress, claim));
-    if (!landed && tick !== this.spinTick) {
-      this.spinTick = tick;
-      sfx('tally', { pitch: 0.85 + (10 - tick) * 0.035 });
-    }
-    if (landed && !this.claimLanded) {
-      this.claimLanded = true;
-      ui.focus(duplicate ? 'claim_sell' : 'claim_equip');
-      ui.lock(0.2);
-      sfx(item.rarity === 4 ? 'legendary' : item.rarity === 3 ? 'epic' : 'reveal');
+    if (!this.claimReady) {
+      this.claimReady = true;
+      ui.focus(full && worn ? 'claim_stash' : duplicate ? 'claim_sell' : 'claim_equip');
     }
     dim(ctx, W, H, 0.9);
     const title = logo('COLLECTED GEAR');
     const scale = Math.min(1, (W - 16) / title.width), titleH = Math.round(title.height * scale);
-    const cardW = Math.min(150, Math.floor((W - 24) / 2)), cardH = Math.min(116, H - titleH - 142);
-    const start = Math.max(5, Math.round((H - titleH - cardH - 126) / 2));
+    const cardW = Math.min(150, Math.floor((W - 24) / 2)), cardH = Math.min(134, H - titleH - 124);
+    const start = Math.max(5, Math.round((H - titleH - cardH - 112) / 2));
     ctx.drawImage(title, Math.round(center - title.width * scale / 2), start, Math.round(title.width * scale), titleH);
     drawText(ctx, `${claim + 1} OF ${this.claims.length} · ${app.store.profile.gold} GOLD`, center, start + titleH + 5, { align: 'center', color: '#c0cbdc' });
-    const reelY = start + titleH + 17;
-    drawRewardReel(ctx, { x: center - 30, y: reelY, w: 60, h: 37, progress, icon: itemIcon(item), color: rarity.color, seed: claim, gear: true });
-    const top = reelY + 42, left = center - cardW - 3, right = center + 3;
+    const icon = (SPR[itemIcon(item)] ?? SPR.i_greed).frames[0].c;
+    const iconScale = Math.min(2, 24 / Math.max(icon.width, icon.height));
+    const iconW = Math.round(icon.width * iconScale), iconH = Math.round(icon.height * iconScale);
+    ctx.drawImage(icon, center - Math.floor(iconW / 2), start + titleH + 17, iconW, iconH);
+    const top = start + titleH + 45, left = center - cardW - 3, right = center + 3;
     ui.begin(dt);
-    if (!landed) {
-      if (button(ctx, ui, 'claim_skip', center - 48, top + 12, 96, 15, 'STOP REEL') || ui.lockT <= 0 && input.pressed('back')) this.t = SPIN;
+    const compareW = Math.min(94, center - 25);
+    if (this.overviewPage !== undefined && (button(ctx, ui, 'claim_back', center - 18 - compareW, top - 24, compareW, 15, W < 220 ? 'FINDS' : 'ALL FINDS', { disabled: this.saving }) ||
+        !this.saving && ui.lockT <= 0 && input.pressed('back'))) {
+      this.openOverview(claim);
       ui.end();
       return;
     }
-    this.claimCard(ctx, left, top, cardW, cardH, 'NEW ' + rarity.name.toUpperCase(), item, 'new');
+    if (button(ctx, ui, 'claim_compare', center + 18, top - 24, compareW, 15, W < 220 ? 'COMPARE' : 'NEXT RUN STATS', { disabled: this.saving })) {
+      this.showClaimDialog(`Next run · ${HEROES[receipt.hero].title}`, gearPreview(app.store.profile, receipt.hero, item), [], () => this.closeClaimDialog('claim_compare'));
+    }
+    this.claimCard(ctx, left, top, cardW, cardH, this.revealedMagic ? 'MAGIC REVEALED' : 'NEW ' + rarity.name.toUpperCase(), item, 'new');
     this.claimCard(ctx, right, top, cardW, cardH, `WORN ${SLOT_NAMES[item.slot].toUpperCase()}`, worn, 'worn');
     const foot = top + cardH + 14;
-    const message = this.claimError || (!compatible ? 'This weapon belongs to another fighting style' : duplicate ? 'That legendary power is already equipped' : worn ? 'Replaced equipment goes to your inventory' : !itemIdentified(item) ? 'Equip now for base bonuses; identify to reveal magic' : '');
+    const message = this.claimError || (!compatible ? 'This weapon belongs to another fighting style' : duplicate ? 'That legendary power is already equipped' : full ? 'Manage inventory to make room for gear' : worn ? 'Replaced equipment goes to your inventory' : !itemIdentified(item) ? 'Equip now for base bonuses; identify to reveal magic' : '');
     if (message) {
       const line = wrapText(message, W - 12)[0];
       drawText(ctx, line, center, foot - 10, { align: 'center', color: this.claimError || duplicate ? '#f6757a' : '#c0cbdc' });
@@ -224,21 +344,84 @@ export class SpoilsReveal {
     if (button(ctx, ui, 'claim_equip', left, foot, cardW, 15, this.saving ? 'SAVING…' : 'EQUIP', { disabled: duplicate || !compatible || full && !!worn || this.saving, color: '#fee761' })) this.resolveClaim('equip', revision);
     if (button(ctx, ui, 'claim_sell', right, foot, cardW, 15, `SELL +${itemPrice(item)}`, { disabled: this.saving, color: '#feae34' })) this.resolveClaim('sell', revision);
     if (button(ctx, ui, 'claim_identify', left, foot + 21, cardW, 15, itemIdentified(item) ? 'IDENTIFIED' : `IDENTIFY ${cost} GOLD`, { disabled: this.saving || itemIdentified(item) || app.store.profile.gold < cost, color: '#63b8ff' })) this.resolveClaim('identify', revision, cost);
-    if (button(ctx, ui, 'claim_stash', right, foot + 21, cardW, 15, full ? 'INVENTORY FULL' : `STASH ${app.store.profile.stash.length}/${MAX_STASH}`, { disabled: this.saving || full })) this.resolveClaim('stash', revision);
+    if (button(ctx, ui, 'claim_stash', right, foot + 21, cardW, 15, full ? 'MANAGE INVENTORY' : `STASH ${app.store.profile.stash.length}/${MAX_STASH}`, { disabled: this.saving })) {
+      if (full) this.openInventory();
+      else this.resolveClaim('stash', revision);
+    }
+    if (!itemIdentified(item)) drawText(ctx, IDENTIFICATION_RULE, center, foot + 40, { align: 'center', color: '#c0cbdc' });
     ui.end();
+  }
+
+  showClaimDialog(title, lines, actions, handle) {
+    this.claimDialog = new MenuDialog(title, lines, actions);
+    this.claimDialogAction = handle;
+    this.app.ui.focus('detail_close');
+    this.app.ui.lock(0.2);
+  }
+
+  openInventory(page = 0, error) {
+    const { stash } = this.app.store.profile;
+    const pages = Math.max(1, Math.ceil(stash.length / 3));
+    page = Math.min(page, pages - 1);
+    const start = page * 3, shown = stash.slice(start, start + 3);
+    const lines = [error || 'Sell a stored item to make room. Your new find stays pending.'];
+    const actions = shown.map((item, i) => ({ id: String(i), label: itemName(item), color: RARITIES[item.rarity].color }));
+    if (pages > 1) actions.push({ id: 'page', label: `NEXT ITEMS · ${page + 1}/${pages}` });
+    this.showClaimDialog(`Inventory ${stash.length}/${MAX_STASH}`, lines, actions, action => {
+      if (action === 'page') this.openInventory((page + 1) % pages);
+      else if (action === 'close') this.closeClaimDialog();
+      else this.inspectStored(shown[Number(action)], start + Number(action), page, stash.length);
+    });
+  }
+
+  closeClaimDialog(focus = 'claim_stash') {
+    this.claimDialog = this.claimDialogAction = null;
+    this.app.ui.focus(focus);
+    this.app.ui.lock(0.2);
+  }
+
+  inspectStored(item, index, page, expectedStashSize) {
+    const { store } = this.app, hero = this.receipt.hero;
+    const claim = { id: this.receipt.id, index: this.claim };
+    const decision = { hero, source: 'stash', index, expected: item, expectedGearRev: gearRevision(store.profile, hero), expectedStashSize, action: 'sell', claim };
+    const sell = { id: 'sell', label: `SELL STORED ITEM · +${itemPrice(item)} GOLD`, color: '#feae34' };
+    this.showClaimDialog(itemName(item), itemLines(item), [sell], async action => {
+      if (action === 'close') return this.openInventory(page);
+      this.saving = true;
+      this.showClaimDialog('Saving inventory', ['Keeping your decision…'], [], () => {});
+      const result = await store.manageInventory(decision).catch(() => ({ ok: false, error: 'Could not save. Try again.' }));
+      this.saving = false;
+      const receipt = store.pendingReveal;
+      if (receipt?.id !== this.receipt.id) {
+        this.done = true;
+        return;
+      }
+      if (receipt.claims !== this.receipt.claims) {
+        this.closeClaimDialog();
+        this.loadClaims(receipt);
+      } else if (result.ok || store.profile.stash.length < MAX_STASH) {
+        this.claimError = null;
+        if (result.ok) sfx('coin');
+        this.closeClaimDialog();
+      } else this.openInventory(page, result.error);
+    });
   }
 
   claimCard(ctx, x, y, w, h, heading, item, key) {
     const color = item ? RARITIES[item.rarity].color : '#8b9bb4';
-    panel(ctx, x, y, w, h, { fill: '#171421', trim: [color, '#302238'], rivets: false });
-    drawText(ctx, heading, x + w / 2, y + 5, { align: 'center', color: '#c28569' });
+    const revealed = key === 'new' && this.revealedMagic;
+    const accent = item?.power || item?.grant ? '#fee761' : '#63b8ff';
+    panel(ctx, x, y, w, h, { fill: '#171421', trim: [revealed ? accent : color, '#302238'], rivets: false });
+    drawText(ctx, heading, x + w / 2, y + 5, { align: 'center', color: revealed ? accent : '#c28569' });
     const lines = item ? wrapText(itemName(item), w - 10) : ['Empty slot'];
     lines.forEach((line, i) => drawText(ctx, line, x + w / 2, y + 16 + i * 9, { align: 'center', color }));
     if (!item) return;
     const dy = 19 + lines.length * 9, rows = Math.max(1, Math.floor((h - 6 - dy) / 8));
-    let details = itemLines(item).flatMap(line => wrapText(line, w - 10));
+    const effects = itemLines(item), ordinary = Object.keys(item.base || {}).length + Number(!!item.weaponType);
+    const wrapEffects = width => effects.flatMap((line, i) => wrapText(line, width).map(text => ({ text, color: revealed && i >= ordinary ? accent : '#c0cbdc' })));
+    let details = wrapEffects(w - 10);
     const overflow = details.length > rows;
-    if (overflow) details = itemLines(item).flatMap(line => wrapText(line, w - 29));
+    if (overflow) details = wrapEffects(w - 29);
     const most = Math.max(0, details.length - rows), mouse = input.mouse;
     this.detailScroll ??= {};
     let scroll = this.detailScroll[key] || 0;
@@ -249,27 +432,34 @@ export class SpoilsReveal {
       if (button(ctx, ui, `claim_${key}_down`, x + w - 20, y + h - 18, 15, 12, '↓', { disabled: scroll >= most })) scroll += 2;
     }
     scroll = this.detailScroll[key] = clamp(scroll, 0, most);
-    details.slice(scroll, scroll + rows).forEach((line, i) => {
-      drawText(ctx, line, x + (w - (overflow ? 18 : 0)) / 2, y + dy + i * 8, { align: 'center', color: '#c0cbdc' });
+    details.slice(scroll, scroll + rows).forEach(({ text, color }, i) => {
+      drawText(ctx, text, x + (w - (overflow ? 18 : 0)) / 2, y + dy + i * 8, { align: 'center', color });
     });
   }
 
   async resolveClaim(action, expectedGearRev, expectedCost) {
     if (this.saving) return;
     this.saving = true;
-    const store = this.app.store, { id } = this.receipt;
-    const r = await store.resolveSpoil({ id, index: this.claim, action, expectedGearRev, expectedCost })
+    const store = this.app.store, { id } = this.receipt, index = this.claim;
+    const r = await store.resolveSpoil({ id, index, action, expectedGearRev, expectedCost })
       .catch(() => ({ ok: false, error: 'Could not save. Try again.' }));
     this.saving = false;
     this.claimError = r.error;
     const receipt = store.pendingReveal;
     if (receipt?.id === id && (r.ok || receipt.claims !== this.receipt.claims)) {
-      if (r.ok) sfx(action === 'sell' ? 'coin' : 'pick');
-      if (action === 'identify' && r.ok) {
+      const claims = unpackSpoils(receipt.claims), identified = claims[index];
+      if (action === 'identify' && identified?.state === 'sealed' && itemIdentified(identified.item)) {
         this.receipt = receipt;
-        this.claims = unpackSpoils(receipt.claims);
-      } else this.loadClaims(receipt);
-    } else if (r.ok && !receipt) this.done = true;
+        this.claims = claims;
+        this.claimError = null;
+        this.detailScroll.new = 0;
+        this.revealedMagic = true;
+        sfx(identified.item.power || identified.item.grant ? 'legendary' : 'reveal');
+      } else {
+        if (r.ok) sfx(action === 'sell' ? 'coin' : 'pick');
+        this.loadClaims(receipt);
+      }
+    } else if (receipt?.id !== id) this.done = true;
   }
 
   async acknowledge() {
@@ -290,10 +480,16 @@ export class SpoilsScreen {
     this.resume();
   }
 
-  async resume() {
+  async resume(report = this.app.store.pendingRun) {
     this.saving = true;
     const store = this.app.store;
-    if (store.pendingRun) this.error = await store.resumeRun();
+    if (report) {
+      this.error = await store.resumeRun(report);
+      if (this.error?.chooseSpoils) this.selection = new SpoilsSelection(this.app.ui, this.error.chooseSpoils, claimIndices => {
+        this.selection = null;
+        this.resume({ ...report, claimIndices });
+      }, this.error.volatile);
+    }
     if (store.pendingReveal) this.reveal = new SpoilsReveal(this.app, store.pendingReveal);
     this.saving = false;
   }
@@ -301,6 +497,7 @@ export class SpoilsScreen {
   draw(ctx, W, H, dt) {
     const { app } = this, ui = app.ui;
     app.scene.draw(ctx, W, H, dt);
+    if (this.selection) return this.selection.draw(ctx, W, H, dt);
     if (this.reveal) {
       this.reveal.draw(ctx, W, H, dt);
       if (this.reveal.done) app.go('title');

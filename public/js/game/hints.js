@@ -19,13 +19,13 @@ const COLOR = '#8fb8ff';
 const DUR = 4.5;
 
 // What each says, for the device: [title, line under it].
-function words(id, g) {
+function words(id, g, firstChoice) {
   const dev = input.device, p = g.player;
   if (id === 'move') {
     return [dev === 'pad' ? 'Left stick to move' : dev === 'touch' ? 'Drag anywhere to move' : 'WASD or arrows to move', 'Keep moving: the horde closes in'];
   }
   if (id === 'gem') return ['A soul gem', 'Gems fill the bar: a full bar is a level, and a card to choose'];
-  if (id === 'weapons') return ['Your weapons strike by themselves', 'Soul gems from the fallen make them grow'];
+  if (id === 'weapons') return ['Your weapons strike by themselves', firstChoice || 'Soul gems from the fallen make them grow'];
   if (id === 'fury') {
     const key = dev === 'pad' ? padKey('X') : dev === 'touch' ? 'Tap the orb' : 'SPACE';
     return [`Fury full: ${key}`, `${p.hero.ultName}: ${p.hero.ultDesc}`];
@@ -59,7 +59,7 @@ export class Hints {
   // later run.
   say(id) {
     if (this.said(id) || this.out.has(id) || !this.g.bannerRoom) return;
-    const [title, sub] = words(id, this.g);
+    const [title, sub] = words(id, this.g, this.firstChoice);
     const b = this.g.banner(title, sub, COLOR, DUR);
     if (!b) return;
     b.hint = true; // held back, not drawn or run down, while the screen is another's (Game.hintsHeld)

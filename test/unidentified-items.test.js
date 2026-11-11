@@ -5,6 +5,8 @@ import { WEAPONS } from '../public/js/data/weapons.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { SLOTS, RARITIES, LEGENDARY, canEquipItem, gearBonuses, gearRanks, itemIcon, itemIdentified, itemLines,
   itemName, packGear, packItem, rarityOdds, rollItem, sameItem, sanitizeGear, sanitizeItem, weaponClass } from '../public/js/shared/items.js';
+import { defaultProfile } from '../public/js/shared/profile.js';
+import { gearPreview } from '../public/js/ui/gear-preview.js';
 
 function findItem(slot, rarity, hero = 'knight') {
   for (let seed = 0; seed < 10000; seed++) {
@@ -20,7 +22,7 @@ test('new crypt loot uses ordinary, blue enchanted or bright gold tiers and jewe
     const item = rollItem(rng, { minute: 8, depth: 2 });
     counts[item.rarity]++;
     assert.ok([0, 2, LEGENDARY].includes(item.rarity));
-    assert.equal(item.identified, false);
+    assert.equal(item.identified, item.rarity === 0);
     assert.deepEqual(sanitizeItem(item), item);
     assert.deepEqual(sanitizeGear(packGear({ [item.slot]: item })), { [item.slot]: item });
     if (item.slot === 'amulet' || item.slot === 'ring') assert.notEqual(item.rarity, 0);
@@ -55,8 +57,10 @@ test('unidentified armor and weapons apply their visible base bonus while all ma
   for (const slot of ['helm', 'armor', 'gloves', 'boots', 'shield']) {
     const common = findItem(slot, 0);
     assert.deepEqual(common.stats, {});
+    assert.doesNotMatch(itemName(common), /^Unidentified /);
     assert.equal(gearBonuses({ [slot]: common }).armor, common.base.armor);
   }
+  assert.ok(itemLines(findItem('weapon', 0, 'archer')).includes('Ranged classes'));
 });
 
 test('melee and ranged equipment remains class specific before and after identification', () => {
@@ -131,4 +135,34 @@ test('item validation rejects forged base bonuses, common jewelry, classless wea
   assert.equal(sanitizeItem({ ...blue, grant: 'weapon:sword' }), null);
   const common = findItem('boots', 0);
   assert.equal(sanitizeItem({ ...common, slot: 'ring', base: {} }), null);
+});
+
+test('next-run gear preview compares actual starting bonuses and hides dormant affixes', () => {
+  const profile = defaultProfile();
+  profile.up.vitality = 1;
+  profile.gear.knight = { helm: findItem('helm', 0) };
+  const item = { ...findItem('helm', LEGENDARY), stats: { armor: 2, growth: 10, cooldown: 5, regen: 3 }, power: 'titan', grant: 'weapon:sword' };
+  const hidden = gearPreview(profile, 'knight', item).join('\n');
+  assert.match(hidden, /Armor 2 → 3/);
+  assert.match(hidden, /Hidden magic is dormant/);
+  assert.doesNotMatch(hidden, /Health|Cooldown|Longsword/);
+  const known = { ...item, identified: true };
+  const preview = gearPreview(profile, 'knight', known).join('\n');
+  assert.match(preview, /Health 94 → 112/);
+  assert.match(preview, /Armor 2 → 7/);
+  assert.match(preview, /Cooldown multiplier 100% → 95%/);
+  assert.match(preview, /Longsword rank 1 → 2/);
+  assert.match(preview, /up to 8.*stops after evolution/);
+
+  profile.gear.knight.ring = { ...findItem('ring', LEGENDARY), identified: true, power: 'titan', grant: 'weapons' };
+  assert.match(gearPreview(profile, 'knight', known).join('\n'), /already worn/);
+  assert.match(gearPreview(profile, 'knight', { ...known, power: 'echo' }).join('\n'), /rank bonus is duplicated/);
+  assert.match(gearPreview(profile, 'knight', { ...known, power: 'echo', grant: 'passives' }).join('\n'), /Dormant at the start.*individual caps/);
+  assert.match(gearPreview(profile, 'knight', { ...known, power: 'echo', grant: 'passive:amount' }).join('\n'), /without a relic slot.*cap is 2/);
+  assert.match(gearPreview(profile, 'knight', findItem('weapon', 0, 'archer')).join('\n'), /incompatible.*inactive/);
+  const ring = { slot: 'ring', rarity: 2, base: {}, identified: true, stats: { luck: 8, greed: 12, magnet: 15 }, power: null, seed: 123 };
+  const ringPreview = gearPreview(defaultProfile(), 'knight', ring).join('\n');
+  assert.match(ringPreview, /Luck multiplier 100% → 108%/);
+  assert.match(ringPreview, /Gold multiplier 100% → 112%/);
+  assert.match(ringPreview, /Pickup range 42 → 48.3/);
 });

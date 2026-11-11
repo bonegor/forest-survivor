@@ -86,6 +86,10 @@ export class PrologueScreen {
       drawText(ctx, 'The Sunscorch', W / 2, H / 2 - 20, { align: 'center', color: '#fee761', font: 'gothic' });
       const lines = wrapText('By midday, Aldric reached the Sunscorch. Something stirred beneath the sand.', Math.min(290, W - 32));
       lines.forEach((s, i) => drawText(ctx, s, W / 2, H / 2 + i * 11, { align: 'center', color: '#ead4aa' }));
+      if (!this.replay) {
+        const lesson = wrapText('In the Sunscorch, gather soul gems to choose an upgrade.', Math.min(290, W - 32));
+        lesson.forEach((s, i) => drawText(ctx, s, W / 2, H / 2 + (lines.length + i) * 11 + 5, { align: 'center', color: '#8fb8ff' }));
+      }
       if (this.replay) {
         ui.begin(dt);
         if (button(ctx, ui, 'road_done', W / 2 - 65, H / 2 + 45, 130, 15, 'RETURN TO CAMP')) this.finish();

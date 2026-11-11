@@ -72,11 +72,22 @@ export function settledSpoils(raw, found, gear, soldOnConflict = []) {
   })));
 }
 
-export function partitionRunSpoils(raw, found) {
-  const items = unpackSpoils(raw, found).filter(entry => entry.state === 'sealed');
-  const excess = items.slice(MAX_CLAIMS);
+export const sealedFinds = (raw, found) => unpackSpoils(raw, found).filter(entry => entry.state === 'sealed');
+
+export function validClaimIndices(indices, count = MAX_SPOILS) {
+  return Array.isArray(indices) && indices.length <= MAX_CLAIMS && new Set(indices).size === indices.length &&
+    Array.from(indices).every(i => Number.isInteger(i) && i >= 0 && i < count);
+}
+
+export function partitionRunSpoils(raw, found, claimIndices, requireSelection = false) {
+  const items = sealedFinds(raw, found);
+  if (claimIndices === undefined && requireSelection && items.length > MAX_CLAIMS) return null;
+  if (claimIndices !== undefined && !validClaimIndices(claimIndices, items.length)) return null;
+  const keep = claimIndices === undefined ? null : new Set(claimIndices);
+  const retained = items.filter((_, i) => keep ? keep.has(i) : i < MAX_CLAIMS);
+  const excess = items.filter((_, i) => keep ? !keep.has(i) : i >= MAX_CLAIMS);
   return {
-    claims: packSpoils(items.slice(0, MAX_CLAIMS)),
+    claims: packSpoils(retained),
     history: packSpoils(excess.map(({ item }) => ({ item, state: 'sold' }))),
     overflowGold: excess.reduce((n, { item }) => n + itemPrice(item), 0),
   };

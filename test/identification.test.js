@@ -36,6 +36,38 @@ test('identification spends 10 then 20 gold, survives packing, and retries never
   assert.equal(unpackSpoils(second.profile.lastRun.claims)[0].item.identified, true);
 });
 
+test('old modern common gear becomes understood without a charge while legacy common keeps its hidden affix', () => {
+  const id = makeRunId();
+  // @7 encodes a modern common helm with seed 7 and its identification bit unset.
+  const previous = { ...defaultProfile(), gold: 100, runs: 1, identifications: 2,
+    gear: { knight: '@7' }, stash: '!2:@7', lastRun: { id, from: 0, hero: 'knight', pending: true, claims: '!4:@7', reward: {} } };
+  const migrated = sanitizeProfile(previous);
+  const common = { slot: 'helm', rarity: 0, stats: {}, power: null, seed: 7, base: { armor: 1 }, identified: true };
+  assert.deepEqual(migrated.gear.knight.helm, common);
+  assert.deepEqual(migrated.stash[0], common);
+  assert.deepEqual(unpackSpoils(migrated.lastRun.claims)[0].item, common);
+  assert.deepEqual(sanitizeProfile(packProfile(migrated)), migrated);
+
+  const claim = resolveSpoil(migrated, { id, index: 0, action: 'identify', expectedCost: 30 });
+  assert.equal(claim.repeated, true);
+  const camp = { hero: 'knight', source: 'stash', index: 0, expectedGearRev: 0, expectedCost: 30, action: 'identify' };
+  const owned = manageInventory(migrated, { ...camp, expected: common });
+  assert.equal(owned.ok, false);
+  for (const result of [claim, owned]) {
+    assert.equal(result.profile.gold, 100);
+    assert.equal(identificationCost(result.profile), 30);
+  }
+
+  const legacy = { slot: 'boots', rarity: 0, stats: { speed: 3 }, power: null, seed: 7, identified: false };
+  const withLegacy = sanitizeProfile({ ...migrated, stash: [legacy] });
+  assert.deepEqual(withLegacy.stash[0], legacy);
+  const identified = manageInventory(withLegacy, { ...camp, expected: legacy });
+  assert.ok(identified.ok);
+  assert.equal(identified.profile.gold, 70);
+  assert.equal(identificationCost(identified.profile), 40);
+  assert.equal(gearBonuses({ boots: identified.profile.stash[0] }).speed, 0.03);
+});
+
 test('unknown gear can be equipped for its base bonus while magic remains hidden and dormant', () => {
   const item = find('boots'), saved = receipt([item]);
   const equipped = resolveSpoil(saved.profile, { id: saved.id, index: 0, action: 'equip', expectedGearRev: 0 });

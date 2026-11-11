@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { createServer } from '../server.js';
 import { store } from '../public/js/engine/storage.js';
+import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { Game } from '../public/js/game/game.js';
 import { rollItem, itemPrice, RARITIES } from '../public/js/shared/items.js';
-import { acknowledgeReveal, applyRun, decodeState, defaultProfile, encodeState, metaBonuses, packProfile, resolveSpoil, sanitizeProfile } from '../public/js/shared/profile.js';
+import { acknowledgeReveal, applyRun, decodeState, defaultProfile, encodeState, manageInventory, MAX_STASH, metaBonuses, packProfile, resolveSpoil, sanitizeProfile } from '../public/js/shared/profile.js';
 import { MAX_CLAIMS, makeRunId, packSpoils, unpackSpoils } from '../public/js/shared/spoils.js';
-import { reelPosition, reelProgress } from '../public/js/ui/reward-reels.js';
+import { reelPosition, reelProgress, SpoilsReveal, SpoilsSelection } from '../public/js/ui/reward-reels.js';
+import { HeroScreen } from '../public/js/ui/hero-selection.js';
+import { UI } from '../public/js/ui/ui.js';
 
 const gear = [
   { slot: 'ring', rarity: 4, stats: { crit: 5, luck: 12, greed: 20, might: 9 }, power: 'undying', seed: 3, grant: 'weapon:sword' },
@@ -101,6 +104,189 @@ test('only the first twelve sealed finds await decisions and any overflow sells 
   assert.equal(saved.reward.spoilsGold, itemPrice(gear[0]) * 2);
   assert.equal(saved.profile.gold, saved.reward.total + saved.reward.spoilsGold);
   assert.equal(applyRun(saved.profile, run).profile.gold, saved.profile.gold);
+});
+
+test('overflow selection survives reload, explicitly sells the remainder, and keeps the thirteenth find', async () => {
+  const entries = Array.from({ length: MAX_CLAIMS + 1 }, (_, i) => ({ item: { ...(i === MAX_CLAIMS ? gear[0] : gear[2]), seed: i }, state: 'sealed' }));
+  const report = { mode: 's15', time: 360, hero: 'knight', found: entries.length, sealedGear: true, selectSpoils: true,
+    spoils: packSpoils(entries), runId: makeRunId(), runFrom: 0 };
+  const fresh = defaultProfile();
+  for (const claimIndices of [undefined, [MAX_CLAIMS + 1], [2, 2], [null]]) {
+    const invalid = applyRun(fresh, { ...report, claimIndices });
+    assert.equal(invalid.ok, false);
+    assert.equal(invalid.profile.runs, 0);
+    assert.equal(invalid.profile.gold, 0);
+  }
+  const memory = new Map(), previousStorage = globalThis.localStorage;
+  globalThis.localStorage = { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value), removeItem: key => memory.delete(key) };
+  const local = { ...store, profile: fresh };
+  // The copied object needs the store's live getters.
+  for (const name of ['pendingRun', 'pendingReveal']) Object.defineProperty(local, name, Object.getOwnPropertyDescriptor(store, name));
+  try {
+    const draft = await local.submitRun(report);
+    assert.equal(local.profile.runs, 0);
+    local.runOutbox = null;
+    const resumed = await local.resumeRun();
+    assert.deepEqual(resumed.chooseSpoils, draft.chooseSpoils);
+    const ui = new UI(), ctx = document.createElement('canvas').getContext('2d');
+    let selection;
+    const chooser = new SpoilsSelection(ui, resumed.chooseSpoils, kept => { selection = kept; });
+    const draw = () => chooser.draw(ctx, 320, 240, 1);
+    function press(id) {
+      ui.focus(id);
+      input.justDown.add('Enter');
+      try { draw(); } finally { input.justDown.clear(); }
+    }
+    draw();
+    press('select_spoils_0');
+    press('select_spoils_review');
+    assert.equal(selection, undefined, 'reviewing never sells');
+    press('detail_sell');
+    assert.ok(selection.includes(MAX_CLAIMS));
+    const reward = await local.resumeRun({ ...local.pendingRun, claimIndices: selection });
+    assert.equal(reward.spoilsGold, itemPrice(gear[2]) * 2);
+    assert.equal(unpackSpoils(local.pendingReveal.claims).at(-1).item.seed, MAX_CLAIMS);
+    const gold = local.profile.gold;
+    await local.submitRun({ ...report, claimIndices: [] });
+    assert.deepEqual(local.pendingReveal.claimIndices, selection);
+    assert.equal(local.profile.gold, gold);
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
+});
+
+test('a full stash can sell an inspected item without consuming the pending claim or replaying the sale', async () => {
+  const initial = defaultProfile(), id = makeRunId();
+  initial.gear.knight = { ring: gear[1] };
+  initial.stash = Array(MAX_STASH).fill(gear[2]);
+  const saved = applyRun(initial, { mode: 's15', time: 300, hero: 'knight', found: 1, sealedGear: true,
+    spoils: packSpoils([{ item: gear[0], state: 'sealed' }]), runId: id, runFrom: 0 });
+  const ui = new UI(), appStore = { profile: saved.profile, get pendingReveal() { return this.profile.lastRun; },
+    async manageInventory(decision) {
+      const stale = resolveSpoil(this.profile, { id, index: 0, action: 'sell' });
+      assert.equal(manageInventory(stale.profile, decision).ok, false, 'a settled claim must not sell a stored item');
+      const result = manageInventory(this.profile, decision);
+      assert.ok(result.ok);
+      this.profile = result.profile;
+      assert.equal(manageInventory(this.profile, decision).ok, false, 'identical next item must survive a retry');
+      return result;
+    },
+    async resolveSpoil(decision) {
+      const result = resolveSpoil(this.profile, decision);
+      this.profile = result.profile;
+      return result;
+    },
+  };
+  const reveal = new SpoilsReveal({ ui, store: appStore }, saved.profile.lastRun);
+  const ctx = document.createElement('canvas').getContext('2d');
+  const draw = () => reveal.draw(ctx, 480, 270, 1);
+  async function press(id) {
+    draw();
+    ui.focus(id);
+    input.justDown.add('Enter');
+    try { draw(); } finally { input.justDown.clear(); }
+    await Promise.resolve();
+  }
+  draw();
+  assert.equal(ui.items.find(item => item.id === 'claim_equip').disabled, true);
+  await press('claim_stash');
+  await press('detail_0');
+  assert.equal(appStore.profile.stash.length, MAX_STASH, 'inspection does not sell');
+  await press('detail_sell');
+  assert.equal(appStore.profile.stash.length, MAX_STASH - 1);
+  assert.equal(appStore.profile.gold, saved.profile.gold + itemPrice(gear[2]));
+  assert.equal(reveal.claim, 0);
+  assert.equal(appStore.profile.lastRun.claims, saved.profile.lastRun.claims);
+  await press('claim_equip');
+  assert.deepEqual(appStore.profile.gear.knight.ring, gear[0]);
+  assert.deepEqual(appStore.profile.stash.at(-1), gear[1]);
+});
+
+test('multi-find overview keeps magical loot inspectable and quick-sells only ordinary gear', async () => {
+  const id = makeRunId(), common = rollItem(mulberry32(1), { slot: 'helm' });
+  assert.equal(common.rarity, 0);
+  const saved = applyRun(defaultProfile(), { mode: 's15', time: 300, hero: 'knight', found: 2, sealedGear: true, runId: id, runFrom: 0,
+    spoils: packSpoils([gear[0], common].map(item => ({ item, state: 'sealed' }))) });
+  const ui = new UI(), appStore = { profile: saved.profile, get pendingReveal() { return this.profile.lastRun; },
+    async resolveSpoil(decision) {
+      const result = resolveSpoil(this.profile, decision);
+      this.profile = result.profile;
+      return result;
+    },
+  };
+  const reveal = new SpoilsReveal({ ui, store: appStore }, saved.profile.lastRun);
+  const ctx = document.createElement('canvas').getContext('2d');
+  const draw = () => reveal.draw(ctx, 320, 240, 1);
+  async function press(id) {
+    draw();
+    ui.focus(id);
+    input.justDown.add('Enter');
+    try { draw(); } finally { input.justDown.clear(); }
+    await Promise.resolve();
+  }
+  draw();
+  assert.deepEqual(ui.items.map(item => item.id), ['find_0', 'find_1', 'quick_sell_1']);
+  await press('find_0');
+  await press('claim_back');
+  await press('quick_sell_1');
+  assert.equal(appStore.profile.gold, saved.profile.gold + itemPrice(common));
+  assert.deepEqual(unpackSpoils(appStore.pendingReveal.claims).map(entry => entry.state), ['sealed', 'sold']);
+  draw();
+  assert.deepEqual(ui.items.map(item => item.id), ['find_0']);
+});
+
+test('identification reveals magic in place on the claim and camp item, without a reel or input pause', async () => {
+  const initial = defaultProfile(), id = makeRunId(), unknown = { ...gear[0], base: {}, identified: false };
+  initial.gold = 100;
+  initial.stash = [{ ...unknown, seed: 4 }];
+  const saved = applyRun(initial, { mode: 's15', time: 300, hero: 'knight', found: 1, sealedGear: true,
+    spoils: packSpoils([{ item: unknown, state: 'sealed' }]), runId: id, runFrom: 0 });
+  const ui = new UI();
+  const appStore = { profile: saved.profile, get pendingReveal() { return this.profile.lastRun; },
+    async resolveSpoil(decision) {
+      const result = resolveSpoil(this.profile, decision);
+      this.profile = result.profile;
+      return result;
+    },
+    async manageInventory(decision) {
+      const result = manageInventory(this.profile, decision);
+      this.profile = result.profile;
+      return result;
+    },
+  };
+  const app = { ui, store: appStore };
+  const claim = new SpoilsReveal(app, saved.profile.lastRun);
+  const ctx = document.createElement('canvas').getContext('2d');
+  claim.draw(ctx, 320, 240, 1 / 60);
+  assert.ok(ui.items.some(item => item.id === 'claim_identify'), 'find is inspectable on the first frame');
+  assert.ok(!ui.items.some(item => item.id === 'claim_skip'));
+  ui.lock(0);
+  await claim.resolveClaim('identify', 0, 10);
+  claim.draw(ctx, 320, 240, 1 / 60);
+  assert.equal(claim.claim, 0);
+  assert.equal(claim.revealedMagic, true);
+  assert.equal(claim.claims[0].item.identified, true);
+  assert.equal(ui.lockT, 0);
+  assert.ok(ui.items.some(item => item.id === 'claim_equip' && !item.disabled));
+  ui.focus('claim_compare');
+  input.justDown.add('Enter');
+  try { claim.draw(ctx, 320, 240, 1 / 60); } finally { input.justDown.clear(); }
+  assert.equal(claim.claimDialog.title, 'Next run · Knight');
+  assert.ok(claim.claimDialog.lines.some(line => line.startsWith('Crit chance')));
+
+  const camp = new HeroScreen();
+  camp.app = app;
+  camp.inspectOwned('knight', 'stash', { item: appStore.profile.stash[0], index: 0 }, 0);
+  await camp.dialogAction('identify');
+  assert.equal(camp.dialog.title, 'Magic revealed');
+  assert.ok(camp.dialog.lines.some(line => line.text?.includes('rank') && line.color === '#fee761'));
+  assert.equal(appStore.profile.stash[0].seed, 4);
+  assert.equal(appStore.profile.stash[0].identified, true);
+  assert.equal(appStore.profile.gold, saved.profile.gold - 30);
+  assert.equal(ui.lockT, 0);
+  await camp.dialogAction('compare');
+  assert.equal(camp.dialog.title, 'Next run · Knight');
+  assert.ok(camp.dialog.lines.some(line => line.startsWith('Crit chance')));
 });
 
 test('lost run and sale responses can be retried without a second payout', async () => {
