@@ -7,6 +7,7 @@ import { HEROES } from '../public/js/data/heroes.js';
 import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 import { heroAttackPose, strikeClip } from '../public/js/game/hero-animation.js';
+import { BASE_SPEED } from '../public/js/game/player.js';
 import baseline from '../tools/animation-round/baseline/index.js';
 
 function run(id, fn) {
@@ -19,6 +20,82 @@ function run(id, fn) {
     return fn(g, g.player, g.mainWeapon(), SPR[id]);
   } finally { input.bot = before; }
 }
+
+test('gait follows ground covered at gentle, normal and boosted speeds, in every direction', () => {
+  for (const speed of [.15, .5, 1, 2.5]) for (const [x, y] of [[1, 0], [-1, 0], [Math.SQRT1_2, -Math.SQRT1_2]]) {
+    run('knight', (g, p, w, spr) => {
+      g.world.collide = () => {};
+      p.speedMul *= Math.max(1, speed);
+      input.bot = { x: x * Math.min(1, speed), y: y * Math.min(1, speed) };
+      const startX = p.x, startY = p.y;
+      for (let i = 0; i < 120; i++) p.update(1 / 60);
+      const traveled = Math.hypot(p.x - startX, p.y - startY);
+      assert.ok(Math.abs(p.anim - 7 * traveled / BASE_SPEED) < 1e-9,
+        `${speed}: each footfall covers the same distance without a speed floor or ceiling`);
+      assert.equal(p.walking, true);
+      assert.equal(p.idleAnim, 0, 'walking cannot advance the idle phase');
+      g.placePlayer(g.cam);
+      assert.ok(spr.walk.includes(spr.frames.indexOf(p._rect[4])));
+    });
+  }
+});
+
+test('a wall stops the visual gait without changing steering, facing or attack receipts', () => run('knight', (g, p, w, spr) => {
+  const startX = p.x, startY = p.y;
+  const stepClock = p.stepT;
+  g.world.collide = actor => { actor.x = startX; actor.y = startY; };
+  input.bot = { x: -1, y: 0 };
+  const resting = new Set();
+  for (let i = 0; i < 120; i++) {
+    p.update(1 / 60); g.placePlayer(g.cam);
+    resting.add(spr.frames.indexOf(p._rect[4]));
+  }
+  assert.equal(p.moving, true, 'gameplay still knows the player is steering');
+  assert.equal(p.face, -1);
+  assert.equal(p.walking, false);
+  assert.equal(p.anim, 0, 'no distance, no footsteps');
+  assert.equal(p.stepT, stepClock, 'a blocked hero cannot emit walking dust or footstep sounds');
+  assert.ok(resting.size > 1);
+  assert.ok([...resting].every(i => spr.idle.includes(i)), 'the blocked hero breathes at rest');
+  p.heroAttack = { at: g.clock, ang: Math.PI, weapon: w };
+  g.placePlayer(g.cam);
+  assert.equal(p._rect[4], spr.frames[spr.attack[spr.attackRelease]], 'a successful strike keeps its real release pose');
+  assert.equal(p._rect[5], true);
+}));
+
+test('stopping settles into idle without advancing the next walking phase', () => run('footman', (g, p) => {
+  g.world.collide = () => {};
+  input.bot = { x: 1, y: 0 };
+  for (let i = 0; i < 60; i++) p.update(1 / 60);
+  input.bot = { x: 0, y: 0 };
+  p.update(1 / 60);
+  assert.equal(p.moving, false);
+  assert.equal(p.walking, false, 'releasing input plants the feet for stationary attacks');
+  for (let i = 0; i < 60; i++) p.update(1 / 60);
+  assert.equal(p.walking, false);
+  const phase = p.anim, idle = p.idleAnim;
+  for (let i = 0; i < 120; i++) p.update(1 / 60);
+  assert.equal(p.anim, phase, 'rest cannot move the gait to an arbitrary pose');
+  assert.ok(p.idleAnim > idle);
+  input.bot = { x: 1, y: 0 };
+  const x = p.x;
+  p.update(1 / 60);
+  assert.ok(Math.abs(p.anim - phase - 7 * (p.x - x) / BASE_SPEED) < 1e-9);
+}));
+
+test('ice sliding and airborne leaps do not spin a ground walk', () => {
+  for (const travel of ['slide', 'leap']) run('knight', (g, p) => {
+    g.world.collide = () => {};
+    input.bot = { x: 1, y: 0 };
+    const x = p.x;
+    if (travel === 'slide') p.slide = { x: 1, y: 0 };
+    else p.leapTo(p.x + 80, p.y, () => {}, 1);
+    for (let i = 0; i < 20; i++) p.update(1 / 60);
+    assert.ok(p.x > x, `${travel}: forced travel really occurs`);
+    assert.equal(p.walking, false);
+    assert.equal(p.anim, 0);
+  });
+});
 
 test('new pose counts preserve every hero\'s original manual hit delay', () => {
   const legacy = { knight: 2/10, archer: 2/14, mage: 2/12, rogue: 0, necromancer: 2/12, paladin: 2/13, druid: 2/12, berserker: 2/12, witchhunter: 2/12 };
@@ -64,12 +141,12 @@ for (const id of Object.keys(HEROES)) test(`${id}: successful field attacks anim
       g.placePlayer(g.cam);
       const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
       const pose = heroAttackPose(g, spr, step);
-      const expected = pose?.frame ?? (p.moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate)));
+      const expected = pose?.frame ?? (p.walking ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate)));
       assert.equal(p._rect[4], expected, 'production renderer selects the attack or current locomotion phase');
       assert.equal(p._rect[5], face < 0);
       if (pose) {
         attacked = true;
-        const frames = p.moving && spr.attackWalk ? spr.attackWalk.flat() : spr.attack;
+        const frames = p.walking && spr.attackWalk ? spr.attackWalk.flat() : spr.attack;
         assert.ok(frames.includes(spr.frames.indexOf(pose.frame)), 'the signature uses an authored attack');
       } else if (attacked) recovered = true;
       if (!p.heroAttack) continue;
@@ -88,7 +165,7 @@ test('every grounded hero keeps its gait through all attack phases', () => {
     if (spr.floating) return;
     assert.ok(spr.attackWalk, `${id}: moving attack clip`);
     assert.equal(spr.attackWalk.length, spr.attack.length);
-    p.moving = true; p.face = 1;
+    p.moving = p.walking = true; p.face = 1;
     g.inCrypt = {};
     p.strikeAng = 0;
     const clip = strikeClip(spr);
@@ -110,7 +187,7 @@ test('every grounded hero keeps its gait through all attack phases', () => {
 test('rear shots and failed casts never invent a forward attack or turn the hero', () => {
   for (const id of ['mage', 'paladin', 'druid', 'witchhunter']) run(id, (g, p, w, spr) => {
     g.inCrypt = {};
-    p.moving = true; p.face = 1;
+    p.moving = p.walking = true; p.face = 1;
     p.strikeAt = g.clock; p.strikeAng = Math.PI;
     assert.equal(heroAttackPose(g, spr, 0), null);
     assert.equal(p.face, 1);
@@ -159,11 +236,11 @@ for (const id of Object.keys(HEROES)) test(`${id}: crypt strikes animate only af
       }
       g.cryptTime += 2 / spr.attackFps;
       g.placePlayer(g.cam);
-      assert.equal(p._rect[4], idleFrame(spr, Math.floor(p.anim * spr.idleRate)));
+      assert.equal(p._rect[4], idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate)));
     }
     g.inCrypt = null;
     g.cryptTime = p.strikeAt - g.time;
     g.placePlayer(g.cam);
-    assert.equal(p._rect[4], idleFrame(spr, Math.floor(p.anim * spr.idleRate)), 'leaving the crypt cannot carry an attack pose outside');
+    assert.equal(p._rect[4], idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate)), 'leaving the crypt cannot carry an attack pose outside');
   });
 });

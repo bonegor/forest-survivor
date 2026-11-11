@@ -1,6 +1,8 @@
 // Native Canvas evidence from the production Game, Player, sprite builder and HUD.
 // Usage: CANVAS_MODULE=/path/to/@napi-rs/canvas node tools/animation-round/capture-review.mjs baseline [hero ...]
 // REVIEW_OUT can choose a fresh take folder; --contacts skips timed world captures.
+// --walk-only records 30 fps travel, stop/restart, slow travel and moving combat.
+// REVIEW_DIFF selects a real difficulty; REVIEW_PHASES is a comma-separated scene subset.
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -19,12 +21,14 @@ const { KNIGHT_PLUMED } = await import('../../public/js/art/knight-plumed.js');
 buildSprites();
 const args = process.argv.slice(2), tag = args.shift() || 'review';
 const contactsOnly = args.includes('--contacts');
+const walkOnly = args.includes('--walk-only');
 const requested = args.filter(a => !a.startsWith('--'));
 const ids = requested.length ? requested : Object.keys(HEROES);
 const root = resolve(process.env.REVIEW_OUT || `output/animation-round/${tag}`);
+const difficulty = process.env.REVIEW_DIFF || 'easy';
 mkdirSync(root, { recursive: true });
 const hash = b => createHash('sha256').update(Buffer.from(b.d.buffer, b.d.byteOffset, b.d.byteLength)).digest('hex');
-const report = { tag, nativeRenderer: 'Game/Player/Camera/lighting/HUD', heroes: {} };
+const report = { tag, nativeRenderer: 'Game/Player/Camera/lighting/HUD', capture: walkOnly ? 'walk' : 'full', difficulty, heroes: {} };
 function canvas(w, h) { const c = createCanvas(w, h); c.getContext('2d').imageSmoothingEnabled = false; return c; }
 function label(ctx, text, x, y) { ctx.fillStyle = '#e7dfc7'; ctx.font = '13px sans-serif'; ctx.fillText(text, x, y); }
 function contacts(id, spr) {
@@ -64,6 +68,21 @@ function contacts(id, spr) {
     }
     writeFileSync(join(root,`${id}-moving-attacks.png`),aw.toBuffer('image/png'));
   }
+  if(walkOnly)for(const [name,ground] of [['dark','#26313a'],['light','#bdb8a5']]){
+    // Fixed native crop and pivot on every tile: enlarged anatomy review must
+    // not hide registration jumps by independently centring each source pose.
+    const list=[...spr.walk,spr.walk[0]],detail=canvas(768,28+Math.ceil(list.length/4)*216),dc=detail.getContext('2d');
+    dc.fillStyle=ground;dc.fillRect(0,0,detail.width,detail.height);
+    dc.fillStyle=name==='light'?'#17202a':'#e7dfc7';dc.font='13px sans-serif';
+    dc.fillText(`${id}: every native gait pose and loop return, fixed crop at 4x`,8,18);
+    list.forEach((index,n)=>{
+      const x=n%4*192,y=28+Math.floor(n/4)*216,frame=spr.frames[index];
+      dc.drawImage(frame.c,16,12,48,48,x,y,192,192);
+      dc.fillStyle=name==='light'?'#6d6a60':'#62717b';dc.fillRect(x+2,y+(spr.anchorY-12)*4,188,1);
+      dc.fillStyle=name==='light'?'#17202a':'#e7dfc7';dc.fillText(`${n===list.length-1?'return to 0':`phase ${n}`} / pose ${index}`,x+7,y+208);
+    });
+    writeFileSync(join(root,`${id}-walk-detail-${name}.png`),detail.toBuffer('image/png'));
+  }
   return { dimensions:[spr.w,spr.h],anchorY:spr.anchorY,idleFps:spr.idleRate*1.6,attackFps:spr.attackFps,attackRelease:spr.attackRelease,motionRate:spr.motionRate,floating:spr.floating,attackWalk:!!spr.attackWalk,frameFingerprint:createHash('sha256').update(spr.frames.map(fr=>hash(fr.buf)).join('')).digest('hex'),motions:motionData };
 }
 for (const id of ids) report.heroes[id] = contacts(id,SPR[HEROES[id].sprite]);
@@ -74,21 +93,33 @@ ids.forEach((id,n)=>{const spr=SPR[id],fr=spr.frames[spr.idle[0]],x=n%7*280,y=Ma
 writeFileSync(join(root,'roster.png'),over.toBuffer('image/png'));
 writeFileSync(join(root,'coverage.json'),JSON.stringify(report,null,2));
 if(contactsOnly) process.exit(0);
-const W=480,H=300,HZ=60,FPS=Number(process.env.REVIEW_FPS || 20),STRIDE=HZ/FPS;
+const W=480,H=300,HZ=60,FPS=Number(process.env.REVIEW_FPS || (walkOnly ? 30 : 20)),STRIDE=HZ/FPS;
 if(!Number.isInteger(STRIDE))throw Error('REVIEW_FPS must divide 60');
 const world=canvas(W,H),ctx=world.getContext('2d'),ui=canvas(W,H),uctx=ui.getContext('2d');
 Object.assign(view,{canvas:world,ctx,ui,uctx,S:1,W,H,pxW:W,pxH:H,zoom:1});
-const phases=[{name:'idle-right',seconds:2.4,x:0,y:0,face:1},{name:'walk-right',seconds:1.6,x:1,y:0,face:1},{name:'walk-left',seconds:1.6,x:-1,y:0,face:-1},{name:'walk-diagonal',seconds:1.6,x:Math.SQRT1_2,y:-Math.SQRT1_2,face:1},{name:'field-attack-right',seconds:1.6,x:0,y:0,face:1,combat:true},{name:'field-attack-moving',seconds:1.6,x:1,y:0,face:1,combat:true},{name:'field-attack-left',seconds:1.6,x:0,y:0,face:-1,combat:true},{name:'crypt-attack-right',seconds:1.4,x:0,y:0,face:1,combat:true,manual:true},{name:'crypt-attack-moving-left',seconds:1.4,x:-1,y:0,face:-1,combat:true,manual:true}];
+const phases=walkOnly ? [
+  {name:'walk-right',seconds:1.8,x:1,y:0,face:1},
+  {name:'walk-left',seconds:1.8,x:-1,y:0,face:-1},
+  {name:'walk-diagonal',seconds:1.8,x:Math.SQRT1_2,y:-Math.SQRT1_2,face:1},
+  {name:'stop',seconds:.6,x:0,y:0,face:1},
+  {name:'restart',seconds:1.2,x:1,y:0,face:1},
+  {name:'slow-travel',seconds:1.8,x:.2,y:0,face:1},
+  {name:'field-attack-moving',seconds:1.8,x:1,y:0,face:1,combat:true},
+  {name:'crypt-attack-moving-left',seconds:1.8,x:-1,y:0,face:-1,combat:true,manual:true},
+] : [{name:'idle-right',seconds:2.4,x:0,y:0,face:1},{name:'walk-right',seconds:1.6,x:1,y:0,face:1},{name:'walk-left',seconds:1.6,x:-1,y:0,face:-1},{name:'walk-diagonal',seconds:1.6,x:Math.SQRT1_2,y:-Math.SQRT1_2,face:1},{name:'field-attack-right',seconds:1.6,x:0,y:0,face:1,combat:true},{name:'field-attack-moving',seconds:1.6,x:1,y:0,face:1,combat:true},{name:'field-attack-left',seconds:1.6,x:0,y:0,face:-1,combat:true},{name:'crypt-attack-right',seconds:1.4,x:0,y:0,face:1,combat:true,manual:true},{name:'crypt-attack-moving-left',seconds:1.4,x:-1,y:0,face:-1,combat:true,manual:true}];
+const requestedPhases=process.env.REVIEW_PHASES?.split(',');
+const selectedPhases=requestedPhases?phases.filter(phase=>requestedPhases.includes(phase.name)):phases;
+if(!selectedPhases.length||requestedPhases?.some(name=>!phases.some(phase=>phase.name===name)))throw Error('Unknown or empty REVIEW_PHASES');
 const profile=defaultProfile(),beforeProfile=JSON.stringify(profile),random=Math.random,bot=input.bot;
 try {
 for(const id of ids){
   Math.random=mulberry32(29471);
-  const g=new Game({hero:id,mode:'s15',map:'forest',diff:'easy',meta:metaBonuses(profile),settings:{numbers:false,softFlash:true},crypts:false});
-  g.spawner.update=()=>{};g.player.devGod=true;g.banners.length=0;g.syncCam();g.cam.x=g.player.x-W/2;g.cam.y=g.player.y-8-H/2;
+  const g=new Game({hero:id,mode:'s15',map:'forest',diff:difficulty,meta:metaBonuses(profile),settings:{numbers:false,softFlash:true},crypts:false});
+  g.spawner.update=()=>{};g.player.devGod=true;g.banners.length=0;g.player.anim=0;g.player.idleAnim=0;g.syncCam();g.cam.x=g.player.x-W/2;g.cam.y=g.player.y-8-H/2;
   const spr=SPR[g.player.hero.sprite],dir=join(root,`${id}-world`);mkdirSync(dir,{recursive:true});
-  const seen={},samples=[],poseCounts={},sheet=canvas(W*4,H*3),sc=sheet.getContext('2d');
+  const seen={},samples=[],poseCounts={},phaseMetrics={},sheet=canvas(W*4,H*3),sc=sheet.getContext('2d');
   let sample=0,clipped=0,stage=0;
-  for(const phase of phases){
+  for(const phase of selectedPhases){
     if(phase.manual&&!g.inCrypt){
       input.bot={x:0,y:0};
       g.enterCrypt({key:'0,0',depth:1,x:g.player.x,y:g.player.y-40});
@@ -111,19 +142,25 @@ for(const id of ids){
       for(const w of g.player.weapons)w.cd=0;
     }
     const frames=phase.seconds*HZ;
+    const gaitStart=g.player.anim;let distance=0,walkingTicks=0;
     for(let n=0;n<frames;n++){
       if(target){target.x=g.player.x+phase.face*30;target.y=g.player.y;}
       if(phase.manual&&n===1){g.mainWeapon().cd=0;if(!g.strike())throw Error(`${id}: manual strike failed`);}
+      const oldX=g.player.x,oldY=g.player.y;
       g.update(1/HZ);g.placePlayer(g.cam);
+      distance+=Math.hypot(g.player.x-oldX,g.player.y-oldY);
+      if(g.player.walking??g.player.moving)walkingTicks++;
       const idx=spr.frames.indexOf(g.player._rect[4]);(seen[phase.name]??=new Set()).add(idx);poseCounts[idx]=(poseCounts[idx]||0)+1;
       if(n%STRIDE)continue;
       g.draw(ctx);uctx.clearRect(0,0,W,H);g.hud.draw(uctx,W,H,g.clock,1/FPS);ctx.drawImage(ui,0,0);
       const rect=g.player._rect;
       if(rect[0]<0||rect[1]<0||rect[0]+rect[2]>W||rect[1]+rect[3]>H)clipped++;
       writeFileSync(join(dir,`${String(sample).padStart(4,'0')}.png`),world.toBuffer('image/png'));
-      samples.push({frame:sample,time:g.clock,phase:phase.name,spriteFrame:idx,face:g.player.face,rect:rect.slice(0,4),attack:!!g.player.heroAttack});sample++;
+      samples.push({frame:sample,time:g.clock,phase:phase.name,spriteFrame:idx,face:g.player.face,rect:rect.slice(0,4),attack:!!g.player.heroAttack,
+        x:g.player.x,y:g.player.y,gait:g.player.anim,idle:g.player.idleAnim,walking:g.player.walking,moving:g.player.moving});sample++;
       if(n===Math.floor(frames/2/STRIDE)*STRIDE)sc.drawImage(world,stage%4*W,Math.floor(stage/4)*H);
     }
+    phaseMetrics[phase.name]={seconds:phase.seconds,distance,gaitSteps:(g.player.anim-gaitStart)*1.4*spr.motionRate,walkingTicks};
     const framesSeen=seen[phase.name];
     if(phase.name==='idle-right'){
       if([...framesSeen].some(index=>!spr.idle.includes(index)))throw Error(`${id}: an attack interrupted the quiet idle phase`);
@@ -139,12 +176,12 @@ for(const id of ids){
     }
     stage++;
   }
-  const data={frames:sample,fps:FPS,clipped,damage:g.stats.damage,seen:Object.fromEntries(Object.entries(seen).map(([k,v])=>[k,[...v]])),poseCounts};
+  const data={frames:sample,fps:FPS,clipped,damage:g.stats.damage,seen:Object.fromEntries(Object.entries(seen).map(([k,v])=>[k,[...v]])),phaseMetrics,poseCounts};
   report.heroes[id].world=data;
   writeFileSync(join(dir,'samples.json'),JSON.stringify(samples));
   writeFileSync(join(root,`${id}-world-contact.png`),sheet.toBuffer('image/png'));
   writeFileSync(join(root,'coverage.json'),JSON.stringify(report,null,2));
-  console.log(`${id}: ${sample} frames, ${clipped} clipped, ${Math.round(g.stats.damage)} damage, field attack frames ${[...new Set([...seen['field-attack-right'],...seen['field-attack-left']])].filter(n=>spr.attack.includes(n)).join(',')}`);
+  console.log(`${id}: ${sample} frames, ${clipped} clipped, ${Math.round(g.stats.damage)} damage; ${Object.keys(seen).join(', ')}`);
 }
 } finally {Math.random=random;input.bot=bot;}
 if(JSON.stringify(profile)!==beforeProfile)throw Error('Capture changed its in-memory review profile');

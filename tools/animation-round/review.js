@@ -9,6 +9,7 @@ import { clamp, mulberry32 } from '/js/engine/util.js';
 import { HeroShowcase } from '/js/ui/hero-showcase.js';
 
 const $ = id => document.getElementById(id), ids = Object.keys(HEROES);
+const previousPath = new URLSearchParams(location.search).get('before') === 'previous' ? '/previous' : '/baseline';
 buildSprites();
 const before = {}, updated = {};
 function originalSprite(id, data) {
@@ -21,12 +22,12 @@ function originalSprite(id, data) {
       }
       return { w: data.w, h: data.h, d };
     }),
-    ...Object.fromEntries(['idle', 'walk', 'attack', 'attackRelease', 'attackFps', 'anchorY', 'floating'].map(k => [k, data[k]])),
+    ...Object.fromEntries(['idle', 'walk', 'attack', 'attackWalk', 'attackRelease', 'attackFps', 'anchorY', 'floating'].map(k => [k, data[k]])),
     motionRate: data.walkFps / (9.8 * clamp(moveFor('s15', 'easy') * (HEROES[id].stats.speed || 1), .6, 1.6)),
     idleRate: data.idleFps / 1.6, selfBob: true, outline: false, manualDelay: SPR[id].manualDelay,
   });
 }
-const originalData = await Promise.all(ids.map(id => import(`/baseline/${id}.js`)));
+const originalData = await Promise.all(ids.map(id => import(`${previousPath}/${id}.js`)));
 for (const [i, id] of ids.entries()) {
   updated[id] = SPR[id];
   before[id] = originalSprite(id, originalData[i].default);
@@ -73,7 +74,7 @@ function begin(next) {
   clearInput(); phase = next;
   games.forEach(g => {
     const p = g.player; g.enemies.length = g.projectiles.length = g.minions.length = g.effects.length = 0;
-    p.heroAttack = null; p.strikeAt = null; p.anim = 0; p.face = face; p.aim = face < 0 ? Math.PI : 0;
+    p.heroAttack = null; p.strikeAt = null; p.anim = 0; p.idleAnim = 0; p.walking = false; p.face = face; p.aim = face < 0 ? Math.PI : 0;
     for (const w of p.weapons) { w.cd = next.startsWith('attack') ? .35 : 1000; w.queue = 0; }
     if (next.startsWith('attack')) for (const y of [-8, 8]) {
       const e = g.spawnEnemy('skeleton', p.x + face * 32, p.y + y, { instant: true, always: true, hpMul: 1000, xpMul: 0 });
@@ -101,7 +102,7 @@ function draw() {
   games.forEach((g, v) => withSprite(v, () => {
     const ctx = contexts[v]; view.ctx = ctx; view.canvas = worlds[v];
     const receipt = g.player.heroAttack;
-    if (!v && !g.inCrypt) g.player.heroAttack = null;
+    if (!v && previousPath === '/baseline' && !g.inCrypt) g.player.heroAttack = null;
     try { g.draw(ctx); } finally { g.player.heroAttack = receipt; }
     view.uctx.clearRect(0, 0, 480, 300); g.hud.draw(view.uctx, 480, 300, g.clock, 1 / 60); ctx.drawImage(ui, 0, 0);
     const r = g.player._rect, cc = $('crop' + v).getContext('2d'); cc.imageSmoothingEnabled = false;

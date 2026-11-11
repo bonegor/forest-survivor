@@ -135,7 +135,9 @@ export class Player {
     this.face = 1;
     this.aim = 0; // radians, last movement direction
     this.moving = false;
+    this.walking = false; // visual travel, separate from the player's steering intent
     this.anim = 0;
+    this.idleAnim = 0;
     this.level = 1;
     this.xp = 0;
     this.xpNext = xpFor(1);
@@ -448,6 +450,17 @@ export class Player {
     return s;
   }
 
+  // Ground covered sets the gait, including acceleration, gentle stick input
+  // and wall collisions. Rest has its own clock so it cannot scramble the next
+  // footfall. The selection stage uses this same clock with simulated travel.
+  advanceAnimation(dt, distance) {
+    // Releasing input plants the feet; below one world pixel per second a
+    // pressed direction has not yet produced meaningful travel either.
+    this.walking = this.moving && dt > 0 && distance > dt;
+    if (this.walking) this.anim += 7 * distance / BASE_SPEED;
+    else this.idleAnim += dt * 1.6;
+  }
+
   update(dt) {
     const g = this.g;
     for (const [id, b] of this.buffs) {
@@ -506,7 +519,7 @@ export class Player {
     // leap carries him (leapTo), the player's steering held while he is in the air.
     // Carried off mid-leap (a crypt's door, the stairs): the leap is over, and lands nowhere.
     if (this.leap && Math.hypot(this.x - this.leap.lx, this.y - this.leap.ly) > 1) this.leap = null;
-    let landed = false;
+    let landed = false, walkDistance = 0;
     if (this.leap) {
       const L = this.leap;
       L.t += dt;
@@ -524,6 +537,10 @@ export class Player {
       this.x += this.vx * dt;
       this.y += this.vy * dt;
       g.world.collide(this);
+      // Ignore forced ice travel; collision corrections cannot contribute more
+      // than the attempted step. A blocked hero keeps facing/aim but rests.
+      if (!this.slide && !this.held) walkDistance = Math.min(
+        Math.hypot(this.x - x0, this.y - y0), Math.hypot(this.vx, this.vy) * dt);
       if (this.marchHeal && this.moving && !this.slide) pilgrimStep(this, this.x - x0, this.y - y0);
       // A step of a slide that covered less than ICE.block of its way along it struck something
       // solid (the world held him: a cliff, a rock, a trunk, an igloo's walls): he stops there, on
@@ -547,8 +564,7 @@ export class Player {
     // What the ground under him does, where the map has ground of its own (never in the Darkwood).
     if (g.world.topo) this.groundUnder(g, landed, dt);
     else this.wade = this.sink = 0;
-    const spd = Math.hypot(this.vx, this.vy);
-    this.anim += dt * (this.moving ? 7 * clamp(spd / BASE_SPEED, 0.6, 1.6) : 1.6);
+    this.advanceAnimation(dt, walkDistance);
     // Shadow hovers: ground still affects gameplay, but it leaves no walking particles or sounds.
     const floating = this.id === 'rogue' || this.hero.floating;
     if (this.slide && !floating) {
@@ -557,14 +573,14 @@ export class Player {
         this.sprayT = 0.06;
         g.particles.emit(this.x + rand(-3, 3), this.y, 0, -this.vx * 0.2 + rand(-10, 10), -this.vy * 0.2 + rand(-5, 5), rand(10, 20), 0.35, 1, rand(1) < 0.5 ? PC.w : PC.c, P.FADE | P.GROUND, 3, 60);
       }
-    } else if (this.moving && !floating) {
+    } else if (this.walking && !floating) {
       // Wading in quicksand: the wet sand he churns thrown up about his shins, as often however slowly
       // he goes (29 October 2026). Never out of it, so the Darkwood's dice fall as they did.
       if (this.wade > 0.5 && (this.sprayT -= dt) <= 0) {
         this.sprayT = 0.1;
         g.particles.emit(this.x + rand(-4, 4), this.y + rand(-1, 1), 0, rand(-12, 12), rand(-4, 4), rand(14, 26), 0.35, 1, rand(1) < 0.5 ? PC.b : PC.S, P.FADE | P.GROUND, 3, 80);
       }
-      this.stepT -= dt * spd;
+      this.stepT -= walkDistance;
       if (this.stepT <= 0) {
         this.stepT = 22;
         g.particles.emit(this.x + rand(-2, 2), this.y, 0, rand(-8, 8), rand(-4, 2), 6, 0.4, 1, g.world.dustColor ?? PC.N, P.FADE | P.GROUND, 3, 30);

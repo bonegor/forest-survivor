@@ -33,11 +33,11 @@ export function heroAttackPose(g, spr, step) {
   }
   // A moving attack keeps the current leg phase underneath its arms/equipment.
   // Older optional sheets without a moving clip retain their ordinary gait.
-  if (p.moving && !spr.attackWalk && !spr.floating) return null;
+  if (p.walking && !spr.attackWalk && !spr.floating) return null;
   if (k < 0 || k >= spr.attack.length) return null;
   const face = faceAlong(p.face, Math.cos(ang), Math.sin(ang));
   if (face !== p.face) return null;
-  const index = p.moving && spr.attackWalk ? spr.attackWalk[k][step % spr.walk.length] : spr.attack[k];
+  const index = p.walking && spr.attackWalk ? spr.attackWalk[k][step % spr.walk.length] : spr.attack[k];
   return { frame: spr.frames[index], flip: p.face < 0 };
 }
 

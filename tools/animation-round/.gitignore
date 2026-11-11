@@ -1,3 +1,4 @@
 generated/
 inspection/
 baseline/*.png
+!baseline/knight-walk-model.png

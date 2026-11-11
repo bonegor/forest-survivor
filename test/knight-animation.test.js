@@ -49,7 +49,7 @@ test('a swing keeps the hero walking or standing: no attack poses, no lunge',()=
 test('idle breath comes from the authored poses and keeps the foot anchor stable',()=>{
   const g=game(),p=g.player,ys=[];
   for(const anim of [0,1.6,3.2,4.8]){
-    p.anim=anim;shown(g);ys.push(g.player._rect[1]);
+    p.idleAnim=anim;shown(g);ys.push(g.player._rect[1]);
   }
   assert.equal(new Set(ys).size,1,'do not add the renderer bob on top of the authored idle');
   assert.equal(SPR.knight.anchorY,56,'use the approved sheet anchor with its transparent padding');

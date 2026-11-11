@@ -1,8 +1,7 @@
 import { Game, strikeClip } from '../game/game.js';
-import { Player, BASE_SPEED } from '../game/player.js';
+import { Player } from '../game/player.js';
 import { SPR } from '../engine/sprites.js';
 import { bounds, rimRing } from '../engine/pixels.js';
-import { clamp } from '../engine/util.js';
 import { HERO_ORDER, heroLook } from '../data/heroes.js';
 import { metaBonuses } from '../shared/profile.js';
 import { moveFor } from '../data/difficulty.js';
@@ -63,8 +62,8 @@ export class HeroShowcase {
     this.action = action;
     p.face = action.face;
     p.moving = action.kind === 'walk';
-    // Same animation clock as Player.update, including the hero's movement-speed multiplier.
-    p.anim += dt * (p.moving ? 7 * clamp(p.moveSpeed / BASE_SPEED, 0.6, 1.6) : 1.6);
+    // The real player's distance-based gait, with travel simulated on the plinth.
+    p.advanceAnimation(dt, p.moving ? p.moveSpeed * dt : 0);
     const clip = strikeClip(spr);
     if (action.kind === 'attack' && clip) {
       p.strike(p.face < 0 ? Math.PI : 0, this.time - action.local + clip.hit / spr.attackFps - clip.delay);

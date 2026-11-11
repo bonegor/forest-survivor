@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import source from './baseline/index.js';
 import { writePng } from '../png.mjs';
+import { buildKnightWalk, KNIGHT_WALK } from './knight-walk.mjs';
 
 const TAU = Math.PI * 2;
 const equipment=JSON.parse(readFileSync(new URL('./baseline/equipment-masks.json',import.meta.url),'utf8'));
@@ -261,8 +262,8 @@ function belowEquipment(frame,x0,x1,y0,y1,seedX0=x0) {
   }
   return mask;
 }
-function attackWalking(attack, walk, standing, rig, id, step, attackStep) {
-  const {w,h}=attack, out=lowerGait(walk,rig,id,step).d.slice();
+function attackWalking(attack, walk, standing, rig, id, step, attackStep, cleanLower) {
+  const {w,h}=attack, out=(cleanLower||lowerGait(walk,rig,id,step)).d.slice();
   const seam=rig.hip+4, range=staffRanges[id];
   let oldStaff=staffMask(walk,range), newStaff=staffMask(attack,range);
   if(id==='thornkeeper') {
@@ -283,7 +284,7 @@ function attackWalking(attack, walk, standing, rig, id, step, attackStep) {
     if(y>=seam&&newStaff[p])out[p]=attack.d[p];
     // Sword/axe tips can extend outside the legs during follow-through. Their
     // opaque connected metal survives below the hip; loose cloak flares do not.
-    if(y>=seam&&trueWeapon?.has(p))out[p]=attack.d[p];
+    if(y>=seam&&trueWeapon?.has(p)&&(!cleanLower||attack.d[p]>>>24>=128))out[p]=attack.d[p];
     if(y>=seam&&!trueWeapon&&!range&&!['mage','arcanist','necromancer','archer','trailblazer','witchhunter','marksman','boltguard'].includes(id)) {
       const c=attack.d[p],r=c&255,g=c>>>8&255,b=c>>>16&255;
       const leftSword=id==='templar'&&lowSword[p];
@@ -353,6 +354,12 @@ for(const [id,base] of Object.entries(source)) {
   const standing=frames[0], idle=[];
   for(let i=0;i<16;i++){idle.push(frames.length);frames.push(flicker(warp(standing,materialField(rig,i/16*TAU)),id,i/16*TAU,base.palette));}
   for(let i=0;i<base.walk.length;i++)frames[base.walk[i]]=connectedWalk(warp(frames[base.walk[i]],materialField(rig,i/base.walk.length*TAU,true)),id,i);
+  let walk=[...base.walk],walkFps=rig.fps,nativeGait;
+  if(id==='knight') {
+    nativeGait=buildKnightWalk(base.palette,standing);walk=nativeGait.frames.map(frame=>{const index=frames.length;frames.push(frame);return index;});
+    walkFps=nativeGait.fps;
+    writeFileSync('tools/animation-round/generated/knight-walk-poses.json',JSON.stringify(nativeGait.poses,null,2)+'\n');
+  }
   let attack=[...base.attack], attackRelease=base.attackRelease,attackFps=base.attackFps;
   if(attack.length===4) {
     const ranged=['marksman','boltguard','witchhunter'].includes(id);
@@ -364,21 +371,21 @@ for(const [id,base] of Object.entries(source)) {
     attack=[attack[0],anticipation,attack[1],attack[2],recovery,attack[3]];
     attackRelease=2; attackFps=ranged?12:14;
   }
-  const attackWalk=rig.floating?undefined:attack.map((index,attackStep)=>base.walk.map((frame,step)=>{
-    const n=frames.length;frames.push(attackWalking(frames[index],frames[frame],standing,rig,id,step,attackStep));return n;
+  const attackWalk=rig.floating?undefined:attack.map((index,attackStep)=>walk.map((frame,step)=>{
+    const n=frames.length;frames.push(attackWalking(frames[index],frames[frame],standing,rig,id,step,attackStep,nativeGait?.lowerFrames[step]));return n;
   }));
   const idleFps=rig.floating?7:8;
-  const data=pack(frames,{...base,idle,idleFps,walkFps:rig.fps,attack,attackRelease,attackFps,attackWalk,
+  const data=pack(frames,{...base,idle,idleFps,walk,walkFps,attack,attackRelease,attackFps,attackWalk,
     manualDelay:base.manualDelay??Math.min(2,base.attackRelease)/base.attackFps,
-    motionRevision:'native-idle-and-moving-attack-2026-11-07',
+    motionRevision:nativeGait?'connected-knight-gait-2026-11-11':'native-idle-and-moving-attack-2026-11-07',
     motionSource:'tools/animation-round/build.mjs',
-    motionNotes:rig.note,
+    motionNotes:nativeGait?'Sixteen connected contact, compression, passing and reaching phases; stable native upper-body texture, alternating planted soles and lifted returns.':rig.note,
   });
   writeFileSync(`public/assets/heroes-approved/${id}.js`,`// Rebuild: node tools/animation-round/build.mjs\nexport default ${JSON.stringify(data)};\n`);
   const contact={w:80*8,h:64*2,d:new Uint32Array(80*8*64*2)};
   idle.forEach((idx,i)=>{const b=frames[idx];for(let y=0;y<64;y++)contact.d.set(b.d.subarray(y*80,(y+1)*80),(Math.floor(i/8)*64+y)*contact.w+(i%8)*80);});
   writePng(`tools/animation-round/generated/${id}-idle.png`,contact);
-  report[id]={idle:idle.length,idleFps,walk:base.walk.length,walkFps:rig.fps,attack:attack.length,attackFps,attackRelease,movingAttack:!!attackWalk,frames:frames.length,note:rig.note,sourceSha256:createHash('sha256').update(JSON.stringify(base)).digest('hex')};
+  report[id]={idle:idle.length,idleFps,walk:walk.length,walkFps,attack:attack.length,attackFps,attackRelease,movingAttack:!!attackWalk,frames:frames.length,note:data.motionNotes,...(nativeGait?{gait:KNIGHT_WALK,gaitSource:{file:'baseline/knight-walk-model.png',sha256:createHash('sha256').update(readFileSync(new URL('./baseline/knight-walk-model.png',import.meta.url))).digest('hex')}}:{}),sourceSha256:createHash('sha256').update(JSON.stringify(base)).digest('hex')};
 }
 writeFileSync('tools/animation-round/generated/manifest.json',JSON.stringify(report,null,2)+'\n');
 console.log(`Rebuilt ${Object.keys(report).length} heroes with dedicated idle loops and moving attack poses.`);

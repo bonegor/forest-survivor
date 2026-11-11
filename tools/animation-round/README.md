@@ -17,16 +17,27 @@ The first command needs only Node and deterministically regenerates the 21 produ
 
 The local comparison preview runs on port **3016**. The review capture uses the production `Game`, `Player`, sprite builder, world, lighting and HUD in memory; it does not write saved progression. Production and comparison remain separate.
 
+## Knight gait correction — 11 November 2026
+
+The Knight now has sixteen chronological travel poses authored by `knight-walk.mjs`. The former eight-pose clip alternated compressed or shifted upper-body details and bunched leg positions. The new gait keeps the approved native helmet, face, torso, hands, sword and shield pixels intact, translating that whole upper body by a controlled single pixel. Original leg textures articulate through connected hips, knees, ankles and level boot contacts; the returning knee bends as its foot lifts and passes the supporting leg. The complete loop includes the last-to-first reach/contact transition.
+
+At the game's normal Knight speed this is a brisk jog: a 0.54-second full cycle, 16 / 0.54 = 29.63 source poses per second, 40% support per foot and two short flight intervals. A planted foot sweeps 13.6 native pixels during its 0.216-second support, approximately 63 pixels/second, matching the normal Knight's movement. Increasing the phase count therefore does not halve cadence. Movement distance drives the runtime gait; idle time and blocked movement do not advance it. This pass changes only the Knight's art; the other twenty approved sheets are byte-identical after rebuilding.
+
+`baseline/knight-walk-model.png` retains the original accepted source model from `example sprites folder/heroes-animation-2026-11-03/heroes7-sentinel/source-motion/original-pose0.png`. Its SHA-256 is `46dff0775110d6761258aca4e862f1f0a93af3af35c83952f161ed3cdc6a755b`. Source registration, limb ownership, equipment protection and joint coordinates are explicit in `knight-walk.mjs`; the builder also records this source hash in the generated manifest. No private sibling asset checkout or external generator is needed. The approved packed standing frame supplies the exact native upper-body colour and alpha values; source-resolution sampling is confined to articulated legs. Palette mapping preserves existing colours and does not promote transparent export fringes into visible pixels.
+
+All eighteen stationary attack poses and the idle remain unchanged. Each attack now has sixteen moving combinations made from the clean articulated lower body, so a transparent weapon-mask margin cannot cut a walking shin. `test/hero-art.test.js` checks every walk and moving-attack combination for disconnected lower anatomy. `test/knight-gait.test.js` checks native upper-body stability, palette/opacity preservation, alternating foot support, continuous cycle endpoints and cadence. Visual captures and a complete chronological review remain required in addition to these checks.
+
 ## Motion
 
 Every hero has a dedicated 16-pose idle, with 14–16 unique native poses at two seconds per loop. The two spectres use a slower 16-pose/7 fps resting hover. Feet remain planted for grounded idles; breathing grows from the waist, while cloth, hair, crests, leaves and held equipment settle at different phases. Sorcerer/Arcanist flames and hand focus, plus the green staff ornaments, use local flicker drawn from the existing material palette. Dark disconnected export specks are removed; coloured effects remain.
 
-The eight-pose walks retain the original connected legs and receive small upper-body and loose-material follow-through. Shadow retains four travel poses and Wraith eight. Their forward-travel float stays separate from the upright resting hover. Walking cadence is reduced from the previous 17–30 fps range:
+Except for the Knight correction above, the eight-pose walks retain the original connected legs and receive small upper-body and loose-material follow-through. Shadow retains four travel poses and Wraith eight. Their forward-travel float stays separate from the upright resting hover. Walking cadence is reduced from the previous 17–30 fps range:
 
 | Cadence | Heroes |
 | --- | --- |
 | 13 fps | Praetorian |
-| 14 fps | Knight, Sorcerer, Necromancer, Paladin, Footman, Templar, Arcanist, Seraph, Swordbearer |
+| 14 fps | Sorcerer, Necromancer, Paladin, Footman, Templar, Arcanist, Seraph, Swordbearer |
+| 29.63 fps / 16 poses | Knight (0.54-second jog; 11 November correction) |
 | 15 fps | Ranger, Druid, Thornkeeper, Gravebinder |
 | 16 fps | Berserker, Trailblazer |
 | 17 fps | Witch Hunter, Boltguard |

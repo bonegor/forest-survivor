@@ -3037,20 +3037,20 @@ export class Game {
     const p = this.player;
     const S = c.S;
     const spr = SPR[p.hero.sprite];
-    const moving = p.moving;
+    const moving = p.walking;
     const frozen = !!p.held && p.held.kind === 'frost', still = frozen || !!p.slide;
     // Walk cycles step a little faster so planted feet slide less against the ground.
     const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
     // Walking remains the base. Authored moving attacks keep the gait underneath the
     // arms/equipment. Imported art without that clip keeps walking with its world-space
     // weapon effect; stationary blows can use the full attack pose.
-    let fr = still ? idleFrame(spr, 0) : moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.anim * spr.idleRate));
+    let fr = still ? idleFrame(spr, 0) : moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate));
     const attackPose = still ? null : heroAttackPose(this, spr, step);
     if (attackPose) fr = attackPose.frame;
     const flip = attackPose ? attackPose.flip : p.face < 0;
     let img = p.flash > 0 ? fr.white(flip) : frozen ? fr.variant('frozen', TINTS.frozen, flip) : fr.get(flip);
     // Walk cycles carry their own body bob; two-frame sprites hop on alternate steps.
-    const bob = spr.selfBob || still ? 0 : moving ? (spr.walk ? 0 : -(step % 2)) : Math.sin(p.anim * 2) > 0.6 ? -1 : 0;
+    const bob = spr.selfBob || still ? 0 : moving ? (spr.walk ? 0 : -(step % 2)) : Math.sin(p.idleAnim * 2) > 0.6 ? -1 : 0;
     const w = img.width * S, h = img.height * S;
     const sink = Math.round(p.sink);
     const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY + bob - p.hop) * S) + Math.round(sink * S);
