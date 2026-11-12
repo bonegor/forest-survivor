@@ -9,7 +9,14 @@ import { clamp, mulberry32 } from '/js/engine/util.js';
 import { HeroShowcase } from '/js/ui/hero-showcase.js';
 
 const $ = id => document.getElementById(id), ids = Object.keys(HEROES);
-const previousPath = new URLSearchParams(location.search).get('before') === 'previous' ? '/previous' : '/baseline';
+const params = new URLSearchParams(location.search), comparingV2 = params.get('compare') === 'v2';
+const previousPath = comparingV2 ? '/variants/v1' : params.get('before') === 'previous' ? '/previous' : '/baseline';
+if (comparingV2) {
+  document.body.classList.add('comparison-v2');
+  $('heading0').textContent = 'V1 · preserved current walk';
+  $('heading1').textContent = 'V2 · shorter steps proposal';
+  $('intro').textContent = 'V1 stays in the game. V2 proposes shorter steps, lower foot lift and restrained knees. Both run at the same travel speed; choose a hero and watch complete cycles against the ground.';
+}
 buildSprites();
 const before = {}, updated = {};
 function originalSprite(id, data) {
@@ -28,8 +35,9 @@ function originalSprite(id, data) {
   });
 }
 const originalData = await Promise.all(ids.map(id => import(`${previousPath}/${id}.js`)));
+const proposedData = comparingV2 ? await Promise.all(ids.map(id => import(`/variants/v2/${id}.js`))) : null;
 for (const [i, id] of ids.entries()) {
-  updated[id] = SPR[id];
+  updated[id] = proposedData ? originalSprite(id, proposedData[i].default) : SPR[id];
   before[id] = originalSprite(id, originalData[i].default);
   $('hero').add(new Option(HEROES[id].title, id));
   const b = document.createElement('button'); b.textContent = HEROES[id].title;
@@ -39,7 +47,7 @@ const worlds = [0, 1].map(i => $('world' + i)), contexts = worlds.map(c => c.get
 const ui = document.createElement('canvas'); ui.width = 480; ui.height = 300;
 Object.assign(view, { canvas: worlds[0], ctx: contexts[0], ui, uctx: ui.getContext('2d'), S: 1, W: 480, H: 300, pxW: 480, pxH: 300, zoom: 1 });
 for (const c of [...contexts, view.uctx]) c.imageSmoothingEnabled = false;
-let games = [], shows = [], action = 'idle', phase = 'idle', face = 1, paused = false, time = 0;
+let games = [], shows = [], action = comparingV2 ? 'right' : 'idle', phase = 'idle', face = 1, paused = false, time = 0;
 const tour = [['idle', 3], ['right', 2], ['left', 2], ['diagonal', 2], ['attack', 2.5], ['attack-walk', 2.5]];
 function withSprite(v, fn) {
   const id = $('hero').value; SPR[id] = (v ? updated : before)[id];
@@ -54,6 +62,10 @@ function reset() {
     games = [0, 1].map(v => withSprite(v, () => {
       Math.random = mulberry32(29471);
       const g = new Game({ hero: $('hero').value, mode: 's15', map: $('setting').value === 'day' ? 'desert' : 'forest', diff: 'easy', settings, meta: metaBonuses(profile), crypts: false });
+      if ($('loadout').value === 'full') {
+        for (const id of ['axe', 'blades', 'aura', 'lightning', 'glaive']) if (g.player.weapons.length < 6) g.addWeapon(id);
+        for (const weapon of g.player.weapons) while (weapon.level < 8) weapon.levelUp();
+      }
       g.spawner.update = () => {}; g.hints = null; g.player.devGod = true; g.banners.length = 0;
       if ($('setting').value === 'crypt') {
         g.enterCrypt({ key: '2,3', depth: 1, x: g.player.x, y: g.player.y });
@@ -80,6 +92,9 @@ function begin(next) {
       const e = g.spawnEnemy('skeleton', p.x + face * 32, p.y + y, { instant: true, always: true, hpMul: 1000, xpMul: 0 });
       if (e) e.speed = 0;
     }
+    // Reset swaps the disposable actors before the first update. The crypt HUD
+    // aims immediately while drawing, so its spatial index must match them now.
+    g.grid.rebuild(g.enemies, p.x, p.y);
   });
 }
 function tick() {
@@ -90,7 +105,7 @@ function tick() {
   }
   time += 1 / 60;
   const motion = { right: [1, 0], left: [-1, 0], diagonal: [face * Math.SQRT1_2, -Math.SQRT1_2], 'attack-walk': [face, 0] };
-  const [x, y] = motion[phase] || [0, 0]; input.bot = { x, y };
+  const [x, y] = motion[phase] || [0, 0], pace = Number($('pace').value); input.bot = { x: x * pace, y: y * pace };
   if (phase.startsWith('attack') && games[0].inCrypt) input.held.add('KeyX'); else input.held.delete('KeyX');
   games.forEach((g, v) => withSprite(v, () => {
     if (phase === 'attack-walk') for (const [i, e] of g.enemies.entries()) { e.x = g.player.x + face * 32; e.y = g.player.y + (i % 2 ? 8 : -8); }
@@ -101,19 +116,20 @@ function tick() {
 function draw() {
   games.forEach((g, v) => withSprite(v, () => {
     const ctx = contexts[v]; view.ctx = ctx; view.canvas = worlds[v];
-    const receipt = g.player.heroAttack;
-    if (!v && previousPath === '/baseline' && !g.inCrypt) g.player.heroAttack = null;
-    try { g.draw(ctx); } finally { g.player.heroAttack = receipt; }
+    g.draw(ctx);
     view.uctx.clearRect(0, 0, 480, 300); g.hud.draw(view.uctx, 480, 300, g.clock, 1 / 60); ctx.drawImage(ui, 0, 0);
     const r = g.player._rect, cc = $('crop' + v).getContext('2d'); cc.imageSmoothingEnabled = false;
     cc.clearRect(0, 0, 96, 96); cc.drawImage(worlds[v], Math.round((g.player.x - g.cam.x) * g.cam.S - 48), Math.round((g.player.y - g.cam.y) * g.cam.S - 70), 96, 96, 0, 0, 96, 96);
     const sc = $('selection' + v).getContext('2d'); sc.imageSmoothingEnabled = false;
     sc.clearRect(0, 0, 128, 180); shows[v].draw(sc, { x: 0, y: 0, w: 128, h: 180 }, false, g.settings);
-    worlds[v].dataset.frame = SPR[$('hero').value].frames.indexOf(r[4]);
+    const spr = SPR[$('hero').value], index = spr.frames.indexOf(r[4]);
+    worlds[v].dataset.frame = index;
+    worlds[v].dataset.pose = spr.idle.includes(index) ? 'idle' : spr.walk.includes(index) ? (spr.floating ? 'float' : 'walk') : spr.attack.includes(index) ? 'attack' : 'walk + attack';
   }));
-  $('status').textContent = `${HEROES[$('hero').value].title} · ${phase} · ${paused ? 'paused' : 'playing'} · ${time.toFixed(1)}s`;
+  const scene = phase.startsWith('attack') ? (games[1].inCrypt ? 'manual crypt combat' : 'automatic map combat') : phase;
+  $('status').textContent = `${HEROES[$('hero').value].title} · ${scene} · showing ${worlds[1].dataset.pose} · ${paused ? 'paused' : 'playing'} · ${time.toFixed(1)}s`;
 }
-$('hero').onchange = $('setting').onchange = reset;
+$('hero').onchange = $('setting').onchange = $('loadout').onchange = $('pace').onchange = reset;
 for (const b of document.querySelectorAll('[data-action]')) b.onclick = () => {
   action = b.dataset.action; for (const c of document.querySelectorAll('[data-action]')) c.classList.toggle('active', c === b); reset();
 };
@@ -126,4 +142,5 @@ function loop(now) {
   if (!paused) { accumulator += Math.min(.1, (now - last) / 1000); while (accumulator >= 1 / 60) { tick(); accumulator -= 1 / 60; } draw(); }
   last = now; requestAnimationFrame(loop);
 }
+for (const b of document.querySelectorAll('[data-action]')) b.classList.toggle('active', b.dataset.action === action);
 reset(); requestAnimationFrame(loop);

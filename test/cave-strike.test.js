@@ -124,27 +124,32 @@ test('a strike plays the attack, and the blade lands on its blow frame', () => g
   assert.ok(!spr.attack.includes(shown(g)), 'and then he stands');
 }));
 
-test('back in the forest every weapon fights by itself again and the signature animates', () => gameCase((g, p) => {
+test('back in the forest every weapon fights by itself again while the hero stays idle', () => gameCase((g, p) => {
   g.addWeapon('bow');
   g.addWeapon('aura');
+  p.strikeAt = g.clock;
+  p.strikeBuf = .2;
   enterStartCrypt(g, p);
+  assert.equal(p.strikeAt, null, 'entering a crypt clears earlier strike poses');
+  g.mainWeapon().cd = 0;
+  assert.equal(g.strike(), true);
   g.leaveCrypt(false);
   for (let i = 0; i < 120 && g.inCrypt; i++) step(g);
   assert.equal(g.inCrypt, null);
+  assert.equal(p.strikeAt, null, 'leaving a crypt clears its last manual strike');
+  assert.equal(p.strikeBuf, 0, 'a buffered press cannot travel between worlds');
   const target = g.spawnEnemy('skeleton', p.x + 24, p.y, { instant: true, always: true, hpMul: 1000 }); target.speed = 0;
   g.mainWeapon().cd = 0;
-  let swung = false, shot = false, animated = false;
+  let swung = false, shot = false;
   for (let i = 0; i < 150; i++) {
     step(g);
     swung ||= slashes(g) > 0;
     shot ||= g.projectiles.some((pr) => pr.kind === 'arrow');
     const frame = shown(g);
-    animated ||= SPR.knight.attack.includes(frame);
-    assert.ok(SPR.knight.idle.includes(frame) || SPR.knight.attack.includes(frame), 'the stationary hero alternates idle and signature attack');
+    assert.ok(SPR.knight.idle.includes(frame), 'the stationary hero stays idle through all automatic attacks');
   }
   assert.ok(swung, 'the sword swings by itself');
   assert.ok(shot, 'the bow is back');
-  assert.ok(animated, 'the signature attack is visible after returning');
   assert.ok(g.effects.some((e) => e.persistent && e.w?.id === 'aura'), 'and the aura');
 }));
 

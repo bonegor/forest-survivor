@@ -1,4 +1,51 @@
-# Hero animation pass — 7 November 2026
+# Hero animation pass — 12 November 2026
+
+## V1 preserved; V2 proposed
+
+The current production artwork is preserved byte-for-byte in `variants/v1/`, with a SHA-256 manifest. The user found its legs too exaggerated. `variants/v2/` is a separate, selectable proposal; it is **not installed into the main game**. Both versions retain the shared crypt-only attack rule below.
+
+V2 uses shorter, lower steps. The thirteen armoured/visible-leg walkers attach the thigh under the actual pelvis, keep near/far feet on modest separate tracks, and constrain knee bend and foot roll. This corrects the excessive inferred leg extension in V1. The six robed walkers have smaller boot returns and quieter hems. Shadow and Wraith keep their existing float. Idles, stationary attacks, portraits, weapon timing and movement speed remain unchanged.
+
+Each designer received concrete directions from the independent motion reviewer, then returned complete cycles for review. See [V2 review and limitations](review-2026-11-12/v2-review.md). Shorter steps need a correspondingly shorter cycle to keep a planted sole moving backward with the ground; simply slowing the animation would create sliding. Diagonals retain the game's existing side-facing art and distance-based cadence, rather than adding directional foot locking.
+
+```powershell
+node tools/animation-round/preserve-v1.mjs
+node tools/animation-round/build.mjs --v2
+node tools/animation-round/serve.mjs
+# Open http://127.0.0.1:3016/?compare=v2
+```
+
+The comparison starts with V1 and V2 walking at normal gameplay speed. Select any hero, scene, action, or half-speed **travel pace**; both columns run the real Game at 60 Hz, with gait driven by actual movement distance. V2's reduced-crop layout keeps both versions visible beside each other on a narrow desktop panel. The comparison uses disposable profiles.
+
+`build.mjs` without `--v2` still rebuilds V1 production assets. The V1 snapshot script validates an existing snapshot and never silently refreshes it. To capture proposed sheets without changing production, set `REVIEW_SHEETS=tools/animation-round/variants/v2` before running `capture-review.mjs`; `--walk-only` records right, left, diagonal, stop/restart, slow travel, field combat and moving crypt attacks. Native PNGs are the source evidence; the paired packaging script preserves elapsed time for comparison GIFs.
+
+## Shared animation rule
+
+Every playable hero uses `heroAttackPose` through `Game.placePlayer`. Standing plays the dedicated idle loop on the main map and in a crypt. Travel plays the walk or spectral float. Only a manual crypt strike can select attack poses. Grounded moving strikes combine the attacking upper body/equipment with the current walking lower body; spectres retain their floating attack. Automatic weapon receipts, extra weapons and evolutions never select a field attack pose. Entering/leaving a world clears the previous manual strike and its buffered press. The legacy Ranger entry point delegates to this same selector.
+
+This behavior correction is separate from the artwork. Crypt hit delays, damage, automatic projectiles and facing rules retain their original gameplay timing.
+
+## Current full-roster gait
+
+All 21 production heroes now have 16 chronological travel phases. `grounded-walk.mjs` draws thirteen visible-leg heroes with connected hip/knee/ankle articulation, an alternating planted sole and lifted return, and native equipment/upper-body pixels. `robed-walk.mjs` draws six robed heroes from their separate original garment/leg layers and gives Shadow/Wraith continuous travelling cloth and hover loops. Both read retained local inputs under `baseline/grounded-models/` and `baseline/robed-walk/`; the original stills/layers and source hashes remain available there. No external generator is required to rebuild.
+
+The gait cadence follows distance covered through the existing Player clock. Source pose counts and full-cycle duration are carried through `walkFps` and `motionRate`. A planted sole sweeps backward at normal travel speed. Held equipment remains registered to its grip, and each character's original palette, 80×64 canvas, anchor at y56, idles and stationary attack clips are retained.
+
+The lower layers used for moving attacks exclude resting equipment before the legs are drawn. Active shafts/blades are then composited over the walking lower body, so removing a resting staff cannot cut through a newly extended boot. Full attack-by-gait connectivity checks remain in `test/hero-art.test.js`.
+
+The drawing/review pair examined every hero's full chronological cycle and loop return; findings and final capture coverage are recorded in [the independent review](review-2026-11-12/reviewer-notes.md). [The research notes](review-2026-11-12/research.md) cover sprite design skills and Sprite Fusion. Source contacts are followed by native Game captures with idle, both facings, diagonals, map combat, crypt idle and manual attacks. The comparison UI also offers six upgraded weapons to reproduce the reported map-combat bug.
+
+To compare this pass with the exact local pre-edit sheets:
+
+```powershell
+$env:WALK_BASELINE='tools/animation-round/review-2026-11-12/before-sheets'
+node tools/animation-round/serve.mjs
+# Open http://127.0.0.1:3016/?before=previous
+```
+
+The local pre-edit copies are ignored; a fresh checkout can compare with the retained original import using the default review URL. Both art columns use the current shared gameplay rule. The older implementation history below documents the starting point, not the current field-attack policy or gait counts.
+
+## Original pass — 7 November 2026
 
 The production roster is the 21 packed sheets in `public/assets/heroes-approved/`, loaded by `public/js/art/approved-heroes.js`. The older `public/assets/heroes/` sheets and Plumed Knight are references, not the selected production roster. This pass keeps every selected character model and its native 80×64 canvas, anchor at y56, palette and equipment identity.
 

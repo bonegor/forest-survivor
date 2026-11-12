@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 const require = createRequire(import.meta.url);
 const { createCanvas } = require(process.env.CANVAS_MODULE || '@napi-rs/canvas');
 globalThis.document = { createElement: () => createCanvas(1, 1) };
@@ -17,8 +18,29 @@ const { defaultProfile, metaBonuses } = await import('../../public/js/shared/pro
 const { input } = await import('../../public/js/engine/input.js');
 const { view } = await import('../../public/js/engine/view.js');
 const { mulberry32 } = await import('../../public/js/engine/util.js');
+const { moveFor } = await import('../../public/js/data/difficulty.js');
 const { KNIGHT_PLUMED } = await import('../../public/js/art/knight-plumed.js');
 buildSprites();
+// Stage a proposed sheet in memory without changing the production artwork.
+// The movement conversion is the same as approved-heroes.js and the browser review.
+if (process.env.REVIEW_SHEETS) {
+  for (const [id, hero] of Object.entries(HEROES)) {
+    const data = (await import(pathToFileURL(resolve(process.env.REVIEW_SHEETS, `${id}.js`)))).default;
+    const manualDelay = SPR[hero.sprite].manualDelay;
+    SPR[hero.sprite] = buildSprite(hero.sprite, {
+      gen: () => data.frames.map(([x,y,w,h,encoded]) => {
+        const raw = Buffer.from(encoded,'base64'), d = new Uint32Array(data.w*data.h), n = data.indexBytes;
+        for(let iy=0;iy<h;iy++)for(let ix=0;ix<w;ix++){
+          const k=(iy*w+ix)*n;d[(iy+y)*data.w+ix+x]=data.palette[raw[k]|(n===2?raw[k+1]<<8:0)];
+        }
+        return {w:data.w,h:data.h,d};
+      }),
+      ...Object.fromEntries(['idle','walk','attack','attackWalk','attackRelease','attackFps','anchorY','floating'].map(k=>[k,data[k]])),
+      motionRate:data.walkFps/(9.8*Math.max(.6,Math.min(1.6,moveFor('s15','easy')*(hero.stats.speed||1)))),
+      idleRate:data.idleFps/1.6,selfBob:true,outline:false,manualDelay,
+    });
+  }
+}
 const args = process.argv.slice(2), tag = args.shift() || 'review';
 const contactsOnly = args.includes('--contacts');
 const walkOnly = args.includes('--walk-only');
@@ -28,7 +50,7 @@ const root = resolve(process.env.REVIEW_OUT || `output/animation-round/${tag}`);
 const difficulty = process.env.REVIEW_DIFF || 'easy';
 mkdirSync(root, { recursive: true });
 const hash = b => createHash('sha256').update(Buffer.from(b.d.buffer, b.d.byteOffset, b.d.byteLength)).digest('hex');
-const report = { tag, nativeRenderer: 'Game/Player/Camera/lighting/HUD', capture: walkOnly ? 'walk' : 'full', difficulty, heroes: {} };
+const report = { tag, nativeRenderer: 'Game/Player/Camera/lighting/HUD', sheetSource:process.env.REVIEW_SHEETS||'public/assets/heroes-approved',capture: walkOnly ? 'walk' : 'full', difficulty, heroes: {} };
 function canvas(w, h) { const c = createCanvas(w, h); c.getContext('2d').imageSmoothingEnabled = false; return c; }
 function label(ctx, text, x, y) { ctx.fillStyle = '#e7dfc7'; ctx.font = '13px sans-serif'; ctx.fillText(text, x, y); }
 function contacts(id, spr) {
@@ -107,6 +129,8 @@ const phases=walkOnly ? [
   {name:'field-attack-moving',seconds:1.8,x:1,y:0,face:1,combat:true},
   {name:'crypt-attack-moving-left',seconds:1.8,x:-1,y:0,face:-1,combat:true,manual:true},
 ] : [{name:'idle-right',seconds:2.4,x:0,y:0,face:1},{name:'walk-right',seconds:1.6,x:1,y:0,face:1},{name:'walk-left',seconds:1.6,x:-1,y:0,face:-1},{name:'walk-diagonal',seconds:1.6,x:Math.SQRT1_2,y:-Math.SQRT1_2,face:1},{name:'field-attack-right',seconds:1.6,x:0,y:0,face:1,combat:true},{name:'field-attack-moving',seconds:1.6,x:1,y:0,face:1,combat:true},{name:'field-attack-left',seconds:1.6,x:0,y:0,face:-1,combat:true},{name:'crypt-attack-right',seconds:1.4,x:0,y:0,face:1,combat:true,manual:true},{name:'crypt-attack-moving-left',seconds:1.4,x:-1,y:0,face:-1,combat:true,manual:true}];
+// Waiting below must breathe too: entering a crypt alone cannot start an attack.
+phases.splice(phases.findIndex(phase=>phase.manual),0,{name:'crypt-idle',seconds:2.4,x:0,y:0,face:1,crypt:true});
 const requestedPhases=process.env.REVIEW_PHASES?.split(',');
 const selectedPhases=requestedPhases?phases.filter(phase=>requestedPhases.includes(phase.name)):phases;
 if(!selectedPhases.length||requestedPhases?.some(name=>!phases.some(phase=>phase.name===name)))throw Error('Unknown or empty REVIEW_PHASES');
@@ -120,7 +144,7 @@ for(const id of ids){
   const seen={},samples=[],poseCounts={},phaseMetrics={},sheet=canvas(W*4,H*3),sc=sheet.getContext('2d');
   let sample=0,clipped=0,stage=0;
   for(const phase of selectedPhases){
-    if(phase.manual&&!g.inCrypt){
+    if((phase.manual||phase.crypt)&&!g.inCrypt){
       input.bot={x:0,y:0};
       g.enterCrypt({key:'0,0',depth:1,x:g.player.x,y:g.player.y-40});
       for(let wait=0;wait<180&&(!g.inCrypt||g.state!=='play');wait++)g.update(1/HZ);
@@ -156,13 +180,13 @@ for(const id of ids){
       const rect=g.player._rect;
       if(rect[0]<0||rect[1]<0||rect[0]+rect[2]>W||rect[1]+rect[3]>H)clipped++;
       writeFileSync(join(dir,`${String(sample).padStart(4,'0')}.png`),world.toBuffer('image/png'));
-      samples.push({frame:sample,time:g.clock,phase:phase.name,spriteFrame:idx,face:g.player.face,rect:rect.slice(0,4),attack:!!g.player.heroAttack,
+      samples.push({frame:sample,time:g.clock,phase:phase.name,spriteFrame:idx,face:g.player.face,rect:rect.slice(0,4),attack:spr.attack.includes(idx)||!!spr.attackWalk?.some(row=>row.includes(idx)),
         x:g.player.x,y:g.player.y,gait:g.player.anim,idle:g.player.idleAnim,walking:g.player.walking,moving:g.player.moving});sample++;
       if(n===Math.floor(frames/2/STRIDE)*STRIDE)sc.drawImage(world,stage%4*W,Math.floor(stage/4)*H);
     }
     phaseMetrics[phase.name]={seconds:phase.seconds,distance,gaitSteps:(g.player.anim-gaitStart)*1.4*spr.motionRate,walkingTicks};
     const framesSeen=seen[phase.name];
-    if(phase.name==='idle-right'){
+    if(phase.name==='idle-right'||phase.name==='crypt-idle'){
       if([...framesSeen].some(index=>!spr.idle.includes(index)))throw Error(`${id}: an attack interrupted the quiet idle phase`);
       if(!spr.idle.every(index=>framesSeen.has(index)))throw Error(`${id}: incomplete idle loop capture`);
     }
@@ -170,9 +194,13 @@ for(const id of ids){
       if([...framesSeen].some(index=>!spr.walk.includes(index)))throw Error(`${id}: an attack interrupted the quiet walking phase`);
       if(!spr.walk.every(index=>framesSeen.has(index)))throw Error(`${id}: incomplete ${phase.name} loop capture`);
     }
-    if(phase.combat){
+    if(phase.combat&&phase.manual){
       const attacking=new Set(phase.x&&spr.attackWalk?spr.attackWalk.flat():spr.attack);
       if(![...framesSeen].some(index=>attacking.has(index)))throw Error(`${id}: ${phase.name} never displayed an attack`);
+    }
+    if(phase.combat&&!phase.manual){
+      const locomotion=new Set([...spr.idle,...spr.walk]);
+      if([...framesSeen].some(index=>!locomotion.has(index)))throw Error(`${id}: field combat interrupted idle/walk`);
     }
     stage++;
   }
