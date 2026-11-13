@@ -156,8 +156,9 @@ test('pause opens the separate gear rank details through the normal button', () 
 test('legacy roster bits, ultimate bits and equipped slots retain their original hero identities', () => {
   const legacy = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
   assert.deepEqual(HERO_ORDER.slice(0, legacy.length), legacy);
-  assert.equal(HERO_ORDER.length, 21);
-  assert.equal(Object.keys(HEROES).length, 21);
+  assert.equal(HERO_ORDER.length, 22);
+  assert.equal(Object.keys(HEROES).length, 22);
+  assert.equal(HERO_ORDER.at(-1), 'eanasir', 'the challenge hero is appended without shifting old save bits');
   const ring = item('ring', 2);
   const old = sanitizeProfile({ v: 4, heroes: 511, uu: 511, bt: '0.0.0.0.0.0.0.0.8c',
     gear: { witchhunter: packGear({ ring }) } });

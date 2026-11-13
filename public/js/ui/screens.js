@@ -1095,7 +1095,11 @@ export class OptionsScreen {
       changed();
     }
     y += step;
-    if (button(ctx, ui, 'o_tracks', x, y, w, 13, 'CHOOSE MUSIC')) this.musicMenu = new MusicMenu(app);
+    const audioHalf = Math.floor((w - 4) / 2);
+    if (button(ctx, ui, 'o_tracks', x, y, audioHalf, 13, 'CHOOSE MUSIC')) this.musicMenu = new MusicMenu(app);
+    if (button(ctx, ui, 'o_weapon_sounds', x + audioHalf + 4, y, w - audioHalf - 4, 13, 'WEAPON SOUNDS')) {
+      window.open(new URL('sound-lab/', document.baseURI).href, '_blank', 'noopener');
+    }
     y += step;
     d = stepper(ctx, ui, 'o_sfx', x, y, w, 'SOUND EFFECTS', `${Math.round(s.sfx * 100)}%`);
     if (d) {
@@ -1154,6 +1158,20 @@ export class OptionsScreen {
       ]);ui.focus('detail_close');ui.lock(0.2);
     }
     keysHint(ctx, W, H, 'ARROWS adjust · ENTER select · ESC back');
+    // Enter the two audio choices from either full-width volume row. Geometric
+    // navigation otherwise skips the pair for the next centred control.
+    if (ui.lockT <= 0) {
+      const inAudioRow = ui.focusId === 'o_tracks' || ui.focusId === 'o_weapon_sounds';
+      let target = null;
+      if (ui.focusId === 'o_music' && input.pressed('down') || ui.focusId === 'o_sfx' && input.pressed('up')) target = 'o_tracks';
+      else if (inAudioRow) {
+        if (input.pressed('left')) target = 'o_tracks';
+        else if (input.pressed('right')) target = 'o_weapon_sounds';
+        else if (input.pressed('up')) target = 'o_music';
+        else if (input.pressed('down')) target = 'o_sfx';
+      }
+      if (target) { ui.take('up', 'down', 'left', 'right');ui.focusId = target;ui.focusSource = 'keys'; }
+    }
     ui.end();
     return null;
   }

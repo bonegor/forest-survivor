@@ -348,7 +348,7 @@ test('Chain Lightning opens once a run has evolved Lightning Strike, with any he
 });
 
 test('every evolution has its bit, and a relic is told only once a run before has made its evolution', () => {
-  const evos = Object.values(WEAPONS).filter((d) => d.evo).map((d) => d.evo.into);
+  const evos = new Set(Object.values(WEAPONS).filter((d) => d.evo).flatMap((d) => d.evo.random || [d.evo.into]));
   assert.deepEqual([...PROGRESS.evolutions].sort(), [...evos].sort(), 'every evolution once, none else');
   assert.equal(new Set(PROGRESS.evolutions).size, PROGRESS.evolutions.length);
   assert.ok(PROGRESS.evolutions.length <= 53, 'the bits of one number');

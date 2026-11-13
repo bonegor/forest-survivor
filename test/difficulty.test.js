@@ -455,3 +455,23 @@ test('Ranked\'s monsters follow the night\'s health to dawn, then grow on from t
   const r = game({ mode: 'ranked' });
   assert.ok(Math.abs(r.spawner.stats(25).hpMul / (monsterHp(25, 'ranked') * ELITE.hp) - 1) < 1e-12, 'its horde takes it');
 });
+
+test('the first ten minutes give real horde monsters 200% more health, without a health cliff afterwards', () => {
+  // Historical multiplier at fixed encounter times, independent of the new curve.
+  const old = [[0, 1], [3, 1.336], [6, 1.672], [8, 3.656], [10, 6.12]];
+  for (const mode of ['s15', 'ranked']) {
+    const g = game({ mode });
+    for (const [minute, multiplier] of old) {
+      const e = g.spawnEnemy('skeleton', 0, 0, { ...g.spawner.stats(minute * 1.4), instant: true });
+      const want = ENEMIES.skeleton.hp * multiplier * 3 * g.diff.hp * g.map.foe.hp;
+      assert.ok(Math.abs(e.maxHp - want) < 1, `${mode} at ${minute}: ${e.maxHp}, expected ${want}`);
+    }
+    let last = 0;
+    for (let minute = 0; minute <= 30; minute += 0.1) {
+      const now = monsterHp(minute * 1.4, mode);
+      assert.ok(now >= last, `health must not fall at ${minute}`);
+      last = now;
+    }
+  }
+  assert.equal(monsterHp(0, 'dungeon'), 1, 'standalone Dungeon floors retain their separate curve');
+});

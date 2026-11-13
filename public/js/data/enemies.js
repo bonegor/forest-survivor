@@ -11,6 +11,7 @@
 // Knight's pace. Below half health they fire three-shot spreads more frequently.
 export const CRYPT_LORD = { health: 20, pace: 0.9, damage: 1.25, enrageAt: 0.5, cooldown: 0.75, spread: 0.2, arrows: 3 };
 export const CRYPT_LORD_TYPES = ['skeletonarcher', 'skeletonmage'];
+export const EA_NASIR_CHANCE = 0.05;
 
 export const ENEMIES = {
   bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, dmg: 3, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true, fry: true },
@@ -53,6 +54,11 @@ export const ENEMIES = {
   skeletonmage: {
     name: 'Skeleton Mage', sprite: 'skeletonmage', hp: 600, spd: 34, dmg: 8, r: 8, xp: 60, ai: 'caster', mass: 30, anim: 4, death: 'bones', kbRes: 0.95,
     shot: { range: 175, cd: 1.7 * 0.7, spd: 170 * 2, dmg: 8, kind: 'cryptfireball', wind: 0.5 * 0.7 },
+  },
+  eanasir: {
+    name: 'Ea-nāṣir', title: 'Merchant of Poor Quality Copper', sprite: 'eanasir',
+    hp: 1500, spd: 34, dmg: 10, r: 9, xp: 150, ai: 'eanasir', mass: 40,
+    anim: 4, death: 'gold', kbRes: 0.97, color: '#e4a672', wicked: true,
   },
   // It runs and strolls at a share of the hero's own pace (game/enemies.js THIEF), not at spd.
   // kbRes 1: no blow shoves him; he only runs and strolls at his own pace (22 October 2026).

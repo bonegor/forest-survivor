@@ -36,16 +36,18 @@ function ward(w, state) {
   const { g } = w, p = g.player, guard = state.guard;
   if (!guard || !guard.left || guard.until <= g.clock) return;
   for (const shot of g.eshots) {
-    if (shot.dead || shot.life <= 0) continue;
+    if (shot.dead || shot.life <= 0 || guard.seen.has(shot)) continue;
     const x = shot.x - p.x, y = shot.y - p.y;
     const reach = guard.reach + shot.r;
     const distance = Math.hypot(x, y);
     if (distance > reach || x * guard.dx + y * guard.dy < distance * 0.54) continue;
     if (x * shot.vx + y * shot.vy >= 0 || !g.world.lineOfSight(p.x, p.y, shot.x, shot.y)) continue;
-    shot.dead = true;
+    // Incoming fire empowers the next cut, but weapons never erase an enemy
+    // missile. Count each passing shot once while this guard is active.
+    guard.seen.add(shot);
     guard.left--;
     state.chargeUntil = g.clock + CHARGE_TIME;
-    g.particles.burst(shot.x, shot.y, shot.z, 7, [PC.Y, PC.w], 45, 0.24, 1, P.FADE | P.GLOW, {});
+    g.particles.burst(p.x + guard.dx * guard.reach, p.y + guard.dy * guard.reach, shot.z, 7, [PC.Y, PC.w], 45, 0.24, 1, P.FADE | P.GLOW, {});
     sfx('hit', { pitch: 1.45, pan: guard.dx * 0.22 });
     if (!guard.left) return;
   }
@@ -114,7 +116,7 @@ export default {
     if (g.clock >= state.readyAt) {
       state.readyAt = g.clock + GUARD_RECOVERY;
       state.guard = guard = {
-        dx, dy, left: s.guard, reach: Math.min(40, 26 * s.area),
+        dx, dy, left: s.guard, seen: new Set(), reach: Math.min(40, 26 * s.area),
         until: g.clock + Math.min(GUARD_DURATION_CAP, s.dur),
       };
       ward(w, state);

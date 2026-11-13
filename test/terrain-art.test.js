@@ -32,6 +32,7 @@ import { FLORA_DESERT } from '../public/js/art/flora-desert.js';
 import { FLORA_FROZEN } from '../public/js/art/flora-frozen.js';
 import { FLORA_MEADOW } from '../public/js/art/flora-meadow.js';
 import { FLORA_HELL } from '../public/js/art/flora-hell.js';
+import { COPPER_ART } from '../public/js/art/eanasir.js';
 
 const BLOOMS = ['fae_bloom1', 'fae_bloom2', 'fae_bloom1_u', 'fae_bloom2_u'];
 const NEW = [...Object.keys(TERRAIN_ART), ...BLOOMS];
@@ -97,7 +98,7 @@ test("a bud or a wilted moonbloom doesn't glow; an open or a bright one does, in
 test('no name is in two of the art tables', () => {
   const tables = [HERO_ART, MONSTER_ART, BOSS_ART, PICKUP_ART, PROJECTILE_ART, ICON_ART, RELIC_EXPANSION_ART, PROC_ART, PROP_ART, LANDMARK_ART,
     PALADIN_ITEMS, DRUID_ITEMS, BERSERKER_ITEMS, WITCHHUNTER_ITEMS, MAP_MONSTER_ART, MAP_BOSS_ART,
-    FLORA_DESERT, FLORA_FROZEN, FLORA_MEADOW, FLORA_HELL, TERRAIN_ART];
+    FLORA_DESERT, FLORA_FROZEN, FLORA_MEADOW, FLORA_HELL, TERRAIN_ART, COPPER_ART];
   const seen = new Map();
   tables.forEach((t, i) => {
     for (const n of Object.keys(t)) {

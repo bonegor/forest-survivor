@@ -14,6 +14,7 @@
 
 import { KILL_CREDIT, NIGHTMARE_MORE } from './population.js';
 import { EXPANSION_EVOLUTIONS } from '../expansion/signatures.js';
+import { COPPER_EVOLUTIONS } from '../data/copper.js';
 
 export const PROGRESS = {
   // Slots a new player has; each rank of the Armory's Arsenal or Reliquary adds one, to the
@@ -125,7 +126,7 @@ export const PROGRESS = {
   evolutions: ['excalibur', 'whirlwind', 'aegis', 'sanctuary', 'stormstring', 'lodestar', 'briarheart', 'faelights', 'meteor', 'thunderstorm', 'stormlash',
     'frozenheart', 'prismatic', 'shadowstrike', 'hellfire', 'razorfield', 'tether', 'fairyring', 'doom', 'tempest', 'kraken', 'abyss', 'knell', 'beacon',
     'runestorm', 'harvest', 'comet', 'legion', 'pestilence', 'judgement', 'worldroot', 'bloodstorm', 'purifier',
-    ...EXPANSION_EVOLUTIONS],
+    ...EXPANSION_EVOLUTIONS, ...COPPER_EVOLUTIONS],
   // The Survival maps (data/maps.js), the owner's (28 October 2026): "the first one where we start
   // is the desert map. From there on, we progress to the frozen map. From there on, we progress to
   // our current forest map. And from there on, we progress to the demonic map", harder in that

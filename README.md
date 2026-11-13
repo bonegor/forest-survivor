@@ -43,6 +43,12 @@ The save there is in localStorage: itch.io frames the game from another site (it
 
 ## How to play
 
+The HUD shows experience progress, owned weapons and free weapon slots, with arrows to nearby objectives. Crypt strike instructions disappear after ten accepted strikes each visit; the entry hint points to the minimap (M, gamepad map button, or the touch MAP button).
+
+Survival and Ranked monsters have 200% more health through the first ten minutes. The added health carries forward after minute ten, so new waves never suddenly become weaker. Incidental box and horde pickups drop half as often; fury pickups do not appear before the hero's ultimate is unlocked. Experience gems and guaranteed boss/champion rewards keep their usual rules. Spinning weapons no longer destroy enemy missiles on contact.
+
+**Options → Weapon Sounds** opens the audition page. Compare the current recordings with **Tempered**, **Heavy**, and **Arcade** at level 1 and maximum level, using real weapon timing and projectile counts. The 15 preview weapons cover every launch-sound family. Listening does not change your preference; **Apply** saves the style and updates the open game immediately.
+
 | Action | Keyboard | Gamepad | Touch |
 | --- | --- | --- | --- |
 | Move | WASD / arrows | left stick / d-pad | drag anywhere |
@@ -83,6 +89,12 @@ awarding gold. Keyboard, gamepad and touch movement all work, and the pause butt
 journey and its reminder.
 
 ### Heroes
+
+**Ea-nāṣir and Poor Quality Copper.** Each crypt has a 5% chance to replace its usual lords with a stronger copper merchant, drawn from the standing worshipper in the supplied reference. He telegraphs a whip, casts skeleton-mage fireballs, and throws a slow cursed copper disc. Each landed curse replaces the lowest-rank ordinary weapon (lowest nominal damage rate breaks ties), preserving its rank; once no ordinary weapons remain it fills empty slots, up to six even without a full Arsenal. Each copper slot throws at the nearest visible enemy automatically, including in crypts, and persists after leaving or fainting. Lost weapons cannot return during that run.
+
+Win a run with all six cursed copper slots to unlock **Ea-nāṣir, Copper Merchant**. Evolved copper counts. He starts with one **good quality copper (not for sale)**, has +25% gold, and never encounters himself. His private stock morphs at rank 8 with the **Spellbook** (the cooldown relic) and a chest, randomly choosing one of the six copper evolutions. The Phoenix Heart retains its normal wildcard effect for this signature weapon.
+
+For cursed Poor Quality Copper, the Phoenix Heart remains available without first evolving a signature weapon; at level 8, each cursed disc evolves through a chest with that Heart held. The six forms are **Furnace Halo** (area), **Copper Crown** (orbit), **Honest Return** (returning throw), **Copper Hail** (rapid fire), **Merchant's Arc** (chain), and **Foundry Burst** (explosions).
 
 Outside crypts, a stationary hero uses the idle animation and a moving hero walks, including while automatic weapons fire. Inside a crypt, the hero idles or walks until a manual attack (X, Shift or its gamepad/touch equivalent) plays the attack animation. The attack still lands on the sprite's strike frame; moving attack clips retain their walking legs.
 

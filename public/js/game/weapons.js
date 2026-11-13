@@ -1,6 +1,7 @@
 // Weapon instances and the firing behaviour of every weapon kind.
 
 import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weapons.js';
+import { PASSIVES } from '../data/passives.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick, angleDiff } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
@@ -13,6 +14,7 @@ import { PC, P } from './particles.js';
 import { reachesBody } from './hitbox.js';
 import { recordHeroAttack } from './hero-animation.js';
 import { EXPANSION_BEHAVIORS } from '../expansion/weapon-behaviors.js';
+import { COPPER_BEHAVIORS } from './weapons-copper.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
 const STAT_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
@@ -115,7 +117,9 @@ export class Weapon {
   // Into its evolved form; false for one that has none (an evolution itself).
   evolve() {
     if (!this.def.evo) return false;
-    const into = this.def.evo.into;
+    if ((this.def.copper || this.def.evo.onlyPartner) && !this.g.player.passives.has(this.def.evo.with) &&
+      (this.def.evo.onlyPartner || ![...this.g.player.passives.keys()].some(id => PASSIVES[id].evolvesAny))) return false;
+    const into = this.def.evo.random ? pick(this.def.evo.random) : this.def.evo.into;
     this.id = into;
     this.def = WEAPONS[into];
     this.level = MAX_WEAPON_LEVEL;
@@ -359,6 +363,7 @@ export const SWORD_ARC = Math.PI / 4;
 
 export const KINDS = {
   ...EXPANSION_BEHAVIORS,
+  ...COPPER_BEHAVIORS,
   ...KINDS_LIGHT, // the Lantern, Runestone, Scythe and Starfall (weapons-light.js)
   sword: {
     fire(w) {
@@ -415,11 +420,18 @@ export const KINDS = {
       // Drawn and struck with at a quarter over the outlined 14x5 sprite (17.5x6.25 px, the hit
       // 8.75 px either side of its centre and 3.75 to either side of its line): still short of
       // her bow, about 21 px tip to tip.
-      const arrow = (a) =>
+      const arrow = (a) => {
+        // The shaft leaves the forward bow hand, not the middle of her torso.
+        // Its 8.75px half-length now starts ahead of her rather than across her
+        // back. Never move the muzzle through a nearby crypt wall.
+        const x = m.x + Math.cos(a) * 18, y = m.y + Math.sin(a) * 18;
+        if (!g.world.lineOfSight(m.x, m.y, x, y)) return;
         spawnProjectile(g, {
-          kind: 'arrow', sprite: 'arrow', x: m.x, y: m.y, z: p.id === 'archer' ? 19 : 7, ang: a, speed: 270 * w.s.speed, life: 1.2, r: 3.75, scale: 1.25,
+          kind: 'arrow', sprite: 'arrow', x, y, z: p.id === 'archer' ? 19 : 7, ang: a, speed: 270 * w.s.speed, life: 1.2, r: 3.75, scale: 1.25,
+          forwardFrom: [p.x, p.y],
           dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w, trail: w.evolved ? PC.c : PC.G,
         });
+      };
       arrow(ang);
       if (w.s.ring && i === 0 && w.volley % 3 === 0) {
         for (let k = 0; k < 10; k++) arrow((k / 10) * TAU + rand(-0.05, 0.05));

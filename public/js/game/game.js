@@ -2,7 +2,8 @@
 
 import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
-import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
+import { COPPER_IDS, isCopper, isCursedCopper } from '../data/copper.js';
 import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
@@ -36,7 +37,7 @@ import { Forest } from './forest.js';
 import { BIOMES } from './biomes.js';
 import { Weather } from './weather.js';
 import { makeHazards } from './hazards/index.js';
-import { Dungeon, cryptLords, cryptLook } from './dungeon.js';
+import { Dungeon, cryptLords, cryptLook, cryptHasEaNasir } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, Sanctum, Overgrowth, Frenzy, Purge, FRENZY, ultFlash, prewarmUlt } from './effects.js';
@@ -166,7 +167,8 @@ export const PROP_HOLD = 0.2;
 // but not far, just so we dont directly pick them up". So half the boxes hold nothing (empty), and
 // what one holds hops `toss` px to one side of the way the hero walks (of the way to the box when
 // he stands), and waits there to be walked over: the magnet doesn't pull it (Pickup opts.box).
-export const PROP_DROP = { empty: 0.5, toss: 26 };
+// November 14: halve the remaining pickup drops again, from one in two boxes to one in four.
+export const PROP_DROP = { empty: 0.75, toss: 26 };
 
 // find (1 a rare find, 2 the rarest) is only how a box tells what it held as it pops out
 // (BOX_FIND, Game.boxFind), never the odds: those are the weights alone.
@@ -244,6 +246,7 @@ export class Game {
     // three of each, one more a rank of Arsenal or Reliquary), unless a run says otherwise (the
     // bots try what a hero can do with fewer slots); never more than MAX_WEAPONS, MAX_RELICS.
     this.maxWeapons = Math.min(MAX_WEAPONS, o.maxWeapons ?? o.meta?.weaponSlots ?? MAX_WEAPONS);
+    this.copperLostWeapons = new Set();
     this.maxRelics = Math.min(MAX_RELICS, o.maxRelics ?? o.meta?.relicSlots ?? MAX_RELICS);
     // What the profile has opened (shared/profile.js openFor): { weapons, relics, ult }, the shared
     // weapons and the relics a run may find and whether the hero's ultimate is open. None given,
@@ -489,11 +492,51 @@ export class Game {
     return w;
   }
 
+  // Each landed bad-copper disc claims one slot. Lower ranks go first, then the
+  // lower nominal damage per second. Copper (including its evolutions) is never
+  // consumed twice. Missing slots fill after ordinary weapons have been replaced.
+  infestCopper() {
+    if (!this.inCrypt || this.player.id === 'eanasir') return false;
+    const p = this.player;
+    const id = COPPER_IDS.find(id => !p.weapons.some(w => w.baseId === id || w.def.copperSlot === WEAPONS[id].copperSlot));
+    if (!id || p.weapons.filter(isCopper).length >= MAX_WEAPONS) return false;
+    const power = w => (w.s.dmg || 0) * (w.s.amount || 1) / Math.max(0.08, w.s.cd);
+    const old = p.weapons.filter(w => !isCopper(w)).sort((a, b) =>
+      a.level - b.level || power(a) - power(b))[0];
+    if (old) {
+      const at = p.weapons.indexOf(old);
+      this.copperLostWeapons.add(old.baseId);
+      if (old.fx) old.fx.dead = true;
+      this.effects = this.effects.filter(fx => fx.w !== old);
+      this.minions = this.minions.filter(m => m.w !== old);
+      for (let i = this.projectiles.length - 1; i >= 0; i--) {
+        if (this.projectiles[i].w !== old) continue;
+        releaseProjectile(this.projectiles[i]);
+        this.projectiles.splice(i, 1);
+      }
+      for (const e of [...this.enemies, ...(this.forestState?.enemies || [])]) e.hitT[old.src] = 0;
+      const copper = new Weapon(this, id, old.src);
+      copper.level = old.level;
+      copper.recompute();
+      p.weapons[at] = copper;
+    } else {
+      if (p.weapons.length >= MAX_WEAPONS) return false;
+      this.addWeapon(id);
+    }
+    // The curse can claim all six slots even before the Armory has opened them.
+    this.maxWeapons = Math.max(this.maxWeapons, p.weapons.length);
+    this.syncGearWeapons();
+    const count = p.weapons.filter(isCopper).length;
+    this.banner(`Poor Quality Copper · ${count}/6`, old ? `${old.def.name} replaced. No refunds.` : 'Another slot claimed. No refunds.', '#c28569', 3);
+    if (count === MAX_WEAPONS) this.banner('The copper contract is complete', 'Win this run with all six to recruit Ea-nāṣir', '#fee761', 5);
+    return true;
+  }
+
   syncGearWeapons() {
     const p = this.player, grants = p.gearRanks.weapons;
     for (let i = p.gearWeapons.length - 1; i >= 0; i--) {
       const w = p.gearWeapons[i];
-      if (grants.has(w.id) && !this.ownsWeapon(w.id)) continue;
+      if (grants.has(w.id) && !this.ownsWeapon(w.id) && !this.copperLostWeapons.has(w.id)) continue;
       p.gearWeapons.splice(i, 1);
       this.freeSrc.push(w.src);
       this.effects = this.effects.filter(effect => effect.w !== w);
@@ -507,7 +550,7 @@ export class Game {
       for (const enemy of this.enemies) enemy.hitT[w.src] = 0;
     }
     for (const id of grants) {
-      if (!this.ownsWeapon(id) && !p.gearWeapons.some(w => w.id === id) && this.freeSrc.length) {
+      if (!this.copperLostWeapons.has(id) && !this.ownsWeapon(id) && !p.gearWeapons.some(w => w.id === id) && this.freeSrc.length) {
         p.gearWeapons.push(new Weapon(this, id, this.freeSrc.shift(), true));
       }
     }
@@ -518,7 +561,8 @@ export class Game {
   // channel is free for the next weapon; its blades or aura go out, and what else of it is about
   // (pools, shots, the raised dead) fades out at once.
   removeWeapon(id) {
-    const p = this.player, w = p.weapons.find((x) => x.id === id || WEAPONS[id]?.evo?.into === x.id);
+    const p = this.player, w = p.weapons.find((x) => x.id === id || x.baseId === id ||
+      (x.baseId === x.id && !WEAPONS[id]?.evo?.random && WEAPONS[id]?.evo?.into === x.id));
     if (!w || p.weapons.length <= 1) return false;
     p.weapons.splice(p.weapons.indexOf(w), 1);
     if (!p.weapons.some((x) => x.src === w.src) && !this.freeSrc.includes(w.src)) this.freeSrc.push(w.src);
@@ -578,7 +622,8 @@ export class Game {
   }
 
   ownsWeapon(id) {
-    return this.player.weapons.some((w) => w.id === id || (w.def.evolved && WEAPONS[id]?.evo?.into === w.id));
+    return this.player.weapons.some((w) => w.id === id || w.baseId === id ||
+      (w.def.evolved && w.baseId === w.id && !WEAPONS[id]?.evo?.random && WEAPONS[id]?.evo?.into === w.id));
   }
 
   // Everything a level-up card or a chest can still give, each with its weight (CARD_WEIGHT): a
@@ -618,10 +663,12 @@ export class Game {
   // Whether the profile has opened a weapon (the hero's own signatures always are) or a relic
   // (open, shared/profile.js openFor): nothing locked is ever offered, at a level-up or in a chest.
   weaponOpen(id) {
+    if (this.copperLostWeapons.has(id)) return false;
     return !this.open || this.player.hero.unique.includes(id) || this.open.weapons.includes(id);
   }
 
   relicOpen(id) {
+    if (id === 'phoenix' && this.player.weapons.some(isCursedCopper)) return true;
     return !this.open || this.open.relics.includes(id);
   }
 
@@ -630,7 +677,7 @@ export class Game {
   // With no profile's open (the tests, the bots) every evolution is known.
   evoKnown(id) {
     const evo = WEAPONS[id]?.evo;
-    return !!evo && (!this.open?.evos || this.open.evos.includes(evo.into));
+    return !!evo && (!this.open?.evos || (evo.random || [evo.into]).some(into => this.open.evos.includes(into)));
   }
 
   // What a weapon's evolution waits on, as the cards and the pause screen tell it, or null for
@@ -642,7 +689,7 @@ export class Game {
     const evo = WEAPONS[id]?.evo, p = this.player;
     if (!evo) return null;
     const any = [...p.passives.keys()].find((r) => PASSIVES[r].evolvesAny);
-    if (any && !p.passives.has(evo.with)) return { relic: any, state: 'owned' };
+    if (any && !evo.onlyPartner && !p.passives.has(evo.with)) return { relic: any, state: 'owned' };
     if (!this.evoKnown(id)) return { state: 'unknown' };
     const r = evo.with;
     const state = p.passives.has(r) ? 'owned' : !this.relicOpen(r) ? 'locked' : this.banished.has('passive:' + r) ? 'banished' : p.passives.size >= this.maxRelics ? 'full' : 'open';
@@ -655,14 +702,15 @@ export class Game {
   relicOffered(id) {
     const r = PASSIVES[id], p = this.player;
     if (!r.afterSignature) return true;
-    return this.signatureEvolved() && (this.phoenixLostAt == null || p.level - this.phoenixLostAt >= (r.again || 0));
+    return (this.signatureEvolved() || p.weapons.some(isCursedCopper)) && (this.phoenixLostAt == null || p.level - this.phoenixLostAt >= (r.again || 0));
   }
 
   // Whether one of the hero's own signature weapons has evolved this run (the Knight's opens the
   // Phoenix Heart in the Armory, shared/progress.js).
   signatureEvolved() {
     const p = this.player;
-    return p.weapons.some((w) => w.evolved && p.hero.unique.some((u) => WEAPONS[u].evo?.into === w.id));
+    return p.weapons.some((w) => w.evolved && (p.hero.unique.includes(w.baseId) ||
+      (w.baseId === w.id && p.hero.unique.some((u) => !WEAPONS[u].evo?.random && WEAPONS[u].evo?.into === w.id))));
   }
 
   // A relic used up (the Phoenix Heart, by the revive it gave): gone, its slot free again, and
@@ -890,12 +938,12 @@ export class Game {
     const anyRelic = [...p.passives.keys()].some((id) => PASSIVES[id].evolvesAny);
     if (c.type === 'weapon' && !c.isNew && c.level >= MAX_WEAPON_LEVEL) {
       const w = p.weapons.find((x) => x.id === c.id);
-      if (w && !w.evolved && w.def.evo && (anyRelic || p.passives.has(w.def.evo.with))) return w.def.evo.into;
+      if (w && !w.evolved && w.def.evo && ((anyRelic && !w.def.evo.onlyPartner) || p.passives.has(w.def.evo.with))) return w.def.evo.random ? RANDOM_EVOLUTION : w.def.evo.into;
     }
     if (c.type === 'passive' && c.isNew) {
       for (const w of p.weapons) {
         if (w.evolved || !w.def.evo || w.level < MAX_WEAPON_LEVEL) continue;
-        if (w.def.evo.with === c.id || PASSIVES[c.id].evolvesAny) return w.def.evo.into;
+        if (w.def.evo.with === c.id || (!w.def.evo.onlyPartner && PASSIVES[c.id].evolvesAny)) return w.def.evo.random ? RANDOM_EVOLUTION : w.def.evo.into;
       }
     }
     return null;
@@ -906,7 +954,8 @@ export class Game {
   evolvable() {
     const p = this.player;
     const any = [...p.passives.keys()].some((id) => PASSIVES[id].evolvesAny);
-    return p.weapons.filter((w) => !w.evolved && w.level >= MAX_WEAPON_LEVEL && w.def.evo && (any || p.passives.has(w.def.evo.with)));
+    return p.weapons.filter((w) => !w.evolved && w.level >= MAX_WEAPON_LEVEL && w.def.evo &&
+      (w.def.evo.onlyPartner ? p.passives.has(w.def.evo.with) : any || p.passives.has(w.def.evo.with)));
   }
 
   // What a chest holds, given at once: an evolution if one is ready, then draws from the
@@ -922,8 +971,8 @@ export class Game {
     const ev = this.evolvable();
     if (ev.length) {
       const w = ev[0];
-      items.push({ type: 'evolve', w, id: w.def.evo.into });
-      w.evolve();
+      const from = w.id;
+      if (w.evolve()) items.push({ type: 'evolve', w, from, id: w.id });
     }
     let n = 1;
     // Luck makes a chest richer, but not a crypt lord's ('lord', drawn as a champion's at plain luck).
@@ -1064,6 +1113,7 @@ export class Game {
   }
 
   hitEnemy(e, dmg, o = {}) {
+    if (this.inCrypt && isCopper(o.w) && !this.world.lineOfSight(this.player.x, this.player.y, e.x, e.y)) return 0;
     // Once the hero has fallen nothing he left behind (a pool, a blade, a minion) fells anything more.
     if (e.dead || this.player.dead) return 0;
     // A sealed guardian (dungeon.js) neither wakes to a blow nor loses health to it: what the blow
@@ -1203,8 +1253,8 @@ export class Game {
     } else {
       // The horde leaves its soul gems and, now and then, a coin or a fury orb: nothing else.
       const r = Math.random();
-      if (r < 0.014 * luck) this.addPickup('coin', e.x, e.y, 1);
-      else if (r < (0.014 + FURY.hordeOrb * Math.max(p.killShare, FURY.orbFloor)) * luck) this.addPickup('fury', e.x, e.y);
+      if (r < 0.007 * luck) this.addPickup('coin', e.x, e.y, 1);
+      else if (!p.ultLocked && r < (0.007 + 0.5 * FURY.hordeOrb * Math.max(p.killShare, FURY.orbFloor)) * luck) this.addPickup('fury', e.x, e.y);
     }
     if (e.def.split && !o.noSplit) {
       for (let i = 0; i < e.def.splitN; i++) {
@@ -1307,11 +1357,14 @@ export class Game {
     const ps = this.particles;
     const cols = e.type === 'urn' ? [PC.d, PC.O, PC.B] : e.type === 'lantern' ? [PC.b, PC.y, PC.N] : [PC.b, PC.B, PC.t, PC.m];
     ps.burst(e.x, e.y - 5, 6, 16, cols, 90, 1.1, 1, P.GROUND | P.FADE, { vz: 110, grav: 300 });
-    sfx('wood', { pan: clamp((e.x - this.player.x) / 200, -1, 1) });
+    sfx('wood', { pan: clamp((e.x - this.player.x) / 200, -1, 1), weaponSound: false });
     this.addDecal('wood', e.x, e.y, 3);
     if (chance(PROP_DROP.empty)) return;
     const p = this.player, luck = p.luck;
     const { kind, find } = weighted(PROP_LOOT, (d) => (d.lucky ? d.w * luck : d.w));
+    // A locked ultimate cannot consume fury. Leave its roll empty instead of
+    // replacing it with extra potions and undoing the lower drop rate.
+    if (kind === 'fury' && p.ultLocked) return;
     // The owner's (22 October 2026): what a box held pops out a moment after it breaks (PROP_HOLD),
     // not under the hero's feet the instant he walks into it, and to one side (PROP_DROP).
     const [tx, ty] = this.propToss(e);
@@ -1470,7 +1523,9 @@ export class Game {
   // What the prompt over a crypt's door says (Hud.drawCryptDoor): its name, how many lords sleep
   // below were he to go in now, and how far his push up its steps has come (0 to 1).
   doorInfo(d) {
-    return { name: cryptName(d.key, this.look), lords: cryptLords(minuteOf(this.phase), d.depth), k: clamp((d.push || 0) / CRYPT_PUSH, 0, 1) };
+    const [a, b] = d.key.split(',').map(Number);
+    const seed = (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0;
+    return { name: cryptName(d.key, this.look), lords: cryptHasEaNasir(seed, this.player.id) ? 1 : cryptLords(minuteOf(this.phase), d.depth), k: clamp((d.push || 0) / CRYPT_PUSH, 0, 1) };
   }
 
   // Every hero fights by hand below: in a crypt only his own weapon (the knight's sword, the
@@ -1483,7 +1538,8 @@ export class Game {
   // The hero's own weapon, or what it evolved into.
   mainWeapon() {
     const id = this.player.hero.weapon, into = WEAPONS[id].evo?.into;
-    return this.player.weapons.find((w) => w.id === id || w.id === into) || null;
+    return this.player.weapons.find((w) => w.id === id || w.baseId === id ||
+      (w.baseId === w.id && !WEAPONS[id].evo?.random && w.id === into)) || this.player.weapons.find(isCopper) || null;
   }
 
   strikeAim(w) {
@@ -1502,6 +1558,17 @@ export class Game {
   strike() {
     if (!this.caveStrike || this.state !== 'play') return false;
     const p = this.player, w = this.mainWeapon();
+    // Copper fires on its own below. A manual gesture may still break boxes,
+    // including after the leading disc becomes a continuous halo or orbit.
+    if (w && isCopper(w)) {
+      if (p.dead || this.clock < (this.copperStrikeReadyAt || 0)) return false;
+      const delay = strikeClip(SPR[p.hero.sprite])?.delay ?? 0;
+      p.strike(p.aim, this.clock);
+      this.copperStrikeReadyAt = this.clock + 0.5;
+      this.boxBlowAt = this.clock + delay;
+      this.inCrypt.strikes = (this.inCrypt.strikes || 0) + 1;
+      return true;
+    }
     // Haste can ready the cooldown before the authored hit frame. Finish that
     // pending wind-up before accepting another press/hold: otherwise it keeps
     // replacing handAt and strikeAt, restarting the pose without ever hitting.
@@ -1511,6 +1578,7 @@ export class Game {
     p.strike(angle, this.clock);
     w.strike(angle, delay, target);
     this.boxBlowAt = this.clock + delay;
+    this.inCrypt.strikes = (this.inCrypt.strikes || 0) + 1;
     return true;
   }
 
@@ -1560,7 +1628,7 @@ export class Game {
       const [a, b] = d.key.split(',').map(Number);
       const minute = minuteOf(this.phase);
       const name = cryptName(d.key, this.look);
-      this.inCrypt = { key: d.key, depth: d.depth, minute, name, hp: p.hp };
+      this.inCrypt = { key: d.key, depth: d.depth, minute, name, hp: p.hp, strikes: 0, enteredAt: this.clock, mapHintSeen: this.showMap };
       // What lies there and sleeps there by the night's minute; how it looks by the map's look too.
       const theme = minute < 6 ? 'crypt' : minute < 11 ? 'catacombs' : 'inferno';
       new Dungeon(this, 1, (this.seed ^ Math.floor(hash2(a, b, 43) * 2 ** 31)) >>> 0, { name, theme, look: cryptLookFor(d.key, this.look), lords: cryptLords(minute, d.depth) });
@@ -1572,17 +1640,18 @@ export class Game {
       this.gatherMinions();
       this.snapCam();
       this.objective = '';
-      this.banner(name, `Here the night stands still. ${LORDS_WORD[this.world.lordCount] || this.world.lordCount} lords sleep below`, '#b55088', 3.2);
+      this.banner(name, this.world.eanasir ? 'Ea-nāṣir waits below. Beware his poor quality copper.' : `Here the night stands still. ${LORDS_WORD[this.world.lordCount] || this.world.lordCount} lords sleep below`, this.world.eanasir ? '#c28569' : '#b55088', 3.2);
       // The other weapons wait outside: their blades and auras go out until he is back.
       const main = this.mainWeapon();
       for (const w of p.combatWeapons) {
-        if (w === main || !w.fx) continue;
+        if (w === main || isCopper(w) || !w.fx) continue;
         w.fx.dead = true;
         w.fx = null;
         w.cd = Math.min(w.cd, 0.35);
       }
       const keys = input.device === 'touch' ? 'Tap a second finger' : `Press or hold ${input.device === 'pad' ? padKey('RB') : 'X or Shift'}`;
-      this.banner(`Your ${main ? main.def.name : 'weapon'} alone`, `${keys} to ${STRIKE_VERB[main?.def.kind] || 'strike'}`, '#feae34', 4);
+      const copper = p.weapons.some(isCopper);
+      this.banner(copper ? 'Copper follows you below' : `Your ${main ? main.def.name : 'weapon'} alone`, copper ? 'Copper discs attack automatically. Other weapons wait outside.' : `${keys} to ${STRIKE_VERB[main?.def.kind] || 'strike'}`, '#feae34', 4);
       playMusic('crypt');
     });
   }
@@ -2362,6 +2431,7 @@ export class Game {
       combo: this.stats.maxCombo, // his longest kill streak, for the record (shared/profile.js best.combo)
       evolved: this.signatureEvolved(), // and his signature evolved
       evos: p.weapons.filter((w) => w.evolved).map((w) => w.id), // and every evolution he held
+      copperWeapons: p.weapons.filter(isCursedCopper).map(w => w.id),
       floor: this.floor,
       gear: this.gear,
       spoils: runSpoils(this.collectedGear, this.gear, this.sealedGear),
@@ -2552,7 +2622,9 @@ export class Game {
 
     if (this.state === 'play') {
       if (this.caveStrike) {
-        this.mainWeapon()?.update(dt, true);
+        const main = this.mainWeapon();
+        if (main && !isCopper(main)) main.update(dt, true);
+        for (const w of p.weapons) if (isCopper(w)) w.update(dt);
         if (this.boxBlowAt !== null && this.clock >= this.boxBlowAt - 1e-6) this.breakBoxes();
       } else for (const w of p.combatWeapons) w.update(dt);
       updateList(this.minions, dt);

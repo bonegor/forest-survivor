@@ -1,0 +1,991 @@
+{
+  "mage": {
+    "design": "heroes7-apprentice",
+    "source": "example sprites folder/heroes-animation-2026-11-03/heroes7-apprentice",
+    "scale": 0.11747100635989526,
+    "pivot": [
+      102.671974522293,
+      328.3375796178344
+    ],
+    "centreX": 117,
+    "floorY": 327,
+    "legs": [
+      {
+        "pivotX": 64,
+        "phaseOffset": 0.5
+      },
+      {
+        "pivotX": 170,
+        "phaseOffset": 0
+      }
+    ],
+    "garment": {
+      "startY": 250,
+      "endY": 312,
+      "lift": 4,
+      "centreX": 117,
+      "width": 90,
+      "protectPolygons": [
+        [
+          [
+            43,
+            0
+          ],
+          [
+            79,
+            0
+          ],
+          [
+            79,
+            285
+          ],
+          [
+            43,
+            285
+          ]
+        ],
+        [
+          [
+            97,
+            240
+          ],
+          [
+            151,
+            240
+          ],
+          [
+            151,
+            315
+          ],
+          [
+            97,
+            315
+          ]
+        ]
+      ]
+    },
+    "protectedPolygons": [
+      [
+        [
+          43,
+          0
+        ],
+        [
+          78,
+          0
+        ],
+        [
+          78,
+          285
+        ],
+        [
+          43,
+          285
+        ]
+      ],
+      [
+        [
+          0,
+          260
+        ],
+        [
+          91,
+          260
+        ],
+        [
+          104,
+          287
+        ],
+        [
+          91,
+          303
+        ],
+        [
+          71,
+          305
+        ],
+        [
+          58,
+          301
+        ],
+        [
+          43,
+          305
+        ],
+        [
+          16,
+          308
+        ],
+        [
+          3,
+          302
+        ]
+      ],
+      [
+        [
+          93,
+          264
+        ],
+        [
+          154,
+          264
+        ],
+        [
+          165,
+          302
+        ],
+        [
+          151,
+          313
+        ],
+        [
+          95,
+          314
+        ],
+        [
+          84,
+          307
+        ]
+      ],
+      [
+        [
+          151,
+          266
+        ],
+        [
+          191,
+          266
+        ],
+        [
+          198,
+          292
+        ],
+        [
+          185,
+          301
+        ],
+        [
+          160,
+          303
+        ]
+      ]
+    ],
+    "originalSourceSha256": "2c5672d5c66a872797ba558824a82354ff027b7c0e5987970a78811d1f7f4a88",
+    "layers": [
+      {
+        "file": "mage-0.png",
+        "sha256": "5a5a8fb4f51490ab5e71c24b2b5ca714f5adda53322cd214e16ab692c813c160"
+      },
+      {
+        "file": "mage-1.png",
+        "sha256": "a6d7ff1558727bae7bf08d95961b2773c59063270a821f3e6448eebee9bf9ae9"
+      },
+      {
+        "file": "mage-2.png",
+        "sha256": "0499d218c136a08437db19e4903b314553cc8aa3b7b37a741d94bd5103b147f9"
+      }
+    ]
+  },
+  "necromancer": {
+    "design": "heroes7-lich",
+    "source": "example sprites folder/heroes-animation-2026-11-03/heroes7-lich",
+    "scale": 0.10015948963317384,
+    "pivot": [
+      118.64649681528661,
+      328.3312101910828
+    ],
+    "centreX": 138,
+    "floorY": 327,
+    "legs": [
+      {
+        "pivotX": 96,
+        "phaseOffset": 0.5
+      },
+      {
+        "pivotX": 174,
+        "phaseOffset": 0
+      }
+    ],
+    "garment": {
+      "startY": 240,
+      "endY": 302,
+      "lift": 4,
+      "centreX": 138,
+      "width": 96,
+      "protectPolygons": [
+        [
+          [
+            145,
+            220
+          ],
+          [
+            171,
+            220
+          ],
+          [
+            171,
+            307
+          ],
+          [
+            145,
+            307
+          ]
+        ]
+      ]
+    },
+    "protectedPolygons": [
+      [
+        [
+          25,
+          270
+        ],
+        [
+          99,
+          270
+        ],
+        [
+          91,
+          290
+        ],
+        [
+          77,
+          307
+        ],
+        [
+          63,
+          318
+        ],
+        [
+          39,
+          321
+        ],
+        [
+          23,
+          307
+        ]
+      ],
+      [
+        [
+          92,
+          270
+        ],
+        [
+          204,
+          270
+        ],
+        [
+          205,
+          289
+        ],
+        [
+          192,
+          297
+        ],
+        [
+          173,
+          301
+        ],
+        [
+          156,
+          301
+        ],
+        [
+          152,
+          300
+        ],
+        [
+          125,
+          302
+        ],
+        [
+          108,
+          300
+        ],
+        [
+          91,
+          301
+        ]
+      ]
+    ],
+    "originalSourceSha256": "479bbc84e9866c91b556ad60b7ad41257543c0cad43159b90122e8cf36ca0a20",
+    "layers": [
+      {
+        "file": "necromancer-0.png",
+        "sha256": "56f44ce971b52d557138904731688b51e0a36ac89eab29c268ef0c24ea3fd267"
+      },
+      {
+        "file": "necromancer-1.png",
+        "sha256": "b9158ca15be6dc4450115d00238212e239b3aefaf75ddd3427d5ab835a3b1feb"
+      },
+      {
+        "file": "necromancer-2.png",
+        "sha256": "26d68b0fbadf980558c5e48a927b7f5a8ffb26fd1b4198a4c3eb03290374d764"
+      }
+    ]
+  },
+  "druid": {
+    "design": "heroes7-druid",
+    "source": "example sprites folder/heroes-animation-2026-11-03/heroes7-druid",
+    "scale": 0.09847140834722147,
+    "pivot": [
+      130.67834394904457,
+      360.3375796178344
+    ],
+    "centreX": 128,
+    "floorY": 360,
+    "legs": [
+      {
+        "pivotX": 90,
+        "phaseOffset": 0.5
+      },
+      {
+        "pivotX": 166,
+        "phaseOffset": 0
+      }
+    ],
+    "garment": {
+      "startY": 267,
+      "endY": 330,
+      "lift": 3,
+      "centreX": 128,
+      "width": 98,
+      "protectPolygons": [
+        [
+          [
+            208,
+            0
+          ],
+          [
+            245,
+            0
+          ],
+          [
+            245,
+            365
+          ],
+          [
+            208,
+            365
+          ]
+        ]
+      ]
+    },
+    "protectedPolygons": [
+      [
+        [
+          209,
+          220
+        ],
+        [
+          241,
+          220
+        ],
+        [
+          241,
+          365
+        ],
+        [
+          209,
+          365
+        ]
+      ],
+      [
+        [
+          0,
+          248
+        ],
+        [
+          96,
+          248
+        ],
+        [
+          85,
+          283
+        ],
+        [
+          70,
+          306
+        ],
+        [
+          50,
+          328
+        ],
+        [
+          28,
+          336
+        ],
+        [
+          7,
+          331
+        ]
+      ],
+      [
+        [
+          101,
+          268
+        ],
+        [
+          126,
+          268
+        ],
+        [
+          127,
+          286
+        ],
+        [
+          120,
+          301
+        ],
+        [
+          108,
+          293
+        ]
+      ],
+      [
+        [
+          135,
+          266
+        ],
+        [
+          158,
+          266
+        ],
+        [
+          159,
+          287
+        ],
+        [
+          149,
+          303
+        ],
+        [
+          139,
+          294
+        ]
+      ],
+      [
+        [
+          171,
+          264
+        ],
+        [
+          193,
+          264
+        ],
+        [
+          195,
+          286
+        ],
+        [
+          184,
+          297
+        ],
+        [
+          176,
+          286
+        ]
+      ],
+      [
+        [
+          111,
+          281
+        ],
+        [
+          145,
+          281
+        ],
+        [
+          149,
+          301
+        ],
+        [
+          142,
+          321
+        ],
+        [
+          131,
+          333
+        ],
+        [
+          120,
+          325
+        ]
+      ]
+    ],
+    "originalSourceSha256": "d8f6e2a2645b1d9d3ebbc73d38226a49bf02b4dcb4193e293a1872854aabaabb",
+    "layers": [
+      {
+        "file": "druid-0.png",
+        "sha256": "da769e9edfd016cdcd71ba187c78643961ea8a0aef157a320275418907dd320b"
+      },
+      {
+        "file": "druid-1.png",
+        "sha256": "7d77a7365d63d19187f91c36eee8c28fb005125d0ec6fd091e86e0d2f314bfa8"
+      },
+      {
+        "file": "druid-2.png",
+        "sha256": "4d84be5145ad429d52b85ed824e668f0324928ae127cc9deea6a4085ccf742e8"
+      }
+    ]
+  },
+  "thornkeeper": {
+    "design": "heroes5-druid",
+    "source": "example sprites folder/heroes-animation-2026-11-03/heroes5-druid",
+    "scale": 0.09847140834722147,
+    "pivot": [
+      142.63375796178343,
+      360.3312101910828
+    ],
+    "centreX": 114,
+    "floorY": 361,
+    "legs": [
+      {
+        "pivotX": 64,
+        "phaseOffset": 0.5
+      },
+      {
+        "pivotX": 164,
+        "phaseOffset": 0
+      }
+    ],
+    "garment": {
+      "startY": 267,
+      "endY": 323,
+      "lift": 3,
+      "centreX": 114,
+      "width": 92,
+      "protectPolygons": [
+        [
+          [
+            208,
+            0
+          ],
+          [
+            248,
+            0
+          ],
+          [
+            248,
+            365
+          ],
+          [
+            208,
+            365
+          ]
+        ]
+      ]
+    },
+    "protectedPolygons": [
+      [
+        [
+          211,
+          190
+        ],
+        [
+          246,
+          190
+        ],
+        [
+          246,
+          365
+        ],
+        [
+          211,
+          365
+        ]
+      ],
+      [
+        [
+          0,
+          264
+        ],
+        [
+          56,
+          264
+        ],
+        [
+          54,
+          295
+        ],
+        [
+          46,
+          315
+        ],
+        [
+          30,
+          331
+        ],
+        [
+          14,
+          328
+        ],
+        [
+          7,
+          303
+        ]
+      ],
+      [
+        [
+          54,
+          268
+        ],
+        [
+          112,
+          268
+        ],
+        [
+          112,
+          299
+        ],
+        [
+          105,
+          307
+        ],
+        [
+          88,
+          300
+        ],
+        [
+          76,
+          296
+        ],
+        [
+          56,
+          296
+        ]
+      ],
+      [
+        [
+          145,
+          266
+        ],
+        [
+          183,
+          266
+        ],
+        [
+          183,
+          302
+        ],
+        [
+          176,
+          303
+        ],
+        [
+          173,
+          296
+        ],
+        [
+          150,
+          292
+        ]
+      ],
+      [
+        [
+          112,
+          264
+        ],
+        [
+          147,
+          264
+        ],
+        [
+          153,
+          303
+        ],
+        [
+          140,
+          318
+        ],
+        [
+          121,
+          325
+        ],
+        [
+          112,
+          309
+        ]
+      ]
+    ],
+    "originalSourceSha256": "29a7d50453f26d6d20cddf991d5a589c51d4487439ee419840ffa7fd437f8cb2",
+    "layers": [
+      {
+        "file": "thornkeeper-0.png",
+        "sha256": "93aa4b488a16f9b5ee3b7133027fe28d76ce1cf4b98c313d25bf55d51cfc53e4"
+      },
+      {
+        "file": "thornkeeper-1.png",
+        "sha256": "44343daacc464a4cdcb8d0e1f08469ba1889ca9478de24e6f85db83557bd2c6e"
+      },
+      {
+        "file": "thornkeeper-2.png",
+        "sha256": "8a60a71e26d9c8852347cf9d5073ff7408872362b28e8eb924c244b7d276d345"
+      }
+    ]
+  },
+  "gravebinder": {
+    "design": "heroes5-lich",
+    "source": "example sprites folder/heroes-animation-2026-11-03/heroes5-lich",
+    "scale": 0.09771657525187692,
+    "pivot": [
+      148.63694267515925,
+      332.3503184713376
+    ],
+    "centreX": 148,
+    "floorY": 332,
+    "legs": [
+      {
+        "pivotX": 105,
+        "phaseOffset": 0.5
+      },
+      {
+        "pivotX": 165,
+        "phaseOffset": 0
+      }
+    ],
+    "garment": {
+      "startY": 235,
+      "endY": 310,
+      "lift": 4,
+      "centreX": 148,
+      "width": 100,
+      "protectPolygons": [
+        [
+          [
+            208,
+            0
+          ],
+          [
+            250,
+            0
+          ],
+          [
+            250,
+            340
+          ],
+          [
+            208,
+            340
+          ]
+        ]
+      ]
+    },
+    "protectedPolygons": [
+      [
+        [
+          211,
+          180
+        ],
+        [
+          246,
+          180
+        ],
+        [
+          246,
+          337
+        ],
+        [
+          211,
+          337
+        ]
+      ],
+      [
+        [
+          62,
+          260
+        ],
+        [
+          111,
+          260
+        ],
+        [
+          124,
+          289
+        ],
+        [
+          118,
+          299
+        ],
+        [
+          107,
+          304
+        ],
+        [
+          94,
+          301
+        ],
+        [
+          82,
+          310
+        ],
+        [
+          66,
+          303
+        ]
+      ],
+      [
+        [
+          111,
+          240
+        ],
+        [
+          150,
+          240
+        ],
+        [
+          147,
+          285
+        ],
+        [
+          136,
+          303
+        ],
+        [
+          124,
+          310
+        ],
+        [
+          114,
+          300
+        ]
+      ],
+      [
+        [
+          182,
+          226
+        ],
+        [
+          205,
+          226
+        ],
+        [
+          210,
+          289
+        ],
+        [
+          202,
+          309
+        ],
+        [
+          184,
+          298
+        ]
+      ]
+    ],
+    "originalSourceSha256": "c4b0587efb28d362f86de0665140d32647d688210fda50355d3f873457779916",
+    "layers": [
+      {
+        "file": "gravebinder-0.png",
+        "sha256": "4a8dc9b1636c0271fb060f6bbe9fc347211ed4b10d8640ef1b9f9d0d3f7789bc"
+      },
+      {
+        "file": "gravebinder-1.png",
+        "sha256": "d29c74ea40653a722d9c911ab1fa15f43eab8c21d9e41e2faf70c6f181e4aaf4"
+      },
+      {
+        "file": "gravebinder-2.png",
+        "sha256": "4ca91e5b9a394cd3a241db0a397dc2f0f5103ac166a0493287cdab7770a95da1"
+      }
+    ]
+  },
+  "arcanist": {
+    "design": "heroes5-mage",
+    "source": "example sprites folder/heroes-animation-2026-11-03/heroes5-mage",
+    "scale": 0.11464037970062066,
+    "pivot": [
+      114.671974522293,
+      336.343949044586
+    ],
+    "centreX": 132,
+    "floorY": 335,
+    "legs": [
+      {
+        "pivotX": 83,
+        "phaseOffset": 0.5
+      },
+      {
+        "pivotX": 184,
+        "phaseOffset": 0
+      }
+    ],
+    "garment": {
+      "startY": 235,
+      "endY": 322,
+      "centreX": 132,
+      "width": 94,
+      "protectPolygons": [
+        [
+          [
+            47,
+            0
+          ],
+          [
+            67,
+            0
+          ],
+          [
+            67,
+            341
+          ],
+          [
+            47,
+            341
+          ]
+        ],
+        [
+          [
+            128,
+            220
+          ],
+          [
+            173,
+            220
+          ],
+          [
+            173,
+            322
+          ],
+          [
+            128,
+            322
+          ]
+        ]
+      ]
+    },
+    "protectedPolygons": [
+      [
+        [
+          47,
+          0
+        ],
+        [
+          67,
+          0
+        ],
+        [
+          67,
+          341
+        ],
+        [
+          47,
+          341
+        ]
+      ]
+    ],
+    "originalSourceSha256": "799ed67d7110a3a39dc8b138a7829703f5b15d54c2a0860239c0d3f0f308a0cb",
+    "layers": [
+      {
+        "file": "arcanist-0.png",
+        "sha256": "2e95eb0c61e6e48b0460abd5cdd8e7b3a508641796853f7dca3937a094cee3b9"
+      },
+      {
+        "file": "arcanist-1.png",
+        "sha256": "453b3865a32ae790bd4df1efd7ea605ad820ccd3c9a68950443539cb6331bf5d"
+      },
+      {
+        "file": "arcanist-2.png",
+        "sha256": "8bc494538b1d55626ceab82dd867d728e0bd3956b8750123c8d64f0d7d7ffc7b"
+      }
+    ]
+  }
+}

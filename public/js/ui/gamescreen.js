@@ -11,7 +11,7 @@ import { tierOf, chestFrame, chestTease, revealOrder, chestSlots, chestTimeline,
 import { clockCountsDown, clockTime, heldBuild, revealOn, SLOT_LIT, slotsLeftOf } from '../game/hud.js';
 import { levelBonus } from '../game/player.js';
 import { heroStats } from '../game/weapons.js';
-import { WEAPONS, MAX_WEAPON_LEVEL } from '../data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL, RANDOM_EVOLUTION } from '../data/weapons.js';
 import { PASSIVES, FILLERS, BLESSING } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
@@ -73,12 +73,13 @@ export class GameScreen {
     this.finishShown = false;
     this.finishRect = null;
     this.away = false; // the game was left; the run pauses once it is back in play (frame)
-    // The touch buttons in play: the pause button and the fury orb (touchFor).
+    // The touch buttons in play: pause, map underground, and the fury orb (touchFor).
     this.regions = (x, y) => {
       const r = this.finishRect;
       if (this.game.state === 'cleared' && r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return 'finish-level';
       const W = view.W, H = view.H;
       if (x > W / 2 - 14 && x < W / 2 + 14 && y > H - 22) return 'pause';
+      if ((this.game.inCrypt || this.game.mode === 'dungeon') && x >= W / 2 + 19 && x < W / 2 + 51 && y >= H - 20) return 'map';
       if (x > W - 56 && y > H - 56) return 'ult';
       return null;
     };
@@ -131,7 +132,10 @@ export class GameScreen {
       this.away ||= input.away;
       if (input.pressed('pause')) this.pause();
       else if (this.away) this.pause(true);
-      if (input.pressed('map') && (g.mode === 'dungeon' || g.inCrypt)) g.showMap = !g.showMap;
+      if (input.pressed('map') && (g.mode === 'dungeon' || g.inCrypt)) {
+        g.showMap = !g.showMap;
+        if (g.inCrypt && g.showMap) g.inCrypt.mapHintSeen = true;
+      }
       if (input.pressed('fps')) app.settings.fps = !app.settings.fps;
       if (!app.devHold) g.update(dt); // the developer panel can freeze the action
       // Nothing opens during a big beat. Afterwards, level-ups come before chests.
@@ -231,11 +235,12 @@ function evoHint(g, id) {
 export const UNTOLD = '???';
 const toldCompletes = (g, c) => {
   const into = g.completesEvolution(c);
+  if (into === RANDOM_EVOLUTION) return into;
   if (!into || g.evoKnown(evolvedFrom(into))) return into;
   return c.type === 'passive' && !PASSIVES[c.id].evolvesAny ? null : UNTOLD;
 };
 // The gold line of a card that completes an evolution (toldCompletes): its name, or ??? untold.
-const completesLine = (into) => `COMPLETES ${into === UNTOLD ? UNTOLD : WEAPONS[into].name.toUpperCase()}`;
+const completesLine = (into) => `COMPLETES ${into === RANDOM_EVOLUTION ? 'RANDOM EVOLUTION' : into === UNTOLD ? UNTOLD : WEAPONS[into].name.toUpperCase()}`;
 
 // A card's change in numbers, as this hero has it (cardChange): signed percent, a multiplier as
 // percent, a whole number.
@@ -1046,7 +1051,7 @@ export class ChestOverlay {
     // An evolution, shown last, has its ceremony (drawCeremony): the gold waits for it.
     this.evo = this.items.find((it) => it.type === 'evolve') || null;
     if (this.evo) {
-      this.evoFrom = evolvedFrom(this.evo.id);
+      this.evoFrom = this.evo.from || evolvedFrom(this.evo.id);
       this.evoAt = this.tl.at[this.items.length - 1];
       this.evoLines = evolveLines(this.evoFrom, this.evo.id);
       this.signature = this.g.player.hero.unique.includes(this.evoFrom);
@@ -1792,7 +1797,7 @@ class ResultsOverlay {
     this.reward = null;
     this.report ??= {
       mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
-      gear: res.gear, realTime: res.realTime, found: res.found,
+      gear: res.gear, realTime: res.realTime, found: res.found, copperWeapons: res.copperWeapons,
       effort: res.effort,
       spoils: res.spoils, sealedGear: res.sealedGear, selectSpoils: true, runId: this.gs.runId, runFrom: this.gs.runFrom, gearRev: this.gs.gearRev, gearStart: this.gs.gearStart,
     };

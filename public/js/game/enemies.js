@@ -16,6 +16,7 @@ import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { EnemyShot } from './projectiles.js';
 import { BOSS_AI } from './bosses.js';
+import { merchantAI } from './eanasir-boss.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { shotName, bossOf } from './names.js';
 import { spriteExtent } from './hitbox.js';
@@ -107,7 +108,7 @@ export const PACE_CLASS = { swift: 1, quick: 0.9, steady: 0.8, slow: 0.7 };
 export const PACE_OF = {
   bat: 'swift', rat: 'swift', imp: 'swift', hellhound: 'swift',
   wolf: 'quick', spider: 'quick', goblin: 'quick', slimelet: 'quick',
-  skeleton: 'steady', ghost: 'steady', deathknight: 'steady', slime: 'steady', skeletonarcher: 'steady', skeletonmage: 'steady',
+  skeleton: 'steady', ghost: 'steady', deathknight: 'steady', slime: 'steady', skeletonarcher: 'steady', skeletonmage: 'steady', eanasir: 'steady',
   zombie: 'slow', ogre: 'slow', orc: 'slow', cultist: 'slow',
 };
 // The new maps' kinds walk in the class of the Darkwood kind each stands for (data/enemies.js
@@ -246,6 +247,11 @@ export class Enemy {
     this.cdT = rand(1, 2.5);
     this.cd2 = rand(4, 7);
     this.cd3 = rand(8, 12);
+    if (def.ai === 'eanasir') {
+      this.cdT = 0.5;
+      this.cd2 = 0.8;
+      this.cd3 = 3.5;
+    }
     this.dirX = 0;
     this.dirY = 0;
     this.lockX = 0;
@@ -289,7 +295,7 @@ export class Enemy {
     this.speech = null;
     this.shake = 0;
     // A boss fights as his kit's (data/enemies.js kit: a new map's boss with a night boss's attacks).
-    this.ai = this.boss ? BOSS_AI[def.kit ?? type] : null;
+    this.ai = def.ai === 'eanasir' ? merchantAI : this.boss ? BOSS_AI[def.kit ?? type] : null;
     this.data = {};
     if (this.mod && this.mod.id === 'swift') this.spd *= 1.45;
     if (this.mod && this.mod.id === 'brutal') this.dmg *= 1.5;
@@ -783,6 +789,17 @@ export class Enemy {
   // rising, or casting with no pose); its walk goes motionRate frames to a step of the old one.
   frameIndex() {
     const s = this.spr;
+    if (this.def.ai === 'eanasir' && s.attack?.length) {
+      const release = s.attackRelease ?? 2;
+      if (this.state === 'wind') {
+        const u = 1 - this.stateT / this.data.wind;
+        return s.attack[Math.min(release, Math.max(0, Math.floor(u * (release + 1))))];
+      }
+      if (this.data.releasedAt != null) {
+        const frame = release + 1 + Math.floor((this.life - this.data.releasedAt) * (s.attackFps || 18));
+        if (frame < s.attack.length) return s.attack[frame];
+      }
+    }
     if (s.attack && this.state === 'wind') return s.attack[0];
     if (s.idle?.length && (this.sleeping || this.dormant || this.spawnT > 0)) return s.idle[Math.floor(this.life * IDLE_FPS) % s.idle.length];
     if (s.poses) {
@@ -985,7 +1002,7 @@ export class Enemy {
   }
 
   rimColor() {
-    return this.boss ? this.def.color : this.mod ? this.mod.color : '#b55088';
+    return this.boss ? this.def.color : this.mod ? this.mod.color : this.def.color || '#b55088';
   }
 
   // Its outline in col (rimBuf), unlit at alpha a, where frame fr was last drawn (drawEmissive).
@@ -1013,7 +1030,7 @@ export class Enemy {
     }
     const sx = (this.x - cam.x) * S, sy = (this.y - this.h * 0.45 - cam.y) * S;
     const s = this.h * 2.6 * S;
-    const col = this.boss ? this.def.color : this.mod ? this.mod.color : '#feae34';
+    const col = this.boss ? this.def.color : this.mod ? this.mod.color : this.def.color || '#feae34';
     ctx.globalAlpha = 0.28 + 0.1 * Math.sin(this.life * 5);
     ctx.drawImage(glow(col), sx - s / 2, sy - s / 2, s, s);
     ctx.globalAlpha = 1;

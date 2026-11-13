@@ -47,6 +47,7 @@ function fit(text, width) {
 }
 
 const FIELD_TARGETING = {
+  eanasir: 'Good copper seeks the nearest foe, including in crypts',
   knight: 'Starts with a slash in front',
   archer: 'Fires along your last movement direction',
   mage: 'Fires at nearby foes and bursts on impact',
@@ -189,9 +190,11 @@ export class HeroScreen {
     const inner = w - 24, tx = x + 10;
     const perk = wrapText(PERK_COPY[h.id] || h.perk, inner);
     const ult = wrapText(h.ultDesc, inner);
-    const weapons = wrapText(startWeapons(h).map(id => WEAPONS[id].name).join(' + '), inner - 20);
+    const loadout = new Map();
+    for (const id of startWeapons(h)) { const name = WEAPONS[id].name; loadout.set(name, (loadout.get(name) || 0) + 1); }
+    const weapons = wrapText([...loadout].map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(' + '), inner - 20);
     const targeting = wrapText(`Field targeting · ${FIELD_TARGETING[h.id]}`, inner);
-    const weaponDesc = wrapText(WEAPONS[h.weapon].desc, inner);
+    const weaponDesc = wrapText(h.startDesc || WEAPONS[h.weapon].desc, inner);
     const ownedUltimate = openFor(profile, h.id).ult;
     const weaponY = 70, descriptionY = weaponY + Math.max(16, weapons.length * 9) + 4;
     const perkY = descriptionY + (targeting.length + weaponDesc.length) * 9 + 6;
@@ -202,7 +205,7 @@ export class HeroScreen {
     // the next hero's note tells the one before him's, a hero of the save his own under the note.
     const longest = (hid) => profile.bt?.[hid] || 0;
     const prevRun = locked && h.id === next && longest(prev) ? ` Longest run with the ${HEROES[prev].title}: ${fmtTime(longest(prev))}.` : '';
-    const note = locked ? `Survive ${heroUnlockTime(h.id) / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : !ownedUltimate ? `Survive ${fmtTime(PROGRESS.ultTime)} with this hero to use ${h.ultName} next run.` : goalText(nextGoal(profile));
+    const note = locked ? h.unlock || `Survive ${heroUnlockTime(h.id) / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : !ownedUltimate ? `Survive ${fmtTime(PROGRESS.ultTime)} with this hero to use ${h.ultName} next run.` : goalText(nextGoal(profile));
     const notes = wrapText(note, inner);
     const runs = !locked && longest(h.id) ? wrapText(`Longest run with this hero: ${fmtTime(longest(h.id))}`, inner) : [];
     const total = goalY + (notes.length + runs.length) * 9 + 8;

@@ -185,11 +185,11 @@ test("the horde still drops the odd fury orb however fast it falls, rarer than a
       return g.pickups.some((pk) => pk.kind === 'fury');
     };
     const fast = (4000 * FURY.window) / 60; // 4000 kills a minute
-    const lone = 0.014 + FURY.hordeOrb * 0.9, floor = 0.014 + FURY.hordeOrb * FURY.orbFloor * 0.9;
+    const lone = 0.007 + 0.5 * FURY.hordeOrb * 0.9, floor = 0.007 + 0.5 * FURY.hordeOrb * FURY.orbFloor * 0.9;
     assert.ok(orbAt(0, lone), 'a lone kill: its orb');
     assert.ok(!orbAt(fast, lone), 'at 4000 kills a minute, rarer');
     assert.ok(orbAt(fast, floor), 'but never gone');
-    assert.ok(!orbAt(fast, 0.014 + FURY.hordeOrb * FURY.orbFloor * 1.1), 'and no likelier than the floor');
+    assert.ok(!orbAt(fast, 0.007 + 0.5 * FURY.hordeOrb * FURY.orbFloor * 1.1), 'and no likelier than the floor');
   });
 });
 

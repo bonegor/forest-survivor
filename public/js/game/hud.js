@@ -6,6 +6,7 @@ import { SPR, buildSprite } from '../engine/sprites.js';
 import { input, padKey } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
+import { isCopper } from '../data/copper.js';
 import { PASSIVES } from '../data/passives.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
@@ -377,13 +378,16 @@ export class Hud {
     this.lastDt = dt;
     this.drawRingWarnings(ctx, W, H, t);
     this.drawUltLaunch(ctx, W, H);
+    this.drawXp(ctx, W, p, dt);
+    this.drawSlots(ctx, p, null, MAX_WEAPONS, true);
     this.drawTop(ctx, W, t, dt);
     this.drawOrbs(ctx, W, H, p, t);
     this.drawBoss(ctx, W, dt, H);
     this.drawNames(ctx, W, H);
     this.drawCryptStrike(ctx, W, H);
     this.drawCryptDoor(ctx, W);
-    this.drawWarningIndicators(ctx, W, H, t);
+    this.drawIndicators(ctx, W, H, t);
+    this.drawMapHint(ctx, W, H);
     this.drawSpeech(ctx, W, H);
     // No kill-streak count at the right edge since 28 October 2026 (game.js COMBO: the owner's "the
     // combo counter on the right actually doesn't make sense"); the damage numbers flash instead.
@@ -457,23 +461,24 @@ export class Hud {
   // light running from 1 down to 0 (litMark); none on the HUD itself. cols: how many of the slots'
   // columns to draw, from the left (slotsLeftOf: a chest's screen leaves those under EVOLUTION! to
   // the HUD under its dim); all of them on the HUD itself.
-  drawSlots(ctx, p, lit = null, cols = MAX_WEAPONS) {
+  drawSlots(ctx, p, lit = null, cols = MAX_WEAPONS, weaponsOnly = false) {
     let x = 3;
     const y = 9;
     // In a crypt, where he fights by hand with his own weapon alone, the others are dimmed.
     const main = this.g.caveStrike ? this.g.mainWeapon() : null;
     const held = this.held;
-    // The run's slots open; those the Armory's Arsenal and Reliquary have yet to add, locked
-    // (Game.maxWeapons, maxRelics).
+    // During play show owned weapons and the free slots this run can actually fill.
+    // Chest reveals may still show both build rows, including their locked slots.
     const { maxWeapons = MAX_WEAPONS, maxRelics = MAX_RELICS } = this.g;
-    for (let i = 0; i < Math.min(MAX_WEAPONS, cols); i++) {
+    const weaponCols = weaponsOnly ? Math.max(maxWeapons, held ? held.weapons.length : p.weapons.length) : MAX_WEAPONS;
+    for (let i = 0; i < Math.min(MAX_WEAPONS, cols, weaponCols); i++) {
       const h = held && held.weapons[i], w = held ? h && h.w : p.weapons[i];
       if (i >= maxWeapons && !h && !w) {
         this.lockedSlot(ctx, x, y);
         x += 18;
         continue;
       }
-      if (main && w && w !== main) ctx.globalAlpha = 0.3;
+      if (main && w && w !== main && !isCopper(w)) ctx.globalAlpha = 0.3;
       if (h) this.slot(ctx, x, y, SPR[h.icon], h.evolved ? -1 : h.level, MAX_WEAPON_LEVEL, h.evolved);
       else this.slot(ctx, x, y, w ? SPR[w.def.icon] : null, w ? (w.evolved ? -1 : w.level) : 0, MAX_WEAPON_LEVEL, w && w.evolved);
       // EVOLVE READY: the next chest opened evolves it (Game.evolvable, kept as evoReady). Not one
@@ -484,6 +489,7 @@ export class Hud {
       if (lit) this.litMark(ctx, x, y, litK(lit, 'w', i));
       x += 18;
     }
+    if (weaponsOnly) return;
     x = 3;
     const ps = held ? held.relics : [...p.passives.entries()];
     for (let i = 0; i < Math.min(MAX_RELICS, cols); i++) {
@@ -593,7 +599,9 @@ export class Hud {
       : g.mode === 'ranked' && g.bestBeaten
         ? ['#ffffff', '#9ee562', '#63c74d']
         : ['#ffffff', '#ffffff', '#c0cbdc'];
-    drawText(ctx, fmtTime(remain), Math.floor(W / 2), 8, { align: 'center', color });
+    const clock = fmtTime(remain), slots = Math.min(MAX_WEAPONS, Math.max(g.maxWeapons, g.player.weapons.length));
+    const clockX = Math.max(Math.floor(W / 2), 3 + slots * 18 + textWidth(clock) / 2 + 4);
+    drawText(ctx, clock, Math.round(clockX), 8, { align: 'center', color });
     // Gold, rolling up to what it is (never down: a fresh run, or a shown chest's held gold, snaps).
     const want = this.held ? this.held.gold : g.gold;
     if (want < this.goldRoll) this.goldRoll = want;
@@ -727,7 +735,7 @@ export class Hud {
     return (this.ultName ??= this.g.player.hero.ultName.toUpperCase());
   }
 
-  // Only the small clock occupies the top edge during play.
+  // The clock and level sit just below the experience bar; the weapon row is reserved separately.
   topLines() {
     return lineBottom(8);
   }
@@ -993,21 +1001,23 @@ export class Hud {
     if (!weapon) return;
     const cam = g.cam, z = cam.S / view.S;
     const x = Math.round((p.x - cam.x) * z), y = Math.round((p.y - cam.y) * z);
-    const ready = weapon.cd <= 0;
+    const copper = isCopper(weapon), ready = copper || weapon.cd <= 0;
     const key = input.device === 'touch' ? '2ND FINGER' : input.device === 'pad' ? padKey('RB') : 'X / SHIFT';
-    const label = `${key} · ${ready ? 'READY' : 'RECOVERING'}`;
-    const width = textWidth(label) + 10, left = Math.round(clamp(x - width / 2, 2, W - width - 2));
-    const top = Math.round(clamp(y + 12, 0, H - 17));
+    const label = copper ? 'COPPER · AUTO' : `${key} · ${ready ? 'READY' : 'RECOVERING'}`;
     const color = ready ? '#fee761' : '#c0cbdc';
-    ctx.fillStyle = '#181425';
-    ctx.fillRect(left, top, width, 13);
-    drawText(ctx, label, left + width / 2, top + 2, { align: 'center', color });
-    ctx.fillStyle = '#3a4466';
-    ctx.fillRect(left + 3, top + 11, width - 6, 1);
-    ctx.fillStyle = color;
-    ctx.fillRect(left + 3, top + 11, Math.round((width - 6) * clamp(1 - weapon.cd / weapon.s.cd, 0, 1)), 1);
+    if ((g.inCrypt.strikes || 0) < 10) {
+      const width = textWidth(label) + 10, left = Math.round(clamp(x - width / 2, 2, W - width - 2));
+      const top = Math.round(clamp(y + 12, 0, H - 17));
+      ctx.fillStyle = '#181425';
+      ctx.fillRect(left, top, width, 13);
+      drawText(ctx, label, left + width / 2, top + 2, { align: 'center', color });
+      ctx.fillStyle = '#3a4466';
+      ctx.fillRect(left + 3, top + 11, width - 6, 1);
+      ctx.fillStyle = color;
+      ctx.fillRect(left + 3, top + 11, Math.round((width - 6) * (copper ? 1 : clamp(1 - weapon.cd / weapon.s.cd, 0, 1))), 1);
+    }
 
-    if (weapon.def.kind === 'summon' || weapon.def.kind === 'meteor') return;
+    if (copper || weapon.def.kind === 'summon' || weapon.def.kind === 'meteor') return;
     let { target, angle } = g.strikeAim(weapon);
     if (target && !g.inView(target)) return;
     if (weapon.def.kind === 'sword') angle = faceAttack(p.face, p.moving, Math.cos(angle), Math.sin(angle)) < 0 ? Math.PI : 0;
@@ -1025,6 +1035,21 @@ export class Hud {
     ctx.strokeStyle = color;
     ctx.stroke();
     ctx.restore();
+  }
+
+  mapHint() {
+    const g = this.g, visit = g.inCrypt;
+    if (!visit || visit.mapHintSeen || g.showMap || !Number.isFinite(visit.enteredAt) || g.clock - visit.enteredAt >= 12) return null;
+    return input.device === 'touch' ? 'TAP MAP TO EXPLORE' : input.device === 'pad' ? `PRESS ${input.pad.ps ? 'SHARE' : 'VIEW'} FOR MAP` : 'PRESS M FOR MAP';
+  }
+
+  drawMapHint(ctx, W, H) {
+    const label = this.mapHint();
+    if (!label) return;
+    const width = textWidth(label) + 12, x = Math.round((W - width) / 2), y = H - 39;
+    ctx.fillStyle = '#181425';
+    ctx.fillRect(x, y, width, 13);
+    drawText(ctx, label, W / 2, y + 3, { align: 'center', color: '#c0cbdc' });
   }
 
   // On a crypt's steps: over its door its name, what lies below, and a bar that fills while the
@@ -1083,7 +1108,7 @@ export class Hud {
     if (g.boss && !g.boss.dead) this.pointer(ctx, W, H, t, g.boss.x, g.boss.y - 10, '#e43b44', m.boss);
     for (const s of g.shrines) if (!s.used) this.pointer(ctx, W, H, t, s.x, s.y - 10, SHRINE_COLORS[s.type], m.shrine[s.type]);
     for (const d of g.crypts) if (!d.sealed) this.pointer(ctx, W, H, t, d.x, d.y - 12, '#b55088', m.crypt);
-    for (const pk of g.pickups) if (pk.kind === 'chest') this.pointer(ctx, W, H, t, pk.x, pk.y, '#feae34', m.chest);
+    for (const pk of g.pickups) if (pk.kind === 'chest' && !pk.dead) this.pointer(ctx, W, H, t, pk.x, pk.y, '#feae34', m.chest);
     for (const e of g.enemies) if (e.type === 'thief' && !e.dead) this.pointer(ctx, W, H, t, e.x, e.y, '#fee761', m.coin);
     if (g.world.marker) {
       const w = g.world.marker();
@@ -1122,11 +1147,8 @@ export class Hud {
     }
   }
 
-  // This frame's band for the markers, inset from the screen's edge and below the HUD's lines at
-  // the top (a boss's bar and name, a dungeon's floor and seal lines), and what they keep off: the
-  // slots, the orbs in the bottom corners with the phoenix feather and the ultimate's name over
-  // them, and a dungeon's minimap (Dungeon.drawMinimap). (The kill streak's count kept the right
-  // edge clear too until 28 October 2026, when it left the screen.)
+  // Edge markers keep clear of the weapon row, corner orbs, revival feather,
+  // ultimate name, and the crypt's entry map reminder.
   markerBand(W, H) {
     const g = this.g, p = g.player;
     BAND.top = this.topLines() + MARK_R + 2;
@@ -1134,12 +1156,19 @@ export class Hud {
     BAND.left = 14;
     BAND.right = W - 14;
     keepN = 0;
+    const evo = !this.held && p.weapons.some(w => !w.evolved && g.evoReady.includes(w));
+    keep(0, 7, 5 + 18 * Math.min(MAX_WEAPONS, Math.max(g.maxWeapons, this.held ? this.held.weapons.length : p.weapons.length)), evo ? 30 : 23);
     keep(0, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
     keep(W - ORB_S - 4, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
     if (p.revives > 0) keep(ORB_S - 2, H - ORB_S - 12, 12, 12);
     if (p.ult || p.fury >= 100) {
       const tw = textWidth(this.ultLabel());
       keep(W - 5 - tw, H - ORB_S - 16, tw + 2, GLYPH_H + 2);
+    }
+    const mapHint = this.mapHint();
+    if (mapHint) {
+      const width = textWidth(mapHint) + 12;
+      keep(Math.round((W - width) / 2), H - 39, width, 13);
     }
   }
 
@@ -1244,6 +1273,11 @@ export class Hud {
     ctx.fillStyle = '#c0cbdc';
     ctx.fillRect(W / 2 - 4, H - 15, 3, 8);
     ctx.fillRect(W / 2 + 1, H - 15, 3, 8);
+    if (this.g.inCrypt || this.g.mode === 'dungeon') {
+      ctx.fillStyle = '#181425';
+      ctx.fillRect(W / 2 + 19, H - 20, 32, 18);
+      drawText(ctx, 'MAP', W / 2 + 35, H - 15, { align: 'center', color: this.g.showMap ? '#2ce8f5' : '#c0cbdc' });
+    }
   }
 }
 

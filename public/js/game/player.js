@@ -238,7 +238,7 @@ export class Player {
       magnet: BASE_MAGNET * m.magnet * (1 + bonus('magnet')),
       luck: (h.luck || 1) * m.luck * (1 + bonus('luck')),
       growth: (h.growth || 1) * m.growth * (1 + bonus('growth')),
-      greed: m.greed * (1 + q.greed) * (1 + 0.5 * (this.g.skulls || 0)), // the Cursed Skulls (Game.cursedSkull)
+      greed: m.greed * (h.greed || 1) * (1 + q.greed) * (1 + 0.5 * (this.g.skulls || 0)), // the Cursed Skulls (Game.cursedSkull)
       regenMul,
       healMul: h.healMul || 1, // the Paladin's Devotion: every heal does this much (heal)
       // regenBoost: a bot's test buff (tools/headless.mjs), all its regeneration times this.

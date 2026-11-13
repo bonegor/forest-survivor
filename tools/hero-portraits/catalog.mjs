@@ -51,6 +51,11 @@ const ORIGINAL_BRIEFS = {
 };
 
 const RECRUIT_BRIEFS = {
+  eanasir: {
+    identity: 'A Mesopotamian copper merchant inspired by the supplied standing worshipper statue: warm alabaster skin, large pale round eyes, tightly curled hair, a long tiered curly beard, bare upper torso, a cream fringed kaunakes skirt and bare feet. He holds one tarnished copper disc and one slim leather whip. Preserve the native sprite silhouette and restrained sandstone palette.',
+    scene: 'A torchlit crypt trading alcove, with a low stone counter and a small pile of tarnished copper.',
+    pose: 'Examining the rim of a copper disc in his leading hand, with the whip hanging loosely from his other hand. His feet rest on the worn flagstones and his skirt falls naturally. Keep the wide-eyed statue likeness while showing an ordinary moment at his counter.',
+  },
   footman: {
     identity: 'A veteran infantryman in unadorned silver and slate plate with a closed steel helmet, a single straight sword, and a brown wooden shield with a steel rim and central boss. Match the compact stance and equipment of the shipping sprite.',
     scene: 'A muddy forest road beside a broken stone wall, with cool morning light on the wet leaves.',

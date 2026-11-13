@@ -511,8 +511,10 @@ export class Spawner {
   spawnLord(x, y, type = 'skeletonarcher') {
     const g = this.g;
     // No Stoneskin damage cut or Swift variant that outruns the calibrated pace.
-    const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone' && m.id !== 'swift'));
-    const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)}`;
+    const rolledMod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone' && m.id !== 'swift'));
+    const rolledName = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)}`;
+    const mod = type === 'eanasir' ? null : rolledMod;
+    const name = type === 'eanasir' ? ENEMIES.eanasir.name : rolledName;
     Math.random(); // Keep the existing seeded crypt layout and encounters after removing titles.
     const e = g.spawnEnemy(type, x, y, {
       hpMul: g.diff.health * g.map.foe.hp * CRYPT_LORD.health,

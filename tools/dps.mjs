@@ -257,13 +257,14 @@ async function main() {
     }
   }
   const none = agg.none;
-  const name = (id, st) => (st === 'EVO' ? WEAPONS[WEAPONS[id].evo.into].name : WEAPONS[id].name);
+  const name = (id, st) => (st === 'EVO' ? WEAPONS[WEAPONS[id].evo.into].name + (WEAPONS[id].evo.random ? ' (sample random form)' : '') : WEAPONS[id].name);
 
   // ------------------------------------------------------------------- the report --
   const f0 = (v) => (!isFinite(v) ? '-' : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2));
   const pct = (v) => (isFinite(v) ? `${Math.round(v * 100)}%` : '-');
   const L = [];
   L.push(`# Weapon DPS estimates`, '');
+  for (const id of base) if (WEAPONS[id].evo?.random) L.push(`${WEAPONS[id].name}: the EVO benchmark samples ${WEAPONS[WEAPONS[id].evo.into].name}. Possible forms: ${WEAPONS[id].evo.random.map(into => WEAPONS[into].name).join(', ')}.`, '');
   const sup = (st) => agg[`${REF}@${st}`]?.horde?.supply ?? agg[`${base[0]}@${st}`]?.horde?.supply;
   L.push(`Real game, headless. Neutral Knight (all multipliers 1, crit 0, no relics), stop-go star kite (walk 1.5 s at full pace, stand 1 s, turn 2.4 rad). ${seeds} seed(s), median; ${warm} s warm-up then ${secs} s measured. Runtime ${runtime.toFixed(0)} s.`);
   L.push(`Foe health per stage: Veteran minute 1 at L1, minute 5 at L8, minute 10 at EVO; a horde Ghoul has ${STAGES.map((st) => Math.round(agg[`${base[0]}@${st}`]?.horde?.foeHp)).join(' / ')} hp.`);

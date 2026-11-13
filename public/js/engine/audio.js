@@ -12,6 +12,7 @@ const ONCE = new Set(['victory', 'gameover']);
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
 import { MUSIC_TRACKS, DEFAULT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, normalizeMusicTrack, normalizeMusicTracks, musicRoleForCue } from './combat-music.js';
+import { WEAPON_SOUND_NAMES, normalizeWeaponSoundStyle, weaponSoundStyle, scheduleWeaponSound } from './weapon-sounds.js';
 
 const MUSIC_DIR = 'audio/music/';
 // Recorded music is mastered loud; this keeps it level with the sound effects.
@@ -45,6 +46,8 @@ const A = {
   combatMusic: DEFAULT_COMBAT_MUSIC,
   musicTracks: { ...DEFAULT_MUSIC },
   menuOverride: false,
+  weaponAudition: null,
+  samplesReady: null,
   files: null, // piece -> file name, from tracks.json
   tracks: new Map(), // piece -> its players and gain, created only when requested
   after: null, // the piece that starts once the jingle playing now has ended (playAfterJingle)
@@ -110,7 +113,7 @@ export function initAudio() {
   A.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
   const d = A.noiseBuf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-  loadSamples();
+  A.samplesReady = loadSamples();
   if (A.songName && !A.preview && !A.startingPreview) startPiece(A.songName);
   globalThis.document?.addEventListener?.('visibilitychange', wake);
 }
@@ -151,14 +154,22 @@ const RECORDED = { names: new Set(['slash', 'hit', 'crit', 'arrow', 'axe', 'dagg
 const BUFS = new Map(); // file -> AudioBuffer
 
 function loadSamples() {
-  if (typeof fetch !== 'function') return;
-  for (const file of new Set(Object.values(SAMPLES).flat())) {
+  if (typeof fetch !== 'function') return Promise.resolve();
+  return Promise.all([...new Set(Object.values(SAMPLES).flat())].map(file =>
     fetch(SFX_DIR + file)
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(file))))
       .then((data) => new Promise((ok, fail) => A.ctx.decodeAudioData(data, ok, fail)))
       .then((buf) => BUFS.set(file, buf))
-      .catch(() => {});
-  }
+      .catch(() => {})
+  ));
+}
+
+// The audition page waits for the current recordings, then compares alternatives
+// through the same live effects bus. Merely previewing never saves a preference.
+export async function prepareWeaponAudio() { initAudio(); await A.samplesReady; }
+export function setWeaponSoundAudition(style = null) {
+  A.weaponAudition = style === null ? null : normalizeWeaponSoundStyle(style);
+  A.last.clear();
 }
 
 // One of the sample's files, at random among those in.
@@ -720,6 +731,7 @@ const SFX = {
 
 export function sfx(name, opts = {}) {
   if (!A.ctx || A.muted || A.vol.sfx <= 0) return;
+  if (A.weaponAudition !== null && (!WEAPON_SOUND_NAMES.has(name) || opts.weaponSound === false)) return;
   const t = A.ctx.currentTime;
   const lim = LIMITS[name];
   if (lim) {
@@ -736,7 +748,8 @@ export function sfx(name, opts = {}) {
   try {
     const o = { p: opts.pitch ?? 1, pan: opts.pan ?? 0, size: opts.size ?? 1 };
     const rate = (1 + (o.p - 1) * RECORDED.pitch) / Math.pow(o.size, 0.25);
-    if (!(RECORDED.names.has(name) && sample(t + 0.005, name, { vol: RECORDED.vol, pan: o.pan, rate }))) fn(t + 0.005, o);
+    const alternative = opts.weaponSound !== false && scheduleWeaponSound(A.ctx, A.sfxBus, name, A.weaponAudition ?? weaponSoundStyle(), opts, t + 0.005);
+    if (!alternative && !(RECORDED.names.has(name) && sample(t + 0.005, name, { vol: RECORDED.vol, pan: o.pan, rate }))) fn(t + 0.005, o);
     if (DUCKED.has(name)) duckMusic();
   } catch {
     /* audio graph errors should never break the game */

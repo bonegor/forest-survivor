@@ -17,7 +17,7 @@ import { bakedBuffers } from '../art/baked.js';
 import CRYPT_ART from '../../assets/art/crypts.js';
 import { FLOORS, PROP_SITES } from '../data/waves.js';
 import { MAX_LORDS } from '../shared/items.js';
-import { CRYPT_LORD_TYPES } from '../data/enemies.js';
+import { CRYPT_LORD_TYPES, EA_NASIR_CHANCE } from '../data/enemies.js';
 import { PC, P } from './particles.js';
 import { glow } from './fxsprites.js';
 import { sfx } from '../engine/audio.js';
@@ -39,6 +39,8 @@ const CRYPT_W = 70, CRYPT_H = 56, CRYPT_ROOMS = 12;
 // four from minute 10, and one more (still four at most) in a crypt three rings or more from
 // the start. Four at most (MAX_LORDS, which the server's bound on a run's gear counts on).
 export const cryptLords = (minute, depth = 1) => Math.min(MAX_LORDS, 2 + Math.floor(minute / 5) + (depth >= 3 ? 1 : 0));
+// Independent of layout and combat dice: returning to the same crypt never rerolls its merchant.
+export const cryptHasEaNasir = (seed, heroId) => heroId !== 'eanasir' && mulberry32((seed ^ 0xea9a51) >>> 0)() < EA_NASIR_CHANCE;
 // A lord's guard: the pack in its room, this much of what a room that size holds.
 const GUARD = 0.6;
 // How far off (tiles) a foe is left behind (tooFar): by the walk in a crypt, as the crow flies on a
@@ -288,6 +290,7 @@ export class Dungeon {
     this.throughWalls = !crypt;
     this.floor = floor;
     this.crypt = crypt;
+    this.eanasir = !!crypt && cryptHasEaNasir(seed, g.player.hero.id);
     this.info = crypt ? { name: crypt.name, theme: crypt.theme, guardian: null } : FLOORS[floor - 1];
     // How it looks: its theme's, or a crypt's look of its own (crypt.look, cryptLook). What lies
     // where, and what sleeps there, always go by info.theme.
@@ -427,7 +430,7 @@ export class Dungeon {
   // rooms besides the first): the farthest walk from the stairs first (guardRoom), then each next
   // the room farthest from the stairs and from every lord's room picked so far, so they lie apart.
   pickLordRooms(start, dist) {
-    const { W, rooms } = this, n = Math.min(this.crypt.lords || 2, rooms.length - 1);
+    const { W, rooms } = this, n = Math.min(this.eanasir ? 1 : (this.crypt.lords || 2), rooms.length - 1);
     const picked = [], from = [dist];
     while (picked.length < n) {
       let best = null, bd = -1;
@@ -992,7 +995,8 @@ export class Dungeon {
         if (this.tile(x, y) !== FLOOR) continue;
         g.spawnEnemy(g.spawner.pickType(phase), x * T + T / 2, y * T + T / 2, { ...st, instant: true, dormant: true, pack });
       }
-      const lord = lordly && g.spawner.spawnLord(r.cx * T + T / 2, r.cy * T + T / 2, CRYPT_LORD_TYPES[this.lordCount % CRYPT_LORD_TYPES.length]);
+      const type = this.eanasir ? 'eanasir' : CRYPT_LORD_TYPES[this.lordCount % CRYPT_LORD_TYPES.length];
+      const lord = lordly && g.spawner.spawnLord(r.cx * T + T / 2, r.cy * T + T / 2, type);
       if (!lord) continue;
       lord.pack = pack;
       this.lordCount++;
@@ -1012,7 +1016,7 @@ export class Dungeon {
     this.sealThaw = Math.min(THAW.most, this.sealThaw + d / (e.maxHp * THAW.hp));
     g.particles.burst(e.x + rand(-3, 3), e.y, e.h * rand(0.35, 0.8), THAW.chips, ICE, 70, 0.45, 1, P.GLOW | P.FADE | P.GROUND, { vz: 50, grav: 300 });
     this.drip(e);
-    sfx('shard', { pitch: rand(1.2, 1.5), pan: clamp((e.x - g.player.x) / 200, -1, 1) });
+    sfx('shard', { pitch: rand(1.2, 1.5), pan: clamp((e.x - g.player.x) / 200, -1, 1), weaponSound: false });
   }
 
   // A drop of meltwater running off the sealed guardian e to the ground as its ice thaws.

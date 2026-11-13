@@ -4,6 +4,7 @@ import * as P from '../public/js/shared/profile.js';
 import * as I from '../public/js/shared/items.js';
 
 const LEGACY_SLOTS = ['helm', 'armor', 'gloves', 'boots', 'amulet', 'ring'];
+const TIMED_HEROES = P.HERO_ORDER.filter(id => id !== 'eanasir');
 
 test('sanitizeProfile repairs garbage into a valid default profile', () => {
   for (const raw of [null, 42, 'x', [], { gold: -5, wins: 'nope', up: { might: 99, bogus: 3 } }]) {
@@ -242,7 +243,7 @@ test('Second Wind cannot be bought past its cap', () => {
   assert.equal(P.buyUpgrade(p, 'revival').ok, false);
 });
 
-test('each hero recruits the next at the listed time, in order and for free', () => {
+test('each ordinary hero recruits the next at the listed time, leaving Ea-nāṣir to his copper challenge', () => {
   let p = P.defaultProfile();
   assert.deepEqual(p.heroes, ['knight']);
   const run = (hero, time) => {
@@ -253,8 +254,8 @@ test('each hero recruits the next at the listed time, in order and for free', ()
   assert.deepEqual(run('knight', P.HERO_UNLOCK_TIME - 1).reward.unlocks, [], '4:59 is not enough');
   assert.deepEqual(P.nextGoal(p), { type: 'survive', hero: 'knight', unlocks: 'archer', minutes: 5 });
   assert.equal(run('archer', 600).ok, false, 'a locked hero cannot play');
-  for (const [i, h] of P.HERO_ORDER.slice(0, -1).entries()) {
-    const next = P.HERO_ORDER[i + 1];
+  for (const [i, h] of TIMED_HEROES.slice(0, -1).entries()) {
+    const next = TIMED_HEROES[i + 1];
     assert.equal(P.unlocksNext(p, h), next);
     const need = P.heroUnlockTime(next);
     assert.deepEqual(run(h, need - 1).reward.unlocks, [], `${h}: a second short`);
@@ -266,6 +267,10 @@ test('each hero recruits the next at the listed time, in order and for free', ()
   }
   assert.equal(P.nextHeroUnlock(p), null);
   assert.equal(P.unlocksNext(p, 'necromancer'), null);
+  assert.equal(P.unlocksNext(p, TIMED_HEROES.at(-1)), null);
+  assert.equal(P.unlocksNext(p, 'eanasir'), null);
+  assert.ok(!p.heroes.includes('eanasir'));
+  assert.equal(run('eanasir', 900).ok, false, 'time alone never recruits the merchant');
 });
 
 test('a save from before keeps its heroes, and a night won brings in the next hero', () => {
@@ -302,15 +307,16 @@ test('the full ladder: nights survived, then the Dungeon hero by hero, then Rank
 
   // Survival ladder: a night won is more than five minutes, so it brings in the next hero too; the
   // Necromancer's opens the Dungeon as well. The four after him are extras: nothing waits on them.
-  for (const [i, h] of P.HERO_ORDER.entries()) {
-    const next = P.HERO_ORDER[i + 1];
+  for (const [i, h] of TIMED_HEROES.entries()) {
+    const next = TIMED_HEROES[i + 1];
     const r = run({ mode: 's15', hero: h });
     const want = [...(next ? ['hero:' + next] : []), ...(h === 'necromancer' ? ['mode:dungeon'] : [])];
     assert.deepEqual(r.reward.unlocks, want, h);
   }
   assert.deepEqual(P.LADDER, ['knight', 'archer', 'mage', 'rogue', 'necromancer']);
   assert.deepEqual(P.nextGoal(p), { type: 'dungeon', hero: 'knight', unlocks: 'archer' });
-  for (const h of P.HERO_ORDER.slice(5)) assert.ok(P.canPlay(p, 'dungeon', h), `${h}, an extra, goes down as soon as it opens`);
+  for (const h of TIMED_HEROES.slice(5)) assert.ok(P.canPlay(p, 'dungeon', h), `${h}, an extra, goes down as soon as it opens`);
+  assert.equal(P.canPlay(p, 'dungeon', 'eanasir'), false, 'the merchant still needs his challenge');
   assert.ok(P.canPlay(p, 'dungeon', 'knight'));
   assert.equal(P.canPlay(p, 'dungeon', 'archer'), false, 'only the Knight enters the Dungeon at first');
   assert.equal(run({ mode: 'dungeon', diff: 'easy', hero: 'archer', time: 1200 }).ok, false);
@@ -335,7 +341,9 @@ test('the full ladder: nights survived, then the Dungeon hero by hero, then Rank
   assert.deepEqual(P.nextGoal(p), { type: 'elite' }, 'one night on Elite first: Ranked is always Elite');
   run({ mode: 's15', diff: 'hard', hero: 'knight' });
   assert.equal(P.nextGoal(p), null);
-  for (const h of P.HERO_ORDER) assert.ok(P.canPlay(p, 'ranked', h), h);
+  for (const h of TIMED_HEROES) assert.ok(P.canPlay(p, 'ranked', h), h);
+  assert.ok(!p.heroes.includes('eanasir'), 'ordinary victories do not recruit the merchant');
+  assert.equal(P.canPlay(p, 'ranked', 'eanasir'), false);
 });
 
 test('ranked keeps a personal best per hero and never counts as a win', () => {

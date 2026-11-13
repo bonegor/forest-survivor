@@ -11,7 +11,9 @@ import { view } from '../public/js/engine/view.js';
 import { textWidth } from '../public/js/engine/font.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
-import { defaultProfile, applyRun, metaBonuses } from '../public/js/shared/profile.js';
+import { defaultProfile, applyRun, metaBonuses, sanitizeProfile } from '../public/js/shared/profile.js';
+import { COPPER_IDS, COPPER_EVOLUTIONS } from '../public/js/data/copper.js';
+import { MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { Game } from '../public/js/game/game.js';
 import { musicState, playMusic } from '../public/js/engine/audio.js';
 
@@ -55,7 +57,7 @@ const frame = (gs) => {
 
 // Starts a seeded run, plays a few seconds standing still, then the hero (with `gold` found)
 // falls; frames on until the results are up and the store has answered.
-async function playToResults(app, { gold = 120, seed = 5 } = {}) {
+async function playToResults(app, { gold = 120, seed = 5, win = false, prepare } = {}) {
   const random = Math.random, bot = input.bot;
   Math.random = mulberry32(seed);
   input.bot = { x: 0, y: 0 };
@@ -64,7 +66,12 @@ async function playToResults(app, { gold = 120, seed = 5 } = {}) {
     const gs = app.screen, g = gs.game;
     for (let f = 0; f < 130; f++) frame(gs); // past two seconds of real time: long enough for 120 gold (profile.js MAX_GOLD_PER_SEC)
     g.gold = gold;
-    g.player.hurt(1e9);
+    prepare?.(g);
+    if (win) {
+      g.time = g.duration;
+      g.finalBossDefeated = true;
+      g.finish(true);
+    } else g.player.hurt(1e9);
     for (let f = 0; f < 900 && !(g.state === 'over' && gs.overlay?.res); f++) frame(gs);
     assert.equal(g.state, 'over');
     assert.ok(gs.overlay?.res, 'the results are up');
@@ -105,6 +112,37 @@ test('winning starts results music at dawn and keeps it on the results screen', 
   await new Promise((r) => setImmediate(r));
   assert.ok(gs.overlay?.res?.victory);
   assert.equal(musicState().piece, 'results');
+});
+
+test('winning with six copper slots reports them through the results screen and persists Ea-nāṣir', async () => {
+  for (const evolved of [false, true]) {
+    const app = makeApp({ hero: 'knight', mode: 's15', diff: 'medium' });
+    assert.ok(!app.store.profile.heroes.includes('eanasir'));
+    const gs = await playToResults(app, { win: true, prepare(g) {
+      // Six actual curse hits acquire six different slots. Leaving the crypt
+      // keeps them; one Phoenix-forged slot must still fulfil the contract.
+      g.inCrypt = { key: 'results-test' };
+      for (let i = 0; i < 6; i++) assert.equal(g.infestCopper(), true);
+      g.inCrypt = null;
+      if (evolved) {
+        g.addPassive('phoenix');
+        const w = g.player.weapons[0];
+        w.level = MAX_WEAPON_LEVEL;
+        w.recompute();
+        assert.equal(w.evolve(), true);
+      }
+    } });
+    const expected = [...COPPER_IDS];
+    if (evolved) expected[0] = COPPER_EVOLUTIONS[0];
+    assert.equal(app.sent.length, 1, 'the browser submits the victory once');
+    assert.deepEqual(app.sent[0].copperWeapons, expected, 'the results report retains all six identities');
+    assert.equal(app.sent[0].victory, true);
+    assert.ok(!gs.overlay.reward.unsaved, 'the store accepted the completed run');
+    assert.ok(gs.overlay.reward.unlocks.includes('hero:eanasir'), 'the reward announces the new hero');
+    assert.ok(app.store.profile.heroes.includes('eanasir'), 'the hero is saved');
+    assert.ok(sanitizeProfile(JSON.parse(JSON.stringify(app.store.profile))).heroes.includes('eanasir'), 'the hero survives a saved-profile reload');
+    gs.leave();
+  }
 });
 
 test('quitting a living run returns to menu music', async () => {

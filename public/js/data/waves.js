@@ -79,7 +79,10 @@ export function hpScale(phase) {
 // of it gets to dawn. Tuned with the gem-collecting bot (tools/bots.mjs
 // --bot=gems --armory=none|max). Ranked follows it to dawn (rankedHpScale); the dungeon keeps hpScale.
 export function nightHpScale(phase) {
-  return 1 + phase * 0.08 + Math.max(0, phase - 9) * 0.8 + Math.max(0, phase - 16) * 1;
+  const base = (p) => 1 + p * 0.08 + Math.max(0, p - 9) * 0.8 + Math.max(0, p - 16);
+  // +200% health through minute ten (phase 14). Keep that gained health
+  // afterwards so crossing 10:00 never makes a new wave weaker.
+  return base(phase) + 2 * base(Math.min(phase, 14));
 }
 
 // Ranked's night is Survival's until dawn (phase 21), then it grows on from Survival's dawn at the

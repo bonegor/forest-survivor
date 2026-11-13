@@ -39,6 +39,7 @@ import { FLORA_MEADOW } from './flora-meadow.js';
 import { FLORA_HELL } from './flora-hell.js';
 import { TERRAIN_ART } from './terrain.js';
 import { TUNED } from './tuned.js';
+import { COPPER_ART } from './eanasir.js';
 
 // The art as drawn, and as the game draws it: with the colour tunes baked from the sprite tuner.
 export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...RELIC_EXPANSION_ART, ...PROC_ART, ...PROP_ART, ...LANDMARK_ART,
@@ -49,7 +50,7 @@ export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, 
   ...MAP_MONSTER_ART, ...MAP_BOSS_ART, ...FLORA_DESERT, ...FLORA_FROZEN, ...FLORA_MEADOW, ...FLORA_HELL,
   // their new ground's (game/topology, 28 October 2026): cave mouths, igloos, ice rocks, spires, bones,
   // bridge posts and swirls (art/terrain.js)
-  ...TERRAIN_ART };
+  ...TERRAIN_ART, ...COPPER_ART };
 export const ART = withTunes(DRAWN, TUNED);
 
 // Art with colour tunes (tuned.js, by tools/bake-tune.mjs) laid over it: a sprite's palette

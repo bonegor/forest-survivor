@@ -128,6 +128,10 @@ export class Projectile {
     this.pull = o.pull || 0;
     this.glowSpec = o.glow || null;
     this.target = null;
+    // A bow fires away from its release position. A tall monster behind the
+    // archer must not catch a forward arrow merely because its drawn head
+    // overlaps the arrow's elevated body sweep (especially while aiming down).
+    this.forwardFrom = o.forwardFrom || null;
     this.retarget = 0;
     this.shape();
   }
@@ -270,6 +274,7 @@ export class Projectile {
       for (let i = 0; i < cands.length; i++) {
         const e = cands[i];
         if (e.dead || (e.x - mx) ** 2 + (e.y - my) ** 2 > (far + e.reach) ** 2) continue;
+        if (this.forwardFrom && (e.x - this.forwardFrom[0]) * Math.cos(this.ang) + (e.y - this.forwardFrom[1]) * Math.sin(this.ang) < -1e-7) continue;
         if (!reachesFeet(e, ox, oy, this.x, this.y, this.r) && !reachesBody(e, ax, ay, bx, by, this.hw)) continue;
         if (this.hitCd) {
           // By the game's clock, which runs on in a crypt where the night's stands still.
@@ -407,6 +412,7 @@ const SHOT_LOOK = {
   skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green', through: true },
   firebolt: { sprite: 'firebolt', glow: '#f77622', light: 'fire' },
   cryptfireball: { sprite: 'fireball', glow: '#f77622', light: 'fire', scale: 1.5, r: 4, burst: [PC.o, PC.y, PC.Y] },
+  pqc: { sprite: 'copper_disc', glow: '#e4a672', light: 'gold', spin: 16, r: 5, burst: [PC.t, PC.o, PC.Y] },
   arrow: { sprite: 'arrow', glow: null, light: null },
   // The new maps' (28 October 2026). The Frost Witch's, in the Cultist's place: his big, slow orb in
   // black ice round a cold heart, spiked with rime, dark enough to read on snow, bursting in ice.
@@ -483,7 +489,9 @@ export class EnemyShot {
       this.y += this.vy * dt / steps;
       if (g.world.solid(this.x, this.y) && !this.look.through) this.dead = true;
       if (!this.dead && this.touches(p)) {
-        if (p.hurt(this.dmg, null, this.by, this.boss) > 0 || !p.untouchable) this.dead = true;
+        const damage = p.hurt(this.dmg, null, this.by, this.boss);
+        if (damage > 0 && this.kind === 'pqc') g.infestCopper();
+        if (damage > 0 || !p.untouchable) this.dead = true;
       }
       if (this.dead) break;
     }

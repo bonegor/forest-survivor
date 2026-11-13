@@ -186,6 +186,8 @@ test('Options exposes a keyboard-reachable music browser and its compact control
         for (const other of a.ui.items.slice(i + 1)) assert.equal(overlaps(control, other), false, `${W}x${H} ${control.id}/${other.id}`);
       }
       h.press('ArrowDown'); assert.equal(a.ui.focusId, 'o_tracks');
+      h.press('ArrowRight'); assert.equal(a.ui.focusId, 'o_weapon_sounds', 'weapon auditions are reachable beside music');
+      h.press('ArrowLeft'); assert.equal(a.ui.focusId, 'o_tracks');
       h.press('Enter'); assert.ok(options.musicMenu);
       options.musicMenu.audio = audio(); h.frame();
       h.press('Escape'); assert.equal(options.musicMenu, null);

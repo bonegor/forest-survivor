@@ -259,37 +259,57 @@ export class SpoilsReveal {
   drawOverview(ctx, W, H, dt) {
     const { ui, store } = this.app;
     const finds = this.claims.flatMap(({ item, state }, index) => state === 'sealed' ? [{ item, index }] : []);
-    const cols = W >= 440 ? 3 : 2, step = 36;
-    const perPage = cols * Math.max(1, Math.floor((H - 66) / step));
+    // One bounded row per find keeps its information and decisions together.
+    // Narrow screens put the actions below the item, rather than squeezing names
+    // and unrelated buttons into adjacent columns.
+    const w = Math.min(480, W - 20), narrow = w < 360, rowH = narrow ? 68 : 56, gap = 6;
+    const help = wrapText('Review to equip, stash, identify or sell.', w - 20);
+    const headH = 39 + help.length * 9, footH = 26;
+    const perPage = Math.max(1, Math.floor((H - 20 - headH - footH + gap) / (rowH + gap)));
     const pages = Math.ceil(finds.length / perPage), page = this.overviewPage = Math.min(this.overviewPage, pages - 1);
     const shown = finds.slice(page * perPage, (page + 1) * perPage);
-    const w = Math.min(510, W - 16), h = Math.ceil(shown.length / cols) * step + 60;
-    const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2), gap = 4;
-    const cardW = Math.floor((w - 16 - (cols - 1) * gap) / cols);
+    const h = headH + shown.length * rowH + Math.max(0, shown.length - 1) * gap + footH;
+    const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2), cardW = w - 16;
     dim(ctx, W, H, 0.9);
     panel(ctx, x, y, w, h, { title: 'COLLECTED GEAR', fill: '#15131f' });
-    const status = this.saving ? 'Saving decision…' : this.claimError || `${finds.length} finds remaining · ${store.profile.gold} gold`;
-    drawText(ctx, wrapText(status, w - 12)[0], W / 2, y + 16, { align: 'center', color: this.claimError ? '#f6757a' : '#c0cbdc' });
+    drawText(ctx, `${finds.length} ${finds.length === 1 ? 'find' : 'finds'} to decide`, x + 12, y + 15, { color: '#ead4aa' });
+    drawText(ctx, `${store.profile.gold} gold`, x + w - 12, y + 15, { align: 'right', color: '#fee761' });
+    const message = this.saving ? ['Saving decision…'] : this.claimError ? wrapText(this.claimError, w - 20) : help;
+    message.slice(0, help.length).forEach((line, i) => drawText(ctx, line, W / 2, y + 29 + i * 9, { align: 'center', color: this.claimError ? '#f6757a' : '#8b9bb4' }));
     ui.begin(dt);
     for (const [i, { item, index }] of shown.entries()) {
-      const bx = x + 8 + i % cols * (cardW + gap), by = y + 29 + Math.floor(i / cols) * step;
+      const bx = x + 8, by = y + headH + i * (rowH + gap);
       const rarity = RARITIES[item.rarity];
       const routine = item.rarity === 0 && item.base !== undefined;
-      const half = Math.floor((cardW - 3) / 2);
-      drawText(ctx, wrapText(itemName(item), cardW)[0], bx + cardW / 2, by, { align: 'center', color: rarity.color });
-      drawText(ctx, routine ? itemLines(item)[0] : rarity.name, bx + cardW / 2, by + 9, { align: 'center', color: '#c0cbdc' });
-      if (button(ctx, ui, `find_${index}`, bx, by + 18, routine ? half : cardW, 14, 'INSPECT', { color: rarity.color, disabled: this.saving })) this.openClaim(index);
-      if (routine && button(ctx, ui, `quick_sell_${index}`, bx + half + 3, by + 18, cardW - half - 3, 14, `SELL +${itemPrice(item)}`, { color: '#feae34', disabled: this.saving })) {
+      const on = ui.focused(`find_${index}`) || ui.focused(`quick_sell_${index}`);
+      panel(ctx, bx, by, cardW, rowH, { fill: on ? '#211b2a' : '#171421', trim: [on ? '#c28569' : '#3a3448', '#262233'], rivets: false });
+      const icon = (SPR[itemIcon(item)] ?? SPR.i_greed).frames[0].c;
+      const scale = Math.min(2, 24 / Math.max(icon.width, icon.height));
+      const iw = Math.round(icon.width * scale), ih = Math.round(icon.height * scale);
+      ctx.drawImage(icon, bx + 18 - Math.floor(iw / 2), by + 22 - Math.floor(ih / 2), iw, ih);
+      const textX = bx + 36, actionW = 94, textW = cardW - 44 - (narrow ? 0 : actionW + 10);
+      const name = wrapText(itemName(item), textW).slice(0, 2);
+      name.forEach((line, j) => drawText(ctx, line, textX, by + 6 + j * 9, { color: rarity.color }));
+      const metaY = by + 8 + name.length * 9;
+      drawText(ctx, `${SLOT_NAMES[item.slot].toUpperCase()} · ${rarity.name}`, textX, metaY, { color: '#8b9bb4' });
+      const detail = !itemIdentified(item) ? 'Magic hidden · review to identify' : itemLines(item)[0] || 'No magical bonuses';
+      drawText(ctx, wrapText(detail, textW)[0], textX, metaY + 11, { color: !itemIdentified(item) ? '#63b8ff' : '#c0cbdc' });
+      const actionX = narrow ? bx + 7 : bx + cardW - actionW - 7;
+      const actionY = narrow ? by + rowH - 21 : by + (routine ? 7 : 19);
+      const reviewW = narrow ? (routine ? Math.floor((cardW - 20) / 2) : cardW - 14) : actionW;
+      if (button(ctx, ui, `find_${index}`, actionX, actionY, reviewW, 16, 'REVIEW ITEM', { color: '#ead4aa', disabled: this.saving })) this.openClaim(index);
+      const sellX = narrow ? actionX + reviewW + 6 : actionX, sellY = narrow ? actionY : actionY + 24;
+      if (routine && button(ctx, ui, `quick_sell_${index}`, sellX, sellY, narrow ? cardW - 20 - reviewW : actionW, 16, `SELL +${itemPrice(item)}`, { color: '#feae34', disabled: this.saving })) {
         this.claim = index;
         this.resolveClaim('sell');
       }
     }
     if (pages > 1) {
-      const foot = y + h - 24, center = Math.round(W / 2);
-      if (button(ctx, ui, 'finds_prev', center - 52, foot, 24, 15, '<', { disabled: this.saving || page === 0 })) this.overviewPage--;
-      if (button(ctx, ui, 'finds_next', center + 28, foot, 24, 15, '>', { disabled: this.saving || page === pages - 1 })) this.overviewPage++;
-      drawText(ctx, `${page + 1}/${pages}`, center, foot + 3, { align: 'center', color: '#c0cbdc' });
-    }
+      const foot = y + h - 20, center = Math.round(W / 2);
+      if (button(ctx, ui, 'finds_prev', x + 9, foot, 55, 15, '< PREV', { disabled: this.saving || page === 0 })) { this.overviewPage--; ui.focus(`find_${finds[(page - 1) * perPage].index}`); }
+      if (button(ctx, ui, 'finds_next', x + w - 64, foot, 55, 15, 'NEXT >', { disabled: this.saving || page === pages - 1 })) { this.overviewPage++; ui.focus(`find_${finds[(page + 1) * perPage].index}`); }
+      drawText(ctx, `PAGE ${page + 1} / ${pages}`, center, foot + 3, { align: 'center', color: '#c0cbdc' });
+    } else drawText(ctx, 'Decide each find to continue', W / 2, y + h - 16, { align: 'center', color: '#8b9bb4' });
     ui.end();
   }
 

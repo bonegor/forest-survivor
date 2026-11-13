@@ -17,6 +17,7 @@ import { HEROES } from '../public/js/data/heroes.js';
 import { textCanvas, textWidth, GLYPH_H } from '../public/js/engine/font.js';
 import { view } from '../public/js/engine/view.js';
 import { input } from '../public/js/engine/input.js';
+import { SPR } from '../public/js/engine/sprites.js';
 import { mulberry32, fmtTime, fmtNum } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
@@ -95,11 +96,14 @@ function chestsAround(g, W, H, n = 1500) {
 // What the markers keep off, as the HUD draws it.
 function keepOff(g, W, H) {
   const out = {
+    'the weapon row': [0, 7, 5 + 18 * Math.min(6, Math.max(g.maxWeapons, g.player.weapons.length)), g.evoReady.length ? 30 : 23],
     'the health orb': [0, H - 52, 52, 52],
     'the fury orb': [W - 52, H - 52, 52, 52],
   };
   const p = g.player;
   if (p.ult || p.fury >= 100) out["the ultimate's name"] = textBox(p.hero.ultName.toUpperCase(), W - 4, H - 52 - 11, 'right');
+  const hint = g.hud.mapHint();
+  if (hint) out['the map reminder'] = [(W - textWidth(hint) - 12) / 2, H - 39, textWidth(hint) + 12, 13];
   return out;
 }
 
@@ -148,6 +152,17 @@ test('with no boss up they still keep off the orbs', () =>
     chestsAround(g, W, H);
     assertClear(g, W, H, 'no boss');
   }));
+
+test('crypt arrows avoid the six weapon slots and entry reminder on narrow screens', () => {
+  for (const W of [320, 240]) game((g) => {
+    g.maxWeapons = 6;
+    g.evoReady = [g.addWeapon('sword', 8)];
+    g.travel = go => go();
+    g.enterCrypt({ key: '1,0', depth: 1 });
+    chestsAround(g, W, 210);
+    assertClear(g, W, 210, `crypt entry at ${W} wide`);
+  });
+});
 
 // The kill streak left the screen (28 October 2026, game.js COMBO). The owner's: "the combo counter
 // on the right actually doesn't make sense, since apart from the very early game, the monsters just
@@ -306,12 +321,12 @@ test('only the three elites nearest the hero are named; a boss speaks above them
     assert.ok(frame > 0, 'the boss speaks');
     assert.ok(near.slice(0, 3).every((e) => named(e) < frame), 'after the names');
     const marker = calls.findLastIndex((c) => c[0] === 'translate');
-    assert.equal(marker, -1, 'persistent chest arrows are absent during play');
+    assert.ok(marker >= 0 && marker < frame, 'the chest arrow is drawn before the speech bubble');
     assert.ok(calls[frame][2] >= g.hud.topLines(), 'speech stays below the clock');
   }));
 
 
-test('the top HUD is one small clock in every mode, with no persistent progress or counters', () => {
+test('the clock stays small in every mode, without extra counters', () => {
   for (const mode of ['s15', 'ranked', 'dungeon']) game((g) => {
     g.time = 42;
     g.nightmare = true;
@@ -326,10 +341,31 @@ test('the top HUD is one small clock in every mode, with no persistent progress 
   }, { mode });
 });
 
-test('play hides persistent HUD indicators, while the full map remains available on request', () => game((g) => {
+test('actual play draws XP, owned and free weapon slots, and exploration arrows', () => game((g, p) => {
+  const { ctx, calls } = recorder();
+  g.maxWeapons = 4;
+  const weapon = g.addWeapon('sword', 2);
+  p.passives.set('might', 1);
+  p.xp = p.xpNext / 2;
+  g.shrines.length = g.crypts.length = g.pickups.length = 0;
+  g.addPickup('chest', p.x + 10000, p.y);
+  g.shrines.push({ x: p.x - 10000, y: p.y, type: 'fury' });
+  g.crypts.push({ x: p.x, y: p.y - 10000 });
+  g.hud.draw(ctx, 480, 270, 0);
+  assert.ok(calls.some(c => c[0] === 'fillRect' && c.slice(1).join() === '1,1,239,5'), 'the actual HUD paints the half-full XP bar');
+  assert.ok(calls.some(c => c[0] === 'drawImage' && c[1] === SPR[weapon.def.icon].frames[0].c), 'the owned weapon icon is visible');
+  assert.equal(calls.filter(c => c[0] === 'fillRect' && c[2] === 9 && c[3] === 17 && c[4] === 17).length, 4, 'one owned plus three free slots, no extra locks');
+  assert.equal(calls.filter(c => c[0] === 'fillRect' && c[2] === 30 && c[3] === 17 && c[4] === 17).length, 0, 'no unsolicited passive row');
+  assert.equal(calls.filter(c => c[0] === 'translate').length, 3, 'chest, shrine and crypt arrows are actually drawn');
+  calls.length = 0;
+  g.addWeapon('bow'); g.addWeapon('fireball');
+  g.maxWeapons = 2;
+  g.hud.draw(ctx, 480, 270, 0);
+  assert.equal(calls.filter(c => c[0] === 'fillRect' && c[2] === 9 && c[3] === 17 && c[4] === 17).length, 3, 'all owned weapons still show when copper has expanded the build');
+}));
+
+test('the full map remains available on request', () => game((g) => {
   const { ctx } = recorder();
-  const hidden = ['drawXp', 'drawSlots', 'drawIndicators', 'drawGold'];
-  for (const method of hidden) g.hud[method] = () => assert.fail(`${method} should not appear during play`);
   let maps = 0;
   g.world.drawMinimap = (_ctx, _W, _H, big) => { assert.equal(big, true); maps++; };
   g.hud.draw(ctx, 480, 270, 0);
@@ -337,6 +373,59 @@ test('play hides persistent HUD indicators, while the full map remains available
   g.showMap = true;
   g.hud.draw(ctx, 480, 270, 0);
   assert.equal(maps, 1);
+}));
+
+test('crypt strike instructions end after ten accepted gestures and reset on another visit', () => {
+  for (const id of ['sword', 'goodcopper']) game((g) => {
+    const w = g.addWeapon(id), visit = key => {
+      g.travel = go => go();
+      g.enterCrypt({ key, depth: 1 });
+      g.banners.length = 0;
+    };
+    const shown = () => {
+      const { ctx, calls } = recorder();
+      g.hud.draw(ctx, 480, 270, g.clock);
+      return calls.some(c => c[0] === 'drawImage' && ['X / SHIFT · READY', 'X / SHIFT · RECOVERING', 'COPPER · AUTO'].some(label =>
+        ['#fee761', '#c0cbdc'].some(color => c[1] === textCanvas(label, color))));
+    };
+    const oldDevice = input.device;
+    input.device = 'keyboard';
+    try {
+      visit('1,0');
+      assert.equal(g.inCrypt.strikes, 0);
+      assert.equal(shown(), true, `${id}: instructions on entry`);
+      for (let count = 1; count <= 10; count++) {
+        w.cd = 0; w.handAt = null;
+        g.cryptTime += 1;
+        assert.equal(g.strike(), true);
+        assert.equal(g.inCrypt.strikes, count);
+        assert.equal(g.strike(), false, 'a repeated gesture during cooldown is rejected');
+        assert.equal(g.inCrypt.strikes, count, 'a rejected gesture cannot dismiss instructions');
+        assert.equal(shown(), count < 10, `${id}: label after gesture ${count}`);
+      }
+      g.leaveCrypt();
+      visit('2,0');
+      assert.equal(g.inCrypt.strikes, 0, 'new visit starts the count again');
+      assert.equal(shown(), true, 'instructions return in the next crypt');
+    } finally { input.device = oldDevice; }
+  });
+});
+
+test('crypt entry map instructions match keyboard, controller and touch, then expire', () => game((g) => {
+  const oldDevice = input.device, oldPS = input.pad.ps;
+  g.travel = go => go();
+  g.enterCrypt({ key: '1,0', depth: 1 });
+  g.banners.length = 0;
+  try {
+    for (const [device, ps, label] of [['keyboard', false, 'PRESS M FOR MAP'], ['pad', false, 'PRESS VIEW FOR MAP'], ['pad', true, 'PRESS SHARE FOR MAP'], ['touch', false, 'TAP MAP TO EXPLORE']]) {
+      input.device = device; input.pad.ps = ps;
+      const { ctx, calls } = recorder();
+      g.hud.draw(ctx, 480, 270, g.clock);
+      assert.ok(calls.some(c => c[0] === 'drawImage' && c[1] === textCanvas(label, '#c0cbdc')), `${device}: real frame contains correct map instruction`);
+    }
+    g.cryptTime += 12;
+    assert.equal(g.hud.mapHint(), null, 'entry reminder expires after twelve crypt seconds');
+  } finally { input.device = oldDevice; input.pad.ps = oldPS; }
 }));
 
 test('boss health and plain name follow the visible boss instead of the top of the screen', () => game((g, p) => {

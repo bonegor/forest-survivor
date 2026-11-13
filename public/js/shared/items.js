@@ -75,7 +75,7 @@ export const POOLS = {
 };
 
 const RANGED_HEROES = new Set(['archer', 'mage', 'necromancer', 'druid', 'witchhunter', 'marksman',
-  'trailblazer', 'thornkeeper', 'gravebinder', 'arcanist', 'boltguard']);
+  'trailblazer', 'thornkeeper', 'gravebinder', 'arcanist', 'boltguard', 'eanasir']);
 export const weaponClass = hero => RANGED_HEROES.has(typeof hero === 'string' ? hero : hero?.id) ? 'ranged' : 'melee';
 // Modern common gear has no affixes. Legacy common gear can still hide one.
 export const itemIdentified = it => it?.identified !== false || (it.rarity === 0 && it.base !== undefined);
@@ -94,7 +94,8 @@ export const POWERS = {
   titan: { text: '+20% health and +2 armor', stat: { maxHp: 0.2, armor: 2 } },
 };
 
-const rankWeapons = Object.keys(WEAPONS).filter(id => !WEAPONS[id].evolved);
+// Cursed slots arrive only through the merchant, never as a gear-granted skill.
+const rankWeapons = Object.keys(WEAPONS).filter(id => !WEAPONS[id].evolved && !WEAPONS[id].special);
 const rankPassives = Object.keys(PASSIVES).filter(id => !PASSIVES[id].stat.revivals);
 
 export function rankGrant(raw, rarity) {

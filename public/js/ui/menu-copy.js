@@ -69,6 +69,6 @@ export function evolutionRecipe(e, prof) {
   const evo = WEAPONS[e.id].evo;
   if (!evo) return null;
   const rank = `Learned rank ${MAX_WEAPON_LEVEL}`;
-  if (!knownEvos(prof).includes(evo.into)) return `${rank} + unknown relic + chest. Leave a relic slot free to experiment.`;
-  return `${rank} + ${PASSIVES[evo.with].name} + chest → ${WEAPONS[evo.into].name}`;
+  if (!(evo.random || [evo.into]).some(id => knownEvos(prof).includes(id))) return `${rank} + unknown relic + chest. Leave a relic slot free to experiment.`;
+  return `${rank} + ${PASSIVES[evo.with].name} + chest → ${evo.random ? 'random copper evolution' : WEAPONS[evo.into].name}`;
 }

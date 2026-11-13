@@ -106,7 +106,7 @@ test('modern full-slot gear preserves base bonuses, identification and weapon cl
 test('compact gear preserves every skill grant and migrates the earlier unidentified metadata format', () => {
   const helm = findItem('helm', LEGENDARY);
   const grants = ['weapons', 'passives',
-    ...Object.keys(WEAPONS).filter(id => !WEAPONS[id].evolved).map(id => 'weapon:' + id),
+    ...Object.keys(WEAPONS).filter(id => !WEAPONS[id].evolved && !WEAPONS[id].special).map(id => 'weapon:' + id),
     ...Object.keys(PASSIVES).filter(id => !PASSIVES[id].stat.revivals).map(id => 'passive:' + id)];
   for (const grant of grants) {
     const item = { ...helm, grant };
@@ -131,6 +131,7 @@ test('item validation rejects forged base bonuses, common jewelry, classless wea
   assert.equal(sanitizeItem({ ...sword, weaponType: undefined }), null);
   assert.equal(sanitizeItem({ ...sword, identified: 'yes' }), null);
   assert.equal(sanitizeItem({ ...sword, grant: undefined }), null);
+  assert.equal(sanitizeItem({ ...sword, grant: 'weapon:pqc1' }), null, 'copper is a curse, not a gear drop');
   const blue = findItem('boots', 2);
   assert.equal(sanitizeItem({ ...blue, grant: 'weapon:sword' }), null);
   const common = findItem('boots', 0);

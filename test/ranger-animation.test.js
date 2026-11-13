@@ -38,7 +38,7 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
 test('the approved Ranger uses the indexed Hunter clip and its release frame',()=>{
   const spr=RANGER;
   assert.ok(spr.idle.length>=4);
-  assert.deepEqual([spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[8,5,2,8]);
+  assert.deepEqual([spr.walk.length,spr.attack.length,spr.attackRelease,spr.attackFps],[16,5,2,8]);
   assert.equal(spr.attackWalk.length,spr.attack.length);
 });
 

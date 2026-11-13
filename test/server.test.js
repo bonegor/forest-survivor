@@ -328,11 +328,12 @@ test('npm run dev opens developer mode without a key', async () => {
 
 // The expanded roster with distinct gear rolls and rank affixes must fit an encrypted
 // compressed cookie and read back whole.
-test('a maximal save of all 21 heroes, eight equipment slots and a full inventory fits the sealed cookie', async () => {
+test('a maximal save of all 22 heroes, eight equipment slots and a full inventory fits the sealed cookie', async () => {
   const P = await import('../public/js/shared/profile.js');
   const I = await import('../public/js/shared/items.js');
   const { MAX_CLAIMS, packSpoils } = await import('../public/js/shared/spoils.js');
-  assert.equal(P.HERO_ORDER.length, 21);
+  assert.equal(P.HERO_ORDER.length, 22);
+  assert.equal(P.HERO_ORDER.at(-1), 'eanasir');
   const p = P.defaultProfile();
   Object.assign(p, { gold: 1e9, runs: 1e7, kills: 1e12, effort: 1e12, deaths: 1e7, identifications: 1e7, heroes: [...P.HERO_ORDER] });
   p.best = { s15: 960, dungeon: 4, kills: 1e7, level: 999 };

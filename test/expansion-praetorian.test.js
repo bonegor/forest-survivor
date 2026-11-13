@@ -43,7 +43,7 @@ function shot(g, dx, dy, ang = Math.PI) {
   return bolt;
 }
 
-test('Shieldward Blade cuts only its limited front rank and blocks a late incoming bolt', () => combat((g, p, w) => {
+test('Shieldward Blade cuts only its limited front rank and senses incoming bolts without deleting them', () => combat((g, p, w) => {
   const front = [17, 22, 26, 30].map(x => foe(g, x, 0));
   const rear = foe(g, -12, 0), flank = foe(g, 19, 27);
   const behind = shot(g, -20, 0, 0), departing = shot(g, 18, 0, 0);
@@ -60,19 +60,22 @@ test('Shieldward Blade cuts only its limited front rank and blocks a late incomi
   second.update(0.1);
   g.time += 0.1;
   w.update(0.1);
-  assert.ok(first.dead && !second.dead, 'rank one blocks a single shot during the guard');
+  assert.ok(!first.dead && !second.dead, 'guarding never deletes either missile');
+  assert.equal(w.shieldward.guard.left, 0, 'rank one senses a single shot during the guard');
+  assert.equal(w.shieldward.guard.seen.size, 1);
   assert.ok(!behind.dead && !departing.dead);
   const hp = p.hp;
   first.update(0.15);
-  assert.equal(p.hp, hp, 'the blocked shot cannot hurt the hero');
+  assert.ok(p.hp < hp, 'the shot continues through the weapon and hurts the hero');
 }));
 
-test('one parry arms only the next cut and never multihits a lord', () => combat((g, p, w) => {
+test('one sensed shot arms only the next cut and never multihits a lord', () => combat((g, p, w) => {
   const lord = foe(g, 22, 0, { lord: true });
   const first = shot(g, 20, 0), second = shot(g, 23, 0);
   g.grid.rebuild(g.enemies, p.x, p.y);
   w.update(0);
-  assert.ok(first.dead && !second.dead);
+  assert.ok(!first.dead && !second.dead);
+  assert.equal(w.shieldward.guard.seen.size, 1);
   assert.equal(w.dmgDealt, 43);
   g.eshots.length = 0;
   g.time = w.s.cd;
@@ -103,7 +106,8 @@ test('crypt release respects the approved clip, stone walls and guard recovery a
   assert.ok(!visibleShot.dead);
   g.cryptTime = clip.delay;
   w.update(0.001, true);
-  assert.ok(front.hp < front.maxHp && visibleShot.dead);
+  assert.ok(front.hp < front.maxHp && !visibleShot.dead);
+  assert.ok(w.shieldward.guard.seen.has(visibleShot));
   assert.equal(blocked.hp, blocked.maxHp);
   assert.ok(!hiddenShot.dead);
 
@@ -122,5 +126,6 @@ test('crypt release respects the approved clip, stone walls and guard recovery a
   assert.ok(!second.dead, 'fast weapon releases do not reopen the guard early');
   g.time += 0.23;
   w.update(0.23);
-  assert.ok(second.dead, 'a fresh guard can block after recovery');
+  assert.ok(!second.dead, 'a fresh guard still never deletes the missile');
+  assert.ok(w.shieldward.guard.seen.has(second), 'a fresh guard senses incoming fire after recovery');
 }));

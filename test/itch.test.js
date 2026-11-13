@@ -70,12 +70,13 @@ test('where localStorage can\'t be used the save stays in a cookie', () => {
 
 test('the release holds the game and its music, not the developer\'s tools, the unlisted pages or the candidates', () => {
   const files = releaseFiles();
+  for (const f of ['sound-lab/index.html', 'sound-lab/audition.js', 'js/engine/weapon-sounds.js']) assert.ok(files.includes(f), `weapon auditions ship: ${f}`);
   const tracks = JSON.parse(readFileSync(new URL('../public/audio/music/tracks.json', import.meta.url), 'utf8'));
   for (const e of Object.values(tracks)) assert.ok(files.includes('audio/music/' + (typeof e === 'string' ? e : e.file)), JSON.stringify(e));
   for (const track of MUSIC_TRACKS) assert.ok(files.includes('audio/music/' + track.preview), track.name + ' preview ships with the release');
   for (const f of ['index.html', 'favicon.svg', 'js/main.js', 'js/engine/build.js', 'audio/music/CREDITS.md', 'audio/sfx/CREDITS.md', 'audio/sfx/rain.ogg', 'assets/ui/CREDITS.md', 'assets/art/vfx.js', 'assets/art/VFX-CREDITS.md']) assert.ok(files.includes(f), f);
   for (const f of files) {
-    assert.ok(/^(index\.html|favicon\.svg|js\/|assets\/|audio\/(music|sfx)\/)/.test(f), `${f}: only the game's own folders`);
+    assert.ok(/^(index\.html|favicon\.svg|js\/|assets\/|sound-lab\/|audio\/(music|sfx)\/)/.test(f), `${f}: only the game's own folders`);
     assert.ok(!/^js\/(dev|bots)\//.test(f) && !/^audio\/music\/menu\//.test(f), `${f}: left out`);
   }
   assert.ok(files.length <= 1000, 'within itch.io\'s 1,000 files');

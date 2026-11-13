@@ -10,6 +10,7 @@ import { Game } from '../public/js/game/game.js';
 import { Pool, Aura } from '../public/js/game/effects.js';
 import { HEROES, startWeapons, SHARED_WEAPONS, weaponsFor } from '../public/js/data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, statsAt } from '../public/js/data/weapons.js';
+import { GOOD_COPPER_ID } from '../public/js/data/copper.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
@@ -39,6 +40,7 @@ const held = (p) => p.weapons.map((w) => [w.id, w.level]);
 const SIGNATURES = {
   knight: ['sword'], archer: ['bow'], mage: ['fireball'], rogue: ['daggers'], necromancer: ['raise', 'miasma'],
   paladin: ['smite'], druid: ['roots'], berserker: ['twinaxes'], witchhunter: ['crossbow'],
+  eanasir: [GOOD_COPPER_ID],
 };
 
 test('each class has its signature weapon, and every other weapon is shared by all', () => {
@@ -57,7 +59,7 @@ test('each class has its signature weapon, and every other weapon is shared by a
   for (const gone of ['bonespear', 'clone', 'grasp', 'spinelance', 'twinshadows', 'gravehands']) assert.equal(WEAPONS[gone], undefined, `${gone} is out of the game`);
 });
 
-test('the Necromancer starts with Raise Dead and Miasma, both at level 1; the others with their one weapon', () => {
+test('heroes start at level 1: the Necromancer with two weapons and every other hero with one signature', () => {
   for (const id of Object.keys(HEROES)) {
     gameCase(id, (g, p) => {
       const want = id === 'necromancer' ? ['raise', 'miasma'] : [HEROES[id].weapon];
@@ -197,25 +199,32 @@ for (const [hero, ids] of Object.entries(AT_WORK)) {
 // at 99 (through all, which there is no beating), and a stat neither uses (0 at both).
 const LOWER = new Set(['cd', 'tick']);
 test('every evolution beats its weapon at level 8 on every stat', () => {
-  const into = new Set();
+  const into = new Set(), fixedInto = new Set();
   for (const [id, d] of Object.entries(WEAPONS)) {
     if (d.evolved) continue;
     assert.equal(d.levels.length, MAX_WEAPON_LEVEL - 1, `${id}: seven levels`);
     for (const lv of d.levels) assert.equal(typeof lv.text, 'string', `${id}: every level has its card text`);
-    const e = WEAPONS[d.evo.into];
-    assert.ok(e && e.evolved, `${id} evolves into ${d.evo.into}, an evolution`);
     assert.ok(PASSIVES[d.evo.with], `${id} evolves with a relic`);
-    assert.ok(!into.has(d.evo.into), `${d.evo.into} is one weapon's evolution`);
-    into.add(d.evo.into);
+    const outcomes = d.evo.random || [d.evo.into];
+    assert.ok(outcomes.length > 0 && new Set(outcomes).size === outcomes.length, `${id}: distinct possible outcomes`);
+    if (!d.evo.random) {
+      assert.ok(!fixedInto.has(d.evo.into), `${d.evo.into} is one weapon's fixed evolution`);
+      fixedInto.add(d.evo.into);
+    }
     const l8 = statsAt(d, MAX_WEAPON_LEVEL);
-    for (const [k, v] of Object.entries(l8)) {
-      // One that lasts for good (eternal) outlasts any duration.
-      const ev = e.base[k] ?? (k === 'cd' ? 1 : k === 'dur' && e.base.eternal ? Infinity : undefined);
-      assert.notEqual(ev, undefined, `${d.evo.into} has ${k}`);
-      if (k === 'pierce' && v >= 99 && ev >= 99) continue;
-      if (v === 0 && ev === 0) continue;
-      const better = LOWER.has(k) ? ev < v - 1e-9 : ev > v + 1e-9;
-      assert.ok(better, `${d.evo.into} ${k} ${ev} against ${id} at level 8: ${+v.toFixed(3)}`);
+    for (const outcome of outcomes) {
+      const e = WEAPONS[outcome];
+      assert.ok(e && e.evolved, `${id} evolves into ${outcome}, an evolution`);
+      into.add(outcome);
+      for (const [k, v] of Object.entries(l8)) {
+        // One that lasts for good (eternal) outlasts any duration.
+        const ev = e.base[k] ?? (k === 'cd' ? 1 : k === 'dur' && e.base.eternal ? Infinity : undefined);
+        assert.notEqual(ev, undefined, `${outcome} has ${k}`);
+        if (k === 'pierce' && v >= 99 && ev >= 99) continue;
+        if (v === 0 && ev === 0) continue;
+        const better = LOWER.has(k) ? ev < v - 1e-9 : ev > v + 1e-9;
+        assert.ok(better, `${outcome} ${k} ${ev} against ${id} at level 8: ${+v.toFixed(3)}`);
+      }
     }
   }
   for (const [id, d] of Object.entries(WEAPONS)) if (d.evolved) assert.ok(into.has(id), `${id} is some weapon's evolution`);

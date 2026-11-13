@@ -368,7 +368,7 @@ export class FaeCourt {
         g.particles.emit(x, y, 2 + rng() * 6, Math.cos(a) * s, Math.sin(a) * s * 0.7, 10 + rng() * 25, 0.7 + rng() * 0.6, 1, PETALS[i % 3], P.GLOW | P.FADE, 2);
       }
       const p = g.player;
-      if ((S.cx - p.x) ** 2 + (S.cy - p.y) ** 2 <= T.sound * T.sound) sfx('whoosh', { pan: clamp((S.cx - p.x) / 200, -1, 1) });
+      if ((S.cx - p.x) ** 2 + (S.cy - p.y) ** 2 <= T.sound * T.sound) sfx('whoosh', { pan: clamp((S.cx - p.x) / 200, -1, 1), weaponSound: false });
     }
   }
 

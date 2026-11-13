@@ -42,8 +42,11 @@ const FONTS = {
   heading: { g: parsePixtura(JACQUARD12), h: JACQUARD12.h, cap: JACQUARD12.ascent, lead: 0 },
 };
 const GOTHIC_SWAP = { '—': '-', '–': '-' };
+// These transliteration accents are absent from the bundled bitmap faces.
+const NAME_SWAP = { 'ā': 'a', 'ṣ': 's', 'Ā': 'A', 'Ṣ': 'S' };
 
 function glyph(ch, font) {
+  if (!FONTS[font].g[ch]) ch = NAME_SWAP[ch] || ch;
   if (font !== 'normal' && font !== 'bold') return FONTS[font].g[GOTHIC_SWAP[ch] || ch] || FONTS[font].g['?'];
   return FONTS[font].g[ch] || FONTS.normal.g[ch] || FONTS.normal.g['?'];
 }

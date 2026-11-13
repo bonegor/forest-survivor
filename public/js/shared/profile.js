@@ -38,6 +38,7 @@ import { PROGRESS, needText } from './progress.js';
 import { killCredit } from './population.js';
 import { MAX_CLAIMS, packSpoils, partitionRunSpoils, settledSpoils, unpackSpoils, validClaimIndices, validRunId } from './spoils.js';
 import { RECRUITS } from '../expansion/roster.js';
+import { COPPER_IDS, COPPER_WEAPONS } from '../data/copper.js';
 
 export { PROGRESS, needText };
 
@@ -55,7 +56,8 @@ export const WIN_MODES = ['s15', 'dungeon']; // Ranked has no victory, only a ti
 // Heroes unlock in this order: a run with one that lasts this long on the clock (seconds)
 // brings in the next.
 const LEGACY_HEROES = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
-export const HERO_ORDER = [...LEGACY_HEROES, ...RECRUITS.map(h => h.id)];
+const RECRUIT_ORDER = [...LEGACY_HEROES, ...RECRUITS.map(h => h.id)];
+export const HERO_ORDER = [...RECRUIT_ORDER, 'eanasir'];
 // The ladder's five, whose Dungeon clears each bring the next one into it and the last opens
 // Ranked; the heroes after them are extras (canPlay, nextGoal).
 export const LADDER = HERO_ORDER.slice(0, 5);
@@ -416,7 +418,7 @@ function earnedBits(p) {
 // minutes with him).
 function ultEarned(p, h) {
   if ((p.bt[h] || 0) >= PROGRESS.ultTime || (p.ranked[h] || 0) >= PROGRESS.ultTime || (p.feats[h] || 0) !== 0) return true;
-  const next = HERO_ORDER[HERO_ORDER.indexOf(h) + 1];
+  const i = RECRUIT_ORDER.indexOf(h), next = i >= 0 ? RECRUIT_ORDER[i + 1] : null;
   return HERO_UNLOCK_TIME >= PROGRESS.ultTime && !!next && p.heroes.includes(next);
 }
 
@@ -635,8 +637,8 @@ export function canPlay(p, mode, hero) {
 
 // The hero that five minutes with `hero` would bring in, or null.
 export function unlocksNext(p, hero) {
-  const i = HERO_ORDER.indexOf(hero);
-  const next = i >= 0 ? HERO_ORDER[i + 1] : null;
+  const i = RECRUIT_ORDER.indexOf(hero);
+  const next = i >= 0 ? RECRUIT_ORDER[i + 1] : null;
   return next && !p.heroes.includes(next) ? next : null;
 }
 
@@ -766,7 +768,7 @@ export function refundUpgrades(profile) {
 
 // The next hero waiting to be unlocked, or null when all are free.
 export function nextHeroUnlock(profile) {
-  return HERO_ORDER.find((h) => !profile.heroes.includes(h)) || null;
+  return RECRUIT_ORDER.find((h) => !profile.heroes.includes(h)) || null;
 }
 
 // A finished run as reported by the client. Numbers are clamped to what a
@@ -805,6 +807,11 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
     nightmare,
     hero: isId(raw.hero) ? raw.hero : 'knight',
     victory,
+    // A complete, distinct copper loadout on a legitimate victory. An evolved disc still
+    // belongs to its original slot; duplicates and a bare client boolean prove nothing.
+    copperVictory: victory && raw.hero !== 'eanasir' && Array.isArray(raw.copperWeapons) &&
+      raw.copperWeapons.length === COPPER_IDS.length && COPPER_IDS.every(id =>
+        raw.copperWeapons.includes(id) || raw.copperWeapons.includes(COPPER_WEAPONS[id].evo.into)),
     // Fallen, not quit: never a win.
     died: !victory && raw.died === true,
     time,
@@ -1079,6 +1086,7 @@ export function applyRun(profile, rawRun) {
   // Five minutes on the clock bring in the next hero.
   const next = unlocksNext(p, run.hero);
   if (next && run.time >= heroUnlockTime(next)) p.heroes.push(next);
+  if (run.copperVictory && !p.heroes.includes('eanasir')) p.heroes.push('eanasir');
   const reward = runReward(run);
   if (gearConflict) reward.gearConflict = true;
   p.gold = int(p.gold + reward.total, 0, 1e9);

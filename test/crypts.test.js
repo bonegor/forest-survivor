@@ -426,10 +426,11 @@ test('a crypt is bigger, ten rooms or so, every room and every lord a walk from 
     }
     assert.ok(walk(w.entrance.x, w.entrance.y) >= 0, `seed ${seed}: the stairs on open floor`);
     const L = g.enemies.filter(e => e.lord);
-    assert.equal(L.length, lords, `seed ${seed}: ${lords} lords`);
-    assert.equal(w.lordCount, lords);
+    const expected = w.eanasir ? 1 : lords;
+    assert.equal(L.length, expected, `seed ${seed}: ${expected} lords`);
+    assert.equal(w.lordCount, expected);
     const homes = L.map(l => w.rooms.find(r => inRoom(l, r)));
-    assert.equal(new Set(homes).size, lords, `seed ${seed}: each lord in a room of its own`);
+    assert.equal(new Set(homes).size, expected, `seed ${seed}: each lord in a room of its own`);
     assert.ok(homes.every(r => r && r !== w.startRoom && w.lordRooms.includes(r)), `seed ${seed}: none by the stairs`);
     assert.ok(inRoom(w.guardian, w.guardRoom), `seed ${seed}: one in the farthest room`);
     L.forEach((l, k) => {

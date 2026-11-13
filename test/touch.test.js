@@ -86,6 +86,24 @@ test('in play a finger steers, a second one strikes, and the pause button pauses
   });
 });
 
+test('the crypt MAP touch button opens and closes the map without steering or striking', () => run((gs, g) => {
+  g.travel = go => go();
+  g.enterCrypt({ key: '1,0', depth: 1 });
+  frame(gs);
+  assert.equal(g.showMap, false);
+  assert.equal(g.inCrypt.mapHintSeen, false);
+  for (const open of [true, false]) {
+    touch('touchstart', 81, 275, 260);
+    assert.equal(input.stick.active, false, 'MAP is a button, not the joystick');
+    assert.equal(input.pressed('strike'), false, 'opening the map does not attack');
+    touch('touchend', 81, 275, 260);
+    frame(gs);
+    assert.equal(g.showMap, open);
+  }
+  assert.equal(g.inCrypt.mapHintSeen, true, 'opening the map dismisses entry instructions for this visit');
+  assert.equal(g.hud.mapHint(), null);
+}));
+
 test('with the level-up screen up, a tap takes the card tapped, and play has the stick back', () => {
   run((gs, g, p) => {
     const lv = openLevelUp(gs, p);

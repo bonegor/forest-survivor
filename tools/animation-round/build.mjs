@@ -6,7 +6,9 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import source from './baseline/index.js';
 import { writePng } from '../png.mjs';
-import { buildKnightWalk, KNIGHT_WALK } from './knight-walk.mjs';
+import { buildGroundedWalk, GROUNDED_MODELS } from './grounded-walk.mjs';
+import { buildRobedWalk } from './robed-walk.mjs';
+import { rangerClarity } from './ranger-clarity.mjs';
 
 const TAU = Math.PI * 2;
 const equipment=JSON.parse(readFileSync(new URL('./baseline/equipment-masks.json',import.meta.url),'utf8'));
@@ -273,14 +275,35 @@ function attackWalking(attack, walk, standing, rig, id, step, attackStep, cleanL
     const path=attackStep<2?[[50,42],[55,50],[55,51]]:attackStep===2?[[48,41],[45,52],[45,55]]:attackStep===3?[[48,42],[47,55]]:[[48,43],[48,55]];
     newStaff=corridor(attack,path,1.35);
   }
+  if(cleanLower?.staffFree){
+    // These pixels belong to the old stationary boot/export margin, not the
+    // active shaft. Filter the source ownership mask rather than erasing the
+    // independently drawn moving foot at the same world coordinates.
+    if(id==='mage'&&attackStep>=2&&attackStep<=3)for(let y=54;y<h;y++)newStaff[y*w+35]=0;
+    if(id==='gravebinder'&&attackStep<3)newStaff[55*w+49]=0;
+    if(id==='gravebinder'&&attackStep===3)for(let y=54;y<h;y++)for(let x=49;x<=50;x++)newStaff[y*w+x]=0;
+  }
   const trueWeapon=equipment[id]?expandedMask(equipment[id].attackMasks[attackStep]):null;
   const lowSword=id==='templar'?belowEquipment(attack,24,31,47,52):null;
   const oldBow=id==='trailblazer'?belowEquipment(walk,43,52,47,53,44):null;
   const activeBow=id==='trailblazer'?belowEquipment(attack,43,56,47,53,44):null;
+  const footmanThrust=id==='footman'&&cleanLower?.hips&&(attackStep===3||attackStep===4);
   for(let y=0;y<h;y++)for(let x=0;x<w;x++) {
     const p=y*w+x;
-    if(y<seam)out[p]=attack.d[p];
-    else if(oldStaff[p])out[p]=0;
+    if(y<seam){
+      // Footman's thrust shifts the upper guard left of the travelling pelvis.
+      // Keep the source-owned upper thighs behind transparent attack pixels at
+      // the waist; replacing them with transparency severs the forward leg.
+      const behindWaist=cleanLower&&id==='footman'&&y>=rig.hip&&(attack.d[p]>>>24)<128&&(out[p]>>>24)>=128;
+      // In the two thrust poses the original near thigh runs backwards above
+      // the normal seam. It belongs to the stationary leg, not the pelvis or
+      // guard; retain the moving layer there and redraw its new proximal thigh.
+      const oldNearThigh=footmanThrust&&y>=44&&x<37;
+      if(!behindWaist&&!oldNearThigh)out[p]=attack.d[p];
+    }
+    // Source-owned robed lower layers already exclude the resting shaft before
+    // their boots are drawn. A broad colour mask here would cut the new shin.
+    else if(!cleanLower?.staffFree&&oldStaff[p])out[p]=0;
     if(y>=seam&&newStaff[p])out[p]=attack.d[p];
     // Sword/axe tips can extend outside the legs during follow-through. Their
     // opaque connected metal survives below the hip; loose cloak flares do not.
@@ -294,18 +317,39 @@ function attackWalking(attack, walk, standing, rig, id, step, attackStep, cleanL
     }
     // The bow's lower limb belongs to the resting equipment, never the leg.
     if(id==='trailblazer'&&y>=seam) {
-      if(oldBow[p])out[p]=0;
+      // Native lower layers contain no resting bow. Its old footprint can now
+      // contain a travelling shin, so only legacy composites erase that mask.
+      if(!cleanLower&&oldBow[p])out[p]=0;
       if(activeBow[p])out[p]=attack.d[p];
     }
     // Crossbow undersides sit exactly on this compositor row; keep the live
     // crossbow footprint instead of the lowered resting-stock pixels.
     if((id==='marksman'&&x>=49||id==='boltguard'&&x>=48)&&y===48)out[p]=attack.d[p];
-    if(id==='mage'&&attackStep>=2&&attackStep<=3&&x===35&&y>=54)out[p]=0;
-    if(id==='gravebinder'&&x===49&&y===55&&attackStep<3)out[p]=0;
-    if(id==='gravebinder'&&attackStep===3&&x>=49&&x<=50&&y>=54)out[p]=0;
+    if(!cleanLower?.staffFree){
+      if(id==='mage'&&attackStep>=2&&attackStep<=3&&x===35&&y>=54)out[p]=0;
+      if(id==='gravebinder'&&x===49&&y===55&&attackStep<3)out[p]=0;
+      if(id==='gravebinder'&&attackStep===3&&x>=49&&x<=50&&y>=54)out[p]=0;
+    }
     // Near-transparent export fringe is not a separate pixel-art part. Leaving
     // alpha1 crumbs makes indexed previews show debris that the live blend hides.
     if(repaired.has(id)&&(out[p]>>>24)<16)out[p]=0;
+  }
+  if(footmanThrust){
+    // The two forward thrust poses lean the attack pelvis left/up. The far
+    // walking hip remains under the shield; continue the armoured thigh between
+    // these two real anchors rather than leaving that whole leg detached.
+    for(const [name,a] of [['far',[42,45.5]],['near',[35.5,43.5]]]){
+      const b=cleanLower.hips.find(j=>j.name===name)?.hip;
+      if(!b)continue;
+      const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);
+      const edge=attack.d[46*w+42],mid=attack.d[47*w+41],highlight=attack.d[46*w+40];
+      for(let y=Math.floor(a[1]-1);y<=Math.ceil(b[1]+1);y++)for(let x=Math.floor(a[0]-2);x<=Math.ceil(b[0]+2);x++){
+        const px=x+.5-a[0],py=y+.5-a[1],t=(px*dx+py*dy)/(length*length),cross=(-px*dy+py*dx)/length;
+        if(t<0||t>1.1||Math.abs(cross)>1.25)continue;
+        const p=y*w+x;
+        if((out[p]>>>24)<128)out[p]=Math.abs(cross)>.85?edge:cross<0?highlight:mid;
+      }
+    }
   }
   // Single isolated low-opacity/outline crumbs left by the removed resting
   // equipment are not limbs. Actual live weapon and staff masks are exempt.
@@ -344,21 +388,28 @@ function flicker(frame, id, phase, palette) {
   return {...frame,d:out};
 }
 
-export function rebuild() {
-mkdirSync('tools/animation-round/generated',{recursive:true});
+export function rebuild({version='v1',outputDir=version==='v2'?'tools/animation-round/variants/v2':'public/assets/heroes-approved',generatedDir=version==='v2'?'tools/animation-round/generated/v2':'tools/animation-round/generated'}={}) {
+if(!['v1','v2'].includes(version))throw Error('Unknown gait version: '+version);
+mkdirSync(outputDir,{recursive:true});
+mkdirSync(generatedDir,{recursive:true});
 const report={};
 for(const [id,base] of Object.entries(source)) {
-  const rig=rigs[id], frames=base.frames.map(f=>clean(unpack(base,f)));
+  const rig=rigs[id], frames=base.frames.map(f=>{
+    const native=clean(unpack(base,f));
+    return id==='archer'&&version==='v1'?rangerClarity(native,base.palette):native;
+  });
   // Dedicated resting model for spectres: use the upright source pose, not their
   // forward-travelling float sequence. Every idle owns separate frame indices.
   const standing=frames[0], idle=[];
   for(let i=0;i<16;i++){idle.push(frames.length);frames.push(flicker(warp(standing,materialField(rig,i/16*TAU)),id,i/16*TAU,base.palette));}
   for(let i=0;i<base.walk.length;i++)frames[base.walk[i]]=connectedWalk(warp(frames[base.walk[i]],materialField(rig,i/base.walk.length*TAU,true)),id,i);
-  let walk=[...base.walk],walkFps=rig.fps,nativeGait;
-  if(id==='knight') {
-    nativeGait=buildKnightWalk(base.palette,standing);walk=nativeGait.frames.map(frame=>{const index=frames.length;frames.push(frame);return index;});
+  let walk=[...base.walk],walkFps=rig.fps;
+  const nativeGait=buildRobedWalk(id,base.palette,standing,clean(unpack(base,base.frames[base.walk[0]])),{version})
+    || buildGroundedWalk(id,base.palette,standing,{version});
+  if(nativeGait) {
+    walk=nativeGait.frames.map(frame=>{const index=frames.length;frames.push(frame);return index;});
     walkFps=nativeGait.fps;
-    writeFileSync('tools/animation-round/generated/knight-walk-poses.json',JSON.stringify(nativeGait.poses,null,2)+'\n');
+    writeFileSync(`${generatedDir}/${id}-walk-poses.json`,JSON.stringify(nativeGait.poses,null,2)+'\n');
   }
   let attack=[...base.attack], attackRelease=base.attackRelease,attackFps=base.attackFps;
   if(attack.length===4) {
@@ -377,17 +428,26 @@ for(const [id,base] of Object.entries(source)) {
   const idleFps=rig.floating?7:8;
   const data=pack(frames,{...base,idle,idleFps,walk,walkFps,attack,attackRelease,attackFps,attackWalk,
     manualDelay:base.manualDelay??Math.min(2,base.attackRelease)/base.attackFps,
-    motionRevision:nativeGait?'connected-knight-gait-2026-11-11':'native-idle-and-moving-attack-2026-11-07',
-    motionSource:'tools/animation-round/build.mjs',
-    motionNotes:nativeGait?'Sixteen connected contact, compression, passing and reaching phases; stable native upper-body texture, alternating planted soles and lifted returns.':rig.note,
+    motionRevision:version==='v2'?'restrained-roster-gait-v2-2026-11-12':'continuous-roster-gait-2026-11-12',
+    ...(id==='archer'&&version==='v1'?{clarityRevision:'ranger-face-2026-11-14',claritySource:'tools/animation-round/ranger-clarity.mjs'}:{}),
+    motionSource:`tools/animation-round/${nativeGait?.settings?'robed':'grounded'}-walk.mjs`,
+    motionNotes:nativeGait?.settings?.note||(nativeGait?'Sixteen connected contact, compression, passing and reaching phases; stable native upper-body texture, alternating planted soles and lifted returns.':rig.note),
   });
-  writeFileSync(`public/assets/heroes-approved/${id}.js`,`// Rebuild: node tools/animation-round/build.mjs\nexport default ${JSON.stringify(data)};\n`);
+  writeFileSync(`${outputDir}/${id}.js`,`// Rebuild: node tools/animation-round/build.mjs${version==='v2'?' --v2':''}\nexport default ${JSON.stringify(data)};\n`);
   const contact={w:80*8,h:64*2,d:new Uint32Array(80*8*64*2)};
   idle.forEach((idx,i)=>{const b=frames[idx];for(let y=0;y<64;y++)contact.d.set(b.d.subarray(y*80,(y+1)*80),(Math.floor(i/8)*64+y)*contact.w+(i%8)*80);});
-  writePng(`tools/animation-round/generated/${id}-idle.png`,contact);
-  report[id]={idle:idle.length,idleFps,walk:walk.length,walkFps,attack:attack.length,attackFps,attackRelease,movingAttack:!!attackWalk,frames:frames.length,note:data.motionNotes,...(nativeGait?{gait:KNIGHT_WALK,gaitSource:{file:'baseline/knight-walk-model.png',sha256:createHash('sha256').update(readFileSync(new URL('./baseline/knight-walk-model.png',import.meta.url))).digest('hex')}}:{}),sourceSha256:createHash('sha256').update(JSON.stringify(base)).digest('hex')};
+  writePng(`${generatedDir}/${id}-idle.png`,contact);
+  report[id]={idle:idle.length,idleFps,walk:walk.length,walkFps,attack:attack.length,attackFps,attackRelease,movingAttack:!!attackWalk,frames:frames.length,note:data.motionNotes,gait:nativeGait.settings||nativeGait.motion,
+    ...(GROUNDED_MODELS[id]?{gaitSource:{file:`baseline/grounded-models/${GROUNDED_MODELS[id].source}`,sha256:GROUNDED_MODELS[id].sha256}}:{}),
+    sourceSha256:createHash('sha256').update(JSON.stringify(base)).digest('hex')};
 }
-writeFileSync('tools/animation-round/generated/manifest.json',JSON.stringify(report,null,2)+'\n');
-console.log(`Rebuilt ${Object.keys(report).length} heroes with dedicated idle loops and moving attack poses.`);
+writeFileSync(`${generatedDir}/manifest.json`,JSON.stringify(report,null,2)+'\n');
+if(version==='v2')writeFileSync(`${outputDir}/index.js`,readFileSync(new URL('./baseline/index.js',import.meta.url),'utf8'));
+console.log(`Rebuilt ${Object.keys(report).length} ${version} heroes in ${outputDir}.`);
+return report;
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)rebuild();
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
+  const version=process.argv.includes('--v2')?'v2':'v1';
+  if(version==='v2')await import('./preserve-v1.mjs');
+  rebuild({version});
+}

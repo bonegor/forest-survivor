@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="../">
+  <title>Weapon sounds · Forest Survivor</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="sound-lab/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <a class="brand" href="./">FOREST SURVIVOR</a>
+      <p class="eyebrow">THE ARMOURY / AUDIO</p>
+      <h1>Find your edge.</h1>
+      <p class="intro">Compare four weapon sound styles. Hear a first-level attack, then a fully upgraded volley.</p>
+    </header>
+    <div class="controls">
+      <label class="weapon-label">Weapon <select id="weapon" aria-label="Preview weapon"></select></label>
+      <label class="volume-label">Preview volume <input id="volume" aria-label="Preview volume" type="range" min="0" max="100" value="55"><output id="volume-value">55%</output></label>
+      <button id="stop" type="button" class="quiet">Stop preview</button>
+    </div>
+    <section class="styles" id="styles" aria-label="Sound styles"></section>
+    <div class="saved" id="saved" role="status"></div>
+    <section class="stage" aria-label="Live weapon preview">
+      <div class="stage-heading"><div><span class="eyebrow">LIVE PRACTICE</span><h2 id="playing">Throwing Axe · ready</h2></div><span id="timer">8-second previews</span></div>
+      <canvas id="arena" width="720" height="340" aria-label="Actual game weapon attacks against stationary practice targets"></canvas>
+      <div class="stage-footer"><span id="stats">Choose a style and level to hear it.</span><span>Real attack timing · No progression saved</span></div>
+    </section>
+    <p class="note">These weapons cover every launch sound family, including sounds shared by expansion weapons. Previews isolate launches so you can compare them clearly. Apply changes weapon launches in the game too; music, enemy attacks and impact sounds keep their own voices. Your current game picks up your choice immediately.</p>
+  </main>
+  <script type="module" src="sound-lab/audition.js"></script>
+</body>
+</html>

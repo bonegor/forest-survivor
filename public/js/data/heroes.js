@@ -8,6 +8,7 @@
 import { WEAPONS } from './weapons.js';
 import { RECRUITS } from '../expansion/roster.js';
 import { SIGNATURES } from '../expansion/signatures.js';
+import { GOOD_COPPER_ID } from './copper.js';
 
 // The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
 // wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
@@ -182,6 +183,17 @@ export const HEROES = {
     ultName: 'Purge',
     ultDesc: 'For 4s foes are slowed by half; every bolt flies three at once and bursts.',
   },
+  eanasir: {
+    id: 'eanasir', short: 'Ea-nasir', name: 'Ea-nāṣir', title: 'Copper Merchant',
+    sprite: 'eanasir', pose: 'eanasir_pose', weapon: GOOD_COPPER_ID,
+    unique: [GOOD_COPPER_ID], color: '#c28569',
+    startDesc: 'Private stock. Rank 8 + Spellbook + chest morphs it into one of six random copper evolutions.',
+    stats: { maxHp: 100, armor: 1, greed: 1.25 },
+    perk: 'Private stock: +25% gold; never encounters himself',
+    ult: 'cataclysm', ultName: 'Liquidation',
+    ultDesc: 'Liquidate the battlefield in a storm of blazing meteors.',
+    unlock: 'Accept all six Poor Quality Copper weapons from Ea-nāṣir, then win the run with them. Phoenix evolutions count.',
+  },
 };
 
 for (const recruit of RECRUITS) {
@@ -199,7 +211,7 @@ export const HERO_LINE = '#d8e2f0';
 export const startWeapons = (hero) => hero.start || [hero.weapon];
 
 // Every weapon that is no hero's signature (evolutions aside): any hero may find these.
-export const SHARED_WEAPONS = Object.keys(WEAPONS).filter((id) => !WEAPONS[id].evolved && !Object.values(HEROES).some((h) => h.unique.includes(id)));
+export const SHARED_WEAPONS = Object.keys(WEAPONS).filter((id) => !WEAPONS[id].evolved && !WEAPONS[id].special && !Object.values(HEROES).some((h) => h.unique.includes(id)));
 
 // The weapons a level-up may offer a hero: his own signature, then those shared by all.
 export const weaponsFor = (hero) => [...hero.unique, ...SHARED_WEAPONS];

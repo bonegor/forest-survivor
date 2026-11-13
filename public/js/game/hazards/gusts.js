@@ -113,7 +113,7 @@ export class Gusts {
     const q = { x, y, r, t: 0, seed, blown: false };
     this.list.push(q);
     this.made++;
-    if (inView(g.cam, x, y)) sfx('whoosh');
+    if (inView(g.cam, x, y)) sfx('whoosh', { weaponSound: false });
     return q;
   }
 

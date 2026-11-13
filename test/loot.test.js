@@ -48,7 +48,7 @@ test('more luck makes every treasure from props likelier, never rarer', () => {
 test('at plain luck a third of boxes hold a potion, a third a fury orb, a tenth a Scroll of Gathering, the rest gold or a rare find', () => {
   const all = 60000, c = breakProps(1, all), n = all - c.empty;
   assert.ok(Math.abs(c.empty / all - PROP_DROP.empty) < 0.01, `empty boxes: ${(c.empty / all).toFixed(3)}`);
-  assert.equal(PROP_DROP.empty, 0.5, 'half the boxes hold nothing');
+  assert.equal(PROP_DROP.empty, 0.75, 'one in four boxes holds a pickup, half the previous rate');
   delete c.empty;
   const share = kind => PROP_LOOT.find(d => d.kind === kind).w;
   const near = (got, want, what) => assert.ok(Math.abs(got / n - want) < 0.01, `${what}: ${(got / n).toFixed(4)} vs ${want.toFixed(4)}`);
@@ -87,12 +87,44 @@ test('the horde leaves soul gems and now and then a coin or a fury orb; champion
     };
     const horde = kills('bat', {}, 4000);
     assert.deepEqual(Object.keys(horde).sort(), ['coin', 'fury', 'gem'], JSON.stringify(horde));
-    assert.ok(horde.coin > 4000 * 0.014 * 3 * 0.7 && horde.coin < 4000 * 0.014 * 3 * 1.3, 'coins as often as before');
-    assert.ok(horde.fury > 4000 * 0.002 * 3 * 0.5 && horde.fury < 4000 * 0.002 * 3 * 1.5, 'fury orbs as often as before');
+    assert.ok(horde.coin > 4000 * 0.007 * 3 * 0.7 && horde.coin < 4000 * 0.007 * 3 * 1.3, 'incidental coins at half the previous rate');
+    assert.ok(horde.fury > 4000 * 0.001 * 3 * 0.5 && horde.fury < 4000 * 0.001 * 3 * 1.5, 'fury orbs at half the previous rate');
     const champions = kills('skeleton', {elite: true}, 300);
     assert.deepEqual(Object.keys(champions).sort(), ['chest', 'gem', 'goldpile'], JSON.stringify(champions));
   } finally {
     Math.random = oldRandom;
+  }
+});
+
+test('locked ultimates suppress useless fury drops from both boxes and horde kills', () => {
+  const random = Math.random;
+  Math.random = mulberry32(42);
+  try {
+    const g = new Game({hero:'knight', mode:'s15', open:{ult:false}, meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
+    const p = g.player;
+    p.luck = 1;
+    assert.equal(p.ultLocked, true);
+    let potions = 0;
+    for (let i = 0; i < 4000; i++) {
+      g.pickups.length = 0;
+      g.breakProp({x:p.x + 40, y:p.y, type:'barrel'});
+      assert.ok(!g.pickups.some(pk => pk.kind === 'fury'));
+      potions += g.pickups.filter(pk => pk.kind === 'potion').length;
+    }
+    assert.ok(potions > 200, 'useful pickups still appear');
+    const kill = () => {
+      const e = g.spawnEnemy('bat', p.x + 60, p.y, {instant:true});
+      g.pickups.length = 0;
+      p.recentKills = 0;
+      Math.random = () => 0.0075; // an ordinary lone-kill fury roll
+      g.killEnemy(e);
+      return g.pickups.map(pk => pk.kind);
+    };
+    assert.deepEqual(kill(), ['gem'], 'experience remains; unusable fury does not');
+    p.ultLocked = false;
+    assert.deepEqual(kill().sort(), ['fury', 'gem'], 'the same roll works once the ultimate is unlocked');
+  } finally {
+    Math.random = random;
   }
 });
 

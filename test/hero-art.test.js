@@ -37,7 +37,14 @@ test('the approved sheets carry all indexed clips, exact dimensions and release 
     assert.ok(spr.idle.length >= 4, `${id}: a complete quiet idle loop`);
     assert.ok(new Set(spr.idle.map(i => [...spr.frames[i].buf.d].join(','))).size >= 3, `${id}: visible idle motion`);
     assert.ok(!spr.idle.some(i => spr.walk.includes(i) || spr.attack.includes(i)), `${id}: idle is separate from walking and attacking`);
-    if (!spr.floating) assert.deepEqual(spr.attackWalk, approved[id].attackWalk, `${id}: moving attacks reach the engine`);
+    if (!spr.floating && approved[id]) assert.deepEqual(spr.attackWalk, approved[id].attackWalk, `${id}: moving attacks reach the engine`);
+    if (!spr.floating && !approved[id]) {
+      assert.equal(spr.attackWalk.length, spr.attack.length, `${id}: each authored attack has a moving clip`);
+      for (const row of spr.attackWalk) {
+        assert.equal(row.length, spr.walk.length, `${id}: moving attacks cover the full gait`);
+        for (const frame of row) assert.ok(opaque(spr.frames[frame]), `${id}: authored moving attack is drawn`);
+      }
+    }
   }
 });
 

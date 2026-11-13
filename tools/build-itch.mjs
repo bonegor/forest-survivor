@@ -49,6 +49,7 @@ export function releaseFiles(pub = PUBLIC) {
     'favicon.svg',
     ...walk(pub, 'js').filter((f) => !LEAVE_OUT.some((d) => f.startsWith(d))),
     ...walk(pub, 'assets'),
+    ...walk(pub, 'sound-lab'),
     MUSIC + 'tracks.json',
     MUSIC + 'CREDITS.md',
     ...walk(pub, MUSIC + 'licences'),

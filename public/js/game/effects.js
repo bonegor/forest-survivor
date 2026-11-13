@@ -671,7 +671,6 @@ export class Pool {
 // ------------------------------------------------------------------ orbit --
 
 // The sparks of an enemy missile a guardian blade shatters (Orbit.update).
-const BLOCK_SPARKS = [PC.y, PC.w];
 
 // How far up off the ground the orbiting blades are drawn (Orbit.draw), and strike.
 const ORBIT_UP = 6;
@@ -702,7 +701,7 @@ export class Orbit {
     this.ang += dt * 3.3 * s.speed;
     const R = 34 * s.area, br = 7 * s.area;
     // Each blade strikes as drawn too (hitbox.js): ORBIT_UP px up, as wide as it is drawn turned.
-    const bw = Math.max(br, spriteRadius(SPR[s.block ? 'goldblade' : 'blade']) * Math.min(1.3, s.area));
+    const bw = Math.max(br, spriteRadius(SPR[s.golden ? 'goldblade' : 'blade']) * Math.min(1.3, s.area));
     for (let i = 0; i < this.n; i++) {
       const a = this.ang + (i / this.n) * TAU;
       const bx = p.x + Math.cos(a) * R, by = p.y + Math.sin(a) * R * 0.85;
@@ -713,14 +712,6 @@ export class Orbit {
         if (!reachesFeet(e, bx, by, bx, by, br) && !reachesBody(e, bx, by - ORBIT_UP, bx, by - ORBIT_UP, bw)) continue;
         e.hitT[this.w.src] = g.clock + s.tick;
         g.hitEnemy(e, s.dmg, { w: this.w, kb: s.kb, kx: Math.cos(a), ky: Math.sin(a) });
-      }
-      if (s.block) {
-        for (const shot of g.eshots) {
-          if (!shot.dead && (shot.x - bx) ** 2 + (shot.y - by) ** 2 < (br + shot.r + 2) ** 2) {
-            shot.dead = true;
-            g.particles.burst(shot.x, shot.y, 8, 6, BLOCK_SPARKS, 60, 0.3, 1, P.GLOW | P.FADE);
-          }
-        }
       }
     }
     return true;
@@ -735,7 +726,7 @@ export class Orbit {
   draw(ctx, cam) {
     const s = this.w.s, p = this.g.player;
     const R = 34 * s.area, S = cam.S;
-    const spr = SPR[s.block ? 'goldblade' : 'blade'].frames[0];
+    const spr = SPR[s.golden ? 'goldblade' : 'blade'].frames[0];
     ctx.globalAlpha = this.alpha;
     for (let i = 0; i < this.n; i++) {
       for (let ghost = 2; ghost >= 0; ghost--) {
@@ -751,7 +742,7 @@ export class Orbit {
   drawGlow(ctx, cam) {
     const s = this.w.s, p = this.g.player;
     const R = 34 * s.area;
-    const col = s.block ? '#feae34' : '#2ce8f5';
+    const col = s.golden ? '#feae34' : '#2ce8f5';
     ctx.globalAlpha = 0.45 * this.alpha;
     for (let i = 0; i < this.n; i++) {
       const a = this.ang + (i / this.n) * TAU;
@@ -759,7 +750,7 @@ export class Orbit {
       const sx = (wx - cam.x) * cam.S, sy = (wy - cam.y) * cam.S;
       const sz = 22 * cam.S;
       ctx.drawImage(glow(col), sx - sz / 2, sy - sz / 2, sz, sz);
-      if (i % 2 === 0) this.g.light(wx, wy, 30, s.block ? 'gold' : 'cyan', 0.6 * this.alpha);
+      if (i % 2 === 0) this.g.light(wx, wy, 30, s.golden ? 'gold' : 'cyan', 0.6 * this.alpha);
     }
     ctx.globalAlpha = 1;
   }

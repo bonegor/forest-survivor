@@ -8,8 +8,10 @@
 // than its weapon at level 8 on every stat it has (test/signature-weapons.test.js).
 
 import { EXPANSION_WEAPONS } from '../expansion/signatures.js';
+import { COPPER_WEAPONS } from './copper.js';
 
 export const MAX_WEAPON_LEVEL = 8;
+export const RANDOM_EVOLUTION = 'random_evolution';
 // How many weapons and how many relics a hero carries at most (Game.upgradePool, the HUD's slots).
 export const MAX_WEAPONS = 6, MAX_RELICS = 6;
 
@@ -40,6 +42,7 @@ export const BRAND_TIME = 3;
 
 export const WEAPONS = {
   ...EXPANSION_WEAPONS,
+  ...COPPER_WEAPONS,
   // ------------------------------- the Knight's signature, then shared weapons
   sword: {
     name: 'Longsword',
@@ -662,8 +665,8 @@ export const WEAPONS = {
     icon: 'i_aegis',
     kind: 'blades',
     evolved: true,
-    desc: 'Eternal guardian blades that shatter enemy missiles.',
-    base: { dmg: 24, cd: 0.1, amount: 6, area: 1.35, speed: 1.6, eternal: 1, kb: 1.6, tick: 0.35, block: 1 },
+    desc: 'Six eternal golden blades cut through enemies as they circle you.',
+    base: { dmg: 24, cd: 0.1, amount: 6, area: 1.35, speed: 1.6, eternal: 1, kb: 1.6, tick: 0.35, golden: 1 },
   },
   sanctuary: {
     name: 'Sanctuary',
