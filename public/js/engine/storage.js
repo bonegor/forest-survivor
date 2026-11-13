@@ -17,7 +17,7 @@
 import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
-import { DEFAULT_COMBAT_MUSIC, normalizeCombatMusic } from './combat-music.js';
+import { DEFAULT_COMBAT_MUSIC, normalizeMusicTracks } from './combat-music.js';
 import { MAX_CLAIMS, partitionRunSpoils, sealedFinds, settledSpoils, validRunId } from '../shared/spoils.js';
 
 export const DEBUG = !RELEASE && !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
@@ -603,9 +603,16 @@ export function loadSettings() {
   try {
     const raw = saveBox.read(SETTINGS);
     const s = raw ? JSON.parse(decodeURIComponent(raw)) : {};
-    return { ...DEFAULT_SETTINGS, ...s, combatMusic: normalizeCombatMusic(s?.combatMusic) };
+    // The role-based soundtrack is a one-time upgrade to the new defaults.
+    // Later choices, including the original songs, live in musicTracks.
+    const musicTracks = normalizeMusicTracks(s?.musicTracks);
+    const settings = { ...DEFAULT_SETTINGS, ...s, musicTracks, combatMusic: musicTracks.battle };
+    if (raw && s && typeof s === 'object' && !Array.isArray(s) && !Object.hasOwn(s, 'musicTracks')) {
+      try { saveSettings(settings); } catch { /* Keep the loaded settings if storage refuses the upgrade. */ }
+    }
+    return settings;
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, musicTracks: normalizeMusicTracks() };
   }
 }
 

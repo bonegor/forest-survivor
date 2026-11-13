@@ -1,6 +1,19 @@
 # Music credits
 
-## Active soundtrack: Thorns and Iron — 28 October 2026
+## Current soundtrack — 13 November 2026
+
+Menus, regular battles, bosses and crypts have independent selections. The defaults
+are **Style of Harp**, **Boss Battle #2**, **Epic Boss Battle**, and **Battle Theme A**,
+respectively. **A Small Fire Will Do** is the acoustic guitar menu alternative;
+**Boss Battle #6 Metal** and **Fairy Battles** are additional combat choices.
+All seven imports are CC0; their source links, authors, processing notes and included
+licence are in [curated/CREDITS.md](curated/CREDITS.md). Existing saved battle preferences
+remain regular-battle choices; boss, crypt and menu settings start with their own defaults.
+
+Choose each role under MUSIC in Options or Pause. The pre-run selector changes regular
+battle music. All selectors have ten-second previews; long lists have multiple pages.
+
+## Original soundtrack archive: Thorns and Iron — 28 October 2026
 
 Original instrumental dark-fantasy music composed for Forest Survivor. The combat score
 combines galloping, palm-muted metal guitars, driving bass and drums with minor-key melodies.
@@ -245,3 +258,15 @@ measured output details are in `combat/previews/manifest.json`.
 
 The existing title, results and ending music retains its separate credits.
 Earlier combat files remain archived with their licences above.
+
+## Curated CC0 music — 13 November 2026
+
+`curated/` adds **Boss Battle #2** and **Boss Battle #6** by nene,
+**Epic Boss Battle** by Juhani Junkala / SubspaceAudio, **Battle Theme A** by
+cynicmusic, and **Fairy Battles** by MintoDog. Peaceful menu alternatives are
+**Style of Harp** by Umplix and **A Small Fire Will Do** by Cal McEachern / Trex0n.
+All seven are CC0 1.0 Universal. Their short previews use the same licence.
+Source links, author credits, loop edits and encoding details are in
+[`curated/CREDITS.md`](curated/CREDITS.md), with the full licence in
+[`curated/LICENSE-CC0-1.0.txt`](curated/LICENSE-CC0-1.0.txt) and source/output
+hashes in the curated manifests. `tracks.json` remains the release playlist.

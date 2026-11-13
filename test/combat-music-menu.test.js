@@ -3,10 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.location = { protocol: 'http:', hostname: 'localhost', search: '' };
-const kept = new Map(), cookies = new Map();
+const kept = new Map(), cookies = new Map(), writes = [];
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
   getItem: (key) => kept.get(key) ?? null,
-  setItem: (key, value) => kept.set(key, String(value)),
+  setItem: (key, value) => { writes.push(key); kept.set(key, String(value)); },
   removeItem: (key) => kept.delete(key),
 } });
 await import('../tools/headless.mjs');
@@ -25,7 +25,7 @@ const { view } = await import('../public/js/engine/view.js');
 const { input } = await import('../public/js/engine/input.js');
 const { loadSettings, saveSettings } = await import('../public/js/engine/storage.js');
 const { defaultProfile } = await import('../public/js/shared/profile.js');
-const { COMBAT_MUSIC } = await import('../public/js/engine/combat-music.js');
+const { COMBAT_MUSIC, LEGACY_COMBAT_MUSIC, DEFAULT_COMBAT_MUSIC, DEFAULT_MUSIC } = await import('../public/js/engine/combat-music.js');
 
 const ctx = document.createElement('canvas').getContext('2d');
 const frame = ({ screen, W, H }) => { screen.draw(ctx, W, H, 1 / 60); input.endFrame(); };
@@ -66,15 +66,26 @@ function openPicker(harness) {
   click(harness, item(harness, 'combat_music'));
   idle(harness);
   assert.equal(harness.screen.musicPicker.open, true);
-  assert.deepEqual(harness.app.ui.items.map((entry) => entry.id), COMBAT_MUSIC.map((track) => 'music_' + track.id));
+  const picker = harness.screen.musicPicker, bounds = picker.menuBounds(harness.W, harness.H);
+  const ids = COMBAT_MUSIC.slice(picker.page * bounds.rows, (picker.page + 1) * bounds.rows).map((track) => 'music_' + track.id);
+  assert.deepEqual(harness.app.ui.items.filter((entry) => !['music_prev', 'music_next'].includes(entry.id)).map((entry) => entry.id), ids);
 }
 
-test('the actual trial dropdown defaults to Clockwork and persists the country track without starting a run', () => {
+function trackItem(harness, id) {
+  for (let attempts = 0; attempts < COMBAT_MUSIC.length; attempts++) {
+    const row = harness.app.ui.items.find((entry) => entry.id === 'music_' + id);
+    if (row) return row;
+    press(harness, 'PageDown');
+  }
+  assert.fail('track not reachable: ' + id);
+}
+
+test('the actual trial dropdown uses the battle default and persists the country track without starting a run', () => {
   const h = trial(), choice = { ...h.app.choice };
-  assert.equal(h.app.settings.combatMusic, 'clockwork-charge');
+  assert.equal(h.app.settings.combatMusic, DEFAULT_COMBAT_MUSIC);
   openPicker(h);
-  assert.equal(h.app.ui.focusId, 'music_clockwork-charge');
-  click(h, item(h, 'music_dusty-trail-stampede'));
+  assert.equal(h.app.ui.focusId, 'music_' + DEFAULT_COMBAT_MUSIC);
+  click(h, trackItem(h, 'dusty-trail-stampede'));
   assert.equal(h.screen.musicPicker.open, false);
   assert.equal(h.app.settings.combatMusic, 'dusty-trail-stampede');
   assert.equal(loadSettings().combatMusic, 'dusty-trail-stampede');
@@ -100,15 +111,14 @@ test('keyboard arrows browse music without changing settings, and Enter confirms
   h.app.ui.focusId = 'combat_music'; h.app.ui.focusSource = 'keys';
   press(h, 'Enter'); idle(h);
   assert.equal(h.screen.musicPicker.open, true);
-  assert.equal(h.app.ui.focusId, 'music_clockwork-charge');
-  press(h, 'ArrowDown');
-  assert.equal(h.app.ui.focusId, 'music_lantern-guard');
-  press(h, 'ArrowDown');
-  assert.equal(h.app.ui.focusId, 'music_spark-rush');
-  press(h, 'ArrowDown');
+  assert.equal(h.app.ui.focusId, 'music_' + DEFAULT_COMBAT_MUSIC);
+  for (const track of COMBAT_MUSIC.slice(1, COMBAT_MUSIC.findIndex((track) => track.id === 'dusty-trail-stampede') + 1)) {
+    press(h, 'ArrowDown');
+    assert.equal(h.app.ui.focusId, 'music_' + track.id);
+  }
   assert.equal(h.app.ui.focusId, 'music_dusty-trail-stampede');
-  assert.equal(h.app.settings.combatMusic, 'clockwork-charge');
-  assert.equal(loadSettings().combatMusic, 'clockwork-charge');
+  assert.equal(h.app.settings.combatMusic, DEFAULT_COMBAT_MUSIC);
+  assert.equal(loadSettings().combatMusic, DEFAULT_COMBAT_MUSIC);
   assert.deepEqual(h.app.choice, choice, 'browsing music cannot change trial, map or difficulty');
   assert.equal(h.app.started, 0);
   press(h, 'Enter');
@@ -130,7 +140,7 @@ test('Escape closes the music list without leaving the trial screen or changing 
   press(h, 'Escape');
   assert.equal(h.screen.musicPicker.open, false);
   assert.equal(h.app.ui.focusId, 'combat_music');
-  assert.equal(h.app.settings.combatMusic, 'clockwork-charge');
+  assert.equal(h.app.settings.combatMusic, DEFAULT_COMBAT_MUSIC);
   assert.deepEqual(h.app.choice, choice);
   assert.equal(h.app.started, 0);
   assert.deepEqual(h.app.went, []);
@@ -145,7 +155,7 @@ test('an outside click on BEGIN or BACK closes the list without clicking through
     assert.ok(point.x < bounds.x || point.x >= bounds.x + bounds.w || point.y < bounds.y || point.y >= bounds.y + bounds.h);
     click(h, rect);
     assert.equal(h.screen.musicPicker.open, false, target);
-    assert.equal(h.app.settings.combatMusic, 'clockwork-charge', target);
+    assert.equal(h.app.settings.combatMusic, DEFAULT_COMBAT_MUSIC, target);
     assert.deepEqual(h.app.choice, choice, target);
     assert.equal(h.app.started, 0, target);
     assert.deepEqual(h.app.went, [], target);
@@ -177,16 +187,59 @@ for (const [W, H] of [[480, 270], [427, 240], [293, 633]]) {
 
 test('saved combat music normalizes missing or stale settings and preserves each valid choice', () => {
   kept.clear(); cookies.clear();
-  assert.equal(loadSettings().combatMusic, 'clockwork-charge');
+  assert.equal(loadSettings().combatMusic, DEFAULT_COMBAT_MUSIC);
   for (const combatMusic of [undefined, null, '', 'old-soundtrack', '__proto__', { id: 'spark-rush' }]) {
     saveSettings({ music: .3, sfx: .6, combatMusic });
     const loaded = loadSettings();
-    assert.equal(loaded.combatMusic, 'clockwork-charge');
+    assert.equal(loaded.combatMusic, DEFAULT_COMBAT_MUSIC);
     assert.equal(loaded.music, .3);
     assert.equal(loaded.sfx, .6);
   }
   for (const track of COMBAT_MUSIC) {
-    saveSettings({ combatMusic: track.id });
+    saveSettings({ musicTracks: { battle: track.id } });
     assert.equal(loadSettings().combatMusic, track.id);
   }
+});
+
+test('legacy settings upgrade once to every new role default without changing unrelated preferences', () => {
+  for (const track of LEGACY_COMBAT_MUSIC) {
+    kept.clear(); cookies.clear();
+    const old = { combatMusic: track.id, music: .3, sfx: .6, weather: false, diff: 'hard', skins: { knight: 'original' } };
+    saveSettings(old);
+    const before = writes.length;
+    const upgraded = loadSettings();
+    assert.deepEqual(upgraded.musicTracks, DEFAULT_MUSIC, track.id);
+    assert.equal(upgraded.combatMusic, DEFAULT_MUSIC.battle);
+    for (const [key, value] of Object.entries(old)) if (key !== 'combatMusic') assert.deepEqual(upgraded[key], value);
+    assert.equal(writes.length, before + 1, 'the upgrade is saved once');
+    const persisted = JSON.parse(decodeURIComponent(kept.get('fs_settings')));
+    assert.deepEqual(persisted.musicTracks, DEFAULT_MUSIC);
+    assert.equal(persisted.combatMusic, DEFAULT_MUSIC.battle);
+    assert.deepEqual(loadSettings(), upgraded);
+    assert.equal(writes.length, before + 1, 'reloading an upgraded save does not write it again');
+  }
+});
+
+test('original songs chosen after the upgrade persist across reloads and override the stale battle alias', () => {
+  kept.clear(); cookies.clear();
+  saveSettings({ combatMusic: 'steel-tread', music: .3 });
+  const settings = loadSettings();
+  for (const track of LEGACY_COMBAT_MUSIC) {
+    settings.musicTracks = { menu: 'menu-guitar', battle: track.id, boss: 'spark-rush', crypt: 'neon-motor' };
+    settings.combatMusic = DEFAULT_COMBAT_MUSIC; // the role selection is authoritative
+    saveSettings(settings);
+    const before = writes.length;
+    const reloaded = loadSettings();
+    assert.deepEqual(reloaded.musicTracks, settings.musicTracks);
+    assert.equal(reloaded.combatMusic, track.id);
+    assert.equal(reloaded.music, .3);
+    assert.equal(writes.length, before, 'an explicit role selection is not migrated again');
+  }
+});
+
+test('fresh settings use the new defaults without an unnecessary migration write', () => {
+  kept.clear(); cookies.clear();
+  const before = writes.length;
+  assert.deepEqual(loadSettings().musicTracks, DEFAULT_MUSIC);
+  assert.equal(writes.length, before);
 });

@@ -11,7 +11,7 @@
 const ONCE = new Set(['victory', 'gameover']);
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
-import { COMBAT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, combatMusicPiece, isCombatMusicCue } from './combat-music.js';
+import { MUSIC_TRACKS, DEFAULT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, normalizeMusicTrack, normalizeMusicTracks, musicRoleForCue } from './combat-music.js';
 
 const MUSIC_DIR = 'audio/music/';
 // Recorded music is mastered loud; this keeps it level with the sound effects.
@@ -43,6 +43,8 @@ const A = {
   songName: null,
   requestedMusic: null, // the game's cue, retained while its selected recording is loading
   combatMusic: DEFAULT_COMBAT_MUSIC,
+  musicTracks: { ...DEFAULT_MUSIC },
+  menuOverride: false,
   files: null, // piece -> file name, from tracks.json
   tracks: new Map(), // piece -> its players and gain, created only when requested
   after: null, // the piece that starts once the jingle playing now has ended (playAfterJingle)
@@ -70,6 +72,7 @@ function menuOverride() {
     const pick = JSON.parse(localStorage.getItem('fs_menu_music') || 'null');
     if (!pick || !/^(found\/)?[\w.-]+\.(ogg|mp3|wav)$/.test(pick.file)) return;
     A.files.title = { file: 'menu/' + pick.file, gain: pick.gain > 0 ? pick.gain : 1 };
+    A.menuOverride = true;
   } catch {
     // no localStorage, or a stale value: the listed title piece plays
   }
@@ -810,18 +813,43 @@ export const limited = (name) => !!LIMITS[name];
 // ---------------------------------------------------------------- music --
 
 function resolveMusic(name) {
-  if (!isCombatMusicCue(name)) return name;
-  const selected = combatMusicPiece(A.combatMusic);
+  if (name === 'title' && A.menuOverride) return name;
+  const role = musicRoleForCue(name);
+  if (!role) return name;
+  const selected = MUSIC_TRACKS.find(track => track.id === A.musicTracks[role]).piece;
   // A missing or older manifest retains the original cue rather than silencing combat.
   return A.files?.[selected] ? selected : name;
 }
 
 // The settings/UI choose an ID; changing it in a menu does not start a combat recording.
 export function setCombatMusic(id) {
-  const selected = normalizeCombatMusic(id);
-  if (selected === A.combatMusic) return selected;
-  A.combatMusic = selected;
-  if (!A.preview && isCombatMusicCue(A.requestedMusic)) playMusic(A.requestedMusic);
+  return setMusicTrack('battle', id);
+}
+
+export function setMusicTracks(choices) {
+  const normalized = normalizeMusicTracks(choices);
+  for (const [role, id] of Object.entries(normalized)) setMusicTrack(role, id);
+  return { ...A.musicTracks };
+}
+
+export function setMusicTrack(role, id) {
+  if (!Object.hasOwn(DEFAULT_MUSIC, role)) return null;
+  const selected = normalizeMusicTrack(id, role);
+  if (selected === A.musicTracks[role]) return selected;
+  A.musicTracks[role] = selected;
+  if (role === 'battle') A.combatMusic = selected;
+  if (musicRoleForCue(A.requestedMusic) === role) {
+    if (!A.preview) playMusic(A.requestedMusic);
+    else if (A.ctx && A.files?.[MUSIC_TRACKS.find(track => track.id === selected).piece]) {
+      // Once confirmed, use the remaining preview time to buffer the real song.
+      // Merely hovering over candidates still downloads only their short excerpts.
+      const selectedTrack = track(MUSIC_TRACKS.find(track => track.id === selected).piece);
+      if (!selectedTrack.playing) for (const voice of selectedTrack.voices) {
+        voice.el.preload = 'auto';
+        voice.el.load();
+      }
+    }
+  }
   return selected;
 }
 
@@ -869,7 +897,13 @@ function cancelPreviewForMusic() {
 // These are small, pre-cut excerpts centred on the recording's midpoint. No
 // fifteen-minute file is fetched or sought just to browse a different song.
 export function previewCombatMusic(id) {
-  const selected = normalizeCombatMusic(id);
+  return previewMusicTrack(normalizeCombatMusic(id));
+}
+
+export function previewMusicTrack(id) {
+  const choice = MUSIC_TRACKS.find(entry => entry.id === id);
+  if (!choice) return null;
+  const selected = choice.id;
   if (A.preview?.id === selected) return combatMusicPreview();
   if (typeof Audio !== 'function' || typeof window === 'undefined') return null;
   if (!A.ctx) {
@@ -879,7 +913,6 @@ export function previewCombatMusic(id) {
   if (!A.ctx) return null;
   if (A.preview) finishPreview(A.preview, false);
   clearTimeout(A.cutTimer);
-  const choice = COMBAT_MUSIC.find((entry) => entry.id === selected);
   const el = new Audio(MUSIC_DIR + (choice.preview || `combat/previews/${selected}-10s.mp3`));
   el.preload = 'auto';
   el.loop = false;
@@ -931,6 +964,9 @@ export function combatMusicPreview() {
   return p ? { id: p.id, playing: p.playing, seconds: p.seconds, sourceStart: p.sourceStart } : null;
 }
 
+export const musicPreview = combatMusicPreview;
+export const stopMusicPreview = stopCombatMusicPreview;
+
 // A music file playing through the music bus, so volume and mute apply. `gain` fades the
 // whole piece in and out; each of its players has its own gain for the loop seams.
 function track(name) {
@@ -943,7 +979,7 @@ function track(name) {
   gain.gain.value = 0;
   gain.connect(A.backgroundMusicBus);
   const gapless = entry?.gapless === true;
-  t = { gain, level, gapless, once: !gapless && ONCE.has(name), voices: [], cur: 0, playing: false, fadeTimer: 0 };
+  t = { gain, level, gapless, once: !gapless && ONCE.has(name), voices: [], cur: 0, playing: false, fadeTimer: 0, pendingStart: null };
   for (let i = t.once || gapless ? 1 : 2; i > 0; i--) {
     const el = new Audio(MUSIC_DIR + file);
     el.preload = name.startsWith('combat-') ? 'metadata' : 'auto';
@@ -952,14 +988,35 @@ function track(name) {
     g.gain.value = level;
     A.ctx.createMediaElementSource(el).connect(g);
     g.connect(gain);
+    const voice = { el, g, retryTimer: 0, retries: 0, resumeAt: null };
+    el.addEventListener('playing', () => {
+      if (!t.playing) { el.pause(); return; }
+      if (t.pendingStart && t.voices[t.cur] === voice) finishPieceStart(name, t, t.pendingStart);
+    });
+    el.addEventListener('loadedmetadata', () => {
+      if (voice.resumeAt === null || !t.playing || t.voices[t.cur] !== voice) return;
+      el.currentTime = voice.resumeAt;
+      voice.resumeAt = null;
+    });
     // A player that fails (a dropped connection, say) fetches its file again, a few times at most.
-    let tries = 0;
     el.addEventListener('error', () => {
-      if (++tries > 3) return;
-      setTimeout(() => {
+      if (!t.playing || t.voices[t.cur] !== voice) return;
+      if (++voice.retries > 3) {
+        cancelRecovery(voice);
+        t.pendingStart = null;
+        t.playing = false;
+        return;
+      }
+      // Reloading resets media time. Retain the phrase, and abandon a queued retry
+      // when another song is selected instead of resurrecting an obsolete download.
+      voice.resumeAt ??= Number(el.currentTime) || 0;
+      clearTimeout(voice.retryTimer);
+      voice.retryTimer = setTimeout(() => {
+        voice.retryTimer = 0;
+        if (!t.playing || t.voices[t.cur] !== voice) return;
         el.load();
-        if (t.playing && t.voices[t.cur].el === el) el.play().catch(() => {});
-      }, 1000 * tries);
+        el.play().catch(() => {});
+      }, 1000 * voice.retries);
     });
     el.addEventListener('ended', () => {
       // A loop's player that ran out before turnLoops caught its last moments (its timer held back
@@ -980,7 +1037,7 @@ function track(name) {
         } else playMusic(next);
       }
     });
-    t.voices.push({ el, g });
+    t.voices.push(voice);
   }
   A.tracks.set(name, t);
   if (!A.loopTimer) A.loopTimer = setInterval(turnLoops, 20);
@@ -1043,6 +1100,8 @@ function fadeFiles(except, secs) {
   for (const [n, t] of A.tracks) {
     if (n === except || !t.playing) continue;
     t.playing = false;
+    t.pendingStart = null;
+    for (const voice of t.voices) cancelRecovery(voice);
     t.gain.gain.cancelScheduledValues(now);
     t.gain.gain.setValueAtTime(t.gain.gain.value, now);
     t.gain.gain.linearRampToValueAtTime(0, now + secs);
@@ -1051,6 +1110,24 @@ function fadeFiles(except, secs) {
       for (const v of t.voices) v.el.pause();
     }, secs * 1000 + 50);
   }
+}
+
+function cancelRecovery(voice) {
+  clearTimeout(voice.retryTimer);
+  voice.retryTimer = 0;
+  voice.resumeAt = null;
+}
+
+// Do not fade away the current recording while a newly chosen file is still
+// loading. Only an actual playing event (or fulfilled play request) commits it.
+function finishPieceStart(name, t, pending) {
+  if (!t.playing || t.pendingStart !== pending) return;
+  t.pendingStart = null;
+  const now = A.ctx.currentTime;
+  fadeFiles(name, pending.fade);
+  t.gain.gain.cancelScheduledValues(now);
+  t.gain.gain.setValueAtTime(pending.slam ? 1 : 0, now);
+  if (!pending.slam) t.gain.gain.linearRampToValueAtTime(1, now + pending.fade);
 }
 
 // Start a piece from its file; whatever played before fades out (over `fade` s; the new one comes
@@ -1062,20 +1139,41 @@ function startPiece(name, fade = 0.9, slam = false) {
     return;
   }
   const t = track(name), now = A.ctx.currentTime;
-  fadeFiles(name, fade);
+  // A superseded request may resolve much later. Cancel its intent now, while
+  // leaving the last audible song available until this replacement can play.
+  for (const other of A.tracks.values()) {
+    if (other === t || !other.pendingStart) continue;
+    other.pendingStart = null;
+    other.playing = false;
+    for (const voice of other.voices) { cancelRecovery(voice); voice.el.pause(); }
+  }
   clearTimeout(t.fadeTimer);
+  if (t.playing && !t.pendingStart) {
+    // The user returned to the still-audible song while its replacement loaded.
+    // Keep its current phrase and volume instead of restarting it at zero.
+    fadeFiles(name, fade);
+    return;
+  }
   t.gain.gain.cancelScheduledValues(now);
-  t.gain.gain.setValueAtTime(slam ? 1 : 0, now);
-  if (!slam) t.gain.gain.linearRampToValueAtTime(1, now + fade);
+  t.gain.gain.setValueAtTime(0, now);
   t.cur = 0;
   t.voices.forEach((v, i) => {
+    cancelRecovery(v);
+    v.retries = 0;
     v.g.gain.cancelScheduledValues(now);
     v.g.gain.setValueAtTime(i === 0 ? t.level : 0, now);
     if (i > 0) v.el.pause();
   });
+  if (t.voices[0].el.error) t.voices[0].el.load();
   t.voices[0].el.currentTime = 0;
-  t.voices[0].el.play().catch(() => {});
+  const pending = t.pendingStart = { fade, slam };
   t.playing = true;
+  t.voices[0].el.play().then(() => finishPieceStart(name, t, pending), () => {
+    if (t.pendingStart !== pending) return;
+    if (t.voices[0].retryTimer || t.voices[0].el.error) return;
+    t.pendingStart = null;
+    t.playing = false;
+  });
 }
 
 const piecePlaying = (name) => A.songName === name && A.tracks.get(name) && A.tracks.get(name).playing;
@@ -1099,7 +1197,7 @@ export function cutToMusic(name, gap = 0.4) {
   clearTimeout(A.cutTimer);
   A.requestedMusic = name;
   const piece = resolveMusic(name);
-  // A boss or a dungeon floor uses the same selected performance; keep its phrase moving.
+  // When roles share a selected recording, keep its phrase moving.
   if (piecePlaying(piece)) return;
   A.songName = piece;
   if (!A.ctx) return;
@@ -1137,6 +1235,7 @@ export function playAfterJingle(name) {
 // What the music is doing, for the developer panel and tests: the piece, and each file's players.
 export function musicState() {
   return { piece: A.songName, requestedPiece: A.requestedMusic, combatMusic: A.combatMusic, after: A.after, files: A.files, tracks: A.tracks,
+    musicTracks: { ...A.musicTracks },
     preview: combatMusicPreview(), backgroundGain: A.backgroundMusicBus?.gain.value ?? 1,
     duck: A.duck ? A.duck.gain.value : 1 };
 }

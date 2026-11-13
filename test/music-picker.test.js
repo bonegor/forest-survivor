@@ -84,6 +84,7 @@ test('gamepad navigation stays within the menu and A confirms the focused track'
   const p = pickerAt();
   p.ui.focusId = 'combat_music';
   p.press('Enter'); p.frame();
+  p.ui.focusId = 'music_' + COMBAT_MUSIC[0].id;
   input.pad.nav = 'up'; p.frame(); input.pad.nav = null;
   assert.equal(p.ui.focusId, 'music_' + COMBAT_MUSIC.at(-1).id, 'up wraps to the final option');
   input.pad.buttons = [true]; input.pad.prev = [false]; p.frame();
@@ -114,7 +115,27 @@ test('dropdown stays inside short landscape and narrow portrait viewports and op
     const bounds = p.picker.menuBounds(W, H);
     assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.w <= W && bounds.y + bounds.h <= H, `${W}x${H}`);
     assert.ok(bounds.y + bounds.h <= rect.y, 'opens above the control');
-    assert.equal(p.ui.items.length, COMBAT_MUSIC.length);
+    assert.ok(p.ui.items.filter((it) => COMBAT_MUSIC.some((track) => it.id === 'music_' + track.id)).length <= bounds.rows);
     assert.ok(p.ui.items.every((it) => it.x >= bounds.x && it.y >= bounds.y && it.x + it.w <= bounds.x + bounds.w && it.y + it.h <= bounds.y + bounds.h));
   }
+});
+
+test('every expanded dropdown choice is reachable across pages by arrows and touch paging', () => {
+  const p = pickerAt({ x: 126, y: 206, w: 228, h: 13 });
+  p.ui.focusId = 'combat_music'; p.press('Enter'); p.frame();
+  const seen = new Set();
+  for (let i = 0; i < COMBAT_MUSIC.length; i++) {
+    seen.add(p.ui.focusId);
+    assert.ok(p.ui.items.some((it) => it.id === p.ui.focusId), 'focused track stays on its visible page');
+    p.press('ArrowDown');
+  }
+  assert.equal(seen.size, COMBAT_MUSIC.length);
+  p.press('PageUp'); p.frame();
+  const next = p.ui.items.find((it) => it.id === 'music_next');
+  assert.ok(next && !next.disabled);
+  p.click(next); p.frame();
+  const last = p.ui.items.find((it) => it.id === 'music_' + COMBAT_MUSIC.at(-1).id);
+  assert.ok(last, 'last page is reachable by a tap');
+  p.click(last);
+  assert.deepEqual(p.choices, [COMBAT_MUSIC.at(-1).id]);
 });

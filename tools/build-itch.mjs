@@ -41,7 +41,8 @@ export function releaseFiles(pub = PUBLIC) {
   const previewFiles = existsSync(join(pub, previewManifest))
     ? [previewManifest, ...JSON.parse(readFileSync(join(pub, previewManifest), 'utf8')).tracks.map((e) => MUSIC + 'combat/previews/' + e.file)]
     : [];
-  const music = [...Object.values(tracks).map((e) => MUSIC + (typeof e === 'string' ? e : e.file)), ...previewFiles];
+  const curated = existsSync(join(pub, MUSIC, 'curated')) ? walk(pub, MUSIC + 'curated') : [];
+  const music = [...Object.values(tracks).map((e) => MUSIC + (typeof e === 'string' ? e : e.file)), ...previewFiles, ...curated];
   for (const f of music) if (!existsSync(join(pub, f))) throw new Error(`Music manifest lists ${f}, which isn't there`);
   const files = [
     'index.html',

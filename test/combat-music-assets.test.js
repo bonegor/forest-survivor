@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMBAT_MUSIC, DEFAULT_COMBAT_MUSIC } from '../public/js/engine/combat-music.js';
+import { LEGACY_COMBAT_MUSIC as COMBAT_MUSIC, MUSIC_TRACKS, DEFAULT_MUSIC, musicRoleForCue } from '../public/js/engine/combat-music.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const music = join(root, 'public/audio/music');
@@ -40,12 +40,11 @@ async function sha256(path) {
   return hash.digest('hex');
 }
 
-test('the eight music choices resolve to the published full-length playback files', () => {
+test('the eight original music choices retain their published full-length playback files', () => {
   assert.deepEqual(COMBAT_MUSIC.map((track) => track.id), selections.map(([id]) => id));
   assert.equal(new Set(approved.tracks.map((track) => track.id)).size, selections.length);
   assert.equal(approved.tracks.length, selections.length);
-  assert.equal(DEFAULT_COMBAT_MUSIC, 'clockwork-charge');
-  assert.equal(approved.default, DEFAULT_COMBAT_MUSIC);
+  assert.equal(approved.default, 'clockwork-charge');
   for (const [id, , file] of selections) {
     const choice = COMBAT_MUSIC.find((track) => track.id === id);
     const recording = approved.tracks.find((track) => track.id === id);
@@ -123,17 +122,42 @@ test('every music choice has a verified ten-second excerpt centred on its full r
   }
 });
 
-test('legacy combat cues use Clockwork while menu and ending cues keep their own music', () => {
-  const defaultTrack = COMBAT_MUSIC.find((track) => track.id === DEFAULT_COMBAT_MUSIC);
-  const combatCues = Object.keys(playback).filter((name) => ['forest', 'crypt', 'boss'].includes(name) || name.startsWith('dungeon-'));
-  assert.ok(combatCues.length >= 6);
-  for (const cue of combatCues) {
+test('fallback cues match the four role defaults while ending cues keep their own music', () => {
+  for (const cue of ['title', 'forest', 'boss', 'crypt', 'dungeon-crypt', 'dungeon-catacombs', 'dungeon-inferno']) {
+    const defaultTrack = MUSIC_TRACKS.find(track => track.id === DEFAULT_MUSIC[musicRoleForCue(cue)]);
     assert.equal(playback[cue].file, defaultTrack.file, cue);
     assert.equal(playback[cue].gapless, true, cue);
     assert.equal(playback[cue].gain, playback[defaultTrack.piece].gain, cue);
   }
-  assert.deepEqual(playback.title, { file: 'oath-at-the-gate.ogg', gapless: true });
   for (const cue of ['results', 'victory', 'gameover']) {
     assert.deepEqual(playback[cue], { file: 'embers-and-iron.ogg', gapless: true }, cue);
+  }
+});
+
+test('curated recordings and all seven preview clips ship with matching provenance and hashes', async () => {
+  const battle = json(join(music, 'curated/manifest.json')).tracks;
+  const menu = json(join(music, 'curated/menu-sources.json')).tracks;
+  const curated = MUSIC_TRACKS.filter(track => track.file.startsWith('curated/'));
+  assert.equal(curated.length, 7);
+  assert.equal(battle.length + menu.length, curated.length);
+  for (const choice of curated) {
+    const record = battle.find(track => track.id === choice.id) || menu.find(track => track.id === choice.id);
+    assert.equal(record.license, 'CC0-1.0');
+    assert.match(record.source_url || record.sourcePage, /^https:\/\/opengameart\.org\//);
+    const full = record.audio || record;
+    assert.ok(Math.abs(choice.seconds - (full.duration ?? full.seconds)) < 0.00003);
+    assert.ok(choice.seconds > 10 && choice.seconds < 240);
+    assert.equal(statSync(join(music, choice.file)).size, full.bytes);
+    assert.ok(full.bytes < 5 * 1024 * 1024, 'curated songs stay small enough for prompt loading');
+    assert.equal(await sha256(join(music, choice.file)), full.sha256);
+    assert.equal(readFileSync(join(music, choice.file)).subarray(0, 4).toString(), 'OggS');
+    assert.equal(playback[choice.piece].file, choice.file);
+    assert.equal(playback[choice.piece].gapless, true);
+    const preview = record.preview;
+    assert.equal(preview.duration ?? preview.seconds, 10);
+    assert.equal(preview.decodedFrames ?? preview.samples, 441000);
+    assert.ok(Math.abs(choice.previewStart - (record.previewStart ?? record.preview_start)) < 0.00003);
+    assert.equal(statSync(join(music, choice.preview)).size, preview.bytes);
+    assert.equal(await sha256(join(music, choice.preview)), preview.sha256);
   }
 });

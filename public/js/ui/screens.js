@@ -20,7 +20,7 @@ import { MenuDialog } from './menu-dialog.js';
 import { codexSummary, codexDescription, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
 import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
 import { needsPrologue } from '../game/prologue.js';
-import { normalizeCombatMusic } from '../engine/combat-music.js';
+import { normalizeCombatMusic, normalizeMusicTracks } from '../engine/combat-music.js';
 import { CombatMusicPicker } from './music-picker.js';
 import { MusicMenu } from './music-menu.js';
 
@@ -317,6 +317,7 @@ export class ModeScreen {
     this.t = 0;
     this.musicPicker = new CombatMusicPicker();
     app.settings.combatMusic = normalizeCombatMusic(app.settings.combatMusic);
+    app.settings.musicTracks = normalizeMusicTracks(app.settings.musicTracks, app.settings.combatMusic);
     setCombatMusic(app.settings.combatMusic);
     playAfterJingle('title'); // as on the hero screen (HeroScreen.enter)
     app.ui.lock(0.2);
@@ -525,7 +526,11 @@ export class ModeScreen {
     if (this.musicPicker.open) {
       if (musicWasOpen) { ui.lockT = musicLock;ui.focusId = musicFocus;ui.focusSource = musicSource; }
       ui.items.length = 0;
-      this.musicPicker.drawMenu(ctx, ui, W, H, app.settings.combatMusic, id => { app.settings.combatMusic = setCombatMusic(id);saveSettings(app.settings); });
+      this.musicPicker.drawMenu(ctx, ui, W, H, app.settings.combatMusic, id => {
+        app.settings.combatMusic = setCombatMusic(id);
+        app.settings.musicTracks.battle = app.settings.combatMusic;
+        saveSettings(app.settings);
+      });
       ui.end();return;
     }
     if (mode !== 'ranked' && ui.lockT <= 0) {
@@ -1141,7 +1146,7 @@ export class OptionsScreen {
     }
     if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
       this.dialog = new MenuDialog('Credits', [
-        'Choose combat music before BEGIN, in Options, or from the paused game. Browsing plays a ten-second preview from the middle. Full music and archived soundtrack credits: audio/music/CREDITS.md',
+        'Choose regular battle music before BEGIN. Options and Pause offer separate MENU, BATTLE, BOSS and CRYPT tracks, with ten-second previews. Music credits: audio/music/CREDITS.md',
         'Sound effects: 0 A.D. by Wildfire Games, Flare, UFO: Alien Invasion, MegaGlest, Ardentryst, HyperRogue (CC BY-SA); OpenClonk by K-Pone (CC BY); artisticdude, Ogrebane, Jan Schupke, Stendhal, Endless Sky, M.A.R.S. (CC0 / public domain)',
         'UI: Foozle Lucifer RPG UI and Kenney Fantasy UI Borders (CC0).',
         'Fonts: Pixtura12 by eishiya; Jacquard by Sarah Cadigan-Fried (SIL OFL).',

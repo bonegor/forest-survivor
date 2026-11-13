@@ -1,7 +1,8 @@
 # Fifteen-minute combat music
 
-The game offers these eight original pieces in its music selectors. Clockwork Charge is
-the default. The files are exact copies of their published listening
+The game retains these eight original pieces alongside the curated recordings in
+its BATTLE, BOSS and CRYPT selectors. New soundtrack defaults and menu alternatives
+are documented in `../curated/CREDITS.md`. These files are exact copies of their published listening
 versions; they have not been re-encoded. `manifest.json` records the selected
 version names, measured levels, source scores and SHA-256 hashes.
 

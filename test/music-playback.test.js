@@ -2,7 +2,8 @@
 // from the scheduler, as it is when an HTMLAudioElement reaches an exact Ogg loop seam.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COMBAT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic } from '../public/js/engine/combat-music.js';
+import { DEBUG_FLAG } from '../public/js/engine/debugflag.js';
+import { COMBAT_MUSIC, MUSIC_TRACKS, DEFAULT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, normalizeMusicTracks } from '../public/js/engine/combat-music.js';
 
 let instance = 0;
 
@@ -68,7 +69,7 @@ async function player(t, options = {}) {
   class Media {
     constructor(src) {
       this.src = src; this.loop = false; this.paused = true; this.ended = false;
-      this.duration = 132.631587; this.time = 0; this.seeks = []; this.plays = 0; this.pauses = 0;
+      this.duration = 132.631587; this.time = 0; this.seeks = []; this.plays = 0; this.pauses = 0; this.loads = 0;
       this.listeners = new Map();
       media.push(this);
     }
@@ -78,6 +79,10 @@ async function player(t, options = {}) {
     emit(name) { this.listeners.get(name)?.(); }
     play() {
       this.plays++; this.paused = false;
+      if (options.deferTrack && this.src.includes(options.deferTrack)) return new Promise((resolve, reject) => {
+        this.begin = () => { this.paused = false; this.emit('playing'); resolve(); };
+        this.fail = reject;
+      });
       if (this.src.includes('/previews/')) {
         if (options.previewPlay === 'reject') return Promise.reject(new Error('Blocked or missing preview'));
         if (options.previewPlay === 'deferred') return new Promise((resolve, reject) => {
@@ -85,10 +90,11 @@ async function player(t, options = {}) {
           this.fail = reject;
         });
       }
+      this.emit('playing');
       return Promise.resolve();
     }
     pause() { this.pauses++; this.paused = true; }
-    load() {}
+    load() { this.loads++; this.time = 0; this.emit('loadedmetadata'); }
   }
   const listeners = new Map();
   const doc = { hidden: false, addEventListener: (name, fn) => listeners.set(name, fn) };
@@ -103,7 +109,8 @@ async function player(t, options = {}) {
   replace('window', { AudioContext: Context });
   replace('document', doc);
   replace('Audio', Media);
-  replace('location', { search: '' });
+  replace('location', { search: options.search || '' });
+  if (options.menuOverride) replace('localStorage', { getItem: () => JSON.stringify(options.menuOverride) });
   const response = { ok: true, json: async () => manifest };
   let releaseManifest;
   const pending = options.deferManifest ? new Promise((resolve) => { releaseManifest = () => resolve(response); }) : Promise.resolve(response);
@@ -111,15 +118,88 @@ async function player(t, options = {}) {
   const api = await import(`../public/js/engine/audio.js?music-playback-test=${++instance}`);
   await new Promise(setImmediate); // settle manifest fetch before any playback request
   if (options.init !== false) api.initAudio();
+  // Existing playback/recovery scenarios deliberately use one legacy recording
+  // in all combat roles. Role-routing tests below opt into the new defaults.
+  if (!options.roleDefaults) api.setMusicTracks({ battle: 'clockwork-charge', boss: 'clockwork-charge', crypt: 'clockwork-charge' });
   return { api, tick, context, doc, media, wake: () => listeners.get('visibilitychange')?.(),
     finishManifest: async () => { releaseManifest?.(); await new Promise(setImmediate); } };
 }
 
 const combatManifest = Object.fromEntries(COMBAT_MUSIC.map((track) => [track.piece, { file: track.file, gapless: true }]));
+const fullManifest = Object.fromEntries(MUSIC_TRACKS.map(track => [track.piece, { file: track.file, gapless: true }]));
 
-test('combat music settings accept only the eight published choices and default to Clockwork Charge', () => {
-  assert.equal(COMBAT_MUSIC.length, 8);
-  assert.equal(DEFAULT_COMBAT_MUSIC, 'clockwork-charge');
+test('the debug menu audition still overrides the selected menu recording', async (t) => {
+  const { api } = await player(t, { manifest: fullManifest, roleDefaults: true,
+    search: '?' + DEBUG_FLAG, menuOverride: { file: 'found/arpegio.ogg', gain: .8 } });
+  api.playMusic('title');
+  assert.equal(api.musicState().piece, 'title');
+  assert.equal(api.musicState().tracks.get('title').voices[0].el.src, 'audio/music/menu/found/arpegio.ogg');
+  api.setMusicTrack('menu', 'menu-guitar');
+  assert.equal(api.musicState().piece, 'title');
+});
+
+test('a saved menu audition cannot override normal player music', async (t) => {
+  const { api } = await player(t, { manifest: fullManifest, roleDefaults: true,
+    menuOverride: { file: 'found/arpegio.ogg', gain: .8 } });
+  api.playMusic('title');
+  assert.equal(api.musicState().piece, 'music-menu-harp');
+});
+
+test('four soundtrack roles have distinct defaults and legacy preferences migrate only to regular battles', () => {
+  assert.equal(new Set(Object.values(DEFAULT_MUSIC)).size, 4);
+  assert.deepEqual(normalizeMusicTracks(), DEFAULT_MUSIC);
+  assert.deepEqual(normalizeMusicTracks(undefined, 'steel-tread'), { ...DEFAULT_MUSIC, battle: 'steel-tread' });
+  assert.deepEqual(normalizeMusicTracks({ menu: 'steel-tread', boss: 'fairy-battles', crypt: '__proto__' }),
+    { ...DEFAULT_MUSIC, boss: 'fairy-battles' });
+});
+
+test('menu, battle, boss and crypt cues play their own recordings and dungeon floors keep their phrase', async (t) => {
+  const { api, tick } = await player(t, { manifest: fullManifest, roleDefaults: true });
+  const expected = { title: 'music-menu-harp', forest: 'combat-boss-battle-2', boss: 'combat-epic-boss-battle', crypt: 'combat-battle-theme-a' };
+  let previous;
+  for (const [cue, piece] of Object.entries(expected)) {
+    if (cue === 'boss') { api.cutToMusic(cue, .4); tick(400); }
+    else api.playMusic(cue);
+    tick(1000);
+    assert.equal(api.musicState().piece, piece);
+    const current = api.musicState().tracks.get(piece).voices[0].el;
+    assert.equal(current.paused, false);
+    if (previous) assert.equal(previous.paused, true);
+    previous = current;
+  }
+  previous.currentTime = 42;
+  const plays = previous.plays;
+  for (const cue of ['dungeon-crypt', 'dungeon-catacombs', 'dungeon-inferno']) api.playMusic(cue);
+  assert.equal(previous.plays, plays);
+  assert.equal(previous.currentTime, 42);
+  api.playMusic('forest'); tick(1000);
+  assert.equal(api.musicState().piece, expected.forest);
+  assert.equal(previous.paused, true);
+});
+
+test('editing a different role does not interrupt playback; a confirmed menu preview applies its own choice', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: fullManifest, roleDefaults: true });
+  api.playMusic('title'); const harp = media[0]; harp.currentTime = 24;
+  api.setMusicTrack('boss', 'boss-battle-6');
+  assert.equal(media.length, 1);
+  assert.equal(harp.currentTime, 24);
+  api.previewMusicTrack('menu-guitar');
+  api.setMusicTrack('menu', 'menu-guitar');
+  await Promise.resolve();
+  assert.equal(api.musicState().piece, 'music-menu-harp');
+  assert.equal(media[2].paused, true);
+  api.stopMusicPreview(); tick(1000);
+  assert.equal(api.musicState().piece, 'music-menu-guitar');
+  assert.equal(harp.paused, true);
+  assert.equal(media[2].paused, false);
+  api.playMusic('boss'); tick(1000);
+  assert.equal(api.musicState().piece, 'combat-boss-battle-6');
+  assert.equal(api.musicState().musicTracks.battle, DEFAULT_MUSIC.battle);
+});
+
+test('combat music settings accept the expanded published choices and default to symphonic metal', () => {
+  assert.equal(COMBAT_MUSIC.length, 13);
+  assert.equal(DEFAULT_COMBAT_MUSIC, 'boss-battle-2');
   for (const track of COMBAT_MUSIC) assert.equal(normalizeCombatMusic(track.id), track.id);
   for (const stale of [undefined, null, '', 'old-song', '__proto__', { id: 'spark-rush' }]) {
     assert.equal(normalizeCombatMusic(stale), DEFAULT_COMBAT_MUSIC);
@@ -131,7 +211,7 @@ test('a selected long recording streams alone and continues through bosses and d
   assert.equal(media.length, 0, 'the catalog does not preload the long recordings');
   api.playMusic('forest');
   const state = api.musicState(), track = state.tracks.get('combat-clockwork-charge');
-  assert.equal(state.combatMusic, DEFAULT_COMBAT_MUSIC);
+  assert.equal(state.combatMusic, 'clockwork-charge');
   assert.equal(state.piece, 'combat-clockwork-charge');
   assert.equal(track.voices.length, 1);
   const el = track.voices[0].el;
@@ -176,7 +256,7 @@ test('choosing music in a menu leaves the menu playing, and changing an active c
   assert.equal(lantern.voices[0].el.paused, true);
   assert.equal(spark.voices[0].el.paused, false);
   assert.equal(api.setCombatMusic('stale-choice'), DEFAULT_COMBAT_MUSIC);
-  assert.equal(api.musicState().piece, 'combat-clockwork-charge');
+  assert.equal(api.musicState().piece, 'combat-boss-battle-2');
   api.playMusic('results');
   assert.equal(api.musicState().piece, 'results');
 });
@@ -184,6 +264,8 @@ test('choosing music in a menu leaves the menu playing, and changing an active c
 test('the country selection streams its own file and survives combat cue changes', async (t) => {
   const { api, tick, media } = await player(t, { manifest: combatManifest });
   api.setCombatMusic('dusty-trail-stampede');
+  api.setMusicTrack('boss', 'dusty-trail-stampede');
+  api.setMusicTrack('crypt', 'dusty-trail-stampede');
   api.playMusic('forest');
   const state = api.musicState(), track = state.tracks.get('combat-dusty-trail-stampede');
   assert.equal(state.combatMusic, 'dusty-trail-stampede');
@@ -202,6 +284,120 @@ test('the country selection streams its own file and survives combat cue changes
   assert.equal(track.playing, true);
 });
 
+test('changing songs keeps the current recording audible until the replacement actually plays', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest, deferTrack: 'steel-tread-v2' });
+  api.playMusic('forest');
+  const old = api.musicState().tracks.get('combat-clockwork-charge');
+  api.setCombatMusic('steel-tread');
+  const replacement = api.musicState().tracks.get('combat-steel-tread');
+  tick(4000);
+  assert.equal(old.playing, true, 'a slow download must not fade away the old recording');
+  assert.equal(media[0].paused, false);
+  assert.equal(replacement.gain.gain.value, 0);
+  media[1].begin(); await Promise.resolve();
+  assert.equal(old.playing, false, 'the crossfade starts only once the new file plays');
+  assert.equal(replacement.playing, true);
+  tick(950);
+  assert.equal(media[0].paused, true);
+  assert.equal(media[1].paused, false);
+});
+
+test('late readiness from a superseded or stopped song cannot interrupt the current choice', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest, deferTrack: 'steel-tread-v2' });
+  api.playMusic('forest');
+  api.setCombatMusic('steel-tread');
+  const abandoned = media[1];
+  api.setCombatMusic('neon-motor');
+  tick(1000);
+  abandoned.begin(); await Promise.resolve();
+  assert.equal(api.musicState().piece, 'combat-neon-motor');
+  assert.equal(abandoned.paused, true);
+  assert.equal(media[2].paused, false);
+  api.setCombatMusic('steel-tread');
+  api.stopMusic();
+  abandoned.begin(); await Promise.resolve();
+  tick(1000);
+  assert.ok(media.every((el) => el.paused));
+});
+
+test('returning to the audible song while its replacement loads preserves its position and volume', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest, deferTrack: 'steel-tread-v2' });
+  api.playMusic('forest');
+  const original = media[0], track = api.musicState().tracks.get('combat-clockwork-charge');
+  original.currentTime = 143;
+  const gainEvents = track.gain.gain.events.length;
+  api.setCombatMusic('steel-tread'); tick(500);
+  api.setCombatMusic('clockwork-charge');
+  assert.equal(original.currentTime, 143);
+  assert.equal(original.plays, 1);
+  assert.equal(track.gain.gain.events.length, gainEvents, 'returning must not mute the song');
+  media[1].begin(); await Promise.resolve(); tick(1000);
+  assert.equal(media[1].paused, true);
+  assert.equal(original.paused, false);
+  assert.equal(api.musicState().piece, 'combat-clockwork-charge');
+});
+
+test('a failed replacement leaves the previous song playing and can be requested again', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest, deferTrack: 'steel-tread-v2' });
+  api.playMusic('forest');
+  api.setCombatMusic('steel-tread');
+  media[1].fail(new Error('Playback blocked')); await Promise.resolve();
+  tick(2000);
+  assert.equal(media[0].paused, false);
+  api.playMusic('forest');
+  assert.equal(media[1].plays, 2);
+  media[1].begin(); await Promise.resolve();
+  tick(950);
+  assert.equal(media[0].paused, true);
+});
+
+test('network error recovery resumes the current phrase instead of replaying the opening', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  api.setCombatMusic('steel-tread'); api.playMusic('forest');
+  const el = media[0]; el.currentTime = 127.5;
+  el.emit('error');
+  tick(999);
+  assert.equal(el.loads, 0);
+  tick(1);
+  assert.equal(el.loads, 1);
+  assert.equal(el.currentTime, 127.5, 'reload must restore position after metadata');
+  assert.equal(el.plays, 2);
+  el.emit('error'); tick(2000);
+  el.emit('error'); tick(3000);
+  el.emit('error'); tick(4000);
+  assert.equal(el.loads, 3, 'a broken recording has bounded retries');
+});
+
+test('changing or stopping a song cancels its pending network retry and ignores late errors', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest });
+  api.playMusic('forest'); const old = media[0];
+  old.currentTime = 60; old.emit('error');
+  api.setCombatMusic('steel-tread');
+  tick(1500); old.emit('error'); tick(5000);
+  assert.equal(old.loads, 0);
+  assert.equal(old.paused, true);
+  const current = media[1]; current.emit('error');
+  api.stopMusic(); tick(5000);
+  assert.equal(current.loads, 0);
+  assert.equal(current.paused, true);
+});
+
+test('exhausted loading retries leave the old song audible and permit a later combat cue to retry', async (t) => {
+  const { api, tick, media } = await player(t, { manifest: combatManifest, deferTrack: 'steel-tread-v2' });
+  api.playMusic('forest'); api.setCombatMusic('steel-tread');
+  const failed = media[1], track = api.musicState().tracks.get('combat-steel-tread');
+  for (let attempt = 1; attempt <= 4; attempt++) { failed.emit('error'); tick(attempt * 1000); }
+  assert.equal(failed.loads, 3);
+  assert.equal(track.playing, false);
+  assert.equal(track.pendingStart, null);
+  assert.equal(media[0].paused, false);
+  api.playMusic('forest');
+  assert.equal(failed.plays, 5, 'a later cue makes a fresh attempt rather than accepting a stuck flag');
+  failed.begin(); await Promise.resolve(); tick(950);
+  assert.equal(failed.paused, false);
+  assert.equal(media[0].paused, true);
+});
+
 test('a choice made before audio unlock and a late manifest starts only the chosen combat file', async (t) => {
   const { api, media, finishManifest } = await player(t, { manifest: combatManifest, deferManifest: true, init: false });
   api.setCombatMusic('spark-rush');
@@ -218,7 +414,7 @@ test('a choice made before audio unlock and a late manifest starts only the chos
 
 test('a late manifest recovers the selected music for a waiting run', async (t) => {
   const { api, media, finishManifest } = await player(t, { manifest: combatManifest, deferManifest: true });
-  api.setCombatMusic('lantern-guard');
+  api.setMusicTrack('crypt', 'lantern-guard');
   api.playMusic('dungeon-crypt');
   assert.equal(media.length, 0);
   await finishManifest();
@@ -391,7 +587,7 @@ test('a preview plays only its short middle excerpt for ten seconds and restores
   assert.equal(title.plays, 1);
 });
 
-test('confirmed combat choices wait for the preview to finish, then start the selected full recording', async (t) => {
+test('confirmed combat choices buffer silently during the preview, then start the selected full recording', async (t) => {
   const { api, tick, media } = await player(t, { manifest: combatManifest });
   api.playMusic('forest');
   const old = media[0]; old.currentTime = 283;
@@ -400,7 +596,10 @@ test('confirmed combat choices wait for the preview to finish, then start the se
   await Promise.resolve();
   assert.equal(api.musicState().piece, 'combat-clockwork-charge');
   assert.equal(api.musicState().combatMusic, 'bootheel-loop');
-  assert.equal(media.length, 2, 'there is no full-recording burst before the excerpt');
+  assert.equal(media.length, 3, 'confirmation starts buffering the selected full recording');
+  assert.equal(media[2].preload, 'auto');
+  assert.equal(media[2].paused, true, 'the full recording stays silent during the excerpt');
+  assert.equal(media[2].plays, 0);
   tick(10000);
   assert.equal(api.musicState().piece, 'combat-bootheel-loop');
   assert.equal(media.length, 3);
