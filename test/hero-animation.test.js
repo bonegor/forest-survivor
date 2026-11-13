@@ -40,7 +40,7 @@ test('gait follows ground covered at gentle, normal and boosted speeds, in every
   }
 });
 
-test('a wall stops the visual gait without changing steering, facing or attack receipts', () => run('knight', (g, p, w, spr) => {
+test('a wall stops the visual gait and field weapon receipts cannot interrupt idle', () => run('knight', (g, p, w, spr) => {
   const startX = p.x, startY = p.y;
   const stepClock = p.stepT;
   g.world.collide = actor => { actor.x = startX; actor.y = startY; };
@@ -59,7 +59,7 @@ test('a wall stops the visual gait without changing steering, facing or attack r
   assert.ok([...resting].every(i => spr.idle.includes(i)), 'the blocked hero breathes at rest');
   p.heroAttack = { at: g.clock, ang: Math.PI, weapon: w };
   g.placePlayer(g.cam);
-  assert.equal(p._rect[4], spr.frames[spr.attack[spr.attackRelease]], 'a successful strike keeps its real release pose');
+  assert.equal(p._rect[4], idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate)), 'field attack receipts cannot replace blocked idle');
   assert.equal(p._rect[5], true);
 }));
 
@@ -119,44 +119,46 @@ for (const id of Object.keys(HEROES)) test(`${id}: an empty clearing plays quiet
   }
 }));
 
-test('the attack remains visible when the sword kills the final nearby foe', () => run('knight', (g, p, w, spr) => {
+test('the hero remains idle while the sword kills the final nearby foe', () => run('knight', (g, p, w, spr) => {
   const e = g.spawnEnemy('skeleton', p.x + 24, p.y, { instant: true, always: true });
   e.hp = 1; g.grid.rebuild(g.enemies, p.x, p.y);
   w.cd = 0; w.update(0); g.placePlayer(g.cam);
   assert.ok(e.dead);
-  assert.equal(p._rect[4], spr.frames[spr.attack[spr.attackRelease]]);
+  assert.ok(spr.idle.includes(spr.frames.indexOf(p._rect[4])));
 }));
 
-for (const id of Object.keys(HEROES)) test(`${id}: successful field attacks animate, then recover, in both directions`, () => {
-  for (const face of [-1, 1]) for (const moving of [false, true]) run(id, (g, p, w) => {
-    const spr = SPR[p.hero.sprite];
+for (const id of Object.keys(HEROES)) test(`${id}: field combat stays idle/walking with a full upgraded loadout`, () => {
+  for (const face of [-1, 1]) for (const moving of [false, true]) run(id, (g, p, w, spr) => {
     p.face = face; p.aim = face < 0 ? Math.PI : 0;
     input.bot = { x: moving ? face : 0, y: 0 };
-    const e = g.spawnEnemy('skeleton', p.x + face * 24, p.y, { instant: true, always: true, hpMul: 1000 });
-    e.speed = 0;
-    let fired = false, attacked = false, recovered = false;
-    for (let i = 0; i < 180; i++) {
-      e.x = p.x + face * 24; e.y = p.y;
-      g.update(1 / 60);
-      g.placePlayer(g.cam);
-      const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
-      const pose = heroAttackPose(g, spr, step);
-      const expected = pose?.frame ?? (p.walking ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate)));
-      assert.equal(p._rect[4], expected, 'production renderer selects the attack or current locomotion phase');
-      assert.equal(p._rect[5], face < 0);
-      if (pose) {
-        attacked = true;
-        const frames = p.walking && spr.attackWalk ? spr.attackWalk.flat() : spr.attack;
-        assert.ok(frames.includes(spr.frames.indexOf(pose.frame)), 'the signature uses an authored attack');
-      } else if (attacked) recovered = true;
-      if (!p.heroAttack) continue;
-      fired = true;
-      w.cd = 1000; w.queue = 0; // one real release followed by its complete recovery
-      assert.equal(p.face, face, 'animation never changes facing');
+    g.world.collide = () => {};
+    for (const weapon of ['axe', 'blades', 'aura', 'lightning', 'glaive']) {
+      // Six weapons, including the signature, reproduce the reported late-run case.
+      if (p.weapons.length < 6) g.addWeapon(weapon);
     }
-    assert.ok(fired, 'the signature weapon actually fired');
-    assert.ok(attacked, 'the attack is visible');
-    assert.ok(recovered, 'the hero returns to idle or walk after the attack');
+    for (const weapon of p.weapons) {
+      while (weapon.level < 8) weapon.levelUp();
+      weapon.cd = 0;
+    }
+    p.cooldown = .35;
+    const e = g.spawnEnemy('skeleton', p.x + face * 24, p.y, { instant: true, always: true, hpMul: 10000 });
+    e.speed = 0;
+    let fired = false;
+    const seen = new Set();
+    for (let i = 0; i < 180; i++) {
+      if (i === 90 && w.def.evo) { w.evolve(); w.cd = 0; }
+      e.x = p.x + face * 24; e.y = p.y;
+      g.update(1 / 60); g.placePlayer(g.cam);
+      const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
+      const expected = p.walking ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate));
+      assert.equal(heroAttackPose(g, spr, step), null, 'no field attack can select a hero pose');
+      assert.equal(p._rect[4], expected, `${id}: all field weapons leave locomotion intact`);
+      assert.equal(p._rect[5], face < 0);
+      seen.add(spr.frames.indexOf(p._rect[4]));
+      fired ||= !!p.heroAttack;
+    }
+    assert.ok(fired, 'the signature really fired during combat');
+    assert.ok(seen.size >= 3, 'idle/walk remains animated through combat');
   });
 });
 
@@ -207,7 +209,7 @@ test('rear shots and failed casts never invent a forward attack or turn the hero
   });
 });
 
-test('secondary weapons cannot trigger the signature pose; evolved signature weapons can', () => run('mage', (g, p, w, spr) => {
+test('secondary and evolved signature weapons cannot trigger field attack poses', () => run('mage', (g, p, w, spr) => {
   g.spawnEnemy('skeleton', p.x + 100, p.y, { instant: true, always: true, hpMul: 1000 });
   g.grid.rebuild(g.enemies, p.x, p.y);
   g.addWeapon('sword');
@@ -216,7 +218,7 @@ test('secondary weapons cannot trigger the signature pose; evolved signature wea
   assert.equal(p.heroAttack, null);
   w.evolve(); w.cd = 0; w.update(.01);
   assert.equal(p.heroAttack.weapon, w);
-  assert.equal(heroAttackPose(g, spr, 0).frame, spr.frames[spr.attack[spr.attackRelease]], 'the evolved signature shows its release at the real firing time');
+  assert.equal(heroAttackPose(g, spr, 0), null, 'an evolved signature still leaves idle/walk intact');
 }));
 
 for (const id of Object.keys(HEROES)) test(`${id}: crypt strikes animate only after a manual attack, then return to idle`, () => {
@@ -226,6 +228,14 @@ for (const id of Object.keys(HEROES)) test(`${id}: crypt strikes animate only af
     p.face = face; p.aim = face < 0 ? Math.PI : 0;
     w.cd = 0;
     assert.equal(heroAttackPose(g, spr, 0), null, 'waiting ready does not predict a strike');
+    const resting = new Set();
+    for (let i = 0; i < 150; i++) {
+      p.update(1 / 60); g.cryptTime += 1 / 60; g.placePlayer(g.cam);
+      const frame = spr.frames.indexOf(p._rect[4]);
+      assert.ok(spr.idle.includes(frame), 'waiting in a crypt always plays idle');
+      resting.add(frame);
+    }
+    assert.ok(resting.size >= 3, 'crypt idle visibly advances before any manual strike');
     assert.equal(g.strike(), true);
     if (clip) {
       for (let k = clip.from; k < spr.attack.length; k++) {

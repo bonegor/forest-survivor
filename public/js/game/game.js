@@ -1500,8 +1500,12 @@ export class Game {
   // walked. The sprite plays its attack, and the blade lands or the shot leaves on its blow
   // frame (strikeClip).
   strike() {
+    if (!this.caveStrike || this.state !== 'play') return false;
     const p = this.player, w = this.mainWeapon();
-    if (!w || w.cd > 0 || p.dead) return false;
+    // Haste can ready the cooldown before the authored hit frame. Finish that
+    // pending wind-up before accepting another press/hold: otherwise it keeps
+    // replacing handAt and strikeAt, restarting the pose without ever hitting.
+    if (!w || w.cd > 0 || w.handAt != null || p.dead) return false;
     const { target, angle } = this.strikeAim(w);
     const delay = strikeClip(SPR[p.hero.sprite])?.delay ?? 0;
     p.strike(angle, this.clock);
@@ -1683,6 +1687,10 @@ export class Game {
 
   clearTransient() {
     const p = this.player;
+    // A manual strike belongs to the world where it was pressed. Entering or
+    // leaving a crypt must never replay an old gesture or a buffered press.
+    p.strikeAt = null;
+    p.strikeBuf = 0;
     // An ultimate over the world he leaves ends with it, its receipt next frame (ultReceipt).
     if (p.ult && WORLD_ULTS.has(p.ult.type)) p.ult = null;
     // Leech Chains' (Blood Tether's) hold on foes in the world he leaves: their effects go below,
@@ -3041,9 +3049,8 @@ export class Game {
     const frozen = !!p.held && p.held.kind === 'frost', still = frozen || !!p.slide;
     // Walk cycles step a little faster so planted feet slide less against the ground.
     const step = Math.floor(p.anim * (spr.walk ? 1.4 : 1) * spr.motionRate);
-    // Walking remains the base. Authored moving attacks keep the gait underneath the
-    // arms/equipment. Imported art without that clip keeps walking with its world-space
-    // weapon effect; stationary blows can use the full attack pose.
+    // Standing always breathes; travelling always walks or floats. Only a manual
+    // crypt strike can overlay attack arms/equipment on that shared locomotion.
     let fr = still ? idleFrame(spr, 0) : moving ? walkFrame(spr, step) : idleFrame(spr, Math.floor(p.idleAnim * spr.idleRate));
     const attackPose = still ? null : heroAttackPose(this, spr, step);
     if (attackPose) fr = attackPose.frame;

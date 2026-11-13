@@ -83,7 +83,7 @@ test('the selected Ranger shoots without breaking her running gait in either dir
         if (g.projectiles.length > count && !released) {
           released = true;
           assert.ok(Math.abs(g.clock - 0.35) <= 1 / 60 + 1e-9, 'sprite must not delay bow cooldown');
-          assert.ok(spr.attackWalk[spr.attackRelease].includes(spr.frames.indexOf(p._rect[4])), `${skin}: the bow releases over the current gait phase`);
+          assert.ok(spr.walk.includes(spr.frames.indexOf(p._rect[4])), `${skin}: automatic bow releases preserve the ordinary walk`);
           assert.ok(Math.cos(g.projectiles[0].ang) * face > 0, 'projectile preserves facing');
         }
       }
