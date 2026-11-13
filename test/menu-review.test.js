@@ -29,16 +29,40 @@ test('Codex: browsing never changes the weapon pool; Enter on an open weapon swi
   assert.deepEqual(went,['title',{ focus: 'codex' }]);
 });
 
-test('Armory inspection does not buy; affordable purchase is explicit and single', async () => {
-  const a = app();a.store.profile.gold=100;let calls=0;a.store.buy=async()=>{calls++;return true;};
-  const s=new ArmoryScreen();s.enter(a);draw(s,a);activate(s,a,'u_might');
-  assert.ok(s.dialog);assert.equal(calls,0);draw(s,a);activate(s,a,'detail_buy');
-  await Promise.resolve();assert.equal(calls,1);
+test('Armory buys one rank with one Enter, keeps focus, and ignores repeats while saving', async () => {
+  const a = app();a.store.profile.gold = 100;let calls = 0, complete;
+  a.store.buy = () => { calls++;return new Promise(resolve => { complete = resolve; }); };
+  const s = new ArmoryScreen();s.enter(a);draw(s,a);
+  a.ui.focusId = 'u_might';draw(s,a);assert.equal(calls,0, 'browsing does not buy');
+  const scroll = s.scroll;
+  activate(s,a,'u_might');await Promise.resolve();
+  assert.equal(calls,1);assert.equal(s.dialog,undefined);assert.equal(a.ui.focusId,'u_might');assert.equal(s.scroll,scroll);
+  activate(s,a,'u_might');await Promise.resolve();assert.equal(calls,1,'no duplicate purchase during save');
+  complete(true);await new Promise(resolve => setImmediate(resolve));
+  assert.equal(s.busy,false);assert.equal(a.ui.focusId,'u_might');assert.equal(s.scroll,scroll);
 });
 
-test('unaffordable upgrades remain inspectable but cannot be purchased', () => {
-  const a=app(),s=new ArmoryScreen();s.enter(a);draw(s,a);activate(s,a,'u_echo');draw(s,a);
-  assert.ok(a.ui.items.find(i=>i.id==='detail_buy').disabled);
+test('unaffordable upgrades show details without opening a modal or buying', async () => {
+  const a = app();let calls = 0;a.store.buy = async () => { calls++;return true; };
+  const s = new ArmoryScreen();s.enter(a);draw(s,a);activate(s,a,'u_echo');draw(s,a);
+  await Promise.resolve();assert.equal(calls,0);assert.equal(s.selected,'echo');assert.equal(s.dialog,undefined);
+  assert.ok(a.ui.items.find(i => i.id === 'buy_upgrade').disabled);
+});
+
+test('Armory arrows follow the upgrade list and never jump diagonally at its edges', () => {
+  const a = app(), s = new ArmoryScreen();s.enter(a);draw(s,a);
+  const press = key => { input.justDown.add(key);draw(s,a);draw(s,a); };
+  press('ArrowUp');assert.equal(a.ui.focusId,'u_might');
+  press('ArrowLeft');assert.equal(a.ui.focusId,'u_might');
+  press('ArrowRight');assert.equal(a.ui.focusId,'u_might','unaffordable buy action does not steal focus');
+  press('ArrowDown');assert.equal(a.ui.focusId,'u_haste');
+  press('ArrowDown');assert.equal(a.ui.focusId,'u_reach');
+  press('ArrowUp');assert.equal(a.ui.focusId,'u_haste');
+  a.store.profile.gold = 1000;draw(s,a);press('ArrowRight');assert.equal(a.ui.focusId,'buy_upgrade');
+  press('ArrowDown');assert.equal(a.ui.focusId,'buy_upgrade');
+  press('ArrowLeft');assert.equal(a.ui.focusId,'u_haste');
+  a.ui.focusId = 'u_banish';draw(s,a);press('ArrowDown');assert.equal(a.ui.focusId,'back','footer remains reachable from the end of the list');
+  press('ArrowUp');assert.equal(a.ui.focusId,'u_banish');
 });
 
 test('low effects preset applies the existing controls together and can restore standard effects', () => {
@@ -65,6 +89,7 @@ test('mouse hover does not change mode or saved difficulty', () => {
   const p=openEverything(defaultProfile());p.heroes=[...HERO_ORDER];p.feats.necromancer=3;
   const a=app(p),s=new ModeScreen();s.enter(a);draw(s,a);
   for(const id of ['m_dungeon','d_hard']) {
+    if(id.startsWith('d_')) { s.step='difficulty';draw(s,a); }
     const it=a.ui.items.find(i=>i.id===id);input.mouse.x=it.x+3;input.mouse.y=it.y+3;input.mouse.moved=true;draw(s,a);
     draw(s,a);assert.equal(a.choice.mode,'s15');assert.equal(a.choice.diff,'easy');
   }

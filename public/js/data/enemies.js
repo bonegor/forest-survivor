@@ -67,7 +67,7 @@ export const ENEMIES = {
   // Bosses.
   // Twice the 30 he walked at (the owner's, 21 October 2026: "Bone King needs to be faster").
   boneking: {
-    name: 'King Ossarian', title: 'The Bone King', sprite: 'boneking', hp: 4000, spd: 60, dmg: 16, r: 12, xp: 120, ai: 'boss',
+    name: 'Ossarian', title: 'The Bone King', sprite: 'boneking', hp: 4000, spd: 60, dmg: 16, r: 12, xp: 120, ai: 'boss',
     mass: 40, anim: 3, death: 'bones', kbRes: 0.97, boss: true, color: '#feae34',
   },
   // The owner's (27 October 2026): "the butcher as big as boneking". The King stands 57 px tall as
@@ -183,7 +183,6 @@ for (const [id, kind, own] of MAP_KINDS) {
 // Champion name generator (Diablo-style uniques).
 export const CHAMPION_PREFIX = ['Grim', 'Rot', 'Blood', 'Bone', 'Gore', 'Ash', 'Dread', 'Plague', 'Night', 'Skull', 'Doom', 'Venom', 'Hate', 'Gloom', 'Black'];
 export const CHAMPION_SUFFIX = ['fang', 'maw', 'claw', 'hide', 'rot', 'gut', 'thorn', 'bane', 'spine', 'eye', 'grin', 'wing', 'scar'];
-export const CHAMPION_TITLE = ['the Cursed', 'the Hungry', 'the Unclean', 'the Wretched', 'the Vile', 'the Mad', 'the Ravenous', 'the Defiler', 'the Hollow'];
 export const CHAMPION_MODS = [
   { id: 'swift', name: 'Swift', color: '#2ce8f5' },
   { id: 'brutal', name: 'Brutal', color: '#e43b44' },

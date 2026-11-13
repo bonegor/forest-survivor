@@ -7,21 +7,14 @@ import { input, padKey } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
-import { RANKS, heroUnlockTime } from '../shared/profile.js';
-import { NIGHTMARE } from '../data/difficulty.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
 import { DEATH, FLASH_SOFT } from './game.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { WARN, RECORD_GRACE } from './events.js';
-import { RANKED_BOSS_EVERY } from '../data/waves.js';
-import { HEROES } from '../data/heroes.js';
 import { THIEF } from './enemies.js';
 import { faceAttack } from './facing.js';
-
-// Beside the clock on a Nightmare (three times the monsters; never Ranked).
-const NIGHTMARE_TAG = NIGHTMARE.name.toUpperCase();
 
 const ORB_R = 21, ORB_S = ORB_R * 2 + 6;
 // The fury orb's three states: filling; ALMOST from `almost`% (its rim glows and pulses, the
@@ -135,55 +128,8 @@ function orbRing(ctx, cx, cy, r, color) {
 
 // Where a line of text drawn at y ends, its outline and all.
 const lineBottom = (y) => y + GLYPH_H + 1;
-// A boss's bar: lower in a dungeon or a crypt, under their own lines.
-const bossBarY = (g) => (g.mode === 'dungeon' || g.inCrypt ? 48 : 43);
-// The night's bar under the clock: its half width, and the marks on it (drawTop).
-// On a narrow screen it keeps clear of the relic slots (drawSlots: 18 px apart from x 3), never
-// narrower than its old 60 px.
-const NIGHT_BAR = 60, SLOTS_RIGHT = 3 + Math.max(MAX_WEAPONS, MAX_RELICS) * 18;
-export const nightBarHalf = (cx) => Math.max(30, Math.min(NIGHT_BAR, Math.floor(cx) - SLOTS_RIGHT - 4));
-// A small skull, 5 x 5: a mark for a boss on the night's bar.
-const SKULL = ['.###.', '#####', '#.#.#', '#####', '.#.#.'];
-function drawSkull(ctx, x, y, color) {
-  ctx.fillStyle = '#181425';
-  ctx.fillRect(x - 3, y - 1, 7, 7);
-  ctx.fillStyle = color;
-  SKULL.forEach((row, j) => {
-    for (let i = 0; i < 5; i++) if (row[i] === '#') ctx.fillRect(x - 2 + i, y + j, 1, 1);
-  });
-}
-// A hero's head, cut from the top of their standing sprite to 6 x 6 (cached): the face of the hero
-// a run is about to unlock, on the night's bar.
-const heads = new Map();
-function heroHead(id) {
-  if (heads.has(id)) return heads.get(id);
-  const spr = SPR[HEROES[id].sprite], src = spr && spr.frames[0] && spr.frames[0].c;
-  if (!src) return null;
-  let d = null;
-  try {
-    d = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
-  } catch {
-    // no pixels to read (a headless run): no face
-  }
-  if (!d) {
-    heads.set(id, null);
-    return null;
-  }
-  let x0 = src.width, x1 = -1, y0 = src.height, y1 = -1;
-  for (let y = 0; y < src.height; y++) for (let x = 0; x < src.width; x++) {
-    if (d[(y * src.width + x) * 4 + 3] < 20) continue;
-    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-  }
-  if (x1 < 0) return null;
-  const side = Math.max(6, Math.round((y1 - y0 + 1) * 0.42)), cx = Math.round((x0 + x1) / 2);
-  const c = makeCanvas(6, 6), cc = c.getContext('2d');
-  cc.imageSmoothingEnabled = false;
-  cc.drawImage(src, cx - side / 2, y0, side, side, 0, 0, 6, 6);
-  heads.set(id, c);
-  return c;
-}
-// The bar's width, its name's colours, and how a fallen boss's bar ends (Hud.barFall).
-const BAR_W = (W) => Math.min(220, W - 120);
+// Boss health belongs beside the foe, leaving the top edge to the clock.
+const BAR_W = (W) => Math.min(72, W - 24);
 const BAR_NAME = ['#fee761', '#feae34', '#be4a2f'];
 export const BAR_FALL = { hold: 0.8, flash: 0.15, drop: 0.7, pieces: 22 };
 // The experience bar's wrap (28 October 2026, the 27 October review's C3: it snapped down to what
@@ -431,22 +377,20 @@ export class Hud {
     this.lastDt = dt;
     this.drawRingWarnings(ctx, W, H, t);
     this.drawUltLaunch(ctx, W, H);
-    this.drawXp(ctx, W, p, dt);
-    this.drawSlots(ctx, p);
     this.drawTop(ctx, W, t, dt);
     this.drawOrbs(ctx, W, H, p, t);
-    this.drawBoss(ctx, W, dt);
+    this.drawBoss(ctx, W, dt, H);
     this.drawNames(ctx, W, H);
     this.drawCryptStrike(ctx, W, H);
     this.drawCryptDoor(ctx, W);
-    this.drawIndicators(ctx, W, H, t);
+    this.drawWarningIndicators(ctx, W, H, t);
     this.drawSpeech(ctx, W, H);
     // No kill-streak count at the right edge since 28 October 2026 (game.js COMBO: the owner's "the
     // combo counter on the right actually doesn't make sense"); the damage numbers flash instead.
     this.drawBanners(ctx, W, H);
     this.drawArrival(ctx, W, H);
     this.drawSlain(ctx, W, H);
-    if (g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, g.showMap);
+    if (g.showMap && g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, true);
     if (input.device === 'touch') this.drawTouch(ctx, W, H, p);
   }
 
@@ -643,83 +587,13 @@ export class Hud {
   }
 
   drawTop(ctx, W, t, dt = 1 / 60) {
-    const g = this.g;
-    const cx = Math.floor(W / 2);
-    if (g.mode === 'dungeon') {
-      drawText(ctx, `FLOOR ${g.floor} · ${g.floorName.toUpperCase()}`, cx, 10, { align: 'center', color: ['#ffffff', '#c0cbdc', '#8b9bb4'] });
-      if (g.objective) drawText(ctx, g.objective, cx, 21, { align: 'center', color: '#feae34' });
-      const clock = fmtTime(g.time);
-      drawText(ctx, clock, cx, 32, { align: 'center', color: '#8b9bb4' });
-      if (g.nightmare) drawText(ctx, NIGHTMARE_TAG, cx + Math.ceil(textWidth(clock) / 2) + 5, 32, { color: '#e43b44' });
-    } else if (g.mode === 'ranked') {
-      // Endless: the clock counts up; the bar fills toward the next rank.
-      const c = textCanvas(fmtTime(g.time), g.bestBeaten ? ['#ffffff', '#9ee562', '#63c74d'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
-      ctx.drawImage(c, cx - c.width, 9, c.width * 2, c.height * 2);
-      const cur = RANKS[g.rankIdx], next = RANKS[g.rankIdx + 1];
-      const u = next ? clamp((g.time - cur[0] * 60) / ((next[0] - cur[0]) * 60), 0, 1) : 1;
-      ctx.fillStyle = '#181425';
-      ctx.fillRect(cx - 30, 30, 60, 4);
-      ctx.fillStyle = '#feae34';
-      ctx.fillRect(cx - 29, 31, Math.round(58 * u), 2);
-      // The next boss's skull, where on the way to the next rank it comes.
-      if (next) {
-        const nb = (g.spawner.bossIdx + 1) * RANKED_BOSS_EVERY, k = (nb - cur[0] * 60) / ((next[0] - cur[0]) * 60);
-        if (k >= 0 && k <= 1) drawSkull(ctx, cx - 29 + Math.round(58 * k), 29, '#8b9bb4');
-      }
-      drawText(ctx, cur[1].toUpperCase(), cx - 34, 29, { align: 'right', color: '#fee761' });
-      if (g.rankedBest) drawText(ctx, `BEST ${fmtTime(Math.max(g.rankedBest, g.bestBeaten ? g.time : 0))}`, cx + 34, 29, { color: g.bestBeaten ? '#63c74d' : '#8b9bb4' });
-    } else {
-      const remain = clockTime(g);
-      const c = textCanvas(fmtTime(remain), remain < 60 ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#ffffff', '#c0cbdc'], '#181425');
-      ctx.drawImage(c, cx - c.width, 9, c.width * 2, c.height * 2);
-      const u = clamp(g.time / g.duration, 0, 1), B = nightBarHalf(cx), at = (s) => cx - B + 1 + Math.round((2 * B - 2) * Math.min(1, s / g.duration));
-      ctx.fillStyle = '#181425';
-      ctx.fillRect(cx - B, 30, 2 * B, 4);
-      ctx.fillStyle = u > 0.9 ? '#f6757a' : '#5a6988';
-      ctx.fillRect(cx - B + 1, 31, Math.round((2 * B - 2) * u), 2);
-      // A tiny moon/sun showing the night's progress.
-      ctx.fillStyle = u > 0.93 ? '#feae34' : '#c0cbdc';
-      ctx.fillRect(at(g.time) - 1, 29, 2, 6);
-      // The night's shape: a skull where each of its map's bosses comes (data/maps.js bosses; gold
-      // once slain, by his id: no map brings one twice), and the face of the hero this run unlocks
-      // at 5:00, under the bar, until then.
-      for (const m of g.mode === 's15' ? g.map.bosses : []) {
-        const slain = g.stats.bossLog.some((l) => l.id === m.id && l.kill !== undefined);
-        drawSkull(ctx, at(m.at), 29, slain ? '#fee761' : g.time >= m.at ? '#e43b44' : '#8b9bb4');
-      }
-      const recruitAt = heroUnlockTime(g.unlocks);
-      const head = g.unlocks && g.time < recruitAt ? heroHead(g.unlocks) : null;
-      if (head) {
-        const hx = at(recruitAt);
-        ctx.fillStyle = HEROES[g.unlocks].color || '#c0cbdc';
-        ctx.fillRect(hx - 4, 34, 8, 8);
-        ctx.fillStyle = '#181425';
-        ctx.fillRect(hx - 3, 35, 6, 6);
-        ctx.drawImage(head, hx - 3, 35);
-      }
-      // Where Ranked shows its best time.
-      if (g.nightmare) drawText(ctx, NIGHTMARE_TAG, cx + B + 4, 29, { color: '#e43b44' });
-    }
-    // In a crypt the clock above stands still.
-    if (g.inCrypt) drawText(ctx, `${g.inCrypt.name.toUpperCase()} · TIME STANDS STILL`, cx, 38, { align: 'center', color: '#b55088' });
-    else if (g.mode === 's15') {
-      const objective = g.levelComplete ? 'LEVEL COMPLETE' : g.finalBossDefeated ? 'BOSS SLAIN' : g.time >= g.duration ? 'DEFEAT FINAL BOSS' : 'FINAL BOSS REQUIRED';
-      drawText(ctx, objective, cx, 38, { align: 'center', color: g.levelComplete || g.finalBossDefeated ? '#fee761' : '#c0cbdc' });
-    }
-    // Kills and gold.
-    let y = 10;
-    const right = W - 4;
-    if (g.collectedGear.length) drawText(ctx, `LOOT ${g.collectedGear.length}`, right, y, { align: 'right', color: '#c0cbdc' });
-    const k = fmtNum(g.kills);
-    drawText(ctx, k, right, y + 10, { align: 'right', color: '#c0cbdc' });
-    ctx.drawImage(SPR.h_skull.frames[0].c, right - textWidth(k) - 11, y + 9);
-    // The record near or beaten (killBest), beside the count, left of its skull: under the count
-    // stands the gold, and under that a crypt's or a floor's map. In the Dungeon the floor's
-    // objective is centred on the same row: where they would meet (a portrait screen, the seal's
-    // long line) the record gives way (28 October 2026).
-    const kb = killBest(g), kx = right - textWidth(k) - 14;
-    const clear = !kb || g.mode !== 'dungeon' || !g.objective || kx - textWidth(kb.text) > cx + Math.ceil(textWidth(g.objective) / 2) + 4;
-    if (kb && clear) drawText(ctx, kb.text, kx, y + 10, { align: 'right', color: kb.color });
+    const g = this.g, remain = clockTime(g);
+    const color = clockCountsDown(g) && remain < 60
+      ? ['#ffffff', '#fee761', '#feae34']
+      : g.mode === 'ranked' && g.bestBeaten
+        ? ['#ffffff', '#9ee562', '#63c74d']
+        : ['#ffffff', '#ffffff', '#c0cbdc'];
+    drawText(ctx, fmtTime(remain), Math.floor(W / 2), 8, { align: 'center', color });
     // Gold, rolling up to what it is (never down: a fresh run, or a shown chest's held gold, snaps).
     const want = this.held ? this.held.gold : g.gold;
     if (want < this.goldRoll) this.goldRoll = want;
@@ -729,8 +603,8 @@ export class Hud {
       if (Math.floor(this.goldRoll) > before) this.goldPulse = 0.18;
     }
     this.goldPulse = Math.max(0, this.goldPulse - dt);
-    this.drawGold(ctx, W);
-    this.drawFlung(ctx, right - 6, y + 24, dt);
+    // Chest reveals still use the gold counter; loose coins no longer fly toward an invisible HUD.
+    this.flung.length = 0;
   }
 
   // The gold counter as it stands (drawTop rolls it up, once a frame). Also painted over a chest's
@@ -853,37 +727,35 @@ export class Hud {
     return (this.ultName ??= this.g.player.hero.ultName.toUpperCase());
   }
 
-  // How far down the HUD's lines at the top reach: the clock and its bar; a dungeon's floor, seal
-  // and clock lines; a crypt's line; a boss's bar and name under them (a fallen one's too, while it
-  // breaks up).
+  // Only the small clock occupies the top edge during play.
   topLines() {
-    const g = this.g;
-    if ((g.boss && !g.boss.dead) || this.fall) return lineBottom(bossBarY(g) + 9);
-    return lineBottom(g.inCrypt ? 38 : g.mode === 'dungeon' ? 32 : 33);
+    return lineBottom(8);
   }
 
   // The boss's (or lord's) bar. When the one it showed falls, its bar stays on, empty, then flashes
   // white and breaks apart (barFall) before another boss still fighting takes it.
-  drawBoss(ctx, W, dt) {
+  drawBoss(ctx, W, dt, H = view.H) {
     const g = this.g, b = g.boss && !g.boss.dead ? g.boss : null;
     // Fallen: dead, or back in the pool as another monster already (its id changed).
     const was = this.barE;
-    if (was && (was.dead || was.id !== this.barId) && !this.fall) this.fall = { t: 0, label: this.barLabel, shown: this.barShown, pieces: null };
+    if (was && (was.dead || was.id !== this.barId) && !this.fall) this.fall = { t: 0, label: this.barLabel, shown: this.barShown, point: this.barPoint, pieces: null };
     this.barE = null;
     if (this.fall) {
       this.barFall(ctx, W, dt);
       return;
     }
-    if (!b) return;
+    if (!b || b.speech || !this.overHead(b, W, H) || !seenBy(g, b)) return;
+    if (AT.x < 0 || AT.y < 0 || AT.x > W || AT.y > H) return;
     // It slams in at its time (Game.bossIntro: after a night boss's name card), dropping from
     // above with a white flash.
     const since = b.introT === undefined ? 9 : b.introT - (b.slamAt || 0);
     if (since < 0) return;
-    const drop = Math.round((1 - ease.outBack(clamp(since / ARRIVAL.slam, 0, 1))) * 26);
-    const w = BAR_W(W), x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g) - drop;
+    const drop = Math.round((1 - ease.outBack(clamp(since / ARRIVAL.slam, 0, 1))) * 8);
+    const w = BAR_W(W), x = Math.round(clamp(AT.x - w / 2, 3, W - w - 3)), y = Math.round(clamp(AT.y - 6, this.topLines() + 16, H - 12)) - drop;
     const f = clamp(b.hp / b.maxHp, 0, 1);
     b._shown = b._shown === undefined ? f : b._shown + (f - b._shown) * 0.06;
-    const label = b.lord ? `${b.name.toUpperCase()}, LORD OF THE CRYPT` : `${b.def.name.toUpperCase()}, ${b.def.title.toUpperCase()}`;
+    const label = (b.lord ? b.name : b.def.name).toUpperCase();
+    this.barPoint = { x, y, cx: x + w / 2 };
     this.barE = b;
     this.barId = b.id;
     this.barLabel = label;
@@ -909,7 +781,8 @@ export class Hud {
       ctx.fillRect(x - 1, y - 1, w + 2, 8);
       ctx.globalAlpha = 1;
     }
-    drawText(ctx, label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+    const hw = textWidth(label) / 2 + 2;
+    drawText(ctx, label, Math.round(clamp(x + w / 2, hw, W - hw)), y - 11, { align: 'center', color: BAR_NAME });
   }
 
   // The ultimate's launch (Game.launchUlt, ULT_LAUNCH): the screen dims round a light on the hero and
@@ -983,7 +856,7 @@ export class Hud {
     const y = Math.round(H * 0.34);
     ctx.globalAlpha = a;
     ctx.drawImage(name, Math.round(W / 2 - (name.width * s2) / 2), Math.round(y - (name.height * s2) / 2), Math.round(name.width * s2), Math.round(name.height * s2));
-    drawText(ctx, c.title, W / 2, Math.round(y + (name.height * s2) / 2 + 3), { align: 'center', color: c.color });
+    if (c.title) drawText(ctx, c.title, W / 2, Math.round(y + (name.height * s2) / 2 + 3), { align: 'center', color: c.color });
     ctx.globalAlpha = 1;
   }
 
@@ -991,7 +864,7 @@ export class Hud {
   // white for BAR_FALL.flash s, then in BAR_FALL.pieces pieces that tumble and fade for
   // BAR_FALL.drop s, its name fading with them. Real time, so it plays out under the cards too.
   barFall(ctx, W, dt) {
-    const F = this.fall, H = BAR_FALL, w = BAR_W(W), x = Math.floor(W / 2 - w / 2), y = bossBarY(this.g);
+    const F = this.fall, H = BAR_FALL, w = BAR_W(W), { x, y, cx } = F.point;
     F.t += dt;
     const t = F.t;
     if (t >= H.hold + H.flash + H.drop) {
@@ -1009,7 +882,7 @@ export class Hud {
         ctx.fillRect(x, y, w, 6);
       }
       barNotches(ctx, x, y, w);
-      drawText(ctx, F.label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+      drawText(ctx, F.label, cx, y - 11, { align: 'center', color: BAR_NAME });
       return;
     }
     // The pieces, set off once, each its own way (no dice: the run's random numbers stay the run's).
@@ -1033,7 +906,7 @@ export class Hud {
       ctx.fillStyle = i % 3 ? '#e43b44' : '#ffffff';
       ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.ceil(pw), 6);
     }
-    drawText(ctx, F.label, W / 2, y + 9, { align: 'center', color: BAR_NAME });
+    drawText(ctx, F.label, cx, y - 11, { align: 'center', color: BAR_NAME });
     ctx.globalAlpha = 1;
   }
 
@@ -1056,7 +929,7 @@ export class Hud {
     NEAR.fill(null);
     let named = 0;
     for (const e of g.enemies) {
-      if (e.dead || !e.elite || e.speech || !this.overHead(e, W, H) || !seenBy(g, e)) continue;
+      if (e.dead || !e.elite || e === g.boss || e.speech || !this.overHead(e, W, H) || !seenBy(g, e)) continue;
       const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
       if (named === NAMED && d >= NEAR_D[NAMED - 1]) continue;
       let i = named < NAMED ? named++ : NAMED - 1;
@@ -1068,7 +941,7 @@ export class Hud {
       NEAR_D[i] = d;
     }
     for (const e of g.enemies) {
-      if (e.dead || e.speech || (!e.elite && e.type !== 'thief') || !this.overHead(e, W, H) || !seenBy(g, e)) continue;
+      if (e.dead || e === g.boss || e.speech || (!e.elite && e.type !== 'thief') || !this.overHead(e, W, H) || !seenBy(g, e)) continue;
       const x = AT.x, y = AT.y;
       if (e.elite) {
         // A name kept whole on the screen, never cut at its edge.
@@ -1222,6 +1095,15 @@ export class Hud {
     for (const w of g.warnings) if (w.from) this.pointer(ctx, W, H, t, p.x + w.from[0], p.y + w.from[1], '#f77622', m.warn);
   }
 
+  // Keep the useful warning for an approaching attack without persistent exploration arrows.
+  drawWarningIndicators(ctx, W, H, t) {
+    const g = this.g, p = g.player;
+    if (!g.warnings.some((w) => w.from)) return;
+    this.hazeR = null;
+    this.markerBand(W, H);
+    for (const w of g.warnings) if (w.from) this.pointer(ctx, W, H, t, p.x + w.from[0], p.y + w.from[1], '#f77622', marks().warn);
+  }
+
   // A ring about to close, or the last stand (a ring too): for its last WARN.ring s, a faint ring
   // on the ground round the hero.
   drawRingWarnings(ctx, W, H, t) {
@@ -1247,13 +1129,11 @@ export class Hud {
   // edge clear too until 28 October 2026, when it left the screen.)
   markerBand(W, H) {
     const g = this.g, p = g.player;
-    BAND.top = Math.max(52, this.topLines() + MARK_R);
+    BAND.top = this.topLines() + MARK_R + 2;
     BAND.bottom = H - 30;
     BAND.left = 14;
     BAND.right = W - 14;
     keepN = 0;
-    keep(0, 0, 3 + 18 * Math.max(MAX_WEAPONS, MAX_RELICS), 49);
-    if (p.buffs.size) keep(0, 49, 3 + 28 * p.buffs.size, 12);
     keep(0, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
     keep(W - ORB_S - 4, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
     if (p.revives > 0) keep(ORB_S - 2, H - ORB_S - 12, 12, 12);
@@ -1261,7 +1141,6 @@ export class Hud {
       const tw = textWidth(this.ultLabel());
       keep(W - 5 - tw, H - ORB_S - 16, tw + 2, GLYPH_H + 2);
     }
-    if (g.world.drawMinimap && !g.showMap) keep(W - g.world.W - 6, 34, g.world.W + 4, g.world.H + 4);
   }
 
   // One of those markers, toward world point (wx, wy), unless that is on screen: an arrow in its

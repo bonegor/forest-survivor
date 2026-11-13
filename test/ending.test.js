@@ -45,7 +45,7 @@ test('a blow by contact is named after the foe: a monster, a champion by its own
     const e = g.enemies.find((x) => x.elite);
     p.hurt(1e9, e);
     assert.equal(g.stats.killedBy, e.name, 'a champion: its own name');
-    assert.match(e.name, /^[A-Z][a-z]+ the [A-Z]/);
+    assert.match(e.name, /^[A-Z][a-z]+$/, 'champions have one name without an epithet');
   });
   game((g, p) => {
     const b = g.spawnBoss('boneking', p.x + 20, p.y);
@@ -53,7 +53,7 @@ test('a blow by contact is named after the foe: a monster, a champion by its own
     p.hp = 1;
     for (let i = 0; i < 240 && !p.dead; i++) g.update(1 / 60);
     assert.ok(p.dead);
-    assert.equal(g.stats.killedBy, 'King Ossarian, The Bone King', 'a boss: name and title, by touch or by its slam');
+    assert.equal(g.stats.killedBy, 'Ossarian', 'a boss: only the name, by touch or by its slam');
   });
 });
 
@@ -104,6 +104,6 @@ test('the results tell what the gold buys at the Armory', () => {
   assert.equal(armoryLine(p), 'Recovery I · 60 gold · +0.1 health per second', 'the recommendation updates after a purchase');
   const app = { ui: new UI() }, screen = new ArmoryScreen();
   screen.enter(app, { focus: 'magnet' });
-  assert.equal(screen.tab, 'preparation');
+  assert.equal(screen.selected, 'magnet');
   assert.equal(app.ui.focusId, 'u_magnet');
 });

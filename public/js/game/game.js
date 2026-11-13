@@ -1031,13 +1031,13 @@ export class Game {
     const color = e.lord ? (e.mod ? e.mod.color : '#b55088') : e.def.color;
     if (this.stir) this.stir.done = true;
     if (e.lord) {
-      this.banner(e.name, `Lord of the ${this.inCrypt ? this.inCrypt.name : 'crypt'}`, color, 3);
+      this.banner(e.name, '', color, 3);
       e.slamAt = 0;
       sfx('lordsting');
       playMusic('boss');
     } else {
       const full = this.mode !== 'ranked';
-      this.card = { name: e.def.name, title: e.def.title, color, t: 0, letterbox: full };
+      this.card = { name: e.def.name, title: '', color, t: 0, letterbox: full };
       e.slamAt = full ? ARRIVAL.slamAt : ARRIVAL.lightSlamAt;
       this.pushback(e.x, e.y, ARRIVAL.recoilR, ARRIVAL.recoilF);
       sfx('boss');
@@ -1398,7 +1398,7 @@ export class Game {
       this.queueItem(gear);
     }
     const R = gear && RARITIES[gear.rarity];
-    this.banner(`${e.def.name} is slain!`, gear ? `${R.name} ${SLOT_NAMES[gear.slot].toLowerCase()} secured` : e.def.title, gear ? R.color : '#fee761', 3.2);
+    this.banner(`${e.def.name} is slain!`, gear ? `${R.name} ${SLOT_NAMES[gear.slot].toLowerCase()} secured` : '', gear ? R.color : '#fee761', 3.2);
     if (this.mode === 'dungeon') {
       if (this.floor < 3) {
         this.world.openStairs(at.x, at.y);

@@ -63,6 +63,12 @@ const GLOWS = {
   spiral: ['#c0cbdc', 12, null, 0],
 };
 
+// These weapons keep their original collision sprite; only their rendered
+// silhouette differs. This also keeps pooled projectiles free of extra state.
+const DISPLAY_SPRITES = {
+  splitpin: 'splitpin_bolt', splitpinShard: 'splitpin_shard', ratchetBolt: 'ratchet_bolt',
+};
+
 export class Projectile {
   init(g, o) {
     this.g = g;
@@ -354,7 +360,8 @@ export class Projectile {
         break;
       default:
         // A spinning blade turns as it flies; anything else points the way it goes.
-        img = this.spin ? this.sprite.frames[0].rotated(this.rot, 16) : this.sprite.frames[0].rotated(this.ang, 32);
+        const display = SPR[DISPLAY_SPRITES[this.kind]] || this.sprite;
+        img = this.spin ? display.frames[0].rotated(this.rot, 16) : display.frames[0].rotated(this.ang, 32);
     }
     drawCentered(ctx, img, sx, sy - this.z * S, S * this.scale);
   }

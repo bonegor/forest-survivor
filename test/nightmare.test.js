@@ -174,6 +174,7 @@ function trialScreen(profile = defaultProfile(), choice = {}, settings = {}) {
 
 test('the trial screen puts the box under the difficulties, shut but on Elite; a click, Enter or the pad\'s A ticks it', () => {
   const { s, app } = trialScreen();
+  s.step = 'difficulty';frame(s);
   let box = item(app, 'nightmare');
   const normal = item(app, 'd_easy'), mid = item(app, 'd_medium'), vet = item(app, 'd_hard');
   assert.ok(box && normal && mid && vet, 'the box and the three difficulties');
@@ -198,7 +199,7 @@ test('the trial screen puts the box under the difficulties, shut but on Elite; a
   // The keyboard: down from Elite to the box, then Enter.
   app.ui.focusId = 'd_hard';
   input.justDown.add('ArrowDown');
-  frame(s);
+  frame(s);frame(s);
   assert.equal(app.ui.focusId, 'nightmare');
   input.justDown.add('Enter');
   frame(s);
@@ -245,7 +246,10 @@ test('moving along the trials or the difficulties picks them; up and down come b
   press('ArrowRight');
   assert.deepEqual([app.ui.focusId, app.choice.mode], ['m_dungeon', 'dungeon']);
   press('ArrowDown');
-  assert.equal(app.ui.focusId, 'd_easy', 'down onto the difficulty chosen');
+  assert.equal(app.ui.focusId, 'next');
+  press('Enter');
+  for (let i = 0; i < 20; i++) frame(s);
+  assert.equal(app.ui.focusId, 'd_easy', 'next step focuses the difficulty chosen');
   press('ArrowRight');
   press('ArrowRight');
   assert.deepEqual([app.ui.focusId, app.choice.diff], ['d_hard', 'hard']);
@@ -256,8 +260,8 @@ test('moving along the trials or the difficulties picks them; up and down come b
   press('ArrowUp');
   press('ArrowUp');
   assert.equal(app.ui.focusId, 'd_hard', 'up onto Elite, the one chosen, not the nearest');
-  press('ArrowUp');
-  assert.equal(app.ui.focusId, 'm_dungeon', 'up onto the trial chosen');
+  press('Escape');
+  assert.equal(app.ui.focusId, 'm_dungeon', 'back onto the trial chosen');
   assert.equal(app.choice.diff, 'hard', 'passing by changes nothing');
 });
 
@@ -266,7 +270,7 @@ test('Ranked\'s trial card shows no box, and a Nightmare ticked before plays Ran
   const { app } = trialScreen(unlockEverything(defaultProfile()), { mode: 'ranked', nightmare: true }, { rankedNote: true });
   assert.equal(app.choice.mode, 'ranked');
   assert.equal(MODES.ranked.name, 'Ranked', 'the name the owner gave it (28 October 2026)');
-  assert.ok(item(app, 'begin') && item(app, 'm_ranked'), 'the trial screen drawn');
+  assert.ok(item(app, 'next') && item(app, 'm_ranked'), 'the destination screen drawn');
   assert.equal(item(app, 'nightmare'), undefined);
   assert.equal(item(app, 'd_hard'), undefined);
   const g = game({ mode: 'ranked', diff: app.choice.diff, nightmare: app.choice.nightmare });

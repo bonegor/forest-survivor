@@ -262,10 +262,10 @@ test('the panel\'s run tab: the clock, and each weapon and relic raised, lowered
     await button(box, '+5 min').click();
     assert.equal(g.time, 300);
     assert.equal(find(box, (n) => n.tagName === 'INPUT' && n.attrs.size === '6').value, '05:00');
-    assert.match(box.textContent, /Minute 5 of the night \(pocket 5-6\): Skeleton, Goblin.*Next boss: Grimgut, The Butcher at 09:00/);
+    assert.match(box.textContent, /Minute 5 of the night \(pocket 5-6\): Skeleton, Goblin.*Next boss: Grimgut at 09:00/);
     await button(box, '−1 min').click();
     assert.equal(g.time, 240);
-    assert.match(box.textContent, /Next boss: King Ossarian, The Bone King at 04:30/);
+    assert.match(box.textContent, /Next boss: Ossarian at 04:30/);
     const tIn = find(box, (n) => n.tagName === 'INPUT' && n.attrs.size === '6');
     tIn.value = '12:30';
     await button(box, 'Set').click();

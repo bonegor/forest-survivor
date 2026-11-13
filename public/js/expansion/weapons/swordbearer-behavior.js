@@ -82,6 +82,20 @@ class MarchsteelCut {
     const image = slashFrame(this.reach, 0.82, angle, frame, 6, this.charged ? GOLD : STEEL);
     const w = image.width * cam.S, h = image.height * cam.S;
     ctx.drawImage(image, Math.round((this.x - cam.x) * cam.S - w / 2), Math.round((this.y - cam.y) * cam.S - h / 2), w, h);
+    // A straight spine inside the cut gives the greatsword a weightier shape
+    // than the other crescent strikes. It never reaches beyond the existing cut.
+    if (frame >= 3) return;
+    const S = cam.S, dx = Math.cos(this.ang), dy = Math.sin(this.ang);
+    ctx.save();
+    ctx.globalAlpha *= 1 - this.t / (CUT_TIME * 0.5);
+    for (let d = Math.ceil(this.reach * 0.35); d <= this.reach * 0.9; d++) {
+      const edge = d >= this.reach * 0.68;
+      const size = Math.max(1, Math.round((edge ? 1 : 2) * S));
+      ctx.fillStyle = this.charged ? (edge ? '#fff1c8' : '#f6ba68') : '#c3c8df';
+      ctx.fillRect(Math.round((this.x + dx * d - cam.x) * S - size / 2),
+        Math.round((this.y + dy * d - cam.y) * S - size / 2), size, size);
+    }
+    ctx.restore();
   }
 }
 

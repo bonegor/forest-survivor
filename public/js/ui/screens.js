@@ -327,7 +327,8 @@ export class ModeScreen {
     // place. None chosen stays none, the row showing its default; nothing is saved for coming here.
     if (app.choice.map !== undefined && !mapOpen(app.store.profile, app.choice.map)) app.choice.map = shownMap(app.store.profile);
     // Back from a run with the trial as it was (HeroScreen's again): the focus starts on BEGIN.
-    app.ui.focusId = params.again && kept ? 'begin' : 'm_' + app.choice.mode;
+    this.step = params.again && kept ? 'difficulty' : 'destination';
+    app.ui.focusId = this.step === 'difficulty' ? 'begin' : 'm_' + app.choice.mode;
   }
 
   draw(ctx, W, H, dt) {
@@ -339,22 +340,20 @@ export class ModeScreen {
     let map = shownMap(prof, app.choice.map);
     app.scene.draw(ctx, W, H, dt, { campfire: false, ...(app.choice.mode === 's15' && { biome: map }) });
     dim(ctx, W, H, 0.45);
-    header(ctx, W, 'Choose your Trial');
+    header(ctx, W, this.step === 'difficulty' ? 'Choose your Challenge' : 'Choose your Destination');
+    if (this.step === 'difficulty') { this.drawDifficulty(ctx, W, H, dt, map); return; }
+    drawText(ctx, '1  DESTINATION    ·    2  CHALLENGE', W / 2, 25, { align: 'center', color: '#8b9bb4' });
     // The note closed (below), the focus goes back onto the trials, not on to BEGIN: moving along
     // them picks one (the owner's, 23 October 2026), so one browsing onto Ranked and closing its
     // note with Enter would have begun an Elite run with the next (27 October 2026).
     if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('m_' + app.choice.mode);ui.lock(0.2); }return; }
     ui.begin(dt);
-    const musicWasOpen = this.musicPicker.open;
-    const musicLock = ui.lockT, musicFocus = ui.focusId, musicFocusSource = ui.focusSource;
-    // Draw the existing choices behind the open list, without allowing clicks through it.
-    if (musicWasOpen) ui.lockT = Infinity;
     const hero = app.choice.hero;
     const modes = Object.keys(MODES);
     const cw = Math.min(110, Math.floor((W - 24) / modes.length) - 6), ch = 84;
     const total = modes.length * cw + (modes.length - 1) * 6;
     let x = Math.round(W / 2 - total / 2);
-    const y = 34;
+    const y = 41;
     let focusMode = null;
     // The trials, a row of choices (the owner's, 23 October 2026: the menus should "respect left,
     // right, up, down"): moving along it picks the trial in focus, if this hero may enter it; up or
@@ -364,7 +363,7 @@ export class ModeScreen {
       const fid = 'm_' + m;
       const open = canPlay(prof, m, hero);
       const activated = ui.item(fid, x, y, cw, ch, { disabled: !open, group: 'trial', home: app.choice.mode === m });
-      if (activated) { app.choice.mode = m; ui.focus('begin'); }
+      if (activated) { app.choice.mode = m; ui.focus('next'); }
       const f = ui.focused(fid);
       if (f) focusMode = m;
       if (f && open && ui.focusSource !== 'pointer' && app.choice.mode !== m) app.choice.mode = m;
@@ -429,7 +428,7 @@ export class ModeScreen {
         // Its short name, or its first three letters on a tab too narrow for it (a phone held upright).
         const label = textWidth(M.short) <= bw - 14 ? M.short : M.short.slice(0, 3);
         const activated = button(ctx, ui, id, mx, my, bw, 13, open ? label : '', { color: on ? '#fee761' : '#8b9bb4', on, disabled: !open, group: 'map', home: on });
-        if (activated) ui.focus('begin');
+        if (activated) ui.focus('next');
         const f = ui.focused(id);
         if (f) focusMap = M.id;
         if ((activated || (f && ui.focusSource !== 'pointer')) && open && !on) {
@@ -462,105 +461,84 @@ export class ModeScreen {
     if (lines.length > descN) lines[descN - 1] = fitLine(lines.slice(descN - 1).join(' '), tw);
     lines.slice(0, descN).forEach((line, i) => drawText(ctx, line, W / 2, y + ch + 5 + row + i * 9, { align: 'center', color: shutMap || lockedFocus ? '#feae34' : '#c0cbdc' }));
     this.desc = desc; // what the slot tells (test/trial-maps.test.js reads it)
-    // Normal, Veteran or Elite (data/difficulty.js), a row of choices like the trials: moving along
-    // it picks one. Under it the Nightmare box (three times the monsters), open only on Elite (the
-    // owner's, 21 October 2026). All remembered with the settings. Ranked keeps one best per hero,
-    // so it is always Elite and never a Nightmare: there neither is shown.
-    let ty = y + ch + 7 + row + descN * 9;
-    const note = [];
+    const nextY = Math.min(H - 45, y + ch + row + 48);
+    if (button(ctx, ui, 'next', Math.round(W / 2 - 64), nextY, 128, 16, 'NEXT · CHALLENGE', { color: '#fee761' })) {
+      this.step = 'difficulty';
+      ui.focus(mode === 'ranked' ? 'begin' : 'd_' + app.choice.diff);
+      ui.lock(0.2);
+    }
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('hero');
+    keysHint(ctx, W, H);
+    // Keep horizontal movement within the mode or map row.
+    const items = ui.items;
+    if (row && !ui.focusId?.startsWith('map_') && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) ui.items = items.filter(i => !i.id.startsWith('map_'));
+    ui.end();ui.items = items;
+    if (input.pressed('back')) app.go('hero');
+  }
+
+  drawDifficulty(ctx, W, H, dt, map) {
+    const app = this.app, ui = app.ui, prof = app.store.profile, mode = app.choice.mode;
+    drawText(ctx, '1  DESTINATION    ·    2  CHALLENGE', W / 2, 25, { align: 'center', color: '#fee761' });
+    ui.begin(dt);
+    const musicWasOpen = this.musicPicker.open, musicLock = ui.lockT, musicFocus = ui.focusId, musicSource = ui.focusSource;
+    if (musicWasOpen) ui.lockT = Infinity;
+    const width = Math.min(360, W - 28), x = Math.round((W - width) / 2);
+    panel(ctx, x, 44, width, 36, { rivets: false, fill: '#15131f' });
+    drawText(ctx, `${MODES[mode].name} · ${HEROES[app.choice.hero].title}`, W / 2, 51, { align: 'center', color: '#ead4aa' });
+    drawText(ctx, mode === 's15' ? MAPS[map].name : MODES[mode].sub, W / 2, 65, { align: 'center', color: mode === 's15' ? MAPS[map].color : '#8b9bb4' });
+    const diffs = [NORMAL, VETERAN, ELITE], ty = 96;
     if (mode === 'ranked') {
-      note.push(['Endless personal bests · Elite difficulty', '#8b9bb4']);
-      const best = prof.ranked[hero] || 0;
-      note.push([best ? `Your best with the ${HEROES[hero].title}: ${fmtTime(best)} · ${rankTitle(best).toUpperCase()}` : `No Ranked run with the ${HEROES[hero].title} yet`, '#feae34']);
+      drawText(ctx, 'ELITE · ENDLESS', W / 2, ty + 5, { align: 'center', color: '#fee761' });
+      const best = prof.ranked[app.choice.hero] || 0;
+      drawText(ctx, best ? `Personal best ${fmtTime(best)} · ${rankTitle(best)}` : 'Survive as long as you can', W / 2, ty + 22, { align: 'center', color: '#8b9bb4' });
     } else {
-      const elite = app.choice.diff === ELITE.id, nightmare = elite && app.choice.nightmare === true;
-      const DIFF_ROW = [NORMAL, VETERAN, ELITE];
-      const bw = 64, gap = 8, bx = Math.round(W / 2 - (DIFF_ROW.length * bw + (DIFF_ROW.length - 1) * gap) / 2);
-      DIFF_ROW.forEach((d, i) => {
+      const bw = Math.min(90, Math.floor((width - 12) / 3)), gap = 6, bx = Math.round((W - bw * 3 - gap * 2) / 2);
+      diffs.forEach((d, i) => {
         const id = 'd_' + d.id, on = app.choice.diff === d.id;
-        const activated = button(ctx, ui, id, bx + i * (bw + gap), ty, bw, 13, d.name.toUpperCase(), { color: on ? '#fee761' : '#8b9bb4', on, group: 'diff', home: on });
-        if (activated) ui.focus('begin');
+        const activated = button(ctx, ui, id, bx + i * (bw + gap), ty, bw, 17, d.name.toUpperCase(), { on, color: on ? '#fee761' : '#8b9bb4', group: 'diff', home: on });
         if ((activated || (ui.focused(id) && ui.focusSource !== 'pointer')) && !on) {
-          app.choice.diff = app.settings.diff = d.id;
-          saveSettings(app.settings);
+          app.choice.diff = app.settings.diff = d.id;saveSettings(app.settings);
         }
+        if (activated) ui.focus('begin');
       });
-      // The box, centred under the row; shut but for Elite, and saying so.
+      const elite = app.choice.diff === ELITE.id, nightmare = elite && app.choice.nightmare === true;
       const label = elite ? NIGHTMARE.name.toUpperCase() : `${NIGHTMARE.name.toUpperCase()} · ELITE ONLY`;
-      if (checkbox(ctx, ui, 'nightmare', Math.round(W / 2 - checkboxWidth(label) / 2), ty + 17, label, nightmare, { color: '#f6757a', disabled: !elite })) {
-        app.choice.nightmare = app.settings.nightmare = !nightmare;
-        saveSettings(app.settings);
+      if (checkbox(ctx, ui, 'nightmare', Math.round((W - checkboxWidth(label)) / 2), ty + 24, label, nightmare, { color: '#f6757a', disabled: !elite })) {
+        app.choice.nightmare = app.settings.nightmare = !nightmare;saveSettings(app.settings);
       }
-      ty += 34;
-      const d = DIFF_ROW.find((x) => x.id === app.choice.diff) || NORMAL;
-      note.push([d.desc, '#8b9bb4']);
-      if (nightmare) note.push([NIGHTMARE.desc, '#f6757a']);
+      const d = diffs.find(d => d.id === app.choice.diff) || NORMAL;
+      const lines = wrapText(d.desc, width - 8);
+      lines.slice(0, 3).forEach((line, i) => drawText(ctx, line, W / 2, ty + 43 + i * 9, { align: 'center', color: '#8b9bb4' }));
+      if (nightmare) drawText(ctx, fitLine(NIGHTMARE.desc, width - 8), W / 2, ty + 72, { align: 'center', color: '#f6757a' });
     }
-    for (const [text, color] of note) {
-      for (const line of wrapText(text, tw)) {
-        drawText(ctx, line, W / 2, ty, { align: 'center', color });
-        ty += 9;
-      }
-    }
-    // BEGIN in one place whatever is chosen: under room for the map row and the longest notes (four
-    // lines), and on a short screen no lower than over the keys' line, but never higher than where
-    // Survival leaves it with two lines of notes (rest: the trials, the map row, its description, the
-    // difficulties and the box, the notes). There it stays as the trial or the difficulty changes,
-    // where it hopped up and down (a 1366 x 768 laptop's 456 x 256) and took the keys' line with it
-    // as it went (an 854 x 480 window's 427 x 240, which now never shows that line): the review of
-    // 28 October 2026. Longer notes (a narrow window) still push it.
-    const rest = y + ch + 7 + MAP_ROW + rowDescN * 9 + 34 + 2 * 9 + 6;
-    const baseBeginY = Math.max(ty + 6, Math.min(Math.max(H - 44, rest), y + ch + MAP_ROW + 25 + 34 + 4 * 9 + 8));
-    const beside = H < 300;
-    const musicW = beside ? Math.min(210, W - 186) : Math.min(230, W - 24);
-    const musicX = Math.round(beside ? Math.max(68, (W - musicW - 108) / 2) : (W - musicW) / 2);
-    const beginY = baseBeginY + (beside ? 0 : 20);
-    const beginX = beside ? musicX + musicW + 8 : Math.round(W / 2 - 50);
-    this.musicPicker.draw(ctx, ui, { x: musicX, y: baseBeginY, w: musicW, h: 15 }, app.settings.combatMusic);
-    if (button(ctx, ui, 'begin', beginX, beginY, 100, 15, 'BEGIN', { color: '#fee761' })) {
+    const controlsY = Math.min(H - 45, 186), musicW = Math.min(210, W - 140);
+    const musicX = Math.round((W - musicW - 108) / 2), beginX = musicX + musicW + 8;
+    this.musicPicker.draw(ctx, ui, { x: musicX, y: controlsY, w: musicW, h: 16 }, app.settings.combatMusic);
+    if (button(ctx, ui, 'begin', beginX, controlsY, 100, 16, 'BEGIN', { color: '#fee761' })) {
       stopCombatMusicPreview();
-      // The map shown is the one played: chosen now where the one shown by default isn't the
-      // Darkwood's (a run without a map is the Darkwood's), or where the one chosen has shut since.
       if (mode === 's15' && (app.choice.map ?? 'forest') !== map) app.choice.map = map;
       app.startRun();
     }
-    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('hero');
-    // The keys' line where BEGIN, as it is drawn, leaves it room: on a short screen BEGIN's place
-    // under the map row (rest), or notes that push it lower, take it.
-    if (beginY + 15 < H - 17) keysHint(ctx, W, H);
+    const back = () => { this.step = 'destination';ui.focus('m_' + mode);ui.lock(0.2); };
+    if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) back();
+    keysHint(ctx, W, H);
     if (this.musicPicker.open) {
-      if (musicWasOpen) {
-        ui.lockT = musicLock;
-        ui.focusId = musicFocus;
-        ui.focusSource = musicFocusSource;
-      }
+      if (musicWasOpen) { ui.lockT = musicLock;ui.focusId = musicFocus;ui.focusSource = musicSource; }
       ui.items.length = 0;
-      this.musicPicker.drawMenu(ctx, ui, W, H, app.settings.combatMusic, (id) => {
-        app.settings.combatMusic = setCombatMusic(id);
-        saveSettings(app.settings);
-      });
-      ui.end();
-      return;
+      this.musicPicker.drawMenu(ctx, ui, W, H, app.settings.combatMusic, id => { app.settings.combatMusic = setCombatMusic(id);saveSettings(app.settings); });
+      ui.end();return;
     }
-    // Off the map row, left or right goes where it always has: along the trials past the last round
-    // to the first and past the first to BACK, off NORMAL or ELITE up to the trial over it. Never onto
-    // the row's end tabs, which lie further out than the end trials' and the end difficulties' middles
-    // and pick their map once in focus (NORMAL's left chose the Sunscorch and ELITE's right the Abyss:
-    // the review of 28 October 2026). Only from on the row do left and right move along it (up or
-    // down, which ui.end takes first, still go onto it), and it is back in the frame's list once the
-    // move is made.
-    const items = ui.items;
-    let navigation = items;
-    if (row && !ui.focusId?.startsWith('map_') && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) navigation = navigation.filter((i) => !i.id.startsWith('map_'));
-    // Keep BEGIN in its familiar keyboard column while its compact visual row shares room
-    // with the picker. Left/right from BEGIN reaches MUSIC; up returns to the difficulty.
-    if (beside) navigation = navigation.map((i) => i.id === 'begin' ? { ...i, x: Math.round(W / 2 - 50) } : i);
-    ui.items = navigation;
+    if (mode !== 'ranked' && ui.lockT <= 0) {
+      if (ui.focusId?.startsWith('d_') && input.pressed('down')) ui.focus('nightmare');
+      else if (ui.focusId === 'nightmare' && input.pressed('down')) ui.focus('begin');
+      else if (ui.focusId === 'nightmare' && input.pressed('up')) ui.focus('d_' + app.choice.diff);
+      else if (ui.focusId === 'begin' && input.pressed('up')) ui.focus('nightmare');
+    }
     if (ui.focusId === 'begin' && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) ui.focus('combat_music');
     ui.end();
-    ui.items = items;
-    if (input.pressed('back')) app.go('hero');
+    if (input.pressed('back')) back();
   }
+
 }
 
 // ----------------------------------------------------------------- armory --
@@ -581,19 +559,20 @@ export function upgradeEffect(p, id) {
 export class ArmoryScreen {
   enter(app, { focus } = {}) {
     const group = UPGRADE_GROUPS.find(([, , ids]) => ids.includes(focus));
-    this.app = app;this.tab = group?.[0] || 'power';this.selected = group ? focus : 'might';this.busy = false;
+    this.app = app;this.selected = group ? focus : 'might';this.busy = false;this.scroll = 0;this.seen = null;this.drag = null;
     app.ui.lock(0.2);app.ui.focusId = 'u_' + this.selected;playMusic('title');
   }
-  inspect(u) {
-    const p = this.app.store.profile, rank = p.up[u.id] || 0, maxed = rank >= u.max;
-    const cost = upgradeCost(u.id, rank), open = upgradeOpen(p, u);
+  buy(u) {
     this.selected = u.id;
-    const lines = [{ text: u.desc, color: '#fee761' }, `Rank ${rank}/${u.max} · permanent for all heroes`];
-    if (!open) lines.push(shortNeed(needText(PROGRESS.locks.find(l => l.id === u.lock))));
-    else if (!maxed) lines.push(`Current ${upgradeEffect(p, u.id)} → next ${upgradeEffect({ ...p, up: { ...p.up, [u.id]: rank + 1 } }, u.id)}`, `${cost} gold · you have ${fmtNum(p.gold)}`, p.gold >= cost ? `${fmtNum(p.gold - cost)} gold after purchase` : `${cost - p.gold} more gold needed`);
-    else lines.push('Fully upgraded');
-    this.dialog = new MenuDialog(u.name, lines, DEBUG ? [{ id: 'buy', label: maxed ? 'CLEAR RANKS' : 'ADD RANK · FREE' }] : [{ id: 'buy', label: maxed ? 'FULLY UPGRADED' : !open ? 'LOCKED' : `BUY · ${cost} GOLD`, disabled: maxed || !open || p.gold < cost || this.busy }]);
-    this.app.ui.focus('detail_close');this.app.ui.lock(0.2);
+    if (this.busy) return;
+    const app = this.app, p = app.store.profile, rank = p.up[u.id] || 0;
+    if (!DEBUG && (rank >= u.max || !upgradeOpen(p, u) || p.gold < upgradeCost(u.id, rank))) return;
+    this.busy = true;this.message = null;
+    // One activation buys one rank. The current row and scroll position stay put while saving.
+    Promise.resolve().then(() => DEBUG ? app.store.setUpgrades({ [u.id]: rank >= u.max ? 0 : rank + 1 }) : app.store.buy(u.id))
+      .then(ok => { if (ok) sfx('chest');else this.message = 'Purchase failed. Please try again.'; })
+      .catch(() => { this.message = 'Purchase failed. Please try again.'; })
+      .finally(() => { this.busy = false; });
   }
   draw(ctx, W, H, dt) {
     const app = this.app, ui = app.ui, p = app.store.profile;
@@ -601,46 +580,65 @@ export class ArmoryScreen {
     header(ctx, W, 'The Armory');goldTag(ctx, app, W - 6, 9);
     if (this.dialog) {
       const action = this.dialog.draw(ctx, ui, W, H, dt);
-      if (action === 'buy' && !this.busy) {
-        const u = UPGRADES.find(u => u.id === this.selected), rank = p.up[u.id] || 0;
-        this.busy = true;
-        // Refused (no answer from the server, or the gold spent meanwhile in another tab): said so, no chest.
-        Promise.resolve(DEBUG ? app.store.setUpgrades({ [u.id]: rank >= u.max ? 0 : rank + 1 }) : app.store.buy(u.id)).then(ok => { if (ok) { sfx('chest'); this.message = null; } else this.message = 'Purchase failed. Please try again.'; }).catch(() => { this.message = 'Purchase failed. Please try again.'; }).finally(() => { this.busy = false; });
-      }
       if (action === 'refund' && !this.busy) { this.busy = true;Promise.resolve(app.store.refund()).catch(() => { this.message = 'Refund failed. Please try again.'; }).finally(() => { this.busy = false; }); }
       if (action) { this.dialog = null;ui.focus('u_' + this.selected);ui.lock(0.2); }
       return;
     }
     ui.begin(dt);
     drawText(ctx, 'Permanent upgrades · all heroes', W / 2, 26, { align: 'center', color: '#8b9bb4' });
-    const tw = Math.min(105, Math.floor((W - 24) / 3)), tx = Math.round((W - 3 * tw - 8) / 2);
-    UPGRADE_GROUPS.forEach(([id, label], i) => {
-      if (button(ctx, ui, 'ug_' + id, tx + i * (tw + 4), 40, tw, 15, label, { on: this.tab === id })) this.tab = id;
-      if (ui.focused('ug_' + id) && ui.focusSource !== 'pointer') this.tab = id;
-    });
-    const ids = UPGRADE_GROUPS.find(g => g[0] === this.tab)[2];
-    const width = Math.min(W - 24, 450), cols = width >= 390 ? 3 : 2, cw = Math.floor((width - (cols - 1) * 6) / cols), ch = 37;
-    const x = Math.round((W - width) / 2);
-    ids.forEach((id, i) => {
-      const u = UPGRADES.find(u => u.id === id), rank = p.up[id] || 0;
-      const maxed = rank >= u.max, open = upgradeOpen(p, u), cost = upgradeCost(id, rank);
-      const cx = x + i % cols * (cw + 6), cy = 64 + Math.floor(i / cols) * (ch + 6);
-      if (ui.item('u_' + id, cx, cy, cw, ch)) this.inspect(u);
-      const f = ui.focused('u_' + id);if (f) this.selected = id;
-      panel(ctx, cx, cy, cw, ch, { rivets: false, fill: '#15131f', trim: f ? ['#fee761', '#be4a2f'] : ['#3a4466', '#262b44'] });
-      ctx.drawImage(SPR[UP_ICONS[id]].frames[0].c, cx + 5, cy + 5);
-      drawText(ctx, u.name, cx + 24, cy + 6, { color: f ? '#fee761' : '#ead4aa' });
-      drawText(ctx, `${rank}/${u.max}`, cx + 7, cy + 24, { color: '#8b9bb4' });
-      drawText(ctx, maxed ? 'MAX' : !open ? 'LOCKED' : DEBUG ? 'FREE' : `${cost} G`, cx + cw - 7, cy + 24, { align: 'right', color: maxed ? '#9ee562' : !open || cost > p.gold ? '#8b9bb4' : '#fee761' });
-    });
-    const selected = UPGRADES.find(u => u.id === this.selected), bottom = 64 + Math.ceil(ids.length / cols) * (ch + 6);
-    if (bottom + 30 < H - 28) wrapText(selected.desc, width - 12).forEach((line, i) => drawText(ctx, line, W / 2, bottom + 6 + i * 10, { align: 'center', color: '#c0cbdc' }));
-    if (bottom + 80 < H - 28) {
-      const bonuses = metaBonuses(p), sy = bottom + 42;
-      panel(ctx, x, sy, width, 43, { title: 'Your preparation', rivets: false, fill: '#15131f' });
-      drawText(ctx, `${bonuses.weaponSlots} weapon slots · ${bonuses.relicSlots} relic slots`, W / 2, sy + 12, { align: 'center', color: '#ead4aa' });
-      drawText(ctx, `${bonuses.reroll} rerolls · ${bonuses.banish} banishes · ${bonuses.revival} revives`, W / 2, sy + 26, { align: 'center', color: '#8b9bb4' });
+    const ids = UPGRADE_GROUPS.flatMap(g => g[2]);
+    const width = Math.min(W - 24, 540), x = Math.round((W - width) / 2), top = 43, height = H - top - 34;
+    const listW = Math.min(190, Math.floor(width * 0.46)), gap = 10, detailX = x + listW + gap, detailW = width - listW - gap, step = 21;
+    const detailH = Math.min(height, detailW < 150 ? 200 : 170);
+    const most = Math.max(0, ids.length * step - height), m = input.mouse;
+    const focused = ids.findIndex(id => ui.focusId === 'u_' + id);
+    if (focused >= 0 && ui.focusId !== this.seen) {
+      this.scroll = clamp(this.scroll, focused * step + step - height, focused * step);
+      this.selected = ids[focused];
     }
+    if (m.wheel) this.scroll += Math.sign(m.wheel) * step * 2;
+    if (m.down && !this.drag && m.x >= x && m.x < x + listW && m.y >= top && m.y < top + height) this.drag = { y: m.y, from: this.scroll, moved: false };
+    let dragged = false;
+    if (this.drag) {
+      if (Math.abs(m.y - this.drag.y) > 4) this.drag.moved = true;
+      if (this.drag.moved) { this.scroll = this.drag.from - (m.y - this.drag.y);dragged = true; }
+      if (!m.down) { if (this.drag.moved) m.clicked = false;this.drag = null; }
+    }
+    this.scroll = clamp(this.scroll, 0, most);
+    ctx.save();ctx.beginPath();ctx.rect(x - 3, top, listW + 6, height);ctx.clip();
+    ids.forEach((id, i) => {
+      const u = UPGRADES.find(u => u.id === id), rank = p.up[id] || 0, open = upgradeOpen(p, u), maxed = rank >= u.max;
+      const cy = top + i * step - this.scroll, f = ui.focused('u_' + id);
+      if (ui.item('u_' + id, x, cy, listW, step - 2, { noMouse: dragged || m.y < top || m.y >= top + height, disabled: this.busy || (!DEBUG && (maxed || !open || p.gold < upgradeCost(id, rank))) })) this.buy(u);
+      if (ui.focused('u_' + id)) this.selected = id;
+      panel(ctx, x, cy, listW, step - 2, { rivets: false, fill: f ? '#241b2c' : '#15131f', trim: f ? ['#fee761', '#be4a2f'] : ['#3a4466', '#262b44'] });
+      ctx.drawImage(SPR[UP_ICONS[id]].frames[0].c, x + 3, cy + 2);
+      drawText(ctx, fitLine(u.name, listW - 49), x + 22, cy + 6, { color: !open ? '#5a6988' : f ? '#fee761' : '#ead4aa' });
+      drawText(ctx, `${rank}/${u.max}`, x + listW - 5, cy + 6, { align: 'right', color: maxed ? '#9ee562' : '#8b9bb4' });
+    });
+    ctx.restore();
+    if (most) {
+      const thumb = Math.max(12, height * height / (ids.length * step));
+      ctx.fillStyle = '#262b44';ctx.fillRect(x + listW + 3, top, 2, height);
+      ctx.fillStyle = '#8b9bb4';ctx.fillRect(x + listW + 3, top + (height - thumb) * this.scroll / most, 2, thumb);
+    }
+    const selected = UPGRADES.find(u => u.id === this.selected), rank = p.up[selected.id] || 0, open = upgradeOpen(p, selected), maxed = rank >= selected.max;
+    const cost = upgradeCost(selected.id, rank);
+    panel(ctx, detailX, top, detailW, detailH, { rivets: false, fill: '#15131f' });
+    let dy = top + 10;
+    for (const [text, color] of [[selected.name, '#fee761'], [selected.desc, '#c0cbdc'], [`Rank ${rank}/${selected.max}`, '#ead4aa'], [`Current: ${upgradeEffect(p, selected.id)}`, '#8b9bb4'], [!open ? shortNeed(needText(PROGRESS.locks.find(l => l.id === selected.lock))) : maxed ? 'Fully upgraded' : `Next: ${upgradeEffect({ ...p, up: { ...p.up, [selected.id]: rank + 1 } }, selected.id)}`, maxed ? '#9ee562' : '#feae34']]) {
+      for (const line of wrapText(text, detailW - 18)) { if (dy < top + detailH - 37) drawText(ctx, line, detailX + 9, dy, { color });dy += 9; }
+      dy += 7;
+    }
+    const canBuy = !this.busy && (DEBUG || (!maxed && open && p.gold >= cost));
+    const buyLabel = this.busy ? 'SAVING...' : DEBUG ? (maxed ? 'CLEAR RANKS' : 'ADD RANK - FREE') : maxed ? 'FULLY UPGRADED' : !open ? 'LOCKED' : `BUY - ${cost} G`;
+    if (button(ctx, ui, 'buy_upgrade', detailX + 8, top + detailH - 24, detailW - 16, 16, buyLabel, { color: '#fee761', disabled: !canBuy })) this.buy(selected);
+    if (top + detailH + 20 < H - 34) {
+      const hint = input.device === 'touch' ? 'Tap an upgrade to buy' : input.device === 'pad' ? `${padKey('A')} buys one rank` : 'ENTER or click buys one rank';
+      wrapText(hint, detailW - 16).forEach((line, i) => drawText(ctx, line, detailX + detailW / 2, top + detailH + 9 + i * 9, { align: 'center', color: '#8b9bb4' }));
+    }
+
+    this.seen = ui.focusId;
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
     if (this.message) drawText(ctx, this.message, W / 2, H - 34, { align: 'center', color: '#f6757a' });
     if (button(ctx, ui, DEBUG ? 'clearall' : 'refund', W - 98, H - 20, 90, 13, DEBUG ? 'CLEAR ALL' : 'REFUND ALL', { disabled: this.busy || !Object.values(p.up).some(Boolean) })) {
@@ -648,6 +646,20 @@ export class ArmoryScreen {
       else { this.dialog = new MenuDialog('Refund upgrades?', ['Return all purchased ranks to gold.', 'This removes their bonuses from future runs. You can buy them again.'], [{ id: 'refund', label: 'REFUND ALL UPGRADES' }]);ui.focus('detail_close');ui.lock(0.2); }
     }
     if (DEBUG && button(ctx, ui, 'maxall', Math.round(W / 2 - 40), H - 20, 80, 13, 'MAX ALL')) app.store.setUpgrades(Object.fromEntries(UPGRADES.map(u => [u.id, u.max])));
+    if (ui.lockT <= 0) {
+      const at = ids.findIndex(id => ui.focusId === 'u_' + id);
+      if (at >= 0) {
+        ui.take('up', 'down', 'left', 'right');
+        const dir = input.pressed('down') - input.pressed('up');
+        if (dir) { ui.focus(at === ids.length - 1 && dir > 0 ? 'back' : 'u_' + ids[clamp(at + dir, 0, ids.length - 1)]);ui.focusSource = 'keys'; }
+        if (input.pressed('right') && canBuy) ui.focus('buy_upgrade');
+      } else if (ui.focusId === 'buy_upgrade') {
+        ui.take('up', 'down', 'left', 'right');
+        if (input.pressed('left')) ui.focus('u_' + this.selected);
+      } else if (input.pressed('up')) {
+        ui.take('up');ui.focus('u_' + this.selected);
+      }
+    }
     ui.end();if (input.pressed('back')) app.go('title');
   }
 }
@@ -662,7 +674,7 @@ export class ArmoryScreen {
 // screenful at a time; the tile in focus is told in full in the panel under the grid, no window to
 // open; Enter on an open weapon is a switch, out of runs or back in; Escape goes back to the title,
 // onto CODEX. The wheel and a touch drag scroll it too.
-export const CODEX_TILE = { min: 104, max: 170, cols: 4, h: 33, gap: 3, top: 43, foot: 30, detail: 44 };
+export const CODEX_TILE = { min: 112, max: 152, h: 44, gap: 6, top: 54, foot: 30, detail: 88 };
 export const CODEX_TABS = [['weapon', 'WEAPONS'], ['relic', 'RELICS'], ['ult', 'ULTIMATES']];
 let codexLastTab = 'weapon'; // the tab the Codex opens on: the one last left
 
@@ -681,23 +693,12 @@ export function codexTab(profile, tab) {
 const tabOf = (e) => (e.type === 'feature' ? 'weapon' : e.type);
 const tileId = (e) => `cx_${e.type}_${e.id}`;
 
-// The tiles' grid for n of them on a W x H screen: as many columns as fit CODEX_TILE.min wide
-// (at most four), below the tabs and above the detail panel (taller on a narrow screen, whose
-// lines wrap more), the BACK button and the keys' line.
+// One horizontal browsing row, with a fixed detail panel beneath it.
 export function codexLayout(W, H, n) {
-  const C = CODEX_TILE;
-  const width = Math.min(C.cols * C.max + (C.cols - 1) * C.gap, W - 24);
-  const cols = clamp(Math.floor((width + C.gap) / (C.min + C.gap)), 1, C.cols);
-  const cw = Math.min(C.max, Math.floor((width - (cols - 1) * C.gap) / cols));
-  const gw = cols * cw + (cols - 1) * C.gap;
-  const detail = gw < 360 ? C.detail + 27 : C.detail;
-  // 11: room over the panel for the plate with its name.
-  const step = C.h + C.gap, room = H - C.top - C.foot - detail - 11;
-  // Whole rows only, never one cut in half over the panel.
-  const rows = Math.max(1, Math.floor((room + C.gap) / step)), total = Math.ceil(n / cols);
-  const view = Math.min(room, rows * step - C.gap);
-  const most = Math.max(0, total * step - C.gap - view);
-  return { cols, rows, total, cw, ch: C.h, step, view, most, gw, detail, x0: Math.round(W / 2 - gw / 2), y0: C.top };
+  const C = CODEX_TILE, gw = Math.min(620, W - 32), cw = Math.min(C.max, Math.max(C.min, Math.floor((gw - C.gap) / 3)));
+  const step = cw + C.gap, most = Math.max(0, n * step - C.gap - gw);
+  return { cols: Math.max(1, Math.floor((gw + C.gap) / step)), rows: 1, total: n, cw, ch: C.h, step, view: gw, most, gw,
+    detail: Math.max(60, Math.min(180, H - C.top - C.h - C.foot - 34)), x0: Math.round((W - gw) / 2), y0: C.top };
 }
 
 const tileName = (e) => e.hiddenCount ? `${e.hiddenCount} hidden weapons` : codexName(e);
@@ -741,7 +742,7 @@ export class CodexScreen {
   enter(app, params = {}) {
     this.app = app;
     this.back = params.back || 'title';
-    this.scroll = 0; // px the grid is scrolled, easing to want
+    this.scroll = 0; // horizontal pixels, easing to want
     this.want = 0;
     this.drag = null; // a press in the grid: where it began, and whether it has become a drag
     this.seen = null; // the focus last frame: a new one by the keys is scrolled into view
@@ -774,47 +775,40 @@ export class CodexScreen {
     const at = list.findIndex((e) => ui.focusId === tileId(e));
     if (ui.focusId !== this.seen) this.message = null;
     if (at >= 0 && ui.focusId !== this.seen) {
-      const top = Math.floor(at / L.cols) * L.step;
-      if (top < this.want) this.want = top;
-      else if (top + L.ch > this.want + L.view) this.want = top + L.ch - L.view;
+      const left = at * L.step;
+      if (left < this.want) this.want = left;
+      else if (left + L.cw > this.want + L.view) this.want = left + L.cw - L.view;
       this.want = clamp(this.want, 0, L.most);
     }
-    const m = input.mouse, out = m.y < L.y0 || m.y >= L.y0 + L.view || !!this.drag?.moved;
-    // The rows in sight, and one more each side, so the keys can step onto the next; and the focused
-    // tile's, however far a page has sent it, so it keeps the focus while the grid scrolls to it.
-    const r0 = Math.max(0, Math.floor(this.scroll / L.step) - 1), r1 = Math.min(L.total - 1, Math.floor((this.scroll + L.view) / L.step) + 1);
-    const fr = at >= 0 ? Math.floor(at / L.cols) : -1;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, L.y0, W, L.view);
-    ctx.clip();
+    const m = input.mouse, out = m.x < L.x0 || m.x >= L.x0 + L.view || m.y < L.y0 || m.y >= L.y0 + L.ch || !!this.drag?.moved;
+    ctx.save();ctx.beginPath();ctx.rect(L.x0, L.y0, L.view, L.ch);ctx.clip();
     list.forEach((e, i) => {
-      const row = Math.floor(i / L.cols);
-      if ((row < r0 || row > r1) && row !== fr) return;
-      const x = L.x0 + (i % L.cols) * (L.cw + CODEX_TILE.gap), y = Math.round(L.y0 + row * L.step - this.scroll);
-      const fid = tileId(e);
+      const x = Math.round(L.x0 + i * L.step - this.scroll), y = L.y0, fid = tileId(e);
       if (ui.item(fid, x, y, L.cw, L.ch, { noMouse: out, disabled: !codexSwitchable(e, prof) })) this.toggle(e);
       const f = ui.focused(fid);
       if (f) this.shown = fid;
-      this.tile(ctx, e, x, y, L.cw, L.ch, f);
-      // A new one in full view is seen, once the Codex is left; its mark stays till then.
-      if (y >= L.y0 && y + L.ch <= L.y0 + L.view && isNewEntry(e, this.fresh)) this.looked.add(seenKey(e));
+      if (x + L.cw >= L.x0 && x <= L.x0 + L.view) this.tile(ctx, e, x, y, L.cw, L.ch, f);
+      if (x >= L.x0 && x + L.cw <= L.x0 + L.view && isNewEntry(e, this.fresh)) this.looked.add(seenKey(e));
     });
     ctx.restore();
-    // The bar: where the view is in the whole grid.
     if (L.most > 0) {
-      const bx = Math.min(W - 4, L.x0 + L.gw + 2), whole = L.view + L.most;
-      const bh = Math.max(10, Math.round((L.view * L.view) / whole)), by = L.y0 + Math.round(((L.view - bh) * this.scroll) / L.most);
-      ctx.fillStyle = '#262b44';
-      ctx.fillRect(bx, L.y0, 2, L.view);
-      ctx.fillStyle = '#8b9bb4';
-      ctx.fillRect(bx, by, 2, bh);
+      const whole = L.view + L.most, bw = Math.max(16, Math.round(L.view * L.view / whole));
+      ctx.fillStyle = '#262b44';ctx.fillRect(L.x0, L.y0 + L.ch + 5, L.view, 2);
+      ctx.fillStyle = '#8b9bb4';ctx.fillRect(L.x0 + Math.round((L.view - bw) * this.scroll / L.most), L.y0 + L.ch + 5, bw, 2);
     }
-    const shown = list.find((e) => tileId(e) === this.shown) || list[0];
-    if (shown) this.drawDetail(ctx, shown, L.x0, L.y0 + L.view + 11, L.gw, L.detail);
+    const shown = list.find(e => tileId(e) === this.shown) || list[0];
+    if (shown) this.drawDetail(ctx, shown, L.x0, L.y0 + L.ch + 34, L.gw, L.detail);
+    const shownIndex = Math.max(0, list.indexOf(shown));
+    drawText(ctx, `${shownIndex + 1} / ${list.length} · SCROLL TO BROWSE`, W / 2, L.y0 + L.ch + 11, { align: 'center', color: '#8b9bb4' });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) this.exit();
     const weapon = at >= 0 && list[at].type === 'weapon' && list[at].open;
     keysHint(ctx, W, H, `ARROWS move · Q/E tabs · ${weapon ? `ENTER ${list[at].home ? 'include' : 'exclude'} · ` : ''}ESC back`);
+    if (at >= 0 && ui.lockT <= 0) {
+      const dir = input.pressed('right') - input.pressed('left');
+      if (dir) { ui.take('left', 'right');ui.focus(tileId(list[clamp(at + dir, 0, list.length - 1)])); }
+      if (input.pressed('up')) { ui.take('up');ui.focus('ct_' + this.tab); }
+      if (input.pressed('down')) { ui.take('down');ui.focus('back'); }
+    }
     ui.end();
     this.seen = ui.focusId;
     if (input.pressed('back')) this.exit();
@@ -901,15 +895,14 @@ export class CodexScreen {
     rows.slice(0, room).forEach((r, i) => drawRich(ctx, r.text, x + 10, y + 11 + i * 9, { color: r.color, hi: '#fee761' }));
   }
 
-  // The grid's scroll: the wheel a row a notch; a press in the grid that moves more than a few
-  // pixels drags it (and lifting then is no click); it eases to where it is wanted.
+  // The wheel moves one card; dragging the row scrolls without activating a weapon.
   scrollGrid(L, dt) {
     const m = input.mouse;
     if (m.wheel) this.want += Math.sign(m.wheel) * L.step;
-    if (m.down && !this.drag && m.y >= L.y0 && m.y < L.y0 + L.view) this.drag = { y: m.y, from: this.want, moved: false };
+    if (m.down && !this.drag && m.x >= L.x0 && m.x < L.x0 + L.view && m.y >= L.y0 && m.y < L.y0 + L.ch) this.drag = { x: m.x, from: this.want, moved: false };
     if (this.drag) {
-      if (Math.abs(m.y - this.drag.y) > 4) this.drag.moved = true;
-      if (this.drag.moved) this.want = this.scroll = clamp(this.drag.from - (m.y - this.drag.y), 0, L.most);
+      if (Math.abs(m.x - this.drag.x) > 4) this.drag.moved = true;
+      if (this.drag.moved) this.want = this.scroll = clamp(this.drag.from - (m.x - this.drag.x), 0, L.most);
       if (!m.down) {
         if (this.drag.moved) m.clicked = false;
         this.drag = null;

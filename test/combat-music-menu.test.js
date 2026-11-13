@@ -56,7 +56,7 @@ function trial({ W = 480, H = 270, settings = {}, reset = true } = {}) {
     startRun() { this.started++; this.startedMusic = this.settings.combatMusic; },
     go(name) { this.went.push(name); },
   };
-  const screen = new ModeScreen(); screen.enter(app);
+  const screen = new ModeScreen(); screen.enter(app, { again: true });
   const harness = { screen, app, W, H };
   idle(harness, 20);
   return harness;

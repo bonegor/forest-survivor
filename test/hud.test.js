@@ -98,21 +98,8 @@ function keepOff(g, W, H) {
     'the health orb': [0, H - 52, 52, 52],
     'the fury orb': [W - 52, H - 52, 52, 52],
   };
-  const b = g.boss;
-  if (b && !b.dead) {
-    const y = g.mode === 'dungeon' || g.inCrypt ? 48 : 40, w = Math.min(220, W - 120);
-    const label = b.lord ? `${b.name.toUpperCase()}, LORD OF THE CRYPT` : `${b.def.name.toUpperCase()}, ${b.def.title.toUpperCase()}`;
-    out["the boss's bar"] = [Math.floor(W / 2 - w / 2) - 2, y - 2, w + 4, 10];
-    out["the boss's name"] = textBox(label, W / 2, y + 9, 'center');
-  }
   const p = g.player;
   if (p.ult || p.fury >= 100) out["the ultimate's name"] = textBox(p.hero.ultName.toUpperCase(), W - 4, H - 52 - 11, 'right');
-  if (g.mode === 'dungeon') {
-    out['the floor line'] = textBox(`FLOOR ${g.floor} · ${g.floorName.toUpperCase()}`, W / 2, 10, 'center');
-    if (g.objective) out['the seal line'] = textBox(g.objective, W / 2, 21, 'center');
-    out['the clock'] = textBox(fmtTime(g.time), W / 2, 32, 'center');
-    out['the minimap'] = [W - g.world.W - 6, 34, g.world.W + 4, g.world.H + 4];
-  }
   return out;
 }
 
@@ -126,7 +113,7 @@ function assertClear(g, W, H, what) {
   }
 }
 
-test('the edge markers keep off the boss bar and name and the orbs, wherever what they point at is', () => {
+test('warning marker placement keeps clear of the orbs, wherever a threat approaches', () => {
   for (const W of [480, 427]) {
     const H = 270;
     game((g, p) => {
@@ -142,7 +129,7 @@ test('the edge markers keep off the boss bar and name and the orbs, wherever wha
   }
 });
 
-test('in a dungeon they keep below its floor and seal lines and the boss, and off the minimap', () =>
+test('dungeon warning marker placement keeps clear of the orbs', () =>
   game((g, p) => {
     const W = 480, H = 270;
     g.spawnBoss('butcher', p.x + 900, p.y + 40);
@@ -287,7 +274,7 @@ test('the pause screen shows the clock the HUD shows: time left in a timed run, 
   }
 });
 
-test('only the three elites nearest the hero are named; a boss speaks over them and the markers, below its name', () =>
+test('only the three elites nearest the hero are named; a boss speaks above them and clear of the clock', () =>
   game((g, p) => {
     const W = 480, H = 270;
     const elites = [];
@@ -319,7 +306,54 @@ test('only the three elites nearest the hero are named; a boss speaks over them 
     assert.ok(frame > 0, 'the boss speaks');
     assert.ok(near.slice(0, 3).every((e) => named(e) < frame), 'after the names');
     const marker = calls.findLastIndex((c) => c[0] === 'translate');
-    assert.ok(marker > 0 && marker < frame, 'and after the markers');
-    const nameBottom = 40 + 9 + GLYPH_H + 1;
-    assert.ok(calls[frame][2] >= nameBottom, `below the boss's name (${calls[frame][2]} >= ${nameBottom})`);
+    assert.equal(marker, -1, 'persistent chest arrows are absent during play');
+    assert.ok(calls[frame][2] >= g.hud.topLines(), 'speech stays below the clock');
   }));
+
+
+test('the top HUD is one small clock in every mode, with no persistent progress or counters', () => {
+  for (const mode of ['s15', 'ranked', 'dungeon']) game((g) => {
+    g.time = 42;
+    g.nightmare = true;
+    g.kills = 123;
+    g.gold = 99;
+    const { ctx, calls } = recorder();
+    g.hud.drawTop(ctx, 480, 0);
+    const images = calls.filter((c) => c[0] === 'drawImage');
+    assert.equal(images.length, 1, `${mode}: the clock alone`);
+    assert.ok(images[0].length < 6 || (images[0][4] === images[0][1].width && images[0][5] === images[0][1].height), 'clock uses its native pixel size');
+    assert.equal(calls.filter((c) => c[0] === 'fillRect').length, 0, 'no progress indicators');
+  }, { mode });
+});
+
+test('play hides persistent HUD indicators, while the full map remains available on request', () => game((g) => {
+  const { ctx } = recorder();
+  const hidden = ['drawXp', 'drawSlots', 'drawIndicators', 'drawGold'];
+  for (const method of hidden) g.hud[method] = () => assert.fail(`${method} should not appear during play`);
+  let maps = 0;
+  g.world.drawMinimap = (_ctx, _W, _H, big) => { assert.equal(big, true); maps++; };
+  g.hud.draw(ctx, 480, 270, 0);
+  assert.equal(maps, 0);
+  g.showMap = true;
+  g.hud.draw(ctx, 480, 270, 0);
+  assert.equal(maps, 1);
+}));
+
+test('boss health and plain name follow the visible boss instead of the top of the screen', () => game((g, p) => {
+  const b = g.spawnBoss('boneking', p.x + 30, p.y + 60);
+  b.introT = 10;
+  b.slamAt = 0;
+  const { ctx, calls } = recorder();
+  g.hud.drawBoss(ctx, 480, 1 / 60, 270);
+  const first = { ...g.hud.barPoint };
+  assert.equal(g.hud.barLabel, b.def.name.toUpperCase());
+  assert.ok(first.y > g.hud.topLines() + 16);
+  b.x += 25;
+  calls.length = 0;
+  g.hud.drawBoss(ctx, 480, 1 / 60, 270);
+  assert.ok(g.hud.barPoint.x > first.x, 'the bar moves with the boss');
+  b.x += 10000;
+  calls.length = 0;
+  g.hud.drawBoss(ctx, 480, 1 / 60, 270);
+  assert.equal(calls.length, 0, 'offscreen bosses have no persistent screen bar');
+}));

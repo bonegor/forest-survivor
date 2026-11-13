@@ -191,6 +191,23 @@ export class Hollow {
     const d = discSprite(r, ['#0b0912', '#181425', '#68386c'], 0.5);
     ctx.globalAlpha = 0.9 * grow;
     ctx.drawImage(d, Math.round(sx - (d.width * S) / 2), Math.round(sy - (d.height * S) / 2), d.width * S, d.height * S);
+    // Broken earth and inward-moving chips distinguish a pit from a liquid pool.
+    // Deterministic drawing only: no extra particles or combat-random draws.
+    const pixel = Math.max(1, Math.round(S));
+    for (let i = 0; i < 10; i++) {
+      const a = i / 10 * TAU + 0.2, edge = r * (i % 2 ? 0.91 : 0.98);
+      ctx.fillStyle = i % 3 ? '#4b3d44' : '#7d6a6a';
+      ctx.fillRect(Math.round(sx + Math.cos(a) * edge * S - pixel),
+        Math.round(sy + Math.sin(a) * edge * S - pixel), pixel * (i % 2 ? 2 : 3), pixel * 2);
+    }
+    for (let i = 0; i < 4; i++) {
+      const phase = (this.t * (this.w.s.drag ? 0.9 : 0.65) + i / 4) % 1;
+      const a = i / 4 * TAU + 0.6, distance = lerp(this.R * 0.85, this.Rc * 0.25, phase);
+      ctx.globalAlpha = grow * (1 - phase) * 0.65;
+      ctx.fillStyle = '#a8b5b2';
+      ctx.fillRect(Math.round(sx + Math.cos(a) * distance * S),
+        Math.round(sy + Math.sin(a) * distance * S), pixel * 2, pixel);
+    }
     // Rings drawing in toward the pit show what it is doing.
     for (let k = 0; k < 2; k++) {
       const f = (this.t * 1.1 + k / 2) % 1;
@@ -251,6 +268,31 @@ export function toll(g, w, foes) {
 
 // The echoes of Death Knell: while a foe flees it drops a ghostly pool every so often, each short
 // lived, cutting whatever runs through it.
+// Keep Pool's existing collision, damage, particles and lifespan; only replace the
+// borrowed blue fire with concentric traces of the bell's toll.
+class EchoPool extends Pool {
+  drawGround(ctx, cam) {
+    const R = this.r;
+    if (R < 1) return;
+    const [sx, sy] = toScreen(cam, this.x, this.y), S = cam.S;
+    for (let i = 0; i < 2; i++) {
+      const phase = (this.t * 2 + i / 2) % 1;
+      const image = ringSprite(Math.max(1, R * (0.25 + phase * 0.7)), i ? '#b55088' : '#ead4aa', 1);
+      ctx.globalAlpha = this.alpha * (1 - phase * 0.6) * 0.7;
+      ctx.drawImage(image, Math.round(sx - image.width * S / 2), Math.round(sy - image.height * S / 2), image.width * S, image.height * S);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawGlow(ctx, cam) {
+    const [sx, sy] = toScreen(cam, this.x, this.y), size = this.r * 2.6 * cam.S;
+    ctx.globalAlpha = 0.12 * this.alpha;
+    ctx.drawImage(glow('#8f5bb0'), sx - size / 2, sy - size / 2, size, size);
+    ctx.globalAlpha = 1;
+    this.g.light(this.x, this.y, this.r * 3, 'purple', 0.25 * this.alpha);
+  }
+}
+
 class Echoes {
   constructor(g, w, foes) {
     this.g = g;
@@ -268,7 +310,7 @@ class Echoes {
     for (const e of this.foes) {
       if (e.dead || e.fearT <= 0) continue;
       any = true;
-      g.effects.push(new Pool(g, this.w, e.x, e.y, 10 * Math.sqrt(s.area), 0.8, s.dmg * 0.5, 0.3, 'hell', false, { decay: true, sparse: true, kb: 0 }));
+      g.effects.push(new EchoPool(g, this.w, e.x, e.y, 10 * Math.sqrt(s.area), 0.8, s.dmg * 0.5, 0.3, 'hell', false, { decay: true, sparse: true, kb: 0 }));
     }
     return any;
   }

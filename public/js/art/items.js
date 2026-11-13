@@ -139,6 +139,11 @@ export const PICKUP_ART = {
 
 export const PROJECTILE_ART = {
   arrow: { emissive: '', frames: [['ww........g.', 'rbBBBBBBBBGw', 'ww........g.']] },
+  // Display-only bolt variants. Projectile.shape keeps the original silver bolt's
+  // bounds, so these identities do not change the weapons' reach or damage.
+  splitpin_bolt: { emissive: 'w', frames: [['yy......G.w', 'BbGGGGGGG..', 'yy......G.w']] },
+  splitpin_shard: { emissive: 'w', frames: [['.........G.', '....NNGGGww', '.........G.']] },
+  ratchet_bolt: { emissive: 'w', frames: [['.B.B.B..NN.', 'bBGBGBGGGww', '.b.b.b..NN.']] },
   dagger: { emissive: '', frames: [['...y......', 'mmbyGGGGGw', '...yNNNNg.']] },
   axe: {
     emissive: '',

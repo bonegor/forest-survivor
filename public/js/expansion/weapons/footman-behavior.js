@@ -86,6 +86,24 @@ class RankShock {
 
   draw(ctx, cam) {
     drawCut(ctx, cam, this.x, this.y - 2, this.radius, SHOCK_ARC, this.ang, this.t / SHOCK_TIME, BRONZE);
+    // The delayed impact breaks forward through the next rank. Three short
+    // bronze splinters stay inside its existing sector and vanish with it.
+    if (this.t < SHOCK_DELAY) return;
+    const progress = Math.min(1, (this.t - SHOCK_DELAY) / (SHOCK_TIME - SHOCK_DELAY)), S = cam.S;
+    const size = Math.max(1, Math.round(S));
+    ctx.save();
+    ctx.globalAlpha *= 1 - progress;
+    for (const offset of [-0.42, 0, 0.42]) {
+      const dx = Math.cos(this.ang + offset), dy = Math.sin(this.ang + offset);
+      const distance = this.radius * (0.3 + progress * 0.4);
+      for (let i = 0; i < 4; i++) {
+        const d = distance + i;
+        ctx.fillStyle = i === 3 ? '#fff1cb' : '#b87848';
+        ctx.fillRect(Math.round((this.x + dx * d - cam.x) * S),
+          Math.round((this.y - 2 + dy * d - cam.y) * S), size, size);
+      }
+    }
+    ctx.restore();
   }
 }
 

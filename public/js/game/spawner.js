@@ -5,7 +5,7 @@
 import { kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, monsterHp, minuteOf, pocketAt, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
-import { ENEMIES, CRYPT_LORD, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_TITLE, CHAMPION_MODS } from '../data/enemies.js';
+import { ENEMIES, CRYPT_LORD, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_MODS } from '../data/enemies.js';
 import { rand, randi, pick, weighted, TAU, chance } from '../engine/util.js';
 import { sfx } from '../engine/audio.js';
 import { NIGHTMARE } from '../data/difficulty.js';
@@ -482,7 +482,8 @@ export class Spawner {
     const pt = at || g.world.spawnPoint(g, 20);
     if (!pt) return null;
     const mod = pick(CHAMPION_MODS);
-    const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)} ${pick(CHAMPION_TITLE)}`;
+    const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)}`;
+    Math.random(); // The removed epithet used one draw; keep seeded spawns and loot unchanged.
     const st = this.stats(phase);
     const e = g.spawnEnemy(type, pt.x, pt.y, {
       hpMul: st.hpMul * 13 * (mod.id === 'stone' ? 1.4 : 1),
@@ -495,7 +496,7 @@ export class Spawner {
     if (e) {
       e.xp *= 8;
       if (!quiet) {
-        g.banner(name, `${mod.name} champion`, mod.color, 2.2);
+        g.banner(name, '', mod.color, 2.2);
         sfx('charge');
       }
     }
@@ -511,7 +512,8 @@ export class Spawner {
     const g = this.g;
     // No Stoneskin damage cut or Swift variant that outruns the calibrated pace.
     const mod = pick(CHAMPION_MODS.filter((m) => m.id !== 'stone' && m.id !== 'swift'));
-    const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)} ${pick(CHAMPION_TITLE)}`;
+    const name = `${pick(CHAMPION_PREFIX)}${pick(CHAMPION_SUFFIX)}`;
+    Math.random(); // Keep the existing seeded crypt layout and encounters after removing titles.
     const e = g.spawnEnemy(type, x, y, {
       hpMul: g.diff.health * g.map.foe.hp * CRYPT_LORD.health,
       dmgMul: 1.5 * CRYPT_LORD.damage,

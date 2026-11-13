@@ -33,11 +33,11 @@ test('the Codex: every tab\'s tiles on the screen at every size, scrolling where
     for (const type of ['weapon', 'relic', 'ult']) {
       const n = codexTab(prof, type).length, L = codexLayout(W, H, n);
       assert.ok(L.x0 >= 4 && L.x0 + L.cols * L.cw + (L.cols - 1) * CODEX_TILE.gap <= W - 4, `${W}x${H} ${type}: within the sides`);
-      assert.ok(L.y0 + L.view <= H - CODEX_TILE.foot, `${W}x${H} ${type}: above the foot`);
+      assert.ok(L.y0 + L.ch <= H - CODEX_TILE.foot, `${W}x${H} ${type}: above the foot`);
       assert.ok(L.total * L.step - CODEX_TILE.gap - L.most <= L.view, `${W}x${H} ${type}: scrolled to the end, the last row in sight`);
-      assert.equal(L.most > 0, L.total > L.rows, `${W}x${H} ${type}: it scrolls only where it runs over`);
+      assert.equal(L.most > 0, L.total * L.step - CODEX_TILE.gap > L.view, `${W}x${H} ${type}: it scrolls only where it runs over`);
       assert.ok(L.cw >= CODEX_TILE.min || L.cols === 1, `${W}x${H} ${type}: tiles wide enough for their lines`);
-      if (W >= 480) assert.equal(L.cols, 4, `${W}x${H} ${type}: four to a row`);
+      assert.equal(L.rows, 1, `${W}x${H} ${type}: one horizontal row`);
     }
   }
 });
@@ -58,7 +58,7 @@ test("the Codex's tabs hold every category; a tile of another tab in focus shows
       assert.ok(!app.ui.items.some(i => i.id.startsWith('cx_relic_')), 'one tab at a time');
       assert.ok(app.ui.items.some(i => i.id === 'back'));
       for (const it of app.ui.items) {
-        assert.ok(it.x >= 0 && it.x + it.w <= W);
+        if (!it.id.startsWith('cx_')) assert.ok(it.x >= 0 && it.x + it.w <= W);
         assert.ok(it.y >= 0 && (it.id.startsWith('cx_') ? it.y < H : it.y + it.h <= H));
       }
       const last = ults.at(-1);
@@ -67,7 +67,7 @@ test("the Codex's tabs hold every category; a tile of another tab in focus shows
       assert.equal(s.tab, 'ult');
       assert.equal(s.want, L.most);
       const tile = app.ui.items.find(i => i.id === `cx_${last.type}_${last.id}`);
-      assert.ok(tile && tile.y >= L.y0 && tile.y + tile.h <= L.y0 + L.view);
+      assert.ok(tile && tile.x >= L.x0 && tile.x + tile.w <= L.x0 + L.view);
     }
   }
 });
@@ -129,7 +129,9 @@ test('the HUD draws the slots a run hasn\'t opened and a shut ultimate locked', 
       slot(...a);
     };
     g.hud.draw(ctx, 480, 270, 1);
-    assert.equal(locked, MAX_WEAPONS - g.maxWeapons + MAX_RELICS - g.maxRelics, 'each slot past the run\'s locked');
+    assert.equal(locked, 0, 'the active HUD hides build slots');
+    g.hud.drawSlots(ctx, g.player);
+    assert.equal(locked, MAX_WEAPONS - g.maxWeapons + MAX_RELICS - g.maxRelics, 'the chest build view still marks unopened slots');
     assert.ok(locked > 0, 'a new player has fewer than six of each');
     assert.ok(g.player.ultLocked, 'his ultimate shut');
     const before = g.hud.comets?.length || 0;
@@ -172,13 +174,13 @@ test('the Codex scrolls: the wheel a row, the keys bring the focused tile into v
   for (let i = 0; i < 60; i++) frame();
   assert.equal(s.scroll, L.most, 'down to the end');
   const tile = app.ui.items.find((it) => it.id === `cx_${last.type}_${last.id}`);
-  assert.ok(tile && tile.y >= L.y0 && tile.y + tile.h <= L.y0 + L.view, 'the last tile in full view');
+  assert.ok(tile && tile.x >= L.x0 && tile.x + tile.w <= L.x0 + L.view, 'the last tile in full view');
   // A drag down with the mouse: back to the top, and lifting is no click.
   input.mouse.x = W / 2;
   input.mouse.y = L.y0 + 10;
   input.mouse.down = true;
   frame();
-  input.mouse.y = L.y0 + 10 + L.most;
+  input.mouse.x = W / 2 + L.most;
   frame();
   input.mouse.down = false;
   input.mouse.clicked = true;

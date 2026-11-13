@@ -111,11 +111,3 @@ test('a boss’s fall fells no small fry, and the night goes on', () =>
     run(g, 3);
     assert.ok(spawned > 0, `the horde keeps coming (${spawned})`);
   }));
-
-test('the night’s bar is 120 px wide where it can be, and on a phone keeps clear of the relic slots', async () => {
-  const { nightBarHalf } = await import('../public/js/game/hud.js');
-  assert.equal(nightBarHalf(240), 60, '1920×1080: the full bar');
-  assert.equal(nightBarHalf(320), 60, '1280×720');
-  const B = nightBarHalf(147); // a phone held upright, 295 px across
-  assert.ok(B >= 30 && 147 - B >= 3 + 6 * 18, `clear of the slots (${B})`);
-});

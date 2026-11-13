@@ -183,7 +183,7 @@ test('the HUD orbs paint what they painted: glass, liquid, waves, bubbles, sheen
 
 // ------------------------------------------------------------- HUD edge arrows --
 
-test('the HUD arrows at the screen edge point where they pointed, in the same order', () =>
+test('the quiet HUD leaves out persistent exploration arrows', () =>
   game((g, p) => {
     // A boss, chests and thieves off screen every way, and one of each on screen (no arrow); the
     // map's own shrines and crypts left out.
@@ -197,7 +197,7 @@ test('the HUD arrows at the screen edge point where they pointed, in the same or
     // Each arrow: where it stands, which way it points, its colour.
     const arrows = (t) => {
       const { ctx, calls } = recorder(), out = [];
-      g.hud.drawIndicators(ctx, 480, 270, t);
+      g.hud.drawWarningIndicators(ctx, 480, 270, t);
       for (const c of calls) {
         if (c[0] === 'translate') out.push([c[1], c[2]]);
         else if (c[0] === 'rotate') out.at(-1).push(+c[1].toFixed(9));
@@ -205,7 +205,7 @@ test('the HUD arrows at the screen edge point where they pointed, in the same or
       }
       return out;
     };
-    fixture('arrows', [0, 1.7].map(arrows));
+    assert.deepEqual([0, 1.7].map(arrows), [[], []]);
   }));
 
 // ---------------------------------------------------------- monster headings --

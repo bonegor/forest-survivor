@@ -80,7 +80,7 @@ function el(tag, props = {}, ...kids) {
 const clone = (o) => JSON.parse(JSON.stringify(o));
 // What the run tab's lists of weapons and relics show, to rebuild them when it changes (renderRun).
 const kitSig = (p) => `${p.weapons.map((w) => `${w.id}:${w.level}`)}|${[...p.passives]}`;
-const foeName = (id) => (ENEMIES[id] ? (ENEMIES[id].title ? `${ENEMIES[id].name}, ${ENEMIES[id].title}` : ENEMIES[id].name) : id);
+const foeName = (id) => ENEMIES[id]?.name || id;
 const parseTime = (s) => {
   const t = String(s).trim();
   if (/^\d+:\d{1,2}$/.test(t)) {

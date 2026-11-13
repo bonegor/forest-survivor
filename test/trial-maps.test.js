@@ -86,12 +86,15 @@ test('a new save shows the desert, the only map open, under Survival; BEGIN play
   const tabs = MAP_LADDER.map((m) => item(app, 'map_' + m.id));
   assert.ok(tabs.every(Boolean), 'a tab for each map, in the ladder\'s order');
   assert.deepEqual(tabs.map((t) => t.disabled), [false, true, true, true, true], 'the desert alone open');
-  const card = item(app, 'm_s15'), diff = item(app, 'd_easy');
-  assert.ok(tabs.every((t) => t.y >= card.y + card.h && t.y + t.h <= diff.y), 'between the trials and the difficulties');
+  const card = item(app, 'm_s15');
+  assert.ok(tabs.every((t) => t.y >= card.y + card.h), 'maps below the trials');
+  assert.equal(item(app, 'd_easy'), undefined, 'difficulty is a separate step');
   assert.ok(Math.abs((tabs[0].x + tabs[4].x + tabs[4].w) / 2 - view.W / 2) <= 1, 'centred');
   assert.equal(app.scene.drawn.biome, 'desert', "the menu's land behind it");
   assert.equal(s.desc, MAP_LADDER[0].desc, 'its own words under the trials');
   assert.equal(app.choice.map, undefined, 'nothing chosen for coming here');
+  click(s, item(app, 'next'));
+  for (let i = 0; i < 20; i++) frame(s);
   click(s, item(app, 'begin'));
   assert.deepEqual(app.started, { hero: 'knight', mode: 's15', diff: 'medium', nightmare: false, map: 'desert' });
   assert.equal(loadSettings().map, undefined, 'nor saved');
@@ -129,7 +132,7 @@ test('moving along the row picks an open map and remembers it; a shut one says w
   press(s, 'ArrowDown');
   assert.equal(app.ui.focusId, 'map_frozen');
   press(s, 'ArrowDown');
-  assert.equal(app.ui.focusId, 'd_medium');
+  assert.equal(app.ui.focusId, 'next');
   assert.equal(app.choice.map, 'frozen', 'passing by changes nothing');
   // Along the trials, left and right go where they always have, never down onto the row's end tabs
   // (further out than the end trials' middles): past the last round to the first, past the first to
@@ -145,16 +148,17 @@ test('moving along the row picks an open map and remembers it; a shut one says w
 // Off the difficulties' ends too (the review of 28 October 2026): left from NORMAL and right from
 // ELITE go up to the trial over them, as before the maps, never onto the row's end tabs (further out
 // than the end difficulties' middles), whose focus would pick the Sunscorch or the Abyss.
-test('left from NORMAL and right from ELITE pick no map', () => {
+test('difficulty changes leave the destination intact, and Back returns to its selection', () => {
   const { s, app } = trialScreen(winning(['desert', 'frozen', 'meadow', 'forest']), { diff: 'easy', map: 'frozen' });
-  assert.deepEqual(app.ui.items.filter((i) => i.id.startsWith('map_')).map((t) => t.disabled), [false, false, false, false, false], 'every map open, the Abyss too');
+  click(s, item(app, 'next'));
+  for (let i = 0; i < 20; i++) frame(s);
+  assert.equal(s.step, 'difficulty');
+  assert.ok(!app.ui.items.some(i => i.id.startsWith('map_')));
   app.ui.focusId = 'd_easy';
-  press(s, 'ArrowLeft');
-  assert.deepEqual([app.ui.focusId, app.choice.map, loadSettings().map], ['m_s15', 'frozen', undefined]);
-  app.ui.focusId = 'd_hard';
-  press(s, 'ArrowRight');
-  assert.deepEqual([app.ui.focusId, app.choice.map, loadSettings().map], ['m_ranked', 'frozen', undefined]);
-  assert.deepEqual([app.choice.mode, app.choice.diff], ['s15', 'hard'], 'Ranked still shut to this save: in focus, not chosen');
+  press(s, 'ArrowRight');press(s, 'ArrowRight');
+  assert.equal(app.choice.diff, 'hard');assert.equal(app.choice.map, 'frozen');
+  press(s, 'Escape');
+  assert.equal(s.step, 'destination');assert.equal(app.choice.map, 'frozen');
 });
 
 test('a map chosen that has shut since falls back to the one shown; the Dungeon and Ranked show no row', () => {
@@ -166,6 +170,8 @@ test('a map chosen that has shut since falls back to the one shown; the Dungeon 
   // leaves the choice without one (a run without a map is the Darkwood's).
   const old = trialScreen(sanitizeProfile({ v: 4, runs: 5, heroes: ['knight'] }));
   assert.equal(old.app.scene.drawn.biome, 'forest');
+  click(old.s, item(old.app, 'next'));
+  for (let i = 0; i < 20; i++) frame(old.s);
   click(old.s, item(old.app, 'begin'));
   assert.equal(old.app.started.map, undefined);
   for (const mode of ['dungeon', 'ranked']) {
@@ -178,19 +184,15 @@ test('a map chosen that has shut since falls back to the one shown; the Dungeon 
 
 // An 854 x 480 window is 427 x 240 (an itch.io embed), a 1366 x 768 laptop 456 x 256, a phone held
 // upright about 293 x 633 (engine/view.js). Normal's notes are the longest.
-test('the row, the difficulties and BEGIN fit a low window and a phone held upright, BEGIN clear of BACK', () => {
+test('both destination and challenge steps fit short and portrait windows', () => {
   for (const [W, H] of [[480, 270], [456, 256], [427, 240], [293, 633]]) {
     const { s, app } = trialScreen(winning(['desert']), { diff: 'easy' });
-    frame(s, W, H);
-    const at = `${W} x ${H}`;
-    const tabs = app.ui.items.filter((i) => i.id.startsWith('map_')), card = item(app, 'm_s15'), diff = item(app, 'd_easy');
-    const box = item(app, 'nightmare'), begin = item(app, 'begin'), back = item(app, 'back');
-    assert.equal(tabs.length, 5, at);
-    assert.ok(tabs.every((t) => t.x >= 0 && t.x + t.w <= W), `${at}: the row on the screen`);
-    assert.ok(tabs.every((t) => t.y >= card.y + card.h && t.y + t.h <= diff.y), `${at}: between the trials and the difficulties`);
-    assert.ok(box.y + box.h <= begin.y, `${at}: the box over BEGIN`);
-    assert.ok(begin.y + begin.h <= H, `${at}: BEGIN on the screen`);
-    assert.ok(begin.x >= back.x + back.w || begin.y + begin.h <= back.y, `${at}: BEGIN clear of BACK`);
+    for (const step of ['destination', 'difficulty']) {
+      s.step = step;frame(s, W, H);
+      for (const it of app.ui.items) assert.ok(it.x >= 0 && it.y >= 0 && it.x + it.w <= W && it.y + it.h <= H, `${W}x${H} ${step}: ${it.id}`);
+      assert.equal(app.ui.items.some(i => i.id.startsWith('map_')), step === 'destination');
+      assert.equal(!!item(app, 'd_easy'), step === 'difficulty');
+    }
   }
 });
 
@@ -202,7 +204,7 @@ test('BEGIN keeps one place whatever trial and difficulty are chosen', () => {
     const ys = [];
     for (const choice of [{ diff: 'easy' }, { diff: 'medium' }, { diff: 'hard' }, { diff: 'hard', nightmare: true }, { mode: 'dungeon', diff: 'easy' }, { mode: 'ranked' }]) {
       const { s, app } = trialScreen(unlockEverything(defaultProfile()), choice, { rankedNote: true });
-      frame(s, W, H);
+      s.step = 'difficulty';frame(s, W, H);
       ys.push(item(app, 'begin').y);
     }
     assert.equal(new Set(ys).size, 1, `${W} x ${H}: ${ys}`);
