@@ -2,6 +2,7 @@ import { sfx } from '../../engine/audio.js';
 import { TAU } from '../../engine/util.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { reachesFeet } from '../../game/hitbox.js';
+import { nearbyWeaponProp } from '../../game/weapon-targets.js';
 
 const REACH = 118, RADIUS = 24, INWARD_SPEED = 105;
 const MAX_SPOKES = 8, MAX_HITS = 12, MAX_CASTS = 6, FADE = 0.13;
@@ -23,7 +24,7 @@ function freeDistance(world, x, y, dx, dy, limit) {
 
 function previewTarget(w) {
   const { g } = w, p = g.player;
-  return g.nearestEnemy(p.x, p.y, REACH, e => visible(g.world, p.x, p.y, e.x, e.y));
+  return g.nearestEnemy(p.x, p.y, REACH, e => visible(g.world, p.x, p.y, e.x, e.y)) || nearbyWeaponProp(w);
 }
 
 class Convergence {
@@ -61,7 +62,7 @@ class Convergence {
       if (this.w.fx === this) this.w.fx = null;
       return false;
     }
-    if (from >= 0 && this.left) this.sweep(from, Math.max(0, 1 - this.t / this.travel));
+    if (from >= 0) this.sweep(from, Math.max(0, 1 - this.t / this.travel));
     return true;
   }
 
@@ -70,15 +71,14 @@ class Convergence {
     const foes = g.grid.foes(x, y, this.radius + width);
     for (const { dx, dy } of this.spokes) {
       for (const e of foes) {
-        if (e.dead || e.prop || e.spawnT > 0.3 || this.hit.has(e.id)) continue;
+        if (e.dead || (!e.prop && !this.left) || e.spawnT > 0.3 || this.hit.has(e.id)) continue;
         if (!reachesFeet(e, x + dx * from, y + dy * from, x + dx * to, y + dy * to, width) ||
             !visible(world, x, y, e.x, e.y)) continue;
         this.hit.add(e.id);
-        this.left--;
+        if (!e.prop) this.left--;
         const strong = e.boss || e.lord || e.elite;
         const length = Math.hypot(dx, dy);
         g.hitEnemy(e, this.dmg, { w, kb: strong ? 0 : this.kb, kx: -dx / length, ky: -dy / length });
-        if (!this.left) return;
       }
     }
   }

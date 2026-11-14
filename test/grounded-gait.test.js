@@ -10,11 +10,16 @@ import { moveFor } from '../public/js/data/difficulty.js';
 import { BASE_SPEED } from '../public/js/game/player.js';
 import { unpack } from '../tools/animation-round/build.mjs';
 import { buildGroundedWalk, groundedFoot, GROUNDED_MODELS } from '../tools/animation-round/grounded-walk.mjs';
+import { heavyHeroClarity } from '../tools/animation-round/heavy-hero-clarity.mjs';
+import originalBerserker from '../tools/hero-polish-review/before/berserker.js';
+import originalPaladin from '../tools/hero-polish-review/before/paladin.js';
+const preserved = { berserker: originalBerserker, paladin: originalPaladin };
 
 test('all articulated heroes retain their source identity and complete registered gait in the packed game',()=>{
   assert.equal(Object.keys(GROUNDED_MODELS).length,13);
   for(const [id,model] of Object.entries(GROUNDED_MODELS)) {
-    const data=approved[id],base=baseline[id],standing=unpack(data,data.frames[0]);
+    const data=approved[id],base=baseline[id],retouched=['berserker','paladin'].includes(id);
+    const standing=unpack(retouched?preserved[id]:data,(retouched?preserved[id]:data).frames[0]);
     const gait=buildGroundedWalk(id,base.palette,standing),palette=new Set(base.palette);
     assert.equal(data.walk.length,16,id+' visits all authored phases');
     assert.equal(gait.lowerFrames.length,16);
@@ -23,7 +28,7 @@ test('all articulated heroes retain their source identity and complete registere
     assert.equal(createHash('sha256').update(readFileSync(source)).digest('hex'),model.sha256,id+' source remains reproducible');
     for(let i=0;i<16;i++) {
       const frame=gait.frames[i],pose=gait.poses[i];
-      assert.deepEqual(frame.d,unpack(data,data.frames[data.walk[i]]).d,id+' packed gait '+i);
+      assert.deepEqual(heavyHeroClarity(frame,id).d,unpack(data,data.frames[data.walk[i]]).d,id+' packed gait with requested face/torso art '+i);
       // Native upper armour/face never undergoes skeletal resampling.
       for(let y=12;y<40;y++)for(let x=12;x<68;x++)
         assert.equal(frame.d[(y+pose.bob)*80+x],standing.d[y*80+x],id+' upper identity '+i);

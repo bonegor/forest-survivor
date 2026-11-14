@@ -4,7 +4,7 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { Weapon } from '../public/js/game/weapons.js';
 import { CopperCrown, CopperFurnace } from '../public/js/game/weapons-copper.js';
-import { COPPER_IDS, COPPER_EVOLUTIONS, isCopper } from '../public/js/data/copper.js';
+import { COPPER_IDS, COPPER_EVOLUTIONS, GOOD_COPPER_ID, HIGH_COPPER_ID, isCopper } from '../public/js/data/copper.js';
 import { MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
@@ -34,6 +34,23 @@ function advance(g, seconds) {
     g.projectiles = g.projectiles.filter((pr) => pr.update(1 / 60));
     g.effects = g.effects.filter((fx) => fx.update(1 / 60));
   }
+}
+
+for (const id of [GOOD_COPPER_ID, HIGH_COPPER_ID]) {
+  test(`${id}: a nearer foe behind Dungeon stone cannot steal a shot from a visible foe`, () => {
+    const g = arena(), p = g.player;
+    const blocked = foe(g, -30, 0), visible = foe(g, 65, 0);
+    g.world.solid = x => x < p.x - 10;
+    g.world.lineOfSight = (_x, _y, tx) => tx >= p.x - 10;
+    assert.ok(!g.inCrypt && g.inView(blocked), 'outside crypts visibility alone does not enforce walls');
+    const w = g.addWeapon(id), hp = blocked.hp, visibleHp = visible.hp;
+    w.cd = 0; w.update(0);
+    assert.ok(g.projectiles.length > 0);
+    assert.ok(g.projectiles.every(pr => pr.vx > 0), 'release selects the farther unobstructed foe');
+    w.cd = 99; advance(g, 0.5);
+    assert.equal(blocked.hp, hp);
+    assert.ok(visible.hp < visibleHp, 'the actual discs reach and damage the visible foe');
+  });
 }
 
 test('all six copper slots fire independently at the nearest foe, including behind the hero', () => {

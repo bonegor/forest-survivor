@@ -2,6 +2,7 @@ import { sfx } from '../../engine/audio.js';
 import { clamp } from '../../engine/util.js';
 import { reachesFeet } from '../../game/hitbox.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
+import { nearbyWeaponProp } from '../../game/weapon-targets.js';
 
 const REACH = 33, HALF_WIDTH = 17, THICKNESS = 2, MAX_CHARGES = 10;
 
@@ -21,7 +22,8 @@ function wardEnd(world, x, y, dx, dy, distance) {
 function targetAhead(w) {
   const p = w.g.player;
   return w.g.nearestEnemy(p.x, p.y, REACH * w.s.area, e =>
-    (e.x - p.x) * p.face >= 0 && openLine(w.g.world, p.x, p.y, e.x, e.y));
+    (e.x - p.x) * p.face >= 0 && openLine(w.g.world, p.x, p.y, e.x, e.y)) ||
+    nearbyWeaponProp(w, REACH * w.s.area, e => (e.x - p.x) * p.face >= 0);
 }
 
 class VotiveWard {
@@ -50,7 +52,7 @@ class VotiveWard {
     if (!this.charges) return;
     const hits = [];
     for (const e of w.g.grid.foes(x, y, this.width + this.thick)) {
-      if (e.dead || e.prop || e.spawnT > 0.3 || this.hit.has(e.id)) continue;
+      if (e.dead || e.spawnT > 0.3 || this.hit.has(e.id)) continue;
       if (!reachesFeet(e, ...a, ...b, this.thick) || !openLine(world, x, y, e.x, e.y)) continue;
       hits.push(e);
     }
@@ -60,7 +62,7 @@ class VotiveWard {
       if (!this.charges) break;
       if (e.dead) continue;
       this.hit.add(e.id);
-      this.charges--;
+      if (!e.prop) this.charges--;
       const slow = e.boss || e.lord || e.elite ? 0 : this.slow;
       w.g.hitEnemy(e, this.damage, { w, type: 'holy', slow, slowT: 0.7, kb: 0 });
     }

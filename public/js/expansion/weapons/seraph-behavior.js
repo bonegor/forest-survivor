@@ -67,22 +67,23 @@ class SunwingCut {
   }
 
   strike(a, b, radius, dmg, limit) {
-    if (!this.left) return;
     const { g } = this.w;
     const reach = Math.hypot(b.x - a.x, b.y - a.y) / 2 + radius;
     const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2;
     const foes = g.grid.foes(x, y, reach).filter(e =>
-      !e.dead && !e.prop && e.spawnT <= 0.3 && !this.hit.has(e.id) &&
+      !e.dead && e.spawnT <= 0.3 && !this.hit.has(e.id) &&
       (e.x - this.x) * this.dx + (e.y - this.y) * this.dy >= 0 &&
       reachesFeet(e, a.x, a.y, b.x, b.y, radius) && clear(this.world, this.x, this.y, e.x, e.y));
     foes.sort((first, second) => ((first.x - a.x) ** 2 + (first.y - a.y) ** 2) -
       ((second.x - a.x) ** 2 + (second.y - a.y) ** 2) || first.id - second.id);
     for (const e of foes) {
-      if (limit <= 0 || this.left <= 0) break;
+      if (!e.prop && (limit <= 0 || this.left <= 0)) continue;
       if (e.dead) continue;
       this.hit.add(e.id);
-      this.left--;
-      limit--;
+      if (!e.prop) {
+        this.left--;
+        limit--;
+      }
       g.hitEnemy(e, dmg, {
         w: this.w, type: 'holy', kb: e.boss || e.lord || e.elite ? 0 : this.kb, kx: this.dx, ky: this.dy,
       });
@@ -93,7 +94,7 @@ class SunwingCut {
     if (this.dead || this.w.def !== this.def || this.w.g.world !== this.world) return false;
     this.t += dt;
     const next = Math.min(STEPS, Math.floor(this.t / this.duration * STEPS + 1e-6));
-    while (this.step < next && this.left) {
+    while (this.step < next) {
       for (const wing of this.wings) {
         if (this.step + 1 >= wing.length) continue;
         this.strike(wing[this.step], wing[this.step + 1], 3 * this.area, this.wingDamage, this.left);

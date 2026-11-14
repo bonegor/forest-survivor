@@ -6,13 +6,17 @@ export const COPPER_EVOLUTIONS = Object.freeze([
   'copper_hail', 'copper_arc', 'copper_foundry',
 ]);
 export const GOOD_COPPER_ID = 'goodcopper';
-const IDS = new Set([GOOD_COPPER_ID, ...COPPER_IDS, ...COPPER_EVOLUTIONS]);
+// Keep the old private-stock id so existing item/source references stay valid.
+export const HIGH_COPPER_ID = 'highcopper';
+export const WHIP_ID = 'merchantwhip', WHIP_EVOLUTION = 'lionslash';
+const IDS = new Set([GOOD_COPPER_ID, HIGH_COPPER_ID, ...COPPER_IDS, ...COPPER_EVOLUTIONS]);
 export const isCopper = (value) => typeof value === 'string' ? IDS.has(value)
   : !!value && (!!value.copper || !!value.def?.copper || IDS.has(value.id) || IDS.has(value.baseId));
 // Keep the merchant's own stock out of curse/unlock accounting, including after
 // it morphs into a form also available to a cursed disc.
 export const isCursedCopper = value => isCopper(value) &&
-  (typeof value === 'string' ? value !== GOOD_COPPER_ID : value.baseId !== GOOD_COPPER_ID && value.id !== GOOD_COPPER_ID);
+  (typeof value === 'string' ? value !== GOOD_COPPER_ID && value !== HIGH_COPPER_ID
+    : value.baseId !== GOOD_COPPER_ID && value.id !== GOOD_COPPER_ID && value.id !== HIGH_COPPER_ID);
 
 const forms = [
   ['Furnace Halo', 'copper_area', 'A circle of Phoenix heat melts every foe nearby.', { dmg: 24, tick: 0.5, eternal: 1 }],
@@ -48,12 +52,38 @@ for (let i = 0; i < COPPER_IDS.length; i++) {
 }
 
 COPPER_WEAPONS[GOOD_COPPER_ID] = {
-  name: 'good quality copper (not for sale)', icon: 'i_copper', kind: 'copper',
+  name: 'Medium Quality Copper', icon: 'i_mediumcopper', kind: 'copper',
   copper: true, goodCopper: true, special: true,
-  desc: 'His private stock: strong copper discs seek the nearest foe. At rank 8, the Spellbook and a chest morph it into a random copper evolution.',
+  desc: 'Copper discs seek the nearest foe, even in crypts. Rank 8 + Phoenix Heart + a chest forges High Quality Copper (not for sale). Evolve the Whip first to open the Heart.',
   base: { dmg: 11, cd: 1.4, amount: 1, area: 1, speed: 1, pierce: 1, kb: 0.35 },
   levels: COPPER_WEAPONS.pqc1.levels.map(level => ({ ...level })),
-  // `into` remains the representative form for older data readers; gameplay
-  // rolls exactly once from `random` when the evolution actually happens.
-  evo: { into: COPPER_EVOLUTIONS[0], random: [...COPPER_EVOLUTIONS], with: 'cooldown' },
+  evo: { into: HIGH_COPPER_ID, with: 'phoenix', onlyPartner: true },
+};
+
+COPPER_WEAPONS[HIGH_COPPER_ID] = {
+  name: 'High Quality Copper (not for sale)', icon: 'i_highcopper', kind: 'copper_shoot',
+  copper: true, goodCopper: true, special: true, evolved: true,
+  desc: 'Phoenix-refined private stock: three fast, piercing copper discs seek the nearest foe. Absolutely not for sale.',
+  base: { dmg: 32, cd: 0.8, amount: 3, area: 1.5, speed: 1.5, pierce: 4, kb: 0.5 },
+};
+
+COPPER_WEAPONS[WHIP_ID] = {
+  name: 'Whip', icon: 'i_merchantwhip', kind: 'merchant_whip', special: true,
+  desc: 'Cracks through nearby foes and boxes in a long lash. Rank 8 + Gauntlets of Might + a chest evolves it and opens Phoenix Heart.',
+  base: { dmg: 14, cd: 1.25, area: 1, kb: 0.7 },
+  levels: [
+    { dmg: 4, text: 'Damage {+4}.' },
+    { cd: -0.15, text: 'Cracks {faster}.' },
+    { area: 0.2, text: 'Reach {+20%}.' },
+    { dmg: 4, text: 'Damage {+4}.' },
+    { cd: -0.15, text: 'Cracks {faster}.' },
+    { area: 0.2, text: 'Reach {+20%}.' },
+    { dmg: 5, text: 'Damage {+5}.' },
+  ],
+  evo: { into: WHIP_EVOLUTION, with: 'might' },
+};
+COPPER_WEAPONS[WHIP_EVOLUTION] = {
+  name: "Lion's Lash", icon: 'i_lionslash', kind: 'merchant_whip', special: true, evolved: true,
+  desc: 'A longer, copper-studded lash tears through every foe along its path. Phoenix Heart can now be offered.',
+  base: { dmg: 36, cd: 0.8, area: 1.6, kb: 1.2 },
 };

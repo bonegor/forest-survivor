@@ -41,9 +41,11 @@ class WhipLane {
 // A segmented leather lash, extending from his hand along the warned lane.
 class CopperWhip {
   constructor(e, angle) {
-    Object.assign(this, { x: e.x - e.face * 11, y: e.y - 20,
+    // Attack release holds the grip ahead of the chest (native hand at 44,36
+    // on the 80x64 sprite anchored at y56), mirrored with the whole hero.
+    Object.assign(this, { x: e.x + e.face * 5, y: e.y - 19,
       tipX: e.x + Math.cos(angle) * MERCHANT.whipReach,
-      tipY: e.y - 20 + Math.sin(angle) * MERCHANT.whipReach, angle, t: 0 });
+      tipY: e.y - 19 + Math.sin(angle) * MERCHANT.whipReach, angle, t: 0 });
   }
   update(dt) {
     this.t += dt;

@@ -3,7 +3,7 @@
 import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
-import { COPPER_IDS, isCopper, isCursedCopper } from '../data/copper.js';
+import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
 import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
@@ -668,6 +668,7 @@ export class Game {
   }
 
   relicOpen(id) {
+    if (id === 'phoenix' && this.player.id === 'eanasir') return this.merchantWhipEvolved();
     if (id === 'phoenix' && this.player.weapons.some(isCursedCopper)) return true;
     return !this.open || this.open.relics.includes(id);
   }
@@ -702,7 +703,12 @@ export class Game {
   relicOffered(id) {
     const r = PASSIVES[id], p = this.player;
     if (!r.afterSignature) return true;
-    return (this.signatureEvolved() || p.weapons.some(isCursedCopper)) && (this.phoenixLostAt == null || p.level - this.phoenixLostAt >= (r.again || 0));
+    const ready = p.id === 'eanasir' ? this.merchantWhipEvolved() : this.signatureEvolved() || p.weapons.some(isCursedCopper);
+    return ready && (this.phoenixLostAt == null || p.level - this.phoenixLostAt >= (r.again || 0));
+  }
+
+  merchantWhipEvolved() {
+    return this.player.weapons.some(w => w.evolved && (w.baseId === WHIP_ID || w.id === WHIP_EVOLUTION));
   }
 
   // Whether one of the hero's own signature weapons has evolved this run (the Knight's opens the
@@ -1545,7 +1551,9 @@ export class Game {
   strikeAim(w) {
     const p = this.player;
     const melee = w.def.kind === 'sword' || w.def.directional;
-    const target = this.nearestEnemy(p.x, p.y, w.reach, melee && p.moving ? e => (e.x - p.x) * p.face >= 0 : null);
+    const target = this.nearestEnemy(p.x, p.y, w.reach, e =>
+      this.world.lineOfSight(p.x, p.y, e.x, e.y) &&
+      (!melee || !p.moving || (e.x - p.x) * p.face >= 0));
     const fallback = !melee ? p.aim : p.face < 0 ? Math.PI : 0;
     return { target, angle: aimAt(p, target, fallback) };
   }

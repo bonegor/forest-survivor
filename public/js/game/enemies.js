@@ -796,7 +796,7 @@ export class Enemy {
         return s.attack[Math.min(release, Math.max(0, Math.floor(u * (release + 1))))];
       }
       if (this.data.releasedAt != null) {
-        const frame = release + 1 + Math.floor((this.life - this.data.releasedAt) * (s.attackFps || 18));
+        const frame = release + Math.floor((this.life - this.data.releasedAt) * (s.attackFps || 18));
         if (frame < s.attack.length) return s.attack[frame];
       }
     }

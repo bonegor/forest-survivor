@@ -2,6 +2,7 @@ import { sfx } from '../../engine/audio.js';
 import { clamp } from '../../engine/util.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { reachesFeet } from '../../game/hitbox.js';
+import { nearbyWeaponProp } from '../../game/weapon-targets.js';
 
 const REACH = 132, FALLBACK_DISTANCE = 48, EDGE = 3.5, TAIL = 0.11, MAX_HITS = 10;
 
@@ -11,7 +12,7 @@ function visible(world, x, y, tx, ty) {
 
 function targetInReach(w) {
   const { g } = w, p = g.player;
-  return g.nearestEnemy(p.x, p.y, REACH, e => visible(g.world, p.x, p.y, e.x, e.y));
+  return g.nearestEnemy(p.x, p.y, REACH, e => visible(g.world, p.x, p.y, e.x, e.y)) || nearbyWeaponProp(w);
 }
 
 class MeridianSweep {
@@ -46,11 +47,10 @@ class MeridianSweep {
         !world.lineOfSight(ax, ay, bx, by)) return;
     const mx = (ax + bx) / 2, my = (ay + by) / 2;
     for (const e of w.g.grid.foes(mx, my, Math.hypot(bx - ax, by - ay) / 2 + this.edge)) {
-      if (!this.charges) break;
-      if (e.dead || e.prop || e.spawnT > 0.3 || this.hit.has(e.id) ||
+      if (e.dead || (!e.prop && !this.charges) || e.spawnT > 0.3 || this.hit.has(e.id) ||
           !reachesFeet(e, ax, ay, bx, by, this.edge) || !visible(world, x, y, e.x, e.y)) continue;
       this.hit.add(e.id);
-      this.charges--;
+      if (!e.prop) this.charges--;
       w.g.hitEnemy(e, this.damage, { w, type: 'shock', kb: 0 });
     }
   }
@@ -62,7 +62,7 @@ class MeridianSweep {
     // Subdivide the arc so a slow frame still sweeps the curve and respects narrow walls.
     let progress = this.progress;
     let a = this.point(progress);
-    while (this.charges && progress < end) {
+    while (progress < end) {
       progress = Math.min(end, progress + 1 / this.steps);
       const b = this.point(progress);
       this.cut(a, b);

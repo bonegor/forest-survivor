@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { EnemyShot } from '../public/js/game/projectiles.js';
-import { COPPER_IDS, COPPER_EVOLUTIONS, GOOD_COPPER_ID, isCopper } from '../public/js/data/copper.js';
+import { COPPER_IDS, COPPER_EVOLUTIONS, GOOD_COPPER_ID, WHIP_ID, isCopper } from '../public/js/data/copper.js';
 import { HEROES, SHARED_WEAPONS } from '../public/js/data/heroes.js';
 import { input } from '../public/js/engine/input.js';
 import { textMask } from '../public/js/engine/font.js';
@@ -132,9 +132,9 @@ test('the hero unlock requires a complete distinct copper build on a legitimate 
   assert.equal(P.unlocksNext(P.defaultProfile(), 'eanasir'), null);
 });
 
-test('the merchant starts with one good copper weapon, normal slots, bonus gold, and no shared copper offers', () => {
+test('the merchant starts with Whip and private copper, normal slots, bonus gold, and no shared copper offers', () => {
   const g = game('eanasir'), knight = game();
-  assert.deepEqual(g.player.weapons.map(w => w.id), [GOOD_COPPER_ID]);
+  assert.deepEqual(g.player.weapons.map(w => w.id), [WHIP_ID, GOOD_COPPER_ID]);
   assert.equal(g.maxWeapons, knight.maxWeapons);
   assert.equal(g.maxWeapons, 3);
   assert.equal(g.player.greed, knight.player.greed * 1.25);

@@ -51,7 +51,7 @@ function targets(w, dx, dy, reach, width) {
   const { g } = w, { x, y } = g.player;
   const hits = [], tx = x + dx * reach, ty = y + dy * reach;
   for (const e of g.grid.foes(x, y, reach + width)) {
-    if (e.dead || e.prop || e.spawnT > 0.3) continue;
+    if (e.dead || e.spawnT > 0.3) continue;
     const ex = e.x - x, ey = e.y - y, along = ex * dx + ey * dy;
     if (along <= 0 || !g.world.lineOfSight(x, y, e.x, e.y)) continue;
     if (!reachesFeet(e, x, y, tx, ty, width) &&
@@ -116,7 +116,10 @@ export default {
     recordHeroAttack(w, ang);
     sfx('slash', { pitch: charged ? 0.71 : 0.87, pan: dx * 0.23 });
     g.effects.push(new MarchsteelCut(w, ang, reach, charged));
-    for (const { e, along } of targets(w, dx, dy, reach, width).slice(0, budget)) {
+    let left = budget;
+    for (const { e, along } of targets(w, dx, dy, reach, width)) {
+      if (!e.prop && !left) continue;
+      if (!e.prop) left--;
       const edge = charged && along >= reach * 0.68;
       const kb = e.boss || e.lord || e.elite ? 0 : s.kb;
       g.hitEnemy(e, s.dmg * (edge ? 1 + s.edge : 1), { w, kb, kx: dx, ky: dy });

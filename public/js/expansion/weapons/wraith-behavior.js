@@ -76,7 +76,7 @@ function cut(w, { x, y, ang }, hit, echo) {
   const max = Math.min(echo ? 5 : 7, s.amount + (echo ? 1 : 2));
   const choices = [];
   for (const e of g.grid.foes(x, y, radius)) {
-    if (e.dead || e.prop || e.spawnT > 0.3 || hit.has(e.id)) continue;
+    if (e.dead || e.spawnT > 0.3 || hit.has(e.id)) continue;
     const dx = e.x - x, dy = e.y - (e.h || 0) / 2 - y + 7;
     const gap = Math.hypot(dx, dy), body = Math.max(e.hr, (e.h || 0) * 0.3);
     if (gap > radius + body || Math.abs(angleDiff(Math.atan2(dy, dx), ang)) > ARC / 2 + Math.atan2(body, gap)) continue;
@@ -84,7 +84,10 @@ function cut(w, { x, y, ang }, hit, echo) {
     choices.push({ e, dx, dy, gap });
   }
   choices.sort((a, b) => a.gap - b.gap || a.e.id - b.e.id);
-  for (const { e, dx, dy, gap } of choices.slice(0, max)) {
+  let left = max;
+  for (const { e, dx, dy, gap } of choices) {
+    if (!e.prop && !left) continue;
+    if (!e.prop) left--;
     hit.add(e.id);
     g.hitEnemy(e, s.dmg * (echo ? s.echo : 1), { w, type: 'dark', kb: s.kb * (echo ? 0.35 : 1),
       kx: dx / (gap || 1), ky: dy / (gap || 1) });

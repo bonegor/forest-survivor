@@ -84,3 +84,13 @@ test('automatic fire waits for a target and a manual release can aim through emp
   behavior.fire(w);
   assert.equal(g.projectiles.at(-1).ang, Math.PI);
 });
+
+test('a nearer foe behind stone cannot steal the Marksman shot from a visible foe', () => {
+  const { g, p, w, foe } = encounter();
+  const hidden = foe(20, 0), visible = foe(0, 60);
+  g.world.lineOfSight = (_x, _y, tx) => tx < hidden.x;
+  g.grid.rebuild(g.enemies, p.x, p.y);
+  assert.equal(behavior.previewTarget(w), visible);
+  behavior.fire(w);
+  assert.equal(g.projectiles.at(-1).ang, Math.PI / 2);
+});

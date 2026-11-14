@@ -10,7 +10,7 @@ import { Game } from '../public/js/game/game.js';
 import { Pool, Aura } from '../public/js/game/effects.js';
 import { HEROES, startWeapons, SHARED_WEAPONS, weaponsFor } from '../public/js/data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, statsAt } from '../public/js/data/weapons.js';
-import { GOOD_COPPER_ID } from '../public/js/data/copper.js';
+import { GOOD_COPPER_ID, WHIP_ID } from '../public/js/data/copper.js';
 import { PASSIVES } from '../public/js/data/passives.js';
 import { input } from '../public/js/engine/input.js';
 import { mulberry32 } from '../public/js/engine/util.js';
@@ -40,7 +40,7 @@ const held = (p) => p.weapons.map((w) => [w.id, w.level]);
 const SIGNATURES = {
   knight: ['sword'], archer: ['bow'], mage: ['fireball'], rogue: ['daggers'], necromancer: ['raise', 'miasma'],
   paladin: ['smite'], druid: ['roots'], berserker: ['twinaxes'], witchhunter: ['crossbow'],
-  eanasir: [GOOD_COPPER_ID],
+  eanasir: [WHIP_ID, GOOD_COPPER_ID],
 };
 
 test('each class has its signature weapon, and every other weapon is shared by all', () => {
@@ -59,10 +59,10 @@ test('each class has its signature weapon, and every other weapon is shared by a
   for (const gone of ['bonespear', 'clone', 'grasp', 'spinelance', 'twinshadows', 'gravehands']) assert.equal(WEAPONS[gone], undefined, `${gone} is out of the game`);
 });
 
-test('heroes start at level 1: the Necromancer with two weapons and every other hero with one signature', () => {
+test('heroes start at level 1 with their complete signature kits', () => {
   for (const id of Object.keys(HEROES)) {
     gameCase(id, (g, p) => {
-      const want = id === 'necromancer' ? ['raise', 'miasma'] : [HEROES[id].weapon];
+      const want = id === 'necromancer' ? ['raise', 'miasma'] : id === 'eanasir' ? [WHIP_ID, GOOD_COPPER_ID] : [HEROES[id].weapon];
       assert.deepEqual(held(p), want.map((w) => [w, 1]), id);
       assert.equal(g.mainWeapon().id, HEROES[id].weapon, `${id}: the weapon he strikes with in a crypt`);
     });

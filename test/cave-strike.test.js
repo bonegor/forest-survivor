@@ -53,6 +53,20 @@ function enterStartCrypt(g, p) {
   return door;
 }
 
+for (const hero of ['archer', 'praetorian']) {
+  test(`${hero}: a hidden foe cannot steal crypt aim from a visible foe`, () => gameCase((g, p) => {
+    const hidden = g.spawnEnemy('zombie', p.x + 12, p.y, { instant: true, always: true });
+    const visible = g.spawnEnemy('zombie', p.x + 20, p.y + 15, { instant: true, always: true });
+    p.face = 1;
+    p.moving = true;
+    g.world.lineOfSight = (_x, _y, tx, ty) => tx !== hidden.x || ty !== hidden.y;
+    g.grid.rebuild(g.enemies, p.x, p.y);
+    const aim = g.strikeAim(g.mainWeapon());
+    assert.equal(aim.target, visible);
+    assert.equal(aim.angle, Math.atan2(15, 20));
+  }, hero));
+}
+
 test('a crypt stands by the start, a few steps north of the hero', () => {
   const s = start(), d = cryptsNear(s.x, s.y, 200).find((c) => c.key === '0,0');
   assert.ok(d, 'the start has a crypt');

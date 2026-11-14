@@ -2,7 +2,7 @@
 // Stats: dmg, cd (seconds), amount, area (x), speed (x), dur (s; eternal: lasts for good),
 // pierce, kb (knockback), plus a few kind-specific extras.
 //
-// Each hero class has a signature weapon of its own (the Necromancer two), no other hero's to
+// Each hero class has signature weapons of its own (Necromancer and Ea-nāṣir have two), no other hero's to
 // find; every other weapon is shared by all (`unique`, SHARED_WEAPONS in data/heroes.js). Below,
 // each class's signature comes first in its section, then shared weapons. An evolution is better
 // than its weapon at level 8 on every stat it has (test/signature-weapons.test.js).

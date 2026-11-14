@@ -8,15 +8,21 @@ import { PC } from './particles.js';
 import { reachesFeet, reachesBody, spriteRadius } from './hitbox.js';
 import { recordHeroAttack } from './hero-animation.js';
 import { sfx } from '../engine/audio.js';
+import { MERCHANT_WHIP } from './merchant-whip.js';
+import { nearbyWeaponProp } from './weapon-targets.js';
 
 const COPPER = '#b86f50', HEAT = '#feae34';
-const target = (w) => w.g.nearestEnemy(w.g.player.x, w.g.player.y, 260, (e) => w.g.inView(e));
+const target = (w) => {
+  const { g } = w, p = g.player;
+  return g.nearestEnemy(p.x, p.y, 260, e => g.inView(e) && !g.world.solid(e.x, e.y) &&
+    g.world.lineOfSight(p.x, p.y, e.x, e.y)) || nearbyWeaponProp(w);
+};
 const bearing = (p, e) => Math.atan2(e.y - p.y, e.x - p.x);
 
 function disc(w, ang, extra = {}) {
   const p = w.g.player, s = w.s;
   return spawnProjectile(w.g, {
-    kind: 'copper', sprite: 'copper_disc', x: p.x, y: p.y - 1, z: 7,
+    kind: 'copper', sprite: w.def.goodCopper && w.evolved ? 'copper_refined_disc' : 'copper_disc', x: p.x, y: p.y - 1, z: 7,
     ang, speed: 190 * s.speed, life: 1.5, r: 3 * s.area, scale: s.area,
     dmg: s.dmg, pierce: s.pierce, kb: s.kb, w, spin: 16,
     trail: w.evolved ? PC.o : null, ...extra,
@@ -100,6 +106,7 @@ const persistent = (w, create) => {
 };
 
 export const COPPER_BEHAVIORS = {
+  merchant_whip: MERCHANT_WHIP,
   copper: { reach: 260, fire: prepare, shoot },
   copper_return: { reach: 260, fire: prepare, shoot },
   copper_shoot: { reach: 260, fire: prepare, shoot },

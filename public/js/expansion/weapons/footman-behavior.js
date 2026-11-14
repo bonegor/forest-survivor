@@ -33,6 +33,20 @@ function leadTarget(w, ang) {
   return first;
 }
 
+// Crates are collateral, never the lead target: they neither steal the
+// first-foe cut nor create the creature-triggered rank shock.
+function breakCutProps(w, ang) {
+  const { g, s } = w, p = g.player, reach = CUT_REACH * s.area;
+  const x = p.x + Math.cos(ang) * reach, y = p.y + Math.sin(ang) * reach;
+  for (const e of g.grid.foes(p.x, p.y, reach + 10 * s.area)) {
+    if (e.dead || !e.prop || !g.world.lineOfSight(p.x, p.y, e.x, e.y)) continue;
+    if (reachesFeet(e, p.x, p.y, x, y, 10 * s.area) ||
+        reachesBody(e, p.x, p.y - CUT_HEIGHT, x, y - CUT_HEIGHT, 10 * s.area)) {
+      g.hitEnemy(e, s.dmg, { w });
+    }
+  }
+}
+
 function drawCut(ctx, cam, x, y, radius, arc, ang, progress, palette) {
   const angleIndex = Math.round(ang / TAU * 32);
   const frame = Math.min(5, Math.floor(progress * 6));
@@ -71,11 +85,15 @@ class RankShock {
     const dx = Math.cos(this.ang), dy = Math.sin(this.ang);
     const hits = [];
     for (const e of g.grid.foes(x, y, radius)) {
-      if (!enemy(e) || e.id === this.sourceId) continue;
+      if (e.dead || e.spawnT > 0.3 || e.id === this.sourceId) continue;
       const ex = e.x - x, ey = e.y - y, gap = Math.hypot(ex, ey);
       const along = ex * dx + ey * dy;
       if (along <= 0 || gap > radius + e.hr || along < gap * Math.cos(SHOCK_ARC / 2)) continue;
       if (!g.world.lineOfSight(x, y, e.x, e.y)) continue;
+      if (e.prop) {
+        g.hitEnemy(e, this.damage, { w });
+        continue;
+      }
       hits.push([gap, e]);
     }
     hits.sort((a, b) => a[0] - b[0]);
@@ -125,6 +143,7 @@ export default {
       update(dt) { t += dt; return t < CUT_TIME; },
       draw(ctx, cam) { drawCut(ctx, cam, p.x, p.y - CUT_HEIGHT, CUT_REACH * s.area, CUT_ARC, ang, t / CUT_TIME, STEEL); },
     });
+    breakCutProps(w, ang);
     if (!target) return;
     g.effects.push(new RankShock(w, target, ang));
     const dealt = g.hitEnemy(target, s.dmg, { w, kb: s.kb, kx: Math.cos(ang), ky: Math.sin(ang) });

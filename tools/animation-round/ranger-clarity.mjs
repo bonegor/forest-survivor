@@ -1,28 +1,17 @@
-// Native repair of the selected Hunter's downsampled head. The old face was
-// only a soft, unbroken skin patch. Keep her auburn hair and green leather, but
-// draw a distinct brow, visible eye, nose, cheek and chin in coarse clusters.
-// Every pose is registered from its own original skull, before animation and
-// moving-attack composition. No upper-body scaling or gait changes.
-const HEAD = [
-  '....kkkkkk....',
-  '..kkhbooobhk..',
-  '.khboobbboohk.',
-  '.hboobbbbhhhk.',
-  'khbbbhjstTThk.',
-  'hbbbhjshhhTtk.',
-  'hbbbhjstweTtk.',
-  'hbbbhjssTTTtTk',
-  '.hbbhhjssttkk.',
-  '.hbbbhhjsjk...',
-  '..hbbhhjsk....',
-  '...hhkgggk....',
+// Preserve the selected Hunter's native 3/4 head, hair and modest proportions.
+// Tighten the original auburn clusters, then describe a face inside its existing
+// silhouette. The earlier replacement enlarged the skull and removed its jaw.
+const FACE = [
+  '....',
+  '.hk.',
+  '...t',
+  '..sj',
+  '.stj',
 ];
 const RGB = {
-  k: [35, 15, 26], h: [104, 33, 30], b: [161, 62, 30], o: [218, 105, 52],
-  j: [143, 76, 61], s: [193, 112, 86], t: [251, 176, 135], T: [253, 198, 152],
-  w: [255, 240, 199], e: [35, 25, 34], g: [70, 85, 45],
+  k: [80, 67, 42], h: [124, 62, 40], j: [151, 88, 64],
+  s: [198, 132, 95], t: [245, 180, 131],
 };
-
 export function rangerClarity(frame, palette) {
   const d = frame.d.slice(), solid = palette.filter(c => c >>> 24 >= 240);
   const nearest = rgb => solid.reduce((best, c) => {
@@ -40,11 +29,16 @@ export function rangerClarity(frame, palette) {
     if (xs.length >= 5) skull = { x: Math.round(xs.reduce((n, x) => n + x, 0) / xs.length) - 7, y: y - 2 };
   }
   if (!skull) throw Error('Ranger head registration missing');
-  // Clear only the old skull/face. Rear hair below/behind it remains original,
-  // as do the collar, shoulders, hands, bow and every lower-body pixel.
-  for (let y = skull.y; y < skull.y + HEAD.length; y++) for (let x = skull.x; x < skull.x + 14; x++) d[y * frame.w + x] = 0;
-  HEAD.forEach((row, yy) => [...row].forEach((key, xx) => {
-    if (key !== '.') d[(skull.y + yy) * frame.w + skull.x + xx] = colors[key];
+  // Existing contour and moving locks remain intact. Collapse near-equal tones
+  // only in the crown: no black rectangular border or new opaque outer pixels.
+  const hair = [[57,23,30],[104,34,31],[157,57,32],[194,80,37],[231,119,55]].map(nearest);
+  for (let y=skull.y+2;y<skull.y+7;y++) for(let x=skull.x+1;x<skull.x+13;x++) {
+    const p=y*frame.w+x,c=d[p],r=c&255,g=c>>>8&255,b=c>>>16&255;
+    if(c>>>24<200||r<40||r<g*1.5||g>b*2.4)continue;
+    d[p]=hair.reduce((a,q)=>Math.abs((q&255)-r)<Math.abs((a&255)-r)?q:a,hair[0]);
+  }
+  FACE.forEach((row, yy) => [...row].forEach((key, xx) => {
+    if (key !== '.') d[(skull.y+6+yy)*frame.w+skull.x+7+xx]=colors[key];
   }));
   return { ...frame, d };
 }

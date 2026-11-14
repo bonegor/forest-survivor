@@ -13,14 +13,14 @@ const GOLD = ['#5e4350', '#b28042', '#ffc665', '#fff4ca'];
 const ahead = (p) => p.face < 0 ? Math.PI : 0;
 const cutReach = (w) => Math.min(72, REACH * w.s.area);
 
-function targets(w, angle) {
+function targets(w, angle, props = false) {
   const { g } = w, p = g.player;
   const dx = Math.cos(angle), dy = Math.sin(angle);
   const reach = cutReach(w), width = Math.min(14, 7 * w.s.area);
   const x = p.x + dx * reach, y = p.y + dy * reach;
   const found = [];
   for (const e of g.grid.foes(p.x, p.y, reach + width)) {
-    if (e.dead || e.prop || e.spawnT > 0.3) continue;
+    if (e.dead || (!props && e.prop) || e.spawnT > 0.3) continue;
     const ex = e.x - p.x, ey = e.y - p.y;
     if (ex * dx + ey * dy < 0) continue;
     if (!reachesFeet(e, p.x, p.y, x, y, width) &&
@@ -67,6 +67,8 @@ class ShieldwardStroke {
     this.guard = guard;
     this.charged = charged;
     this.reach = cutReach(w);
+    this.x = w.g.player.x;
+    this.y = w.g.player.y;
     this.t = 0;
   }
 
@@ -78,19 +80,28 @@ class ShieldwardStroke {
 
   draw(ctx, cam) {
     const { S } = cam, { g } = this.w, p = g.player;
-    const cx = (p.x - cam.x) * S, cy = (p.y - HEIGHT - cam.y) * S;
+    const cx = (this.x - cam.x) * S, cy = (this.y - HEIGHT - cam.y) * S;
     if (this.t < CUT_TIME) {
       const frame = Math.min(5, Math.floor(this.t / CUT_TIME * 6));
       const art = slashFrame(this.reach, ARC, Math.round(this.angle / TAU * 32), frame, 6, this.charged ? GOLD : STEEL);
       const w = art.width * S, h = art.height * S;
       ctx.drawImage(art, Math.round(cx - w / 2), Math.round(cy - h / 2), Math.round(w), Math.round(h));
+      // The bright spine shows the narrow damaging lane. The slash stays at
+      // its release point; walking away must not drag an already landed hit.
+      if (frame < 3) {
+        const dx = Math.cos(this.angle), dy = Math.sin(this.angle);
+        ctx.fillStyle = this.charged ? '#fff4ca' : '#d9ecff';
+        for (let d = 6; d <= this.reach; d++) {
+          ctx.fillRect(Math.round(cx + dx * d * S), Math.round(cy + dy * d * S), S, 2 * S);
+        }
+      }
     }
     if (!(this.guard?.left > 0 && this.guard.until > g.clock)) return;
     const radius = this.guard.reach;
     for (let i = -4; i <= 4; i++) {
       const angle = this.angle + i * 0.24;
-      const x = Math.round(cx + Math.cos(angle) * radius * S);
-      const y = Math.round(cy + Math.sin(angle) * radius * S);
+      const x = Math.round((p.x - cam.x + Math.cos(angle) * radius) * S);
+      const y = Math.round((p.y - HEIGHT - cam.y + Math.sin(angle) * radius) * S);
       ctx.fillStyle = i % 2 ? '#95b4cb' : '#3c5275';
       ctx.fillRect(x, y - S, 2 * S, 3 * S);
     }
@@ -126,7 +137,10 @@ export default {
     sfx('slash', { pitch: charged ? 1.12 : 0.88, pan: dx * 0.22 });
     g.effects.push(new ShieldwardStroke(w, angle, guard, charged));
     const damage = s.dmg * (charged ? 1 + s.reprisal : 1);
-    for (const { e } of targets(w, angle).slice(0, Math.min(MAX_CUTS, s.amount + 1))) {
+    let left = Math.min(MAX_CUTS, s.amount + 1);
+    for (const { e } of targets(w, angle, true)) {
+      if (!e.prop && !left) continue;
+      if (!e.prop) left--;
       const kb = e.boss || e.elite || e.lord ? 0 : s.kb;
       g.hitEnemy(e, damage, { w, kb, kx: dx, ky: dy });
     }

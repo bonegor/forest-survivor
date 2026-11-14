@@ -140,6 +140,23 @@ test('the whip is warned, locked to its lane, blocked by walls, and frozen with 
   assert.equal(blows, 1, 'a wall blocks the lash');
 }));
 
+test('merchant whip impact displays the release pose and starts at its forward hand in both facings', () => gameCase((g, p) => {
+  for (const face of [-1, 1]) {
+    const e = merchant(g, p);
+    e.x = p.x - face * 40; e.y = p.y;
+    e.cdT = 0; e.cd2 = e.cd3 = 99;
+    merchantAI(e, 1 / 60);
+    assert.equal(e.face, face); assert.equal(e.data.attack, 'whip');
+    merchantAI(e, MERCHANT.whipWind + .01);
+    const lash = g.effects.at(-1), spr = e.spr;
+    assert.equal(e.frameIndex(), spr.attack[spr.attackRelease], 'impact must not skip directly to recovery');
+    assert.ok((lash.x - e.x) * face >= 4 && (lash.x - e.x) * face <= 7, 'lash meets forward palm');
+    assert.ok(e.y - lash.y >= 18 && e.y - lash.y <= 20, 'lash meets raised hand height');
+    e.life += 1 / spr.attackFps + 1e-6;
+    assert.equal(e.frameIndex(), spr.attack[spr.attackRelease + 1], 'then recovery advances at its real clock');
+  }
+}));
+
 test('PQC infests once per landed hit, never through walls, invulnerability, or dodge', () => gameCase((g, p) => {
   g.world.solid = () => false;
   let curses = 0;

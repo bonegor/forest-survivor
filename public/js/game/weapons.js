@@ -15,6 +15,7 @@ import { reachesBody } from './hitbox.js';
 import { recordHeroAttack } from './hero-animation.js';
 import { EXPANSION_BEHAVIORS } from '../expansion/weapon-behaviors.js';
 import { COPPER_BEHAVIORS } from './weapons-copper.js';
+import { nearbyWeaponProp } from './weapon-targets.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
 const STAT_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
@@ -958,6 +959,7 @@ export const KINDS = {
     fire(w) {
       const g = w.g, p = g.player;
       const foes = mightiest(g, p.x, p.y, w.reach, w.s.amount, w.handTarget);
+      if (!foes.length) { const prop = nearbyWeaponProp(w); if (prop) foes.push(prop); }
       if (!foes.length) return false;
       foes.forEach((e, i) => g.effects.push(new Pillar(g, w, e, i * 0.08)));
       recordHeroAttack(w, aimAt(p, foes[0]));
@@ -973,6 +975,7 @@ export const KINDS = {
       const foes = g.nearestEnemies(p.x, p.y, w.s.amount, w.reach);
       const t = w.handTarget;
       if (t && !t.dead && !foes.includes(t)) foes.unshift(t);
+      if (!foes.length) { const prop = nearbyWeaponProp(w); if (prop) foes.push(prop); }
       if (!foes.length) return false;
       foes.slice(0, w.s.amount).forEach((e, i) => g.effects.push(new Burrow(g, w, p.x, p.y + 1, e, i * 0.06)));
       recordHeroAttack(w, aimAt(p, foes[0]));
@@ -997,7 +1000,7 @@ export const KINDS = {
           return;
         }
       }
-      if (!w.hand && !g.nearestEnemy(p.x, p.y, R + LEAP.close)) return false;
+      if (!w.hand && !g.nearestEnemy(p.x, p.y, R + LEAP.close) && !nearbyWeaponProp(w, R)) return false;
       chops(w);
     },
     kill(w) {
@@ -1017,6 +1020,7 @@ export const KINDS = {
     fire(w) {
       const g = w.g, p = g.player;
       setTargets(w, boltTargets(g, p.x, p.y, w.reach, w.s.amount));
+      if (!w.targets.length) { const prop = nearbyWeaponProp(w); if (prop) setTargets(w, [prop]); }
       if (!w.targets.length && !w.hand) return false;
       w.baseAng = aimAt(p, w.targets[0], p.aim);
       w.burst(w.s.amount, w.s.nova ? 0.08 : 0.12);

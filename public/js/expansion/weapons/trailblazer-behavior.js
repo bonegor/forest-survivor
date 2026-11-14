@@ -3,6 +3,7 @@ import { recordHeroAttack } from '../../game/hero-animation.js';
 import { pointSegGap } from '../../game/hitbox.js';
 import { PC } from '../../game/particles.js';
 import { spawnProjectile } from '../../game/projectiles.js';
+import { nearbyWeaponProp } from '../../game/weapon-targets.js';
 
 const REACH = 210, SPEED = 294;
 const LINE_REACH = 118, LINE_WIDTH = 4, LINE_SCAN = 0.065;
@@ -98,7 +99,7 @@ function plantLine(arrow, pin) {
 
 function previewTarget(w) {
   const { g } = w, p = g.player;
-  return g.nearestEnemy(p.x, p.y, REACH, e => !g.world.solid(e.x, e.y) && g.world.lineOfSight(p.x, p.y, e.x, e.y));
+  return g.nearestEnemy(p.x, p.y, REACH, e => !g.world.solid(e.x, e.y) && g.world.lineOfSight(p.x, p.y, e.x, e.y)) || nearbyWeaponProp(w);
 }
 
 export default {

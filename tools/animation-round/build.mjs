@@ -9,6 +9,7 @@ import { writePng } from '../png.mjs';
 import { buildGroundedWalk, GROUNDED_MODELS } from './grounded-walk.mjs';
 import { buildRobedWalk } from './robed-walk.mjs';
 import { rangerClarity } from './ranger-clarity.mjs';
+import { heavyHeroClarity } from './heavy-hero-clarity.mjs';
 
 const TAU = Math.PI * 2;
 const equipment=JSON.parse(readFileSync(new URL('./baseline/equipment-masks.json',import.meta.url),'utf8'));
@@ -388,12 +389,13 @@ function flicker(frame, id, phase, palette) {
   return {...frame,d:out};
 }
 
-export function rebuild({version='v1',outputDir=version==='v2'?'tools/animation-round/variants/v2':'public/assets/heroes-approved',generatedDir=version==='v2'?'tools/animation-round/generated/v2':'tools/animation-round/generated'}={}) {
+export function rebuild({version='v1',outputDir=version==='v2'?'tools/animation-round/variants/v2':'public/assets/heroes-approved',generatedDir=version==='v2'?'tools/animation-round/generated/v2':'tools/animation-round/generated',ids=null}={}) {
 if(!['v1','v2'].includes(version))throw Error('Unknown gait version: '+version);
 mkdirSync(outputDir,{recursive:true});
 mkdirSync(generatedDir,{recursive:true});
 const report={};
 for(const [id,base] of Object.entries(source)) {
+  if(ids&&!ids.includes(id))continue;
   const rig=rigs[id], frames=base.frames.map(f=>{
     const native=clean(unpack(base,f));
     return id==='archer'&&version==='v1'?rangerClarity(native,base.palette):native;
@@ -425,12 +427,19 @@ for(const [id,base] of Object.entries(source)) {
   const attackWalk=rig.floating?undefined:attack.map((index,attackStep)=>walk.map((frame,step)=>{
     const n=frames.length;frames.push(attackWalking(frames[index],frames[frame],standing,rig,id,step,attackStep,nativeGait?.lowerFrames[step]));return n;
   }));
-  const idleFps=rig.floating?7:8;
+  // Shadow's requested 2x cadence is visual only. Keep the manual impact delay
+  // and all weapon/movement statistics unchanged. Menu portraits read idleFps.
+  const visualRate=id==='rogue'?2:1;
+  walkFps*=visualRate; attackFps*=visualRate;
+  const idleFps=(rig.floating?7:8)*visualRate;
+  for(let i=0;i<frames.length;i++)frames[i]=heavyHeroClarity(frames[i],id);
   const data=pack(frames,{...base,idle,idleFps,walk,walkFps,attack,attackRelease,attackFps,attackWalk,
     manualDelay:base.manualDelay??Math.min(2,base.attackRelease)/base.attackFps,
     motionRevision:version==='v2'?'restrained-roster-gait-v2-2026-11-12':'continuous-roster-gait-2026-11-12',
-    ...(id==='archer'&&version==='v1'?{clarityRevision:'ranger-face-2026-11-14',claritySource:'tools/animation-round/ranger-clarity.mjs'}:{}),
+    ...(id==='archer'&&version==='v1'?{clarityRevision:'ranger-native-face-2026-11-14',claritySource:'tools/animation-round/ranger-clarity.mjs'}:{}),
+    ...(['berserker','paladin'].includes(id)?{clarityRevision:'heavy-hero-faces-2026-11-14',claritySource:'tools/animation-round/heavy-hero-clarity.mjs'}:{}),
     motionSource:`tools/animation-round/${nativeGait?.settings?'robed':'grounded'}-walk.mjs`,
+    ...(id==='rogue'?{animationRevision:'shadow-double-cadence-2026-11-14'}:{}),
     motionNotes:nativeGait?.settings?.note||(nativeGait?'Sixteen connected contact, compression, passing and reaching phases; stable native upper-body texture, alternating planted soles and lifted returns.':rig.note),
   });
   writeFileSync(`${outputDir}/${id}.js`,`// Rebuild: node tools/animation-round/build.mjs${version==='v2'?' --v2':''}\nexport default ${JSON.stringify(data)};\n`);

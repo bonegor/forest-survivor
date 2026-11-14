@@ -2,6 +2,7 @@ import { sfx } from '../../engine/audio.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { spawnProjectile } from '../../game/projectiles.js';
 import { PC } from '../../game/particles.js';
+import { nearbyWeaponProp } from '../../game/weapon-targets.js';
 
 const REACH = 216;
 const SPLINTER_DMG = 0.48;
@@ -38,7 +39,8 @@ function splitPin(pin, foe) {
 
 function previewTarget(w) {
   const { g } = w;
-  return g.nearestEnemy(g.player.x, g.player.y, REACH);
+  return g.nearestEnemy(g.player.x, g.player.y, REACH, e =>
+    !g.world.solid(e.x, e.y) && g.world.lineOfSight(g.player.x, g.player.y, e.x, e.y)) || nearbyWeaponProp(w);
 }
 
 export default {

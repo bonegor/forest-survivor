@@ -1,6 +1,6 @@
 // Playable heroes. `stats` are multipliers/overrides on the base player.
 //
-// Each hero class has a signature weapon no other can get (`unique`; the Necromancer has two),
+// Each hero class has signature weapons no other can get (`unique`; Necromancer and Ea-nāṣir have two),
 // and every other weapon is shared by all (SHARED_WEAPONS): a level-up offers a hero his own and
 // the shared ones (weaponsFor). `start`: what he starts a run with, if not his `weapon` alone
 // (startWeapons). Relics are shared by all.
@@ -8,7 +8,7 @@
 import { WEAPONS } from './weapons.js';
 import { RECRUITS } from '../expansion/roster.js';
 import { SIGNATURES } from '../expansion/signatures.js';
-import { GOOD_COPPER_ID } from './copper.js';
+import { GOOD_COPPER_ID, WHIP_ID } from './copper.js';
 
 // The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
 // wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
@@ -185,9 +185,9 @@ export const HEROES = {
   },
   eanasir: {
     id: 'eanasir', short: 'Ea-nasir', name: 'Ea-nāṣir', title: 'Copper Merchant',
-    sprite: 'eanasir', pose: 'eanasir_pose', weapon: GOOD_COPPER_ID,
-    unique: [GOOD_COPPER_ID], color: '#c28569',
-    startDesc: 'Private stock. Rank 8 + Spellbook + chest morphs it into one of six random copper evolutions.',
+    sprite: 'eanasir', pose: 'eanasir_pose', weapon: WHIP_ID,
+    unique: [WHIP_ID, GOOD_COPPER_ID], start: [WHIP_ID, GOOD_COPPER_ID], color: '#c28569',
+    startDesc: 'Whip + Medium Quality Copper. Evolve Whip with Gauntlets of Might to open Phoenix Heart; the Heart forges rank-8 copper into High Quality Copper (not for sale). Evolutions require a chest.',
     stats: { maxHp: 100, armor: 1, greed: 1.25 },
     perk: 'Private stock: +25% gold; never encounters himself',
     ult: 'cataclysm', ultName: 'Liquidation',

@@ -2,18 +2,20 @@ import { sfx } from '../../engine/audio.js';
 import { clamp, lerp } from '../../engine/util.js';
 import { Ring } from '../../game/effects.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
+import { nearbyWeaponProp } from '../../game/weapon-targets.js';
 
 const REACH = 152, SIPHON_RADIUS = 29, MAX_SIPHONS = 6, MAX_TITHE = 0.5, FLIGHT = 0.18;
 const DARK = '#42284f', VIOLET = '#b55088', LILAC = '#e8b4d6';
 const strong = foe => foe.boss || foe.lord || foe.elite;
 const visible = (world, x, y, target) => !world.solid(target.x, target.y) && world.lineOfSight(x, y, target.x, target.y);
-const available = foe => foe && !foe.dead && !foe.prop && foe.spawnT <= 0.3;
+const strikable = foe => foe && !foe.dead && foe.spawnT <= 0.3;
+const available = foe => strikable(foe) && !foe.prop;
 
 function targetFor(w) {
   const { g } = w, { player: p, world } = g;
   const open = foe => visible(world, p.x, p.y, foe);
   return g.nearestEnemy(p.x, p.y, REACH, foe => strong(foe) && open(foe)) ||
-    g.nearestEnemy(p.x, p.y, REACH, open);
+    g.nearestEnemy(p.x, p.y, REACH, open) || nearbyWeaponProp(w);
 }
 
 class CarrionFlight {
@@ -27,7 +29,7 @@ class CarrionFlight {
 
   valid() {
     const { w, target, world, x, y } = this;
-    return !this.dead && w.g.world === world && available(target) && target.id === this.targetId &&
+    return !this.dead && w.g.world === world && strikable(target) && target.id === this.targetId &&
       visible(world, x, y, target);
   }
 
@@ -88,10 +90,10 @@ export default {
     const { g, s } = w, { player: p, world } = g;
     if (w.fx?.world === world && g.effects.includes(w.fx)) return 0.1;
     const target = w.hand ? w.handTarget : targetFor(w);
-    if (!available(target) || !visible(world, p.x, p.y, target)) return false;
+    if (!strikable(target) || !visible(world, p.x, p.y, target)) return false;
     const angle = Math.atan2(target.y - p.y, target.x - p.x);
     recordHeroAttack(w, angle);
-    const fed = levy(w, target);
+    const fed = target.prop ? 0 : levy(w, target);
     const damage = s.dmg * (1 + Math.min(MAX_TITHE, s.tithe * fed));
     w.fx = new CarrionFlight(w, target, damage, fed);
     g.effects.push(w.fx);
