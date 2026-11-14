@@ -35,7 +35,7 @@ test('every hero cycles through rest, both walking directions and its actual att
       preview.update(1/60);preview.draw(ctx,box,false,{});
       actions.add(preview.action.kind);faces.add(p.face);
       poses.add(spr.frames.indexOf(p._rect[4]));
-      const [x,y,,,art,flip]=p._rect,b=bounds(art.buf),S=preview.geometry.scale;
+      const [x,y,,,art,flip]=p._rect,b=bounds(art.buf),S=preview.geometry.scale/(spr.hires||1);
       const left=flip ? art.w-1-b.x1 : b.x0;
       const right=flip ? art.w-b.x0 : b.x1+1;
       assert.ok(x+left*S>=box.x && x+right*S<=box.x+box.w,`${id}: full width at ${frame}`);

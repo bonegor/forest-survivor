@@ -3,6 +3,7 @@
 // REVIEW_OUT can choose a fresh take folder; --contacts skips timed world captures.
 // --walk-only records 30 fps travel, stop/restart, slow travel and moving combat.
 // REVIEW_DIFF selects a real difficulty; REVIEW_PHASES is a comma-separated scene subset.
+// REVIEW_SCALE sets real device pixels per logical world pixel (e.g. 1 or 2.4).
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -36,7 +37,7 @@ if (process.env.REVIEW_SHEETS) {
         }
         return {w:data.w,h:data.h,d};
       }),
-      ...Object.fromEntries(['idle','walk','attack','attackWalk','attackRelease','attackFps','anchorY','floating'].map(k=>[k,data[k]])),
+      ...Object.fromEntries(['idle','walk','attack','attackWalk','attackRelease','attackFps','anchorY','floating','hires'].map(k=>[k,data[k]])),
       motionRate:data.walkFps/(9.8*Math.max(.6,Math.min(1.6,moveFor('s15','easy')*(hero.stats.speed||1)))),
       idleRate:data.idleFps/1.6,selfBob:true,outline:false,manualDelay,
     });
@@ -55,6 +56,7 @@ const report = { tag, nativeRenderer: 'Game/Player/Camera/lighting/HUD', sheetSo
 function canvas(w, h) { const c = createCanvas(w, h); c.getContext('2d').imageSmoothingEnabled = false; return c; }
 function label(ctx, text, x, y) { ctx.fillStyle = '#e7dfc7'; ctx.font = '13px sans-serif'; ctx.fillText(text, x, y); }
 function contacts(id, spr) {
+  const density=spr.hires||1,display=2/density;
   const motions = ['idle','walk','attack'];
   const rows = motions.reduce((n, m) => n + Math.ceil((spr[m].length + 1) / 8), 0);
   const c = canvas(1280, 32 + rows * 150), ctx = c.getContext('2d');
@@ -68,8 +70,8 @@ function contacts(id, spr) {
       const frame = spr.frames[list[n]], x = n % 8 * 160, y = 32 + (row + Math.floor(n / 8)) * 150;
       ctx.fillStyle = (n % 8) % 2 ? '#18232d' : '#1d2a35'; ctx.fillRect(x,y,160,150);
       label(ctx, `${motion} ${n === list.length-1 ? '↻0' : n} / ${list[n]}`, x+7,y+16);
-      ctx.drawImage(frame.c, x + (160-frame.w*2)/2, y+21, frame.w*2,frame.h*2);
-      ctx.fillStyle = '#62717b'; ctx.fillRect(x+3,y+21+spr.anchorY*2,154,1);
+      ctx.drawImage(frame.c, x + (160-frame.w*display)/2, y+21, frame.w*display,frame.h*display);
+      ctx.fillStyle = '#62717b'; ctx.fillRect(x+3,y+21+spr.anchorY*display,154,1);
     }
     const frames = spr[motion].map(i=>spr.frames[i].buf);
     motionData[motion] = { frames:spr[motion].length, unique:new Set(frames.map(hash)).size,
@@ -86,8 +88,8 @@ function contacts(id, spr) {
       const fr=spr.frames[spr.attackWalk[k][j]],x=j*160,y=32+k*150;
       ac.fillStyle=j%2?'#18232d':'#1d2a35';ac.fillRect(x,y,160,150);
       label(ac,`attack ${k} / gait ${j}`,x+6,y+16);
-      ac.drawImage(fr.c,x+(160-fr.w*2)/2,y+21,fr.w*2,fr.h*2);
-      ac.fillStyle='#62717b';ac.fillRect(x+3,y+21+spr.anchorY*2,154,1);
+      ac.drawImage(fr.c,x+(160-fr.w*display)/2,y+21,fr.w*display,fr.h*display);
+      ac.fillStyle='#62717b';ac.fillRect(x+3,y+21+spr.anchorY*display,154,1);
     }
     writeFileSync(join(root,`${id}-moving-attacks.png`),aw.toBuffer('image/png'));
   }
@@ -100,8 +102,8 @@ function contacts(id, spr) {
     dc.fillText(`${id}: every native gait pose and loop return, fixed crop at 4x`,8,18);
     list.forEach((index,n)=>{
       const x=n%4*192,y=28+Math.floor(n/4)*216,frame=spr.frames[index];
-      dc.drawImage(frame.c,16,12,48,48,x,y,192,192);
-      dc.fillStyle=name==='light'?'#6d6a60':'#62717b';dc.fillRect(x+2,y+(spr.anchorY-12)*4,188,1);
+      dc.drawImage(frame.c,16*density,12*density,48*density,48*density,x,y,192,192);
+      dc.fillStyle=name==='light'?'#6d6a60':'#62717b';dc.fillRect(x+2,y+(spr.anchorY/density-12)*4,188,1);
       dc.fillStyle=name==='light'?'#17202a':'#e7dfc7';dc.fillText(`${n===list.length-1?'return to 0':`phase ${n}`} / pose ${index}`,x+7,y+208);
     });
     writeFileSync(join(root,`${id}-walk-detail-${name}.png`),detail.toBuffer('image/png'));
@@ -112,14 +114,17 @@ for (const id of ids) report.heroes[id] = contacts(id,SPR[HEROES[id].sprite]);
 contacts('plumed-reference',buildSprite('plumed-reference',KNIGHT_PLUMED));
 const over=canvas(280*7,180*Math.ceil(ids.length/7)),oc=over.getContext('2d');
 oc.fillStyle='#17202a';oc.fillRect(0,0,over.width,over.height);
-ids.forEach((id,n)=>{const spr=SPR[id],fr=spr.frames[spr.idle[0]],x=n%7*280,y=Math.floor(n/7)*180;label(oc,HEROES[id].title,x+8,y+18);oc.drawImage(fr.c,x+(280-fr.w*2)/2,y+30,fr.w*2,fr.h*2);});
+ids.forEach((id,n)=>{const spr=SPR[id],fr=spr.frames[spr.idle[0]],x=n%7*280,y=Math.floor(n/7)*180,scale=2/(spr.hires||1);label(oc,HEROES[id].title,x+8,y+18);oc.drawImage(fr.c,x+(280-fr.w*scale)/2,y+30,fr.w*scale,fr.h*scale);});
 writeFileSync(join(root,'roster.png'),over.toBuffer('image/png'));
 writeFileSync(join(root,'coverage.json'),JSON.stringify(report,null,2));
 if(contactsOnly) process.exit(0);
 const W=480,H=300,HZ=60,FPS=Number(process.env.REVIEW_FPS || (walkOnly ? 30 : 20)),STRIDE=HZ/FPS;
+const SCALE=Number(process.env.REVIEW_SCALE||1),PW=Math.round(W*SCALE),PH=Math.round(H*SCALE);
+if(!Number.isFinite(SCALE)||SCALE<1||SCALE>4)throw Error('REVIEW_SCALE must be from 1 to 4');
+report.displayScale=SCALE;
 if(!Number.isInteger(STRIDE))throw Error('REVIEW_FPS must divide 60');
-const world=canvas(W,H),ctx=world.getContext('2d'),ui=canvas(W,H),uctx=ui.getContext('2d');
-Object.assign(view,{canvas:world,ctx,ui,uctx,S:1,W,H,pxW:W,pxH:H,zoom:1});
+const world=canvas(PW,PH),ctx=world.getContext('2d'),ui=canvas(PW,PH),uctx=ui.getContext('2d');
+Object.assign(view,{canvas:world,ctx,ui,uctx,S:SCALE,W,H,pxW:PW,pxH:PH,zoom:1});
 const phases=walkOnly ? [
   {name:'walk-right',seconds:1.8,x:1,y:0,face:1},
   {name:'walk-left',seconds:1.8,x:-1,y:0,face:-1},
@@ -142,7 +147,7 @@ for(const id of ids){
   const g=new Game({hero:id,mode:'s15',map:'forest',diff:difficulty,meta:metaBonuses(profile),settings:{numbers:false,softFlash:true},crypts:false});
   g.spawner.update=()=>{};g.player.devGod=true;g.banners.length=0;g.player.anim=0;g.player.idleAnim=0;g.syncCam();g.cam.x=g.player.x-W/2;g.cam.y=g.player.y-8-H/2;
   const spr=SPR[g.player.hero.sprite],dir=join(root,`${id}-world`);mkdirSync(dir,{recursive:true});
-  const seen={},samples=[],poseCounts={},phaseMetrics={},sheet=canvas(W*4,H*3),sc=sheet.getContext('2d');
+  const seen={},samples=[],poseCounts={},phaseMetrics={},sheet=canvas(PW*4,PH*3),sc=sheet.getContext('2d');
   let sample=0,clipped=0,stage=0;
   for(const phase of selectedPhases){
     if((phase.manual||phase.crypt)&&!g.inCrypt){
@@ -177,13 +182,13 @@ for(const id of ids){
       if(g.player.walking??g.player.moving)walkingTicks++;
       const idx=spr.frames.indexOf(g.player._rect[4]);(seen[phase.name]??=new Set()).add(idx);poseCounts[idx]=(poseCounts[idx]||0)+1;
       if(n%STRIDE)continue;
-      g.draw(ctx);uctx.clearRect(0,0,W,H);g.hud.draw(uctx,W,H,g.clock,1/FPS);ctx.drawImage(ui,0,0);
+      g.draw(ctx);uctx.clearRect(0,0,PW,PH);g.hud.draw(uctx,PW,PH,g.clock,1/FPS);ctx.drawImage(ui,0,0);
       const rect=g.player._rect;
-      if(rect[0]<0||rect[1]<0||rect[0]+rect[2]>W||rect[1]+rect[3]>H)clipped++;
+      if(rect[0]<0||rect[1]<0||rect[0]+rect[2]>PW||rect[1]+rect[3]>PH)clipped++;
       writeFileSync(join(dir,`${String(sample).padStart(4,'0')}.png`),world.toBuffer('image/png'));
       samples.push({frame:sample,time:g.clock,phase:phase.name,spriteFrame:idx,face:g.player.face,rect:rect.slice(0,4),attack:spr.attack.includes(idx)||!!spr.attackWalk?.some(row=>row.includes(idx)),
         x:g.player.x,y:g.player.y,gait:g.player.anim,idle:g.player.idleAnim,walking:g.player.walking,moving:g.player.moving});sample++;
-      if(n===Math.floor(frames/2/STRIDE)*STRIDE)sc.drawImage(world,stage%4*W,Math.floor(stage/4)*H);
+      if(n===Math.floor(frames/2/STRIDE)*STRIDE)sc.drawImage(world,stage%4*PW,Math.floor(stage/4)*PH);
     }
     phaseMetrics[phase.name]={seconds:phase.seconds,distance,gaitSteps:(g.player.anim-gaitStart)*1.4*spr.motionRate,walkingTicks};
     const framesSeen=seen[phase.name];

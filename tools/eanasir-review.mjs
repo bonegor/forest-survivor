@@ -17,7 +17,7 @@ const { input } = await import('../public/js/engine/input.js');
 const { view } = await import('../public/js/engine/view.js');
 const { mulberry32 } = await import('../public/js/engine/util.js');
 buildSprites();
-const root = 'output/eanasir-review';
+const root = process.env.REVIEW_OUT || 'output/eanasir-review';
 mkdirSync(root + '/encounter', { recursive: true });
 function surface(w, h) {
   const canvas = createCanvas(w, h), ctx = canvas.getContext('2d');

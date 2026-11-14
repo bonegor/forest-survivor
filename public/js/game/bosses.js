@@ -214,7 +214,7 @@ export const BOSS_AI = {
     }
     if (e.cd2 <= 0 && d < 70) {
       e.cd2 = 5;
-      cast(e, 0.95);
+      cast(e, 0.95, 'slam');
       const id = e.id;
       g.effects.push(new Telegraph(g, {
         shape: 'circle', x: e.x, y: e.y, r: 54, dur: 0.85, follow: e,
@@ -241,7 +241,7 @@ export const BOSS_AI = {
       const bolt = e.def.bolt ?? 'skullbolt';
       ring(g, e, e.phase ? 16 : 12, bolt, 58, 13, e.data.off);
       if (e.phase) fan(g, e, 3, 0.3, bolt, 70, 13, { homing: 0.9, life: 5 });
-      cast(e, 0.35);
+      cast(e, 0.35, 'volley');
       return [0, 0, 0];
     }
     // Blinks away when cornered, but not right after a blink: melee gets a window.
@@ -256,14 +256,14 @@ export const BOSS_AI = {
       e.y = spot.y;
       g.particles.burst(e.x, e.y - 12 * e.scale, 0, 24, puff ?? [PC.l, PC.L, PC.w], 90, 0.6, 2, P.GLOW | P.FADE, { vz: 40 });
       sfx('teleport');
-      cast(e, 0.5);
+      cast(e, 0.5, 'blink');
       return [0, 0, 0];
     }
     if (e.cd3 <= 0) {
       e.cd3 = e.phase ? 9 : 12;
       if (Math.random() < 0.5) say(e, pick(e.def.lines?.summon ?? ['YOUR SOUL IS MINE.', 'DEATH IS ONLY THE BEGINNING.', 'SERVE ME IN DEATH!']));
       g.summonRing(e.def.summon ?? 'ghost', e.phase ? 8 : 6, 80);
-      cast(e, 0.8);
+      cast(e, 0.8, 'summon');
       return [0, 0, 0];
     }
     // Keep a respectful distance and drift sideways.

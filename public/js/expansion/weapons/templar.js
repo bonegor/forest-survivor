@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Hallowed Boundary', icon: 'i_excalibur', kind: id, directional: true, evolved: true,
     desc: 'A wider, brighter ward holds the ground longer and cuts down more foes that cross it.',
-    base: { dmg: 67, cd: 0.95, area: 1.42, amount: 4, dur: 1.16, slow: 0.3 },
+    base: { dmg: 100, cd: 0.78, area: 1.52, amount: 6, dur: 1.3, slow: 0.3 },
   },
 };

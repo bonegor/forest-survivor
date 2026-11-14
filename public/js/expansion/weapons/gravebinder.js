@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Ravenous Edict', icon: 'i_doom', kind: id, evolved: true,
     desc: 'The raven collects a greater toll from more foes and strikes its target harder.',
-    base: { dmg: 64, cd: 1.02, area: 1.46, amount: 5, siphon: 0.48, tithe: 0.12 },
+    base: { dmg: 94, cd: 0.84, area: 1.6, amount: 6, siphon: 0.6, tithe: 0.12 },
   },
 };

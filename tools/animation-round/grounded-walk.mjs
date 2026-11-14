@@ -54,32 +54,35 @@ function vertex(p,leg,target,scale) {
   const cs=Math.cos(target.roll),sn=Math.sin(target.roll);
   return [mix(q[0],target.ankle[0]+x*cs-y*sn,foot),mix(q[1],target.ankle[1]+x*sn+y*cs,foot)];
 }
-function triangle(out,texture,uv,pts) {
+function triangle(out,texture,uv,pts,density=1) {
+  const W=80*density,H=64*density;
   const [a,b,c]=pts,det=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
   if(Math.abs(det)<1e-8)return;
-  const x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))),x1=Math.min(79,Math.ceil(Math.max(a[0],b[0],c[0])));
-  const y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))),y1=Math.min(63,Math.ceil(Math.max(a[1],b[1],c[1])));
+  const x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0])*density)),x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0],c[0])*density));
+  const y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1])*density)),y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1],c[1])*density));
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++) {
-    const px=x+.5,py=y+.5,u=((b[1]-c[1])*(px-c[0])+(c[0]-b[0])*(py-c[1]))/det;
+    const px=(x+.5)/density,py=(y+.5)/density,u=((b[1]-c[1])*(px-c[0])+(c[0]-b[0])*(py-c[1]))/det;
     const v=((c[1]-a[1])*(px-c[0])+(a[0]-c[0])*(py-c[1]))/det,w=1-u-v;
     if(Math.min(u,v,w)<-1e-7)continue;
     const sx=Math.floor(uv[0][0]*u+uv[1][0]*v+uv[2][0]*w),sy=Math.floor(uv[0][1]*u+uv[1][1]*v+uv[2][1]*w);
     if(sx<0||sx>=texture.w||sy<0||sy>=texture.h)continue;
-    const color=texture.d[sy*texture.w+sx];if(color>>>24>=128)out[y*80+x]=color;
+    const color=texture.d[sy*texture.w+sx];if(color>>>24>=128)out[y*W+x]=color;
   }
 }
-function renderLeg(out,leg,target,scale) {
+function renderLeg(out,leg,target,scale,density=1) {
+  const W=80*density,H=64*density;
   // The original still hides parts of each thigh behind equipment. Draw the
   // complete connected material underneath first, then preserve its visible
   // original texture. Newly exposed joints must not inherit a sword-shaped hole.
   const outline=leg.material.outline;
   const segment=(a,b,wa,wb,color)=>{
     const dx=b[0]-a[0],dy=b[1]-a[1],len=dx*dx+dy*dy;
-    for(let y=Math.max(0,Math.floor(Math.min(a[1],b[1])-wa-1));y<=Math.min(63,Math.ceil(Math.max(a[1],b[1])+wb+1));y++)
-      for(let x=Math.max(0,Math.floor(Math.min(a[0],b[0])-wa-1));x<=Math.min(79,Math.ceil(Math.max(a[0],b[0])+wb+1));x++) {
-        const t=clamp(((x+.5-a[0])*dx+(y+.5-a[1])*dy)/(len||1)),r=mix(wa,wb,t);
-        const dist=Math.hypot(x+.5-a[0]-t*dx,y+.5-a[1]-t*dy);
-        if(dist<=r)out[y*80+x]=dist>r-.65?outline:color;
+    for(let y=Math.max(0,Math.floor((Math.min(a[1],b[1])-wa-1)*density));y<=Math.min(H-1,Math.ceil((Math.max(a[1],b[1])+wb+1)*density));y++)
+      for(let x=Math.max(0,Math.floor((Math.min(a[0],b[0])-wa-1)*density));x<=Math.min(W-1,Math.ceil((Math.max(a[0],b[0])+wb+1)*density));x++) {
+        const px=(x+.5)/density,py=(y+.5)/density;
+        const t=clamp(((px-a[0])*dx+(py-a[1])*dy)/(len||1)),r=mix(wa,wb,t);
+        const dist=Math.hypot(px-a[0]-t*dx,py-a[1]-t*dy);
+        if(dist<=r)out[y*W+x]=dist>r-.65?outline:color;
       }
   };
   segment(target.hip,target.knee,1.45,1.35,leg.material.thigh);
@@ -88,19 +91,19 @@ function renderLeg(out,leg,target,scale) {
   // a subpixel ankle. Keep a level sole through support and roll the return.
   const boot=[[-1.15,-.7],[1.05,-.7],[1.25,Math.max(.5,leg.soleDepth-.8)],[2.65,Math.max(.6,leg.soleDepth-.6)],[2.65,leg.soleDepth],[-1.15,leg.soleDepth]];
   const cs=Math.cos(target.roll),sn=Math.sin(target.roll),poly=boot.map(([x,y])=>[target.ankle[0]+x*cs-y*sn,target.ankle[1]+x*sn+y*cs]);
-  for(let y=Math.max(0,Math.floor(target.ankle[1]-2));y<=Math.min(63,Math.ceil(target.ankle[1]+leg.soleDepth+1));y++)
-    for(let x=Math.max(0,Math.floor(target.ankle[0]-3));x<=Math.min(79,Math.ceil(target.ankle[0]+4));x++)
-      if(inside(x+.5,y+.5,poly))out[y*80+x]=y+.5>target.ankle[1]+leg.soleDepth-.7?outline:leg.material.boot;
+  for(let y=Math.max(0,Math.floor((target.ankle[1]-2)*density));y<=Math.min(H-1,Math.ceil((target.ankle[1]+leg.soleDepth+1)*density));y++)
+    for(let x=Math.max(0,Math.floor((target.ankle[0]-3)*density));x<=Math.min(W-1,Math.ceil((target.ankle[0]+4)*density));x++)
+      if(inside((x+.5)/density,(y+.5)/density,poly))out[y*W+x]=(y+.5)/density>target.ankle[1]+leg.soleDepth-.7?outline:leg.material.boot;
   const grid=5,x0=Math.min(...leg.polygon.map(p=>p[0]))-3,x1=Math.max(...leg.polygon.map(p=>p[0]))+3;
   const y0=Math.min(...leg.polygon.map(p=>p[1]))-3,y1=Math.max(...leg.polygon.map(p=>p[1]))+3;
   for(let y=y0;y<y1;y+=grid)for(let x=x0;x<x1;x+=grid) {
     const uv=[[x,y],[x+grid,y],[x+grid,y+grid],[x,y+grid]],pts=uv.map(p=>vertex(p,leg,target,scale));
-    triangle(out,leg.texture,[uv[0],uv[1],uv[2]],[pts[0],pts[1],pts[2]]);
-    triangle(out,leg.texture,[uv[0],uv[2],uv[3]],[pts[0],pts[2],pts[3]]);
+    triangle(out,leg.texture,[uv[0],uv[1],uv[2]],[pts[0],pts[1],pts[2]],density);
+    triangle(out,leg.texture,[uv[0],uv[2],uv[3]],[pts[0],pts[2],pts[3]],density);
   }
   // Every stance shares the registered floor. Rounded joint contours and a
   // returning toe's rotation must never punch a stray pixel through that plane.
-  out.fill(0,56*80);
+  out.fill(0,56*density*W);
 }
 function paletteMapper(palette) {
   const known=new Set(palette),memo=new Map(),solid=palette.filter(c=>c>>>24>=128);
@@ -115,18 +118,19 @@ function paletteMapper(palette) {
     memo.set(color,best);return best;
   };
 }
-function removeOutlineCrumbs(d) {
+function removeOutlineCrumbs(d,density=1) {
+  const W=80*density,H=64*density;
   const seen=new Uint8Array(d.length);
   for(let p=0;p<d.length;p++) {
     if(seen[p]||d[p]>>>24<128)continue;
-    const q=[p];seen[p]=1;let top=64,bright=0;
+    const q=[p];seen[p]=1;let top=H,bright=0;
     for(let i=0;i<q.length;i++) {
-      const n=q[i],x=n%80,y=Math.floor(n/80),c=d[n];top=Math.min(top,y);bright=Math.max(bright,c&255,c>>>8&255,c>>>16&255);
-      for(let yy=Math.max(0,y-1);yy<=Math.min(63,y+1);yy++)for(let xx=Math.max(0,x-1);xx<=Math.min(79,x+1);xx++) {
-        const k=yy*80+xx;if(seen[k]||d[k]>>>24<128)continue;seen[k]=1;q.push(k);
+      const n=q[i],x=n%W,y=Math.floor(n/W),c=d[n];top=Math.min(top,y);bright=Math.max(bright,c&255,c>>>8&255,c>>>16&255);
+      for(let yy=Math.max(0,y-1);yy<=Math.min(H-1,y+1);yy++)for(let xx=Math.max(0,x-1);xx<=Math.min(W-1,x+1);xx++) {
+        const k=yy*W+xx;if(seen[k]||d[k]>>>24<128)continue;seen[k]=1;q.push(k);
       }
     }
-    if(top>=44&&q.length<=2&&bright<112)for(const n of q)d[n]=0;
+    if(top>=44*density&&q.length<=2*density*density&&bright<112)for(const n of q)d[n]=0;
   }
 }
 function over(c,b) {
@@ -170,13 +174,15 @@ function prepare(config,source,foregroundImage) {
   return {foreground,legs};
 }
 
-export function buildTextureWalk(config,source,palette,standing,foregroundImage) {
-  if(standing.w!==80||standing.h!==64)throw Error('Grounded walks require the registered 80×64 native canvas.');
-  const prepared=prepare(config,source,foregroundImage),remap=paletteMapper(palette),m=config.motion;
-  const foreground=new Uint32Array(80*64);
-  for(let y=0;y<64;y++)for(let x=0;x<80;x++) {
-    const sx=(x+.5-40)/config.scale+config.pivot[0],sy=(y+.5-56)/config.scale+config.pivot[1];
-    if(y<44||(sx>=0&&sx<source.w&&sy>=0&&sy<source.h&&prepared.foreground(sx,sy)))foreground[y*80+x]=standing.d[y*80+x];
+export function buildTextureWalk(config,source,palette,standing,foregroundImage,{density=1}={}) {
+  if(!Number.isInteger(density)||density<1||density>4)throw Error('Gait density must be an integer from 1 to 4.');
+  const W=80*density,H=64*density;
+  if(standing.w!==W||standing.h!==H)throw Error('Grounded walks require the registered 80×64 native canvas.');
+  const prepared=prepare(config,source,foregroundImage),remap=density===1?paletteMapper(palette):color=>color,m=config.motion;
+  const foreground=new Uint32Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++) {
+    const sx=((x+.5)/density-40)/config.scale+config.pivot[0],sy=((y+.5)/density-56)/config.scale+config.pivot[1];
+    if(y<44*density||(sx>=0&&sx<source.w&&sy>=0&&sy<source.h&&prepared.foreground(sx,sy)))foreground[y*W+x]=standing.d[y*W+x];
   }
   // Native export edges sometimes contain an isolated old boot/greave pixel
   // just outside the high-resolution mask. Only clean the extracted resting
@@ -184,24 +190,24 @@ export function buildTextureWalk(config,source,palette,standing,foregroundImage)
   const seen=new Uint8Array(foreground.length);
   for(let p=0;p<foreground.length;p++) {
     if(seen[p]||foreground[p]>>>24<128)continue;
-    const todo=[p];seen[p]=1;let top=64;
+    const todo=[p];seen[p]=1;let top=H;
     for(let i=0;i<todo.length;i++) {
-      const n=todo[i],x=n%80,y=Math.floor(n/80);top=Math.min(top,y);
-      for(let yy=Math.max(0,y-1);yy<=Math.min(63,y+1);yy++)for(let xx=Math.max(0,x-1);xx<=Math.min(79,x+1);xx++) {
-        const q=yy*80+xx;if(seen[q]||foreground[q]>>>24<128)continue;seen[q]=1;todo.push(q);
+      const n=todo[i],x=n%W,y=Math.floor(n/W);top=Math.min(top,y);
+      for(let yy=Math.max(0,y-1);yy<=Math.min(H-1,y+1);yy++)for(let xx=Math.max(0,x-1);xx<=Math.min(W-1,x+1);xx++) {
+        const q=yy*W+xx;if(seen[q]||foreground[q]>>>24<128)continue;seen[q]=1;todo.push(q);
       }
     }
-    if(top>=44&&todo.length<=8)for(const n of todo)foreground[n]=0;
+    if(top>=44*density&&todo.length<=8*density*density)for(const n of todo)foreground[n]=0;
   }
   // Keep the original garment in moving attacks as well as ordinary travel.
   // Ownership is explicit: cape/tabard/coat polygons are distinct from the
   // resting blade, shield and bow that the attack compositor replaces.
-  const garment=new Uint32Array(80*64),garmentMask=new Uint8Array(80*64),occluded=[];
+  const garment=new Uint32Array(W*H),garmentMask=new Uint8Array(W*H),occluded=[];
   const garmentIndices=config.garmentIndices||[],cloth=garmentIndices.map(i=>config.protect[i]);
   const equipment=config.protect.filter((_,i)=>!garmentIndices.includes(i));
-  for(let y=44;y<56;y++)for(let x=0;x<80;x++) {
-    const p=y*80+x,sx=(x+.5-40)/config.scale+config.pivot[0],sy=(y+.5-56)/config.scale+config.pivot[1];
-    const owned=config.garmentNativeMaxX!=null?x<=config.garmentNativeMaxX:cloth.some(poly=>owns(sx,sy,poly,1));
+  for(let y=44*density;y<56*density;y++)for(let x=0;x<W;x++) {
+    const p=y*W+x,sx=((x+.5)/density-40)/config.scale+config.pivot[0],sy=((y+.5)/density-56)/config.scale+config.pivot[1];
+    const owned=config.garmentNativeMaxX!=null?x/density<=config.garmentNativeMaxX:cloth.some(poly=>owns(sx,sy,poly,1));
     if(!owned||!(foreground[p]>>>24))continue;
     garmentMask[p]=1;
     if(equipment.some(poly=>owns(sx,sy,poly,1)))occluded.push(p);
@@ -210,9 +216,9 @@ export function buildTextureWalk(config,source,palette,standing,foregroundImage)
   // Continue genuine cloth behind the resting equipment from its nearest
   // visible material. Removing the resting sword must not cut a tabard notch.
   for(const p of occluded) {
-    const x=p%80,y=Math.floor(p/80);let best=0,score=Infinity;
-    for(let yy=Math.max(44,y-4);yy<Math.min(56,y+5);yy++)for(let xx=Math.max(0,x-8);xx<Math.min(80,x+9);xx++) {
-      const q=yy*80+xx;if(!garmentMask[q]||garment[q]>>>24<200)continue;
+    const x=p%W,y=Math.floor(p/W);let best=0,score=Infinity;
+    for(let yy=Math.max(44*density,y-4*density);yy<Math.min(56*density,y+5*density);yy++)for(let xx=Math.max(0,x-8*density);xx<Math.min(W,x+9*density);xx++) {
+      const q=yy*W+xx;if(!garmentMask[q]||garment[q]>>>24<200)continue;
       const distance=(xx-x)**2+(yy-y)**2*2;if(distance<score){best=garment[q];score=distance;}
     }
     garment[p]=best;
@@ -223,7 +229,7 @@ export function buildTextureWalk(config,source,palette,standing,foregroundImage)
     const phase=i/m.frames,wave=.5+.5*Math.cos(TAU*phase*2),bob=m.bob*wave;
     // Native one-pixel compression spans contact and loading, including 15→0.
     // Rounding a 0.55px sinusoid made the heavy models jab for just one frame.
-    const shift=m.bodyBobPixels??Math.round((.65+m.bob*.25)*wave),d=new Uint32Array(80*64),targets=[];
+    const shift=m.bodyBobPixels??Math.round((.65+m.bob*.25)*wave),d=new Uint32Array(W*H),targets=[];
     for(const leg of [...prepared.legs].reverse()) {
       const foot=groundedFoot(phase+leg.offset,m),hip=[40+(leg.hip[0]-config.pivot[0])*config.scale,56+(leg.hip[1]-config.pivot[1])*config.scale+shift+(m.hipCompression||0)*wave];
       const ankle=[centerX+foot.x+(leg.trackOffset||0),55.5-leg.soleDepth-foot.lift];
@@ -232,31 +238,31 @@ export function buildTextureWalk(config,source,palette,standing,foregroundImage)
         target.restLength=leg.upper+leg.lower;
         target.extension=Math.hypot(ankle[0]-hip[0],ankle[1]-hip[1])/target.restLength;
       }
-      renderLeg(d,leg,target,config.scale);targets.push({name:leg.name,...target,...foot});
+      renderLeg(d,leg,target,config.scale,density);targets.push({name:leg.name,...target,...foot});
     }
     const lower=d.slice();
-    for(let y=44;y<56;y++)for(let x=0;x<80;x++) {
-      const sy=y-shift;if(sy<44)continue;
-      lower[y*80+x]=over(garment[sy*80+x],lower[y*80+x]);
+    for(let y=44*density;y<56*density;y++)for(let x=0;x<W;x++) {
+      const sy=y-shift*density;if(sy<44*density)continue;
+      lower[y*W+x]=over(garment[sy*W+x],lower[y*W+x]);
     }
     // Equipment, face and upper armour translate together and never stretch.
-    for(let y=0;y<64;y++)for(let x=0;x<80;x++) {
-      const sy=y-shift;if(sy<0)continue;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++) {
+      const sy=y-shift*density;if(sy<0)continue;
       // Real alpha-over: an antialiased sword edge cannot erase the shin.
-      const p=y*80+x;d[p]=over(foreground[sy*80+x],d[p]);
+      const p=y*W+x;d[p]=over(foreground[sy*W+x],d[p]);
     }
     for(let p=0;p<d.length;p++){d[p]=remap(d[p]);lower[p]=remap(lower[p]);}
-    removeOutlineCrumbs(d);removeOutlineCrumbs(lower);
-    frames.push({w:80,h:64,d});lowerFrames.push({w:80,h:64,d:lower,equipmentFree:true,hips:targets.map(({name,hip})=>({name,hip}))});poses.push({phase,bob:shift,legs:targets});
+    removeOutlineCrumbs(d,density);removeOutlineCrumbs(lower,density);
+    frames.push({w:W,h:H,d});lowerFrames.push({w:W,h:H,d:lower,equipmentFree:true,hips:targets.map(({name,hip})=>({name,hip}))});poses.push({phase,bob:shift,legs:targets});
   }
   return {frames,lowerFrames,poses,fps:m.frames/m.cycleSeconds,motion:m};
 }
 
-export function buildGroundedWalk(id,palette,standing,{version='v1'}={}) {
+export function buildGroundedWalk(id,palette,standing,{version='v1',density=1}={}) {
   const base=GROUNDED_MODELS[id];if(!base)return null;
   if(version!=='v1'&&version!=='v2')throw Error('Unknown grounded walk version: '+version);
   const config=version==='v2'?groundedV2Config(base):base;
   if(!cache.has(id))cache.set(id,{source:readPng(new URL('./baseline/grounded-models/'+config.source,import.meta.url)),foreground:config.foregroundImage?readPng(new URL('./baseline/grounded-models/'+config.foregroundImage,import.meta.url)):null});
   const {source,foreground}=cache.get(id);
-  return buildTextureWalk(config,source,palette,standing,foreground);
+  return buildTextureWalk(config,source,palette,standing,foreground,{density});
 }

@@ -61,7 +61,7 @@ test('all heroes ignore hostile automatic receipts in the actual frame, image an
         const rect=draw(g);
         assert.equal(rect[4],expected,`${id}: ${crypt?'crypt':'field'} automatic state cannot select attack`);
         assert.equal(rect[5],face<0);assert.equal(rect[6],expected.get(face<0));
-        assert.equal(rect[2],expected.w*g.cam.S);assert.equal(rect[3],expected.h*g.cam.S);
+        assert.equal(rect[2],expected.w*g.cam.S/spr.hires);assert.equal(rect[3],expected.h*g.cam.S/spr.hires);
       }
     }
   });

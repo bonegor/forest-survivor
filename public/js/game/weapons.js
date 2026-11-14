@@ -77,6 +77,7 @@ export class Weapon {
     this.queueT = 0;
     this.handAt = null; // when a blow struck by hand lands or fires, on the game's clock (strike)
     this.handTarget = null; // and the foe it is struck at, if any
+    this.handTargetId = null; // pooled bodies can become a different foe during the wind-up
     this.hand = false; // true while a blow struck by hand fires (KINDS' fire: it fires, foe or none)
     this.gap = 0.1;
     this.shot = 0;
@@ -132,6 +133,7 @@ export class Weapon {
     this.queue = 0; // the new form may not fire volleys
     this.handAt = null;
     this.handTarget = null; // else its blows by itself would go on seeking a foe struck at long ago
+    this.handTargetId = null;
     this.recompute();
     return true;
   }
@@ -161,6 +163,7 @@ export class Weapon {
     if (this.handAt !== null) {
       if (this.g.clock < this.handAt - 1e-6) return;
       this.handAt = null;
+      if (this.handTarget && (this.handTarget.dead || this.handTarget.id !== this.handTargetId)) this.handTarget = null;
       if (!K.shoot) {
         this.hand = true;
         const r = K.fire(this);
@@ -168,6 +171,7 @@ export class Weapon {
         if (typeof r === 'number') this.cd = r;
       }
       this.handTarget = null;
+      this.handTargetId = null;
     }
     if (manual) this.cd = Math.max(0, this.cd);
     else if (this.cd <= 0) {
@@ -219,6 +223,7 @@ export class Weapon {
     this.cd = this.s.cd;
     this.handAt = this.g.clock + delay;
     this.handTarget = target;
+    this.handTargetId = target?.id ?? null;
     const K = KINDS[this.def.kind];
     if (this.def.kind === 'sword') {
       this.aimAng = sideways(this.g.player);

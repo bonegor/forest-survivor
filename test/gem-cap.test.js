@@ -80,9 +80,10 @@ test("past the cap, the farthest gem's XP drops where the hero fights", () =>
     assert.equal(xp.collected, 400 + e.xp, 'and with them all the XP');
   }));
 
-// Two seeded bot nights past the cap, four minutes of a Nightmare each (the cap is reached from
-// about 2:15 to 3:15, the monsters walking at the game's speed): the gems' invariants hold, whatever
-// the balance. The hero can't fall (devGod), so only the gems are on trial.
+// Two seeded bot nights past the cap, four minutes of a Nightmare each: the gems' invariants
+// hold through changing builds and kill rates. The hero can't fall (devGod), so only the gems
+// are on trial. A large burst can legitimately make a rich gem that is collected seconds later;
+// hoarding means XP stays in an old distant gem instead of following the current drops.
 test('four minutes of a Nightmare past the cap: no XP lost, never over 380 gems lying, no gem hoarding', () => {
   for (const o of [{ hero: 'knight', bot: 'autopilot', seed: 2 }, { hero: 'necromancer', bot: 'gems', seed: 1 }]) {
     // The Armory full, so the hero kills fast enough on Elite to fill the ground with gems.
@@ -90,25 +91,36 @@ test('four minutes of a Nightmare past the cap: no XP lost, never over 380 gems 
     play({ ...o, diff: 'hard', nightmare: true, up }, (g, p, xp, d) => {
       assert.equal(g.nightmare, true, 'a Nightmare (Elite only)');
       p.devGod = true;
-      let folds = 0, most = 0, richest = 0;
+      let folds = 0, most = 0;
       const drop = g.dropGem;
       g.dropGem = function (x, y, v) {
-        if (liveGems(this).length >= 380) folds++;
-        return drop.call(this, x, y, v);
+        const gems = liveGems(this), dist = pk => (pk.x - p.x) ** 2 + (pk.y - p.y) ** 2;
+        const far = gems.length >= 380 ? gems.filter(pk => !pk.pulled).reduce((a, b) => !a || dist(b) > dist(a) ? b : a, null) : null;
+        const expected = v + (far?.value || 0);
+        drop.call(this, x, y, v);
+        if (far) {
+          folds++;
+          const fresh = this.pickups.at(-1);
+          assert.ok(far.dead, `${o.hero}: a fold retires the distant XP owner`);
+          assert.ok(fresh !== far && !fresh.dead && fresh.kind === 'gem', `${o.hero}: XP moves into a new gem`);
+          assert.equal(fresh.value, expected, `${o.hero}: the new drop holds all folded XP`);
+          // Topology may move a drop out of a wall; ordinary floor drops must
+          // appear exactly at this kill, never remain behind at the old gem.
+          if (!this.world.free || this.world.free(x, y)) {
+            assert.equal(fresh.x, x, `${o.hero}: folded XP follows the current drop x`);
+            assert.equal(fresh.y, y, `${o.hero}: folded XP follows the current drop y`);
+          }
+          assert.equal(fresh.rank, rankOf(expected), `${o.hero}: folded XP has the right visible gem tier`);
+        }
       };
       for (let t = 1; t <= 240; t++) {
         d.run(t - g.time);
         const gems = liveGems(g);
         most = Math.max(most, gems.filter((pk) => !pk.pulled).length);
-        // Lying about: one already flying to him is XP he has as good as picked up (the 2,500 cap
-        // of 27 October 2026 lets a ring come whole, and a fold by him can grow big on its way in).
-        for (const pk of gems) if (!pk.pulled) richest = Math.max(richest, pk.value);
       }
       assert.ok(folds > 0, `${o.hero}: the cap was reached`);
       assert.ok(most <= 380, `${o.hero}: at most 380 gems lay about unpulled (${most})`);
       assert.ok(Math.abs(xp.collected + sum(liveGems(g)) - xp.dropped) < 1e-6 * xp.dropped, `${o.hero}: no XP is lost: picked up or still lying about`);
-      // The oldest gem used to grow past 1 000 XP while he fought elsewhere.
-      assert.ok(richest <= 300, `${o.hero}: the richest gem lying about held ${richest} XP`);
     });
   }
 });

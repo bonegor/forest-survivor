@@ -73,7 +73,7 @@ test('Bastion Crank caps charge and Echo impacts, and a lord stops one bolt', ()
   w.update(0.21);
   sweep(g, 0.5);
   assert.deepEqual(strikes.map(([e]) => e), line.slice(0, 8));
-  assert.deepEqual(strikes.slice(3).map(([, damage]) => damage), Array(5).fill(69 * 1.54));
+  assert.deepEqual(strikes.slice(3).map(([, damage]) => damage), Array(5).fill(w.s.dmg * 1.54));
 
   strikes.length = 0;
   g.enemies.length = 0;
@@ -81,7 +81,7 @@ test('Bastion Crank caps charge and Echo impacts, and a lord stops one bolt', ()
   index(g);
   w.update(w.s.cd + 0.001);
   sweep(g, 0.4);
-  assert.deepEqual(strikes, [[lord, 69, 0]], 'no charge, stagger, or repeat hit against a lone lord');
+  assert.deepEqual(strikes, [[lord, w.s.dmg, 0]], 'no charge, stagger, or repeat hit against a lone lord');
   assert.equal(behind.hp, behind.maxHp, 'a bolt ends on a strong target');
 }));
 

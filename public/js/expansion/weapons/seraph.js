@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Aureole Sundering', icon: 'i_aegis', kind: id, directional: true, evolved: true,
     desc: 'A greater cleave splits into wider, faster wings of light that cut more foes.',
-    base: { dmg: 70, cd: 0.89, amount: 4, area: 1.43, speed: 1.3, kb: 0.95, wing: 0.75 },
+    base: { dmg: 104, cd: 0.76, amount: 6, area: 1.55, speed: 1.3, kb: 0.95, wing: 0.75 },
   },
 };

@@ -106,8 +106,9 @@ async function main(argv) {
   const workers = Math.max(1, Math.min(jobs.length, posInt(opts.jobs ?? Math.max(1, cores - 1), 'jobs')));
   const t0 = performance.now();
   let done = 0;
-  const results = await playAll(jobs, workers, () => {
+  const results = await playAll(jobs, workers, (result) => {
     done++;
+    if (opts.each) console.log(`[${done}/${jobs.length}] ${result.bot} ${result.hero} seed ${result.seed}  ${gameLine(result)}`);
     if (process.stderr.isTTY) process.stderr.write(`\r  ${done}/${jobs.length} games`);
   });
   if (process.stderr.isTTY) process.stderr.write('\r' + ' '.repeat(30) + '\r');
@@ -127,12 +128,6 @@ async function main(argv) {
   const rows = combos.map((c) => ({ c, s: summarize(results.filter((r) => dims.every((k) => r[k] === c[k]))) }));
   printTable(rows, varying, modes.includes('dungeon'));
 
-  if (opts.each) {
-    const who = (r) => [...(varying.length ? varying : ['bot']).map((k) => shown(k, r[k])), `seed ${r.seed}`].join(' ');
-    const w = Math.max(...results.map((r) => who(r).length));
-    console.log('');
-    for (const r of results) console.log(`${who(r).padEnd(w)}  ${gameLine(r)}`);
-  }
   const errors = results.filter((r) => r.error);
   if (errors.length) {
     console.log(`\n${errors.length} game${errors.length > 1 ? 's' : ''} failed; the first:\n${errors[0].error}`);

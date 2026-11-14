@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Astral Meridian', icon: 'i_prismatic', kind: id, evolved: true,
     desc: 'An astral crystal sweeps a wider arc, cutting more foes on its way across.',
-    base: { dmg: 72, cd: 0.88, area: 1.4, speed: 1.28, amount: 5, sweep: 0.92 },
+    base: { dmg: 96, cd: 0.76, area: 1.52, speed: 1.28, amount: 6, sweep: 0.92 },
   },
 };

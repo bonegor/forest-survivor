@@ -659,13 +659,14 @@ export class MenuScene {
     const hero = ([name, dx, dy]) => {
       const spr = SPR[name], fr = idleFrame(spr, Math.floor((t + Math.abs(dx)) * 1.6 * spr.idleRate)), flip = dx > 0;
       const img = fr.get(flip);
+      const density = spr.hires || 1, w = img.width / density, h = img.height / density;
       const x = fx + dx, y = fy + dy;
-      if (x - img.width / 2 < 2 || x + img.width / 2 > W - 2) return;
+      if (x - w / 2 < 2 || x + w / 2 > W - 2) return;
       ctx.fillStyle = 'rgba(5,4,10,0.5)';
       ctx.fillRect(Math.round(x - 8), y - 1, 16, 2);
-      const ix = Math.round(x - img.width / 2), iy = y - spr.anchorY;
-      ctx.drawImage(img, ix, iy);
-      if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, ix, iy);
+      const ix = Math.round(x - w / 2), iy = y - spr.anchorY / density;
+      ctx.drawImage(img, ix, iy, w, h);
+      if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, ix, iy, w, h);
     };
     for (const h of CAMP) if (h[2] < 0) hero(h);
     const fire = SPR.campfire.frames[Math.floor(t * 8) % 3].c;

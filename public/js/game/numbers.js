@@ -152,7 +152,7 @@ export class Numbers {
     const B = this.bodies;
     if (!B) return false;
     for (let i = 0; i < B.length; i++) {
-      const e = B[i], hw = (e.spr.w * e.scale) / 2;
+      const e = B[i], hw = (e.spr.w * e.scale) / (2 * (e.spr.hires || 1));
       if (!e.dead && x > e.x - hw && x < e.x + hw && y > e.y - e.h && y < e.y + 2) return true;
     }
     return false;

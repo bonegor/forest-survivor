@@ -41,7 +41,7 @@ function enterStartCrypt(g, p, keep = false) {
   return door;
 }
 
-test('a crypt has boss-sized Skeleton Archers and Mages, each in a room of its own with its guard', () => gameCase((g, p) => {
+test('a crypt has Skeleton Archer and Mage lords, each in a room of its own with its guard', () => gameCase((g, p) => {
   enterStartCrypt(g, p, true);
   const w = g.world, T = 16;
   assert.deepEqual([w.W, w.H], [70, 56]);
@@ -61,7 +61,10 @@ test('a crypt has boss-sized Skeleton Archers and Mages, each in a room of its o
     const guard = g.enemies.filter((e) => e.dormant && e.pack === lord.pack);
     assert.ok(guard.length && guard.every((e) => roomOf(e) === roomOf(lord)), 'its guard asleep about it');
   }
-  assert.ok(SPR.skeletonarcher.h >= SPR.lich.h, 'as big as a boss');
+  // These established world bodies are independent of a different boss's
+  // source-canvas resolution, padding and separate AI scale.
+  assert.deepEqual(Object.fromEntries(lords.map(lord => [lord.type, lord.h])),
+    { skeletonarcher: 32, skeletonmage: 27 }, 'lord world-body sizes stay unchanged');
   // Struck, a lord wakes, and its guard with it; the other sleeps on until its own guard wakes.
   const lord = w.guardian, other = lords.find((l) => l !== lord);
   g.hitEnemy(lord, 1, {});

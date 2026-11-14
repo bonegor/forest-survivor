@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Splinterline', icon: 'i_purifier', kind: MARKSMAN_WEAPON, evolved: true,
     desc: 'Releases six piercing splinters in a wider pattern. Echo adds pairs, up to eight splinters.',
-    base: { dmg: 54, cd: 0.82, amount: 3, area: 1.25, speed: 1.25, pierce: 3, kb: 1 },
+    base: { dmg: 80, cd: 0.72, amount: 3, area: 1.35, speed: 1.25, pierce: 3, kb: 1 },
   },
 };

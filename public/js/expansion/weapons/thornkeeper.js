@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Heartwood Convergence', icon: 'i_worldroot', kind: id, evolved: true,
     desc: 'More and stronger thorns converge across a wider clearing.',
-    base: { dmg: 72, cd: 0.87, area: 1.45, speed: 1.3, amount: 4, pierce: 4, kb: 0.6 },
+    base: { dmg: 90, cd: 0.76, area: 1.55, speed: 1.3, amount: 5, pierce: 4, kb: 0.6 },
   },
 };

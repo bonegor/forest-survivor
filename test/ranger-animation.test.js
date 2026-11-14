@@ -28,9 +28,10 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
   assert.equal(spr.frames.length,data.frames.length,'all authored idle, walk and attack combinations reach the engine');
   for(const [i,fr] of spr.frames.entries()){
     const f=fr.buf;
-    assert.deepEqual([f.w,f.h],[80,64]);
+    assert.deepEqual([f.w/(spr.hires||1),f.h/(spr.hires||1)],[80,64]);
+    assert.equal(spr.anchorY/(spr.hires||1),56,'source detail keeps the logical foot anchor');
     const b=bounds(f);
-    assert.ok(b.x0>0&&b.y0>0&&b.x1<79&&b.y1<63,`pose ${i} has transparent safety padding`);
+    assert.ok(b.x0>0&&b.y0>0&&b.x1<f.w-1&&b.y1<f.h-1,`pose ${i} has transparent safety padding`);
     assert.deepEqual(flipX(flipX(f)).d,f.d);
   }
 });

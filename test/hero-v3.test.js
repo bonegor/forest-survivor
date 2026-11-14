@@ -23,7 +23,7 @@ test('all selected heroes draw complete idle, walk and attack cycles in both dir
     // Continuous production clocks cover transitions and complete loop boundaries.
     for (let t = 0; t < 24 * 60; t++) {
       show.update(1 / 60);show.draw(ctx, box, false, settings);
-      const [x, y, , , frame, flip] = p._rect, b = bounds(frame.buf), S = show.geometry.scale;
+      const [x, y, , , frame, flip] = p._rect, b = bounds(frame.buf), S = show.geometry.scale / (spr.hires || 1);
       const index = spr.frames.indexOf(frame), key = `${show.action.kind}:${p.face}`;
       assert.ok(index >= 0, `${label}: uses its selected frame`);
       assert.equal(flip, p.face < 0, label + ': frame mirrors with facing');

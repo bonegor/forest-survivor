@@ -40,6 +40,7 @@ import { FLORA_HELL } from './flora-hell.js';
 import { TERRAIN_ART } from './terrain.js';
 import { TUNED } from './tuned.js';
 import { COPPER_ART } from './eanasir.js';
+import { REFORGED_BOSS_ART } from './bosses-reforged.js';
 
 // The art as drawn, and as the game draws it: with the colour tunes baked from the sprite tuner.
 export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...RELIC_EXPANSION_ART, ...PROC_ART, ...PROP_ART, ...LANDMARK_ART,
@@ -47,7 +48,7 @@ export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, 
   ...PALADIN_ITEMS, ...DRUID_ITEMS, ...BERSERKER_ITEMS, ...WITCHHUNTER_ITEMS,
   // the new Survival maps of 28 October 2026 (data/maps.js): their horde, their bosses, and the
   // trees, rocks and props their ground grows (game/biomes.js)
-  ...MAP_MONSTER_ART, ...MAP_BOSS_ART, ...FLORA_DESERT, ...FLORA_FROZEN, ...FLORA_MEADOW, ...FLORA_HELL,
+  ...MAP_MONSTER_ART, ...MAP_BOSS_ART, ...REFORGED_BOSS_ART, ...FLORA_DESERT, ...FLORA_FROZEN, ...FLORA_MEADOW, ...FLORA_HELL,
   // their new ground's (game/topology, 28 October 2026): cave mouths, igloos, ice rocks, spires, bones,
   // bridge posts and swirls (art/terrain.js)
   ...TERRAIN_ART, ...COPPER_ART };

@@ -15,14 +15,33 @@ const WHITE = px.pack(255, 255, 255);
 export const PALETTE_KEYS = Object.keys(PAL);
 export const PALETTE_CSS = PALETTE_KEYS.map((k) => PAL[k]);
 const packedToIndex = new Map(PALETTE_KEYS.map((k, i) => [pal[k], i]));
+// Keep the source art's shades intact; only its byte-palette debris selects a
+// nearby registered colour. Exact registrations always take precedence.
+const debrisNearest = new Map();
+function debrisIndex(c) {
+  const exact = packedToIndex.get(c);
+  if (exact !== undefined) return exact;
+  let best = debrisNearest.get(c);
+  if (best !== undefined) return best;
+  const r = c & 255, g = (c >>> 8) & 255, b = (c >>> 16) & 255;
+  let gap = Infinity;
+  for (const [colour, index] of packedToIndex) {
+    const dr = r - (colour & 255), dg = g - ((colour >>> 8) & 255), db = b - ((colour >>> 16) & 255);
+    const d = 2 * dr * dr + 4 * dg * dg + db * db;
+    if (d < gap) { gap = d; best = index; }
+  }
+  debrisNearest.set(c, best);
+  return best;
+}
 export const colorIndex = (key) => PALETTE_KEYS.indexOf(key);
 
 // A colour a tuned sprite is drawn in (def.palette), added to the list so its death burst keeps
-// it. A particle holds its colour in a byte: past 256 colours a burst leaves that colour out.
+// it. Once the byte palette fills, debrisIndex maps additional shades to an existing colour.
 function addColour(c) {
   if (packedToIndex.has(c) || PALETTE_CSS.length >= 256) return;
   const hex = `#${[c & 255, (c >>> 8) & 255, (c >>> 16) & 255].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
   packedToIndex.set(c, PALETTE_CSS.length);
+  debrisNearest.clear();
   PALETTE_KEYS.push(hex);
   PALETTE_CSS.push(hex);
 }
@@ -118,7 +137,7 @@ export class Frame {
       const out = [];
       const ink = this.buf.ink ?? OUTLINE, rim = this.buf.rim;
       for (let i = 0; i < list.length; i += 3) {
-        const c = list[i + 2], idx = packedToIndex.get(c);
+        const c = list[i + 2], idx = debrisIndex(c);
         if (idx !== undefined && c !== ink && c !== rim) out.push(list[i], list[i + 1], idx);
       }
       this._pixels = out;

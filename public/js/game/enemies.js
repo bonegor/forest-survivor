@@ -16,6 +16,7 @@ import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { EnemyShot } from './projectiles.js';
 import { BOSS_AI } from './bosses.js';
+import { bossFrame } from './boss-animation.js';
 import { merchantAI } from './eanasir-boss.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { shotName, bossOf } from './names.js';
@@ -128,6 +129,21 @@ export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast:
 // A flyer is drawn up off the ground, bobbing a little (draw, body).
 const HOVER = { up: 6, bob: 2 };
 
+// Drawing and collision share the same squash/stretch. One scratch pair,
+// consumed immediately, so body queries in the projectile hot path allocate nothing.
+const DRAW_SCALE = [1, 1];
+const FLASH_BOUNDS = [[1, 1], [1.12, 0.9]];
+const HOP_BOUNDS = [...FLASH_BOUNDS, [1.25, 0.8], [1.4, 0.72]].flatMap(([x, y]) => [[x, y], [x * 0.92, y * 1.12]]);
+function renderScale(e) {
+  let sx = e.drawScale, sy = e.drawScale;
+  if (e.flash > 0) { sx *= 1.12; sy *= 0.9; }
+  if (e.squash > 0) { sx *= 1 + e.squash * 0.25; sy *= 1 - e.squash * 0.2; }
+  if (e.def.ai === 'hopper' && (e.life * 1.25 + e.wob) % 1 < 0.42) { sy *= 1.12; sx *= 0.92; }
+  DRAW_SCALE[0] = sx;
+  DRAW_SCALE[1] = sy;
+  return DRAW_SCALE;
+}
+
 // A sealed guardian (dungeon.js) is iced over, the owner's (27 October 2026) "let it look like its
 // being defrosted": the frozen tint (TINTS.frozen, a frozen foe's) over it at `most` while its seal
 // holds whole, thinning to `least` as the seal breaks (thaw), when the last of it bursts off
@@ -180,11 +196,20 @@ export class Enemy {
     this.boss = !!def.boss;
     this.prop = !!def.prop;
     this.scale = o.scale ?? (def.scale || 1) * (this.elite ? 1.35 : 1);
+    // scale remains the established AI/effect scale. Art coordinates, including
+    // body/anchor/below, are source pixels and use their authored density.
+    this.drawScale = this.scale / (this.spr.hires || 1);
     this.r = def.r * (this.elite ? 1.3 : 1);
     // A boss's width on the ground is its body's (spr.body), not the reach of its swings.
     const ext = spriteExtent(this.spr), hover = def.fly ? HOVER.up + HOVER.bob : 0;
-    this.hr = Math.max(this.r, (this.spr.body ? this.spr.body[0] / 2 : ext.side) * this.scale + 1);
-    this.reach = Math.hypot(ext.side * this.scale, ext.up * this.scale + hover) + 2; // body's spare pixel
+    this.hr = Math.max(this.r, (this.spr.body ? this.spr.body[0] / 2 : ext.side) * this.drawScale + 1);
+    // Only hoppers squash. Bound the actual paired scales (a flash widens but
+    // shortens), so ordinary tall foes do not unnecessarily enter grid.big.
+    let reach = 0;
+    for (const [sx, sy] of def.ai === 'hopper' ? HOP_BOUNDS : FLASH_BOUNDS) {
+      reach = Math.max(reach, Math.hypot(ext.side * this.drawScale * sx, ext.up * this.drawScale * sy + hover));
+    }
+    this.reach = reach + 2;
     this.maxHp = this.hp = Math.max(1, def.hp * (o.hpMul ?? 1));
     this.spd = hordePace(type, o) * (o.spdMul ?? 1);
     this.paced = isPaced(def, o) && !!PACE_OF[type]; // one of the horde, walking its class's speed (hordePace)
@@ -263,7 +288,7 @@ export class Enemy {
     }
     this.spawnMax = this.spawnT = o.instant ? 0 : def.rise ? 0.75 : 0.25;
     this.hitT.fill(0);
-    this.h = (this.spr.body ? this.spr.body[1] : this.spr.h) * this.scale;
+    this.h = (this.spr.body ? this.spr.body[1] : this.spr.h) * this.drawScale;
     this.name = o.name || null;
     this.mod = o.mod || null;
     this.vampiric = this.mod && this.mod.id === 'vampiric';
@@ -789,6 +814,7 @@ export class Enemy {
   // rising, or casting with no pose); its walk goes motionRate frames to a step of the old one.
   frameIndex() {
     const s = this.spr;
+    if (s.poses?.rest) return bossFrame(this);
     if (this.def.ai === 'eanasir' && s.attack?.length) {
       const release = s.attackRelease ?? 2;
       if (this.state === 'wind') {
@@ -817,19 +843,19 @@ export class Enemy {
   // the frame draw shows, where it puts them (mirrored as it faces, a flyer up off the ground with
   // the whole of its bob), and a pixel to spare all round. One array, rewritten each call.
   body() {
-    const fr = this.spr.frames[this.frameIndex()], b = fr.box, sc = this.scale, half = fr.w / 2, out = this._box;
+    const fr = this.spr.frames[this.frameIndex()], b = fr.box, [sx, sy] = renderScale(this), half = fr.w / 2, out = this._box;
     const flip = this.face < 0, l = flip ? half - b[2] : b[0] - half, r = flip ? half - b[0] : b[2] - half;
-    const top = this.y + 1 + (this.spr.below - fr.h) * sc - (this.def.fly ? HOVER.up : 0), bob = this.def.fly ? HOVER.bob : 0;
-    out[0] = this.x + l * sc - 1;
-    out[1] = top + b[1] * sc - bob - 1;
-    out[2] = this.x + r * sc + 1;
-    out[3] = top + b[3] * sc + bob + 1;
+    const top = this.y + 1 + (this.spr.below - fr.h) * sy - (this.def.fly ? HOVER.up : 0), bob = this.def.fly ? HOVER.bob : 0;
+    out[0] = this.x + l * sx - 1;
+    out[1] = top + b[1] * sy - bob - 1;
+    out[2] = this.x + r * sx + 1;
+    out[3] = top + b[3] * sy + bob + 1;
     return out;
   }
 
   drawShadow(ctx, cam) {
     const S = cam.S;
-    const sw = Math.max(6, (this.spr.body ? this.spr.body[0] : this.spr.w) * 0.7 * this.scale);
+    const sw = Math.max(6, (this.spr.body ? this.spr.body[0] : this.spr.w) * 0.7 * this.drawScale);
     if (sw !== this._shW) {
       this._shW = sw;
       this._sh = shadowSprite(sw);
@@ -874,22 +900,7 @@ export class Enemy {
     this._look = look < 0 || this.boss || this.lord || this.prop ? -1 : this.elite ? look + 3 : look;
     this._img = img;
 
-    let sx = this.scale, sy = this.scale;
-    if (this.flash > 0) {
-      sx *= 1.12;
-      sy *= 0.9;
-    }
-    if (this.squash > 0) {
-      sx *= 1 + this.squash * 0.25;
-      sy *= 1 - this.squash * 0.2;
-    }
-    if (this.def.ai === 'hopper') {
-      const ph = (this.life * 1.25 + this.wob) % 1;
-      if (ph < 0.42) {
-        sy *= 1.12;
-        sx *= 0.92;
-      }
-    }
+    const [sx, sy] = renderScale(this);
     const w = img.width * S * sx, h = img.height * S * sy;
     let X = (this.x - cam.x) * S - w / 2;
     const Y = (this.y - cam.y) * S - h + S + this.spr.below * S * sy;

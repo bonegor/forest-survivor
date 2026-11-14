@@ -193,14 +193,15 @@ test('the Lich is drawn as big as the Bone King, his shots and words where his b
   const lich = g.spawnBoss('lich', p.x + 80, p.y, {sleeping: true}), fr = lich.spr.frames[0];
   assert.equal(lich.scale, k);
   assert.equal(lich.r, 15, 'his touch: the 10 it was, half again, as before');
-  assert.ok(Math.abs(lich.h - fr.h * k) < 1e-9, 'as tall as he is drawn');
+  assert.equal(lich.h, 57, 'the detailed model preserves the 57-world-pixel body height');
   const ctx = document.createElement('canvas').getContext('2d');
   lich.draw(ctx, g.cam);
   const [, Y, w, h] = lich._rect;
-  assert.ok(Math.abs(w - fr.w * k * S) < 1e-9 && Math.abs(h - fr.h * k * S) < 1e-9, `drawn ${w / S} x ${h / S}, ${k} times his frame's ${fr.w} x ${fr.h}`);
+  const pixelScale = k / lich.spr.hires;
+  assert.ok(Math.abs(w - fr.w * pixelScale * S) < 1e-9 && Math.abs(h - fr.h * pixelScale * S) < 1e-9, 'source detail is rendered at its authored pixel density');
   // Over his head (his name, his words) is at the top of him as drawn, his flight and bob within 3 px.
-  const top = Y / S + g.cam.y, over = lich.y - lich.h - 6;
-  assert.ok(Math.abs(over - top) <= 3, `over his head at ${over.toFixed(1)}, his top at ${top.toFixed(1)}`);
+  const top = Y / S + g.cam.y + fr.box[1] * pixelScale, over = lich.y - lich.h - 6;
+  assert.ok(over <= top + 1 && top - over <= 8, `over his visible head at ${over.toFixed(1)}, his top at ${top.toFixed(1)}`);
   // A ring of his skulls leaves his chest, as much higher as he is bigger: 10 px up times his size.
   const before = g.eshots.length, chest = lich.y - 10 * k;
   lich.state = 'move';

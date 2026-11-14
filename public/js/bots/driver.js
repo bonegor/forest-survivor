@@ -88,7 +88,7 @@ export class Driver {
       // The run's auto-pick first, as the game screen does (a bot's run never sets one).
       g.resolveAutoLevels();
       while (g.pendingLevels > 0) {
-        const cards = g.levelChoices(g.choiceCount());
+        const cards = this.planCards(g.levelChoices(g.choiceCount()));
         g.applyChoice(cards[this.choose(cards)]);
         g.pendingLevels--;
       }
@@ -106,6 +106,26 @@ export class Driver {
   }
 
   // The bot's own pick if it makes a valid one, else the policy's.
+  planCards(cards) {
+    if (!this.policy.score) return cards;
+    const g = this.g, p = g.player;
+    for (let attempt = 0; attempt < 14; attempt++) {
+      const v = this.view.refresh(), scores = cards.map(c => this.policy.score(cardInfo(c), v));
+      if (Math.min(...scores) < 12) break;
+      const worst = scores.indexOf(Math.max(...scores)), card = cards[worst];
+      if (p.banishes > 0 && g.banish(card)) {
+        p.banishes--;
+        const replacement = g.redrawCard(cards.filter((_, i) => i !== worst));
+        if (replacement) cards[worst] = replacement;
+        else cards.splice(worst, 1);
+      } else if (p.rerolls > 0) {
+        p.rerolls--;
+        cards = g.levelChoices(g.choiceCount());
+      } else break;
+    }
+    return cards;
+  }
+
   choose(cards) {
     const v = this.view.refresh(), shown = cards.map(cardInfo);
     const ok = (i) => Number.isInteger(i) && i >= 0 && i < cards.length;
@@ -199,7 +219,8 @@ class BotView {
       magnet: p.magnet,
       armor: p.armor,
       invuln: p.invuln > 0,
-      weapons: p.weapons.map((w) => ({ id: w.id, level: w.level, evolved: w.evolved })),
+      relicSlots: g.maxRelics,
+      weapons: p.weapons.map((w) => ({ id: w.id, level: w.level, evolved: w.evolved, cd: w.cd })),
       passives: Object.fromEntries(p.passives),
     };
     // The boss fight in progress, if any.

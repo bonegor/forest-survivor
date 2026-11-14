@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Echo of the Veil', icon: 'i_shadowstrike', kind: id, directional: true, evolved: true,
     desc: 'A longer blade leaves a stronger shade. Each foe can still take only one hit per cast.',
-    base: { dmg: 72, cd: 0.79, area: 1.42, amount: 4, dur: 2.1, kb: 1.05, echo: 0.75 },
+    base: { dmg: 100, cd: 0.69, area: 1.52, amount: 5, dur: 2.1, kb: 1.05, echo: 0.75 },
   },
 };

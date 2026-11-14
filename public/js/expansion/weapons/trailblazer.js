@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Runewire', icon: 'i_stormstring', kind: TRAILBLAZER_WEAPON, evolved: true,
     desc: 'A stronger arrow leaves a wider, longer tripline that deals more damage and slows harder.',
-    base: { dmg: 67, cd: 0.7, amount: 4, area: 1.32, speed: 1.14, dur: 1.75, kb: 0.8, slow: 0.28 },
+    base: { dmg: 90, cd: 0.62, amount: 5, area: 1.42, speed: 1.14, dur: 2.1, kb: 0.8, slow: 0.28 },
   },
 };

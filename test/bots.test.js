@@ -61,6 +61,18 @@ test('headless runs honor map selection and a profile starts on its newest unloc
   assert.throws(() => playGame({ profile, map: 'hell', max: 0 }), /locked/);
 });
 
+test('headless Armory presets grant the same rerolls and banishes as a real profile', () => {
+  for (const armory of [{}, Object.fromEntries(P.UPGRADES.map(u => [u.id, u.max]))]) {
+    const expected = P.metaBonuses(P.sanitizeProfile({ up: armory }));
+    let resources;
+    playGame({ armory, max: 1 / 60, bot: v => {
+      resources = { rerolls: v.g.player.rerolls, banishes: v.g.player.banishes };
+      return { x: 0, y: 0 };
+    } });
+    assert.deepEqual(resources, { rerolls: expected.reroll, banishes: expected.banish });
+  }
+});
+
 test('strategies of your own, and their parameters', () => {
   // Five times his health (a test buff): walking into the first swarm, a bare Knight falls in under
   // 5 s since a blow can land every 0.22 s (23 October 2026).

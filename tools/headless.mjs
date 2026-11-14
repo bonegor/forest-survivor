@@ -47,8 +47,8 @@ buildSprites();
 // desert); without one, the forest as before. Explicit locked or unknown maps are rejected.
 // profile: play as this save (shared/profile.js): its Armory (armory is then ignored), its weapon
 // and relic slots, its rerolls and banishes, and only the weapons, relics and ultimate it has
-// opened (openFor). Without one, everything is open, with six slots of each and the two free
-// rerolls and banishes every run had before progression (21 October 2026), as the bots always played.
+// opened (openFor). Without one, everything is open, with six slots of each; rerolls and
+// banishes still come only from the requested Armory ranks, as they do in a real save.
 // The result's `report` is the run as the game would report it, for P.applyRun.
 export function playGame(o = {}) {
   const { hero = 'knight', mode = 's15', map, diff = 'hard', nightmare = false, bot = 'autopilot', params, label, pick = 'build', seed = 1, hz = 60, max = 3600, armory = {}, buff = {}, slots, relics, crypts = false, profile = null } = o;
@@ -63,7 +63,7 @@ export function playGame(o = {}) {
     if (mode === 's15') chosenMap = map ?? (prof ? P.PROGRESS.mapLadder.filter(id => P.mapOpen(prof, id)).at(-1) : 'forest');
     if (prof && chosenMap && !P.mapOpen(prof, chosenMap)) throw new Error(`Map "${chosenMap}" is locked for this profile`);
     const meta = P.metaBonuses(prof || P.sanitizeProfile({ up: armory })); // ranks clamped like a real save
-    if (!prof) Object.assign(meta, { weaponSlots: 6, relicSlots: 6, reroll: meta.reroll + 2, banish: meta.banish + 2 });
+    if (!prof) Object.assign(meta, { weaponSlots: 6, relicSlots: 6 });
     const open = prof ? P.openFor(prof, hero) : null;
     for (const [k, pct] of Object.entries(buff)) {
       const [key] = BUFFS[k], x = 1 + pct / 100;

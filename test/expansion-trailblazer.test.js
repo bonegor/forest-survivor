@@ -103,6 +103,21 @@ test('Runewire scales, caps Echo at seven contacts, and never multiplies boss da
   assert.equal(pin.hp, pinHp);
 }));
 
+test('point-blank impacts retain the visible short tripline and its contact damage', () => encounter((g, p, w) => {
+  g.world.lineOfSight = () => true;
+  const pin = foe(g, 8, 0);
+  g.grid.rebuild(g.enemies, p.x, p.y);
+  w.update(0);
+  fly(g, 3);
+  assert.ok(pin.hp < pin.maxHp, 'the ordinary arrow lands');
+  assert.equal(g.effects.length, 1, 'a close impact still plants its wire');
+  const other = foe(g, 5, 3);
+  effects(g, .08);
+  assert.ok(other.hp < other.maxHp, 'another body touching that short wire is tripped');
+  assert.ok(other.slowT > 0);
+  assert.ok(Number.isFinite(w.dmgDealt));
+}));
+
 test('a crypt shot waits for the real release and a wall blocks the arrow and tripline', () => encounter((g, p, w) => {
   const blocked = foe(g, 103, 0);
   g.inCrypt = {};

@@ -67,8 +67,8 @@ test('Splinterline caps a packed fan at eight shards and one hit per nearby body
   for (let i = 0; i < 18 && g.projectiles[0].kind === 'splitpin'; i++) fly(g, 1);
   assert.equal(g.projectiles.filter((shot) => shot.kind === 'splitpinShard').length, 8);
   fly(g);
-  assert.deepEqual(hits.filter(([e]) => e === impact), [[impact, 54]]);
-  assert.deepEqual(hits.filter(([e]) => e === neighbor), [[neighbor, 54 * 0.48]]);
+  assert.deepEqual(hits.filter(([e]) => e === impact), [[impact, w.s.dmg]]);
+  assert.deepEqual(hits.filter(([e]) => e === neighbor), [[neighbor, w.s.dmg * 0.48]]);
 });
 
 test('automatic fire waits for a target and a manual release can aim through empty space', () => {

@@ -122,10 +122,11 @@ export class HeroScreen {
       const on = this.lastHero === id;
       panel(ctx, x, y, L.cardW, L.cardH, { rivets: false, fill: on ? '#292330' : '#14131f', trim: on ? ['#fee761', '#be4a2f'] : nextRecruit ? ['#feae34', '#59422f'] : ['#3a4466', '#262b44'] });
       const spr = SPR[h.sprite], crop = heroCrop(spr), frame = idleFrame(spr, Math.floor(this.t * SPR[h.pose].fps));
-      const portraitW = Math.min(L.cardW - 4, crop.w);
-      const portraitH = Math.min(L.cardH - 16, crop.h);
+      const density = spr.hires || 1;
+      const portraitW = Math.min(L.cardW - 4, crop.w / density);
+      const portraitH = Math.min(L.cardH - 16, crop.h / density);
       ctx.globalAlpha = nextRecruit ? 0.65 : locked ? 0.22 : 1;
-      ctx.drawImage(frame.c, crop.x + Math.floor((crop.w - portraitW) / 2), crop.y, portraitW, portraitH,
+      ctx.drawImage(frame.c, crop.x + Math.floor((crop.w - portraitW * density) / 2), crop.y, portraitW * density, portraitH * density,
         Math.round(x + (L.cardW - portraitW) / 2), y + 3, portraitW, portraitH);
       ctx.globalAlpha = 1;
       const label = locked ? nextRecruit ? 'NEXT' : 'LOCKED' : h.short.toUpperCase();

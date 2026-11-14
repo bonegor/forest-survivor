@@ -257,7 +257,10 @@ export class TitleScreen {
 // The hero screen's cards and portrait draw every hero at one whole-number scale, from the largest
 // crop of any hero's idle frames (heroCrop), so they all stand alike.
 function heroesCrop() {
-  const crops = HERO_ORDER.map((id) => heroCrop(SPR[HEROES[id].sprite]));
+  const crops = HERO_ORDER.map(id => {
+    const spr = SPR[HEROES[id].sprite], crop = heroCrop(spr), density = spr.hires || 1;
+    return { w: crop.w / density, h: crop.h / density };
+  });
   return { w: Math.max(...crops.map((c) => c.w)), h: Math.max(...crops.map((c) => c.h)) };
 }
 

@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Aegis Reprisal', icon: 'i_armor', kind: id, directional: true, evolved: true,
     desc: 'A longer, stronger slash cuts more foes and boxes in front. The brief guard senses three incoming shots and charges a fiercer next cut; it does not block damage.',
-    base: { dmg: 72, cd: 0.74, area: 1.42, amount: 3, kb: 1.1, dur: 0.31, guard: 3, reprisal: 0.44 },
+    base: { dmg: 112, cd: 0.64, area: 1.55, amount: 5, kb: 1.1, dur: 0.31, guard: 3, reprisal: 0.44 },
   },
 };

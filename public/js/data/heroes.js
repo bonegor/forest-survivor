@@ -11,7 +11,9 @@ import { SIGNATURES } from '../expansion/signatures.js';
 import { GOOD_COPPER_ID, WHIP_ID } from './copper.js';
 
 // The owner's rule (21 October 2026): every hero loses a night on Normal without the Armory and
-// wins it with the Armory full, as the best bot plays it (tools/bots.mjs, gems and autopilot). The
+// wins it with the Armory full, as the best bot plays it (tools/bots.mjs). The tactical policy
+// reserves evolution slots and spends only the run's owned rerolls/banishes; tactician walks
+// actual terrain and faces directional attacks. Generic circling alone does not test every kit. The
 // Knight, Ranger, Shadow, Necromancer, Paladin and Berserker were cut to it that day: their health,
 // the Knight's armour and regeneration, the Berserker's Bloodrage.
 export const HEROES = {

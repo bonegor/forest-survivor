@@ -7,6 +7,7 @@
 //           level, isNew, value }]
 
 import { WEAPONS } from '../data/weapons.js';
+import { HEROES } from '../data/heroes.js';
 
 // Index of the card with the lowest score (the first one on ties).
 function lowest(cards, score) {
@@ -35,6 +36,19 @@ const WEAPON_PREF = {
   druid: ['thorns', 'wisps', 'frost', 'flask'],
   berserker: ['aura', 'blades', 'axe', 'caltrops'],
   witchhunter: ['glaive', 'lightning', 'arcane', 'wisps'],
+  eanasir: ['blades', 'lightning', 'aura', 'axe'],
+  footman: ['aura', 'blades', 'axe', 'lightning'],
+  marksman: ['lightning', 'glaive', 'blades', 'wisps'],
+  templar: ['aura', 'blades', 'lightning', 'axe'],
+  trailblazer: ['lightning', 'glaive', 'wisps', 'blades'],
+  thornkeeper: ['blades', 'lightning', 'aura', 'axe'],
+  wraith: ['aura', 'blades', 'glaive', 'lightning'],
+  gravebinder: ['blades', 'lightning', 'aura', 'axe'],
+  arcanist: ['lightning', 'arcane', 'blades', 'flask'],
+  praetorian: ['aura', 'blades', 'axe', 'lightning'],
+  seraph: ['aura', 'blades', 'lightning', 'axe'],
+  boltguard: ['lightning', 'glaive', 'blades', 'wisps'],
+  swordbearer: ['aura', 'blades', 'axe', 'lightning'],
 };
 const prefOf = (v, id) => {
   const list = WEAPON_PREF[v.hero] || [], r = list.indexOf(id);
@@ -43,7 +57,41 @@ const prefOf = (v, id) => {
 // Whether a relic evolves a weapon the hero holds.
 const evolves = (v, id) => v.me.weapons.some((w) => !w.evolved && WEAPONS[w.id]?.evo?.with === id);
 
+export function tacticalScore(c, v) {
+  const held = v.me.weapons, signature = HEROES[v.hero]?.unique || [];
+  if (c.type === 'weapon') {
+    if (!c.isNew) return signature.includes(c.id) ? .3 - c.level * .02 : .7;
+    const rank = (WEAPON_PREF[v.hero] || []).indexOf(c.id);
+    // Two-starter kits still need the same three shared support slots as a
+    // one-starter hero. Counting only four total quietly denied them a third.
+    const target = Math.min(6, 3 + signature.length);
+    return rank >= 0 && held.length < target ? 1 + rank * .15 : 16;
+  }
+  if (c.type === 'passive') {
+    if (c.id === 'phoenix') return .15;
+    const partner = held.find(w => !w.evolved && WEAPONS[w.id]?.evo?.with === c.id);
+    if (c.isNew && partner) return partner.level >= 6 ? .1 : 1.5;
+    const good = ['might', 'cooldown', 'area', 'amount', 'armor', 'regen', 'vitality'];
+    const i = good.indexOf(c.id);
+    const reserved = new Set(held.filter(w => !w.evolved).map(w => WEAPONS[w.id]?.evo?.with).filter(Boolean));
+    for (const id of Object.keys(v.me.passives)) reserved.delete(id);
+    const spare = (v.me.relicSlots ?? 6) - Object.keys(v.me.passives).length - reserved.size;
+    if (c.isNew && spare <= 0) return 18;
+    return i < 0 ? 17 : 2 + i * .4 + (c.isNew ? .3 : 0);
+  }
+  if (c.type === 'heal') return v.me.hpFrac < .55 ? .8 : 25;
+  if (c.type === 'bless') return 5;
+  if (c.type === 'haste') return 4;
+  if (c.type === 'reach') return 6;
+  return 26;
+}
+
 export const PICKS = {
+  tactical: {
+    about: 'Builds around each hero, reserves evolution relic slots and uses owned rerolls/banishes to avoid dead-end cards',
+    score: tacticalScore,
+    pick: (cards, v) => lowest(cards, c => tacticalScore(c, v)),
+  },
   first: { about: 'Always the first card', pick: () => 0 },
   random: { about: 'Any card, at random', pick: (cards, v) => Math.floor(v.rng() * cards.length) },
   weapons: { about: 'New weapons, then weapon upgrades, then the first card', pick: (cards) => lowest(cards, (c) => (c.type !== 'weapon' ? 2 : c.isNew ? 0 : 1)) },

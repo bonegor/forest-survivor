@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Roadbreaker', icon: 'i_sword', kind: id, evolved: true, directional: true,
     desc: 'Build momentum sooner. Its wider, longer charged cut carries a stronger outer edge through the horde.',
-    base: { dmg: 71, cd: 0.86, amount: 5, area: 1.22, kb: 1.1, stride: 1.45, chargeReach: 0.59, edge: 0.37 },
+    base: { dmg: 112, cd: 0.72, amount: 7, area: 1.38, kb: 1.1, stride: 1.45, chargeReach: 0.59, edge: 0.37 },
   },
 };

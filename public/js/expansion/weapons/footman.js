@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Iron Advance', icon: 'i_sword', kind: id, evolved: true, directional: true,
     desc: 'An unyielding cut drives a wider, stronger shock through more of the ranks behind the lead foe.',
-    base: { dmg: 72, cd: 0.82, area: 1.43, amount: 4, kb: 1.22, dur: 0.48 },
+    base: { dmg: 112, cd: 0.72, area: 1.58, amount: 6, kb: 1.22, dur: 0.48 },
   },
 };

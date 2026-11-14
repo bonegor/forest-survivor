@@ -21,15 +21,19 @@ test('each trial has its own scene drawn in code, 64 x 44, and a locked one in s
   }
 });
 
-test('the hero cards and the portrait size every hero by what he covers, all five at one scale', () => {
+test('the hero cards and the portrait size every hero by its logical footprint at one scale', () => {
   buildSprites();
   for (const id of HERO_ORDER) {
     const s = SPR[HEROES[id].sprite], c = heroCrop(s);
     assert.ok(c.w > 0 && c.h > 0 && c.x >= 0 && c.y >= 0 && c.x + c.w <= s.w && c.y + c.h <= s.h, `${id}: the crop lies in the frame`);
     assert.equal(c.list.length, (s.idle || [0]).length, `${id}: one frame per idle pose`);
   }
-  const tallest = Math.max(...HERO_ORDER.map((id) => heroCrop(SPR[HEROES[id].sprite]).h));
-  const widest = Math.max(...HERO_ORDER.map((id) => heroCrop(SPR[HEROES[id].sprite]).w));
+  const logicalCrops = HERO_ORDER.map(id => {
+    const spr = SPR[HEROES[id].sprite], crop = heroCrop(spr), density = spr.hires || 1;
+    return { w: crop.w / density, h: crop.h / density };
+  });
+  const tallest = Math.max(...logicalCrops.map(c => c.h));
+  const widest = Math.max(...logicalCrops.map(c => c.w));
   // The hero screen's 64 x 66 card: each hero whole, his name under him.
   const cs = cardScale(64, 66);
   assert.ok(Number.isInteger(cs) && cs >= 1);

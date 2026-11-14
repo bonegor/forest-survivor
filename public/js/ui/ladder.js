@@ -130,9 +130,10 @@ export function codexIcon(ctx, e, x, y, shut = !e.open) {
     const spr = SPR[HEROES[e.id]?.sprite];
     if (spr) {
       const crop = heroCrop(spr), fr = crop.list[0];
-      const sx = Math.max(0, Math.round(crop.x + crop.w / 2 - 8)), sy = Math.max(0, crop.y - 1);
-      const w = Math.min(16, fr.w - sx), h = Math.min(16, fr.h - sy);
-      ctx.drawImage(fr.c, sx, sy, w, h, x + Math.floor((16 - w) / 2), y, w, h);
+      const density = spr.hires || 1;
+      const sx = Math.max(0, Math.round(crop.x + crop.w / 2 - 8 * density)), sy = Math.max(0, crop.y - density);
+      const w = Math.min(16 * density, fr.w - sx), h = Math.min(16 * density, fr.h - sy);
+      ctx.drawImage(fr.c, sx, sy, w, h, x + Math.floor((16 - w / density) / 2), y, w / density, h / density);
     }
   } else {
     const icon = e.type === 'feature' ? 'i_reroll' : (e.type === 'weapon' ? WEAPONS : PASSIVES)[e.id]?.icon;

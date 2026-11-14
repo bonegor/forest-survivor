@@ -12,7 +12,7 @@ const MAX_LINES = 3, MAX_TRIPS = 7, LINE_FADE = 0.18;
 class Tripline {
   constructor(arrow, pin) {
     const { w } = arrow, s = w.s;
-    const distance = Math.hypot(arrow.x - arrow.sx, arrow.y - arrow.sy);
+    const distance = Math.max(0.001, Math.hypot(arrow.x - arrow.sx, arrow.y - arrow.sy));
     const back = Math.min(1, (LINE_REACH * s.area) / distance);
     this.w = w;
     this.ax = arrow.x + (arrow.sx - arrow.x) * back;
@@ -88,7 +88,10 @@ class Tripline {
 
 function plantLine(arrow, pin) {
   const { g, w, sx, sy, x, y } = arrow;
-  if (Math.hypot(x - sx, y - sy) < 12 || g.world.solid(x, y) || !g.world.lineOfSight(sx, sy, x, y)) return;
+  // Even a point-blank hit leaves its short, visible wire. Discarding every
+  // impact inside twelve pixels removed the bow's entire crowd-control half
+  // precisely when a closing pack reached its archer.
+  if (g.world.solid(x, y) || !g.world.lineOfSight(sx, sy, x, y)) return;
   const live = g.effects.filter(fx => fx instanceof Tripline && fx.w === w && fx.left);
   if (live.length >= MAX_LINES) {
     live[0].left = 0;

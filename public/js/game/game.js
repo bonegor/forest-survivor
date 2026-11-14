@@ -1281,7 +1281,7 @@ export class Game {
   deathFx(e, fr) {
     const ps = this.particles;
     const pix = fr.pixels;
-    const S = e.scale;
+    const S = e.scale / (e.spr.hires || 1);
     const ox = e.x - (fr.w * S) / 2, oy = e.y - (fr.h - e.spr.below) * S;
     // The sprite shatters into its own pixels.
     const step = pix.length > 300 ? 3 : 1;
@@ -1770,9 +1770,17 @@ export class Game {
     p.strikeBuf = 0;
     // An ultimate over the world he leaves ends with it, its receipt next frame (ultReceipt).
     if (p.ult && WORLD_ULTS.has(p.ult.type)) p.ult = null;
-    // Leech Chains' (Blood Tether's) hold on foes in the world he leaves: their effects go below,
-    // and a chain kept in w.chains would hold its slot until that foe died.
-    for (const w of p.combatWeapons) if (w.chains) w.chains = [];
+    for (const w of p.combatWeapons) {
+      // Its pending hit and follow-up volley belong to the world left behind,
+      // as does the target (which may now be returned to the enemy pool).
+      // Keep the cooldown already paid by the attack.
+      w.handAt = null;
+      w.handTarget = null;
+      w.handTargetId = null;
+      w.queue = 0;
+      // Leech Chains must also release their slots in the departed world.
+      if (w.chains) w.chains = [];
+    }
     for (const pr of this.projectiles) releaseProjectile(pr);
     this.projectiles.length = 0;
     this.eshots.length = 0;
@@ -3138,9 +3146,11 @@ export class Game {
     let img = p.flash > 0 ? fr.white(flip) : frozen ? fr.variant('frozen', TINTS.frozen, flip) : fr.get(flip);
     // Walk cycles carry their own body bob; two-frame sprites hop on alternate steps.
     const bob = spr.selfBob || still ? 0 : moving ? (spr.walk ? 0 : -(step % 2)) : Math.sin(p.idleAnim * 2) > 0.6 ? -1 : 0;
-    const w = img.width * S, h = img.height * S;
+    // Higher-density art carries finer authored detail, not a larger world body.
+    const density = spr.hires || 1, pixelScale = S / density;
+    const w = img.width * pixelScale, h = img.height * pixelScale;
     const sink = Math.round(p.sink);
-    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY + bob - p.hop) * S) + Math.round(sink * S);
+    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY / density + bob - p.hop) * S) + Math.round(sink * S);
     let alpha = 1;
     if (p.invuln > 0 && !(p.ult && p.ult.type === 'shadowdance') && Math.floor(p.invuln * 18) % 2 === 0) alpha = 0.45;
     if (p.ult && p.ult.type === 'shadowdance') alpha = 0.35 + 0.15 * Math.sin(this.clock * 20);
@@ -3162,12 +3172,13 @@ export class Game {
     ctx.fillRect(0, 0, c.pxW, c.pxH);
     ctx.globalAlpha = 1;
     const spr = SPR[p.hero.sprite], fr = idleFrame(spr, 0), flip = p.face < 0;
+    const pixelScale = S / (spr.hires || 1);
     const img = t < D.flash ? fr.white(flip) : fr.get(flip);
     const a = ease.outBack(clamp(t / D.fall, 0, 1)) * (Math.PI / 2) * (flip ? -1 : 1);
     ctx.save();
     ctx.translate(Math.round((p.x - c.x) * S), Math.round((p.y - c.y) * S));
     ctx.rotate(a);
-    ctx.drawImage(img, Math.round((-img.width * S) / 2), Math.round(-spr.anchorY * S), img.width * S, img.height * S);
+    ctx.drawImage(img, Math.round((-img.width * pixelScale) / 2), Math.round(-spr.anchorY * pixelScale), img.width * pixelScale, img.height * pixelScale);
     ctx.restore();
   }
 
@@ -3295,7 +3306,8 @@ function heroImage(ctx, img, r, S) {
     ctx.drawImage(img, r[0], r[1], r[2], r[3]);
     return;
   }
-  ctx.drawImage(img, 0, 0, img.width, img.height - sink, r[0], r[1], r[2], r[3] - Math.round(sink * S));
+  const sourceSink = Math.min(img.height, Math.round(sink * img.height * S / r[3]));
+  ctx.drawImage(img, 0, 0, img.width, img.height - sourceSink, r[0], r[1], r[2], r[3] - Math.round(sink * S));
 }
 
 function onScreen(c, x, y, m) {

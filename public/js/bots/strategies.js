@@ -10,11 +10,13 @@
 // full speed. Per-game state lives in make()'s closure.
 
 import { TAU } from '../engine/util.js';
+import { TACTICIAN } from './tactician.js';
 
 // Every built-in presses the ultimate as soon as it's ready, unless ult=0.
 const act = (x, y, o, v) => ({ x, y, ult: !!o.ult && v.me.ultReady });
 
 export const BOTS = {
+  tactician: TACTICIAN,
   idle: {
     about: 'Stands still and lets the weapons work',
     make: (o) => (v) => act(0, 0, o, v),

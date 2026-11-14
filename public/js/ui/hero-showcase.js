@@ -33,7 +33,8 @@ export function showcaseBounds(spr) {
     top = Math.min(top, b.y0 - spr.anchorY);
     bottom = Math.max(bottom, b.y1 + 1 - spr.anchorY);
   }
-  const result = { radius: Math.max(-left, right), top, bottom };
+  const density = spr.hires || 1;
+  const result = { radius: Math.max(-left, right) / density, top: top / density, bottom: bottom / density };
   extents.set(spr, result);
   return result;
 }
@@ -104,7 +105,7 @@ export class HeroShowcase {
     if (h.line && !locked && p._rect) {
       const [dx, dy, dw, dh, frame, flip] = p._rect;
       ctx.globalAlpha = 0.5;
-      ctx.drawImage(frame.variant('showcase-edge', b => rimRing(b, '#d8e2f0', 1), flip), dx - scale, dy - scale, dw + scale * 2, dh + scale * 2);
+      ctx.drawImage(frame.variant('showcase-edge', b => rimRing(b, '#d8e2f0', spr.hires || 1), flip), dx - scale, dy - scale, dw + scale * 2, dh + scale * 2);
       ctx.globalAlpha = 1;
     }
     ctx.restore();

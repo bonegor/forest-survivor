@@ -55,7 +55,7 @@ COPPER_WEAPONS[GOOD_COPPER_ID] = {
   name: 'Medium Quality Copper', icon: 'i_mediumcopper', kind: 'copper',
   copper: true, goodCopper: true, special: true,
   desc: 'Copper discs seek the nearest foe, even in crypts. Rank 8 + Phoenix Heart + a chest forges High Quality Copper (not for sale). Evolve the Whip first to open the Heart.',
-  base: { dmg: 11, cd: 1.4, amount: 1, area: 1, speed: 1, pierce: 1, kb: 0.35 },
+  base: { dmg: 16, cd: 1.4, amount: 1, area: 1, speed: 1, pierce: 1, kb: 0.35 },
   levels: COPPER_WEAPONS.pqc1.levels.map(level => ({ ...level })),
   evo: { into: HIGH_COPPER_ID, with: 'phoenix', onlyPartner: true },
 };
@@ -64,7 +64,7 @@ COPPER_WEAPONS[HIGH_COPPER_ID] = {
   name: 'High Quality Copper (not for sale)', icon: 'i_highcopper', kind: 'copper_shoot',
   copper: true, goodCopper: true, special: true, evolved: true,
   desc: 'Phoenix-refined private stock: three fast, piercing copper discs seek the nearest foe. Absolutely not for sale.',
-  base: { dmg: 32, cd: 0.8, amount: 3, area: 1.5, speed: 1.5, pierce: 4, kb: 0.5 },
+  base: { dmg: 40, cd: 0.8, amount: 3, area: 1.5, speed: 1.5, pierce: 4, kb: 0.5 },
 };
 
 COPPER_WEAPONS[WHIP_ID] = {
@@ -85,5 +85,5 @@ COPPER_WEAPONS[WHIP_ID] = {
 COPPER_WEAPONS[WHIP_EVOLUTION] = {
   name: "Lion's Lash", icon: 'i_lionslash', kind: 'merchant_whip', special: true, evolved: true,
   desc: 'A longer, copper-studded lash tears through every foe along its path. Phoenix Heart can now be offered.',
-  base: { dmg: 36, cd: 0.8, area: 1.6, kb: 1.2 },
+  base: { dmg: 48, cd: 0.8, area: 1.6, kb: 1.2 },
 };

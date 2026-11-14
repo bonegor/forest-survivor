@@ -20,6 +20,6 @@ export default {
   evolution: {
     name: 'Bastion Crank', icon: 'i_purifier', kind: BOLTGUARD_WEAPON, evolved: true,
     desc: 'The heavy bolt cranks 18% per ordinary foe, up to 54%. Extra projectiles add penetration, up to eight impacts.',
-    base: { dmg: 69, cd: 0.86, area: 1.16, speed: 1.28, dur: 1.1, pierce: 5, kb: 0.85, crank: 0.18, crankCap: 0.54 },
+    base: { dmg: 96, cd: 0.74, area: 1.26, speed: 1.28, dur: 1.1, pierce: 5, kb: 0.85, crank: 0.18, crankCap: 0.54 },
   },
 };

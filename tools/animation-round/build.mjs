@@ -1,5 +1,6 @@
 // Native motion pass. Rebuild from the retained packed inputs, never from output.
-// No scaling, palette replacement or newly generated character models is involved.
+// The connected gait stays in logical pixels. Source-detail heroes retain their
+// original character proportions at an explicitly declared higher pixel density.
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -8,8 +9,8 @@ import source from './baseline/index.js';
 import { writePng } from '../png.mjs';
 import { buildGroundedWalk, GROUNDED_MODELS } from './grounded-walk.mjs';
 import { buildRobedWalk } from './robed-walk.mjs';
-import { rangerClarity } from './ranger-clarity.mjs';
 import { heavyHeroClarity } from './heavy-hero-clarity.mjs';
+import { sourceDetail } from './source-detail.mjs';
 
 const TAU = Math.PI * 2;
 const equipment=JSON.parse(readFileSync(new URL('./baseline/equipment-masks.json',import.meta.url),'utf8'));
@@ -398,7 +399,7 @@ for(const [id,base] of Object.entries(source)) {
   if(ids&&!ids.includes(id))continue;
   const rig=rigs[id], frames=base.frames.map(f=>{
     const native=clean(unpack(base,f));
-    return id==='archer'&&version==='v1'?rangerClarity(native,base.palette):native;
+    return native;
   });
   // Dedicated resting model for spectres: use the upright source pose, not their
   // forward-travelling float sequence. Every idle owns separate frame indices.
@@ -433,18 +434,20 @@ for(const [id,base] of Object.entries(source)) {
   walkFps*=visualRate; attackFps*=visualRate;
   const idleFps=(rig.floating?7:8)*visualRate;
   for(let i=0;i<frames.length;i++)frames[i]=heavyHeroClarity(frames[i],id);
-  const data=pack(frames,{...base,idle,idleFps,walk,walkFps,attack,attackRelease,attackFps,attackWalk,
+  const detail=sourceDetail(id,{base,frames,idle,walk,attack,attackWalk,version,idleField:i=>materialField(rig,i/16*TAU)});
+  const finalFrames=detail?.frames||frames;
+  const data=pack(finalFrames,{...base,idle,idleFps,walk,walkFps,attack,attackRelease,attackFps,attackWalk,
     manualDelay:base.manualDelay??Math.min(2,base.attackRelease)/base.attackFps,
     motionRevision:version==='v2'?'restrained-roster-gait-v2-2026-11-12':'continuous-roster-gait-2026-11-12',
-    ...(id==='archer'&&version==='v1'?{clarityRevision:'ranger-native-face-2026-11-14',claritySource:'tools/animation-round/ranger-clarity.mjs'}:{}),
-    ...(['berserker','paladin'].includes(id)?{clarityRevision:'heavy-hero-faces-2026-11-14',claritySource:'tools/animation-round/heavy-hero-clarity.mjs'}:{}),
+    ...(id==='paladin'?{clarityRevision:'heavy-hero-faces-2026-11-14',claritySource:'tools/animation-round/heavy-hero-clarity.mjs'}:{}),
     motionSource:`tools/animation-round/${nativeGait?.settings?'robed':'grounded'}-walk.mjs`,
     ...(id==='rogue'?{animationRevision:'shadow-double-cadence-2026-11-14'}:{}),
     motionNotes:nativeGait?.settings?.note||(nativeGait?'Sixteen connected contact, compression, passing and reaching phases; stable native upper-body texture, alternating planted soles and lifted returns.':rig.note),
+    ...detail?.metadata,
   });
   writeFileSync(`${outputDir}/${id}.js`,`// Rebuild: node tools/animation-round/build.mjs${version==='v2'?' --v2':''}\nexport default ${JSON.stringify(data)};\n`);
-  const contact={w:80*8,h:64*2,d:new Uint32Array(80*8*64*2)};
-  idle.forEach((idx,i)=>{const b=frames[idx];for(let y=0;y<64;y++)contact.d.set(b.d.subarray(y*80,(y+1)*80),(Math.floor(i/8)*64+y)*contact.w+(i%8)*80);});
+  const fw=data.w,fh=data.h,contact={w:fw*8,h:fh*2,d:new Uint32Array(fw*8*fh*2)};
+  idle.forEach((idx,i)=>{const b=finalFrames[idx];for(let y=0;y<fh;y++)contact.d.set(b.d.subarray(y*fw,(y+1)*fw),(Math.floor(i/8)*fh+y)*contact.w+(i%8)*fw);});
   writePng(`${generatedDir}/${id}-idle.png`,contact);
   report[id]={idle:idle.length,idleFps,walk:walk.length,walkFps,attack:attack.length,attackFps,attackRelease,movingAttack:!!attackWalk,frames:frames.length,note:data.motionNotes,gait:nativeGait.settings||nativeGait.motion,
     ...(GROUNDED_MODELS[id]?{gaitSource:{file:`baseline/grounded-models/${GROUNDED_MODELS[id].source}`,sha256:GROUNDED_MODELS[id].sha256}}:{}),
