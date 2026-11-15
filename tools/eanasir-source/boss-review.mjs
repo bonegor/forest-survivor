@@ -11,7 +11,7 @@ const {view}=await import('../../public/js/engine/view.js');
 const {input}=await import('../../public/js/engine/input.js');
 const {mulberry32}=await import('../../public/js/engine/util.js');
 buildSprites();
-const root='output/hero-round2-2026-11-14/eanasir-art/boss',W=360,H=240,S=2.4,PW=W*S,PH=H*S;
+const root=process.env.EANASIR_BOSS_OUT||'output/style-match/eanasir-boss',W=360,H=240,S=2.4,PW=W*S,PH=H*S;
 mkdirSync(root+'/frames',{recursive:true});
 const canvas=createCanvas(PW,PH),ctx=canvas.getContext('2d'),ui=createCanvas(PW,PH),uctx=ui.getContext('2d');ctx.imageSmoothingEnabled=uctx.imageSmoothingEnabled=false;
 Object.assign(view,{canvas,ctx,ui,uctx,S,W,H,pxW:PW,pxH:PH,zoom:1});

@@ -6,6 +6,8 @@ import rogue from '../tools/hero-polish-review/before/rogue.js';
 import berserker from '../tools/hero-polish-review/before/berserker.js';
 import paladin from '../tools/hero-polish-review/before/paladin.js';
 import { unpack } from '../tools/animation-round/build.mjs';
+import { packedPalette } from '../public/js/art/palette.js';
+const master = new Set([0, ...Object.values(packedPalette())]);
 
 for (const [id, original] of Object.entries({ archer, rogue, berserker, paladin })) {
   test(`${id}: requested art and cadence preserve complete gait, strike timing and equipment mapping`, () => {
@@ -21,13 +23,13 @@ for (const [id, original] of Object.entries({ archer, rogue, berserker, paladin 
     for (let i = 0; i < current.frames.length; i++) {
       const after = unpack(current, current.frames[i]), before = unpack(original, original.frames[i]);
       assert.deepEqual([after.w / density, after.h / density], [before.w / originalDensity, before.h / originalDensity]);
-      // The source-detail revisions re-export the original textured anatomy at
-      // twice the density. Their literal source identity and every connected
-      // gait phase are checked in grounded-gait.test.js. Pixel equality still
-      // applies to the unchanged-density Shadow and Paladin treatments.
-      if (density !== originalDensity) {
-        assert.equal(density, 2);
-        assert.equal(current.clarityRevision, 'source-model-detail-2026-11-14');
+      // Ranger and Berserker retain the source rig but now use the roster's
+      // native opaque palette. Exact gait registration is checked separately.
+      if (id === 'archer' || id === 'berserker') {
+        assert.equal(density, 1);
+        assert.equal(current.clarityRevision, 'native-style-match-2026-11-15');
+        assert.ok(current.palette.length <= 32, `${id}: restrained palette`);
+        for (const color of after.d) assert.ok(master.has(color), `${id}: opaque master-palette pixel`);
         continue;
       }
       const from = id === 'rogue' ? 0 : (id === 'archer' ? 44 : 46) * after.w;

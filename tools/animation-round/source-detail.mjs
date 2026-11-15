@@ -1,11 +1,13 @@
-// Recover the original, coherent character model at two source pixels per world
-// pixel. The face is never replaced or enlarged relative to its body. All raw
-// attacks retain their authored source geometry; the connected gait keeps the
-// exact same logical joints, foot contacts and timing as the native-density rig.
+// Recover the coherent character model at two source pixels per world pixel,
+// then finish it as deliberately opaque native pixel art. All raw attacks keep
+// their authored source geometry; the connected gait preserves logical joints,
+// foot contacts and timing. Per-hero finishers retain readable face/equipment.
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {readPng} from '../png.mjs';
 import {buildGroundedWalk,GROUNDED_MODELS} from './grounded-walk.mjs';
+import {nativeRanger} from './ranger-native.mjs';
+import {nativeBerserker} from './berserker-native.mjs';
 const D=2,W=160,H=128,cache=new Map();
 const sourceHeroes=new Set(['archer','berserker']);
 function read(path) {if(!cache.has(path))cache.set(path,readPng(path));return cache.get(path);}
@@ -65,8 +67,11 @@ export function sourceDetail(id,{base,frames,idle,walk,attack,attackWalk,idleFie
  walk.forEach((index,i)=>detailed[index]=gait.frames[i]);
  attackWalk.forEach((row,a)=>row.forEach((index,step)=>detailed[index]=movingAttack(detailed[attack[a]],gait.lowerFrames[step],id,a)));
  if(detailed.includes(undefined))throw Error(id+' source detail has an unassigned frame');
- return {frames:detailed,gait,metadata:{w:W,h:H,anchorY:112,hires:D,
-  clarityRevision:'source-model-detail-2026-11-14',claritySource:'tools/animation-round/source-detail.mjs',
+ const native=id==='archer'?nativeRanger:nativeBerserker;
+ const attackPhases=new Map(attack.map((index,phase)=>[index,phase]));
+ attackWalk.forEach((row,phase)=>row.forEach(index=>attackPhases.set(index,phase)));
+ return {frames:detailed.map((frame,index)=>native(frame,{attackStep:attackPhases.get(index)??-1})),gait,metadata:{w:W/D,h:H/D,anchorY:112/D,hires:1,
+  clarityRevision:'native-style-match-2026-11-15',claritySource:`tools/animation-round/${id==='archer'?'ranger':'berserker'}-native.mjs`,
   sourceModelSha256:createHash('sha256').update(readFileSync(sourcePath)).digest('hex'),
-  motionNotes:'Original face, anatomy, hair, cloth and equipment at 2× source density; sixteen connected logical gait phases and original authored attacks. World footprint and all impact timings preserved.'}};
+  motionNotes:'Original face, anatomy and equipment in opaque native pixel clusters with a restrained game palette; sixteen connected gait phases and authored attacks. World footprint and all impact timings preserved.'}};
 }

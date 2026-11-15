@@ -7,18 +7,20 @@ import data from '../public/assets/heroes-authored/eanasir.js';
 import {COPPER_ART} from '../public/js/art/eanasir.js';
 import {COPPER_ART as beforeCopper,EANASIR_HERO_ART as beforeHero} from '../tools/hero-round2-review/before/eanasir-source.js';
 import {buildSprites,SPR} from '../public/js/engine/sprites.js';
-import {readPng} from '../tools/png.mjs';
-import {reduceSource} from '../tools/animation-round/source-detail.mjs';
+import {packedPalette} from '../public/js/art/palette.js';
 import {unpack} from '../tools/animation-round/build.mjs';
 
-test('merchant standing identity is the literal retained statue source model, with unchanged world geometry',()=>{
- const file=new URL('../tools/eanasir-source/model.png',import.meta.url),model=readPng(file);
+test('merchant uses opaque native master-palette pixels with unchanged world geometry and source provenance',()=>{
+ const file=new URL('../tools/eanasir-source/model.png',import.meta.url);
  assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'),data.sourceSha256);
- assert.deepEqual(unpack(data,data.frames[data.idle[0]]).d,reduceSource(model,[0,0,model.w,model.h],[548,1340],44/1331).d);
+ const allowed=new Set([0,...Object.values(packedPalette())]);
+ assert.ok(data.palette.length<=32,'broad restrained ramps rather than filtered source texture');
+ for(const c of data.palette){assert.ok(allowed.has(c),'every colour belongs to the game master palette');assert.ok(c===0||c>>>24===255,'no translucent antialiased edges');}
+ for(const tile of data.frames){const f=unpack(data,tile);for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++)if(x===0||y===0||x===f.w-1||y===f.h-1)assert.equal(f.d[y*f.w+x],0,'all poses preserve transparent safety padding');}
  buildSprites();const spr=SPR.eanasir;
- assert.equal(spr.hires,2);assert.equal(spr.w/spr.hires,80);assert.equal(spr.h/spr.hires,64);
+ assert.equal(spr.hires,1);assert.equal(spr.w/spr.hires,80);assert.equal(spr.h/spr.hires,64);
  assert.equal(spr.anchorY/spr.hires,56);assert.deepEqual(spr.body.map(n=>n/spr.hires),[25,44]);
- assert.equal(spr.below/spr.hires,7);assert.equal(SPR.eanasir_pose.hires,2);
+ assert.equal(spr.below/spr.hires,7);assert.equal(SPR.eanasir_pose.hires,1);
  assert.deepEqual(COPPER_ART,beforeCopper,'all copper discs, weapon and evolution icons remain byte-for-byte definitions');
 });
 
@@ -36,9 +38,9 @@ test('merchant release grips stay at the actual lash origin through every moving
  assert.deepEqual(data.attackGrips[data.attackRelease],[44,38]);
  for(const i of [data.attack[data.attackRelease],...data.attackWalk[data.attackRelease]]){
   const {w,d}=unpack(data,data.frames[i]);let hand=0;
-  for(let y=74;y<=78;y++)for(let x=86;x<=90;x++){
+  for(let y=37;y<=39;y++)for(let x=43;x<=45;x++){
    const c=d[y*w+x];if(c>>>24>=128&&(c&255)>(c>>>16&255))hand++;
   }
-  assert.ok(hand>=10,'a substantial warm hand/handle surrounds logical44,38 in frame '+i);
+  assert.ok(hand>=7,'a substantial native hand/handle surrounds logical44,38 in frame '+i);
  }
 });
