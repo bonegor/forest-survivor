@@ -54,7 +54,7 @@ function withSprite(v, fn) {
 function clearInput() { input.held.clear(); input.justDown.clear(); input.virtual.clear(); input.bot = { x: 0, y: 0 }; }
 function reset() {
   clearInput(); time = 0;
-  $('heading0').textContent=changed.has($('hero').value)?'Before · fine source detail':'Current roster';
+  $('heading0').textContent=changed.has($('hero').value)?'Before · preserved artwork':'Current roster';
   $('heading1').textContent=changed.has($('hero').value)?'Updated · native pixel art':'Current roster';
   const profile = defaultProfile(), settings = { diff: 'easy', numbers: false, softFlash: true, skins: {} };
   const previousRandom = Math.random;

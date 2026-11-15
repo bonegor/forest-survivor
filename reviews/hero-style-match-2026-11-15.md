@@ -1,5 +1,9 @@
 # Ranger, Berserker and Ea-Nasir style match
 
+Ea-Nasir's material and likeness were subsequently revised to follow the statue's
+stone colours; see [the follow-up review](eanasir-statue-colours-2026-11-15.md).
+The details below describe the initial three-hero revision.
+
 The previous source-detail export made these heroes visibly smoother than the
 rest of the roster. All three now use an 80×64 native canvas, opaque pixels and
 the game's master palette. Their logical footprints, anchors, clip indices,

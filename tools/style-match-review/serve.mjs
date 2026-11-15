@@ -6,7 +6,8 @@ import {resolve,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const source=resolve(root,'tools/style-match-review'),game=resolve(root,'public');
-const baseline='6a7d8bb';
+const baseline=process.env.STYLE_REVIEW_BASELINE||'6a7d8bb';
+if(!/^[a-f0-9]{7,40}$/i.test(baseline))throw Error('STYLE_REVIEW_BASELINE must be a Git commit hash');
 const previous={
  'archer.js':'public/assets/heroes-approved/archer.js',
  'berserker.js':'public/assets/heroes-approved/berserker.js',

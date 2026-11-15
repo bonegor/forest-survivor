@@ -10,6 +10,9 @@ travel diagonally, inspect field and crypt combat, or use WASD/arrows and X.
 The selection showcases use each side's matching character art. The scene selector
 provides forest, daylight and crypt views; `?scale=1`, `2.4`, or `3.2` checks
 different display densities. `STYLE_REVIEW_PORT` changes the loopback port.
+`STYLE_REVIEW_BASELINE` accepts a Git commit hash for a later comparison. For
+the statue-colour correction, use `aa98685` and select Ea-Nasir; the Ranger and
+Berserker are unchanged on both sides.
 
 `tools/animation-round/capture-review.mjs` provides native PNG pose sheets and
 timed full-game captures. Set `REVIEW_OUT` to a fresh output folder and
