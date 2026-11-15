@@ -5,7 +5,8 @@ import {writeFileSync,mkdirSync} from 'node:fs';
 import {sources} from './extract.mjs';
 import {writePng} from '../png.mjs';
 const W=224,H=192,FOOT=166,CX=W/2,TAU=Math.PI*2;
-mkdirSync('output/hero-round2-2026-11-14/bosses',{recursive:true});
+const reviewOut=process.env.BOSS_ART_REVIEW_OUT||'output/hero-round2-2026-11-14/bosses';
+mkdirSync(reviewOut,{recursive:true});
 const SRC=sources(),clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),mix=(a,b,t)=>a+(b-a)*t;
 const smooth=t=>{t=clamp(t);return t*t*(3-2*t);};
 const rot=(p,o,a)=>{const c=Math.cos(a),s=Math.sin(a),x=p[0]-o[0],y=p[1]-o[1];return[o[0]+x*c-y*s,o[1]+x*s+y*c];};
@@ -150,9 +151,9 @@ for(const id of IDS.length?IDS:Object.keys(RIG)){
  }
  const oldScale=57/r.oldHeight;
  result[id]={w:W,h:H,palette,frames:encoded,delta16:true,idle,walk,poses,poseFps:24,motionRate:16/((id==='butcher'||id==='frostgiant'?3.5:id==='lich'||id==='thornqueen'?2:3)*r.cycle),idleRate:5,hires:oldScale*2,anchorY:FOOT,below:H-1-FOOT,body:[(r.oldHr-1)*4,114],outline:false,selfBob:true};
- writePng(`output/hero-round2-2026-11-14/bosses/${id}-rig-rest.png`,frames[0]);
+ writePng(`${reviewOut}/${id}-rig-rest.png`,frames[0]);
  // Contact sheets stay outside production. Their output is evidence, not input.
- const sheet={w:W*8,h:H*Math.ceil(frames.length/8),d:new Uint32Array(W*8*H*Math.ceil(frames.length/8))};frames.forEach((f,n)=>{for(let y=0;y<H;y++)sheet.d.set(f.d.subarray(y*W,(y+1)*W),((Math.floor(n/8)*H+y)*sheet.w)+(n%8)*W);});writePng(`output/hero-round2-2026-11-14/bosses/${id}-rig-contact.png`,sheet);
+ const sheet={w:W*8,h:H*Math.ceil(frames.length/8),d:new Uint32Array(W*8*H*Math.ceil(frames.length/8))};frames.forEach((f,n)=>{for(let y=0;y<H;y++)sheet.d.set(f.d.subarray(y*W,(y+1)*W),((Math.floor(n/8)*H+y)*sheet.w)+(n%8)*W);});writePng(`${reviewOut}/${id}-rig-contact.png`,sheet);
  console.log(id,frames.length,'poses',palette.length,'colours',encoded.reduce((n,s)=>n+s.length,0),'base64 bytes');
 }
 mkdirSync('public/assets/art/bosses-reforged',{recursive:true});

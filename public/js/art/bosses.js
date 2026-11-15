@@ -1,6 +1,7 @@
 // Boss sprites, facing right.
 
-import BAKED from '../../assets/art/bosses.js';
+import BONEKING from '../../assets/art/bosses-polished/boneking.js';
+import DEMONLORD from '../../assets/art/bosses-polished/demonlord.js';
 import { bakedDef } from './baked.js';
 import { hexPack } from '../engine/pixels.js';
 import { SKELETON_MAGE_ART } from './skeleton-mage.js';
@@ -17,7 +18,7 @@ export const BOSS_ART = {
   skeletonmage: SKELETON_MAGE_ART,
   // King Ossarian, the Bone King: Foozle's Ancient Skeleton, crowned in his gilded horns
   // (tools/art/bosses.mjs). His poses play as he strikes (game/bosses.js).
-  boneking: baked(BAKED.boneking, ['#5f6367', '#869598', '#3a3b3d', '#a29d6b', '#836b3f', '#28221f']),
+  boneking: baked(BONEKING, ['#92a9b2', '#576b7b', '#303d50', '#e4c276', '#b88b46', '#d4ccb3']),
 
   // The Skeleton Archer, lord of every crypt off the forest roads: walking (0, 1) with its
   // longbow held at the grip, drawing it (2) as it takes aim.
@@ -213,5 +214,5 @@ export const BOSS_ART = {
 
   // Azgaroth, Lord of Cinders: the Gothicvania demon, halved, his skull and horns in embers
   // (tools/art/bosses.mjs).
-  demonlord: baked(BAKED.demonlord, ['#621619', '#470c24', '#21112a', '#0d0415']),
+  demonlord: baked(DEMONLORD, ['#621619', '#470c24', '#262b44', '#0d0415', '#5a6988']),
 };

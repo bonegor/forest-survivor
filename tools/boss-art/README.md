@@ -1,14 +1,15 @@
 # Detailed boss source and animation
 
 These six original boss models replace the previous two-frame Butcher, Lich,
-Pharaoh, Frost Giant, Thorn Queen and Pit Lord. Bone King and Demon Lord are
-unchanged. The original atlas is `source/bosses-original-2026-11-15.png`, generated
+Pharaoh, Frost Giant, Thorn Queen and Pit Lord. The subsequent material pass in
+`../boss-polish` also updates Bone King and Demon Lord. The original atlas is
+`source/bosses-original-2026-11-15.png`, generated
 with the built-in image tool and copied into the repository. It includes an alpha
 channel; its RGB under fully transparent pixels is intentionally ignored.
 
 Run `node tools/boss-art/build.mjs` from the repository root. The build has no
 external dependencies. It extracts native source pixels, removes disconnected
-neighboring atlas scraps, retains the full source colour palette, and bakes
+neighboring atlas scraps, applies each boss's authored material hook, and bakes
 texture rigs into `public/assets/art/bosses-reforged/*.js`. Each boss has connected
 shoulder/elbow/hand and hip/knee/foot motion, a head counter-motion, and independent
 cloth/fur motion. A fist and its whole weapon share one rigid forearm island.
@@ -28,7 +29,7 @@ particle colour, with a cache independent of exact colour registrations.
 Review in the real game with `node tools/hero-round2-review/serve.mjs`, then open
 `http://127.0.0.1:3018/bosses.html`. Each 30-second tour includes idle, travel,
 all relevant attacks and recovery, both facings, and the Butcher kits' enraged
-charge. The route uses current Game/Enemy/boss AI, an in-memory profile, and the
+charge. The Demon Lord's full tour takes 42 seconds. The route uses current Game/Enemy/boss AI, an in-memory profile, and the
 same simulation time for movement, pose and effects.
 
 `capture.mjs` records that same encounter with native Canvas and makes continuous

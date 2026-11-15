@@ -8,8 +8,8 @@ recoloured or shrunk.
 
 | What | Files | Pack | Licence |
 | --- | --- | --- | --- |
-| King Ossarian, the Bone King (horns gilded into a crown) (`bosses.js`) | Right/Png: AncientSkeletonRightIdle, Walk, Attack01, Attack03 | [Lucifer – Ancient Skeleton Boss](https://foozlecc.itch.io/lucifer-skeleton-ancient-boss) by Foozle (art by Baldur) | CC0 |
-| Azgaroth, Lord of Cinders (mirrored, halved, skull and horns recoloured to embers) (`bosses.js`) | demon-Files/PNG: demon-idle, demon-attack-no-breath | [Gothicvania Patreon's Collection](https://opengameart.org/content/gothicvania-patreons-collection) by Luis Zuno (ansimuz) | CC0 |
+| King Ossarian, the Bone King (authored crown, ivory skull, royal shield and steel materials) (`bosses-polished/boneking.js`; original `bosses.js`) | Right/Png: AncientSkeletonRightIdle, Walk, Attack01, Attack03 | [Lucifer – Ancient Skeleton Boss](https://foozlecc.itch.io/lucifer-skeleton-ancient-boss) by Foozle (art by Baldur) | CC0 |
+| Azgaroth, Lord of Cinders (mirrored, halved; authored crowned face, iron armor and furnace seal) (`bosses-polished/demonlord.js`; original `bosses.js`) | demon-Files/PNG: demon-idle, demon-attack-no-breath | [Gothicvania Patreon's Collection](https://opengameart.org/content/gothicvania-patreons-collection) by Luis Zuno (ansimuz) | CC0 |
 | The Inferno's lava, wall torches, lava lamps and standing flags (`crypts.js`) | Animated Tiles/Lava Dungeon/Lava/Png/Lava.png, Deco/Png/Torch.png, Deco/Png/Lava lamp.png, Flags/Png/StandingFlag.png | [Lucifer – Lava Dungeon Tileset](https://foozlecc.itch.io/lucifer-lava-dungeon-tileset) by Foozle (art by Baldur) | CC0 |
 | A lord's room: its red carpet, armour stands, arched door and pool of blood (`crypts.js`) | Png/DungeonTileset.png | [Lucifer – Dungeon Tileset](https://foozlecc.itch.io/lucifer-dungeon-tileset) by Foozle (art by Baldur) | CC0 |
 | The Undercroft's floors, walls, columns, banners and fountains (`crypts.js`) | frames/floor_*.png, wall_*.png, column.png, wall_fountain_*.png | [16x16 DungeonTileset II](https://0x72.itch.io/dungeontileset-ii) by 0x72 (Robert Norenberg) | CC0 |

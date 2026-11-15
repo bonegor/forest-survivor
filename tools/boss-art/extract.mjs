@@ -1,7 +1,13 @@
 import {readPng,writePng} from '../png.mjs';
+import {existsSync} from 'node:fs';
+const polishers={};
+for(const id of ['butcher','lich','pharaoh','frostgiant','thornqueen','pitlord']){
+ const file=new URL(`../boss-polish/${id}/source.mjs`,import.meta.url);
+ if(existsSync(file))polishers[id]=(await import(file.href)).polishSource;
+}
 // Preserve the generated RGBA's material shades. Area filtering is only used
 // once to choose native source pixels; runtime poses keep hard pixel edges.
-export function sources(){
+export function sources({original=false}={}){
  const png=readPng(new URL('source/bosses-original-2026-11-15.png',import.meta.url)),out={};
  for(const [n,id]of ['butcher','lich','pharaoh','frostgiant','thornqueen','pitlord'].entries()){
   const w=128,h=128,d=new Uint32Array(w*h),sx=n%3*512,sy=Math.floor(n/3)*512;
@@ -10,6 +16,12 @@ export function sources(){
   // complete connected body/equipment, discard only detached neighbor scraps.
   const seen=new Uint8Array(w*h),groups=[];for(let i=0;i<d.length;i++){if(!d[i]||seen[i])continue;const group=[],q=[i];seen[i]=1;while(q.length){const p=q.pop();group.push(p);const px=p%w,py=Math.floor(p/w);for(let yy=Math.max(0,py-1);yy<=Math.min(h-1,py+1);yy++)for(let xx=Math.max(0,px-1);xx<=Math.min(w-1,px+1);xx++){const j=yy*w+xx;if(d[j]&&!seen[j]){seen[j]=1;q.push(j);}}}groups.push(group);}groups.sort((a,b)=>b.length-a.length);for(const g of groups.slice(1))for(const i of g)d[i]=0;
   let x0=w,y0=h,x1=0,y1=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[y*w+x]){x0=Math.min(x0,x);x1=Math.max(x1,x+1);y0=Math.min(y0,y);y1=Math.max(y1,y+1);}out[id]={w,h,d,box:[x0,y0,x1,y1]};
+ }
+ if(!original)for(const[id,polish]of Object.entries(polishers)){
+  const base=out[id],next=polish({...base,d:base.d.slice(),box:[...base.box]});
+  if(next.w!==base.w||next.h!==base.h||next.d.length!==base.d.length)throw Error(`${id}: source polish changed canvas dimensions`);
+  for(let i=0;i<base.d.length;i++)if((next.d[i]>>>24)!==(base.d[i]>>>24))throw Error(`${id}: source polish changed silhouette at ${i}`);
+  out[id]={...next,box:base.box};
  }
  return out;
 }
