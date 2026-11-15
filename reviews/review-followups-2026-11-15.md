@@ -30,7 +30,8 @@ the release build contains 303 files with 206 module imports checked.
 
 ## Boss memory risk remains open
 
-This is an investigation and isolated prototype, not a production optimization.
+The empty-rim optimization below is now implemented. Lazy allocation and frame
+deduplication remain investigated candidates; the startup/mobile risk stays open.
 The six detailed bosses have 532 frames at 224×192. Their RGBA buffers require
 87.28 MiB, and eager normal/mirrored canvases add 174.56 MiB: **261.84 MiB minimum**
 before variants, asset strings, temporary allocations and browser/GPU overhead.
@@ -40,13 +41,33 @@ Promising changes preserve source pixels, frame order, timing and geometry:
 
 | Candidate | Evidence | Benefit and limitation |
 | --- | --- | --- |
-| Cache absence of an outline and skip an empty rim | All 532 boss frames lack the ink colour used by `rimBuf`, so their rim variants are transparent. | Avoids 0.328 MiB of transparent normal/mirrored canvases per visited frame per rim colour. This saves later variants, not initial allocation. |
+| **Implemented:** cache absence of an outline and skip an empty rim | All 532 boss frames lack the ink colour used by `rimBuf`, so their rim variants are transparent. | Avoids 0.328 MiB of transparent normal/mirrored canvases per visited frame per rim colour. This saves later variants, not initial allocation. |
 | Lazy normal/mirrored canvas getters; create each variant facing separately | All 5,320 native Canvas comparisons matched, plus six synthetic alpha/emissive checks. | Defers boss startup backing from 261.84 to 87.28 MiB before first use. Prewarm upcoming poses in bounded work; caches can still grow as more poses are visited. |
 | Deduplicate exactly equal frames | Exact pixel comparison confirmed 37 duplicates, leaving 495 unique frames. | Saves 18.21 MiB when both decoder buffers and rendered frames share storage. Keep every animation index and relevant metadata. |
 
-Recommended order: skip empty rims, then lazy canvas allocation with measured
-prewarming and cache lifetime, then exact deduplication. These changes need no
+Next candidates: lazy canvas allocation with measured prewarming and cache
+lifetime, then exact deduplication. These changes need no
 resolution reduction, palette reduction or removed animation frames.
+
+### Empty-rim fix verification
+
+`Frame.hasInk` caches exact presence of the frame's ink colour; `Enemy.drawRim`
+skips canvas creation and drawing only when that colour is absent. Existing
+outlined art, custom ink and the context's alpha-reset contract are preserved.
+The source pixels, pose indices, geometry and eager startup canvases are untouched.
+
+Two allocation/draw regressions failed before the fix, while the outlined
+control passed. All 25 focused rim, night-layer, boss-animation and render checks
+pass after it. Independent native-Canvas comparison covered all 532 detailed
+boss frames in both facings plus 118 outlined/custom-ink control cases: every
+image matched the old renderer. The new path allocated zero boss rim canvases;
+the old path allocated 2,128 across the two tested colours. Repeated queries used
+cached presence for all 591 tested frames without rescanning pixels.
+
+Local evidence: `output/empty-rim-fix/before-tests.log`, `focused-tests.log`,
+`native-result.json` and the independent `check-native.mjs` reproduction.
+
+### Remaining investigation
 
 Transparent trimming is not ready: cropped buffers reconstruct the source
 exactly, but a naive cropped draw changed 1,063 of 1,596 scaled-image comparisons

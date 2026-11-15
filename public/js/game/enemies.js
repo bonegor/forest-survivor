@@ -1020,9 +1020,13 @@ export class Enemy {
 
   // Its outline in col (rimBuf), unlit at alpha a, where frame fr was last drawn (drawEmissive).
   drawRim(ctx, fr, col, a) {
-    const r = this._rect;
-    ctx.globalAlpha = a;
-    ctx.drawImage(fr.variant('rim' + col, (b) => rimBuf(b, col), r[4]), Math.round(r[0]), Math.round(r[1]), Math.round(r[2]), Math.round(r[3]));
+    // No ink means an entirely transparent rim. Avoid building and retaining
+    // two full-size canvases for each colour of that invisible image.
+    if (fr.hasInk) {
+      const r = this._rect;
+      ctx.globalAlpha = a;
+      ctx.drawImage(fr.variant('rim' + col, (b) => rimBuf(b, col), r[4]), Math.round(r[0]), Math.round(r[1]), Math.round(r[2]), Math.round(r[3]));
+    }
     ctx.globalAlpha = 1;
   }
 

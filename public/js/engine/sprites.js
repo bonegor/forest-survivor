@@ -70,6 +70,14 @@ export class Frame {
     this._rot = new Map();
     this._box = null;
     this._radius = -1;
+    this._hasInk = undefined;
+  }
+
+  // Frame buffers are immutable, like the cached bounds. A rim recolours only
+  // this exact ink value; source-painted art may contain none of it.
+  get hasInk() {
+    if (this._hasInk === undefined) this._hasInk = this.buf.d.includes(this.buf.ink ?? OUTLINE);
+    return this._hasInk;
   }
 
   // The box its opaque pixels fill, [x0, y0, x1, y1] (x1, y1 one past the last), as the hitboxes
