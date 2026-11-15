@@ -34,7 +34,7 @@ export const PASSIVES = {
   // (Game.relicOffered, Player.hurt). Each time it may be offered it is on the first `sure`
   // level-up screens for certain, after that only by its weight (Game.sureRelic).
   phoenix: {
-    name: 'Phoenix Heart', icon: 'i_revival', // placeholder (tools/handoff-art.md)
+    name: 'Phoenix Heart', icon: 'i_phoenix',
     max: 1, desc: 'Rise {once} from death. Any weapon at its peak {evolves}, with or without its relic.',
     stat: { revivals: 1 }, weight: 0.35, evolvesAny: true, afterSignature: true, again: 5, sure: 2,
   },

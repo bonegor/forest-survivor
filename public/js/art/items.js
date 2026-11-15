@@ -1,5 +1,8 @@
 // Pickups, projectiles and item icons.
 
+import {PHOENIX_HEART_ICON} from './icons/phoenix-heart.js';
+import {EXILE_ICON} from './icons/exile.js';
+
 export const PICKUP_ART = {
   gem1: { emissive: 'cwU', frames: [['..c..', '.cwU.', 'cUUUu', '.Uuu.', '..u..'], ['..w..', '.cwU.', 'cUwUu', '.Uuu.', '..u..']] },
   gem2: {
@@ -446,6 +449,8 @@ export const PROJECTILE_ART = {
 
 // 14×14 item icons (16×16 once outlined).
 export const ICON_ART = {
+  i_phoenix: PHOENIX_HEART_ICON,
+  i_banish: EXILE_ICON,
   // ---------------------------------------------------------------- weapons
   i_sword: {
     frames: [[

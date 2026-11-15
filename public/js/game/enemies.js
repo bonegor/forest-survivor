@@ -437,6 +437,8 @@ export class Enemy {
 
     let dx = 0, dy = 0;
     if (this.lockT > 0) {
+      // Swarm streams keep their forced heading ahead of fear/confusion by design.
+      // Those statuses can steer the foe only after its crossing lock expires.
       this.lockT -= dt;
       dx = this.lockX;
       dy = this.lockY;
@@ -444,7 +446,7 @@ export class Enemy {
       // Asleep in a fae-sown circle (the Bloomvale's thread, game/fae.js, 29 October 2026): no heading,
       // no shot, no charge; its pace is 0 above and it bites no one (the contact test below).
     } else if (this.fearT > 0) {
-      // Afraid: it runs straight from the hero, whatever else it would do.
+      // Afraid: after any forced swarm crossing, it runs straight from the hero.
       const l = Math.hypot(this.x - p.x, this.y - p.y) || 1;
       AWAY.x = this.x + ((this.x - p.x) / l) * 60;
       AWAY.y = this.y + ((this.y - p.y) / l) * 60;

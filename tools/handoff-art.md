@@ -1,5 +1,22 @@
 # Art handoff: the newer weapons
 
+## Completion status · 15 November 2026
+
+All icons and projectiles listed below now have dedicated art. Phoenix Heart's
+new `i_phoenix` is a red heart carried by rising fire-feathers; Exile's new
+`i_banish` is a cancelled parchment sinking into a violet rift. Each received
+its own graphics worker and was checked beside the former stand-in at native
+size, enlarged, and in the production menus. Phoenix uses its icon in both
+relic definitions and the Armory; Exile uses its icon in the Armory. Revival
+and Insight keep their own existing symbols.
+
+The remaining text is the original October brief; its borrowing column records
+the former placeholders, not current missing artwork. Production captures can
+be regenerated with `node tools/icon-refresh-review.mjs` (set `CANVAS_MODULE`
+when the native canvas package is installed outside the repository).
+
+## Original brief · 16 October 2026
+
 The signature weapons (16 October 2026) brought the Necromancer's Miasma and two weapons shared by all, the Arcane Ray and Caltrops, with their evolutions; renamed the Shadow's daggers to Shadow Blade; and made his blades spin. (Bone Spear, Shadow Clone and Grasping Dead were tried and taken out: each copied another class's signature.) Everything plays now, but on **borrowed art**. This is what the art pair (one generator, one reviewer) has to deliver, and where each piece goes in.
 
 All art is palette strings, as in `public/js/art/items.js`: one character per pixel, keys from `public/js/art/palette.js`, `.` transparent. The build adds a 1 px dark outline (`k`) round every sprite unless it says `outline: false`, so don't draw one. `emissive` lists the keys that glow unlit in the dark.

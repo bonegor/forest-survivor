@@ -447,7 +447,7 @@ export class Spawner {
           const x = sx - dy * off - dx * back, y = sy + dx * off - dy * back;
           const e = g.spawnEnemy(ev.enemy, x, y, { ...st, instant: true, lock: [dx, dy], lockT: 6, aware: true, sent: true });
           if (shut(e)) break;
-          if (e) e.spd *= 1.2;
+          if (e) e.spd *= 1.2; // Swarm streams are 20% faster than the configured base foe.
         }
         sfx('charge');
         break;

@@ -27,12 +27,11 @@ import { MusicMenu } from './music-menu.js';
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
   swiftness: 'i_movespeed', magnet: 'i_magnet', fortune: 'i_luck', wisdom: 'i_growth', greed: 'i_greed', reroll: 'i_reroll', revival: 'i_revival',
-  banish: 'i_reroll', // placeholder (tools/handoff-art.md): Insight's, the other level-up card tool
+  banish: 'i_banish',
   endurance: 'i_duration', velocity: 'i_projspeed', echo: 'i_amount',
-  // The slots of 21 October 2026 (shared/progress.js); an axe and a clover stand in until they are
-  // drawn (art/fallbacks.js).
+  // Dedicated icons for the weapon and relic slot upgrades.
   arsenal: 'i_arsenal', reliquary: 'i_reliquary',
-  phoenix: 'i_revival', // the relic's own placeholder (data/passives.js)
+  phoenix: 'i_phoenix',
 };
 
 function goldTag(ctx, app, x, y, align = 'right') {
