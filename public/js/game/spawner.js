@@ -80,6 +80,8 @@ export function timedHordeCount(g, ev, phase) {
 // Knights locked on him unwarned was a wall of the heavy and slow (27 October 2026; Cultists are few,
 // big and slow, the owner's). Every pocket of the night has one of them (the first, rats and bats).
 export const JOLT = { every: [30, 90], count: 6, spread: 0.45, pace: ['swift', 'quick'] };
+// The difficulty's elite multiplier scales both champion delays.
+export const CHAMPION = { first: 95, every: [105, 140] };
 // What a jolt never is: the shooters (Cultists, Skeleton Archers) and any kind not of JOLT.pace.
 const JOLT_NOT = Object.keys(ENEMIES).filter((type) => ENEMIES[type].shot || !JOLT.pace.includes(PACE_OF[type]));
 // What is never a champion: the small fry (data/enemies.js fry: bats, rats, slimelets and their like
@@ -114,7 +116,7 @@ export class Spawner {
     this.acc = HORDE_RATE.delay; // how long yet before the steady horde starts coming
     this.owed = null; // the steady horde's monsters due and not yet come (null: its head start yet to come)
     this.eventIdx = 0;
-    this.eliteT = 95;
+    this.eliteT = CHAMPION.first;
     this.thiefT = rand(140, 220);
     this.propT = 4;
     this.shrineT = 45;
@@ -317,7 +319,7 @@ export class Spawner {
     // Champions.
     this.eliteT -= dt * g.diff.elite;
     if (this.eliteT <= 0) {
-      this.eliteT = rand(105, 140);
+      this.eliteT = rand(...CHAMPION.every);
       this.spawnElite(phase);
     }
 

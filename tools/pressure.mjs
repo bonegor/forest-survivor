@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 await import('./headless.mjs');
 const { Game } = await import('../public/js/game/game.js');
-const { isFew, timedHordeCount, waveAt, RING, JOLT } = await import('../public/js/game/spawner.js');
+const { isFew, timedHordeCount, waveAt, RING, JOLT, CHAMPION } = await import('../public/js/game/spawner.js');
 const { ENEMIES, CHAMPION_MODS } = await import('../public/js/data/enemies.js');
 const { SWARM_BATCH, HORDE_RATE, RANKED_BOSSES, RANKED_BOSS_EVERY, kindWeightsBy, minuteOf, pocketAt } = await import('../public/js/data/waves.js');
 const { MAPS } = await import('../public/js/data/maps.js');
@@ -154,8 +154,9 @@ export function pressureTable({ mode = 's15', diff = 'hard', map = 'forest', nig
     for (const [k, share] of Object.entries(mx)) arrive(t, share * evCount({ type: 'swarm', enemy: k, count: JOLT.count, picked: true }, ph), k);
   }
 
-  // Champions: the first at 95 s, then every 122.5 s on average, faster by the difficulty's elite.
-  for (let t = 95 / D.elite; t < minutes * 60; t += 122.5 / D.elite) {
+  // Start from the live champion delay and average its random repeat interval.
+  const [min, max] = CHAMPION.every;
+  for (let t = CHAMPION.first / D.elite; t < minutes * 60; t += (min + max) / (2 * D.elite)) {
     const c = champHp(at(t));
     arrive(t, 1, c.mx, { hpX: c.x, dmgX: 1.3, boss: true });
   }
