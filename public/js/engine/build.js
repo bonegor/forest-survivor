@@ -3,3 +3,5 @@
 // and has neither the debug address (storage.js DEBUG, audio.js) nor the developer panel
 // (main.js). In the repository, and so on gamevibe.si, false: everything as before.
 export const RELEASE = false;
+// Set only in generated free-demo builds. The working game and full releases retain all content.
+export const DEMO = false;

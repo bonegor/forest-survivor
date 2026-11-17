@@ -1,9 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import '../tools/headless.mjs';
-import { WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES, normalizeWeaponSoundStyle, weaponSoundRecipe } from '../public/js/engine/weapon-sounds.js';
+import { WEAPON_SOUND_KEY, WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES, normalizeWeaponSoundStyle, weaponSoundRecipe } from '../public/js/engine/weapon-sounds.js';
 import { MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { makeWeaponPreview, PREVIEW_WEAPONS, PREVIEW_SECONDS } from '../public/sound-lab/preview.js';
+
+test('demo and full builds keep separate weapon sound preferences on the same origin', async t => {
+  const fullKey = 'fs_weapon_sound_style_v1';
+  assert.equal(WEAPON_SOUND_KEY, fullKey);
+  const preferences = new Map([[fullKey, 'heavy']]);
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  t.after(() => {
+    if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage);
+    else delete globalThis.localStorage;
+  });
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: key => preferences.get(key) ?? null,
+      setItem: (key, value) => preferences.set(key, value),
+    },
+  });
+
+  const demoBuild = 'data:text/javascript,' + encodeURIComponent('export const DEMO = true;');
+  const source = readFileSync(new URL('../public/js/engine/weapon-sounds.js', import.meta.url), 'utf8')
+    .replace("'./build.js'", JSON.stringify(demoBuild));
+  const demo = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  assert.equal(demo.weaponSoundStyle(), 'current');
+  assert.equal(demo.applyWeaponSoundStyle('arcade'), true);
+  assert.equal(preferences.get(demo.WEAPON_SOUND_KEY), 'arcade');
+  assert.equal(preferences.get(fullKey), 'heavy');
+});
 
 test('sound choices preserve the original default and leave non-weapon audio untouched', () => {
   assert.equal(normalizeWeaponSoundStyle(null), 'current');

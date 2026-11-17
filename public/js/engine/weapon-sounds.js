@@ -1,6 +1,8 @@
 // Original, short procedural alternatives for weapon launches. The current
 // recordings remain the default until the player explicitly applies a style.
-export const WEAPON_SOUND_KEY = 'fs_weapon_sound_style_v1';
+import { DEMO } from './build.js';
+
+export const WEAPON_SOUND_KEY = DEMO ? 'fs_demo_weapon_sound_style_v1' : 'fs_weapon_sound_style_v1';
 export const WEAPON_SOUND_STYLES = Object.freeze([
   { id: 'current', name: 'Current', desc: 'The game’s existing recorded weapon sounds.' },
   { id: 'tempered', name: 'Tempered', desc: 'Short air cuts, restrained steel and a clear attack.' },
