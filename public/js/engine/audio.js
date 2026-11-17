@@ -641,6 +641,20 @@ const SFX = {
     noise(t, { filter: 'lowpass', f0: 900, f1: 120, dur: 0.8, vol: 0.28 });
     for (const [f, v] of [[294, 0.12], [588, 0.06], [704, 0.04], [880, 0.03]]) tone(t + 0.12, { type: 'sine', f0: f, dur: 1.8, vol: v, attack: 0.004 });
   },
+  // Aldric's shield rim hits the ground. The low plate rings briefly after the initial scrape.
+  shieldfall: (t) => {
+    noise(t, { filter: 'bandpass', f0: 2600, f1: 850, q: 0.8, dur: 0.05, vol: 0.24 });
+    tone(t, { type: 'sine', f0: 114, f1: 68, dur: 0.14, vol: 0.26 });
+    for (const [f, dur, vol] of [[263, 0.28, 0.15], [727, 0.19, 0.09], [1397, 0.11, 0.06]]) {
+      tone(t, { type: 'sine', f0: f, dur, vol });
+    }
+  },
+  // Air escaping the empty helm, thinning as Aldric's spirit rises.
+  souldepart: (t) => {
+    noise(t, { filter: 'bandpass', f0: 460, f1: 1150, q: 1.4, dur: 0.64, vol: 0.12, attack: 0.09, curve: 'lin' });
+    tone(t, { type: 'sine', f0: 174, f1: 204, dur: 0.42, vol: 0.037, attack: 0.09 });
+    noise(t + 0.1, { filter: 'bandpass', f0: 1150, f1: 1750, q: 3, dur: 0.49, vol: 0.047, attack: 0.14 });
+  },
   // The hero rising again: a swell climbing from below into a bright held chord.
   revive: (t) => {
     tone(t, { type: 'sine', f0: 110, f1: 440, dur: 0.8, vol: 0.2, attack: 0.3 });

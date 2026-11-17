@@ -396,6 +396,7 @@ export class Hud {
     this.drawSlain(ctx, W, H);
     if (g.showMap && g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, true);
     if (input.device === 'touch') this.drawTouch(ctx, W, H, p);
+    if (g.state === 'dying') this.drawDepartingSoul(ctx);
   }
 
   // dt: real seconds since the last frame (the wrap runs on it, under the cards too: XP_WRAP).
@@ -1216,6 +1217,29 @@ export class Hud {
     ctx.globalAlpha = 1;
   }
 
+  // Draw above the clock and XP bar so the trailing tip crosses the actual screen edge.
+  drawDepartingSoul(ctx) {
+    const g = this.g, p = g.player, c = g.cam;
+    const wisp = SPR[p.hero.sprite]?.fall?.wisp;
+    if (!wisp) return;
+    const age = g.deathT - wisp.release;
+    if (age < 0 || age >= wisp.duration) return;
+
+    const frame = wisp.frames[wisp.frameAt(age)];
+    const flip = p._rect ? p._rect[5] : p.face < 0;
+    const scale = c.S / view.S; // World pixels expressed on the HUD canvas.
+    const u = age / wisp.duration;
+    const startY = (p.y - c.y + wisp.offsetY - wisp.anchorY) * scale;
+    const distance = startY + frame.h * scale + 1;
+    // The initial lift has the same pace at any zoom. The wisp then accelerates to
+    // cover the remaining distance, including its full tail, even on a tall display.
+    const launch = Math.min(64 * scale, distance);
+    const y = startY - u * (launch + (distance - launch) * u);
+    const drift = 4 * Math.sin(age * 3.5);
+    const x = (p.x - c.x + (flip ? -1 : 1) * (wisp.offsetX + drift) - frame.w / 2) * scale;
+    ctx.drawImage(frame.get(flip), Math.round(x), Math.round(y), frame.w * scale, frame.h * scale);
+  }
+
   // Fallen: "Slain by …" fades in over the drained world (Game DEATH.name), before the results.
   drawSlain(ctx, W, H) {
     const g = this.g;
@@ -1224,7 +1248,9 @@ export class Hud {
     const c = textCanvas(who ? `SLAIN BY ${who.toUpperCase()}` : 'YOU HAVE FALLEN', ['#ffffff', '#f6757a', '#a22633'], '#181425');
     const s = c.width * 2 <= W - 16 ? 2 : 1;
     ctx.globalAlpha = clamp((g.deathT - DEATH.name) / 0.5, 0, 1);
-    ctx.drawImage(c, Math.round(W / 2 - (c.width * s) / 2), Math.round(H * 0.3), c.width * s, c.height * s);
+    // Leave the space above Aldric clear for the spirit's ascent.
+    const y = H * (g.player.id === 'knight' ? 0.63 : 0.3);
+    ctx.drawImage(c, Math.round(W / 2 - (c.width * s) / 2), Math.round(y), c.width * s, c.height * s);
     ctx.globalAlpha = 1;
   }
 

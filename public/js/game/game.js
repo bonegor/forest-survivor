@@ -64,8 +64,8 @@ export const MILESTONES = [10, 25, 50, 100];
 // The most banners on screen at once.
 export const BANNERS_MOST = 2;
 // The hero's fall, in real seconds from the killing blow (onPlayerDeath): the music stops; the
-// world slows and drains to grey and dark over `drain`; he flashes white for `flash` and tips
-// over in `fall`, still in colour; "Slain by …" fades in from `name` (Hud); the results at `end`.
+// world slows and drains to grey over `drain`. After the flash, Aldric plays his authored fall;
+// other heroes tip over in `fall`. "Slain by …" fades in from `name` (Hud); results at `end`.
 export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
 // Any earlier boss left when the timer and final-boss objectives are met burns away during
 // the victory transition. The final boss itself must be slain (burnBoss).
@@ -2258,7 +2258,8 @@ export class Game {
     this.timeScale = 0.3;
     const p = this.player;
     this.particles.burst(p.x, p.y - 8, 6, 60, [PC.r, PC.R, PC.x, PC.w], 120, 1.4, 1, P.GROUND | P.FADE, { vz: 120, grav: 250 });
-    this.particles.burst(p.x, p.y - 8, 6, 20, [PC.w, PC.G], 40, 2, 2, P.GLOW | P.FADE, { vz: 50, drag: 1 });
+    // Keep the glowing flecks clear of Aldric's bowed helmet during the kneel.
+    if (!SPR[p.hero.sprite]?.fall) this.particles.burst(p.x, p.y - 8, 6, 20, [PC.w, PC.G], 40, 2, 2, P.GLOW | P.FADE, { vz: 50, drag: 1 });
     this.shake(1);
     // Silence at the blow; the lament plays with the results (ResultsOverlay).
     stopMusic();
@@ -2557,7 +2558,11 @@ export class Game {
       this.spawner.update(dt);
       this.checkRecords();
     } else if (this.state === 'dying') {
+      const before = this.deathT;
       this.deathT += rdt;
+      for (const cue of SPR[p.hero.sprite]?.fall?.cues ?? []) {
+        if (before < cue.time && this.deathT >= cue.time) sfx(cue.sound);
+      }
       if (this.deathT > DEATH.end) this.finish(false);
     } else if (this.state === 'faint') {
       // The world slows and goes dark; then the fade back in, outside (as a journey's).
@@ -3158,8 +3163,7 @@ export class Game {
     p._rect = [X, Y, w, h, fr, flip, img, alpha, sink];
   }
 
-  // The hero fallen (DEATH): the world drains to grey and darkens round him, and he, still in
-  // colour, flashes white and tips over where he stood.
+  // The hero falls in colour over the darkening field, anchored where the blow landed.
   drawFallen(ctx, c) {
     const p = this.player, D = DEATH, t = this.deathT, S = c.S;
     const k = clamp(t / D.drain, 0, 1);
@@ -3172,14 +3176,20 @@ export class Game {
     ctx.fillStyle = '#05040a';
     ctx.fillRect(0, 0, c.pxW, c.pxH);
     ctx.globalAlpha = 1;
-    const spr = SPR[p.hero.sprite], fr = idleFrame(spr, 0), flip = p.face < 0;
+    const spr = SPR[p.hero.sprite], flash = t < D.flash;
+    let fr = idleFrame(spr, 0);
+    if (spr.fall) {
+      // Freeze the pose that actually took the hit, then play the fall once and hold it.
+      fr = flash ? (p._rect?.[4] ?? fr) : spr.fall.frames[spr.fall.frameAt(t)];
+    }
+    const anchorY = spr.fall && !flash ? spr.fall.anchorY : spr.anchorY;
     const pixelScale = S / (spr.hires || 1);
-    const img = t < D.flash ? fr.white(flip) : fr.get(flip);
-    const a = ease.outBack(clamp(t / D.fall, 0, 1)) * (Math.PI / 2) * (flip ? -1 : 1);
+    const flip = spr.fall && p._rect ? p._rect[5] : p.face < 0;
+    const img = flash ? fr.white(flip) : fr.get(flip);
     ctx.save();
     ctx.translate(Math.round((p.x - c.x) * S), Math.round((p.y - c.y) * S));
-    ctx.rotate(a);
-    ctx.drawImage(img, Math.round((-img.width * pixelScale) / 2), Math.round(-spr.anchorY * pixelScale), img.width * pixelScale, img.height * pixelScale);
+    if (!spr.fall) ctx.rotate(ease.outBack(clamp(t / D.fall, 0, 1)) * (Math.PI / 2) * (flip ? -1 : 1));
+    ctx.drawImage(img, Math.round((-img.width * pixelScale) / 2), Math.round(-anchorY * pixelScale), img.width * pixelScale, img.height * pixelScale);
     ctx.restore();
   }
 

@@ -239,26 +239,42 @@ export function spriteBuffers(def) {
   return { frames, emissive, anchorY };
 }
 
+function buildFrames(def) {
+  const { frames, emissive, anchorY } = spriteBuffers(def);
+  return { frames: frames.map(buf => new Frame(buf, emissive)), anchorY };
+}
+
 // One sprite definition built into outlined frames (the sprite lab uses this too).
 // What glows unlit: def.emissive, palette keys (as in art/palette.js); or def.glow, the colours
 // themselves (packed), for art drawn in colours of its own.
 export function buildSprite(name, def) {
-  const built = spriteBuffers(def);
-  const frames = built.frames.map((b) => new Frame(b, built.emissive));
+  const { frames, anchorY } = buildFrames(def);
   // Its colours join the particle list (addColour) for its death burst; art that never bursts
   // (def.burst === false: the Survival maps' recoloured doors, bones and moonblooms, 28 October 2026)
   // leaves the list's 256 to what does: the horde, and the sprite tuner's live tunes.
   if (def.palette && def.burst !== false) for (const to of Object.values(def.palette)) addColour(px.hexPack(to));
-  return { name, frames, walk: def.walk || null, idle: def.idle || null,
+  const sprite = { name, frames, walk: def.walk || null, idle: def.idle || null,
     motionRate: def.motionRate || 1, idleRate: def.idleRate ?? 4,
     attack: def.attack || null, attackFps: def.attackFps || 0, selfBob: !!def.selfBob, floating: !!def.floating,
     attackRelease: def.attackRelease ?? null, attackWalk: def.attackWalk || null, manualDelay: def.manualDelay,
     // A boss's: its poses as it strikes (frame lists at poseFps), the rows of art below its feet
     // (a blow sweeping low) and its body's [w, h] (what its shadow and glow go by).
     poses: def.poses || null, poseFps: def.poseFps || 0, below: def.below || 0, body: def.body || null,
-    anchorY: built.anchorY ?? frames[0].h - 1,
+    anchorY: anchorY ?? frames[0].h - 1,
     fitW: def.fitW || frames[0].w, fitH: def.fitH || frames[0].h,
     fps: def.fps || 0, hires: def.hires || 1, small: def.small || null, picture: def.picture || null, w: frames[0].w, h: frames[0].h };
+  if (def.fall) {
+    sprite.fall = {
+      ...buildFrames({ ...def.fall, palette: def.palette, rim: def.rim }),
+      frameAt: def.fall.frameAt, cues: def.fall.cues,
+    };
+    const wisp = def.fall.wisp;
+    if (wisp) {
+      const { frameAt, release, duration, offsetX, offsetY } = wisp;
+      sprite.fall.wisp = { ...buildFrames(wisp), frameAt, release, duration, offsetX, offsetY };
+    }
+  }
+  return sprite;
 }
 
 export function buildSprites() {
