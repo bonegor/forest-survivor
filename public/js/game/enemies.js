@@ -134,9 +134,9 @@ const HOVER = { up: 6, bob: 2 };
 const DRAW_SCALE = [1, 1];
 const FLASH_BOUNDS = [[1, 1], [1.12, 0.9]];
 const HOP_BOUNDS = [...FLASH_BOUNDS, [1.25, 0.8], [1.4, 0.72]].flatMap(([x, y]) => [[x, y], [x * 0.92, y * 1.12]]);
-function renderScale(e) {
+function renderScale(e, stretchOnHit = true) {
   let sx = e.drawScale, sy = e.drawScale;
-  if (e.flash > 0) { sx *= 1.12; sy *= 0.9; }
+  if (stretchOnHit && e.flash > 0) { sx *= 1.12; sy *= 0.9; }
   if (e.squash > 0) { sx *= 1 + e.squash * 0.25; sy *= 1 - e.squash * 0.2; }
   if (e.def.ai === 'hopper' && (e.life * 1.25 + e.wob) % 1 < 0.42) { sy *= 1.12; sx *= 0.92; }
   DRAW_SCALE[0] = sx;
@@ -817,6 +817,12 @@ export class Enemy {
   frameIndex() {
     const s = this.spr;
     if (s.poses?.rest) return bossFrame(this);
+    if (this.state === 'cast' && this.pose === 'sweepWind') return s.poses.volley[0];
+    if (this.state === 'cast' && this.pose === 'sweep') {
+      const volley = s.poses.volley;
+      const step = Math.floor((this.life - this.poseAt) * s.poseFps);
+      return volley[Math.min(volley.length - 1, 3 + step)];
+    }
     if (this.def.ai === 'eanasir' && s.attack?.length) {
       const release = s.attackRelease ?? 2;
       if (this.state === 'wind') {
@@ -855,6 +861,12 @@ export class Enemy {
     return out;
   }
 
+  get drawSprite() {
+    if (this.type !== 'boneking') return this.spr;
+    // Both looks share the original encounter geometry in this.spr.
+    return this.g.settings.boneKingLegs === true ? SPR.boneking_legs : SPR.boneking_floating;
+  }
+
   drawShadow(ctx, cam) {
     const S = cam.S;
     const sw = Math.max(6, (this.spr.body ? this.spr.body[0] : this.spr.w) * 0.7 * this.drawScale);
@@ -874,7 +886,8 @@ export class Enemy {
 
   draw(ctx, cam) {
     const S = cam.S;
-    const fr = this.spr.frames[this.frameIndex()];
+    const sprite = this.drawSprite;
+    const fr = sprite.frames[this.frameIndex()];
     const flip = this.face < 0;
     let img, look = 0;
     if (this.flash > 0) {
@@ -902,10 +915,11 @@ export class Enemy {
     this._look = look < 0 || this.boss || this.lord || this.prop ? -1 : this.elite ? look + 3 : look;
     this._img = img;
 
-    const [sx, sy] = renderScale(this);
+    // The sword keeps the scale of the marked area even when the boss flashes.
+    const [sx, sy] = renderScale(this, this.state !== 'cast' || this.pose !== 'sweep');
     const w = img.width * S * sx, h = img.height * S * sy;
     let X = (this.x - cam.x) * S - w / 2;
-    const Y = (this.y - cam.y) * S - h + S + this.spr.below * S * sy;
+    const Y = (this.y - cam.y) * S - h + S + sprite.below * S * sy;
     if (this.shake) X += (Math.random() - 0.5) * S * 2;
     if (this.def.fly) {
       const bob = Math.sin(this.life * 6 + this.wob) * HOVER.bob * S;
@@ -950,15 +964,21 @@ export class Enemy {
   // colour, so the night can't swallow it.
   drawEmissive(ctx, cam) {
     if (!this._rect || this.spawnT > 0) return;
-    const fr = this.spr.frames[this.frameIndex()];
+    const index = this.frameIndex();
+    const sprite = this.drawSprite;
+    const fr = sprite.frames[index];
     const r = this._rect, X = r[0], Y = r[1], w = r[2], h = r[3], flip = r[4];
     if (fr.em && this.flash <= 0) {
       ctx.globalAlpha = this.alpha;
       ctx.drawImage(flip ? fr.emf : fr.em, Math.round(X), Math.round(Y), Math.round(w), Math.round(h));
       ctx.globalAlpha = 1;
     }
-    if (this.brandT > 0) this.drawBrand(ctx, cam, X, Y, w);
-    if (this.curseT > 0 || this.confuseT > 0) this.drawMarks(ctx, cam, X, Y, w);
+    if (this.brandT > 0 || this.curseT > 0 || this.confuseT > 0) {
+      const topPad = (fr.h - sprite.below) - (this.spr.frames[index].h - this.spr.below);
+      const markY = Y + topPad * h / fr.h;
+      if (this.brandT > 0) this.drawBrand(ctx, cam, X, markY, w);
+      if (this.curseT > 0 || this.confuseT > 0) this.drawMarks(ctx, cam, X, markY, w);
+    }
     if ((this.boss || this.lord) && this.flash <= 0) {
       // A sealed guardian's outline burns icy for as much as its ice is on it (FROST), in its own
       // colour for the rest.

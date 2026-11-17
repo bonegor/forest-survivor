@@ -175,8 +175,8 @@ for (const [W, H] of [[480, 270], [427, 240], [293, 633], [320, 180], [180, 320]
   });
 }
 
-test('Options exposes a keyboard-reachable music browser and its compact controls remain separate', () => {
-  for (const [W, H] of [[480, 270], [427, 240], [293, 633]]) {
+test('Options exposes music and the Bone King style, with separate controls in compact windows', () => {
+  for (const [W, H] of [[480, 270], [427, 240], [406, 228], [293, 633]]) {
     for (const embedded of [false, true]) {
       reset(W, H); const a = app(), options = new OptionsScreen(); options.enter(a);
       const h = harness((c, w, height, dt) => options.draw(c, w, height, dt, embedded), W, H);
@@ -193,6 +193,13 @@ test('Options exposes a keyboard-reachable music browser and its compact control
       h.press('Escape'); assert.equal(options.musicMenu, null);
       assert.deepEqual(a.visits, [], 'Escape closes just the music browser');
       h.frame(); assert.equal(a.ui.focusId, 'o_tracks');
+      assert.equal(loadSettings().boneKingLegs, false);
+      h.click(item(a, 'o_bone_king'));
+      h.frame();
+      assert.equal(a.settings.boneKingLegs, true);
+      assert.equal(loadSettings().boneKingLegs, true);
+      h.press('ArrowLeft');
+      assert.equal(loadSettings().boneKingLegs, false);
     }
   }
 });

@@ -1083,12 +1083,9 @@ export class OptionsScreen {
     }
     ui.begin(dt);
     const w = Math.min(220, W - 30), x = Math.round(W / 2 - w / 2);
-    let y = 36;
-    // Ten rows, and RESET PROGRESS below them, must stay clear of CONTROLS and CREDITS at H - 44 on
-    // a short window (27 October 2026: an 854x480 itch.io embed is 240 high), so a short screen
-    // packs the rows down to 14 apart and then narrows the spacer before RESET PROGRESS, and the
-    // column ends two pixels above the footer buttons.
-    const foot = H - 46, rows = 10;
+    // Pack the rows and the reset button above the footer in a 240px-high embed.
+    const foot = H - 46, rows = 11;
+    let y = clamp(foot - (rows + (embedded ? 0 : 1)) * 13 - (embedded ? 0 : 2), 24, 36);
     const step = clamp(Math.floor((foot - y - 13 - (embedded ? 0 : 8)) / (embedded ? rows - 1 : rows)), 13, 17);
     const gap = clamp(foot - y - 13 - rows * step, 2, 8);
     let d = stepper(ctx, ui, 'o_music', x, y, w, 'MUSIC VOLUME', `${Math.round(s.music * 100)}%`);
@@ -1124,6 +1121,11 @@ export class OptionsScreen {
       }
       y += step;
     }
+    if (stepper(ctx, ui, 'o_bone_king', x, y, w, 'BONE KING', s.boneKingLegs === true ? 'LEGGED' : 'FLOATING')) {
+      s.boneKingLegs = s.boneKingLegs !== true;
+      changed();
+    }
+    y += step;
     const half = Math.floor((w - 4) / 2);
     if (button(ctx, ui, 'o_full', x, y, half, 13, document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN')) app.toggleFullscreen();
     if (button(ctx, ui, 'o_effects', x + half + 4, y, w - half - 4, 13, 'EFFECTS PRESETS')) {

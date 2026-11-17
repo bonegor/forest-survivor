@@ -1,6 +1,8 @@
 // Boss sprites, facing right.
 
 import BONEKING from '../../assets/art/bosses-polished/boneking.js';
+import BONEKING_FLOATING from '../../assets/art/bosses-polished/boneking_floating.js';
+import BONEKING_LEGS from '../../assets/art/bosses-polished/boneking_legs.js';
 import DEMONLORD from '../../assets/art/bosses-polished/demonlord.js';
 import { bakedDef } from './baked.js';
 import { hexPack } from '../engine/pixels.js';
@@ -13,12 +15,15 @@ const baked = (data, own) => bakedDef(data, {
   glow: data.glow.map((c) => hexPack(c)),
   palette: Object.fromEntries(own.map((c) => [c, c])),
 });
+const BONEKING_COLORS = ['#92a9b2', '#576b7b', '#303d50', '#e4c276', '#b88b46', '#d4ccb3'];
 
 export const BOSS_ART = {
   skeletonmage: SKELETON_MAGE_ART,
   // King Ossarian, the Bone King: Foozle's Ancient Skeleton, crowned in his gilded horns
   // (tools/art/bosses.mjs). His poses play as he strikes (game/bosses.js).
-  boneking: baked(BONEKING, ['#92a9b2', '#576b7b', '#303d50', '#e4c276', '#b88b46', '#d4ccb3']),
+  boneking: baked(BONEKING, BONEKING_COLORS),
+  boneking_floating: baked(BONEKING_FLOATING, BONEKING_COLORS),
+  boneking_legs: baked(BONEKING_LEGS, BONEKING_COLORS),
 
   // The Skeleton Archer, lord of every crypt off the forest roads: walking (0, 1) with its
   // longbow held at the grip, drawing it (2) as it takes aim.

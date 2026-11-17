@@ -1213,7 +1213,8 @@ export class Game {
   killEnemy(e, o = {}) {
     if (e.dead || this.player.dead) return; // no kill counts once the hero has fallen
     e.dead = true;
-    const fr = e.spr.frames[e.frameIndex()];
+    const sprite = e.drawSprite;
+    const fr = sprite.frames[e.frameIndex()];
     if (e.prop) {
       this.breakProp(e, fr);
       return;
@@ -1235,7 +1236,7 @@ export class Game {
     }
     // Weapons that watch every foe fall, whoever struck it (Weapon.onFoeDeath).
     for (const w of p.combatWeapons) w.onFoeDeath(e);
-    this.deathFx(e, fr);
+    this.deathFx(e, fr, sprite);
     // Loot.
     if (e.xp > 0) this.dropGem(e.x, e.y, e.xp);
     const luck = p.luck;
@@ -1278,11 +1279,11 @@ export class Game {
     }
   }
 
-  deathFx(e, fr) {
+  deathFx(e, fr, sprite = e.spr) {
     const ps = this.particles;
     const pix = fr.pixels;
-    const S = e.scale / (e.spr.hires || 1);
-    const ox = e.x - (fr.w * S) / 2, oy = e.y - (fr.h - e.spr.below) * S;
+    const S = e.scale / (sprite.hires || 1);
+    const ox = e.x - (fr.w * S) / 2, oy = e.y - (fr.h - sprite.below) * S;
     // The sprite shatters into its own pixels.
     const step = pix.length > 300 ? 3 : 1;
     const flip = e.face < 0;

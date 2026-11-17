@@ -17,7 +17,7 @@ for(const id of ids)test(`${id}: every pose and facing remains hittable througho
   assert.ok(body[0]<=actual[0]+1e-8&&body[1]<=actual[1]+1e-8&&body[2]+1e-8>=actual[2]&&body[3]+1e-8>=actual[3],`${id} frame${i} facing${face} flash${flash} squash${squash}: drawn ${actual}, body ${body}`);
  }
 });
-test('every monster remains inside the broad-phase reach during its actual draw deformations',()=>{
+test('every monster hitbox remains inside its broad-phase reach during draw deformations',()=>{
  const g=game(),ctx=document.createElement('canvas').getContext('2d');
  for(const id of Object.keys(ENEMIES)){
   const e=g.spawnEnemy(id,100,100,{instant:true,always:true});e.shake=0;e.wob=0;
@@ -25,9 +25,12 @@ test('every monster remains inside the broad-phase reach during its actual draw 
   for(const[flash,squash,life]of states)for(let i=0;i<e.spr.frames.length;i++){
    e.frameIndex=()=>i;e.flash=flash;e.squash=squash;e.life=life;e.draw(ctx,g.cam);
    const f=e.spr.frames[i],b=f.box,S=g.cam.S,[X,Y,w,h]=e._rect;
+   const art=e.drawSprite,drawn=art.frames[i],sx=w/S/drawn.w,sy=h/S/drawn.h;
+   const originX=X/S+g.cam.x+(drawn.w-f.w)*sx/2;
+   const originY=Y/S+g.cam.y+((drawn.h-art.below)-(f.h-e.spr.below))*sy;
    for(const x of[b[0],b[2]])for(const y of[b[1],b[3]]){
-    const dx=X/S+g.cam.x+x*w/S/f.w-e.x,dy=Y/S+g.cam.y+y*h/S/f.h-e.y;
-    assert.ok(Math.hypot(dx,dy)<=e.reach+1e-8,`${id} frame${i}: visible body escapes candidate reach`);
+    const dx=originX+x*sx-e.x,dy=originY+y*sy-e.y;
+    assert.ok(Math.hypot(dx,dy)<=e.reach+1e-8,`${id} frame${i}: hitbox escapes candidate reach`);
    }
   }
   if(id==='cultist'||id==='ogre')assert.ok(e.reach<=32,id+' stays in the local grid query');

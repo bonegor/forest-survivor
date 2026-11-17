@@ -16,7 +16,7 @@ export function makeBossScene({Game,defaultProfile,metaBonuses,input},id='butche
   if(kit==='demonlord')e.data.cd4=100;
   if(name==='nova'){e.x=p.x-f*70;if(kit==='demonlord')e.data.cd4=.18;else e.cdT=.18;}
   if(name==='summon'){if(kit==='lich'||kit==='demonlord')e.cd3=.18;else e.cd2=.18;}
-  if(name==='volley'||name==='enraged volley'){if(kit==='lich'||kit==='demonlord')e.cdT=.18;else{e.hp=e.maxHp*.4;e.cd3=.18;}if(name.startsWith('enraged'))e.hp=e.maxHp*.2;}
+  if(name==='volley'||name==='enraged volley'){if(kit==='lich'||kit==='demonlord')e.cdT=.18;else{e.hp=e.maxHp*.4;e.cd3=.18;if(id==='boneking')e.x=p.x-f*32;}if(name.startsWith('enraged'))e.hp=e.maxHp*.2;}
   if(name==='meteor')e.cd2=.18;
   if(name==='blink')e.cd2=.18;
  }

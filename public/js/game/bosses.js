@@ -13,6 +13,8 @@ import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick } from '../engine/util.js';
 import { EnemyShot } from './projectiles.js';
 import { Telegraph, Explosion, Ring } from './effects.js';
+import { boneKingSweep, sweepHitsPlayer } from './boneking-sweep.js';
+import { BoneKingSweepWarning } from './boneking-sweep-fx.js';
 import { PC, P } from './particles.js';
 import { faceAttack } from './facing.js';
 import { foeName, shotName, bossOf } from './names.js';
@@ -30,6 +32,9 @@ const BUTCHER_DASH = { spd: 290, t: 0.7 };
 // A boss's telegraphed blow lands only while that same boss stands. Once it falls, its body
 // goes back to the pool and may come out again as another monster, with a new id.
 const still = (e, id) => !e.dead && e.id === id;
+const bossDamage = (g, damage) => damage * (1 + (g.dmgScale - 1) * 0.6) * g.bossPower;
+const BONE_KING_SWEEP_WINDUP = 0.7;
+const BONE_KING_SWEEP_DAMAGE = 20;
 
 function say(e, text, dur = 2.2) {
   e.speech = { text, t: dur };
@@ -58,7 +63,7 @@ function blast(g, x, y, r, dmg, style, by, boss = null) {
   const p = g.player;
   // As a boss's touch grows with the night (Enemy.update): 0.6 of the night's own growth (Game.dmgScale), so a
   // warned slam late in the night never hurts less than a stray bolt (27 October 2026).
-  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(dmg * (1 + (g.dmgScale - 1) * 0.6) * g.bossPower, null, by, boss);
+  if (Math.hypot(p.x - x, p.y - y) < r + p.r) p.hurt(bossDamage(g, dmg), null, by, boss);
   g.shake(0.45);
   sfx('slam');
 }
@@ -76,7 +81,7 @@ function ring(g, e, n, kind, speed, dmg, off = 0, opts) {
 }
 
 function fan(g, e, n, spread, kind, speed, dmg, opts) {
-  const a0 = angP(e);
+  const a0 = opts?.aim ?? angP(e);
   for (let i = 0; i < n; i++) shoot(g, e, a0 + (i - (n - 1) / 2) * spread, kind, speed, dmg, opts);
   sfx('enemyshot');
 }
@@ -112,14 +117,40 @@ function casting(e, dt) {
   return true;
 }
 
+function warnBoneKingSweep(e) {
+  const g = e.g, p = g.player;
+  const aim = angP(e);
+  const face = faceAttack(e.face, false, p.x - e.x, p.y - e.y);
+  const area = boneKingSweep(e.x, e.y, face, e.drawScale);
+  const recovery = (e.spr.poses.volley.length - 3) / e.spr.poseFps;
+  e.face = face;
+  cast(e, BONE_KING_SWEEP_WINDUP + recovery, 'sweepWind');
+  g.effects.push(new BoneKingSweepWarning(g, {
+    area,
+    dur: BONE_KING_SWEEP_WINDUP,
+    follow: e,
+    active: () => e.state === 'cast' && e.pose === 'sweepWind' && e.face === face &&
+      !e.sleeping && !e.dormant && e.lullT <= 0 && e.fearT <= 0 && e.confuseT <= 0,
+    onDone(points) {
+      cast(e, recovery, 'sweep');
+      fan(g, e, 5, 0.22, 'bone', 115, 12, { aim });
+      if (sweepHitsPlayer(points, p)) {
+        p.hurt(bossDamage(g, BONE_KING_SWEEP_DAMAGE), null, `${foeName(e)}'s sword sweep`, bossOf(e));
+      }
+    },
+  }));
+}
+
 export const BOSS_AI = {
   boneking(e, dt) {
     const g = e.g;
     e.phase = e.hp / e.maxHp < 0.5 ? 1 : 0;
-    if (casting(e, dt)) return [0, 0, 0];
+    const inCast = casting(e, dt);
+    if (inCast && e.pose !== 'sweepWind' && e.pose !== 'sweep') return [0, 0, 0];
     e.cdT -= dt;
     e.cd2 -= dt;
     e.cd3 -= dt;
+    if (inCast) return [0, 0, 0];
     if (e.cdT <= 0 && distP(e) < 160) {
       e.cdT = e.phase ? 4.6 : 6.4;
       cast(e, 1.15, 'nova');
@@ -147,6 +178,10 @@ export const BOSS_AI = {
     if (e.phase && e.cd3 <= 0) {
       // Five bones, the middle one at the hero; every 3.75 s, so as few as four a volley would be.
       e.cd3 = 3.75;
+      if (e.type === 'boneking') {
+        warnBoneKingSweep(e);
+        return [0, 0, 0];
+      }
       fan(g, e, 5, 0.22, e.def.bolt ?? 'bone', 115, 12);
       strikePose(e, 'volley');
     }
