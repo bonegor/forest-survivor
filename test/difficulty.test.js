@@ -359,6 +359,43 @@ test('Normal keeps small timed hordes and slower movement, with a sustained stea
   assert.deepEqual([NORMAL.name, VETERAN.name, ELITE.name], ['Normal', 'Veteran', 'Elite']);
 });
 
+test('Nightmare doubles steady spawns and timed groups at 1:00 in Survival and Dungeon Run', () => {
+  const swarm = { type: 'swarm', enemy: 'bat', count: 16 };
+  for (const mode of ['s15', 'dungeon']) {
+    const night = game({ mode, diff: 'hard', nightmare: true });
+    const elite = game({ mode, diff: 'hard' });
+    const normal = game({ mode, diff: 'easy', nightmare: true });
+    const plain = game({ mode, diff: 'easy' });
+    for (const [time, doubling] of [[59.99, 1], [60, 2]]) {
+      for (const g of [night, elite, normal, plain]) g.time = time;
+      const label = `${mode} at ${time}s`;
+      const rate = elite.spawner.waveRate(elite.phase) * 3 * doubling;
+      const s = night.spawner;
+      assert.ok(Math.abs(s.waveRate(night.phase) - rate) < 1e-10, label);
+      assert.equal(normal.spawner.waveRate(normal.phase), plain.spawner.waveRate(plain.phase), label);
+
+      // Use the live budget loop with fixed placement and single-monster spawns.
+      let steady = 0;
+      night.calm = s.acc = s.owed = 0;
+      s.eliteT = s.thiefT = s.propT = s.shrineT = s.joltT = Infinity;
+      s._events = [];
+      s.pickType = () => 'rat';
+      night.world.spawnPoint = () => ({ x: night.player.x + 300, y: night.player.y });
+      night.spawnEnemy = () => { steady++; return {}; };
+      for (let i = 0; i < 60; i++) s.update(1 / 60);
+      assert.equal(steady, Math.floor(rate), label);
+
+      const beforeDoubling = Math.round(swarm.count * ELITE.horde * (minuteMore(night.phase) * 3));
+      assert.equal(asks(night, () => s.fire(swarm, night.phase)).length, beforeDoubling * doubling, label);
+      assert.equal(
+        asks(normal, () => normal.spawner.fire(swarm, normal.phase)).length,
+        asks(plain, () => plain.spawner.fire(swarm, plain.phase)).length,
+        label,
+      );
+    }
+  }
+});
+
 test('Normal triples its former steady rate for the whole run, including waves and every map', () => {
   for (const map of Object.values(MAPS)) for (const mode of ['s15', 'dungeon']) {
     const g = { diff: NORMAL, mode, map, time: 0, skulls: 0, nightmare: false };

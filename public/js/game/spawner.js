@@ -28,14 +28,12 @@ export { lateMore } from '../shared/population.js';
 // minute of the night (1.75 times it at 15:00), the steady horde and the timed swarms alike.
 export { PER_MINUTE, minuteMore } from '../shared/population.js';
 
-// All the more the run sends: a minute's growth (minuteMore), Normal's late horde (lateMore) and,
-// on a Nightmare, three times as many again (difficulty.js NIGHTMARE), on Veteran only. Never on
-// Ranked (Game.nightmare).
+// Timed groups also grow with the current phase. Nightmare's doubling uses the run clock because
+// a Dungeon floor's phase does not track its elapsed time.
 export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * runMore(g);
-// The run's own part of it: a Nightmare's triple, a quarter more for each Cursed Skull, and its
-// Survival map's horde (data/maps.js foe: the Sunscorch's 0.7, the Abyss's 1.2; 28 October 2026),
-// whole like a Nightmare's, after the difficulty's bend (rate), in every swarm, ring and pack too.
-export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0)) * (g.map?.foe.horde ?? 1);
+const nightmareLateFactor = (g) => g.nightmare && g.time >= NIGHTMARE.doubleAt ? 2 : 1;
+// Nightmare, Cursed Skulls and the map multiply the steady rate after its soft cap.
+export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0)) * (g.map?.foe.horde ?? 1) * nightmareLateFactor(g);
 
 // "make it more wave like, the generation of monsters ... it is too constant", then "not full on
 // waves, just occasionally ... base line, + wave every once in a while" (21 October 2026): the
@@ -63,6 +61,15 @@ export const RING = { more: 3, layers: 3, gap: 26 };
 // A pack event is never fewer than PACK_LEAST, whatever the difficulty and its few take off (the
 // 27 October 2026 review, D5: Normal's "Wolves on the hunt!" brought two).
 export const PACK_LEAST = 6;
+
+export function timedHordeCount(g, ev, phase) {
+  const minimum = ev.type === 'pack' ? PACK_LEAST : 1;
+  // Jolts already account for rare types when choosing which monster to send.
+  const few = isFew(ev.enemy) && !ev.picked ? g.diff.few : 1;
+  const doubling = nightmareLateFactor(g);
+  const beforeDoubling = ev.count * g.diff.horde * few * (hordeMore(g, phase) / doubling);
+  return Math.max(minimum, Math.round(beforeDoubling)) * doubling;
+}
 
 // Jolts (the owner's, 26 October 2026): "random jolts of monsters ... every 30 - 90 seconds ... the
 // computer quickly checks where the hero is currently headed" and sends a stream at him from ahead,
@@ -206,7 +213,7 @@ export class Spawner {
   // many stand: the rules' rate times the difficulty's spawn, a tenth fewer on a dungeon floor, the
   // minute's growth and Veteran's late horde, bent under HORDE_RATE.knee (x / (1 + x / knee): half
   // the knee asked comes as a third of it, the knee as half, ever closer to it past that; the knee
-  // grows with the minute, so Ranked's never stops growing), then a Nightmare's triple and the
+  // grows with the minute, so Ranked's never stops growing), then Nightmare's multiplier and the
   // Cursed Skulls on top, whole (runMore). Unbent, Veteran asked 115 a second at 10:00 and Elite
   // 330 at 15:00, far past any hero's killing: the cap would have held the field full all night,
   // the standing horde again.
@@ -398,8 +405,7 @@ export class Spawner {
   fire(ev, phase) {
     const g = this.g, p = g.player;
     g.warnings = g.warnings.filter((w) => w.ev !== ev);
-    // A kind picked by pickType (a jolt: ev.picked) came that much more seldom already; cut again it was a ninth, not a third (27 October 2026).
-    ev = { ...ev, count: Math.max(ev.type === 'pack' ? PACK_LEAST : 1, Math.round(ev.count * g.diff.horde * (isFew(ev.enemy) && !ev.picked ? g.diff.few : 1) * hordeMore(g, phase))) };
+    ev = { ...ev, count: timedHordeCount(g, ev, phase) };
     const st = { ...this.stats(phase), xpMul: (g.diff.xp ?? 1) * g.map.foe.xp };
     const cam = g.cam;
     // At the cap a refused spawn means no one is left off the screen to make room (Game.recycleFar),

@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 await import('./headless.mjs');
 const { Game } = await import('../public/js/game/game.js');
-const { isFew, hordeMore, waveAt, RING, PACK_LEAST, JOLT } = await import('../public/js/game/spawner.js');
+const { isFew, timedHordeCount, waveAt, RING, JOLT } = await import('../public/js/game/spawner.js');
 const { ENEMIES, CHAMPION_MODS } = await import('../public/js/data/enemies.js');
 const { SWARM_BATCH, HORDE_RATE, RANKED_BOSSES, RANKED_BOSS_EVERY, kindWeightsBy, minuteOf, pocketAt } = await import('../public/js/data/waves.js');
 const { MAPS } = await import('../public/js/data/maps.js');
@@ -105,7 +105,7 @@ export function pressureTable({ mode = 's15', diff = 'hard', map = 'forest', nig
   // The timed events, as Spawner.fire counts them; a swarm comes as a batch of 2-5 (3.5 expected).
   const evCount = (ev, ph) => {
     at(timeOf(ph));
-    return Math.max(ev.type === 'pack' ? PACK_LEAST : 1, Math.round(ev.count * D.horde * (isFew(ev.enemy) && !ev.picked ? D.few : 1) * hordeMore(g, ph)));
+    return timedHordeCount(g, ev, ph);
   };
   const events = mode === 's15' && g.map.lastStand ? [...g.map.events, g.map.lastStand] : [...g.map.events];
   const sizes = [];

@@ -128,16 +128,13 @@ export const DIFFS = { easy: NORMAL, medium: VETERAN, hard: ELITE };
 // tests, older saves) plays it too: the game as it was tuned.
 export const diffFor = (mode, id) => (mode === 'ranked' ? ELITE : DIFFS[id] || ELITE);
 
-// Nightmare, the user's (16 October 2026): a box to tick on the trial screen that multiplies the
-// number of monsters, Elite's only (nightmareFor): three times as many of the night's monsters
-// (the owner's, 21 October 2026; twice before) come, in
-// the steady horde and the timed swarms, rings and packs alike (spawner.js hordeMore), each as
-// strong as ever. Not on Ranked, which keeps one best time per hero. The gold it brings home is
-// the profile's to weigh (shared/profile.js NIGHTMARE_GOLD).
+// Nightmare starts with triple Elite's horde and doubles that budget at 1:00. The steady horde
+// and timed groups both use this modifier (spawner.js). The profile sets its gold multiplier.
 export const NIGHTMARE = {
   name: 'Nightmare',
   more: NIGHTMARE_MORE,
-  desc: `Nightmare: three times as many monsters. Gold x${NIGHTMARE_GOLD} on top of Elite's.`,
+  doubleAt: 60,
+  desc: `3x monsters, 6x from 1:00. Gold x${NIGHTMARE_GOLD} over Elite.`,
 };
 
 // Whether a run is a Nightmare: only as chosen, only on Elite (the owner's, 21 October 2026: a
