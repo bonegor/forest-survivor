@@ -1,5 +1,7 @@
 # Boss material and identity pass
 
+The current field-art rebuild is documented in [Forest Survivor boss field art](../boss-chunky/README.md). Reproduce this historical material pass from its own revision, `c2d2c99`.
+
 This pass gives each of the eight main bosses a dedicated artist and independent
 reviewer. Ea-nāṣir and the crypt lords are outside this pass. Stronger material separation,
 recognizable faces and controlled focal details retain the game's medieval pixel

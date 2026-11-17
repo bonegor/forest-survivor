@@ -1,30 +1,26 @@
 import { deepStrictEqual } from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { sources } from '../boss-art/extract.mjs';
+import { packRig, rigFrames } from '../boss-art/build.mjs';
 import { bakedBuffers } from '../../public/js/art/baked.js';
 import { OUTLINE } from '../../public/js/art/palette.js';
-import base from './base/boneking.mjs';
-import paintBoneKing from './boneking.mjs';
-import paintLegged from './boneking-legs.mjs';
-import paintFloating, { padding } from './boneking-shield.mjs';
+import { padding } from './boneking-shield.mjs';
+import { paintWorldGrid } from './world-grid.mjs';
 
-const encounter = 'boneking';
 const legged = 'boneking_legs';
 const floating = 'boneking_floating';
-const outputs = [encounter, legged, floating];
+const baked = ['boneking', 'demonlord', legged, floating];
+const rigged = ['butcher', 'lich', 'pharaoh', 'frostgiant', 'thornqueen', 'pitlord'];
+const all = [...baked, ...rigged];
 const args = process.argv.slice(2);
-const apply = args.includes('--apply');
 const selected = args.filter(id => id !== '--apply');
-if (selected.some(id => !outputs.includes(id))) {
-  throw Error(`Choose a Bone King asset from ${outputs.join(', ')}`);
-}
+const ids = selected.length ? [...new Set(selected.flatMap(id => id === 'boneking' ? [id, floating] : [id]))] : all;
+if (ids.some(id => !all.includes(id))) throw Error(`Choose a boss from ${all.join(', ')}`);
 
-// The default build and --apply boneking both include the active floating art.
-const ids = selected.length
-  ? [...new Set(selected.flatMap(id => id === encounter ? [id, floating] : [id]))]
-  : outputs;
-const out = apply ? 'public/assets/art/bosses-polished'
-  : process.env.BOSS_CHUNKY_OUT || 'output/boss-chunky/candidates';
+const apply = args.includes('--apply');
+const reviewDir = process.env.BOSS_CHUNKY_OUT || 'output/boss-chunky/candidates';
+const original = ids.some(id => rigged.includes(id)) ? sources({ original: true }) : {};
 
 function opaqueBounds({ w, h, d }) {
   let left = w, top = h, right = -1, bottom = -1;
@@ -32,25 +28,35 @@ function opaqueBounds({ w, h, d }) {
     if (!(d[i] >>> 24)) continue;
     const x = i % w, y = Math.floor(i / w);
     left = Math.min(left, x);
-    right = Math.max(right, x);
     top = Math.min(top, y);
+    right = Math.max(right, x);
     bottom = Math.max(bottom, y);
   }
   return [left, top, right, bottom];
 }
 
-const metadata = ({ palette, frames, glow, ...rest }) => rest;
+const bakedMetadata = ({ palette, frames, glow, ...metadata }) => metadata;
 
-function checkAsset(id, before, after) {
-  const expected = metadata(before);
-  if (id !== encounter) {
-    // The art centers on the same pivot, with the hem at the old world Y.
+async function buildBaked(id) {
+  const ground = id === legged;
+  const shield = id === floating;
+  const name = ground || shield ? 'boneking' : id;
+  const { default: paint } = await import(`./${name}.mjs`);
+  const { default: source } = await import(`./base/${name}.mjs`);
+  const edged = paint(source);
+  const before = ground || shield ? edged : source;
+  let after = edged;
+  if (ground) after = (await import('./boneking-legs.mjs')).default(edged);
+  if (shield) after = (await import('./boneking-shield.mjs')).default(edged);
+  const expected = bakedMetadata(before);
+  if (ground || shield) {
+    // Center the wider art on the same pivot and keep its feet at the old Y.
     expected.w += 2 * padding;
     expected.h += 2 * padding;
     expected.below += padding;
   }
-  deepStrictEqual(metadata(after), expected, `${id}: changed baked timing or dimensions`);
-  if (id !== encounter) deepStrictEqual(after.glow, before.glow, `${id}: changed crown glow`);
+  deepStrictEqual(bakedMetadata(after), expected, `${id}: changed baked timing or dimensions`);
+  if (ground || shield) deepStrictEqual(after.glow, before.glow, `${id}: changed crown glow`);
   if (after.palette.includes(OUTLINE)) throw Error(`${id}: painted interior would glow as engine outline`);
   const beforeFrames = bakedBuffers(before);
   const afterFrames = bakedBuffers(after);
@@ -58,12 +64,12 @@ function checkAsset(id, before, after) {
 
   for (const [i, frame] of afterFrames.entries()) {
     const previous = beforeFrames[i];
-    if (id !== encounter) {
+    if (ground || shield) {
       const [left, top, right, bottom] = opaqueBounds(frame);
       if (left > right || top > bottom || left < 1 || top < 1 || right >= frame.w - 1 || bottom >= frame.h - 1) {
         throw Error(`${id}: frame ${i} has cropped artwork or no artwork`);
       }
-      if (id === legged && i !== 20 && i !== 21) {
+      if (ground && i !== 20 && i !== 21) {
         const [oldLeft, oldTop, oldRight, oldBottom] = opaqueBounds(previous);
         if (left < oldLeft + padding || top < oldTop + padding ||
             right > oldRight + padding || bottom > oldBottom + padding) {
@@ -74,17 +80,25 @@ function checkAsset(id, before, after) {
       throw Error(`${id}: paint changed frame ${i} alpha`);
     }
   }
+  return { id, data: after, directory: 'bosses-polished' };
 }
 
-const edged = paintBoneKing(base);
-const assets = ids.map(id => {
-  const after = id === legged ? paintLegged(edged) : id === floating ? paintFloating(edged) : edged;
-  checkAsset(id, id === encounter ? base : edged, after);
-  return { id, data: after };
-});
+const assets = await Promise.all(ids.map(async id => {
+  if (baked.includes(id)) return buildBaked(id);
+  const { default: paint } = await import(`./${id}.mjs`);
+  const base = original[id];
+  const texture = paint({ ...base, box: [...base.box], d: base.d.slice() });
+  if (!(texture instanceof Uint32Array) || texture.length !== base.d.length ||
+      texture.some((v, i) => (v >>> 24) !== (base.d[i] >>> 24))) {
+    throw Error(`${id}: paint changed canonical source alpha or dimensions`);
+  }
+  const { frames, meta } = rigFrames(id, { ...base, d: texture });
+  return { id, data: packRig(frames.map(paintWorldGrid), meta), directory: 'bosses-reforged' };
+}));
 
-mkdirSync(out, { recursive: true });
-for (const { id, data } of assets) {
+for (const { id, data, directory } of assets) {
+  const out = apply ? join('public/assets/art', directory) : reviewDir;
+  mkdirSync(out, { recursive: true });
   const target = join(out, `${id}.js`);
   writeFileSync(target, `// Boss field art. Rebuild: node tools/boss-chunky/build.mjs --apply ${id}\nexport default ${JSON.stringify(data)};\n`);
   console.log(`${target}: ${data.frames.length} poses, ${data.palette.length - 1} paint colors`);

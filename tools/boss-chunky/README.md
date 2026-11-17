@@ -1,0 +1,11 @@
+# Forest Survivor boss field art
+
+The eight main bosses use dark contours, hard color blocks and bright stepped highlights drawn from the Knight and monsters. Each detailed rig uses one world pixel per paint cell. The original alpha within each cell carries the existing hit silhouette. The Bone King and Demon Lord already render at that resolution and retain their outer rim effects.
+
+From the repository root, run `node tools/boss-chunky/build.mjs` to stage all eight candidates. Supply one or more boss IDs to build only those sprites. `BOSS_CHUNKY_OUT` sets the candidate directory. Use `node tools/boss-chunky/build.mjs --apply` to rebuild the game assets from the reviewed source. The previous Bone King and Demon Lord data in `base/` are the source of their animation frames. The other six paint over the original articulated models from `tools/boss-art`.
+
+The floating Bone King carries a shield on his free arm. His larger drawing canvas gives the shield and sword sweep room while the encounter uses its original hit geometry. `node tools/boss-chunky/build.mjs boneking` builds both the encounter sprite and its floating drawing. In Options, choose **Bone King → Floating** or **Bone King → Legged**. The game saves the choice and offers it from the pause menu. Both styles use the same pose indices. The legged drawing can be rebuilt separately as `boneking_legs`. Use `node tools/boss-chunky/review.mjs --legs --motion` to compare the styles through the game setting.
+
+With `@napi-rs/canvas` available, run `node tools/boss-chunky/review.mjs` for before-and-after images from the actual game. `CANVAS_MODULE` can point at a separate installation. The review uses the current game as its baseline unless `BOSS_CHUNKY_BASELINE` names a folder containing the previous eight assets. Set `BOSS_CHUNKY_REVIEW` to choose a destination. Add `--motion` with FFmpeg installed to capture each attack and movement sequence in both facings. Tests check hit bounds, frame sizes, anchors, clocks and the world-pixel paint grid.
+
+For a playable comparison against the pre-rework art, set `BOSS_BASELINE_REF=c2d2c99` and run `node tools/boss-polish/serve.mjs`. Open `http://127.0.0.1:3022` and choose a boss and action. The comparison runs with disposable profiles.

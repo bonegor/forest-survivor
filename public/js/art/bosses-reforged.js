@@ -19,6 +19,10 @@ function unpack(data) {
 }
 export const REFORGED_BOSS_ART={};
 for(const[id,data]of Object.entries({butcher,lich,pharaoh,frostgiant,thornqueen,pitlord})){
+  REFORGED_BOSS_ART[id]=reforgedBossDef(data);
+}
+
+export function reforgedBossDef(data){
   const {frames,palette,delta16,...meta}=data;let buffers;
-  REFORGED_BOSS_ART[id]={...meta,gen:()=>buffers??=unpack(data),outline:false};
+  return {...meta,gen:()=>buffers??=unpack(data),outline:false};
 }

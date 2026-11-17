@@ -2,12 +2,11 @@
 // as connected texture rigs. Rebuild: node tools/boss-art/build.mjs
 // Offline only: production loads the baked palettes and delta-coded poses.
 import {writeFileSync,mkdirSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
 import {sources} from './extract.mjs';
 import {writePng} from '../png.mjs';
 const W=224,H=192,FOOT=166,CX=W/2,TAU=Math.PI*2;
-const reviewOut=process.env.BOSS_ART_REVIEW_OUT||'output/hero-round2-2026-11-14/bosses';
-mkdirSync(reviewOut,{recursive:true});
-const SRC=sources(),clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),mix=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),mix=(a,b,t)=>a+(b-a)*t;
 const smooth=t=>{t=clamp(t);return t*t*(3-2*t);};
 const rot=(p,o,a)=>{const c=Math.cos(a),s=Math.sin(a),x=p[0]-o[0],y=p[1]-o[1];return[o[0]+x*c-y*s,o[1]+x*s+y*c];};
 const add=(p,q)=>[p[0]+q[0],p[1]+q[1]];
@@ -84,8 +83,8 @@ function pose(name,phase,u,kit){
  return q;
 }
 
-function render(id,name,phase,u){
- const src=SRC[id],r=RIG[id],q=pose(name,phase,u,r.kit),scale=114/(src.box[3]-src.box[1]),base=src.box[3]-1,d=new Uint32Array(W*H),verts=[];
+function render(id,src,name,phase,u){
+ const r=RIG[id],q=pose(name,phase,u,r.kit),scale=114/(src.box[3]-src.box[1]),base=src.box[3]-1,d=new Uint32Array(W*H),verts=[];
  const frontContains=p=>{
   if(!inside(p,r.frontMask))return false;
   const[x,y]=p;
@@ -138,23 +137,36 @@ function render(id,name,phase,u){
  weld(d);return{w:W,h:H,d};
 }
 
-const IDS=process.argv.filter(x=>Object.hasOwn(RIG,x));
-const result={};
-for(const id of IDS.length?IDS:Object.keys(RIG)){
- const r=RIG[id],poses={},frames=[],add=(name,n,action=name)=>{const seq=[];for(let i=0;i<n;i++){seq.push(frames.length);frames.push(render(id,action,i/n*TAU,i/(n-1)));}poses[name]=seq;return seq;};
+export function rigFrames(id,source){
+ const r=RIG[id],poses={},frames=[],add=(name,n,action=name)=>{const seq=[];for(let i=0;i<n;i++){seq.push(frames.length);frames.push(render(id,source,action,i/n*TAU,i/(n-1)));}poses[name]=seq;return seq;};
  const idle=add('rest',12,'rest'),walk=add('travel',16,'walk');
  if(r.kit==='butcher'){add('charge',12);add('dash',12);add('recover',12);add('slam',24);}
  else{if(r.kit==='boneking')add('nova',24);add('summon',18);add('volley',12);add('summonWind',6);add('volleyWind',6);if(r.kit==='lich')add('blink',14);}
+ const oldScale=57/r.oldHeight;
+ return {frames,meta:{w:W,h:H,delta16:true,idle,walk,poses,poseFps:24,motionRate:16/((id==='butcher'||id==='frostgiant'?3.5:id==='lich'||id==='thornqueen'?2:3)*r.cycle),idleRate:5,hires:oldScale*2,anchorY:FOOT,below:H-1-FOOT,body:[(r.oldHr-1)*4,114],outline:false,selfBob:true}};
+}
+
+export function packRig(frames,meta){
  const palette=[0],index=new Map([[0,0]]),encoded=[],prev=new Uint16Array(W*H);
  for(const fr of frames){const next=new Uint16Array(W*H);for(let i=0;i<next.length;i++){const v=fr.d[i]>>>0;let k=index.get(v);if(k===undefined){k=palette.length;index.set(v,k);palette.push(v);}next[i]=k;}
   const bytes=[];let pos=0;for(let i=0;i<next.length;){if(next[i]===prev[i]){i++;continue;}const start=i;while(i<next.length&&next[i]!==prev[i])i++;const skip=start-pos,len=i-start;bytes.push(skip&255,skip>>>8,len&255,len>>>8);for(let j=start;j<i;j++)bytes.push(next[j]&255,next[j]>>>8);pos=i;}encoded.push(Buffer.from(bytes).toString('base64'));prev.set(next);
  }
- const oldScale=57/r.oldHeight;
- result[id]={w:W,h:H,palette,frames:encoded,delta16:true,idle,walk,poses,poseFps:24,motionRate:16/((id==='butcher'||id==='frostgiant'?3.5:id==='lich'||id==='thornqueen'?2:3)*r.cycle),idleRate:5,hires:oldScale*2,anchorY:FOOT,below:H-1-FOOT,body:[(r.oldHr-1)*4,114],outline:false,selfBob:true};
- writePng(`${reviewOut}/${id}-rig-rest.png`,frames[0]);
- // Contact sheets stay outside production. Their output is evidence, not input.
- const sheet={w:W*8,h:H*Math.ceil(frames.length/8),d:new Uint32Array(W*8*H*Math.ceil(frames.length/8))};frames.forEach((f,n)=>{for(let y=0;y<H;y++)sheet.d.set(f.d.subarray(y*W,(y+1)*W),((Math.floor(n/8)*H+y)*sheet.w)+(n%8)*W);});writePng(`${reviewOut}/${id}-rig-contact.png`,sheet);
- console.log(id,frames.length,'poses',palette.length,'colours',encoded.reduce((n,s)=>n+s.length,0),'base64 bytes');
+ return {w:meta.w,h:meta.h,palette,frames:encoded,...meta};
 }
-mkdirSync('public/assets/art/bosses-reforged',{recursive:true});
-for(const[id,data]of Object.entries(result))writeFileSync(`public/assets/art/bosses-reforged/${id}.js`,`// Original model and authored animation. Rebuild: node tools/boss-art/build.mjs\n// hires = original boss scale × 2, keeping each source pixel at .5 world pixels.\nexport default ${JSON.stringify(data)};\n`);
+
+if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
+ const reviewOut=process.env.BOSS_ART_REVIEW_OUT||'output/hero-round2-2026-11-14/bosses';
+ const assetOut=process.env.BOSS_ART_ASSET_OUT||'public/assets/art/bosses-reforged';
+ mkdirSync(reviewOut,{recursive:true});
+ mkdirSync(assetOut,{recursive:true});
+ const original=sources(),ids=process.argv.filter(x=>Object.hasOwn(RIG,x));
+ for(const id of ids.length?ids:Object.keys(RIG)){
+  const {frames,meta}=rigFrames(id,original[id]),data=packRig(frames,meta);
+  writePng(`${reviewOut}/${id}-rig-rest.png`,frames[0]);
+  const sheet={w:W*8,h:H*Math.ceil(frames.length/8),d:new Uint32Array(W*8*H*Math.ceil(frames.length/8))};
+  frames.forEach((f,n)=>{for(let y=0;y<H;y++)sheet.d.set(f.d.subarray(y*W,(y+1)*W),((Math.floor(n/8)*H+y)*sheet.w)+(n%8)*W);});
+  writePng(`${reviewOut}/${id}-rig-contact.png`,sheet);
+  writeFileSync(`${assetOut}/${id}.js`,`// Original model and authored animation. Rebuild: node tools/boss-art/build.mjs\n// hires = original boss scale × 2, keeping each source pixel at .5 world pixels.\nexport default ${JSON.stringify(data)};\n`);
+  console.log(id,frames.length,'poses',data.palette.length,'colours',data.frames.reduce((n,s)=>n+s.length,0),'base64 bytes');
+ }
+}

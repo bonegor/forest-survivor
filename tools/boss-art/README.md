@@ -1,5 +1,7 @@
 # Detailed boss source and animation
 
+The current field-art rebuild is documented in [Forest Survivor boss field art](../boss-chunky/README.md). This page describes the previous source art and its shared rig. When reproducing the previous build, set `BOSS_ART_ASSET_OUT` to an evidence folder before running the build command below.
+
 These six original boss models replace the previous two-frame Butcher, Lich,
 Pharaoh, Frost Giant, Thorn Queen and Pit Lord. The subsequent material pass in
 `../boss-polish` also updates Bone King and Demon Lord. The original atlas is

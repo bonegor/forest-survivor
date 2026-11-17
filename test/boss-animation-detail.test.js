@@ -12,6 +12,23 @@ test('detailed boss source density preserves original AI scales, ground footprin
 test('all authored boss poses retain native detail and complete silhouettes within their canvases',()=>{
  for(const id of Object.keys(specs)){const s=SPR[id];assert.ok(s.idle.length>=8&&s.walk.length>=12,id+' complete cycles');for(const f of s.frames){const b=f.box;assert.ok(b[2]>b[0]&&b[3]>b[1],id+' nonempty frame');assert.ok(b[0]>0&&b[1]>0&&b[2]<f.w&&b[3]<f.h,id+' no clipped equipment');}assert.ok(s.frames.length>=80,id+' authored attack poses');}
 });
+test('detailed boss color blocks match the world pixel grid throughout every pose', () => {
+  for (const id of Object.keys(specs)) {
+    for (const [index, { w, h, d }] of SPR[id].frames.map(frame => frame.buf).entries()) {
+      for (let y = 0; y < h; y += 2) {
+        for (let x = 0; x < w; x += 2) {
+          const i = y * w + x;
+          const colors = [d[i], d[i + 1], d[i + w], d[i + w + 1]].filter(pixel => pixel >>> 24);
+          if (colors.length < 2) continue;
+          const rgb = colors[0] & 0xffffff;
+          if (colors.some(pixel => (pixel & 0xffffff) !== rgb)) {
+            assert.fail(`${id} pose ${index}: subpixel paint detail in cell ${x / 2},${y / 2}`);
+          }
+        }
+      }
+    }
+  }
+});
 test('both facing hitboxes contain the actual detailed boss draw, including moving equipment',()=>{
  const g=game(),ctx=document.createElement('canvas').getContext('2d');for(const id of Object.keys(specs)){const e=g.spawnEnemy(id,100,100,{instant:true,always:true});e.spawnT=0;e.sleeping=true;for(const face of[-1,1]){e.face=face;e.draw(ctx,g.cam);const f=e.spr.frames[e.frameIndex()],b=f.box,S=g.cam.S,[X,Y,w,h]=e._rect,body=e.body();const left=X/S+g.cam.x+(face<0?f.w-b[2]:b[0])*e.drawScale,right=X/S+g.cam.x+(face<0?f.w-b[0]:b[2])*e.drawScale,top=Y/S+g.cam.y+b[1]*e.drawScale,bottom=Y/S+g.cam.y+b[3]*e.drawScale;assert.ok(body[0]<=left&&body[2]>=right&&body[1]<=top&&body[3]>=bottom,id+' facing '+face);}}
 });
