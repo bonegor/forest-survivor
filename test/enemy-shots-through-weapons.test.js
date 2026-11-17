@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
+import { Driver } from '../public/js/bots/driver.js';
 import { Game } from '../public/js/game/game.js';
 import { Orbit, Whirl } from '../public/js/game/effects.js';
 import { EnemyShot } from '../public/js/game/projectiles.js';
@@ -37,3 +38,22 @@ for (const id of ['blades', 'aegis', 'whirlwind-ultimate']) {
     assert.ok(shot.dead, 'it expires on the real player hit');
   });
 }
+
+test('the playtest driver preserves bolt damage and attribution during Whirlwind', () => {
+  const live = arena();
+  const automated = arena();
+  const driver = new Driver(automated, { bot: 'idle' });
+
+  for (const g of [live, automated]) {
+    g.startUlt('whirlwind');
+    const { x, y } = g.player;
+    const shot = new EnemyShot(g, x, y, 0, 0, 20, 'darkbolt', { by: 'Cultist' });
+    shot.update(0);
+  }
+
+  const expected = live.stats.damageTaken;
+  assert.ok(expected > 0);
+  assert.equal(automated.stats.damageTaken, expected);
+  assert.equal(automated.stats.wounds.Cultist, expected);
+  assert.equal(driver.hits, 1);
+});

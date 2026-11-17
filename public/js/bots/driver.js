@@ -29,8 +29,8 @@ export class Driver {
     // Count every blow and remember the one that kills; the hero's own
     // hurt() still does all the work.
     const p = g.player, hurt = p.hurt;
-    p.hurt = (amount, src) => {
-      const dmg = hurt.call(p, amount, src);
+    p.hurt = (amount, src, ...details) => {
+      const dmg = hurt.call(p, amount, src, ...details);
       if (dmg > 0) {
         this.hits++;
         if (p.dead) this.cause = this.blame(src);
