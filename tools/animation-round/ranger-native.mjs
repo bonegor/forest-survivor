@@ -1,6 +1,7 @@
 // Ranger's retained model, reduced to the same opaque native pixels as the roster.
 // Work on one fixed 80×64 canvas so every pose preserves its original pivot.
 import { packedPalette } from '../../public/js/art/palette.js';
+import { fitTrailHead } from './ranger-trail-head.mjs';
 
 const palette = packedPalette();
 export const RANGER_PALETTE_KEYS = ['k','h','m','b','B','O','d','t','T','s','S','1','2','3','4','I','J','C','D'];
@@ -29,17 +30,6 @@ export function nativeRanger(frame,{attackStep=-1}={}) {
     if(a<(x>=44&&y<52?250:420))continue;
     d[y*w+x]=nearest(r/a,g/a,b/a);
   }
-  // Keep the two eyes as intentional dark pixels instead of reducing their
-  // green source irises into olive noise. The forehead locates the face after
-  // breathing, stride bob and the lowered draw/release pose.
-  const skin=new Set(['t','T','s','S'].map(k=>palette[k]));
-  for(let y=28;y<36;y++)if(skin.has(d[y*w+40])&&skin.has(d[y*w+41])) {
-    d[(y+2)*w+38]=palette.S;
-    d[(y+2)*w+39]=palette.m;
-    d[(y+2)*w+40]=palette.s;
-    d[(y+2)*w+41]=palette.k;
-    break;
-  }
   // Reassert the continuous string on the native grid. A subpixel diagonal
   // cannot be allowed to turn into floating pale dashes after reduction.
   for(let y=25;y<47;y++)for(let x=44;x<60;x++) {
@@ -61,5 +51,5 @@ export function nativeRanger(frame,{attackStep=-1}={}) {
     outer:for(let y=32;y<39;y++)for(let x=45;x<49;x++)if(d[y*w+x]){top=y;break outer;}
     string([45,top+1],[43,top+12]);
   }
-  return {w,h,d};
+  return fitTrailHead({w,h,d},attackStep);
 }

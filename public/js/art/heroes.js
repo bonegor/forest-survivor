@@ -2,9 +2,11 @@
 import { APPROVED_HERO_ART } from './approved-heroes.js';
 import { EANASIR_HERO_ART } from './eanasir.js';
 import { KNIGHT_FALL } from './knight-fall.js';
+import { RANGER_FALL } from './ranger-fall.js';
 
 export const HERO_ART = {
   ...APPROVED_HERO_ART,
   ...EANASIR_HERO_ART,
   knight: { ...APPROVED_HERO_ART.knight, fall: KNIGHT_FALL },
+  archer: { ...APPROVED_HERO_ART.archer, fall: RANGER_FALL },
 };

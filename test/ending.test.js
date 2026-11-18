@@ -19,12 +19,12 @@ import { bounds } from '../public/js/engine/pixels.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
-function game(fn, seed = 8) {
+function game(fn, hero = 'knight') {
   const random = Math.random, bot = input.bot;
-  Math.random = mulberry32(seed);
+  Math.random = mulberry32(8);
   input.bot = { x: 0, y: 0 };
   try {
-    const g = new Game({ hero: 'knight', mode: 's15', diff: 'medium', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, crypts: false });
+    const g = new Game({ hero, mode: 's15', diff: 'medium', meta: metaBonuses(defaultProfile()), settings: { numbers: false }, crypts: false });
     g.spawner.update = () => {};
     g.update(1 / 60);
     return fn(g, g.player);
@@ -127,6 +127,42 @@ test('Aldric falls in either facing, his wisp rises, and only his sword and shie
     assert.equal(at(DEATH.end - 0.25), remains.get(face < 0));
     assert.equal(at(DEATH.end), remains.get(face < 0));
   })));
+
+test('the Ranger drops her bow, leaves it planted at a slant and fully decays beneath the rising soul', () =>
+  [1, -1].forEach(face => game((g, p) => {
+    const ranger = SPR.archer, fall = ranger.fall;
+    const ctx = document.createElement('canvas').getContext('2d');
+    let image;
+    ctx.drawImage = drawn => { image = drawn; };
+    p.face = face;
+    g.placePlayer(g.cam);
+    p.hurt(1e9);
+    const at = t => { g.deathT = t; g.drawFallen(ctx, g.cam); return image; };
+    assert.equal(at(0), p._rect[4].white(face < 0));
+    const falling = [.17, .31, .49, .60, .73, .94].map(at);
+    assert.equal(new Set(falling).size, falling.length);
+
+    const bow = fall.frames.at(-1).buf;
+    const box = bounds(bow);
+    assert.ok(box.x0 > bow.w / 2, 'the whole body and both boots have disappeared');
+    assert.equal(box.y1, ranger.anchorY - 1, 'the submerged end is cut off at ground level');
+    const row = y => [...bow.d.slice(y * bow.w, (y + 1) * bow.w)];
+    assert.ok(row(box.y0).findIndex(Boolean) - row(box.y1).findIndex(Boolean) >= 5,
+      'the upper tip leans several native pixels outward from the nock in the soil');
+    const landed = fall.frames[fall.frameAt(.94)].buf;
+    const exposedBody = frame => frame.d.filter((pixel, i) => pixel && !bow.d[i]).length;
+    for (const t of [1.1, 1.65, 1.9, 2.2, 2.4]) {
+      const f = fall.frames[fall.frameAt(t)].buf;
+      assert.ok(bow.d.every((pixel, i) => !pixel || f.d[i] === pixel), 'the planted bow holds still');
+    }
+    const counts = [landed, fall.frames[fall.frameAt(1.9)].buf, bow].map(exposedBody);
+    assert.ok(counts[0] > counts[1] && counts[1] > counts[2]);
+    assert.equal(at(DEATH.end), fall.frames.at(-1).get(face < 0));
+    assert.deepEqual(fall.wisp.frames.map(f => f.buf), SPR.knight.fall.wisp.frames.map(f => f.buf));
+    g.deathT = fall.wisp.release + .5;
+    g.hud.drawDepartingSoul(ctx);
+    assert.equal(image, fall.wisp.frames[fall.wisp.frameAt(.5)].get(face < 0));
+  }, 'archer')));
 
 test('the wisp visibly crosses the top edge, tail last, before results in landscape and portrait', () =>
   game((g, p) => {

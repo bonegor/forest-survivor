@@ -36,6 +36,19 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
   }
 });
 
+test('Ranger wears Trailblazer’s face and ear through the original idle and walk cycles',()=>{
+  const trail = SPR[HEROES.trailblazer.sprite].frames[0].buf;
+  // The donor coordinates cover the forehead, pointed ear, both irises and jaw.
+  const samples = [[39,31],[40,32],[34,33],[35,33],[38,33],[41,33],[38,34],[41,34],[39,35],[40,36]];
+  for (const index of [...RANGER.idle, ...RANGER.walk]) {
+    const frame = RANGER.frames[index].buf;
+    const dy = bounds(frame).y0 - 27;
+    for (const [x,y] of samples)
+      assert.equal(frame.d[(y+dy)*frame.w+x+1],trail.d[y*trail.w+x],`donor pixel (${x},${y}) in frame ${index}`);
+    assert.notEqual(frame.d[(29+dy)*frame.w+40],trail.d[29*trail.w+39],'silver fringe changes color');
+  }
+});
+
 test('the approved Ranger uses the indexed Hunter clip and its release frame',()=>{
   const spr=RANGER;
   assert.ok(spr.idle.length>=4);

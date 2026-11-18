@@ -71,7 +71,7 @@ export function sourceDetail(id,{base,frames,idle,walk,attack,attackWalk,idleFie
  const attackPhases=new Map(attack.map((index,phase)=>[index,phase]));
  attackWalk.forEach((row,phase)=>row.forEach(index=>attackPhases.set(index,phase)));
  return {frames:detailed.map((frame,index)=>native(frame,{attackStep:attackPhases.get(index)??-1})),gait,metadata:{w:W/D,h:H/D,anchorY:112/D,hires:1,
-  clarityRevision:'native-style-match-2026-11-15',claritySource:`tools/animation-round/${id==='archer'?'ranger':'berserker'}-native.mjs`,
+  clarityRevision:id==='archer'?'trailblazer-head-2026-11-18':'native-style-match-2026-11-15',claritySource:`tools/animation-round/${id==='archer'?'ranger-trail-head':'berserker-native'}.mjs`,
   sourceModelSha256:createHash('sha256').update(readFileSync(sourcePath)).digest('hex'),
-  motionNotes:'Original face, anatomy and equipment in opaque native pixel clusters with a restrained game palette; sixteen connected gait phases and authored attacks. World footprint and all impact timings preserved.'}};
+  motionNotes:id==='archer'?'Original Ranger body, gait and bow with the Trailblazer face and longer auburn hair.':'Original face, anatomy and equipment in opaque native pixel clusters with a restrained game palette; sixteen connected gait phases and authored attacks. World footprint and all impact timings preserved.'}};
 }

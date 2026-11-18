@@ -1248,8 +1248,8 @@ export class Hud {
     const c = textCanvas(who ? `SLAIN BY ${who.toUpperCase()}` : 'YOU HAVE FALLEN', ['#ffffff', '#f6757a', '#a22633'], '#181425');
     const s = c.width * 2 <= W - 16 ? 2 : 1;
     ctx.globalAlpha = clamp((g.deathT - DEATH.name) / 0.5, 0, 1);
-    // Leave the space above Aldric clear for the spirit's ascent.
-    const y = H * (g.player.id === 'knight' ? 0.63 : 0.3);
+    // Leave the spirit's path above the fallen hero clear.
+    const y = H * (SPR[g.player.hero.sprite]?.fall?.wisp ? 0.63 : 0.3);
     ctx.drawImage(c, Math.round(W / 2 - (c.width * s) / 2), Math.round(y), c.width * s, c.height * s);
     ctx.globalAlpha = 1;
   }

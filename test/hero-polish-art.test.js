@@ -7,7 +7,9 @@ import berserker from '../tools/hero-polish-review/before/berserker.js';
 import paladin from '../tools/hero-polish-review/before/paladin.js';
 import { unpack } from '../tools/animation-round/build.mjs';
 import { packedPalette } from '../public/js/art/palette.js';
+import trail from '../tools/animation-round/baseline/trailblazer.js';
 const master = new Set([0, ...Object.values(packedPalette())]);
+const donor = new Set(trail.palette);
 
 for (const [id, original] of Object.entries({ archer, rogue, berserker, paladin })) {
   test(`${id}: requested art and cadence preserve complete gait, strike timing and equipment mapping`, () => {
@@ -23,13 +25,17 @@ for (const [id, original] of Object.entries({ archer, rogue, berserker, paladin 
     for (let i = 0; i < current.frames.length; i++) {
       const after = unpack(current, current.frames[i]), before = unpack(original, original.frames[i]);
       assert.deepEqual([after.w / density, after.h / density], [before.w / originalDensity, before.h / originalDensity]);
-      // Ranger and Berserker retain the source rig but now use the roster's
-      // native opaque palette. Exact gait registration is checked separately.
+      // The Ranger retains Trailblazer's original skin, ear and eye colors.
+      // The rest of both sprites uses the opaque roster palette.
       if (id === 'archer' || id === 'berserker') {
         assert.equal(density, 1);
-        assert.equal(current.clarityRevision, 'native-style-match-2026-11-15');
-        assert.ok(current.palette.length <= 32, `${id}: restrained palette`);
-        for (const color of after.d) assert.ok(master.has(color), `${id}: opaque master-palette pixel`);
+        assert.equal(current.clarityRevision, id === 'archer' ? 'trailblazer-head-2026-11-18' : 'native-style-match-2026-11-15');
+        assert.ok(current.palette.filter(c => id !== 'archer' || !donor.has(c)).length <= 32, `${id}: restrained body palette`);
+        for (const [pixel, color] of after.d.entries()) {
+          const x = pixel % after.w, y = Math.floor(pixel / after.w);
+          const onFace = id === 'archer' && x >= 35 && x <= 43 && y >= 28 && y <= 39;
+          assert.ok(master.has(color) || (onFace && donor.has(color)), `${id}: intended color at ${x},${y}`);
+        }
         continue;
       }
       const from = id === 'rogue' ? 0 : (id === 'archer' ? 44 : 46) * after.w;

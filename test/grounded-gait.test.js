@@ -28,13 +28,14 @@ test('all articulated heroes retain their source identity and complete registere
     const original=native?readPng(source):null;
     const standing=native?reduceSource(original,[0,0,original.w,original.h],model.pivot,model.scale):unpack(retouched?preserved[id]:data,(retouched?preserved[id]:data).frames[0]);
     const gait=buildGroundedWalk(id,base.palette,standing,{density}),palette=new Set(native?[0,...Object.values(packedPalette())]:base.palette);
+    if(id==='archer')for(const color of baseline.trailblazer.palette)palette.add(color);
     assert.equal(data.walk.length,16,id+' visits all authored phases');
     assert.equal(gait.lowerFrames.length,16);
     assert.ok(Math.abs(data.walk.length/data.walkFps-model.motion.cycleSeconds)<1e-12);
     assert.equal(createHash('sha256').update(readFileSync(source)).digest('hex'),model.sha256,id+' source remains reproducible');
     if(native){
       assert.equal(data.hires,1);
-      assert.equal(data.clarityRevision,'native-style-match-2026-11-15');
+      assert.equal(data.clarityRevision,id==='archer'?'trailblazer-head-2026-11-18':'native-style-match-2026-11-15');
       assert.deepEqual(unpack(data,data.frames[0]).d,native(standing).d,id+' retained model is reproducibly adapted to native pixels');
       assert.equal(data.sourceModelSha256,model.sha256);
       assert.equal(data.w,80);assert.equal(data.h,64);assert.equal(data.anchorY,56);
