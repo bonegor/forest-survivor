@@ -489,7 +489,7 @@ export class EnemyShot {
       this.y += this.vy * dt / steps;
       if (g.world.solid(this.x, this.y) && !this.look.through) this.dead = true;
       if (!this.dead && this.touches(p)) {
-        const damage = p.hurt(this.dmg, null, this.by, this.boss);
+        const damage = p.hurt(this.dmg, null, this.by, this.boss, 'projectile');
         if (damage > 0 && this.kind === 'pqc') g.infestCopper();
         if (damage > 0 || !p.untouchable) this.dead = true;
       }

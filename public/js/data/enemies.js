@@ -14,7 +14,7 @@ export const CRYPT_LORD_TYPES = ['skeletonarcher', 'skeletonmage'];
 export const EA_NASIR_CHANCE = 0.05;
 
 export const ENEMIES = {
-  bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, dmg: 3, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true, fry: true },
+  bat: { name: 'Cave Bat', sprite: 'bat', hp: 5, spd: 50, paceMul: 1.18, dmg: 3, r: 4, xp: 1, ai: 'flyer', mass: 0.6, anim: 9, death: 'dark', fly: true, fry: true },
   rat: { name: 'Plague Rat', sprite: 'rat', hp: 2.5, spd: 44, dmg: 3, r: 4, xp: 1, ai: 'walker', mass: 0.6, anim: 8, death: 'blood', fry: true },
   slime: { name: 'Bog Slime', sprite: 'slime', hp: 13, spd: 30, dmg: 4, r: 5, xp: 2, ai: 'hopper', mass: 1, anim: 3, death: 'goo', split: 'slimelet', splitN: 2 },
   slimelet: { name: 'Slimelet', sprite: 'slimelet', hp: 5, spd: 40, dmg: 2, r: 3, xp: 1, ai: 'hopper', mass: 0.5, anim: 4, death: 'goo', fry: true },
@@ -29,7 +29,7 @@ export const ENEMIES = {
   ghost: { name: 'Wraith', sprite: 'ghost', hp: 26, spd: 35, dmg: 9, r: 5, xp: 4, ai: 'phaser', mass: 0.7, anim: 3, death: 'ecto', alpha: 0.78, kbRes: 0.5 },
   // The red-robed caster: few (weight 1 in the night's pockets), big, and slow.
   cultist: {
-    name: 'Cultist', sprite: 'cultist', hp: 32, spd: 27, slower: 0.1, dmg: 6, r: 7.5, scale: 1.5, xp: 5, ai: 'caster', mass: 1, anim: 3, death: 'dark',
+    name: 'Cultist', sprite: 'cultist', hp: 32, spd: 27, paceMul: 0.9, dmg: 6, r: 7.5, scale: 1.5, xp: 5, ai: 'caster', mass: 1, anim: 3, death: 'dark',
     shot: { range: 125, cd: 3.2, spd: 61.2, dmg: 10, kind: 'darkbolt', wind: 0.55 }, wicked: true,
   },
   orc: {
@@ -107,8 +107,8 @@ export const ENEMIES = {
 // SHOT_LOOK). The four new bosses each fight with a night boss's attacks (kit: game/bosses.js BOSS_AI)
 // at his numbers, with their own shot (bolt), summons, blast (a game/effects.js style), words (lines,
 // as the kit says them) and particle colours (sparks, palette keys), and stand as tall as the Butcher
-// and the Lich (57 px: 57 over the height of their art, 28 rows each). A map's harder or
-// gentler night is in who comes when (data/maps.js pockets) and its foe factors, never here.
+// and the Lich (57 px: 57 over the height of their art, 28 rows each). The map definitions
+// substitute these variants into the shared schedule and apply each map's foe factors.
 // [id, the Darkwood kind it stands for, what is its own]
 const MAP_KINDS = [
   // The Sunscorch (desert).

@@ -660,8 +660,9 @@ export class Player {
 
   // A blow of amount from src (a foe, by contact) or by (who struck it from afar, as the results
   // name it: names.js); the one that fells him is the run's stats.killedBy. boss: a boss's name
-  // alone when the blow from afar is his (names.js bossOf), for the wounds.
-  hurt(amount, src, by = null, boss = null) {
+  // alone when the blow from afar is his (names.js bossOf), for the wounds. Enemy shots pass
+  // through a Whirlwind, so only those hits skip its damage reduction.
+  hurt(amount, src, by = null, boss = null, kind = null) {
     const g = this.g;
     if (this.dead || this.untouchable || this.devGod || g.state === 'faint') return 0;
     // Shadow Cloak: a dodged blow costs nothing, and a breath of grace stops the next roll at once.
@@ -676,7 +677,7 @@ export class Player {
     // (A hero shown on the hero screen stands in a game with no map: hero-showcase.js.)
     let dmg = armored(amount * g.diff.dmg * (g.map?.foe?.dmg ?? 1), this.armor);
     if (this.buff('protection')) dmg *= 0.5;
-    if (this.ult && this.ult.type === 'whirlwind') dmg *= 0.5;
+    if (kind !== 'projectile' && this.ult?.type === 'whirlwind') dmg *= 0.5;
     // Normal halves what he takes, after all of that (difficulty.js hurt). A blow always lands.
     dmg = sealDamage(this, Math.max(1, Math.round(dmg * g.diff.hurt)));
     this.hp -= dmg;

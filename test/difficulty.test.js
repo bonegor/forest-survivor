@@ -322,16 +322,17 @@ test('on Veteran every monster walks 10% slower than the same monster on a run a
   }
 });
 
-// The owner (20 October 2026): four classes of speed; bats and rats as fast as a Knight with no
-// upgrades on Veteran; on a Nightmare the fastest 5% past a Knight with every rank of Swiftness.
-test('the horde walks in four classes: the swift at the bare Knight’s pace, a Nightmare’s 5% past a fully swift Knight', async () => {
+test('the horde walks in four speed classes with a faster pace for bats and their map variants', async () => {
   const { hordePace, PACE_OF, NIGHTMARE_PACE } = await import('../public/js/game/enemies.js');
   const { ENEMIES } = await import('../public/js/data/enemies.js');
   const { HEROES } = await import('../public/js/data/heroes.js');
   const knight = 70 * HEROES.knight.stats.speed;
-  assert.ok(Math.abs(hordePace('bat') - knight) < 1e-9 && hordePace('rat') === hordePace('bat'), 'bats and rats at the Knight’s pace');
-  assert.ok(Math.abs(hordePace('bat') * NIGHTMARE_PACE - knight * 1.15 * 1.05) < 1e-9, 'a Nightmare’s 5% past three ranks of Swiftness');
-  const order = ['bat', 'wolf', 'skeleton', 'zombie'].map((id) => hordePace(id));
+  for (const [runner, flyer] of [['rat', 'bat'], ['scarab', 'vulture'], ['lemming', 'snowowl'], ['rabbit', 'bee'], ['cinderrat', 'flameskull']]) {
+    assert.equal(hordePace(runner), knight);
+    assert.equal(hordePace(flyer), hordePace(runner) * 1.18);
+  }
+  assert.ok(Math.abs(hordePace('rat') * NIGHTMARE_PACE - knight * 1.15 * 1.05) < 1e-9, 'a Nightmare’s 5% past three ranks of Swiftness');
+  const order = ['rat', 'wolf', 'skeleton', 'zombie'].map((id) => hordePace(id));
   for (let i = 1; i < order.length; i++) assert.ok(order[i] < order[i - 1], 'each class slower than the last');
   assert.ok(Math.abs(hordePace('cultist') - hordePace('zombie') * 0.9) < 1e-9, 'the Cultist a tenth slower than its class');
   for (const [id, d] of Object.entries(ENEMIES)) {
@@ -481,8 +482,6 @@ test('Normal\'s horde pays NORMAL_XP times the experience; champions, crypts and
   assert.equal(asks(n, () => n.spawner.fire({ type: 'pack', enemy: 'wolf', count: 8 }, 13.3)).length, PACK_LEAST);
 });
 
-// The 27 October 2026 review (D10): Ranked's monsters had the old hpScale, x6.58 health at 15:00
-// against Survival's x17.28.
 test('Ranked\'s monsters follow the night\'s health to dawn, then grow on from there', () => {
   for (const ph of [0, 6.3, 12.6, 21]) assert.equal(monsterHp(ph, 'ranked'), nightHpScale(ph), `phase ${ph}`);
   assert.ok(Math.abs(monsterHp(30, 'ranked') / monsterHp(21, 'ranked') - hpScale(30) / hpScale(21)) < 1e-9, 'past dawn at hpScale\'s rate');
@@ -491,24 +490,21 @@ test('Ranked\'s monsters follow the night\'s health to dawn, then grow on from t
   assert.equal(monsterHp(10, 's15'), nightHpScale(10));
   const r = game({ mode: 'ranked' });
   assert.ok(Math.abs(r.spawner.stats(25).hpMul / (monsterHp(25, 'ranked') * ELITE.hp) - 1) < 1e-12, 'its horde takes it');
+  r.time = 900;
+  assert.equal(r.dmgScale, 3);
+  r.time += 0.01;
+  assert.ok(r.dmgScale > 3 && r.dmgScale < 3.001, 'its damage keeps climbing from the dawn value');
 });
 
-test('the first ten minutes give real horde monsters 200% more health, without a health cliff afterwards', () => {
-  // Historical multiplier at fixed encounter times, independent of the new curve.
-  const old = [[0, 1], [3, 1.336], [6, 1.672], [8, 3.656], [10, 6.12]];
+test('Survival and Ranked add a fixed amount to horde health and damage each minute through dawn', () => {
   for (const mode of ['s15', 'ranked']) {
     const g = game({ mode });
-    for (const [minute, multiplier] of old) {
-      const e = g.spawnEnemy('skeleton', 0, 0, { ...g.spawner.stats(minute * 1.4), instant: true });
-      const want = ENEMIES.skeleton.hp * multiplier * 3 * g.diff.hp * g.map.foe.hp;
-      assert.ok(Math.abs(e.maxHp - want) < 1, `${mode} at ${minute}: ${e.maxHp}, expected ${want}`);
-    }
-    let last = 0;
-    for (let minute = 0; minute <= 30; minute += 0.1) {
-      const now = monsterHp(minute * 1.4, mode);
-      assert.ok(now >= last, `health must not fall at ${minute}`);
-      last = now;
+    for (const minute of [0, 0.5, 1, 2, 5, 9.99, 10, 10.01, 12, 15]) {
+      g.time = minute * 60;
+      const e = g.spawnEnemy('skeleton', 0, 0, { ...g.spawner.stats(g.phase), instant: true });
+      const wantHp = ENEMIES.skeleton.hp * g.diff.hp * g.map.foe.hp * (1 + 0.8 * minute);
+      assert.ok(Math.abs(e.maxHp - wantHp) < 1e-9, `${mode} at ${minute}: expected ${wantHp} HP`);
+      assert.ok(Math.abs(g.dmgScale - (1 + 2 * minute / 15)) < 1e-9, `${mode} at ${minute}: damage`);
     }
   }
-  assert.equal(monsterHp(0, 'dungeon'), 1, 'standalone Dungeon floors retain their separate curve');
 });

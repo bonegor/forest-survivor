@@ -27,7 +27,7 @@ const RELIC_SUMMARY = {
 };
 
 export const HERO_SUMMARY = {
-  knight: ['Armored · strong regeneration', 'Spinning attack · less damage taken'],
+  knight: ['Armored · strong regeneration', 'Spinning attack · less melee damage'],
   archer: ['Fast attacks · high critical chance', 'Arrow rain across the screen'],
   mage: ['Faster spells · more area and XP', 'Meteors across the battlefield'],
   rogue: ['Fast movement · critical hits and luck', 'Invulnerable blade storm'],

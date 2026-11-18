@@ -405,13 +405,11 @@ export function createDevPanel(app) {
     return r > 0 ? `${PASSIVES[id].name} rank ${r}` : `${PASSIVES[id].name} taken away`;
   }
 
-  // What the clock's minute brings: that minute's pocket of the horde, of the run's map (data/maps.js
-  // pockets; the Darkwood's are data/waves.js POCKETS), the commonest first, and the boss that comes
-  // next (its map's, in Survival).
+  // The current horde pocket, most common enemies first, and the next boss.
   function minuteText(g) {
-    const m = minuteOf(g.phase), pk = pocketAt(m, g.map.pockets), [a, b] = pk.minutes;
-    const foes = Object.entries(pk.spawn).sort((x, y) => y[1] - x[1]).map(([id]) => foeName(id)).join(', ');
     const sp = g.spawner;
+    const m = minuteOf(g.phase), pk = pocketAt(m, sp.pockets), [a, b] = pk.minutes;
+    const foes = Object.entries(pk.spawn).sort((x, y) => y[1] - x[1]).map(([id]) => foeName(id)).join(', ');
     let boss;
     if (g.mode === 'dungeon') boss = `This floor's guardian: ${foeName(FLOORS[g.floor - 1].guardian)}.`;
     else if (g.mode === 'ranked') boss = `Next boss: ${foeName(RANKED_BOSSES[sp.bossIdx % RANKED_BOSSES.length])} at ${fmtTime((sp.bossIdx + 1) * RANKED_BOSS_EVERY)}.`;

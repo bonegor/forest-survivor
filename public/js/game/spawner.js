@@ -2,7 +2,7 @@
 // treasure thieves, breakables, shrines and survival bosses. None of it inside a
 // crypt, where the night stands still; a crypt brings its own packs and lords.
 
-import { kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, monsterHp, minuteOf, pocketAt, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
+import { DUNGEON_POCKETS, kindWeightsBy, SWARM_BATCH, batchEvents, HORDE_RATE, HORDE_CAP, monsterHp, minuteOf, pocketAt, RANKED_BOSSES, RANKED_BOSS_EVERY, RANKED_EVENT_EVERY, PROP_SITES } from '../data/waves.js';
 import { ARRIVAL } from './arrival.js';
 import { WARN } from './events.js';
 import { ENEMIES, CRYPT_LORD, CHAMPION_PREFIX, CHAMPION_SUFFIX, CHAMPION_MODS } from '../data/enemies.js';
@@ -78,10 +78,10 @@ export function timedHordeCount(g, ev, phase) {
 // swift and quick kinds (JOLT.pace, enemies.js PACE_OF: bats, rats, imps, hellhounds, wolves, spiders,
 // goblins, slimelets) and never one that shoots: the night's count of Cultists, Orcs, Ogres or Death
 // Knights locked on him unwarned was a wall of the heavy and slow (27 October 2026; Cultists are few,
-// big and slow, the owner's). Every pocket of the night has one of them (the first, rats and bats).
+// big and slow, the owner's). Every pocket of the night has one of them.
 export const JOLT = { every: [30, 90], count: 6, spread: 0.45, pace: ['swift', 'quick'] };
-// The difficulty's elite multiplier scales both champion delays.
-export const CHAMPION = { first: 95, every: [105, 140] };
+// The first champion follows the opening swarm and the arrival of its first eligible kind.
+export const CHAMPION = { first: 140, every: [105, 140] };
 // What a jolt never is: the shooters (Cultists, Skeleton Archers) and any kind not of JOLT.pace.
 const JOLT_NOT = Object.keys(ENEMIES).filter((type) => ENEMIES[type].shot || !JOLT.pace.includes(PACE_OF[type]));
 // What is never a champion: the small fry (data/enemies.js fry: bats, rats, slimelets and their like
@@ -116,7 +116,7 @@ export class Spawner {
     this.acc = HORDE_RATE.delay; // how long yet before the steady horde starts coming
     this.owed = null; // the steady horde's monsters due and not yet come (null: its head start yet to come)
     this.eventIdx = 0;
-    this.eliteT = CHAMPION.first;
+    this.eliteT = 0;
     this.thiefT = rand(140, 220);
     this.propT = 4;
     this.shrineT = 45;
@@ -126,6 +126,10 @@ export class Spawner {
     this.warnIdx = 0; // the next of events to announce (warn)
     this.warned = new Map(); // events index -> the announced copy, its side rolled
     this._events = null;
+  }
+
+  get pockets() {
+    return this.g.mode === 'dungeon' ? DUNGEON_POCKETS : this.g.map.pockets;
   }
 
   // The night's timed events, every swarm a batch (data/waves.js batchEvents), rolled once a run
@@ -187,21 +191,19 @@ export class Spawner {
     this.rewarn();
   }
 
-  // One of the monsters the current pocket of the night allows, by weight: of its map's night (data/
-  // maps.js pockets; the Darkwood's are data/waves.js POCKETS), or its map's own fallback when the
-  // pocket has nothing left to send (a champion at dusk, which allows only small fry). Where the
+  // One of the monsters the current pocket allows, picked by weight, or the map's fallback
+  // when exclusions empty the pocket. Where the
   // rules send fewer of those that shoot or lunge, one picked comes only that often (few); otherwise
   // another kind comes in its place, so the horde is as big and they are that many times fewer.
   pickType(phase, exclude) {
-    const map = this.g.map;
-    const rows = Object.entries(pocketAt(minuteOf(phase), map.pockets).spawn).filter(([type]) => !exclude || !exclude.includes(type));
+    const rows = Object.entries(pocketAt(minuteOf(phase), this.pockets).spawn).filter(([type]) => !exclude || !exclude.includes(type));
     let r = weighted(rows, (row) => row[1]);
     const few = this.g.diff.few;
     if (r && few < 1 && isFew(r[0]) && Math.random() >= few) {
       const rest = rows.filter(([type]) => !isFew(type));
       if (rest.length) r = weighted(rest, (row) => row[1]);
     }
-    return r ? r[0] : map.fallback;
+    return r ? r[0] : this.g.map.fallback;
   }
 
   // The horde's health at a phase: the night's growth, the difficulty's and its map's (data/maps.js
@@ -318,7 +320,7 @@ export class Spawner {
 
     // Champions.
     this.eliteT -= dt * g.diff.elite;
-    if (this.eliteT <= 0) {
+    if (this.eliteT <= 0 && (g.mode === 'dungeon' || g.time >= CHAMPION.first)) {
       this.eliteT = rand(...CHAMPION.every);
       this.spawnElite(phase);
     }
@@ -424,7 +426,7 @@ export class Spawner {
         // names' banners.
         const R0 = Math.hypot(cam.W, cam.H) * 0.5 + 10;
         const count = ev.count * RING.more, per = Math.ceil(count / RING.layers);
-        const kinds = ev.type === 'stand' ? spreadKinds(kindWeightsBy(minuteOf(phase), g.map.pockets), count) : null;
+        const kinds = ev.type === 'stand' ? spreadKinds(kindWeightsBy(minuteOf(phase), this.pockets), count) : null;
         for (let i = 0; i < count; i++) {
           const layer = Math.floor(i / per), R = R0 + layer * RING.gap;
           const a = ((i % per) + (layer % 2) * 0.5) / per * TAU;

@@ -6,7 +6,7 @@ import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } 
 import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
 import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
-import { FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
+import { DAWN_PHASE, FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { mapFor } from '../data/maps.js';
 import { RANKS, heroUnlockTime, countedKills } from '../shared/profile.js';
 import { killCredit } from '../shared/population.js';
@@ -212,10 +212,8 @@ const BOX_REACH = 20;
 
 // Crypt names, picked by the crossroads; the night's minute picks the stone.
 const CRYPT_KIND = ['Crypt', 'Barrow', 'Tomb', 'Ossuary', 'Sepulchre', 'Vault'];
-// The monsters' blows (Game.dmgScale): DMG_AT_DAWN times as hard at dawn, phase 21 (15:00), along
-// a curve; past dawn, as the old rule had them climb. The old rule: gentle, then steeper from phase
-// 10, a little less steep from 20 (2.1 times at dawn), and steeper again from 30.
-const DAWN_PHASE = 21, DMG_AT_DAWN = 5;
+// Survival and Ranked reach triple starting damage at dawn. Dungeon floors use their own curve.
+const DMG_AT_DAWN = 3, DUNGEON_DMG_AT_DAWN = 5;
 const oldDmgScale = (ph) => 1 + ph * 0.025 + Math.max(0, ph - 10) * 0.06 - Math.max(0, ph - 20) * 0.04 + Math.max(0, ph - 30) * 0.1;
 
 const CRYPT_OF = ['the Hollow King', 'Saint Aldwyn', 'the Nameless', 'Mourn', 'the Weeping Widow', 'Old Bones', 'the Last Knight', 'the Ashen Monk', 'the Drowned', 'Vesper', 'the Pale Hunt', 'Black Ondra'];
@@ -428,7 +426,7 @@ export class Game {
     if (this.mode === 'ranked') {
       // The 15-minute night's pace, then a climb that never stops.
       const m = this.time / 60;
-      return m <= 15 ? m * 1.4 : 21 + (m - 15) * 0.9;
+      return m <= 15 ? m * 1.4 : DAWN_PHASE + (m - 15) * 0.9;
     }
     if (this.mode === 's15') return (Math.min(this.time, this.duration) / 60) * 1.4;
     const f = FLOORS[this.floor - 1];
@@ -440,14 +438,14 @@ export class Game {
     return this.time + this.cryptTime;
   }
 
-  // Enemy damage stays gentle early and climbs once the night gets long: one smooth curve to five
-  // times at dawn (the owner's, 23 October 2026: "have it more nicely scaled and get to 5X instead
-  // of 2.1X"), about x1.1 at 3:00, x1.3 at 5:00, x2.5 at 10:00, x3.3 at 12:00. Past dawn (Ranked)
-  // it climbs on as it always did, from those five times (oldDmgScale).
+  // Survival and Ranked add the same amount of damage each minute through dawn.
   get dmgScale() {
     const ph = this.phase;
-    if (ph <= DAWN_PHASE) return 1 + (DMG_AT_DAWN - 1) * (ph / DAWN_PHASE) ** 2.5;
-    return (DMG_AT_DAWN * oldDmgScale(ph)) / oldDmgScale(DAWN_PHASE);
+    const dungeon = this.mode === 'dungeon';
+    const atDawn = dungeon ? DUNGEON_DMG_AT_DAWN : DMG_AT_DAWN;
+    if (ph > DAWN_PHASE) return (atDawn * oldDmgScale(ph)) / oldDmgScale(DAWN_PHASE);
+    const progress = ph / DAWN_PHASE;
+    return 1 + (atDawn - 1) * (dungeon ? progress ** 2.5 : progress);
   }
 
   // ------------------------------------------------------------ floors --

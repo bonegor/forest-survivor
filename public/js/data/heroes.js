@@ -33,7 +33,7 @@ export const HEROES = {
     perk: 'Bulwark: +1 armor, regenerates, every regeneration doubled',
     ult: 'whirlwind',
     ultName: 'Whirlwind',
-    ultDesc: 'Spin for 3.5s shredding all nearby foes. Damage taken halved.',
+    ultDesc: 'Spin for 3.5s, shredding nearby foes and halving melee and area damage.',
   },
   archer: {
     id: 'archer',

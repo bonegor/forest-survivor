@@ -670,8 +670,6 @@ export class Pool {
 
 // ------------------------------------------------------------------ orbit --
 
-// The sparks of an enemy missile a guardian blade shatters (Orbit.update).
-
 // How far up off the ground the orbiting blades are drawn (Orbit.draw), and strike.
 const ORBIT_UP = 6;
 

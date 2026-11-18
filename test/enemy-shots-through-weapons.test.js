@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Driver } from '../public/js/bots/driver.js';
 import { Game } from '../public/js/game/game.js';
-import { Orbit, Whirl } from '../public/js/game/effects.js';
+import { Orbit, Whirl, WHIRL_R } from '../public/js/game/effects.js';
 import { EnemyShot } from '../public/js/game/projectiles.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
@@ -20,10 +20,12 @@ function arena() {
 for (const id of ['blades', 'aegis', 'whirlwind-ultimate']) {
   test(`a Cultist bolt crosses ${id} and can still hit the Knight`, () => {
     const g = arena(), p = g.player;
-    const w = id === 'whirlwind-ultimate' ? null : g.addWeapon(id);
-    const effect = w ? new Orbit(g, w) : new Whirl(g, 3.5);
+    const whirlwind = id === 'whirlwind-ultimate';
+    const w = whirlwind ? null : g.addWeapon(id);
+    if (whirlwind) g.startUlt('whirlwind');
+    const effect = whirlwind ? g.effects.find((fx) => fx instanceof Whirl) : new Orbit(g, w);
     effect.ang = 0;
-    const radius = w ? 34 * w.s.area : 46 * p.area;
+    const radius = w ? 34 * w.s.area : WHIRL_R * p.area;
     const shot = new EnemyShot(g, p.x + radius, p.y, Math.PI, 100, 20, 'darkbolt');
     g.eshots.push(shot);
     effect.update(0); // The bolt is exactly on the leading blade's collision point.
@@ -34,7 +36,7 @@ for (const id of ['blades', 'aegis', 'whirlwind-ultimate']) {
       shot.update(1 / 60);
       effect.update(1 / 60);
     }
-    assert.ok(p.hp < hp, 'the missile reaches and damages the hero');
+    assert.equal(hp - p.hp, arena().player.hurt(20), 'the missile deals the same damage during an attack');
     assert.ok(shot.dead, 'it expires on the real player hit');
   });
 }

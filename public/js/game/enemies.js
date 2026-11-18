@@ -93,16 +93,10 @@ let nextId = 1;
 // (`haloA`), corners and all, so the edge fades out as a soft glow; and by night the vignette
 // darkens the scene under this layer, not over it (Game.draw), so a monster near the edge of the
 // screen is no darker for it than one by the hero.
-// The horde's speeds come in four classes (the owner's, 20 October 2026: "let us have a few
-// classes of speeds ... mice and bats should probably be equally fast and as fast as basic no
-// upgrade knight on normal. Then on nightmare they should be a little faster than basic knights
-// with all speed upgrades ... the fastest animal should be like 5% faster"). SWIFT is the Knight's
-// own pace with no upgrades (70 x 1.067 = 74.7 px/s); the others a tenth less each. Normal and
-// Veteran alike: these are the speeds walked, not multiplied by a difficulty's speed. On a
-// Nightmare every class goes NIGHTMARE_PACE faster, the swift ones 5% past a Knight with every rank
-// of the Armory's Swiftness (90.2 px/s), the rest as far behind them as ever. Bosses, the crypts'
-// lords, the Gilded Thief (who must stay a fifth slower than every hero) and props keep their own;
-// one that walks a share slower than its class (def.slower: the Cultist's tenth) stays so.
+// Swift starts at the unupgraded Knight's pace. Each other class is another tenth slower.
+// Individual kinds adjust that pace: a bat gains speed to close faster while weaving, and a
+// cultist walks a tenth slower. Nightmare boosts all four classes. Bosses, crypt lords, thieves
+// and props use their own speeds.
 const KNIGHT_PACE = BASE_SPEED * HEROES.knight.stats.speed;
 const SWIFTNESS = UPGRADES.find((u) => u.id === 'swiftness');
 export const PACE_CLASS = { swift: 1, quick: 0.9, steady: 0.8, slow: 0.7 };
@@ -121,7 +115,7 @@ const isPaced = (def, o = {}) => !(def.boss || def.prop || o.lord || def.ai === 
 export function hordePace(type, o = {}) {
   const def = ENEMIES[type];
   if (!isPaced(def, o) || !PACE_OF[type]) return def.spd;
-  return KNIGHT_PACE * PACE_CLASS[PACE_OF[type]] * (1 - (def.slower || 0));
+  return KNIGHT_PACE * PACE_CLASS[PACE_OF[type]] * (def.paceMul ?? 1);
 }
 
 export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast: 25, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.4, haloA: 0.16, near: 60 };

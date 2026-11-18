@@ -19,7 +19,7 @@ import { ENEMIES, STANDS_FOR } from '../public/js/data/enemies.js';
 import { PROGRESS } from '../public/js/shared/progress.js';
 import { PACE_OF } from '../public/js/game/enemies.js';
 import { BOSS_AI } from '../public/js/game/bosses.js';
-import { JOLT, runMore } from '../public/js/game/spawner.js';
+import { CHAMPION, JOLT, runMore } from '../public/js/game/spawner.js';
 import { EnemyShot } from '../public/js/game/projectiles.js';
 import { SHOT_NOUN } from '../public/js/game/names.js';
 import { eventWords } from '../public/js/game/events.js';
@@ -195,25 +195,33 @@ test('every kind a map sends is known, drawn and paced, and its events are told 
   }
 });
 
-test('each map\'s night has the Darkwood\'s shape: its minutes and events, its last stand, a jolt and a champion in every pocket, few casters', () => {
+test('each map substitutes enemies into the same weighted pockets and timed events', () => {
+  const baseKind = (type) => STANDS_FOR[type] ?? type;
   for (const [id, map] of Object.entries(MAPS)) {
     assert.deepEqual(map.pockets.map((p) => p.minutes), POCKETS.map((p) => p.minutes), `${id}: the Darkwood's minutes`);
-    const shape = (list) => list.map(({ at, type, count }) => [at, type, count]);
-    assert.deepEqual(shape(map.events), shape(EVENTS), `${id}: the Darkwood's events, at its times and counts`);
     assert.equal(map.lastStand, LAST_STAND);
-    for (const p of map.pockets) {
+    const byKind = new Map();
+    for (const [i, p] of map.pockets.entries()) {
       const kinds = Object.keys(p.spawn), all = Object.values(p.spawn).reduce((s, w) => s + w, 0), at = `${id} ${p.minutes.join('-')}`;
-      for (const k of kinds) assert.ok(ENEMIES[k] && p.spawn[k] > 0, `${at}: ${k}`);
-      // A jolt is of the swift and quick that don't shoot (Spawner.jolt); a champion never of the
-      // small fry (Spawner.spawnElite), the first at 1:35.
+      const roles = Object.entries(p.spawn).map(([type, weight]) => [baseKind(type), weight]);
+      assert.deepEqual(roles, Object.entries(POCKETS[i].spawn), `${at}: the Darkwood's roles and weights`);
+      for (const k of kinds) {
+        assert.ok(ENEMIES[k] && p.spawn[k] > 0, `${at}: ${k}`);
+        const role = baseKind(k);
+        if (byKind.has(role)) assert.equal(k, byKind.get(role), `${at}: the same variant for ${role}`);
+        else byKind.set(role, k);
+      }
+      // Jolts pick swift or quick foes. Small fry never become champions.
       assert.ok(kinds.some((k) => !ENEMIES[k].shot && JOLT.pace.includes(PACE_OF[k])), `${at}: a kind a jolt can be`);
-      if (p.minutes[0] >= 1) assert.ok(kinds.some((k) => !ENEMIES[k].fry), `${at}: a kind a champion can be`);
+      if (p.minutes[1] * 60 > CHAMPION.first) assert.ok(kinds.some((k) => !ENEMIES[k].fry), `${at}: a kind a champion can be`);
       // The Cultist's place, whoever takes it, one monster in twenty at most (cultist.test.js).
       if (p.minutes[0] < 15) {
         const casters = kinds.filter((k) => ENEMIES[k].shot).reduce((s, k) => s + p.spawn[k], 0);
         assert.ok(casters / all <= 1 / 20, `${at}: casters ${((casters / all) * 100).toFixed(1)}%`);
       }
     }
+    const expectedEvents = EVENTS.map((event) => ({ ...event, enemy: byKind.get(event.enemy) ?? event.enemy }));
+    assert.deepEqual(map.events, expectedEvents, `${id}: timed events use the same replacement as the steady horde`);
     const fb = ENEMIES[map.fallback];
     assert.ok(fb && !fb.fry && !fb.boss && PACE_OF[map.fallback], `${id}: its fallback (${map.fallback}) can be a champion`);
     assert.ok(kindsBy(Infinity, map.pockets).includes(map.fallback), `${id}: its fallback is one of its own`);
@@ -223,6 +231,57 @@ test('each map\'s night has the Darkwood\'s shape: its minutes and events, its l
     }
   }
 });
+
+test('live Survival and Ranked spawns introduce a runner, a flyer, a slime, then a skeleton', () => {
+  const openings = {
+    forest: ['rat', 'bat', 'slime', 'skeleton'],
+    desert: ['scarab', 'vulture', 'sandslime', 'skeleton'],
+    frozen: ['lemming', 'snowowl', 'frostslime', 'skeleton'],
+    meadow: ['rabbit', 'bee', 'petalslime', 'myconid'],
+    hell: ['cinderrat', 'flameskull', 'magmaslime', 'skeleton'],
+  };
+  const verify = (map, mode) => game((g) => {
+    const firstOf = new Map(), champions = [];
+    const times = [0, 60, 120, 150, 180];
+    g.spawnEnemy = (type, x, y, opts) => {
+      if (!ENEMIES[type].prop && type !== 'thief' && !firstOf.has(type)) firstOf.set(type, g.time);
+      if (opts.elite) champions.push([g.time, type]);
+      return { spd: 1, xp: 1 };
+    };
+    for (let t = 1; t < 180; t++) {
+      g.time = t;
+      g.spawner.update(1);
+    }
+    assert.deepEqual([...firstOf.keys()], openings[map]);
+    for (const [i, type] of openings[map].entries()) {
+      assert.ok(firstOf.get(type) >= times[i] && firstOf.get(type) < times[i + 1], `${map}: ${type} arrives in its window`);
+    }
+    assert.deepEqual(champions, [[CHAMPION.first, openings[map][2]]]);
+  }, { map, mode });
+  for (const map of Object.keys(openings)) verify(map, 's15');
+  verify('forest', 'ranked');
+});
+
+test('Dungeon Run keeps its opening enemy weights and first-floor champion delay', () => game((g) => {
+  const sp = g.spawner;
+  assert.deepEqual(sp.pockets.filter(({ minutes: [start] }) => start < 3), [
+    { minutes: [0, 1], spawn: { rat: 6, bat: 4 } },
+    { minutes: [1, 2], spawn: { rat: 5, bat: 5, slime: 3 } },
+    { minutes: [2, 3], spawn: { rat: 4, bat: 3, slime: 3, skeleton: 5 } },
+  ]);
+  const openingKinds = new Set(Array.from({ length: 40 }, () => sp.pickType(0)));
+  assert.deepEqual(openingKinds, new Set(['rat', 'bat']));
+
+  g.spawnEnemy = () => ({ spd: 1, xp: 1 });
+  const champions = [];
+  sp.spawnElite = () => champions.push(g.floorTime);
+  const firstChampion = Math.ceil(60 / g.diff.elite);
+  for (let t = 1; t <= firstChampion; t++) {
+    g.time = g.floorTime = t;
+    sp.update(1);
+  }
+  assert.deepEqual(champions, [firstChampion]);
+}, { mode: 'dungeon', diff: 'hard' }));
 
 test('each map brings three bosses at the Darkwood\'s times, none twice, each with a night boss\'s kit, and no event within 30 s of them', () => {
   const gap = (SWARM_BATCH.gap * 1.4) / 60; // a batch's swarms apart, in phase, on the 15-minute night

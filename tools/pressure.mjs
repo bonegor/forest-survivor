@@ -154,9 +154,9 @@ export function pressureTable({ mode = 's15', diff = 'hard', map = 'forest', nig
     for (const [k, share] of Object.entries(mx)) arrive(t, share * evCount({ type: 'swarm', enemy: k, count: JOLT.count, picked: true }, ph), k);
   }
 
-  // Start from the live champion delay and average its random repeat interval.
+  // Champions begin at CHAMPION.first. Repeat timing depends on the difficulty.
   const [min, max] = CHAMPION.every;
-  for (let t = CHAMPION.first / D.elite; t < minutes * 60; t += (min + max) / (2 * D.elite)) {
+  for (let t = CHAMPION.first; t < minutes * 60; t += (min + max) / (2 * D.elite)) {
     const c = champHp(at(t));
     arrive(t, 1, c.mx, { hpX: c.x, dmgX: 1.3, boss: true });
   }

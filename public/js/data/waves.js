@@ -2,15 +2,9 @@
 // advances 1.4 phases per minute; Ranked keeps going past 30 with the late
 // mix; dungeon floors map their own clocks onto this scale.
 
-// What may spawn when. Each pocket is a stretch of the night in minutes of the
-// 15-minute Survival clock, with the monsters that can turn up in it and how
-// often, as relative weights. Ranked runs on the same clock and carries on into
-// the pockets past minute 15; a dungeon floor's clock maps onto it through
-// minuteOf. Timed swarms, rings and packs come on top (EVENTS below).
-export const POCKETS = [
-  { minutes: [0, 1], spawn: { rat: 6, bat: 4 } },
-  { minutes: [1, 2], spawn: { rat: 5, bat: 5, slime: 3 } },
-  { minutes: [2, 3], spawn: { rat: 4, bat: 3, slime: 3, skeleton: 5 } },
+// Enemy weights shared by Survival and Dungeon after the opening. Ranked also
+// uses the pockets past minute 15. Timed events are listed separately below.
+const LATER_POCKETS = [
   { minutes: [3, 4], spawn: { bat: 1, slime: 3, skeleton: 6, zombie: 4 } },
   { minutes: [4, 5], spawn: { bat: 1, slime: 2, skeleton: 6, zombie: 4, wolf: 3 } },
   { minutes: [5, 6], spawn: { bat: 1, skeleton: 6, zombie: 4, wolf: 3, goblin: 5 } },
@@ -27,9 +21,27 @@ export const POCKETS = [
   { minutes: [19, Infinity], spawn: { bat: 1, skeleton: 1.5, cultist: 1, orc: 2, imp: 4, hellhound: 3, deathknight: 2, ogre: 1.1 } },
 ];
 
+// Survival minutes, also used as the opening clock in Ranked.
+export const POCKETS = [
+  { minutes: [0, 1], spawn: { rat: 1 } },
+  { minutes: [1, 2], spawn: { rat: 6, bat: 4 } },
+  { minutes: [2, 2.5], spawn: { rat: 4, bat: 3, slime: 3 } },
+  { minutes: [2.5, 3], spawn: { rat: 4, bat: 3, slime: 3, skeleton: 5 } },
+  ...LATER_POCKETS,
+];
+
+// Dungeon floor phases map to these minutes through minuteOf.
+export const DUNGEON_POCKETS = [
+  { minutes: [0, 1], spawn: { rat: 6, bat: 4 } },
+  { minutes: [1, 2], spawn: { rat: 5, bat: 5, slime: 3 } },
+  { minutes: [2, 3], spawn: { rat: 4, bat: 3, slime: 3, skeleton: 5 } },
+  ...LATER_POCKETS,
+];
+
 // The minute of the night a phase stands for: 1.4 phases a minute up to
 // minute 15 (phase 21), then Ranked's 0.9 a minute.
-export const minuteOf = (phase) => (phase <= 21 ? phase / 1.4 : 15 + (phase - 21) / 0.9);
+export const DAWN_PHASE = 21;
+export const minuteOf = (phase) => (phase <= DAWN_PHASE ? phase / 1.4 : 15 + (phase - DAWN_PHASE) / 0.9);
 // The pocket of a minute, of the Darkwood's night or of a Survival map's own (data/maps.js pockets).
 export const pocketAt = (minute, pockets = POCKETS) => pockets.find((p) => minute >= p.minutes[0] && minute < p.minutes[1]) || pockets[pockets.length - 1];
 
@@ -74,23 +86,14 @@ export function hpScale(phase) {
   return (1 + phase * 0.08 + Math.max(0, phase - 9) * 0.2 + Math.max(0, phase - 16) * 0.3) * Math.pow(1.06, Math.max(0, phase - 30));
 }
 
-// Survival's night hardens much faster from minute 6.5 (phase 9) on: a hero
-// without the Armory hits a wall of health it can't cut through, one with all
-// of it gets to dawn. Tuned with the gem-collecting bot (tools/bots.mjs
-// --bot=gems --armory=none|max). Ranked follows it to dawn (rankedHpScale); the dungeon keeps hpScale.
+// Survival and Ranked add 0.8 times the starting HP per minute through dawn.
 export function nightHpScale(phase) {
-  const base = (p) => 1 + p * 0.08 + Math.max(0, p - 9) * 0.8 + Math.max(0, p - 16);
-  // +200% health through minute ten (phase 14). Keep that gained health
-  // afterwards so crossing 10:00 never makes a new wave weaker.
-  return base(phase) + 2 * base(Math.min(phase, 14));
+  return 1 + 12 * (phase / DAWN_PHASE);
 }
 
-// Ranked's night is Survival's until dawn (phase 21), then it grows on from Survival's dawn at the
-// old hpScale's rate, compounding past 30, as Game.dmgScale does past dawn (the 27 October 2026
-// review, D10: its monsters had x6.58 health at 15:00 against Survival's x17.28, and reached that
-// only about minute 29).
+// After dawn, Ranked keeps the endless growth curve from the new dawn value.
 export function rankedHpScale(phase) {
-  return phase <= 21 ? nightHpScale(phase) : (nightHpScale(21) * hpScale(phase)) / hpScale(21);
+  return phase <= DAWN_PHASE ? nightHpScale(phase) : (nightHpScale(DAWN_PHASE) * hpScale(phase)) / hpScale(DAWN_PHASE);
 }
 
 // Monster health multiplier for a mode at a phase.
