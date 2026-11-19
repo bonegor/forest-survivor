@@ -72,3 +72,27 @@ test('manual preview attacks are visual only and the loop rests before changing 
   assert.equal(showcaseAction(12).kind,'idle');
   assert.equal(showcaseAction(11.99).face,showcaseAction(12).face);
 });
+
+test('Ranger can raise and lower her hood from the character screen', () => {
+  const profile = defaultProfile();
+  profile.heroes.push('archer');
+  const app = {
+    ui: new UI(), store: { profile }, settings: { skins: { paladin: 'c' } },
+    choice: { hero: 'archer' }, scene: { draw() {} },
+  };
+  const screen = new HeroScreen();
+  screen.enter(app);
+  const draw = () => { screen.draw(ctx, 480, 270, 0.3); input.endFrame(); };
+  draw();
+  for (const sprite of ['archer_hooded', 'archer']) {
+    const toggle = app.ui.items.find(i => i.id === 'ranger_hood');
+    assert.ok(toggle && !toggle.disabled);
+    Object.assign(input.mouse, { x: toggle.x + 3, y: toggle.y + 3, clicked: true });
+    draw();
+    draw();
+    assert.equal(screen.preview.game.player.hero.sprite, sprite);
+    assert.equal(app.settings.skins.paladin, 'c');
+  }
+  assert.equal(app.settings.skins.archer, undefined);
+  input.mouse.x = input.mouse.y = -1;
+});

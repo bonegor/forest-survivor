@@ -1,4 +1,3 @@
-import { APPROVED_HERO_ART } from './approved-heroes.js';
 import { fromRows } from '../engine/pixels.js';
 import { packedPalette } from './palette.js';
 import { SOUL_RELEASE, appendDecay, blank, cut, departingSoul, fallFrameAt, paint, segment } from './hero-fall.js';
@@ -69,23 +68,23 @@ function fallPose(standing, parts, pose) {
   return out;
 }
 
-let frames;
-export const RANGER_FALL = {
-  anchorY: APPROVED_HERO_ART.archer.anchorY,
-  outline: false,
-  frameAt: seconds => fallFrameAt(poses, seconds),
-  wisp: departingSoul,
-  cues: [{ time: SOUL_RELEASE, sound: 'souldepart' }],
-  gen() {
-    if (!frames) {
-      const ranger = APPROVED_HERO_ART.archer;
+export function rangerFall(ranger) {
+  let frames;
+  return {
+    anchorY: ranger.anchorY,
+    outline: false,
+    frameAt: seconds => fallFrameAt(poses, seconds),
+    wisp: departingSoul,
+    cues: [{ time: SOUL_RELEASE, sound: 'souldepart' }],
+    gen() {
+      if (frames) return frames;
       const standing = ranger.gen()[ranger.idle[0]];
       const parts = separateBody(standing);
       frames = poses.map((pose, i) => i ? fallPose(standing, parts, pose) : standing);
       const remains = blank(standing.w, standing.h);
       drawBow(remains, ...poses.at(-1).slice(-3));
       appendDecay(frames, remains);
-    }
-    return frames;
-  },
-};
+      return frames;
+    },
+  };
+}

@@ -8,6 +8,8 @@ import {input} from '../public/js/engine/input.js';
 import {defaultProfile,metaBonuses} from '../public/js/shared/profile.js';
 import {bounds,flipX} from '../public/js/engine/pixels.js';
 import data from '../public/assets/heroes-approved/archer.js';
+import donor from '../tools/animation-round/baseline/trailblazer.js';
+import {unpack} from '../tools/animation-round/build.mjs';
 import {moveFor} from '../public/js/data/difficulty.js';
 
 const RANGER=SPR[HEROES.archer.sprite];
@@ -37,7 +39,7 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
 });
 
 test('Ranger wears Trailblazer’s face and ear through the original idle and walk cycles',()=>{
-  const trail = SPR[HEROES.trailblazer.sprite].frames[0].buf;
+  const trail = unpack(donor, donor.frames[0]);
   // The donor coordinates cover the forehead, pointed ear, both irises and jaw.
   const samples = [[39,31],[40,32],[34,33],[35,33],[38,33],[41,33],[38,34],[41,34],[39,35],[40,36]];
   for (const index of [...RANGER.idle, ...RANGER.walk]) {
@@ -46,6 +48,22 @@ test('Ranger wears Trailblazer’s face and ear through the original idle and wa
     for (const [x,y] of samples)
       assert.equal(frame.d[(y+dy)*frame.w+x+1],trail.d[y*trail.w+x],`donor pixel (${x},${y}) in frame ${index}`);
     assert.notEqual(frame.d[(29+dy)*frame.w+40],trail.d[29*trail.w+39],'silver fringe changes color');
+  }
+});
+
+test('Trail keeps two blue irises through resting, travelling, drawing and moving bow shots',()=>{
+  const trail = SPR[HEROES.trailblazer.sprite];
+  for (const index of [...trail.idle, ...trail.walk, ...trail.attack, ...trail.attackWalk.flat()]) {
+    const { w, d } = trail.frames[index].buf;
+    const eyes = [];
+    for (let y = 31; y <= 36; y++) {
+      for (let x = 35; x <= 43; x++) {
+        const c = d[y*w+x], red = c & 255, green = c >>> 8 & 255, blue = c >>> 16 & 255;
+        if ((c >>> 24) > 220 && blue >= green + 20 && green >= red + 20) eyes.push([x,y]);
+      }
+    }
+    assert.equal(eyes.length, 2, 'two visible irises in pose '+index);
+    assert.equal(eyes[0][1], eyes[1][1], 'eyes stay level in pose '+index);
   }
 });
 

@@ -10,6 +10,9 @@ import { writePng } from '../png.mjs';
 import { buildGroundedWalk, GROUNDED_MODELS } from './grounded-walk.mjs';
 import { buildRobedWalk } from './robed-walk.mjs';
 import { heavyHeroClarity } from './heavy-hero-clarity.mjs';
+import { fitPaladinFace } from './paladin-trail-face.mjs';
+import { fitPaladinArms } from './paladin-arms.mjs';
+import { colorTrailEyes, registerTrailIdleEyes, trailWalkPalette } from './trailblazer-eyes.mjs';
 import { sourceDetail } from './source-detail.mjs';
 
 const TAU = Math.PI * 2;
@@ -397,18 +400,21 @@ mkdirSync(generatedDir,{recursive:true});
 const report={};
 for(const [id,base] of Object.entries(source)) {
   if(ids&&!ids.includes(id))continue;
-  const rig=rigs[id], frames=base.frames.map(f=>{
+  const blueEyes=id==='trailblazer' && version==='v1';
+  const rig=rigs[id], frames=base.frames.map((f,index)=>{
     const native=clean(unpack(base,f));
+    if(blueEyes)colorTrailEyes(native,base.attack.indexOf(index));
     return native;
   });
   // Dedicated resting model for spectres: use the upright source pose, not their
   // forward-travelling float sequence. Every idle owns separate frame indices.
   const standing=frames[0], idle=[];
   for(let i=0;i<16;i++){idle.push(frames.length);frames.push(flicker(warp(standing,materialField(rig,i/16*TAU)),id,i/16*TAU,base.palette));}
+  if(blueEyes)for(const index of idle)registerTrailIdleEyes(frames[index],standing);
   for(let i=0;i<base.walk.length;i++)frames[base.walk[i]]=connectedWalk(warp(frames[base.walk[i]],materialField(rig,i/base.walk.length*TAU,true)),id,i);
   let walk=[...base.walk],walkFps=rig.fps;
   const nativeGait=buildRobedWalk(id,base.palette,standing,clean(unpack(base,base.frames[base.walk[0]])),{version})
-    || buildGroundedWalk(id,base.palette,standing,{version});
+    || buildGroundedWalk(id,blueEyes?trailWalkPalette(base.palette,standing):base.palette,standing,{version});
   if(nativeGait) {
     walk=nativeGait.frames.map(frame=>{const index=frames.length;frames.push(frame);return index;});
     walkFps=nativeGait.fps;
@@ -425,6 +431,14 @@ for(const [id,base] of Object.entries(source)) {
     attack=[attack[0],anticipation,attack[1],attack[2],recovery,attack[3]];
     attackRelease=2; attackFps=ranged?12:14;
   }
+  const trailFace=id==='paladin' && version==='v1';
+  if(trailFace) {
+    const blades=equipment.paladin.attackMasks.map(indices=>new Set(indices));
+    for(let i=0;i<frames.length;i++){
+      const step=attack.indexOf(i),blade=blades[step];
+      frames[i]=fitPaladinFace(fitPaladinArms(frames[i],step,blade??blades[0]),blade);
+    }
+  }
   const attackWalk=rig.floating?undefined:attack.map((index,attackStep)=>walk.map((frame,step)=>{
     const n=frames.length;frames.push(attackWalking(frames[index],frames[frame],standing,rig,id,step,attackStep,nativeGait?.lowerFrames[step]));return n;
   }));
@@ -433,13 +447,14 @@ for(const [id,base] of Object.entries(source)) {
   const visualRate=id==='rogue'?2:1;
   walkFps*=visualRate; attackFps*=visualRate;
   const idleFps=(rig.floating?7:8)*visualRate;
-  for(let i=0;i<frames.length;i++)frames[i]=heavyHeroClarity(frames[i],id);
+  if(id==='paladin' && !trailFace)for(let i=0;i<frames.length;i++)frames[i]=heavyHeroClarity(frames[i],id);
   const detail=sourceDetail(id,{base,frames,idle,walk,attack,attackWalk,version,idleField:i=>materialField(rig,i/16*TAU)});
   const finalFrames=detail?.frames||frames;
   const data=pack(finalFrames,{...base,idle,idleFps,walk,walkFps,attack,attackRelease,attackFps,attackWalk,
     manualDelay:base.manualDelay??Math.min(2,base.attackRelease)/base.attackFps,
     motionRevision:version==='v2'?'restrained-roster-gait-v2-2026-11-12':'continuous-roster-gait-2026-11-12',
-    ...(id==='paladin'?{clarityRevision:'heavy-hero-faces-2026-11-14',claritySource:'tools/animation-round/heavy-hero-clarity.mjs'}:{}),
+    ...(id==='paladin'?{clarityRevision:trailFace?'paladin-trail-face-2026-11-19':'heavy-hero-faces-2026-11-14',
+      claritySource:trailFace?'tools/animation-round/paladin-trail-face.mjs':'tools/animation-round/heavy-hero-clarity.mjs'}:{}),
     motionSource:`tools/animation-round/${nativeGait?.settings?'robed':'grounded'}-walk.mjs`,
     ...(id==='rogue'?{animationRevision:'shadow-double-cadence-2026-11-14'}:{}),
     motionNotes:nativeGait?.settings?.note||(nativeGait?'Sixteen connected contact, compression, passing and reaching phases; stable native upper-body texture, alternating planted soles and lifted returns.':rig.note),

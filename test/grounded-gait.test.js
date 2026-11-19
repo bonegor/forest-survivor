@@ -10,14 +10,17 @@ import { moveFor } from '../public/js/data/difficulty.js';
 import { BASE_SPEED } from '../public/js/game/player.js';
 import { unpack } from '../tools/animation-round/build.mjs';
 import { buildGroundedWalk, groundedFoot, GROUNDED_MODELS } from '../tools/animation-round/grounded-walk.mjs';
-import { heavyHeroClarity } from '../tools/animation-round/heavy-hero-clarity.mjs';
+import { fitPaladinFace } from '../tools/animation-round/paladin-trail-face.mjs';
+import { fitPaladinArms } from '../tools/animation-round/paladin-arms.mjs';
 import originalPaladin from '../tools/hero-polish-review/before/paladin.js';
 import { readPng } from '../tools/png.mjs';
 import { reduceSource } from '../tools/animation-round/source-detail.mjs';
 import { nativeRanger } from '../tools/animation-round/ranger-native.mjs';
 import { nativeBerserker } from '../tools/animation-round/berserker-native.mjs';
+import { trailWalkPalette } from '../tools/animation-round/trailblazer-eyes.mjs';
 import { packedPalette } from '../public/js/art/palette.js';
 const preserved = { paladin: originalPaladin };
+const paladinWeapon = JSON.parse(readFileSync(new URL('../tools/animation-round/baseline/equipment-masks.json', import.meta.url))).paladin.mask;
 const nativeTreatments = { archer: nativeRanger, berserker: nativeBerserker };
 
 test('all articulated heroes retain their source identity and complete registered gait in the packed game',()=>{
@@ -27,7 +30,8 @@ test('all articulated heroes retain their source identity and complete registere
     const source=new URL('../tools/animation-round/baseline/grounded-models/'+model.source,import.meta.url);
     const original=native?readPng(source):null;
     const standing=native?reduceSource(original,[0,0,original.w,original.h],model.pivot,model.scale):unpack(retouched?preserved[id]:data,(retouched?preserved[id]:data).frames[0]);
-    const gait=buildGroundedWalk(id,base.palette,standing,{density}),palette=new Set(native?[0,...Object.values(packedPalette())]:base.palette);
+    const sourcePalette=id==='trailblazer'?trailWalkPalette(base.palette,standing):base.palette;
+    const gait=buildGroundedWalk(id,sourcePalette,standing,{density}),palette=new Set(native?[0,...Object.values(packedPalette())]:sourcePalette);
     if(id==='archer')for(const color of baseline.trailblazer.palette)palette.add(color);
     assert.equal(data.walk.length,16,id+' visits all authored phases');
     assert.equal(gait.lowerFrames.length,16);
@@ -42,7 +46,7 @@ test('all articulated heroes retain their source identity and complete registere
     }
     for(let i=0;i<16;i++) {
       const frame=gait.frames[i],pose=gait.poses[i];
-      const expected=native?native(frame):heavyHeroClarity(frame,id),packed=unpack(data,data.frames[data.walk[i]]);
+      const expected=native?native(frame):id==='paladin'?fitPaladinFace(fitPaladinArms(frame,-1,paladinWeapon)):frame,packed=unpack(data,data.frames[data.walk[i]]);
       assert.deepEqual(expected.d,packed.d,id+' packed gait with requested face/torso art '+i);
       // Native upper armour/face never undergoes skeletal resampling.
       for(let y=12*density;y<40*density;y++)for(let x=12*density;x<68*density;x++)

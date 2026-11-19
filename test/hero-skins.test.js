@@ -9,8 +9,9 @@ import { releaseFiles } from '../tools/build-itch.mjs';
 import approved from '../public/assets/heroes-approved/index.js';
 import { APPROVED_DESIGNS } from '../public/js/expansion/roster.js';
 
-test('the only registered hero art is the selected roster and its matching poses', () => {
-  assert.deepEqual(Object.keys(HERO_ART).sort(), Object.keys(HEROES).flatMap(id => [id, id+'_pose']).sort());
+test('registered hero art includes the selected roster, the hooded Ranger and their matching poses', () => {
+  const models = [...Object.keys(HEROES), 'archer_hooded'];
+  assert.deepEqual(Object.keys(HERO_ART).sort(), models.flatMap(id => [id, id+'_pose']).sort());
   for (const h of Object.values(HEROES)) {
     assert.equal(h.sprite,h.id); assert.equal(h.pose,h.id+'_pose'); assert.equal(h.skins,undefined);
     for (const saved of [undefined,'original','refined','v3','v4a','v4b','removed']) {

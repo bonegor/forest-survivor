@@ -13,23 +13,23 @@ const PALADIN_COLORS={...COLORS,s:rgba(191,135,106),t:rgba(224,174,139),T:rgba(2
 function stamp(d,w,x,y,rows,colors=COLORS) {
  rows.forEach((row,yy)=>[...row].forEach((key,xx)=>{if(key!=='.')d[(y+yy)*w+x+xx]=colors[key];}));
 }
-function crest(frame,id) {
+export function paladinCrest(frame) {
  // Register to the original warm hair/hood, including the one-pixel breath and
  // moving-combat translation. A blade above the crown must not become a head.
  for(let y=23;y<=31;y++){
   const xs=[];
   for(let x=32;x<=43;x++){
    const c=frame.d[y*frame.w+x],r=c&255,g=c>>>8&255,b=c>>>16&255;
-   if(c>>>24>190&&r>60&&r>g*(id==='berserker'?1.8:1.4)&&r>b*1.3)xs.push(x);
+   if(c>>>24>190&&r>60&&r>g*1.4&&r>b*1.3)xs.push(x);
   }
-  if(xs.length>=(id==='berserker'?1:2))return {x:Math.round(xs.reduce((n,x)=>n+x,0)/xs.length),y};
+  if(xs.length>=2)return {x:Math.round(xs.reduce((n,x)=>n+x,0)/xs.length),y};
  }
- throw Error(`${id}: could not register the native head`);
+ throw Error('Paladin: could not register the native head');
 }
 export function heavyHeroClarity(frame,id) {
  // Berserker now uses its coherent original source model via source-detail.mjs.
  if(id!=='paladin')return frame;
- const d=frame.d.slice(),p=crest(frame,id);
+ const d=frame.d.slice(),p=paladinCrest(frame);
  {
   // The red hood and gold circlet are already a strong silhouette. Give the
   // exposed face a brow, one lit nose edge and a connected jaw instead of the

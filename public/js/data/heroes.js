@@ -222,8 +222,9 @@ export const weaponsFor = (hero) => [...hero.unique, ...SHARED_WEAPONS];
 // with one hero bring in the next.
 export { HERO_ORDER } from '../shared/profile.js';
 
-// Every caller uses the single approved roster, regardless of old LOOK preferences.
-export function heroLook(id) {
-  // Old saved LOOK settings cannot restore a discarded sprite.
+const hoodedRanger = { ...HEROES.archer, sprite: 'archer_hooded', pose: 'archer_hooded_pose' };
+
+export function heroLook(id, skins) {
+  if (id === 'archer' && skins?.archer === 'hooded') return hoodedRanger;
   return HEROES[id];
 }

@@ -1,4 +1,5 @@
 import { input, padKey } from '../engine/input.js';
+import { saveSettings } from '../engine/storage.js';
 import { SPR, idleFrame } from '../engine/sprites.js';
 import { sfx, playAfterJingle } from '../engine/audio.js';
 import { clamp, fmtTime } from '../engine/util.js';
@@ -174,16 +175,28 @@ export class HeroScreen {
 
   appearance(ctx, ui, h, box, locked) {
     const app = this.app;
-    {
-      // Every star he has earned, each in its colour (ladder.js featStars: the wins, then their marks).
-      const earned = featStars(app.store.profile, h.id).filter(s => s[2]);
-      // Ready for the night, on whichever Survival map it falls (28 October 2026).
-      if (locked || !earned.length) drawText(ctx, locked ? 'NOT YET RECRUITED' : 'READY FOR THE NIGHT', box.x + box.w / 2, box.y + box.h - 12, { align: 'center', color: locked ? '#8b9bb4' : '#c28569' });
-      else {
-        const x0 = Math.round(box.x + box.w / 2 - (earned.length * 7 - 2) / 2);
-        earned.forEach(([, col], i) => drawText(ctx, '★', x0 + i * 7, box.y + box.h - 12, { color: col }));
+    const earned = featStars(app.store.profile, h.id).filter(s => s[2]);
+    const center = box.x + box.w / 2, bottom = box.y + box.h;
+    let starCenter = center, starSpacing = 7;
+    if (h.id === 'archer' && !locked) {
+      const hooded = app.settings.skins?.archer === 'hooded';
+      const width = 66;
+      const x = earned.length ? box.x + 2 : Math.round(center - width / 2);
+      if (button(ctx, ui, 'ranger_hood', x, bottom - 18, width, 16, hooded ? 'LOWER HOOD' : 'RAISE HOOD')) {
+        const skins = { ...app.settings.skins };
+        if (hooded) delete skins.archer;
+        else skins.archer = 'hooded';
+        app.settings.skins = skins;
+        saveSettings(app.settings);
       }
+      starCenter = (x + width + box.x + box.w) / 2;
+      if (earned.length) starSpacing = Math.min(7, Math.floor((box.w - width - 4) / earned.length));
+    } else if (locked || !earned.length) {
+      drawText(ctx, locked ? 'NOT YET RECRUITED' : 'READY FOR THE NIGHT', center, bottom - 12, { align: 'center', color: locked ? '#8b9bb4' : '#c28569' });
+      return;
     }
+    const x0 = Math.round(starCenter - ((earned.length - 1) * starSpacing + 5) / 2);
+    earned.forEach(([, col], i) => drawText(ctx, '★', x0 + i * starSpacing, bottom - 12, { color: col }));
   }
 
   details(ctx, ui, box, h, locked, dt) {

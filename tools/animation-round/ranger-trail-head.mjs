@@ -1,25 +1,7 @@
-import trail from './baseline/trailblazer.js';
+import { trailHeadRows } from './trail-head.mjs';
 import { packedPalette } from '../../public/js/art/palette.js';
 
 const palette = packedPalette();
-const [left, top, width, , encoded] = trail.frames[0];
-const pixels = Buffer.from(encoded, 'base64');
-
-// The head in Trailblazer's approved standing pose. Each entry spans one
-// source scanline. 'f' copies the face or pointed ear; 'h' recolors the hair.
-// The quiver, fletching and green collar around it belong to the donor body.
-const rows = [
-  [37, 'hhhh'],
-  [35, 'hhhhhhhh'],
-  [34, 'hhhhhhhhh'],
-  [33, 'hhhhhhhhhhh'],
-  [32, 'hhhhhhhfhfhh'],
-  [31, 'hhhhhhhffffhh'],
-  [31, 'hhhffffffffh'],
-  [31, 'hhhhffffffff'],
-  [32, 'hhhhhffffff'],
-  [33, 'hhhhfffff'],
-];
 
 function auburn(silver) {
   const light = silver >>> 8 & 255;
@@ -31,15 +13,10 @@ function auburn(silver) {
   return palette.B;
 }
 
-const head = rows.map(([x, row], line) => {
-  const y = 27 + line;
-  const colors = [...row].map((material, i) => {
-    const p = ((y - top) * width + x + i - left) * trail.indexBytes;
-    const color = trail.palette[pixels.readUIntLE(p, trail.indexBytes)];
-    return material === 'h' ? auburn(color) : color;
-  });
-  return { x, colors };
-});
+const head = trailHeadRows.map(({ x, pixels }) => ({
+  x,
+  colors: pixels.map(({ hair, color }) => hair ? auburn(color) : color),
+}));
 
 export function fitTrailHead(frame, attackStep) {
   const { w, d } = frame;
