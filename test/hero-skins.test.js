@@ -4,28 +4,32 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import '../tools/headless.mjs';
 import { HEROES, heroLook } from '../public/js/data/heroes.js';
 import { HERO_ART } from '../public/js/art/heroes.js';
+import { APPROVED_HERO_ART } from '../public/js/art/approved-heroes.js';
 import { SPR } from '../public/js/engine/sprites.js';
 import { releaseFiles } from '../tools/build-itch.mjs';
 import approved from '../public/assets/heroes-approved/index.js';
 import { APPROVED_DESIGNS } from '../public/js/expansion/roster.js';
 
-test('registered hero art includes the selected roster, the hooded Ranger and their matching poses', () => {
-  const models = [...Object.keys(HEROES), 'archer_hooded'];
+test('registered hero art contains one look and matching pose per hero', () => {
+  const models = Object.keys(HEROES);
   assert.deepEqual(Object.keys(HERO_ART).sort(), models.flatMap(id => [id, id+'_pose']).sort());
   for (const h of Object.values(HEROES)) {
     assert.equal(h.sprite,h.id); assert.equal(h.pose,h.id+'_pose'); assert.equal(h.skins,undefined);
-    for (const saved of [undefined,'original','refined','v3','v4a','v4b','removed']) {
+    for (const saved of [undefined,'original','refined','v3','v4a','v4b','hooded','removed']) {
       assert.equal(heroLook(h.id,{[h.id]:saved}),h,h.id+': old settings cannot restore a discarded sprite');
     }
   }
 });
 
-test('every shipped frame reconstructs the registered native pixels and anchor', () => {
+test('packed sheets reconstruct the native art underlying every registered sprite', () => {
   for (const [id, data] of Object.entries(approved)) {
     assert.equal(data.design, APPROVED_DESIGNS[id]);
     assert.match(data.sha256, /^[a-f0-9]{64}$/);
     const spr = SPR[id];
     assert.equal(spr.frames.length,data.frames.length,id);
+    // Trail wears her hood over this native sheet. The hood art test checks
+    // the final silhouette, registration and weapon pixels of every pose.
+    const frames = id === 'trailblazer' ? APPROVED_HERO_ART[id].gen() : spr.frames.map(frame => frame.buf);
     for (const [index,[x,y,w,h,encoded]] of data.frames.entries()) {
       const bytes=Buffer.from(encoded,'base64'), expected=new Uint32Array(data.w*data.h);
       assert.equal(bytes.length, w * h * data.indexBytes);
@@ -33,7 +37,7 @@ test('every shipped frame reconstructs the registered native pixels and anchor',
         const color = bytes.readUIntLE(p * data.indexBytes, data.indexBytes);
         expected[(y + Math.floor(p / w)) * data.w + x + p % w] = data.palette[color];
       }
-      assert.deepEqual(spr.frames[index].buf.d,expected,`${id}: approved frame ${index}`);
+      assert.deepEqual(frames[index].d,expected,`${id}: approved frame ${index}`);
     }
   }
 });

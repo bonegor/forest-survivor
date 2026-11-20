@@ -17,22 +17,15 @@ test('every selected hero has a complete default sprite and matching pose', () =
   assert.equal(SPR.paladin_d, undefined, 'her Style D is gone');
 });
 
-test('the Ranger hood carries through a run, its fall and its final planted bow', () => {
+test('a saved hood preference starts Ranger bareheaded and carries her current art into the fall', () => {
   const settings = { skins: { archer: 'hooded' } };
   const g = new Game({ hero: 'archer', mode: 's15', meta: metaBonuses(defaultProfile()), settings, crypts: false });
   const { hero } = g.player;
   assert.equal(hero.id, 'archer');
-  assert.equal(hero.sprite, 'archer_hooded');
-  assert.equal(hero.pose, 'archer_hooded_pose');
-  const ranger = SPR.archer, hood = SPR[hero.sprite];
-  assert.deepEqual(hood.fall.frames[0].buf, hood.frames[hood.idle[0]].buf);
-  const landed = hood.fall.frameAt(0.94);
-  assert.notDeepEqual(hood.fall.frames[landed].buf.d, ranger.fall.frames[landed].buf.d);
-  assert.deepEqual(hood.fall.frames.at(-1).buf, ranger.fall.frames.at(-1).buf);
-  assert.deepEqual(hood.fall.cues, ranger.fall.cues);
-  assert.deepEqual(hood.walk, ranger.walk);
-  assert.deepEqual(hood.attackWalk, ranger.attackWalk);
-  assert.equal(hood.motionRate, ranger.motionRate);
+  assert.equal(hero.sprite, 'archer');
+  assert.equal(hero.pose, 'archer_pose');
+  const ranger = SPR[hero.sprite];
+  assert.deepEqual(ranger.fall.frames[0].buf, ranger.frames[ranger.idle[0]].buf);
 });
 
 test('heroLook leaves a hero as she is, whatever look the settings once chose', () => {

@@ -222,9 +222,7 @@ export const weaponsFor = (hero) => [...hero.unique, ...SHARED_WEAPONS];
 // with one hero bring in the next.
 export { HERO_ORDER } from '../shared/profile.js';
 
-const hoodedRanger = { ...HEROES.archer, sprite: 'archer_hooded', pose: 'archer_hooded_pose' };
-
-export function heroLook(id, skins) {
-  if (id === 'archer' && skins?.archer === 'hooded') return hoodedRanger;
+// All saves use the roster appearance, including saves with an old Ranger hood selection.
+export function heroLook(id) {
   return HEROES[id];
 }

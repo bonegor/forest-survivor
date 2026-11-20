@@ -6,8 +6,9 @@ import trail from '../public/assets/heroes-approved/trailblazer.js';
 import original from '../tools/hero-polish-review/before/paladin.js';
 import { unpack } from '../tools/animation-round/build.mjs';
 import { paladinCrest } from '../tools/animation-round/heavy-hero-clarity.mjs';
+import { hexPack } from '../public/js/engine/pixels.js';
 
-test('the Paladin wears Trail’s native face with brown eyes behind her moving sword', () => {
+test('the Paladin keeps Trail’s brow and cheeks, with brown eyes and a rounded ear behind her sword', () => {
   const sylva = unpack(trail, trail.frames[0]);
   const { paladin: { attackMasks } } = JSON.parse(readFileSync(
     new URL('../tools/animation-round/baseline/equipment-masks.json', import.meta.url), 'utf8'));
@@ -17,19 +18,26 @@ test('the Paladin wears Trail’s native face with brown eyes behind her moving 
     for (const i of [frame, ...paladin.attackWalk[step]]) swords.set(i, { step, mask });
   }
   const eyes = new Map([[38, 0x366099], [41, 0x1f3962]]);
+  const ear = [
+    [-3, 5, '#962438'], // The old projecting tip is tucked into burgundy hair.
+    [-1, 5, '#dc9a80'], [-2, 6, '#dc9a80'], [-1, 6, '#a86359'], [-1, 7, '#c78270'],
+  ];
   for (const [i, packed] of paladin.frames.entries()) {
     const frame = unpack(paladin, packed);
     const before = unpack(original, original.frames[i]);
     const { x, y } = paladinCrest(before);
     const strike = swords.get(i);
     const sword = strike?.mask;
-    // The projected ear, brows, nose and tapered chin follow the donor exactly.
-    for (const [sx, sy] of [[39,31],[40,32],[34,33],[38,33],[41,33],[38,34],[41,34],[40,35],[39,36]]) {
+    for (const [sx, sy] of [[39,31],[40,32],[38,33],[41,33],[38,34],[41,34],[40,35],[39,36]]) {
       const j = (y + sy - 28) * frame.w + x + sx - 37;
       if (sword?.has(j)) continue;
       const donor = sylva.d[sy * sylva.w + sx];
       const expected = sy === 34 ? ((donor & 0xff000000) | eyes.get(sx)) >>> 0 : donor;
       assert.equal(frame.d[j], expected, `pose ${i}, donor (${sx},${sy})`);
+    }
+    for (const [dx, dy, color] of ear) {
+      const j = (y + dy) * frame.w + x + dx;
+      if (!sword?.has(j)) assert.equal(frame.d[j], hexPack(color), 'rounded ear in pose ' + i);
     }
     // The equipment mask also owns the old arm. The seven pixels nearest
     // its shoulder pivot contain the new elbow and fist. Beyond them the
@@ -51,9 +59,11 @@ test('the resting pauldron sits below the jaw through every breath and footfall'
   for (const i of [...paladin.idle, ...paladin.walk]) {
     const frame = unpack(paladin, paladin.frames[i]);
     const before = unpack(original, original.frames[i]);
-    const { y } = paladinCrest(before), at = (x, offset) => (y + offset) * frame.w + x;
+    const { x, y } = paladinCrest(before), at = (column, offset) => (y + offset) * frame.w + column;
     assert.ok(before.d[at(31, 8)] >>> 24 > 128, 'the old pointed rim occupied cheek height');
-    assert.equal(frame.d[at(31, 8)] >>> 24, 0, 'space beside the jaw in pose ' + i);
+    assert.equal(frame.d[at(x - 6, 8)], hexPack('#4d122a'), 'burgundy lock beside the jaw in pose ' + i);
+    const tip = frame.d[at(x - 7, 12)];
+    assert.ok(tip === hexPack('#4d122a') || tip === hexPack('#160d22'), 'taper reaches the shoulder outline in pose ' + i);
     assert.ok((frame.d[at(34, 10)] & 255) > 220, 'lit steel below the jaw in pose ' + i);
     assert.ok((frame.d[at(30, 14)] & 255) > 180, 'a distinct gauntlet at the waist in pose ' + i);
   }
