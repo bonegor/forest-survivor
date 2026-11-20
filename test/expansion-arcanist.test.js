@@ -89,18 +89,14 @@ test('the arc pays one charge per body and its evolution widens and hastens the 
   assert.equal(g.effects.at(-1).charges, 10, 'Echo cannot make a sweep unbounded');
 }));
 
-test('a manual crypt sweep starts on the approved staff release and cannot strike through stone', () => combat((g, p, w) => {
+test('a manual crypt sweep releases immediately and cannot strike through stone', () => combat((g, p, w) => {
   const face = foe(g, 55), blocked = foe(g, 55, 0.32);
   const wall = p.y + 10;
   g.inCrypt = {};
   g.world.solid = (_x, y) => y >= wall;
   g.world.lineOfSight = (_x, y, _tx, ty) => y < wall && ty < wall;
   assert.ok(g.strike());
-  g.cryptTime = 0.08;
-  w.update(0.08, true);
-  assert.equal(g.effects.length, 0);
-  g.cryptTime = 1 / 12;
-  w.update(1 / 12 - 0.08, true);
+  w.update(0, true);
   assert.equal(g.effects.length, 1);
   g.effects[0].update(0.3);
   assert.ok(face.hp < face.maxHp);
