@@ -102,14 +102,10 @@ test('crypt damage follows the approved release, respects a wall and scales thro
   g.grid.rebuild(g.enemies, p.x, p.y);
   const clip = strikeClip(SPR.swordbearer);
   assert.equal(clip.hit, 8);
-  assert.equal(clip.delay, 2 / 24);
+  assert.equal(clip.from, clip.hit);
   w.cd = 0;
   assert.ok(g.strike());
-  g.cryptTime = clip.delay - 0.001;
-  w.update(g.cryptTime, true);
-  assert.equal(near.hp, near.maxHp);
-  g.cryptTime = clip.delay;
-  w.update(0.001, true);
+  w.update(0, true);
   assert.equal(near.maxHp - near.hp, 44);
   assert.equal(hidden.hp, hidden.maxHp);
   for (let rank = 1; rank < 8; rank++) w.levelUp();

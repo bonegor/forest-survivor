@@ -76,10 +76,9 @@ test('all heroes reject field strikes and preserve a pending crypt release even 
     assert.equal(g.strike(),false,`${id}: paused input must not start a strike`);
     g.state='play';assert.equal(g.strike(),true,`${id}: a ready crypt weapon strikes`);
     const at=p.strikeAt,release=w.handAt,queue=w.queue;
-    // Haste can expire the cooldown before the authored release delay. A second
-    // input must not keep postponing the first hit or restarting its animation.
+    // A second input before the weapon update cannot replace the queued hit.
     w.cd=-1;g.cryptTime+=1/120;
-    assert.equal(g.strike(),false,`${id}: pending release owns the current wind-up`);
+    assert.equal(g.strike(),false,`${id}: the queued hit takes precedence`);
     assert.equal(p.strikeAt,at);assert.equal(w.handAt,release);assert.equal(w.queue,queue);
   });
 });

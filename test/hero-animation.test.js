@@ -8,7 +8,6 @@ import { input } from '../public/js/engine/input.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 import { heroAttackPose, strikeClip } from '../public/js/game/hero-animation.js';
 import { BASE_SPEED } from '../public/js/game/player.js';
-import baseline from '../tools/animation-round/baseline/index.js';
 
 function run(id, fn) {
   const before = input.bot;
@@ -97,11 +96,12 @@ test('ice sliding and airborne leaps do not spin a ground walk', () => {
   });
 });
 
-test('new pose counts preserve every hero\'s original manual hit delay', () => {
-  const legacy = { knight: 2/10, archer: 2/14, mage: 2/12, rogue: 0, necromancer: 2/12, paladin: 2/13, druid: 2/12, berserker: 2/12, witchhunter: 2/12 };
-  for (const [id, data] of Object.entries(baseline)) {
-    const expected = legacy[id] ?? Math.min(2, data.attackRelease) / data.attackFps;
-    assert.equal(strikeClip(SPR[id]).delay, expected, `${id}: artwork cannot change the damage schedule`);
+test('crypt attacks open on the release pose, with the Knight starting at the raised sword', () => {
+  for (const [id, hero] of Object.entries(HEROES)) {
+    const spr = SPR[hero.sprite], clip = strikeClip(spr);
+    assert.equal(clip.hit, spr.attackRelease, `${id}: contact uses the authored release pose`);
+    assert.equal(clip.from, clip.hit - (id === 'knight' ? 1 : 0));
+    assert.equal(clip.delay, id === 'knight' ? 1 / spr.attackFps : 0);
   }
 });
 
@@ -178,7 +178,7 @@ test('every grounded hero keeps its gait through all attack phases', () => {
         const frame = spr.frames[spr.attackWalk[k][j]], b = frame.buf;
         assert.ok(b.d.some(c => c >>> 24), `${id}/${k}/${j}: nonempty pose`);
         poses.add([...b.d].join(','));
-        p.strikeAt = g.clock - Math.max(0, clip.delay + (k - clip.hit + .1) / spr.attackFps);
+        p.strikeAt = g.clock - (k - clip.from + .1) / spr.attackFps;
         assert.equal(heroAttackPose(g, spr, j).frame, frame);
       }
       assert.ok(poses.size >= 4, `${id}/${k}: the moving attack keeps distinct gait phases`);
@@ -239,7 +239,7 @@ for (const id of Object.keys(HEROES)) test(`${id}: crypt strikes animate only af
     assert.equal(g.strike(), true);
     if (clip) {
       for (let k = clip.from; k < spr.attack.length; k++) {
-        g.cryptTime = p.strikeAt + Math.max(0, clip.delay + (k - clip.hit + .1) / spr.attackFps) - g.time;
+        g.cryptTime = p.strikeAt + (k - clip.from + .1) / spr.attackFps - g.time;
         g.placePlayer(g.cam);
         assert.equal(p._rect[4], spr.frames[spr.attack[k]], `crypt attack frame ${k}`);
         assert.equal(p._rect[5], face < 0);

@@ -88,7 +88,7 @@ test('Ravenous Edict caps siphons and crowd amplification; a solitary lord yield
   assert.equal(crowd.filter(e => e.hp < e.maxHp).length, 6);
 }));
 
-test('manual release uses the native Lich strike timing and cancels blocked or recycled targets', () => combat((g, p, w) => {
+test('an immediate Lich strike respects walls and cancels flights to recycled targets', () => combat((g, p, w) => {
   g.inCrypt = {};
   const wall = p.x + 46;
   g.world.solid = x => x >= wall;
@@ -96,10 +96,9 @@ test('manual release uses the native Lich strike timing and cancels blocked or r
   const blocked = foe(g, 53, 0);
   refresh(g);
   assert.ok(g.strike());
-  const { delay } = strikeClip(SPR.gravebinder);
-  assert.equal(delay, 1 / 12);
-  g.cryptTime = delay;
-  w.update(delay, true);
+  const clip = strikeClip(SPR.gravebinder);
+  assert.equal(clip.from, clip.hit);
+  w.update(0, true);
   assert.equal(w.fx, null);
   assert.equal(blocked.hp, blocked.maxHp);
 
@@ -107,11 +106,7 @@ test('manual release uses the native Lich strike timing and cancels blocked or r
   refresh(g);
   w.cd = 0;
   assert.ok(g.strike());
-  g.cryptTime = delay * 2 - 0.01;
-  w.update(delay - 0.01, true);
-  assert.equal(w.fx, null);
-  g.cryptTime = delay * 2;
-  w.update(0.01, true);
+  w.update(0, true);
   const flight = w.fx;
   assert.equal(flight.target, target);
   assert.equal(flight.fed, 0, 'wall also prevents the siphon');

@@ -16,8 +16,8 @@ export function heroAttackPose(g, spr, step) {
   const clip = strikeClip(spr);
   if (!clip) return null;
   const preview = !!g.inCrypt.preview;
-  if (p.strikeAt == null || !preview && g.clock < p.strikeAt) return null;
-  const k = Math.max(preview ? 0 : clip.from, clip.hit + Math.floor((g.clock - p.strikeAt - clip.delay) * spr.attackFps + 1e-6));
+  if (p.strikeAt == null || g.clock < p.strikeAt) return null;
+  const k = (preview ? 0 : clip.from) + Math.floor((g.clock - p.strikeAt) * spr.attackFps + 1e-6);
   const ang = p.strikeAng;
   // A moving attack keeps the current leg phase underneath its arms/equipment.
   // Older optional sheets without a moving clip retain their ordinary gait.
@@ -29,11 +29,11 @@ export function heroAttackPose(g, spr, step) {
   return { frame: spr.frames[index], flip: p.face < 0 };
 }
 
-// Start just before the hit/release frame, leaving the weapon's actual delay intact.
+// Start at the release or the first pose of the strike itself.
 export function strikeClip(spr) {
   if (!spr.attack?.length || !spr.attackFps) return null;
   const hit = spr.attackRelease ?? Math.floor(spr.attack.length / 2);
-  const delay = spr.manualDelay ?? Math.min(2, hit) / spr.attackFps;
-  const from = Math.max(0, hit - Math.ceil(delay * spr.attackFps - 1e-6));
+  const from = spr.attackStart ?? hit;
+  const delay = (hit - from) / spr.attackFps;
   return { from, hit, delay };
 }

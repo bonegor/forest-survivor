@@ -98,14 +98,9 @@ test('crypt release respects the approved clip, stone walls and guard recovery a
   g.grid.rebuild(g.enemies, p.x, p.y);
   const clip = strikeClip(SPR.praetorian);
   assert.equal(clip.hit, 8);
-  assert.equal(clip.delay, 2 / 24);
+  assert.equal(clip.from, clip.hit);
   assert.ok(g.strike());
-  g.cryptTime = clip.delay - 0.001;
-  w.update(g.cryptTime, true);
-  assert.equal(front.hp, front.maxHp);
-  assert.ok(!visibleShot.dead);
-  g.cryptTime = clip.delay;
-  w.update(0.001, true);
+  w.update(0, true);
   assert.ok(front.hp < front.maxHp && !visibleShot.dead);
   assert.ok(w.shieldward.guard.seen.has(visibleShot));
   assert.equal(blocked.hp, blocked.maxHp);

@@ -77,7 +77,8 @@ for (const fallback of [false, true]) {
     g.world.solid = () => false; g.world.lineOfSight = () => true;
     const target = g.spawnEnemy('zombie', p.x + 24, p.y, { instant: true, always: true });
     target.spd = 0; g.grid.rebuild(g.enemies, p.x, p.y);
-    w.cd = 0; assert.equal(g.strike(), true);
+    // Allow the pool to recycle a queued target before the weapon update consumes it.
+    w.strike(0, 0.1, target);
     const oldId = target.id;
     g.killEnemy(target); frames(g, 1);
     const recycled = g.spawnEnemy('zombie', p.x + 300, p.y, { instant: true, always: true });
@@ -105,6 +106,6 @@ test('a living manual target keeps its identity while moving before release', ()
   target.spd = 0; g.grid.rebuild(g.enemies, p.x, p.y);
   w.cd = 0; assert.equal(g.strike(), true);
   target.x = p.x + 48;
-  frames(g, 20);
+  frames(g, 1);
   assert.ok(g.effects.some(effect => effect.constructor.name === 'Burrow' && effect.target === target));
 }));

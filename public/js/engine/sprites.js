@@ -256,7 +256,8 @@ export function buildSprite(name, def) {
   const sprite = { name, frames, walk: def.walk || null, idle: def.idle || null,
     motionRate: def.motionRate || 1, idleRate: def.idleRate ?? 4,
     attack: def.attack || null, attackFps: def.attackFps || 0, selfBob: !!def.selfBob, floating: !!def.floating,
-    attackRelease: def.attackRelease ?? null, attackWalk: def.attackWalk || null, manualDelay: def.manualDelay,
+    attackStart: def.attackStart ?? null, attackRelease: def.attackRelease ?? null,
+    attackWalk: def.attackWalk || null, manualDelay: def.manualDelay,
     // A boss's: its poses as it strikes (frame lists at poseFps), the rows of art below its feet
     // (a blow sweeping low) and its body's [w, h] (what its shadow and glow go by).
     poses: def.poses || null, poseFps: def.poseFps || 0, below: def.below || 0, body: def.body || null,

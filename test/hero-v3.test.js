@@ -59,10 +59,10 @@ test('selected sprites preserve stats, weapons, movement, animation cadence and 
   }
 });
 
-test('Justicar keeps its eighteen authored attacks, with Smite at the legacy manual timing', () => {
+test('Justicar keeps its eighteen authored attack poses and opens crypt strikes on Smite', () => {
   const spr = SPR[heroLook('paladin', { paladin: 'selected' }).sprite];
   assert.deepEqual([spr.attack.length, spr.attackRelease, spr.attackFps], [18, 8, 24]);
-  assert.equal(strikeClip(spr).delay, 2 / 13);
+  assert.equal(strikeClip(spr).delay, 0);
 });
 
 test('the selected Ranger shoots without breaking her running gait in either direction', () => {

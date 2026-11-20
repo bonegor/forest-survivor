@@ -164,6 +164,43 @@ test('the Ranger drops her bow, leaves it planted at a slant and fully decays be
     assert.equal(image, fall.wisp.frames[fall.wisp.frameAt(.5)].get(face < 0));
   }, 'archer')));
 
+test('each of the other seven original heroes falls, releases a soul and leaves their planted gear', () => {
+  for (const hero of ['mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter']) {
+    for (const face of [1, -1]) game((g, p) => {
+      const spr = SPR[p.hero.sprite], fall = spr.fall;
+      const ctx = document.createElement('canvas').getContext('2d');
+      let shown;
+      ctx.drawImage = img => { shown = img; };
+      ctx.rotate = () => assert.fail(`${hero}: the fall is animated in native poses`);
+      p.face = face;
+      g.placePlayer(g.cam);
+      p.hurt(1e9);
+      const at = t => { g.deathT = t; g.drawFallen(ctx, g.cam); return shown; };
+      assert.equal(at(0), p._rect[4].white(face < 0));
+      assert.equal(new Set([.16, .29, .42, .55, .69, .83].map(at)).size, 6, `${hero}: the whole stumble plays`);
+
+      const { wisp } = fall;
+      const landed = fall.frames[fall.frameAt(wisp.release - .01)].buf;
+      const remains = fall.frames.at(-1).buf;
+      const box = bounds(remains);
+      assert.ok(box && box.y1 >= spr.anchorY - 2, `${hero}: gear meets the ground`);
+      const body = { ...landed, d: landed.d.map((pixel, i) => remains.d[i] ? 0 : pixel) };
+      assert.ok(bounds(body).y0 >= spr.anchorY - 22, `${hero}: the body has dropped`);
+      const bodyPixels = frame => frame.buf.d.filter((pixel, i) => pixel && !remains.d[i]).length;
+      const frames = [wisp.release, 1.9, 2.68].map(t => fall.frames[fall.frameAt(t)]);
+      const counts = frames.map(bodyPixels);
+      assert.ok(counts[0] > counts[1] && counts[1] > counts[2] && counts[2] === 0, `${hero}: the body decays completely`);
+      for (const buf of [landed, ...frames.map(frame => frame.buf)]) {
+        assert.ok(remains.d.every((pixel, i) => !pixel || buf.d[i] === pixel), `${hero}: the gear remains fixed`);
+      }
+      g.deathT = wisp.release + .45;
+      g.hud.drawDepartingSoul(ctx);
+      assert.equal(shown, wisp.frames[wisp.frameAt(.45)].get(face < 0));
+      assert.equal(at(DEATH.end), fall.frames.at(-1).get(face < 0));
+    }, hero);
+  }
+});
+
 test('the wisp visibly crosses the top edge, tail last, before results in landscape and portrait', () =>
   game((g, p) => {
     const wisp = SPR.knight.fall.wisp;

@@ -88,14 +88,10 @@ test('crypt strike waits for the approved release and only sweeps unobstructed g
   g.world.solid = (_x, y) => y >= wallY;
   g.world.lineOfSight = (_x, y, _tx, ty) => y < wallY && ty < wallY;
   index(g);
-  const delay = strikeClip(SPR.thornkeeper).delay;
-  assert.equal(delay, 1 / 12);
+  const clip = strikeClip(SPR.thornkeeper);
+  assert.equal(clip.from, clip.hit);
   assert.ok(g.strike());
-  g.cryptTime = delay - 0.01;
-  w.update(0.01, true);
-  assert.equal(w.fx, null);
-  g.cryptTime = delay;
-  w.update(0.01, true);
+  w.update(0, true);
   assert.ok(w.fx.spokes.every(s => p.y + s.dy < wallY));
   w.fx.update(0.25);
   assert.ok(front.hp < front.maxHp);

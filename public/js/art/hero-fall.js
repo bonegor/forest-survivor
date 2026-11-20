@@ -73,7 +73,7 @@ function shade(a, b, t) {
 }
 
 // Break up the fallen silhouette in small patches. Boots fade first and the head last.
-function sinkBody(out, body, t, depth) {
+function sinkBody(out, body, t, depth, groundY) {
   for (let y = 0; y < body.h; y++) {
     for (let x = 0; x < body.w; x++) {
       const color = body.d[y * body.w + x];
@@ -86,8 +86,9 @@ function sinkBody(out, body, t, depth) {
       const split = easeBetween(t, start, start + .18);
       const drop = easeBetween(t, start + .08, start + .46);
       const yy = y + Math.round(depth * drop);
-      if (yy > 57) continue;
+      if (yy > groundY) continue;
       const xx = x + Math.round(((seed % 5) - 2) * split);
+      if (xx < 0 || xx >= out.w) continue;
       const light = brightness(color);
       const soil = ash[light > 176 ? 3 : light > 100 ? 2 : light > 44 ? 1 : 0];
       const tarnish = easeBetween(t, head ? 1.39 : 1.22, start + .20);
@@ -134,13 +135,13 @@ export const departingSoul = {
 };
 
 // The weapon layer is already in its resting place when the body starts to decay.
-export function appendDecay(frames, remains) {
+export function appendDecay(frames, remains, groundY = 57) {
   const landed = frames.at(-1);
   const body = { ...landed, d: landed.d.map((color, i) => remains.d[i] ? 0 : color) };
-  const depth = Math.max(16, 58 - bounds(body).y0);
+  const depth = Math.max(16, groundY + 1 - bounds(body).y0);
   for (let i = 0; i < DECAY_FRAMES; i++) {
     const out = makeBuf(body.w, body.h);
-    sinkBody(out, body, SOUL_RELEASE + DECAY_STEP * i, depth);
+    sinkBody(out, body, SOUL_RELEASE + DECAY_STEP * i, depth, groundY);
     for (let j = 0; j < out.d.length; j++) if (remains.d[j]) out.d[j] = remains.d[j];
     frames.push(out);
   }

@@ -19,8 +19,7 @@ function unpack(data, [x, y, w, h, encoded], box) {
 
 export const APPROVED_HERO_ART = {};
 
-// The existing signatures keep their manual strike latency. Their new frames
-// count back from the original impact time at the approved clip's cadence.
+// Legacy timing kept for sheet review tools.
 const manualDelay = {
   knight: 2 / 10, archer: 2 / 14, mage: 2 / 12, rogue: 0, necromancer: 2 / 12,
   paladin: 2 / 13, druid: 2 / 12, berserker: 2 / 12, witchhunter: 2 / 12,
@@ -32,6 +31,8 @@ for (const [id, data] of Object.entries(sheets)) {
   let worldFrames, portraitFrames;
   APPROVED_HERO_ART[id] = {
     gen: () => (worldFrames ??= data.frames.map(frame => unpack(data, frame, { x: 0, y: 0, w, h }))),
+    // The Knight begins his downswing with the sword already raised.
+    attackStart: id === 'knight' ? attackRelease - 1 : null,
     anchorY, hires: data.hires || 1, idle, walk, attack, attackRelease, attackFps, floating, attackWalk: data.attackWalk, manualDelay: manualDelay[id] ?? data.manualDelay,
     motionRate: walkFps / (7 * 1.4 * normalSpeed),
     idleRate: idleFps / 1.6,

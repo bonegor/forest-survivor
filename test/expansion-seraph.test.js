@@ -96,13 +96,9 @@ test('a real crypt strike releases at the approved frame, stops at stone and evo
   g.world.solid = x => x >= wall;
   g.world.lineOfSight = (x, y, tx) => x < wall && tx <= wall;
   rebuild(g);
+  assert.equal(clip.from, clip.hit);
   assert.equal(g.strike(), true);
-  g.cryptTime = clip.delay - 0.001;
-  w.update(clip.delay - 0.001, true);
-  assert.ok(!wounded(front));
-  assert.equal(cast(g, w), undefined);
-  g.cryptTime = clip.delay;
-  w.update(0.001, true);
+  w.update(0, true);
   assert.ok(wounded(front));
   const cut = cast(g, w);
   assert.ok(cut.wings.every(wing => wing.every(pos => pos.x < wall)));

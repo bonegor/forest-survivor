@@ -103,11 +103,11 @@ test('in a crypt the knight has his sword alone, and it waits for the player', (
   input.held.delete('ControlLeft');
 }));
 
-test('a strike plays the attack, and the blade lands on its blow frame', () => gameCase((g, p) => {
+test('a strike starts with the sword raised and lands as it sweeps', () => gameCase((g, p) => {
   enterStartCrypt(g, p);
   const spr = SPR.knight, clip = strikeClip(spr), w = g.mainWeapon();
   assert.equal(clip.hit, spr.attackRelease, 'the new Sentinel clip lands at its authored release');
-  assert.equal(clip.delay, 0.2, 'the original Longsword strike latency is preserved');
+  assert.equal(clip.from, clip.hit - 1, 'the first swing pose has the sword already raised');
   const foe = g.spawnEnemy('skeleton', p.x - 18, p.y, { instant: true });
   foe.dormant = true;
   step(g);
@@ -116,15 +116,15 @@ test('a strike plays the attack, and the blade lands on its blow frame', () => g
   const at = p.strikeAt;
   assert.notEqual(at, null, 'the key strikes');
   assert.equal(p.face, -1, 'standing, he turns to the foe');
-  assert.equal(shown(g), spr.attack[clip.from], 'the swing starts as the key goes down');
-  assert.equal(slashes(g), 0, 'the blade has not landed yet');
+  assert.equal(shown(g), spr.attack[clip.from], 'the sword is already raised on keydown');
+  assert.equal(slashes(g), 0, 'contact follows the first swing pose');
   let landed = null;
-  for (let i = 0; i < 60 && landed === null; i++) {
+  for (let i = 0; i < 3 && landed === null; i++) {
     step(g);
     if (slashes(g)) landed = g.clock - at;
-    else assert.ok(spr.attack.slice(0, clip.hit).includes(shown(g)), 'winding up');
+    else assert.equal(shown(g), spr.attack[clip.from]);
   }
-  assert.ok(Math.abs(landed - clip.delay) < 2 / 60, `the slash lands ${clip.delay}s in, not ${landed}`);
+  assert.ok(landed !== null && landed < 0.06, 'the sword sweeps in under 60 ms');
   assert.equal(shown(g), spr.attack[clip.hit], 'as the sprite sweeps');
   assert.ok(Math.abs(Math.cos(g.effects.find((e) => e instanceof Slash).ang) + 1) < 0.2, 'at the foe');
 
@@ -212,19 +212,8 @@ for (const [hero, what] of Object.entries(OWN)) {
     assert.notEqual(p.strikeAt, null, 'left Shift strikes');
     assert.equal(p.face, -1, 'standing, the hero turns to the foe');
     const spr = SPR[p.hero.sprite], clip = strikeClip(spr);
-    let left = null, frame = -1;
-    for (let i = 0; i < 60 && left === null; i++) {
-      step(g);
-      if (made(g, what)) {
-        left = g.clock - p.strikeAt;
-        frame = shown(g);
-      }
-    }
-    assert.notEqual(left, null, 'it fires');
-    if (clip) {
-      assert.ok(Math.abs(left - clip.delay) < 2 / 60, `on the blow frame, ${clip.delay}s in, not ${left}`);
-      assert.equal(frame, spr.attack[clip.hit], 'as the sprite strikes');
-    } else assert.ok(left < 2 / 60, `at once, with no attack to play (${left})`);
+    assert.ok(made(g, what), 'the weapon fires during the input update');
+    assert.equal(shown(g), spr.attack[clip.hit], 'the sprite opens on the release pose');
     if (what === 'pillar' || what === 'burrow') {
       assert.equal(g.effects.find((e) => e instanceof (what === 'pillar' ? Pillar : Burrow)).target, foe, 'at the foe');
     } else if (what === 'leap') {

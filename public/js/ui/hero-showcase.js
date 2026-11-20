@@ -67,7 +67,7 @@ export class HeroShowcase {
     p.advanceAnimation(dt, p.moving ? p.moveSpeed * dt : 0);
     const clip = strikeClip(spr);
     if (action.kind === 'attack' && clip) {
-      p.strike(p.face < 0 ? Math.PI : 0, this.time - action.local + clip.hit / spr.attackFps - clip.delay);
+      p.strike(p.face < 0 ? Math.PI : 0, this.time - action.local);
     } else p.strikeAt = null;
   }
 

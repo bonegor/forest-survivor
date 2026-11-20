@@ -1560,8 +1560,8 @@ export class Game {
   // A blow struck by the player (Player.update reads the keys), once the weapon is ready: at
   // the nearest foe in its reach (Weapon.reach; a sword on the move, only one ahead of him, as
   // he keeps facing the way he walks), else straight ahead, or for a shot the way he last
-  // walked. The sprite plays its attack, and the blade lands or the shot leaves on its blow
-  // frame (strikeClip).
+  // walked. The sprite starts at the strike, and the blade lands or the shot leaves on its
+  // release frame (strikeClip).
   strike() {
     if (!this.caveStrike || this.state !== 'play') return false;
     const p = this.player, w = this.mainWeapon();
@@ -1576,9 +1576,7 @@ export class Game {
       this.inCrypt.strikes = (this.inCrypt.strikes || 0) + 1;
       return true;
     }
-    // Haste can ready the cooldown before the authored hit frame. Finish that
-    // pending wind-up before accepting another press/hold: otherwise it keeps
-    // replacing handAt and strikeAt, restarting the pose without ever hitting.
+    // Finish a pending release before accepting another press or held input.
     if (!w || w.cd > 0 || w.handAt != null || p.dead) return false;
     const { target, angle } = this.strikeAim(w);
     const delay = strikeClip(SPR[p.hero.sprite])?.delay ?? 0;
