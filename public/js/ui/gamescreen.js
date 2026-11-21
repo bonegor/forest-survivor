@@ -29,6 +29,7 @@ import { MusicMenu } from './music-menu.js';
 import { MenuDialog } from './menu-dialog.js';
 import { makeRunId } from '../shared/spoils.js';
 import { SpoilsReveal, SpoilsSelection, drawRewardReel, reelProgress } from './reward-reels.js';
+import { cardReaction } from '../data/reactions.js';
 
 export class GameScreen {
   enter(app, params = {}) {
@@ -327,24 +328,34 @@ export function cardSynergy(g, c) {
   return on && h.perk ? { text: `Synergy: ${h.perk.split(':')[0]}`, color: h.color } : null;
 }
 
+// G1 (21 November 2026): a new weapon or relic that reacts with one the hero holds (data/reactions.js)
+// says so on the same free line, "Shatter: Longsword" in the reaction's colour; the perk's synergy
+// goes first where a relic has both.
+export function cardReactionLine(g, c) {
+  if (!c.isNew || (c.type !== 'weapon' && c.type !== 'passive')) return null;
+  const p = g.player, held = p.weapons.map((w) => ({ id: w.id, name: WEAPONS[w.id].name }));
+  for (const id of p.passives.keys()) held.push({ id, name: PASSIVES[id].name });
+  return cardReaction(c.id, held);
+}
+
 // What a card shows: its name, icon and text; its tag (a NEW weapon or relic, or the level it
 // brings) and colour; what it evolves with (evoHint); its change in numbers (cardChange); its
-// synergy with the hero's perk (cardSynergy); and how many levels it has, for its pips (max: 0
-// for a filler).
+// synergy with the hero's perk (cardSynergy) or a reaction with what he holds (cardReactionLine);
+// and how many levels it has, for its pips (max: 0 for a filler).
 function choiceInfo(g, c) {
   const p = g.player;
   if (c.type === 'weapon') {
     const def = WEAPONS[c.id];
     const desc = c.isNew ? def.desc : def.levels[c.level - 2]?.text || def.desc;
     const hint = def.evo ? evoHint(g, c.id) : null;
-    return { name: def.name, icon: def.icon, desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW WEAPON' : `LV ${c.level}`, color: c.isNew ? '#0099db' : '#c0cbdc', hint, change: cardChange(g, c), max: MAX_WEAPON_LEVEL };
+    return { name: def.name, icon: def.icon, desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW WEAPON' : `LV ${c.level}`, color: c.isNew ? '#0099db' : '#c0cbdc', hint, change: cardChange(g, c), synergy: cardReactionLine(g, c), max: MAX_WEAPON_LEVEL };
   }
   if (c.type === 'passive') {
     const def = PASSIVES[c.id];
     let hint = null;
     // The weapon it evolves, only once that evolution is known (Game.evoKnown).
     for (const w of p.weapons) if (!w.evolved && w.def.evo && w.def.evo.with === c.id && g.evoKnown(w.id)) hint = { name: w.def.name, icon: w.def.icon, owned: true, word: 'evolves', line2: 'Evolves it', color: '#feae34' };
-    return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, change: cardChange(g, c), synergy: cardSynergy(g, c), max: def.max };
+    return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, change: cardChange(g, c), synergy: cardSynergy(g, c) || cardReactionLine(g, c), max: def.max };
   }
   const { name, icon } = FILLERS[c.type], B = BLESSING;
   // The three Blessings (the owner's, 27 October 2026), each counted on its tag.

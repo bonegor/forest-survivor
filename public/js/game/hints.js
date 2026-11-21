@@ -9,10 +9,13 @@
 // settings (settings.hints), and the settings cookie keeps it when the run ends (nothing is
 // written while a run lasts). A player whose first run ended before then (settings.hintsDone,
 // no longer written) knows the gem's and the level-up's already. The profile's shape doesn't change.
+// Since 21 November 2026 (G1), the first time each reaction is seen (data/reactions.js: Shatter,
+// Scald, Combust) its rule is told too, in any run, not only the first.
 
 import { input, padKey } from '../engine/input.js';
+import { REACT_WORD } from '../data/reactions.js';
 
-export const HINT_IDS = ['move', 'gem', 'weapons', 'fury', 'crypt', 'levelup'];
+export const HINT_IDS = ['move', 'gem', 'weapons', 'fury', 'crypt', 'levelup', 'shatter', 'scald', 'combust'];
 // The hints a player whose first run ended before 27 October 2026 counts as said (said).
 const LATER = ['gem', 'levelup'];
 const COLOR = '#8fb8ff';
@@ -30,6 +33,7 @@ function words(id, g, firstChoice) {
     const key = dev === 'pad' ? padKey('X') : dev === 'touch' ? 'Tap the orb' : 'SPACE';
     return [`Fury full: ${key}`, `${p.hero.ultName}: ${p.hero.ultDesc}`];
   }
+  if (REACT_WORD[id]) return [REACT_WORD[id].name, REACT_WORD[id].hint];
   return ['A crypt', 'Walk up its steps: below, time stands still and lords guard their gear'];
 }
 
@@ -42,6 +46,12 @@ export class Hints {
     this.levelClosed = false; // the first level-up screen has closed (GameScreen)
     this.gemTaken = false; // a soul gem picked up (pickups.js)
     this.out = new Map(); // id -> its banner, shown but not yet played out
+    this.seen = []; // the reactions seen this run (saw), to be told once each
+  }
+
+  // A reaction set off (game/reactions.js), to tell its rule the first time.
+  saw(kind) {
+    if (!this.seen.includes(kind) && !this.said(kind)) this.seen.push(kind);
   }
 
   said(id) {
@@ -84,6 +94,7 @@ export class Hints {
     if (g.player.fury >= 100) this.say('fury');
     // After the opening's lines have had their say, not on top of them.
     if (g.clock > 10 && !this.said('crypt') && g.crypts.some((d) => !d.sealed && onScreen(g.cam, d))) this.say('crypt');
+    for (let i = 0; i < this.seen.length; i++) this.say(this.seen[i]);
   }
 
   // The run is over: what has played out in full counts as said, and the settings cookie

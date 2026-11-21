@@ -103,7 +103,7 @@ export class Hook {
       g.hitEnemy(e, s.dmg, { w, type: 'normal', kb: 0 });
       if (e.dead) continue;
       // Bleeding already from another hook: the cut goes twice as deep.
-      const double = s.twin && e.dotT > 0 && e.dotType === 'bleed' && e.bleedBy !== this.i;
+      const double = s.twin && e.dots.bleed.t > 0 && e.bleedBy !== this.i;
       e.bleedBy = this.i;
       e.addDot('bleed', s.bleed * (double ? 2 : 1), s.dur, w);
     }

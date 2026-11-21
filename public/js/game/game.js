@@ -43,6 +43,7 @@ import { Dungeon, cryptLords, cryptLook, cryptHasEaNasir } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
 import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, Sanctum, Overgrowth, Frenzy, Purge, FRENZY, ultFlash, prewarmUlt } from './effects.js';
+import { REACT, exposed, isHeavy, scalds, combusts, react } from './reactions.js';
 import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
 import { Minion } from './minions.js';
 import { Hints } from './hints.js';
@@ -236,6 +237,10 @@ export class Game {
     this.map = mapFor(o.mode, o.map);
     this.settings = o.settings || {};
     this.seed = Math.floor(Math.random() * 2 ** 31);
+    // The reactions' own (game/reactions.js): when each word was last said over the field, and
+    // the splash bursts drawn this second.
+    this.reactSaid = {};
+    this.reactBursts = { t: -Infinity, n: 0 };
     this.duration = this.mode === 's15' ? 15 * 60 : Infinity;
     this.rankedBest = o.rankedBest || 0; // personal best to beat in Ranked
     this.rankIdx = 0;
@@ -1132,7 +1137,7 @@ export class Game {
       e.aware = true;
     }
     const p = this.player;
-    let d = dmg, crit = false;
+    let d = dmg, crit = false, shatter = false, scald = false;
     // A blow already reckoned in full (o.raw: a Hex curse's payoff, Enemy.update, a share of blows
     // that each had the hero's strength, his crits and the foe's brand and stone in them) is dealt as
     // it is: put through all that again it counted twice (27 October 2026).
@@ -1153,12 +1158,24 @@ export class Game {
       if (hs.grove && p.inGrove) d *= 1 + hs.grove;
       // A tick of damage over time (Enemy.addDot) never crits.
       if (!o.noCrit) {
-        crit = Math.random() < p.crit + (o.crit || 0);
+        // A held or slowed foe is Exposed (reactions.js): crit the more easily.
+        crit = Math.random() < p.crit + (o.crit || 0) + exposed(e);
         if (crit) d *= p.critMult + (o.critDmg || 0);
       }
       d *= rand(0.9, 1.1);
       if (e.mod && e.mod.id === 'stone') d *= 0.65;
-      if (e.freezeT > 0 && o.shatter) d *= 1.5;
+      // Shatter (reactions.js): Frozen Heart's shards and, since 21 November 2026, every heavy
+      // blow strike a frozen foe half again as hard, and a heavy one marks it to burst if it dies so.
+      if (e.freezeT > 0 && (o.shatter || (!o.noReact && isHeavy(o.w)))) {
+        d *= REACT.shatter.mul;
+        shatter = true;
+        if (!o.shatter && !e.boss) e.shatterOnDeath = true;
+      }
+      // Scald: fire on a frozen foe melts it, twice the blow and a splash (react, below).
+      if (scalds(this, e, o)) {
+        d *= REACT.scald.mul;
+        scald = true;
+      }
     }
     d = Math.max(1, Math.round(d));
     if (sealed) {
@@ -1201,12 +1218,17 @@ export class Game {
     // Ember Heart: a blow (not a burn's own tick) may set the foe alight for 3 s at a quarter of the blow
     // as the weapon struck it (dmg) a second: each tick puts the hero's strength in (hitEnemy), as for
     // every other burn, so the blow's own is not in it twice (27 October 2026).
-    if (p.ember > 0 && !o.noCrit && !e.prop && Math.random() < p.ember) e.addDot('fire', dmg * 0.25, 3, o.w);
+    const lit = p.ember > 0 && !o.noCrit && !e.prop && Math.random() < p.ember;
+    if (lit) e.addDot('fire', dmg * 0.25, 3, o.w);
     const pan = clamp((e.x - p.x) / 200, -1, 1);
     if (crit) sfx('crit', { pitch: rand(0.9, 1.1), pan });
     else sfx('hit', { pitch: rand(0.8, 1.2), pan });
     if (crit) this.particles.burst(e.x, e.y - e.h * 0.5, 4, 5, [PC.Y, PC.w], 90, 0.25, 1, P.GLOW | P.FADE, {});
     if (e.hp <= 0) this.killEnemy(e, o);
+    // The reaction the blow set off, once it is dealt (reactions.js): Scald's splash, Combust's.
+    if (scald) react(this, e, 'scald', d, o.w);
+    else if (combusts(this, e, o, lit)) react(this, e, 'combust', d, o.w);
+    else if (shatter) react(this, e, 'shatter', d, o.w);
     return d;
   }
 

@@ -17,7 +17,7 @@ import { panel, button, stepper, checkbox, checkboxWidth, logo, dim, drawText, d
 import { goalText, lockReason, featStars, codexEntries, codexName, codexRecord, codexIcon, seenKey, isNewEntry, seenKeys } from './ladder.js';
 import { flank, pointer } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
-import { codexSummary, codexDescription, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
+import { codexSummary, codexDescription, codexReaction, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
 import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
 import { needsPrologue } from '../game/prologue.js';
 import { normalizeCombatMusic, normalizeMusicTracks } from '../engine/combat-music.js';
@@ -708,6 +708,8 @@ export function codexSwitchable(e, prof) {
 // along; an open weapon, whether runs offer it and the exclusion slots.
 export function codexDetail(e, prof) {
   const lines = [codexDescription(e)];
+  const reacts = codexReaction(e);
+  if (reacts) lines.push({ text: reacts, color: '#2ce8f5' });
   const slots = exclusionState(prof), used = prof.home?.length || 0;
   if (e.type === 'feature') {
     const next = e.next ? ` · next slot at ${fmtNum(e.next)}` : '';

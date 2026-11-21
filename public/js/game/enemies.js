@@ -51,6 +51,20 @@ export const heroPace = (g) => BASE_SPEED * (g.player.hero.stats.speed || 1) * g
 export const CONFUSE_TOUCH = 0.5;
 // The sparks a foe gives off while it burns or sickens (Enemy.addDot).
 const DOT_SPARKS = { fire: [PC.o, PC.y], poison: [PC.l, PC.L], bleed: [PC.r, PC.R] };
+const DOT_KINDS = ['fire', 'poison', 'bleed'];
+const newDot = () => ({ t: 0, dps: 0, tick: 0, w: null });
+// The strongest damage over time burning: its kind ('fire' when none).
+function strongestDot(D) {
+  let k = 'fire', best = -1;
+  for (let i = 0; i < DOT_KINDS.length; i++) {
+    const d = D[DOT_KINDS[i]];
+    if (d.t > 0 && d.dps > best) {
+      best = d.dps;
+      k = DOT_KINDS[i];
+    }
+  }
+  return k;
+}
 // The dust a monster throws up rising out of the ground (def.rise) and on a charge (charger): the
 // ground's own where the world gives one (riseDust, chargeDust: a Survival map's, 28 October 2026;
 // sand on the dunes, snow on the Frostfell), else the forest's dirt and its grey.
@@ -171,6 +185,11 @@ export class Enemy {
     this._mTick = undefined; // minions.js
     this._mOn = undefined;
     this.shatterOnDeath = undefined; // Game.hitEnemy
+    // Damage over time (addDot), a slot for each kind so that one never puts out another (G1, 21
+    // November 2026: Ember Heart's burn put out Miasma's poison): how long each lasts yet, its
+    // damage a second, the time to its next blow and the weapon it counts for.
+    this.dots = { fire: newDot(), poison: newDot(), bleed: newDot() };
+    this.reactT = 0; // reactions.js: when it may react (Scald, Combust) again, on the game's clock
     this.sealed = undefined; // dungeon.js, a guardian
     this.thaw = undefined; // dungeon.js, a sealed guardian: how far its seal is broken (0-1)
   }
@@ -249,11 +268,12 @@ export class Enemy {
     this.curseW = null;
     this.holdT = 0;
     this.holdCd = 0;
-    this.dotT = 0; // damage over time (addDot): how long it lasts yet
-    this.dotDps = 0;
-    this.dotTick = 0;
-    this.dotType = 'fire';
-    this.dotW = null; // the weapon it counts for
+    for (let i = 0; i < DOT_KINDS.length; i++) {
+      const d = this.dots[DOT_KINDS[i]];
+      d.t = d.dps = d.tick = 0;
+      d.w = null;
+    }
+    this.reactT = 0;
     this.bleedBy = -1; // which of a weapon's hooks last opened a bleed on it (hook: two at once cut double)
     this.fearT = 0; // afraid (scare): runs from the hero for this long
     this.blowT = 0; // blown back (blow): how long it flies yet, striking foes it meets
@@ -380,17 +400,22 @@ export class Enemy {
       }
     }
 
-    // Damage over time.
-    if (this.dotT > 0) {
-      this.dotT -= dt;
-      this.dotTick -= dt;
-      if (this.dotTick <= 0) {
-        this.dotTick = 0.5;
-        g.hitEnemy(this, this.dotDps * 0.5, { type: this.dotType, kb: 0, noCrit: true, w: this.dotW });
+    // Damage over time, each kind's in turn; its sparks one roll a frame however many burn, in the
+    // strongest's colours, as when there was only the one.
+    let burning = false;
+    for (let i = 0; i < DOT_KINDS.length; i++) {
+      const d = this.dots[DOT_KINDS[i]];
+      if (d.t <= 0) continue;
+      burning = true;
+      d.t -= dt;
+      d.tick -= dt;
+      if (d.tick <= 0) {
+        d.tick = 0.5;
+        g.hitEnemy(this, d.dps * 0.5, { type: DOT_KINDS[i], kb: 0, noCrit: true, tick: true, w: d.w });
         if (this.dead) return;
       }
-      if (Math.random() < 18 * dt) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick(DOT_SPARKS[this.dotType]), P.GLOW | P.FADE, 0);
     }
+    if (burning && Math.random() < 18 * dt) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick(DOT_SPARKS[this.dotType]), P.GLOW | P.FADE, 0);
 
     // In a crypt (world.vision) a monster that hasn't seen the hero doesn't know where he is:
     // it strolls about (Dungeon.wander) and looks out for him (Dungeon.sees). Once it has seen
@@ -584,18 +609,34 @@ export class Enemy {
     }
   }
 
-  // Damage over time: dps for t seconds, a blow every half second ('fire' or 'poison', which
-  // its numbers and sparks show), counting for weapon w. A stronger one takes over a weaker;
-  // any keeps it going at least t seconds more.
+  // Damage over time: dps for t seconds, a blow every half second ('fire', 'poison' or 'bleed',
+  // which its numbers and sparks show), counting for weapon w. Each kind has its own slot (dots):
+  // in it a stronger one takes over a weaker, and any keeps it going at least t seconds more.
   addDot(type, dps, t, w = null) {
     if (this.dead || this.prop || dps <= 0) return;
-    if (this.dotT <= 0) this.dotTick = 0.5;
-    if (this.dotT <= 0 || dps >= this.dotDps) {
-      this.dotDps = dps;
-      this.dotType = type;
-      this.dotW = w;
+    const d = this.dots[type] || this.dots.fire;
+    if (d.t <= 0) d.tick = 0.5;
+    if (d.t <= 0 || dps >= d.dps) {
+      d.dps = dps;
+      d.w = w;
     }
-    this.dotT = Math.max(this.dotT, t);
+    d.t = Math.max(d.t, t);
+  }
+
+  // The damage over time as one, for what asks of it so (tests, the hook's twin cut): how long the
+  // longest lasts, and the strongest's kind, damage and weapon.
+  get dotT() {
+    const D = this.dots;
+    return Math.max(D.fire.t, D.poison.t, D.bleed.t);
+  }
+  get dotType() {
+    return strongestDot(this.dots);
+  }
+  get dotDps() {
+    return this.dots[strongestDot(this.dots)].dps;
+  }
+  get dotW() {
+    return this.dots[strongestDot(this.dots)].w;
   }
 
   // The horde alone is shoved, scared or dragged about: never a boss, a crypt's lord, a champion,

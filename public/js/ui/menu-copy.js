@@ -3,6 +3,7 @@ import { MAX_WEAPON_LEVEL, WEAPONS } from '../data/weapons.js';
 import { PASSIVES } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { IDENTIFICATION_STEP, knownEvos } from '../shared/profile.js';
+import { reactionLine } from '../data/reactions.js';
 
 export const IDENTIFICATION_RULE = `Account-wide price · +${IDENTIFICATION_STEP} gold each time`;
 
@@ -60,6 +61,12 @@ export function codexDescription(e) {
   if (e.type === 'feature') return 'Each level gives one more exclusion slot, five in all: switch a weapon off here and no run offers it, until you switch it back on. Your hero always keeps their signature weapon.';
   if (e.hidden) return 'Win your first night to reveal this weapon.';
   return e.type === 'weapon' ? WEAPONS[e.id].desc : e.type === 'relic' ? PASSIVES[e.id].desc : HEROES[e.id].ultDesc;
+}
+
+// What an open weapon or relic sets up or cashes in (data/reactions.js, 21 November 2026), for the
+// Codex's panel under its description; '' for none.
+export function codexReaction(e) {
+  return !e.hidden && e.open && (e.type === 'weapon' || e.type === 'relic') ? reactionLine(e.id) : '';
 }
 
 // A weapon's evolution as the Codex tells it, for this profile (prof): the owner's (27 October
