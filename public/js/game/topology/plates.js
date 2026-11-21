@@ -430,7 +430,7 @@ export class Plates {
       out.push(first);
       if (this.H(N.id, 0, 12) < (N.area >= P.bigNode ? P.q2[1] : P.q2[0])) {
         const f = this.site(first.q);
-        const rest = cands.filter((c) => c.M !== first.M && Math.hypot(this.site(c.q).x - f.x, this.site(c.q).y - f.y) > 150);
+        const rest = cands.filter((c) => c.M.id !== first.M.id && Math.hypot(this.site(c.q).x - f.x, this.site(c.q).y - f.y) > 150);
         if (rest.length) out.push(this.byHash(rest, 13));
       }
     }
@@ -463,7 +463,7 @@ export class Plates {
       }
       if (ways.size < 2) {
         const first = out[0], free = (c) => !ways.has(c.q < c.t ? c.q + ',' + c.t : c.t + ',' + c.q);
-        let rest = N.cands.filter((c) => free(c) && (!first || c.M !== first.M));
+        let rest = N.cands.filter((c) => free(c) && (!first || c.M.id !== first.M.id)); // by id: a node trimmed in part (trim) comes back a new object
         if (!rest.length) rest = N.cands.filter(free);
         if (!rest.length) rest = other.filter(free);
         if (rest.length) out.push(this.byHash(rest, 19));
