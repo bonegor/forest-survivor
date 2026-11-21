@@ -36,6 +36,7 @@ const LOOK = {
   chest: { sprite: 'chest', glow: '#feae34', light: 'gold' },
   trophy: { sprite: 'i_trophy', glow: '#f6757a', light: 'red' }, // a boss's (Game.takeTrophy)
   altar: { sprite: 'i_altar', glow: '#b55088', light: 'purple' }, // a crypt's, its last lord's (Game.takeAltar)
+  stall: { sprite: 'i_stall', glow: '#feae34', light: 'gold' }, // the night's merchant (Game.stallTick)
 };
 
 // The light a piece of gear casts, by rarity.
@@ -81,7 +82,7 @@ export class Pickup {
       this.vx = opts.toss[0] / TOSS.carry;
       this.vy = opts.toss[1] / TOSS.carry;
     }
-    this.t = rand(3);
+    this.t = opts.t ?? rand(3); // a stall stands without a roll (Game.stallTick: no dice on its clock)
     this.age = 0; // seconds since it dropped (CHEST_SETTLE)
     // Seconds it waits, unseen and untouched, before it pops out (a broken box's: Game.breakProp).
     this.hold = opts.hold || 0;
@@ -281,6 +282,10 @@ export class Pickup {
         g.takeAltar();
         sfx('shrine');
         break;
+      case 'stall':
+        g.takeStall();
+        sfx('coin');
+        break;
       case 'item':
         g.queueItem(this.opts.item);
         sfx(g.sealedGear ? 'pick' : 'chestopen');
@@ -349,7 +354,7 @@ export class Pickup {
     const sx = (this.x - cam.x) * S, sy = (this.y - this.z - 3 - cam.y) * S;
     if (sx < -60 || sy < -60 || sx > cam.pxW + 60 || sy > cam.pxH + 60) return;
     if (this.kind === 'gem') return this.drawBling(ctx, S, sx, sy);
-    const big = this.kind === 'chest' || this.kind === 'relic' || this.kind === 'elixir' || this.kind === 'item' || this.kind === 'trophy' || this.kind === 'altar';
+    const big = this.kind === 'chest' || this.kind === 'relic' || this.kind === 'elixir' || this.kind === 'item' || this.kind === 'trophy' || this.kind === 'altar' || this.kind === 'stall';
     const s = (big ? 40 * (this.scale || 1) : this.kind === 'gem' ? 12 : 14) * S;
     if (this.kind === 'item') this.drawPillar(ctx, cam, sx, sy);
     // EVOLVE READY: while a weapon waits on a chest to evolve, every chest lying about glows orange.

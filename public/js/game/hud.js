@@ -1126,7 +1126,7 @@ export class Hud {
     if (g.boss && !g.boss.dead) this.pointer(ctx, W, H, t, g.boss.x, g.boss.y - 10, '#e43b44', m.boss);
     for (const s of g.shrines) if (!s.used) this.pointer(ctx, W, H, t, s.x, s.y - 10, SHRINE_COLORS[s.type], m.shrine[s.type]);
     for (const d of g.crypts) if (!d.sealed) this.pointer(ctx, W, H, t, d.x, d.y - 12, '#b55088', m.crypt);
-    for (const pk of g.pickups) if (pk.kind === 'chest' && !pk.dead) this.pointer(ctx, W, H, t, pk.x, pk.y, '#feae34', m.chest);
+    for (const pk of g.pickups) if ((pk.kind === 'chest' || pk.kind === 'stall') && !pk.dead) this.pointer(ctx, W, H, t, pk.x, pk.y, '#feae34', m.chest); // and the merchant's stall (game/stall.js)
     for (const e of g.enemies) if (e.type === 'thief' && !e.dead) this.pointer(ctx, W, H, t, e.x, e.y, '#fee761', m.coin);
     if (g.world.marker) {
       const w = g.world.marker();

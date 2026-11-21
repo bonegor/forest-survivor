@@ -4,6 +4,7 @@ import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { oathFlags } from '../data/oaths.js';
 import { BOONS, trophyChoices } from '../data/boons.js';
 import { FUSION, fusionOf, infuseOf } from '../data/fusions.js';
+import { STALL, WARES, price } from './stall.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
 import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
@@ -339,6 +340,9 @@ export class Game {
     this.chestQueue = [];
     this.trophyQueue = []; // a boss's trophies picked up, each its boons to choose from (ui/trophy.js)
     this.bossPatches = []; // a map boss's quicksand and ice lying a while (boss-mechanics.js)
+    // The night's merchant (game/stall.js): when the next stall sets up, and the one standing.
+    this.stallAt = STALL.first;
+    this.stall = null;
     this.showMap = false;
     this.floor = 1;
     this.objective = '';
@@ -1121,6 +1125,54 @@ export class Game {
     if (ids.length) this.trophyQueue.push({ title: 'TROPHY', cards: ids.map((id) => ({ kind: 'boon', id })) });
   }
 
+  // The merchant's stall (game/stall.js): set up ahead of the hero on its clock, in Survival and
+  // Ranked out in the open; packed up once it has stood STALL.stay s unvisited.
+  stallTick() {
+    if (this.inCrypt || (this.mode !== 's15' && this.mode !== 'ranked')) return;
+    const s = this.stall;
+    if (s && (s.pk.dead || this.time > s.until)) {
+      if (!s.pk.dead) {
+        s.pk.dead = true;
+        this.banner('The merchant moves on', 'His stall is gone', '#8b9bb4', 1.8);
+      }
+      this.stall = null;
+    }
+    if (this.time < this.stallAt) return;
+    this.stallAt += STALL.every;
+    const p = this.player, w = this.world;
+    let x = p.x + Math.cos(p.aim) * STALL.ahead, y = p.y + Math.sin(p.aim) * STALL.ahead;
+    if (w.free && !w.free(x, y)) {
+      x = p.x - Math.cos(p.aim) * STALL.ahead;
+      y = p.y - Math.sin(p.aim) * STALL.ahead;
+      if (!w.free(x, y)) [x, y] = [p.x, p.y + 30];
+    }
+    if (this.stall) this.stall.pk.dead = true;
+    const pk = this.addPickup('stall', x, y, 0, { pop: false, t: 0 });
+    this.stall = pk ? { pk, until: this.time + STALL.stay } : null;
+    this.banner('A merchant sets up shop', "Tonight's gold, spent tonight", '#feae34', 2.4);
+  }
+
+  // The stall walked up to (pickups.js): its wares, to choose one of as a trophy's are.
+  takeStall() {
+    this.trophyQueue.push({ title: 'MERCHANT', cards: this.stallCards() });
+  }
+
+  // The stall's wares, priced for this moment of the night: a draught, a Whetstone for his weakest
+  // weapon not at its top (an Overcharge for his best once all are), a polish for his lowest relic
+  // not at its top (while he has one), and a reroll.
+  stallCards() {
+    const p = this.player, ph = this.phase, out = [{ kind: 'buy', id: 'heal', price: price('heal', ph) }];
+    let low = null;
+    for (const w of p.weapons) if (!w.maxed && !w.fromGear && (!low || w.level < low.level)) low = w;
+    const top = low || this.overTarget();
+    if (top) out.push({ kind: 'buy', id: 'whet', price: price('whet', ph), target: top.id, over: !low });
+    let relic = null;
+    for (const [id, rank] of p.passives) if (rank < PASSIVES[id].max && (!relic || rank < p.passives.get(relic))) relic = id;
+    if (relic) out.push({ kind: 'buy', id: 'polish', price: price('polish', ph), target: relic });
+    out.push({ kind: 'buy', id: 'reroll', price: price('reroll', ph) });
+    return out;
+  }
+
   // A crypt's altar taken (pickups.js; G8): its three cards, to choose from as a trophy's are.
   takeAltar() {
     this.trophyQueue.push({ title: 'ALTAR', cards: this.altarCards() });
@@ -1142,9 +1194,23 @@ export class Game {
     return out;
   }
 
-  // What a trophy's or an altar's card shows (ui/trophy.js): its name, icon, text and colour.
+  // What a trophy's, an altar's or a stall's card shows (ui/trophy.js): its name, icon, text and
+  // colour, and whether it can be taken (a ware he can't afford can't).
   cardInfo(c) {
     const p = this.player;
+    if (c.kind === 'buy') {
+      const W = WARES[c.id], cost = ` {${c.price}} gold.`, disabled = this.gold < c.price;
+      if (c.id === 'whet') {
+        const def = WEAPONS[c.target], w = p.weapons.find((x) => x.id === c.target);
+        const desc = c.over ? `{${def.name}} takes an Overcharge.` : `{${def.name}} rises to level {${(w?.level || 1) + 1}}.`;
+        return { name: W.name, icon: def.icon, desc: desc + cost, color: '#feae34', disabled };
+      }
+      if (c.id === 'polish') {
+        const d = PASSIVES[c.target];
+        return { name: W.name, icon: d.icon, desc: `{${d.name}} rises to rank {${(p.passives.get(c.target) || 0) + 1}}.` + cost, color: '#feae34', disabled };
+      }
+      return { name: W.name, icon: W.icon, desc: W.desc + cost, color: '#feae34', disabled };
+    }
     if (c.kind === 'boon') {
       const b = BOONS[c.id];
       return { name: b.name, icon: b.icon, desc: b.desc, color: '#f6757a' };
@@ -1160,9 +1226,19 @@ export class Game {
       : { name: 'Blood Tithe', icon: 'i_skull', desc: `A fifth of your health for ${blessed}.`, color: '#e43b44' };
   }
 
-  // A trophy's or an altar's card taken. What the banner says of it, or null for none.
+  // A trophy's, an altar's or a stall's card taken. What the banner says of it, or null for none.
   takeCard(c) {
     const p = this.player;
+    if (c.kind === 'buy') {
+      if (this.gold < c.price) return null;
+      this.gold -= c.price;
+      if (c.id === 'heal') p.heal(p.maxHp * 0.5);
+      else if (c.id === 'whet') this.applyChoice(c.over ? { type: 'over', id: c.target } : { type: 'weapon', id: c.target }, true);
+      else if (c.id === 'polish') this.applyChoice({ type: 'passive', id: c.target }, true);
+      else p.rerolls++;
+      sfx('coin');
+      return { name: WARES[c.id].name, sub: `-${c.price} gold` };
+    }
     if (c.kind === 'boon') {
       p.boons.add(c.id);
       p.recompute();
@@ -2792,6 +2868,7 @@ export class Game {
       } else this.bossBeatT = 0;
       p.update(pdt);
       this.spawner.update(dt);
+      this.stallTick();
       this.checkRecords();
     } else if (this.state === 'dying') {
       const before = this.deathT;

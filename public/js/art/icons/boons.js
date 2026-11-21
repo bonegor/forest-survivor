@@ -221,4 +221,25 @@ export const BOON_ICONS = {
       'ZQQQQQQQQQQQWV',
     ]],
   },
+  // Merchant's stall: a little wheeled cart under a red-and-cream striped awning, a red
+  // potion and gold coins on its counter, a lantern hanging at its side.
+  i_stall: {
+    emissive: 'fY',
+    frames: [[
+      '...zzirzzirz..',
+      '..rTTrrTTrrTr.',
+      '.rrTTrrTTrrTTr',
+      'RRttRRttRRttRR',
+      'RR.bRR..RR.bRR',
+      '...B.......b..',
+      '...B..B....b..',
+      '...B.rir..CfD.',
+      '...B.RrR.wCYD.',
+      '.tTTTTTTTyYTt.',
+      '.BBbBBbBBbBBb.',
+      '.bBb.mmmm.bBb.',
+      'bBmBb....bBmBb',
+      '.bBb......bBb.',
+    ]],
+  },
 };

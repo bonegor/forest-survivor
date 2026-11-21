@@ -1,7 +1,8 @@
 // A choice the run offers off the level-up cards (GameScreen.frame, once the screens before it have
 // had their turn), the run standing still under it as under a chest's: a boss's TROPHY (G7 of the
-// 21 November 2026 review; data/boons.js), three boons the hero hasn't, and a crypt's ALTAR (G8:
-// Game.altarCards), a boon, a weapon's rank and a bargain. Its cards side by side, each with its
+// 21 November 2026 review; data/boons.js), three boons the hero hasn't; a crypt's ALTAR (G8:
+// Game.altarCards), a boon, a weapon's rank and a bargain; and the night's MERCHANT (G6:
+// game/stall.js), wares for the night's gold, one he can't afford greyed. Its cards side by side, each with its
 // icon, its name and what it does, and TAKE NONE. What is taken is given by Game.takeCard.
 import { sfx } from '../engine/audio.js';
 import { SPR } from '../engine/sprites.js';
@@ -9,7 +10,7 @@ import { button, dim, drawRich, drawText, logo, panel, wrapText } from './ui.js'
 
 const READY = 0.5; // s before a card can be taken: it opens mid-fight, as a level-up's do
 const RED = '#f6757a';
-const SUB = { TROPHY: 'Take one boon for the rest of the night, or none', ALTAR: 'The altar grants one thing, or none' };
+const SUB = { TROPHY: 'Take one boon for the rest of the night, or none', ALTAR: 'The altar grants one thing, or none', MERCHANT: 'One thing for tonight\'s gold, or none' };
 
 export class TrophyOverlay {
   // entry: { title, cards } (Game.trophyQueue).
@@ -48,7 +49,9 @@ export class TrophyOverlay {
     const s = Math.min(1, (W - 20) / L.width);
     ctx.drawImage(L, Math.round(W / 2 - (L.width * s) / 2), 8, Math.round(L.width * s), Math.round(L.height * s));
     const top = 14 + L.height * s;
-    drawText(ctx, SUB[this.title] || '', W / 2, top, { align: 'center', color: '#c0cbdc' });
+    // The merchant's: the gold there is to spend (game/stall.js).
+    const sub = this.title === 'MERCHANT' ? `${SUB.MERCHANT} · gold ${g.gold}` : SUB[this.title] || '';
+    drawText(ctx, sub, W / 2, top, { align: 'center', color: '#c0cbdc' });
     ui.begin(dt);
     const n = this.cards.length, vertical = W < 300;
     const y0 = top + 14, foot = 24;
@@ -71,11 +74,13 @@ export class TrophyOverlay {
         drawText(ctx, info.name, x + w / 2, y + 46, { align: 'center', color: f ? '#fee761' : info.color || RED });
         wrapText(info.desc, w - 12).slice(0, 6).forEach((ln, j) => drawRich(ctx, ln, x + 6, y + 60 + j * 9, { color: '#c0cbdc' }));
       }
-      if (!ready) {
+      if (!ready || info.disabled) {
         ctx.fillStyle = 'rgba(8,6,16,0.45)';
         ctx.fillRect(x, y, w, h);
       }
-      if (hit && ready) {
+      // A ware he can't afford says no.
+      if (hit && ready && info.disabled) sfx('deny');
+      else if (hit && ready) {
         ui.end();
         return this.take(c);
       }
