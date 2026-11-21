@@ -83,7 +83,8 @@ function menuOverride() {
 
 export function initAudio() {
   if (A.ctx) {
-    if (A.ctx.state === 'suspended') A.ctx.resume();
+    // Suspended, or Safari's interrupted (a call, Siri), which only a resume brings back.
+    if (A.ctx.state !== 'running' && A.ctx.state !== 'closed') A.ctx.resume().catch(() => {});
     return;
   }
   const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -1112,7 +1113,7 @@ function handOff(t) {
 // hands on if its player ran out.
 function wake() {
   if (!A.ctx || globalThis.document?.hidden) return;
-  if (A.ctx.state === 'suspended') A.ctx.resume().catch(() => {});
+  if (A.ctx.state !== 'running' && A.ctx.state !== 'closed') A.ctx.resume().catch(() => {}); // suspended, or Safari's interrupted
   for (const t of A.tracks.values()) {
     if (!t.playing) continue;
     const el = t.voices[t.cur].el;
