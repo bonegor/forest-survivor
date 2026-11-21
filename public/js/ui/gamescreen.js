@@ -1575,7 +1575,9 @@ export class PauseOverlay {
         this.gs.open(new ResultsOverlay(this.gs));
         return null;
       }
+      // Armed, then a moment with no input: a double click or a key pressed twice ended the run.
       this.confirm = true;
+      ui.lock(0.5);
     }
     ui.end();
     return null;
