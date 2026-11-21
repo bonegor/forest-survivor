@@ -142,7 +142,7 @@ test('a legendary power counts once, however many pieces worn carry it', async (
   assert.ok(!I.powerWorn({ring: legend('ring', 'echo')}, 'echo', 'ring'), 'not when it is the piece being replaced');
 });
 
-test('a level-up always offers a full choice, filled with the Blessing, a heal and gold', async () => {
+test('a level-up always offers a full choice, filled with the Blessing, an Overcharge and a heal', async () => {
   const {MAX_WEAPON_LEVEL} = await mod('public/js/data/weapons.js');
   const {PASSIVES, PASSIVE_IDS, FILLER_IDS} = await mod('public/js/data/passives.js');
   const g = new Game({hero:'knight', mode:'s15', meta:P.metaBonuses(P.defaultProfile()), settings:{numbers:false}});
@@ -154,7 +154,7 @@ test('a level-up always offers a full choice, filled with the Blessing, a heal a
   for (const id of PASSIVE_IDS.slice(0, 6)) g.addPassive(id, PASSIVES[id].max);
   p.weapons[0].level = MAX_WEAPON_LEVEL - 1;
   const cards = g.levelChoices(3);
-  assert.deepEqual(cards.map(c => c.type), ['weapon', 'bless', 'heal'], 'one upgrade left, and two to fill');
+  assert.deepEqual(cards.map(c => c.type), ['weapon', 'bless', 'over'], 'one upgrade left, and two to fill: a weapon at its top is overcharged');
   p.weapons[0].level = MAX_WEAPON_LEVEL;
   assert.deepEqual(g.levelChoices(3).map(c => c.type), FILLER_IDS, 'the whole build maxed: every filler');
 });

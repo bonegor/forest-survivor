@@ -192,6 +192,6 @@ test("a sure Phoenix screen isn't swallowed by ALWAYS: with it on offer the leve
     assert.equal(g.pendingLevels, 1);
     const cards = g.levelChoices(3);
     assert.ok(heartOn(cards), 'and the heart is on it');
-    assert.deepEqual(cards.filter((c) => c.id !== 'phoenix').map((c) => c.type), ['bless', 'heal'], 'the fillers after it');
+    assert.deepEqual(cards.filter((c) => c.id !== 'phoenix').map((c) => c.type), ['bless', 'over'], 'the fillers after it, its Excalibur overcharged');
   });
 });

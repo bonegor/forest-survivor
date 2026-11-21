@@ -4,7 +4,7 @@ import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
 import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
-import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, BLESSING } from '../data/passives.js';
+import { PASSIVES, PASSIVE_IDS, FILLERS, FILLER_IDS, FILLER_ROOM, BLESSING } from '../data/passives.js';
 import { ENEMIES } from '../data/enemies.js';
 import { DAWN_PHASE, FLOORS, monsterHp, minuteOf, HORDE_CAP, RANKED_BOSS_EVERY } from '../data/waves.js';
 import { mapFor } from '../data/maps.js';
@@ -748,7 +748,8 @@ export class Game {
   }
 
   // A level-up's cards: n drawn from the pool, the fillers after them while there is room (the
-  // first of them: Valor, the heal, the gold). With nothing left to draw, every filler, each with
+  // first of them: Valor, an Overcharge once a weapon is at its top, the heal, the gold:
+  // FILLER_ROOM). With nothing left to draw, every filler, each with
   // its ALWAYS, whatever n (the owner's, 27 October 2026: the Blessing comes in three kinds). A
   // relic due for certain (sureRelic: the Phoenix Heart) and a signature due for certain
   // (sureSignature) are among the n, each in a place of chance. (A chest draws from the plain
@@ -761,7 +762,7 @@ export class Game {
     const out = this.drawUpgrades(n - sure.length, pool.filter((c) => !sure.includes(c)));
     for (const c of sure) out.splice(Math.floor(Math.random() * (out.length + 1)), 0, c);
     this.signatureSeen(pool, out);
-    for (const type of FILLER_IDS) if (out.length < n && !this.blessingCapped(type)) out.push(this.filler(type));
+    for (const type of FILLER_ROOM) if (out.length < n && !this.blessingCapped(type)) out.push(this.filler(type));
     return out;
   }
 
@@ -820,7 +821,7 @@ export class Game {
     const on = (c) => shown.some((s) => s.type === c.type && s.id === c.id);
     const pool = this.upgradePool().filter((c) => !on(c));
     if (pool.length) return weighted(pool, (x) => x.weight);
-    for (const type of FILLER_IDS) if (!shown.some((s) => s.type === type) && !this.blessingCapped(type)) return this.filler(type);
+    for (const type of FILLER_ROOM) if (!shown.some((s) => s.type === type) && !this.blessingCapped(type)) return this.filler(type);
     return null;
   }
 
@@ -829,6 +830,10 @@ export class Game {
   // BLESSING), Valor for any other and for one that would give nothing more (blessingCapped).
   filler(type) {
     if (type === 'heal') return { type, value: 0.35 };
+    if (type === 'over') {
+      const w = this.overTarget();
+      return w ? { type, id: w.id } : { type: 'bless' };
+    }
     if (type === 'gold') return { type, value: Math.max(1, Math.round(30 * (1 + this.phase / 10) * this.player.greed)) };
     return { type: FILLERS[type]?.count && !this.blessingCapped(type) ? type : 'bless' };
   }
@@ -839,9 +844,18 @@ export class Game {
   // chest's, and an ALWAYS on it turns to Valor (resolveAutoLevels), so no level is spent on it.
   blessingCapped(type) {
     const p = this.player;
+    if (type === 'over') return !this.overTarget(); // no weapon at its top yet
     if (type === 'haste') return p.cooldown <= COOLDOWN_FLOOR + 1e-9;
     if (type === 'reach') return p.reaches >= BLESSING.reachMost;
     return false;
+  }
+
+  // The weapon an Overcharge goes to (G9, 21 November 2026): of his own at their top (not gear's
+  // extras), the one that has dealt the most this run; null while none is at its top.
+  overTarget() {
+    let best = null;
+    for (const w of this.player.weapons) if (w.maxed && !w.fromGear && (!best || w.dmgDealt > best.dmgDealt)) best = w;
+    return best;
   }
 
   choiceCount() {
@@ -867,6 +881,14 @@ export class Game {
       if (!quiet) sfx('coin');
     } else if (c.type === 'heal') {
       p.heal(p.maxHp * c.value, quiet);
+    } else if (c.type === 'over') {
+      // Its weapon, or the one at its top that has dealt the most if that one is gone.
+      const w = p.weapons.find((x) => x.id === c.id && x.maxed && !x.fromGear) || this.overTarget();
+      if (w) {
+        w.over++;
+        p.overcharges++;
+        w.recompute();
+      }
     } else if (FILLERS[c.type]?.count) {
       p[FILLERS[c.type].count]++; // a Blessing, of Valor, Haste or Reach
       p.recompute();

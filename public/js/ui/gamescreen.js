@@ -13,7 +13,7 @@ import { loadoutItems } from '../game/loadout.js';
 import { levelBonus } from '../game/player.js';
 import { heroStats } from '../game/weapons.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, RANDOM_EVOLUTION } from '../data/weapons.js';
-import { PASSIVES, FILLERS, BLESSING } from '../data/passives.js';
+import { PASSIVES, FILLERS, BLESSING, OVERCHARGE, overDamage } from '../data/passives.js';
 import { HEROES } from '../data/heroes.js';
 import { MODES, NIGHTMARE } from '../data/difficulty.js';
 import { MAPS } from '../data/maps.js';
@@ -358,6 +358,12 @@ function choiceInfo(g, c) {
     return { name: def.name, icon: def.icon, desc: def.desc, isNew: !!c.isNew, tag: c.isNew ? 'NEW RELIC' : `LV ${c.level}`, color: c.isNew ? '#63c74d' : '#9ee562', hint, change: cardChange(g, c), synergy: cardSynergy(g, c) || cardReactionLine(g, c), max: def.max };
   }
   const { name, icon } = FILLERS[c.type], B = BLESSING;
+  // An Overcharge (G9): its weapon's icon and what it will have in all, rank by rank.
+  if (c.type === 'over') {
+    const w = p.weapons.find((x) => x.id === c.id) || g.overTarget(), r = (w?.over || 0) + 1;
+    const area = Math.round(Math.min(OVERCHARGE.areaMost, OVERCHARGE.area * r) * 100);
+    return { name, icon: w ? w.def.icon : icon, desc: `${w ? w.def.name : 'Your best weapon'}: damage {+${Math.round(overDamage(r) * 100)}%}, area {+${area}%} in all.`, tag: `x${r}`, color: '#f77622', max: 0 };
+  }
   // The three Blessings (the owner's, 27 October 2026), each counted on its tag.
   if (c.type === 'bless') return { name, icon, desc: `Might {+${B.might * 100}%}, health {+${B.maxHp * 100}%}. Stacks.`, tag: `x${p.blessings + 1}`, color: '#fee761', max: 0 };
   if (c.type === 'haste') {
@@ -993,7 +999,7 @@ export class LevelUpOverlay {
       }
     }
     if (!input.down('always')) this.heldAlways = false;
-    const keys = ['one', 'two', 'three', 'four', 'five'], shift = input.down('always') && !this.heldAlways;
+    const keys = ['one', 'two', 'three', 'four', 'five', 'six'], shift = input.down('always') && !this.heldAlways;
     for (let i = 0; i < n && !result && act === null && this.choices === shown; i++) {
       if (!input.pressed(keys[i]) || i >= this.choices.length) continue;
       if (this.heldCard(i)) {

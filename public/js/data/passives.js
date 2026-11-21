@@ -72,8 +72,20 @@ export const FILLERS = {
   gold: { name: 'Purse of Gold', short: 'Gold', icon: 'i_greed' },
   haste: { name: 'Blessing of Haste', short: 'Blessing of Haste', icon: 'i_cooldown', count: 'hastes', tally: 'Haste' },
   reach: { name: 'Blessing of Reach', short: 'Blessing of Reach', icon: 'i_area', count: 'reaches', tally: 'Reach' },
+  // Overcharge (G9 of the 21 November 2026 review, answering the October review's D8): a rank past
+  // its top for the weapon at its top that has dealt the most this run (Game.overTarget), offered
+  // once one is; count: how many he has taken in all, of every weapon (Weapon.over holds each's).
+  over: { name: 'Overcharge', short: 'Overcharge', icon: 'i_might', count: 'overcharges', tally: 'Overcharge' },
 };
 export const FILLER_IDS = Object.keys(FILLERS);
+// The order the fillers fill a screen that still has upgrades on it (Game.levelChoices): Valor,
+// then an Overcharge, the heal and the gold; a full build's screen shows them all in FILLER_IDS's.
+export const FILLER_ROOM = ['bless', 'over', 'heal', 'gold', 'haste', 'reach'];
+// What each Overcharge rank r gives its weapon (Weapon.recompute): damage 1 + dmg·r^bend times
+// (each rank a little less than the last, never an end: +10% at one, +56% at ten, +95% at
+// twenty), and area `area` more a rank, `areaMost` at most.
+export const OVERCHARGE = { dmg: 0.1, bend: 0.75, area: 0.02, areaMost: 0.2 };
+export const overDamage = (r) => OVERCHARGE.dmg * r ** OVERCHARGE.bend;
 // What each Blessing gives a time (Player.recompute): Valor's might and health; Haste's cooldowns,
 // down to the floor every cooldown has (0.35); Reach's area, counted up to reachMost times
 // (+100% at most).

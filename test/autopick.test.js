@@ -88,10 +88,11 @@ function sayings(g) {
 test('a maxed build is offered every filler, even on a four-card level-up, and no reroll', () => {
   screen((g, gs, p) => {
     maxOut(g);
-    // The owner's (27 October 2026): the Blessing in three kinds, all of them on a full build's screen.
-    assert.deepEqual(FILLER_IDS, ['bless', 'heal', 'gold', 'haste', 'reach']);
-    assert.deepEqual(g.levelChoices(4).map((c) => c.type), FILLER_IDS, 'all five, whatever the count');
-    assert.deepEqual(g.levelChoices(3).map((c) => c.type), FILLER_IDS, 'all five, whatever the count');
+    // The owner's (27 October 2026): the Blessing in three kinds, all of them on a full build's
+    // screen; and since 21 November 2026 (G9) the Overcharge with them.
+    assert.deepEqual(FILLER_IDS, ['bless', 'heal', 'gold', 'haste', 'reach', 'over']);
+    assert.deepEqual(g.levelChoices(4).map((c) => c.type), FILLER_IDS, 'all six, whatever the count');
+    assert.deepEqual(g.levelChoices(3).map((c) => c.type), FILLER_IDS, 'all six, whatever the count');
     g.choiceCount = () => 4;
     g.state = 'levelup';
     g.pendingLevels = 1;
@@ -430,7 +431,7 @@ test('a Blessing at its cap is offered no more, and an ALWAYS on it turns to Val
     assert.ok(g.blessingCapped('haste') && g.blessingCapped('reach'));
     assert.ok(!g.blessingCapped('bless') && !g.blessingCapped('heal') && !g.blessingCapped('gold'));
     const shown = g.levelChoices(4);
-    assert.deepEqual(shown.map((c) => c.type), ['bless', 'heal', 'gold'], 'Haste and Reach no more');
+    assert.deepEqual(shown.map((c) => c.type), ['bless', 'heal', 'gold', 'over'], 'Haste and Reach no more');
     assert.equal(g.filler('haste').type, 'bless');
     assert.equal(g.filler('reach').type, 'bless');
     assert.equal(g.redrawCard(shown), null, 'nothing capped in a banished card\'s place');

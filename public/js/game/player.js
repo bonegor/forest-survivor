@@ -145,6 +145,7 @@ export class Player {
     this.blessings = 0; // stacking rewards once the build is complete
     this.hastes = 0; // and the Blessings of Haste and Reach taken (data/passives.js BLESSING)
     this.reaches = 0;
+    this.overcharges = 0; // Overcharges taken, of every weapon (Weapon.over, Game.applyChoice)
     this.weapons = [];
     this.gearWeapons = [];
     this.strikeAt = null; // when the last blow struck by hand began (Game.strike)

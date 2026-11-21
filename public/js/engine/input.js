@@ -36,6 +36,7 @@ const BIND = {
   three: { keys: ['Digit3', 'Numpad3'], pad: [] },
   four: { keys: ['Digit4', 'Numpad4'], pad: [] },
   five: { keys: ['Digit5', 'Numpad5'], pad: [] }, // a full build's fifth filler (Game.levelChoices)
+  six: { keys: ['Digit6', 'Numpad6'], pad: [] }, // and its sixth, the Overcharge (21 November 2026)
   fps: { keys: ['F3'], pad: [] },
   fullscreen: { keys: ['F11', 'KeyF'], pad: [] },
 };

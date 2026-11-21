@@ -3,7 +3,7 @@
 //
 //   PICKS.name = { about, pick(cards, view) -> index }
 //
-// cards: [{ type: 'weapon' | 'passive' | 'bless' | 'haste' | 'reach' | 'heal' | 'gold', id, name,
+// cards: [{ type: 'weapon' | 'passive' | 'bless' | 'haste' | 'reach' | 'over' | 'heal' | 'gold', id, name,
 //           level, isNew, value }]
 
 import { WEAPONS } from '../data/weapons.js';
@@ -81,6 +81,7 @@ export function tacticalScore(c, v) {
   }
   if (c.type === 'heal') return v.me.hpFrac < .55 ? .8 : 25;
   if (c.type === 'bless') return 5;
+  if (c.type === 'over') return 3.5;
   if (c.type === 'haste') return 4;
   if (c.type === 'reach') return 6;
   return 26;
@@ -108,7 +109,7 @@ export const PICKS = {
           return 2 + (r < 0 ? 20 : r) + (c.isNew ? 0.5 : 0);
         }
         if (c.type === 'heal') return v.me.hp < v.me.maxHp * 0.7 ? 29 : 31;
-        return c.type === 'bless' ? 30 : 32;
+        return c.type === 'over' ? 29.5 : c.type === 'bless' ? 30 : 32;
       }),
   },
 };

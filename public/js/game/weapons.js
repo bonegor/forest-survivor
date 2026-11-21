@@ -1,7 +1,7 @@
 // Weapon instances and the firing behaviour of every weapon kind.
 
 import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weapons.js';
-import { PASSIVES } from '../data/passives.js';
+import { PASSIVES, OVERCHARGE, overDamage } from '../data/passives.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick, angleDiff } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
@@ -88,6 +88,7 @@ export class Weapon {
     this.fx = null;
     this.targets = [];
     this.targetIds = []; // and the id each had when picked (setTargets): a fallen foe's body comes back from the pool as another
+    this.over = 0; // Overcharge ranks past its top (data/passives.js OVERCHARGE), kept through its evolution
     this.recompute();
   }
 
@@ -107,6 +108,13 @@ export class Weapon {
 
   recompute() {
     this.s = heroStats(this.def, this.effectiveRank(), this.g.player);
+    // Overcharged (G9): its blows, and any poison it leaves, the stronger, its reach a little wider.
+    if (this.over > 0) {
+      const k = 1 + overDamage(this.over);
+      if (this.s.dmg) this.s.dmg *= k;
+      if (this.s.dot) this.s.dot *= k;
+      this.s.area *= 1 + Math.min(OVERCHARGE.areaMost, OVERCHARGE.area * this.over);
+    }
     if (this.fx && this.fx.refresh) this.fx.refresh();
     prewarm(this);
   }
