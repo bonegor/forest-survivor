@@ -1346,7 +1346,7 @@ export class Whirl {
       }
       sfx('slash', { pitch: rand(1.1, 1.4) });
     }
-    if (Math.random() < 0.7) {
+    if (Math.random() < 42 * dt) {
       const a = rand(TAU);
       g.particles.emit(p.x + Math.cos(a) * R * 0.8, p.y + Math.sin(a) * R * 0.8, 6, -Math.sin(a) * 120, Math.cos(a) * 120, 0, 0.25, 1, PC.G, P.FADE, 4);
     }
@@ -1479,7 +1479,7 @@ export class ShadowDance {
       this.k += 0.05;
       for (let i = 0; i < 2; i++) danceBlade(g, p.x, p.y, rand(TAU));
     }
-    if (Math.random() < 0.5) g.particles.emit(p.x + rand(-5, 5), p.y - rand(0, 14), 0, 0, 0, rand(10, 20), 0.5, 2, pick([PC.p, PC.q, PC.P]), P.FADE | P.GLOW, 0);
+    if (Math.random() < 30 * dt) g.particles.emit(p.x + rand(-5, 5), p.y - rand(0, 14), 0, 0, 0, rand(10, 20), 0.5, 2, pick([PC.p, PC.q, PC.P]), P.FADE | P.GLOW, 0);
     return this.t < this.dur;
   }
 }
@@ -1792,7 +1792,7 @@ export class Sanctum {
       this.healT = 1;
       p.heal(p.maxHp * SANCTUM.heal);
     }
-    if (Math.random() < 0.6) {
+    if (Math.random() < 36 * dt) {
       const a = rand(TAU), r = Math.sqrt(Math.random()) * R;
       g.particles.emit(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r * 0.8, 0, 0, 0, rand(20, 40), 0.7, 1, pick([PC.Y, PC.y, PC.w]), P.GLOW | P.FADE, 0);
     }
@@ -1900,7 +1900,7 @@ export class Frenzy {
       this.k += FRENZY.every;
       g.effects.push(new Chop(g, null, FRENZY.R * p.area, FRENZY.dmg, { ult: true, kb: 0.8, quiet: Math.random() < 0.5 }));
     }
-    if (Math.random() < 0.5) g.particles.emit(p.x + rand(-5, 5), p.y - rand(2, 14), 0, 0, 0, rand(10, 25), 0.5, 1, pick([PC.r, PC.x, PC.R]), P.GLOW | P.FADE, 0);
+    if (Math.random() < 30 * dt) g.particles.emit(p.x + rand(-5, 5), p.y - rand(2, 14), 0, 0, 0, rand(10, 25), 0.5, 1, pick([PC.r, PC.x, PC.R]), P.GLOW | P.FADE, 0);
     return this.t < this.dur;
   }
 

@@ -1082,7 +1082,7 @@ export class Dungeon {
     if (this.stairs && g.state === 'play') {
       const s = this.stairs;
       s.t += dt;
-      if (Math.random() < 0.3) g.particles.emit(s.x + rand(-10, 10), s.y + rand(-4, 8), 0, 0, 0, rand(10, 30), 1, 1, PC.L, P.GLOW | P.FADE, 0);
+      if (Math.random() < 18 * dt) g.particles.emit(s.x + rand(-10, 10), s.y + rand(-4, 8), 0, 0, 0, rand(10, 30), 1, 1, PC.L, P.GLOW | P.FADE, 0);
       // Armed once he is off them, as a crypt's stairs up are: stairs opening under his feet where
       // the guardian fell don't take him down before he has seen what it left.
       if (!onStairs(s)) s.armed = true;
@@ -1100,7 +1100,7 @@ export class Dungeon {
     if (this.exit && this.exit.hole && g.state === 'play' && onStairs(this.exit)) g.leaveCrypt();
     if (this.way) this.updateWay(dt);
     // Torch embers.
-    if (Math.random() < 0.3 && this.torches.length) {
+    if (Math.random() < 18 * dt && this.torches.length) {
       const t = pick(this.torches);
       if (Math.abs(t.x - p.x) < 260 && Math.abs(t.y - p.y) < 200) g.particles.emit(t.x + rand(-1, 1), t.y - this.flameAt, 0, rand(-4, 4), rand(-6, 0), rand(10, 25), 0.8, 1, PC.y, P.GLOW | P.FADE, 0);
     }
@@ -1332,7 +1332,7 @@ export class Dungeon {
     }
     // Motes drift along it, up toward the stairs.
     const path = w.path;
-    if (path.length > 1 && dt > 0 && Math.random() < Math.min(1, path.length / 12)) {
+    if (path.length > 1 && dt > 0 && Math.random() < Math.min(1, path.length / 12) * 60 * dt) {
       const k = Math.floor(Math.random() * (path.length - 1)), a = path[k], b = path[k + 1];
       const l = Math.hypot(b.x - a.x, b.y - a.y) || 1, v = rand(22, 40);
       g.particles.emit(a.x + rand(-4, 4), a.y + rand(-3, 3), rand(1, 5), ((b.x - a.x) / l) * v, ((b.y - a.y) / l) * v, rand(4, 12), rand(0.9, 1.6), 1, pick([PC.c, PC.w, PC.G]), P.GLOW | P.FADE, 0);

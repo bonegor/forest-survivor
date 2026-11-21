@@ -91,7 +91,7 @@ export class Minion {
     }
     if (this.rise > 0) {
       this.rise -= dt;
-      if (Math.random() < 0.5) g.particles.emit(this.x + rand(-5, 5), this.y, 0, rand(-15, 15), rand(-5, 5), rand(20, 50), 0.45, 1, Math.random() < 0.5 ? this.look.rise[0] : this.look.rise[1], P.GROUND | P.FADE, 2, 220);
+      if (Math.random() < 30 * dt) g.particles.emit(this.x + rand(-5, 5), this.y, 0, rand(-15, 15), rand(-5, 5), rand(20, 50), 0.45, 1, Math.random() < 0.5 ? this.look.rise[0] : this.look.rise[1], P.GROUND | P.FADE, 2, 220);
       return true;
     }
     this.swing = Math.max(0, this.swing - dt);

@@ -350,7 +350,7 @@ export class Enemy {
 
     if (this.spawnT > 0) {
       this.spawnT -= dt;
-      if (def.rise && Math.random() < 0.5) {
+      if (def.rise && Math.random() < 30 * dt) {
         g.particles.emit(this.x + rand(-5, 5), this.y, 0, rand(-15, 15), rand(-5, 5), rand(20, 50), 0.45, 1, pick(g.world.riseDust || RISE_DUST), P.GROUND | P.FADE, 2, 220);
       }
       return;
@@ -389,7 +389,7 @@ export class Enemy {
         g.hitEnemy(this, this.dotDps * 0.5, { type: this.dotType, kb: 0, noCrit: true, w: this.dotW });
         if (this.dead) return;
       }
-      if (Math.random() < 0.3) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick(DOT_SPARKS[this.dotType]), P.GLOW | P.FADE, 0);
+      if (Math.random() < 18 * dt) g.particles.emit(this.x + rand(-3, 3), this.y - rand(2, 10), 0, 0, 0, rand(15, 30), 0.35, 1, pick(DOT_SPARKS[this.dotType]), P.GLOW | P.FADE, 0);
     }
 
     // In a crypt (world.vision) a monster that hasn't seen the hero doesn't know where he is:
@@ -549,7 +549,7 @@ export class Enemy {
           dy = d[1];
           // Its own speed, slows and holds as they are, made the share of the hero's pace it runs or walks at.
           sp *= ((this.fleeing ? THIEF.run : THIEF.walk) * heroPace(g)) / Math.max(1, this.spd * g.diff.speed * g.move);
-          if (Math.random() < 0.2) g.particles.emit(this.x + rand(-4, 4), this.y - rand(4, 12), 0, 0, 0, rand(5, 15), 0.6, 1, PC.Y, P.GLOW | P.FADE, 0);
+          if (Math.random() < 12 * dt) g.particles.emit(this.x + rand(-4, 4), this.y - rand(4, 12), 0, 0, 0, rand(5, 15), 0.6, 1, PC.Y, P.GLOW | P.FADE, 0);
           if (this.life > THIEF.time) {
             g.escape(this);
             return;
