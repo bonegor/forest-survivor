@@ -16,6 +16,10 @@ import { GOOD_COPPER_ID, WHIP_ID } from './copper.js';
 // actual terrain and faces directional attacks. Generic circling alone does not test every kit. The
 // Knight, Ranger, Shadow, Necromancer, Paladin and Berserker were cut to it that day: their health,
 // the Knight's armour and regeneration, the Berserker's Bloodrage.
+// The owner's (22 November 2026): "heroes can be one harder than the other, but not too much".
+// On Veteran with half the Armory (tactician, tactical picks, seeds 1-8) the Ranger, Necromancer,
+// Druid and Witch Hunter fell at 2:13-3:13 against a pack at 4:41-5:22 (Paladin, Berserker,
+// Sorcerer, Shadow); 30% more health brought them to 2:53-5:41. The Knight (10:49) still leads.
 export const HEROES = {
   knight: {
     id: 'knight',
@@ -48,8 +52,9 @@ export const HEROES = {
     // The owner's (20 October 2026): "make ranger attack faster and stronger (both by 20%) and
     // increase ranger health by 50%". Faster is how often her weapons strike (every cooldown
     // divided by 1.2), not her pace, which the thief is measured against; stronger is her damage
-    // (might), the bow's and all else she fires. Her health, 150 then, is 80 since the rule above.
-    stats: { maxHp: 80, might: 1.2, cooldown: 1 / 1.2, speed: 1.15, crit: 0.12, projSpeed: 1.1 },
+    // (might), the bow's and all else she fires. Her health, 150 then, is 80 since the rule above, and
+    // 104 since 22 November 2026 (the rule below HEROES' head).
+    stats: { maxHp: 104, might: 1.2, cooldown: 1 / 1.2, speed: 1.15, crit: 0.12, projSpeed: 1.1 },
     perk: 'Eagle Eye: +20% damage & attack speed, +12% crit',
     ult: 'arrowstorm',
     ultName: 'Arrow Storm',
@@ -102,7 +107,7 @@ export const HEROES = {
     unique: ['raise', 'miasma'],
     start: ['raise', 'miasma'],
     color: '#9ee562',
-    stats: { maxHp: 50, summonDur: 1.3, growth: 1.1 },
+    stats: { maxHp: 65, summonDur: 1.3, growth: 1.1 },
     perk: 'Grave Pact: minions last 30% longer, +10% XP',
     ult: 'deadrise',
     ultName: 'Army of the Dead',
@@ -144,7 +149,7 @@ export const HEROES = {
     color: '#b86f50',
     // Grove Warden: `grove` more damage while a tree stands within GROVE.near of him (the forest's;
     // never in a crypt or the Dungeon), and he regenerates.
-    stats: { maxHp: 110, regen: 0.4, grove: 0.25 },
+    stats: { maxHp: 143, regen: 0.4, grove: 0.25 },
     perk: 'Grove Warden: +25% damage near trees, regenerates',
     ult: 'overgrowth',
     ultName: 'Overgrowth',
@@ -179,7 +184,7 @@ export const HEROES = {
     unique: ['crossbow'],
     color: '#c0cbdc',
     // Inquisition: `bane` more damage on champions, crypt lords and bosses, from all she has.
-    stats: { maxHp: 100, speed: 1.05, crit: 0.1, bane: 0.3 },
+    stats: { maxHp: 130, speed: 1.05, crit: 0.1, bane: 0.3 },
     perk: 'Inquisition: +30% damage to champions, lords & bosses, +10% crit',
     ult: 'purge',
     ultName: 'Purge',
