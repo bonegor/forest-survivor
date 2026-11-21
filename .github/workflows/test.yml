@@ -1,0 +1,42 @@
+# Runs the tests when a push to main changes what they test but the game's publish doesn't run for
+# (pages.yml runs them on every change to public/), and on pull requests. A change to a tool, a test
+# or the server once went untested until the next push to public/ failed and held up its deploy.
+name: Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'test/**'
+      - 'tools/**'
+      - 'server.js'
+      - 'desktop/**'
+      - 'package.json'
+      - '.github/workflows/test.yml'
+  pull_request:
+  workflow_dispatch:
+
+# Nothing unless a job asks for it.
+permissions: {}
+
+# A newer push to the same branch makes an older run moot.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # Pinned to the same release commits as pages.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm test
