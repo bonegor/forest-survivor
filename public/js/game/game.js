@@ -2700,7 +2700,11 @@ export class Game {
     // Shrines.
     for (const s of this.shrines) {
       s.t += dt;
-      if (!s.used && this.state === 'play' && Math.hypot(p.x - s.x, p.y - s.y) < 13) this.useShrine(s);
+      const d = Math.hypot(p.x - s.x, p.y - s.y);
+      if (!s.used && this.state === 'play' && d < 13) this.useShrine(s);
+      // Its sparkles, about twelve a second near enough to be seen: here, not in drawShrineGlow, where
+      // they piled up unmoving while paused or choosing a level-up, and came with the frame rate.
+      if (!s.used && d < 360 && Math.random() < 12 * dt) this.particles.emit(s.x + rand(-4, 4), s.y - 14, 0, 0, 0, rand(10, 25), 0.8, 1, PC.w, P.GLOW | P.FADE, 0);
     }
     // Resolve a completed Survival level before a doorway can start another journey.
     if (this.state === 'play' && this.mode === 's15' && this.time >= this.duration && !this.inCrypt) {
@@ -3315,7 +3319,6 @@ export class Game {
     ctx.drawImage(glow(col), sx - sz / 2, sy - sz / 2, sz, sz);
     ctx.drawImage(glow(col), sx - sz / 4, sy - sz / 4, sz / 2, sz / 2);
     this.light(s.x, s.y - 12, 70, s.type === 'fury' ? 'red' : s.type === 'haste' ? 'cyan' : s.type === 'fortune' ? 'gold' : s.type === 'wisdom' ? 'purple' : 'green', 0.9);
-    if (Math.random() < 0.2) this.particles.emit(s.x + rand(-4, 4), s.y - 14, 0, 0, 0, rand(10, 25), 0.8, 1, PC.w, P.GLOW | P.FADE, 0);
   }
 }
 
