@@ -499,7 +499,8 @@ export class Dungeon {
 
   bake() {
     const { W, H, theme } = this;
-    const rng = mulberry32(this.floor * 1013 + 7);
+    // The floor and the seed: by the floor alone, every crypt (each a floor 1) shared one floor's shading.
+    const rng = mulberry32(((this.seed >>> 0) ^ (this.floor * 1013 + 7)) >>> 0);
     const pw = W * T, ph = H * T;
     const c = (this.canvas = makeCanvas(pw, ph));
     const ctx = c.getContext('2d');
@@ -520,7 +521,7 @@ export class Dungeon {
       if (x >= 0 && y >= 0 && x < pw && y < ph) px[y * pw + x] = col;
     };
     const hash = (x, y) => {
-      let h = (x * 374761393 + y * 668265263 + this.floor * 2147483647) | 0;
+      let h = (x * 374761393 + y * 668265263 + this.floor * 2147483647 + Math.imul(this.seed | 0, 1597334677)) | 0;
       h = Math.imul(h ^ (h >>> 13), 1274126177);
       return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
     };
