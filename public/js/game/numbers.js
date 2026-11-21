@@ -124,7 +124,9 @@ export class Numbers {
     const tier = plain ? TIER.plain : crit ? TIER.crit : TIER.big;
     if (tier < TIER.big && (this.count[tier] >= (plain ? PLAIN_MAX : CRIT_MAX) || this.nearHero(x, y))) return;
     if (style !== 'player' && style !== 'heal' && this.onBody(x, y)) return;
-    if (plain && target && target._num && target._num.alive && target._num.t < 0.32 && target._num.style === style) {
+    // Its own still: numbers are pooled, and one this foe had may since be another foe's.
+    const own = target?._num?.alive && target._num.owner === target && target._num.ownerId === target.id;
+    if (plain && own && target._num.t < 0.32 && target._num.style === style) {
       const n = target._num;
       n.value += value;
       n.t = 0.05;
@@ -138,7 +140,11 @@ export class Numbers {
     n.boost = boostFor(value, style);
     n.str = (STYLES[style].prefix || '') + value;
     n.spin = style === 'crit' ? rand(-0.25, 0.25) : 0;
-    if (target) target._num = n;
+    if (target) {
+      target._num = n;
+      n.owner = target;
+      n.ownerId = target.id;
+    }
   }
 
   // Within the clear zone round the hero's middle.
@@ -191,6 +197,8 @@ export class Numbers {
     this.count[tier]++;
     n.hold = null;
     n.holdId = 0;
+    n.owner = null; // the foe whose plain hits it gathers (add), its body and its life (id)
+    n.ownerId = 0;
     n.critT = 0;
     n.x = style === 'held' ? x : x + rand(-3, 3);
     n.y = y;
