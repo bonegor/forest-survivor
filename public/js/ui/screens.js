@@ -277,23 +277,6 @@ export function portraitFit(fh, maxW) {
   return { s: Math.max(1, Math.min(6, Math.floor((foot - 6) / c.h), Math.floor((maxW - 12) / c.w))), foot };
 }
 
-// The hero screen's cards: as many in a row as fit HERO_CARD.min wide or wider (at most
-// HERO_CARD.max), all nine in one row where they fit (a desktop), else in rows of as many as fit (a
-// phone held upright: five and four); the rows kept short enough on a low screen to leave the
-// detail panel under them room. A screen too low for rows even HERO_CARD.low tall (a 1366 x 768
-// laptop) keeps all in one row, down to HERO_CARD.tight wide, rather than crush the panel.
-export const HERO_CARD = { min: 44, tight: 38, max: 64, h: 66, low: 56, gap: 4 };
-export function heroCards(W, H, n) {
-  const C = HERO_CARD, wide = (k) => Math.min(C.max, Math.floor((W - 30) / k) - C.gap);
-  const room = (rows) => Math.floor((H - 32 - 26 - 100 - 8 - C.gap * (rows - 1)) / rows);
-  let cols = n;
-  while (cols > 1 && wide(cols) < C.min) cols--;
-  let rows = Math.ceil(n / cols);
-  if (rows > 1 && room(rows) < C.low && wide(n) >= C.tight) rows = 1;
-  cols = Math.ceil(n / rows);
-  return { cols, rows, cw: wide(cols), ch: rows > 1 ? Math.max(C.low, Math.min(C.h, room(rows))) : C.h };
-}
-
 export { HeroScreen } from './hero-selection.js';
 
 // ------------------------------------------------------------------- mode --
