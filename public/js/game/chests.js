@@ -9,6 +9,7 @@ import { hexPack } from '../engine/pixels.js';
 import { PAL } from '../art/palette.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, statsAt } from '../data/weapons.js';
 import { FILLER_IDS } from '../data/passives.js';
+import { fusionLines } from '../data/fusions.js';
 
 // The chest sprite's own colours (art/items.js) and what each tier paints them.
 const OWN = { dark: PAL.b, wood: PAL.B, band: PAL.y, shine: PAL.Y, lock: PAL.o };
@@ -110,6 +111,8 @@ const DELTA = [
 ];
 const COUNT_NOUN = { sword: 'Slashes', bow: 'Arrows', axe: 'Axes', blades: 'Blades', daggers: 'Blades', fireball: 'Fireballs', meteor: 'Meteors', glaive: 'Glaives', wisp: 'Wisps', flask: 'Flasks', summon: 'Skeletons', lightning: 'Bolts', chain: 'Chains',caltrops: 'Caltrops', hook: 'Hooks', thorns: 'Thorns', spiral: 'Axes', lantern: 'Beams', runestone: 'Stones', starfall: 'Stars', leech: 'Chains', spores: 'Mushrooms', hex: 'Curses' };
 export function evolveLines(fromId, toId) {
+  // A fusion (data/fusions.js) tells its parents and what each now does instead.
+  if (WEAPONS[toId].fusion) return fusionLines(toId, Object.fromEntries(WEAPONS[toId].of.map((id) => [id, WEAPONS[id].name])));
   const a = statsAt(WEAPONS[fromId], MAX_WEAPON_LEVEL), b = statsAt(WEAPONS[toId], MAX_WEAPON_LEVEL);
   const out = [];
   for (const [k, name, fmt] of DELTA) {

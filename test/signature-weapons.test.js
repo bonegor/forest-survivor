@@ -227,7 +227,8 @@ test('every evolution beats its weapon at level 8 on every stat', () => {
       }
     }
   }
-  for (const [id, d] of Object.entries(WEAPONS)) if (d.evolved) assert.ok(into.has(id), `${id} is some weapon's evolution`);
+  // (A fusion, data/fusions.js, is two evolutions as one, no weapon's own.)
+  for (const [id, d] of Object.entries(WEAPONS)) if (d.evolved && !d.fusion) assert.ok(into.has(id), `${id} is some weapon's evolution`);
 });
 
 // How a weapon's stats at a level were worked out, three ways, before data/weapons.js statsAt:

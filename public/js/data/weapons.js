@@ -9,6 +9,7 @@
 
 import { EXPANSION_WEAPONS } from '../expansion/signatures.js';
 import { COPPER_WEAPONS } from './copper.js';
+import { FUSION_WEAPONS } from './fusions.js';
 
 export const MAX_WEAPON_LEVEL = 8;
 export const RANDOM_EVOLUTION = 'random_evolution';
@@ -909,3 +910,6 @@ export const WEAPONS = {
     base: { dmg: 70, cd: 2.4, area: 1.9, fear: 2.8, echo: 1 },
   },
 };
+// The fusions (data/fusions.js), each two evolutions as one, after every weapon so nothing before
+// them moves.
+Object.assign(WEAPONS, FUSION_WEAPONS);

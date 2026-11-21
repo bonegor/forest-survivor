@@ -3,6 +3,7 @@
 import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { oathFlags } from '../data/oaths.js';
 import { BOONS, trophyChoices } from '../data/boons.js';
+import { FUSION, fusionOf, infuseOf } from '../data/fusions.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
 import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
@@ -44,7 +45,7 @@ import { makeHazards } from './hazards/index.js';
 import { Dungeon, cryptLords, cryptLook, cryptHasEaNasir } from './dungeon.js';
 import { Hud, SHRINE_COLORS, SHRINE_INFO } from './hud.js';
 import { releaseProjectile } from './projectiles.js';
-import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, Sanctum, Overgrowth, Frenzy, Purge, FRENZY, ultFlash, prewarmUlt } from './effects.js';
+import { explode, Ring, Beam, Whirl, ArrowRain, ShadowDance, Meteor, Sanctum, Overgrowth, Frenzy, Purge, FRENZY, ultFlash, prewarmUlt, stunFoe, rootFoe } from './effects.js';
 import { REACT, exposed, isHeavy, scalds, combusts, react } from './reactions.js';
 import { shadowSprite, glow, splatSprite, vignette, groundRing } from './fxsprites.js';
 import { Minion } from './minions.js';
@@ -640,8 +641,59 @@ export class Game {
   }
 
   ownsWeapon(id) {
-    return this.player.weapons.some((w) => w.id === id || w.baseId === id ||
-      (w.def.evolved && w.baseId === w.id && !WEAPONS[id]?.evo?.random && WEAPONS[id]?.evo?.into === w.id));
+    const has = (w) => w.id === id || w.baseId === id ||
+      (w.def.evolved && w.baseId === w.id && !WEAPONS[id]?.evo?.random && WEAPONS[id]?.evo?.into === w.id);
+    // Both of a fusion's are his still (data/fusions.js): never offered again.
+    return this.player.weapons.some((w) => has(w) || (w.parts && w.parts.some(has)));
+  }
+
+  // Two evolved weapons he holds that a fusion makes (data/fusions.js), [a, b, fusion id]; null if
+  // none (or under the Hollow Crown, where nothing evolves).
+  fusable() {
+    const p = this.player;
+    if (p.noEvolve) return null;
+    const ws = p.weapons.filter((w) => w.evolved && !w.fromGear && !w.parts && !w.def.copper);
+    for (let i = 0; i < ws.length; i++) {
+      for (let j = i + 1; j < ws.length; j++) {
+        const id = fusionOf(ws[i].id, ws[j].id);
+        if (id) return [ws[i], ws[j], id];
+      }
+    }
+    return null;
+  }
+
+  // a and b become the fusion id (a chest's: rollChest), in a's place, b's slot freed: both go on
+  // as its parts, each carrying the other's mark, what they had dealt and slain counted as its.
+  fuse(a, b, id) {
+    const p = this.player;
+    const f = new Weapon(this, id, this.freeSrc.shift() ?? 13);
+    f.level = MAX_WEAPON_LEVEL;
+    f.parts = [a, b];
+    a.owner = b.owner = f;
+    a.infuse = infuseOf(b.id);
+    b.infuse = infuseOf(a.id);
+    f.over = Math.max(a.over, b.over);
+    f.dmgDealt = a.dmgDealt + b.dmgDealt;
+    f.kills = a.kills + b.kills;
+    p.weapons[p.weapons.indexOf(a)] = f;
+    p.weapons.splice(p.weapons.indexOf(b), 1);
+    f.recompute();
+    return f;
+  }
+
+  // A fusion part's mark on a foe it struck (data/fusions.js FUSION): d, the blow as dealt.
+  infuse(e, mark, d, w) {
+    const F = FUSION, strong = e.boss || e.lord;
+    if (mark === 'freeze') {
+      if (!e.boss && Math.random() < F.freeze) e.freezeT = Math.max(e.freezeT, F.freezeT);
+    } else if (mark === 'burn') e.addDot('fire', d * F.burn, F.dot, w);
+    else if (mark === 'bleed') e.addDot('bleed', d * F.bleed, F.dot, w);
+    else if (mark === 'stun') stunFoe(e, F.stun);
+    else if (mark === 'root') rootFoe(e, F.root);
+    else if (mark === 'slow' && !strong) {
+      e.slowT = Math.max(e.slowT, F.slowT);
+      e.slowF = Math.max(e.slowF, F.slow);
+    } else if (mark === 'fear') e.scare(F.fear);
   }
 
   // Everything a level-up card or a chest can still give, each with its weight (CARD_WEIGHT): a
@@ -1020,6 +1072,13 @@ export class Game {
       const w = ev[0];
       const from = w.id;
       if (w.evolve()) items.push({ type: 'evolve', w, from, id: w.id });
+    } else {
+      // With no evolution due, a fusion (G2, data/fusions.js), told as an evolution from its first.
+      const fz = this.fusable();
+      if (fz) {
+        const [a, b, id] = fz, from = a.id;
+        items.push({ type: 'evolve', w: this.fuse(a, b, id), from, id, fusion: true });
+      }
     }
     let n = 1;
     // Luck makes a chest richer, but not a crypt lord's ('lord', drawn as a champion's at plain luck).
@@ -1309,6 +1368,8 @@ export class Game {
       e.slowT = Math.max(e.slowT, o.slowT || 1.5);
       e.slowF = Math.max(e.slowF, o.slow);
     }
+    // A fusion's part (data/fusions.js): its blow carries its partner's mark.
+    if (o.w?.infuse && !o.tick && !o.raw && !o.noReact && !e.prop && !e.dead) this.infuse(e, o.w.infuse, d, o.w);
     // The Frost-Bound Sigil (data/boons.js): any blow (not a burn's tick or a splash) may freeze.
     const frosted = p.frostHit > 0 && !o.tick && !o.raw && !o.noReact && !e.boss && !e.prop && Math.random() < p.frostHit;
     if (frosted && e.freezeT <= 0) e.freezeT = 1.6;
@@ -1322,6 +1383,7 @@ export class Game {
     const took = Math.min(d, Math.max(0, e.hp + d));
     if (e.curseT > 0) e.curseRec += took; // Hex Hourglass's curse (Enemy.curse)
     if (o.w) o.w.dmgDealt += took;
+    if (o.w?.owner) o.w.owner.dmgDealt += took; // a fusion's part counts for the fusion too
     if (this.ultRun && ultBlow(o)) this.ultRun.dmg += took;
     this.stats.damage += took;
     if (p.fang > 0) p.fangHeal(took); // Vampire Fang
@@ -1365,6 +1427,7 @@ export class Game {
     if (p.ult && p.ult.type === 'frenzy') p.heal(p.maxHp * FRENZY.heal, true);
     if (o.w) {
       o.w.kills++;
+      if (o.w.owner) o.w.owner.kills++;
       if (o.w.onKill) o.w.onKill(e);
     }
     // Weapons that watch every foe fall, whoever struck it (Weapon.onFoeDeath).

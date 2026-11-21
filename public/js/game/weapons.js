@@ -2,6 +2,7 @@
 
 import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weapons.js';
 import { PASSIVES, OVERCHARGE, overDamage } from '../data/passives.js';
+import { FUSION } from '../data/fusions.js';
 import { sfx } from '../engine/audio.js';
 import { rand, TAU, pick, angleDiff } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
@@ -89,6 +90,11 @@ export class Weapon {
     this.targets = [];
     this.targetIds = []; // and the id each had when picked (setTargets): a fallen foe's body comes back from the pool as another
     this.over = 0; // Overcharge ranks past its top (data/passives.js OVERCHARGE), kept through its evolution
+    // A fusion's two weapons (data/fusions.js, Game.fuse), and for a part, the fusion it is part of
+    // and the mark its blows carry, its partner's (Game.hitEnemy).
+    this.parts = null;
+    this.owner = null;
+    this.infuse = null;
     this.recompute();
   }
 
@@ -114,6 +120,14 @@ export class Weapon {
       if (this.s.dmg) this.s.dmg *= k;
       if (this.s.dot) this.s.dot *= k;
       this.s.area *= 1 + Math.min(OVERCHARGE.areaMost, OVERCHARGE.area * this.over);
+    }
+    // A part of a fusion strikes the harder (FUSION.dmg); a fusion's ranks are its parts'.
+    if (this.owner && this.s.dmg) this.s.dmg *= FUSION.dmg;
+    if (this.parts) {
+      for (const q of this.parts) {
+        q.over = this.over;
+        q.recompute();
+      }
     }
     if (this.fx && this.fx.refresh) this.fx.refresh();
     prewarm(this);
@@ -379,6 +393,16 @@ export const KINDS = {
   ...EXPANSION_BEHAVIORS,
   ...COPPER_BEHAVIORS,
   ...KINDS_LIGHT, // the Lantern, Runestone, Scythe and Starfall (weapons-light.js)
+  // A fusion (data/fusions.js): its two parts each go on as they were (Weapon.parts), each a weapon
+  // of its own with its own channel; a foe's fall is told to both.
+  fusion: {
+    tick(w, dt) {
+      for (const q of w.parts || []) q.update(dt);
+    },
+    death(w, e) {
+      for (const q of w.parts || []) q.onFoeDeath(e);
+    },
+  },
   sword: {
     fire(w) {
       // Swing straight out to the side his sprite faces, seeking no foe: one on the other side
