@@ -119,8 +119,12 @@ export const input = {
   },
 
   update() {
-    // Gamepad polling.
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    // Gamepad polling. A frame whose permissions policy keeps gamepads from it throws here (some
+    // portals' iframes): no pad there, as where the browser has none.
+    let pads = [];
+    try {
+      pads = navigator.getGamepads?.() || [];
+    } catch {}
     let gp = null;
     for (const p of pads) if (p && p.connected) { gp = p; break; }
     const pad = this.pad;

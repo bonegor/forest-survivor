@@ -108,12 +108,13 @@ function loop(now) {
     fpsAcc = 0;
     fpsFrames = 0;
   }
-  input.update();
-  // F11 at any time; F only off the battlefield (27 October 2026): mid-fight a stray F left the
-  // window with nothing paused.
-  if (input.pressed('fullscreen') && (input.justDown.has('F11') || app.screen?.game?.state !== 'play')) app.toggleFullscreen();
   const s = app.screen;
+  // Input inside the try too: a throw there stopped the loop for good, on its first frame.
   try {
+    input.update();
+    // F11 at any time; F only off the battlefield (27 October 2026): mid-fight a stray F left the
+    // window with nothing paused.
+    if (input.pressed('fullscreen') && (input.justDown.has('F11') || app.screen?.game?.state !== 'play')) app.toggleFullscreen();
     if (s.frame) s.frame(dt);
     else s.draw(view.uctx, view.W, view.H, dt);
     presentUI();
