@@ -60,17 +60,34 @@ export class Frame {
     this.buf = buf;
     this.w = buf.w;
     this.h = buf.h;
-    this.c = bufToCanvas(buf);
-    this.cf = bufToCanvas(px.flipX(buf));
-    const em = emissive ? px.keepColors(buf, emissive) : null;
-    this.em = em ? bufToCanvas(em) : null;
-    this.emf = em ? bufToCanvas(px.flipX(em)) : null;
+    // Its canvases (c, cf, em, emf) are made the first time each is drawn: made here, every hero's
+    // and boss's frames, both ways round, came to some 490 MiB at boot, for a run that draws one
+    // hero and a boss or two (the review of 21 November 2026).
+    this.emissive = emissive || null;
+    this._c = this._cf = this._em = this._emf = null;
     this.variants = new Map();
     this._pixels = null;
     this._rot = new Map();
     this._box = null;
     this._radius = -1;
     this._hasInk = undefined;
+  }
+
+  get c() {
+    return (this._c ??= bufToCanvas(this.buf));
+  }
+
+  get cf() {
+    return (this._cf ??= bufToCanvas(px.flipX(this.buf)));
+  }
+
+  // Its unlit pixels (the emissive colours) alone, or null where it has none to keep.
+  get em() {
+    return this.emissive ? (this._em ??= bufToCanvas(px.keepColors(this.buf, this.emissive))) : null;
+  }
+
+  get emf() {
+    return this.emissive ? (this._emf ??= bufToCanvas(px.flipX(px.keepColors(this.buf, this.emissive)))) : null;
   }
 
   // Frame buffers are immutable, like the cached bounds. A rim recolours only
