@@ -895,6 +895,10 @@ function sanitizeReceipt(raw, runs) {
   const reward = Object.fromEntries(['gold', 'collected', 'wage', 'bonus', 'total'].map(key => [key, int(r[key], 0, 1e9)]));
   reward.multiplier = RECEIPT_MULTIPLIERS.find((m) => Math.abs(m - r.multiplier) < 1e-9) ?? 1;
   if (r.gearConflict === true) reward.gearConflict = true;
+  if (r.heat > 0) {
+    reward.heat = int(r.heat, 1, MAX_HEAT);
+    reward.heatBest = r.heatBest === true;
+  }
   if (r.spoilsGold > 0) reward.spoilsGold = int(r.spoilsGold, 0, 1e9);
   reward.unlocks = Array.isArray(r.unlocks) ? r.unlocks.slice(0, HERO_ORDER.length + 10).filter(key => {
     if (typeof key !== 'string') return false;
@@ -1155,11 +1159,14 @@ export function applyRun(profile, rawRun) {
   p.best.time = Math.max(p.best.time, run.time);
   // His longest run, any mode (the clock that brings in the next hero and opens his ultimate).
   if (run.time > 0) p.bt[run.hero] = Math.max(p.bt[run.hero] || 0, run.time);
-  // A night won under oaths: his best heat won, and whether this one beat it (the results' NEW BEST).
+  // A night won under oaths: its heat, and whether it beat his best heat won (the results' NEW
+  // BEST); a reward without oaths has neither, as it had before them.
   const heat = run.victory ? heatOf(run.oaths || []) : 0;
-  reward.heat = heat;
-  reward.heatBest = heat > (p.oh[run.hero] || 0);
-  if (reward.heatBest) p.oh[run.hero] = heat;
+  if (heat) {
+    reward.heat = heat;
+    reward.heatBest = heat > (p.oh[run.hero] || 0);
+    if (reward.heatBest) p.oh[run.hero] = heat;
+  }
   p.best.gold = Math.max(p.best.gold, pickedUp);
   p.best.bosses = Math.max(p.best.bosses, run.bosses);
   p.best.combo = Math.max(p.best.combo, run.combo);
