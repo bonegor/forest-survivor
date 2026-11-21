@@ -86,40 +86,56 @@ export function discSprite(r, colors, edge = 0.35) {
 // A swept sword arc, frame f of n: a crisp crescent with a white-hot leading
 // edge and a tail that tapers and dithers away behind it.
 // palette: dark -> light, last entry is the edge highlight.
+// Slash arcs come in as many radii as Reach and a cut's own growth make (an expansion hero's cuts, a
+// Chop or Whirl past its baked ones), a canvas a frame: kept by last use, the oldest let go past
+// SLASH_MAX (unbounded, a Footman stacking Reach made some 15 MB of them a step, kept across runs).
+const slashes = new Map(), SLASH_MAX = 480;
 export function slashFrame(radius, arc, angleIdx, f, n, palette) {
   radius = Math.round(radius);
+  angleIdx = ((Math.round(angleIdx) % 32) + 32) % 32; // -16 and 16, 0 and 32: the same turn, one canvas
   const key = `slash3|${radius}|${arc.toFixed(2)}|${angleIdx}|${f}|${n}|${palette.join(',')}`;
-  return cached(key, () => {
-    const s = radius * 2 + 4;
-    const cx = s / 2, cy = s / 2;
-    const a0 = (angleIdx / 32) * TAU - arc / 2;
-    const p = (f + 1) / n;
-    const head = arc * Math.min(1, p * 1.45);
-    const tail = arc * 0.95;
-    const fade = p > 0.6 ? (p - 0.6) / 0.4 : 0;
-    const cols = palette.map(hexToRgb);
-    const top = cols.length - 1;
-    return pixelCanvas(s, s, (x, y) => {
-      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-      const d = Math.hypot(dx, dy);
-      if (d > radius) return null;
-      let th = Math.atan2(dy, dx) - a0;
-      th = ((th % TAU) + TAU) % TAU;
-      if (th > head) return null;
-      const u = (head - th) / tail; // 0 at the leading edge, 1 at the tail end
-      if (u > 1) return null;
-      const thick = radius * (0.66 * (1 - u) * (1 - u * 0.4) + 0.06) * (1 - fade * 0.5);
-      const inner = radius - thick;
-      if (d < inner) return null;
-      const rim = (d - inner) / Math.max(1, thick); // 0 inner .. 1 outer
-      let v = (1 - u) * 0.8 + rim * 0.3 - fade;
-      // Only the far tail breaks up into dither.
-      if (u > 0.55 && v + (dither(x, y) - 0.5) * 0.35 < 0.2) return null;
-      if (v < 0.04) return null;
-      if (u < 0.12 && rim > 0.55 && fade < 0.5) return cols[top];
-      const k = clamp(Math.floor(v * top), 0, top - 1);
-      return cols[k];
-    });
+  let c = slashes.get(key);
+  if (c) {
+    slashes.delete(key);
+    slashes.set(key, c);
+    return c;
+  }
+  c = drawSlash(radius, arc, angleIdx, f, n, palette);
+  slashes.set(key, c);
+  if (slashes.size > SLASH_MAX) slashes.delete(slashes.keys().next().value);
+  return c;
+}
+
+function drawSlash(radius, arc, angleIdx, f, n, palette) {
+  const s = radius * 2 + 4;
+  const cx = s / 2, cy = s / 2;
+  const a0 = (angleIdx / 32) * TAU - arc / 2;
+  const p = (f + 1) / n;
+  const head = arc * Math.min(1, p * 1.45);
+  const tail = arc * 0.95;
+  const fade = p > 0.6 ? (p - 0.6) / 0.4 : 0;
+  const cols = palette.map(hexToRgb);
+  const top = cols.length - 1;
+  return pixelCanvas(s, s, (x, y) => {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+    const d = Math.hypot(dx, dy);
+    if (d > radius) return null;
+    let th = Math.atan2(dy, dx) - a0;
+    th = ((th % TAU) + TAU) % TAU;
+    if (th > head) return null;
+    const u = (head - th) / tail; // 0 at the leading edge, 1 at the tail end
+    if (u > 1) return null;
+    const thick = radius * (0.66 * (1 - u) * (1 - u * 0.4) + 0.06) * (1 - fade * 0.5);
+    const inner = radius - thick;
+    if (d < inner) return null;
+    const rim = (d - inner) / Math.max(1, thick); // 0 inner .. 1 outer
+    let v = (1 - u) * 0.8 + rim * 0.3 - fade;
+    // Only the far tail breaks up into dither.
+    if (u > 0.55 && v + (dither(x, y) - 0.5) * 0.35 < 0.2) return null;
+    if (v < 0.04) return null;
+    if (u < 0.12 && rim > 0.55 && fade < 0.5) return cols[top];
+    const k = clamp(Math.floor(v * top), 0, top - 1);
+    return cols[k];
   });
 }
 
