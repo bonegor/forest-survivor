@@ -33,6 +33,7 @@ import { FLORA_FROZEN } from '../public/js/art/flora-frozen.js';
 import { FLORA_MEADOW } from '../public/js/art/flora-meadow.js';
 import { FLORA_HELL } from '../public/js/art/flora-hell.js';
 import { COPPER_ART } from '../public/js/art/eanasir.js';
+import { REFORGED_BOSS_ART } from '../public/js/art/bosses-reforged.js';
 
 const BLOOMS = ['fae_bloom1', 'fae_bloom2', 'fae_bloom1_u', 'fae_bloom2_u'];
 const NEW = [...Object.keys(TERRAIN_ART), ...BLOOMS];
@@ -95,13 +96,21 @@ test("a bud or a wilted moonbloom doesn't glow; an open or a bright one does, in
   }
 });
 
-test('no name is in two of the art tables', () => {
+test('no name is in two of the art tables, but for the reforged bosses drawn over their old art', () => {
+  // In art/defs.js's order: the reforged bosses (bosses-reforged.js) come after the night's and the
+  // maps' bosses, and each of them replaces one of those, as intended; any other name in two tables
+  // is a mistake, the later one silently drawn in place of the first.
   const tables = [HERO_ART, MONSTER_ART, BOSS_ART, PICKUP_ART, PROJECTILE_ART, ICON_ART, RELIC_EXPANSION_ART, PROC_ART, PROP_ART, LANDMARK_ART,
-    PALADIN_ITEMS, DRUID_ITEMS, BERSERKER_ITEMS, WITCHHUNTER_ITEMS, MAP_MONSTER_ART, MAP_BOSS_ART,
+    PALADIN_ITEMS, DRUID_ITEMS, BERSERKER_ITEMS, WITCHHUNTER_ITEMS, MAP_MONSTER_ART, MAP_BOSS_ART, REFORGED_BOSS_ART,
     FLORA_DESERT, FLORA_FROZEN, FLORA_MEADOW, FLORA_HELL, TERRAIN_ART, COPPER_ART];
   const seen = new Map();
   tables.forEach((t, i) => {
     for (const n of Object.keys(t)) {
+      if (t === REFORGED_BOSS_ART) {
+        assert.ok([BOSS_ART, MAP_BOSS_ART].includes(tables[seen.get(n)]), `${n}: a reforged boss replaces a boss drawn before`);
+        assert.equal(DRAWN[n], REFORGED_BOSS_ART[n], `${n}: drawn as reforged`);
+        continue;
+      }
       assert.ok(!seen.has(n), `${n} in tables ${seen.get(n)} and ${i}`);
       seen.set(n, i);
     }
