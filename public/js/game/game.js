@@ -1062,18 +1062,66 @@ export class Game {
     if (ids.length) this.trophyQueue.push({ title: 'TROPHY', cards: ids.map((id) => ({ kind: 'boon', id })) });
   }
 
-  // What a trophy's card shows (ui/trophy.js): its name, icon, text and colour.
-  cardInfo(c) {
-    const b = BOONS[c.id];
-    return { name: b.name, icon: b.icon, desc: b.desc, color: '#f6757a' };
+  // A crypt's altar taken (pickups.js; G8): its three cards, to choose from as a trophy's are.
+  takeAltar() {
+    this.trophyQueue.push({ title: 'ALTAR', cards: this.altarCards() });
   }
 
-  // A trophy's card taken: the boon is his for the run. What the banner says of it.
+  // An altar's cards: a boon he hasn't (while any is left); a rank for his weakest weapon not at its
+  // top, else an Overcharge for his best; and a bargain, a Cursed Skull (while the curse can grow)
+  // with three Blessings of Valor, or else the Blessings for a fifth of his health.
+  altarCards() {
+    const p = this.player, out = [];
+    const boon = trophyChoices(p.boons)[0];
+    if (boon) out.push({ kind: 'boon', id: boon });
+    let low = null;
+    for (const w of p.weapons) if (!w.maxed && !w.fromGear && (!low || w.level < low.level)) low = w;
+    const top = this.overTarget();
+    if (low) out.push({ kind: 'rank', id: low.id });
+    else if (top) out.push({ kind: 'over', id: top.id });
+    out.push({ kind: this.skulls < MAX_SKULLS ? 'curse' : 'tithe' });
+    return out;
+  }
+
+  // What a trophy's or an altar's card shows (ui/trophy.js): its name, icon, text and colour.
+  cardInfo(c) {
+    const p = this.player;
+    if (c.kind === 'boon') {
+      const b = BOONS[c.id];
+      return { name: b.name, icon: b.icon, desc: b.desc, color: '#f6757a' };
+    }
+    if (c.kind === 'rank' || c.kind === 'over') {
+      const w = p.weapons.find((x) => x.id === c.id), def = WEAPONS[c.id];
+      const desc = c.kind === 'rank' ? `{${def.name}} rises to level {${(w?.level || 1) + 1}}.` : `{${def.name}} takes an Overcharge.`;
+      return { name: c.kind === 'rank' ? 'Whetstone' : 'Overcharge', icon: def.icon, desc, color: '#fee761' };
+    }
+    const blessed = `three Blessings of Valor (might {+${Math.round(BLESSING.might * 300)}%}, health {+${Math.round(BLESSING.maxHp * 300)}%})`;
+    return c.kind === 'curse'
+      ? { name: 'Dark Bargain', icon: 'i_skull', desc: `A Cursed Skull (monsters {+25%}, gold {+50%}) for ${blessed}.`, color: '#e43b44' }
+      : { name: 'Blood Tithe', icon: 'i_skull', desc: `A fifth of your health for ${blessed}.`, color: '#e43b44' };
+  }
+
+  // A trophy's or an altar's card taken. What the banner says of it, or null for none.
   takeCard(c) {
     const p = this.player;
-    p.boons.add(c.id);
+    if (c.kind === 'boon') {
+      p.boons.add(c.id);
+      p.recompute();
+      return { name: BOONS[c.id].name, sub: 'Yours for the rest of the night' };
+    }
+    if (c.kind === 'rank') {
+      this.applyChoice({ type: 'weapon', id: c.id }, true);
+      return { name: WEAPONS[c.id].name, sub: 'Sharpened at the altar' };
+    }
+    if (c.kind === 'over') {
+      this.applyChoice({ type: 'over', id: c.id }, true);
+      return { name: WEAPONS[c.id].name, sub: 'Overcharged at the altar' };
+    }
+    if (c.kind === 'curse') this.cursedSkull();
+    else p.hp = Math.max(1, p.hp - p.maxHp * 0.2);
+    p.blessings += 3;
     p.recompute();
-    return { name: BOONS[c.id].name, sub: 'Yours for the rest of the night' };
+    return c.kind === 'curse' ? null : { name: 'Blood Tithe', sub: 'Three Blessings of Valor' };
   }
 
   // The director of the big beats. A boss or a crypt lord slain, a revive: for `secs` of real
@@ -1542,7 +1590,12 @@ export class Game {
     this.addPickup('elixir', at.x + rand(-10, 10), at.y + rand(-10, 10));
     // Its trophy beside its chest (G7, 21 November 2026): walked over, a choice of boons the hero
     // hasn't (data/boons.js, trophyCards), while any is left.
-    if (trophyChoices(p.boons).length) this.addPickup('trophy', at.x + 16, at.y + 4, 0);
+    // On open floor, never in a wall (a Dungeon Run floor's, the Sunscorch's cliffs).
+    if (trophyChoices(p.boons).length) {
+      const w = this.world, tx = at.x + 16, ty = at.y + 4;
+      const tp = w.floorNear ? w.floorNear(tx, ty) : !w.free || w.free(tx, ty) ? { x: tx, y: ty } : at;
+      this.addPickup('trophy', tp.x, tp.y, 0);
+    }
     // A Dungeon Run guardian's gear is secured directly, without a pickup on the ground.
     let gear = null;
     if (this.mode === 'dungeon') {
@@ -1608,6 +1661,12 @@ export class Game {
     const rest = left ? `. ${LORDS_WORD[left] || left} ${left === 1 ? 'lord remains' : 'lords remain'}` : '';
     this.banner(`${e.name} is slain!`, `${what} dropped${rest}`, it ? R.color : '#feae34', 3.2);
     if (!left && this.world.lightWayOut) this.world.lightWayOut();
+    // The last lord of a crypt leaves its altar (G8, 21 November 2026): walked up to, a boon, a
+    // weapon's rank or a bargain for this night (altarCards).
+    if (c && !left) {
+      const at = this.world.floorNear ? this.world.floorNear(e.x, e.y - 22) : e;
+      this.addPickup('altar', at.x, at.y, 0);
+    }
     if (!next) playMusic('crypt');
   }
 
@@ -1850,6 +1909,7 @@ export class Game {
       } else if (pk.kind === 'item') this.queueItem(pk.opts.item);
       else if (pk.kind === 'chest') this.openChest(pk.opts);
       else if (pk.kind === 'trophy') this.takeTrophy();
+      else if (pk.kind === 'altar') this.takeAltar();
       else if (pk.kind === 'elixir' && !this.inCrypt) p.heal(p.maxHp * p.potionMul);
       pk.dead = true;
     }

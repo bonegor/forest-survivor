@@ -200,4 +200,25 @@ export const BOON_ICONS = {
       '..............',
     ]],
   },
+  // Crypt altar: a squat stone altar, a violet-white flame and two candle stubs on top,
+  // a glowing arched niche carved in its front.
+  i_altar: {
+    emissive: 'wjf',
+    frames: [[
+      '.......j......',
+      '......jj......',
+      '.....jwwj.....',
+      '.f..jwwwwj..f.',
+      'zZ..jwwwwj..zZ',
+      'zZ...jwwj...zZ',
+      'GZZZZQQQQZZZZQ',
+      'QQQQQQQQQQQQQW',
+      '..VWWWWWWWWV..',
+      '..ZQQVjjVQQW..',
+      '..ZQVjqqjVQW..',
+      '..ZQVjqqjVQW..',
+      '.ZZQQQQQQQQWW.',
+      'ZQQQQQQQQQQQWV',
+    ]],
+  },
 };

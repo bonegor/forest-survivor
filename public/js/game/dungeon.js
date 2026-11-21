@@ -32,6 +32,14 @@ const FLOOR = 0, WALL = 1, LAVA = 2, PROP = 3;
 const WAY_SPEED = 90, WAY_GAP = 72;
 // How far from the hero (tiles' walk) the wall breaks open on a crypt's way out.
 export const HOLE_AWAY = 5;
+// Spike plates (G8 of the 21 November 2026 gameplay review): in a crypt (never on a Dungeon Run
+// floor), a `share` of the rooms off the start and the lords' have a row of plates across their
+// middle. Each plate in turn glows `warn` s, stands up `up` s (a blow to the hero on it, `dmg` as
+// the night's monsters' blows grow, once in `rest` s; a leap carries him over) and lies `down` s;
+// every other plate half a turn behind, so the row is crossed by its timing. The horde walks over
+// them unharmed. Laid by dice of their own, so a crypt's packs and boxes lie where they always did.
+export const TRAP = { share: 0.35, warn: 0.6, up: 0.5, down: 1.6, dmg: 10, rest: 0.6 };
+const TRAP_TURN = TRAP.warn + TRAP.up + TRAP.down;
 // A crypt's size in tiles, and how many rooms it has at most: about ten as a rule, room for its
 // lords and the packs between them (a Dungeon Run floor is 76 x 64, so the maps fit as theirs do).
 const CRYPT_W = 70, CRYPT_H = 56, CRYPT_ROOMS = 12;
@@ -319,6 +327,9 @@ export class Dungeon {
     this.exit = null;
     this.way = null; // a crypt's lit way out, once its last lord has fallen: { path: [{ x, y, d }], at, t }
     this.huntT = 0;
+    this.traps = []; // a crypt's spike plates (TRAP, layTraps): { x, y, off }, a tile's top-left corner
+    this.trapT = 0;
+    this.trapHitT = 0;
     this.flowT = 0;
     this.seenT = 0;
     this.lastPT = -1;
@@ -987,7 +998,27 @@ export class Dungeon {
   // lord, asleep in the middle of a smaller pack, its guard (they wake together: wakeLords). The
   // stairs up are where you came in. guardian is the lord of the farthest room, lordCount how
   // many lords there are.
+  // A crypt's spike plates (TRAP): a row across the middle of some of its rooms, along its longer side.
+  layTraps() {
+    const dice = mulberry32((this.seed ^ 0x5b1c3e) >>> 0);
+    for (const r of this.rooms) {
+      if (r === this.startRoom || this.lordRooms.includes(r) || dice() >= TRAP.share) continue;
+      const across = r.w >= r.h;
+      for (let i = across ? r.x : r.y, k = 0; i < (across ? r.x + r.w : r.y + r.h); i++, k++) {
+        const tx = across ? i : r.cx, ty = across ? r.cy : i;
+        if (this.tile(tx, ty) === FLOOR) this.traps.push({ x: tx * T, y: ty * T, off: (k % 2) * TRAP_TURN / 2 });
+      }
+    }
+  }
+
+  // What a plate is doing now: 'warn', 'up' or 'down'.
+  trapState(t) {
+    const u = (this.trapT + t.off) % TRAP_TURN;
+    return u < TRAP.warn ? 'warn' : u < TRAP.warn + TRAP.up ? 'up' : 'down';
+  }
+
   populateCrypt() {
+    this.layTraps();
     const g = this.g, rng = this.rng, phase = g.phase;
     const st = g.spawner.stats(phase);
     let pack = 0;
@@ -1048,6 +1079,19 @@ export class Dungeon {
 
   update(dt) {
     const g = this.g, p = g.player;
+    // The spike plates (TRAP): a plate up under his feet strikes him, once in TRAP.rest s.
+    if (this.traps.length) {
+      this.trapT += dt;
+      this.trapHitT -= dt;
+      if (this.trapHitT <= 0 && !p.leap && !p.dead) {
+        for (const t of this.traps) {
+          if (p.x < t.x || p.x >= t.x + T || p.y < t.y || p.y >= t.y + T || this.trapState(t) !== 'up') continue;
+          p.hurt(TRAP.dmg * g.dmgScale, null, 'a spike trap');
+          this.trapHitT = TRAP.rest;
+          break;
+        }
+      }
+    }
     this.flowT -= dt;
     this.updateFlow(false);
     this.seenT -= dt;
@@ -1569,6 +1613,29 @@ export class Dungeon {
     const sw = Math.min(this.canvas.width - sx, Math.ceil(cam.W) + 2), sh = Math.min(this.canvas.height - sy, Math.ceil(cam.H) + 2);
     if (sw <= 0 || sh <= 0) return;
     ctx.drawImage(this.canvas, sx, sy, sw, sh, Math.round((sx - cam.x) * S), Math.round((sy - cam.y) * S), sw * S, sh * S);
+    if (this.traps.length) this.drawTraps(ctx, cam);
+  }
+
+  // The spike plates: an iron plate with its holes, glowing red as it is about to rise, its spikes up.
+  drawTraps(ctx, cam) {
+    const S = cam.S;
+    for (const t of this.traps) {
+      if (t.x + T < cam.x || t.x > cam.x + cam.W || t.y + T < cam.y || t.y > cam.y + cam.H) continue;
+      const x = Math.round((t.x - cam.x) * S), y = Math.round((t.y - cam.y) * S), st = this.trapState(t);
+      ctx.fillStyle = '#262b44';
+      ctx.fillRect(x + S, y + S, (T - 2) * S, (T - 2) * S);
+      ctx.fillStyle = st === 'warn' ? '#e43b44' : '#181425';
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) ctx.fillRect(x + (3 + i * 4) * S, y + (3 + j * 4) * S, 2 * S, 2 * S);
+      if (st !== 'up') continue;
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          ctx.fillStyle = '#c0cbdc';
+          ctx.fillRect(x + (3 + i * 4) * S, y + j * 4 * S, 2 * S, 4 * S);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(x + (3 + i * 4) * S, y + j * 4 * S, 2 * S, S);
+        }
+      }
+    }
   }
 
   drawGroundProps(ctx, cam, time) {
