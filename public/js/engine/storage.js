@@ -16,7 +16,7 @@
 
 import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
-import { RELEASE } from './build.js';
+import { RELEASE, STATIC } from './build.js';
 import { DEFAULT_COMBAT_MUSIC, normalizeMusicTracks } from './combat-music.js';
 import { MAX_CLAIMS, partitionRunSpoils, sealedFinds, settledSpoils, validRunId } from '../shared/spoils.js';
 
@@ -270,7 +270,8 @@ export const store = {
 
   async init() {
     for (const name of STALE_RUNS) if (readCookie(name) != null) writeCookie(name, null);
-    for (let attempt = 0; !DEBUG && !RELEASE; attempt++) {
+    // Never on a static host (build.js STATIC, the Pages copy): no game server there to ask for.
+    for (let attempt = 0; !DEBUG && !RELEASE && !STATIC; attempt++) {
       try {
         const data = await api('state');
         if (!data.server) throw new Error('not our server');
