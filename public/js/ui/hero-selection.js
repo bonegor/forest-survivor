@@ -491,8 +491,12 @@ export class HeroScreen {
       `Pay ${quote.cost} gold. ${p.gold - quote.cost} gold will remain.`,
     ], [{ id: 'confirm', label: `TRANSFER · ${quote.cost} GOLD` }], async action => {
       if (action !== 'confirm') return this.transferRecipients(from, slot);
+      // Held open until the answer comes, as an inventory save is: dismissed mid-request, its result
+      // popped up later, perhaps once a run had begun with the gear as it was.
+      this.inventorySaving = true;
       this.gearDialog('Transferring', ['Checking the recipient and moving the item.'], [], null);
-      const result = await this.app.store.transfer(details);
+      const result = await this.app.store.transfer(details).catch(() => ({ ok: false, error: 'Could not save. Try again.' }));
+      this.inventorySaving = false;
       const line = result.ok
         ? `${HEROES[to].title} received ${itemName(quote.item)}. ${quote.cost} gold paid.`
         : result.error;
