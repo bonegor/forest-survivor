@@ -91,8 +91,9 @@ class Orb {
   }
 
   // glow: how much the liquid shines, pulsing (0 none; the fury orb's ALMOST and FULL, FURY_GLOW).
-  render(frac, t, glow) {
-    this.shown += (frac - this.shown) * 0.15;
+  // The liquid eases toward its level by time: 15% of the way a frame at 60 fps, at any frame rate.
+  render(frac, t, glow, dt = 1 / 60) {
+    this.shown += (frac - this.shown) * (1 - Math.pow(0.85, dt * 60));
     const s = ORB_S, R = ORB_R, cy = s / 2;
     const d = this.img.data, tones = this.tones, lit = this.lit;
     const level = cy + R - 2 * R * clamp(this.shown, 0, 1);
@@ -386,7 +387,7 @@ export class Hud {
     this.drawXp(ctx, W, p, dt);
     drawLoadout(ctx, belt, t);
     this.drawTop(ctx, W, t, dt);
-    this.drawOrbs(ctx, W, H, p, t, belt);
+    this.drawOrbs(ctx, W, H, p, t, belt, dt);
     this.drawBoss(ctx, W, dt, H);
     this.drawNames(ctx, W, H);
     this.drawCryptStrike(ctx, W, H, belt);
@@ -647,15 +648,15 @@ export class Hud {
     }
   }
 
-  drawOrbs(ctx, W, H, p, t, belt = this.loadout(W, H)) {
+  drawOrbs(ctx, W, H, p, t, belt = this.loadout(W, H), dt = 1 / 60) {
     const g = this.g;
-    const hpImg = this.hp.render(p.hp / p.maxHp, t, false);
+    const hpImg = this.hp.render(p.hp / p.maxHp, t, false, dt);
     const ox = 4 + view.safe.left, oy = H - view.safe.bottom - hpImg.height - 4;
     ctx.drawImage(hpImg, ox, oy);
     drawText(ctx, `${Math.ceil(p.hp)}`, ox + hpImg.width / 2, oy + hpImg.height / 2 - 4, { align: 'center', color: '#ffffff' });
     const shown = this.shownFury();
     const full = p.fury >= 100 && shown >= 100, almost = !full && shown >= FURY_ORB.almost;
-    const fImg = (full ? this.furyFull : this.fury).render(shown / 100, t, full ? 1 : almost ? FURY_ORB.glow : 0);
+    const fImg = (full ? this.furyFull : this.fury).render(shown / 100, t, full ? 1 : almost ? FURY_ORB.glow : 0, dt);
     const fx = W - view.safe.right - fImg.width - 4, fy = H - view.safe.bottom - fImg.height - 4;
     const ocx = fx + fImg.width / 2, ocy = fy + fImg.height / 2;
     // His ultimate not open yet (shared/progress.js ultTime; Player.ultLocked): the orb stands
@@ -778,7 +779,7 @@ export class Hud {
     const drop = Math.round((1 - ease.outBack(clamp(since / ARRIVAL.slam, 0, 1))) * 8);
     const w = BAR_W(W), x = Math.round(clamp(AT.x - w / 2, 3, W - w - 3)), y = Math.round(clamp(AT.y - 6, this.topLines() + 16, H - 12)) - drop;
     const f = clamp(b.hp / b.maxHp, 0, 1);
-    b._shown = b._shown === undefined ? f : b._shown + (f - b._shown) * 0.06;
+    b._shown = b._shown === undefined ? f : b._shown + (f - b._shown) * (1 - Math.pow(0.94, dt * 60)); // by time, as the orbs
     const label = (b.lord ? b.name : b.def.name).toUpperCase();
     this.barPoint = { x, y, cx: x + w / 2 };
     this.barE = b;
