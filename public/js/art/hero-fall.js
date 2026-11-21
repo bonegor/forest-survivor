@@ -98,16 +98,19 @@ function sinkBody(out, body, t, depth, groundY) {
 }
 
 const wispFps = 20, bloomFrames = 8, curlFrames = 32;
+const sinkingTipY = 14;
 const pearl = shade(pal.M, pal.X, .58);
 
 // The leading tip has its own pivot. After unfurling, the ribbon continues
 // to billow as it travels; the distance it flies is independent of this art.
-function wispPose(index) {
-  const out = makeBuf(20, 26);
+function wispPose(index, sinks = false) {
+  const tip = sinks ? sinkingTipY : 1;
+  const out = makeBuf(20, sinks ? 16 : 26);
   const bloom = easeBetween(index, 0, bloomFrames);
   const phase = (index - bloomFrames) * 2 * Math.PI / curlFrames;
-  const depth = Math.round(3 + (17 + 1.5 * Math.sin(phase)) * bloom);
+  const depth = Math.round(3 + ((sinks ? 8 : 17) + 1.5 * Math.sin(phase)) * bloom);
   for (let i = 0; i <= depth; i++) {
+    const y = sinks ? tip - i : tip + i;
     const along = i / depth;
     const curl = 2.5 * (Math.sin(phase + 5.5 * along) - Math.sin(phase));
     const center = 9.5 + curl * bloom;
@@ -118,7 +121,7 @@ function wispPose(index) {
       const color = side < -.35 ? pal.X : side > .48 ? pal.M : pearl;
       const strength = (side > .48 ? .46 : .90) * (.42 + .58 * fullness);
       const alpha = Math.round(255 * strength * (.38 + .62 * bloom));
-      out.d[(1 + i) * out.w + x] = ((alpha << 24) | (color & 0xffffff)) >>> 0;
+      out.d[y * out.w + x] = ((alpha << 24) | (color & 0xffffff)) >>> 0;
     }
   }
   return out;
@@ -132,6 +135,12 @@ export const departingSoul = {
     const frame = Math.max(0, Math.floor(age * wispFps + 1e-9));
     return frame < bloomFrames ? frame : bloomFrames + (frame - bloomFrames) % curlFrames;
   },
+};
+
+let sinkingFrames;
+export const sinkingSoul = {
+  ...departingSoul, duration: 1.15, anchorY: sinkingTipY, sinks: true,
+  gen: () => (sinkingFrames ??= Array.from({ length: bloomFrames + curlFrames }, (_, i) => wispPose(i, true))),
 };
 
 // The weapon layer is already in its resting place when the body starts to decay.

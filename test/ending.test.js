@@ -241,6 +241,38 @@ test('the wisp visibly crosses the top edge, tail last, before results in landsc
     }
   }));
 
+test('Shadow and Necromancer souls descend through the ground in either facing', () => {
+  for (const hero of ['rogue', 'necromancer']) {
+    for (const face of [1, -1]) game((g, p) => {
+      const wisp = SPR[p.hero.sprite].fall.wisp;
+      const ctx = document.createElement('canvas').getContext('2d');
+      let drawn;
+      ctx.drawImage = (image, sx, sy, sw, sh, x, y, w, h) => { drawn = { image, sh, y, h }; };
+      p.face = face;
+      g.placePlayer(g.cam);
+      p.hurt(1e9);
+      const sample = age => {
+        drawn = null;
+        g.deathT = wisp.release + age;
+        g.hud.drawDepartingSoul(ctx);
+        return drawn;
+      };
+
+      assert.equal(sample(-.01), null);
+      const emerge = sample(0), entering = sample(.45), tail = sample(.73);
+      assert.equal(emerge.image, wisp.frames[0].get(face < 0));
+      assert.ok(emerge.y < entering.y && entering.y < tail.y, 'the wisp moves down');
+      assert.ok(entering.sh < emerge.sh && tail.sh < entering.sh, 'the ground covers the tip before the tail');
+      const groundY = Math.round((p.y - g.cam.y) * g.cam.S / view.S);
+      for (const draw of [emerge, entering, tail]) {
+        assert.ok(draw.h > 0 && draw.y + draw.h <= groundY);
+      }
+      assert.equal(sample(wisp.duration - .001), null, 'the tail clears the ground');
+      assert.equal(sample(DEATH.end - wisp.release), null);
+    }, hero);
+  }
+});
+
 test("the killer caption leaves Aldric's wisp, sword and shield visible", () =>
   game((g, p) => {
     p.hurt(1e9);

@@ -1,6 +1,6 @@
 import { fromRows } from '../engine/pixels.js';
 import {
-  SOUL_RELEASE, appendDecay, blank, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, turn,
+  SOUL_RELEASE, appendDecay, blank, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, sinkingSoul, turn,
 } from './hero-fall.js';
 
 // Seconds, belt displacement, chest tilt, hem tilt and length, then the
@@ -275,12 +275,13 @@ export function casterFall(id, sprite) {
   const rig = sheetRig[id], keys = staggers[id];
   const poses = Array.from({ length: 21 }, (_, index) => [index / 20]);
   const [offsetX, offsetY] = rig.soul;
+  const soul = id === 'necromancer' ? sinkingSoul : departingSoul;
   let frames;
   return {
     anchorY: sprite.anchorY,
     outline: false,
     frameAt: elapsed => fallFrameAt(poses, elapsed),
-    wisp: { ...departingSoul, offsetX, offsetY },
+    wisp: { ...soul, offsetX, offsetY },
     cues: [{ time: SOUL_RELEASE, sound: 'souldepart' }],
     gen() {
       if (frames) return frames;

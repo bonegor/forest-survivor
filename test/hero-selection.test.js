@@ -6,22 +6,130 @@ import { HeroShowcase, showcaseAction } from '../public/js/ui/hero-showcase.js';
 import { SPR } from '../public/js/engine/sprites.js';
 import { bounds } from '../public/js/engine/pixels.js';
 import { input } from '../public/js/engine/input.js';
+import { view } from '../public/js/engine/view.js';
 import { UI } from '../public/js/ui/ui.js';
 import { HEROES, HERO_ORDER } from '../public/js/data/heroes.js';
 import { defaultProfile } from '../public/js/shared/profile.js';
 
 const ctx = document.createElement('canvas').getContext('2d');
 
-test('hero stage aligns with roster; stats sit beside it on desktop and below it on portrait screens', () => {
-  for (const [W, H] of [[640,360], [480,270], [844,390], [293,633], [390,844]]) {
-    const L = heroSelectionLayout(W,H);
-    assert.equal(L.stage.x,L.x);
-    for (const box of [L.stage,L.info,L.play]) {
-      assert.ok(box.x>=0 && box.y>=0 && box.w>0 && box.h>0);
-      assert.ok(box.x+box.w<=W && box.y+box.h<=H);
+function openRoster(heroes = ['knight'], selected = heroes[0]) {
+  const profile = defaultProfile();
+  profile.heroes = [...heroes];
+  const app = { ui: new UI(), store: { profile }, settings: {}, choice: { hero: selected }, scene: { draw() {} } };
+  const screen = new HeroScreen();
+  screen.enter(app);
+  return { screen, ui: app.ui };
+}
+
+const rosterRows = ui => ui.items.filter(item => item.id.startsWith('h_'));
+
+test('the scrollable roster stays on the left and the preview, stats and footer fit the screen', () => {
+  for (const [W, H] of [[640,360], [480,270], [844,390], [320,240], [293,633], [390,844]]) {
+    const layout = heroSelectionLayout(W, H);
+    const { roster, stage, info, play } = layout;
+    for (const box of [roster, stage, info, play]) {
+      assert.ok(box.x >= 0 && box.y >= 0 && box.w > 0 && box.h > 0);
+      assert.ok(box.x + box.w <= W && box.y + box.h <= H, `${W} × ${H}`);
     }
-    if (L.stacked) assert.ok(L.info.y>=L.stage.y+L.stage.h);
-    else { assert.equal(L.stage.y,L.info.y);assert.ok(L.info.x>=L.stage.x+L.stage.w); }
+    assert.ok(roster.x + roster.w <= stage.x);
+    assert.ok(roster.x + roster.w <= info.x);
+    assert.ok(stage.y + stage.h <= info.y);
+    assert.ok(info.y + info.h <= play.y);
+  }
+});
+
+test('a fresh roster shows Knight above the next recruit and a sparse save keeps its earned heroes', () => {
+  for (const heroes of [['knight'], ['knight', 'eanasir']]) {
+    const { screen, ui } = openRoster(heroes);
+    screen.draw(ctx, 640, 360, .3);
+    const rows = rosterRows(ui);
+    assert.deepEqual(rows.map(row => row.id), [...heroes, 'archer'].map(id => 'h_' + id));
+    for (let i = 1; i < rows.length; i++) {
+      assert.equal(rows[i].x, rows[0].x);
+      assert.ok(rows[i].y >= rows[i - 1].y + rows[i - 1].h);
+    }
+    ui.focusId = 'h_archer';
+    screen.draw(ctx, 640, 360, .01);
+    assert.equal(screen.preview.game.player.id, 'archer');
+    assert.equal(ui.items.find(item => item.id === 'hero_continue').disabled, true);
+  }
+});
+
+test('the wheel reveals the end of a full roster and Up and Down follow the selected row across pages', () => {
+  const { screen, ui } = openRoster(HERO_ORDER);
+  const draw = () => { screen.draw(ctx, 480, 270, .1); input.endFrame(); };
+  const previousMouse = { ...input.mouse };
+  try {
+    input.mouse.x = input.mouse.y = -1;
+    draw();
+    const firstRows = rosterRows(ui);
+    assert.ok(firstRows.length > 1 && firstRows.length < HERO_ORDER.length);
+    const roster = screen.layout.roster;
+    input.mouse.x = roster.x + roster.w / 2;
+    input.mouse.y = roster.y + roster.h / 2;
+    for (let i = 0; i < HERO_ORDER.length * 2; i++) {
+      input.mouse.wheel = 1;
+      draw();
+      assert.equal(screen.preview.game.player.id, 'knight', 'browsing later rows keeps the selected preview');
+    }
+    assert.equal(rosterRows(ui).at(-1).id, 'h_' + HERO_ORDER.at(-1));
+    for (let i = 0; i < HERO_ORDER.length * 2; i++) {
+      input.mouse.wheel = -1;
+      draw();
+    }
+    assert.equal(rosterRows(ui)[0].id, 'h_knight');
+
+    input.mouse.x = input.mouse.y = -1;
+    ui.focusId = 'h_knight';
+    for (const [key, heroes] of [['ArrowDown', HERO_ORDER.slice(1)], ['ArrowUp', HERO_ORDER.slice(0, -1).reverse()]]) {
+      for (const hero of heroes) {
+        input.justDown.add(key);
+        draw();
+        draw();
+        assert.equal(ui.focusId, 'h_' + hero, hero);
+        assert.equal(screen.preview.game.player.id, hero);
+        assert.ok(rosterRows(ui).some(row => row.id === ui.focusId), 'the focused row is visible');
+      }
+    }
+  } finally {
+    input.endFrame();
+    Object.assign(input.mouse, previousMouse);
+  }
+});
+
+test('the merchant can be previewed when his special unlock is the last remaining one', () => {
+  const earned = HERO_ORDER.filter(id => id !== 'eanasir');
+  const { screen, ui } = openRoster(earned, earned.at(-1));
+  const draw = () => { screen.draw(ctx, 480, 270, .3); input.endFrame(); };
+  draw();
+  assert.equal(ui.focusId, 'h_' + earned.at(-1));
+  input.justDown.add('ArrowDown');
+  draw();
+  draw();
+  assert.equal(ui.focusId, 'h_eanasir');
+  assert.equal(screen.preview.game.player.id, 'eanasir');
+  assert.equal(ui.items.find(item => item.id === 'hero_continue').disabled, true);
+});
+
+test('the showcase draws the selected hero at gameplay size on phone and desktop displays', () => {
+  const { S, zoom } = view;
+  try {
+    for (const [uiScale, worldZoom] of [[1, .8], [2, .8], [4, .8]]) {
+      Object.assign(view, { S: uiScale, zoom: worldZoom });
+      const preview = new HeroShowcase('knight', defaultProfile(), {});
+      preview.update(.1);
+      preview.draw(ctx, { x: 20, y: 20, w: 240, h: 160 }, false, {});
+      const [, , menuW, menuH] = preview.game.player._rect;
+      preview.game.cam = {};
+      preview.game.syncCam();
+      preview.game.placePlayer({ ...preview.game.cam, x: 0, y: 0 });
+      const [, , fieldW, fieldH] = preview.game.player._rect;
+      assert.ok(Math.abs(menuW * uiScale - fieldW) <= uiScale);
+      assert.ok(Math.abs(menuH * uiScale - fieldH) <= uiScale);
+    }
+  } finally {
+    Object.assign(view, { S, zoom });
   }
 });
 

@@ -1217,7 +1217,7 @@ export class Hud {
     ctx.globalAlpha = 1;
   }
 
-  // Draw above the clock and XP bar so the trailing tip crosses the actual screen edge.
+  // Draw over the HUD so a rising wisp can cross the top edge.
   drawDepartingSoul(ctx) {
     const g = this.g, p = g.player, c = g.cam;
     const wisp = SPR[p.hero.sprite]?.fall?.wisp;
@@ -1229,14 +1229,25 @@ export class Hud {
     const flip = p._rect ? p._rect[5] : p.face < 0;
     const scale = c.S / view.S; // World pixels expressed on the HUD canvas.
     const u = age / wisp.duration;
-    const startY = (p.y - c.y + wisp.offsetY - wisp.anchorY) * scale;
+    const groundY = (p.y - c.y) * scale;
+    const startY = groundY + (wisp.offsetY - wisp.anchorY) * scale;
+    const drift = (wisp.sinks ? 1.75 : 4) * Math.sin(age * 3.5);
+    const x = (p.x - c.x + (flip ? -1 : 1) * (wisp.offsetX + drift) - frame.w / 2) * scale;
+    if (wisp.sinks) {
+      // Mask the ribbon at the ground as its leading tip and then its tail pass through.
+      const y = Math.round(startY + (groundY - startY) * u);
+      const height = Math.min(frame.h * scale, Math.round(groundY) - y);
+      if (height / scale > frame.box[1]) {
+        ctx.drawImage(frame.get(flip), 0, 0, frame.w, height / scale,
+          Math.round(x), y, frame.w * scale, height);
+      }
+      return;
+    }
     const distance = startY + frame.h * scale + 1;
     // The initial lift has the same pace at any zoom. The wisp then accelerates to
     // cover the remaining distance, including its full tail, even on a tall display.
     const launch = Math.min(64 * scale, distance);
     const y = startY - u * (launch + (distance - launch) * u);
-    const drift = 4 * Math.sin(age * 3.5);
-    const x = (p.x - c.x + (flip ? -1 : 1) * (wisp.offsetX + drift) - frame.w / 2) * scale;
     ctx.drawImage(frame.get(flip), Math.round(x), Math.round(y), frame.w * scale, frame.h * scale);
   }
 

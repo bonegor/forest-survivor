@@ -271,8 +271,8 @@ export function buildSprite(name, def) {
     };
     const wisp = def.fall.wisp;
     if (wisp) {
-      const { frameAt, release, duration, offsetX, offsetY } = wisp;
-      sprite.fall.wisp = { ...buildFrames(wisp), frameAt, release, duration, offsetX, offsetY };
+      const { frameAt, release, duration, offsetX, offsetY, sinks } = wisp;
+      sprite.fall.wisp = { ...buildFrames(wisp), frameAt, release, duration, offsetX, offsetY, sinks };
     }
   }
   return sprite;

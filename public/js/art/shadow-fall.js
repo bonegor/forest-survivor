@@ -1,5 +1,5 @@
 import { fromRows, hexPack } from '../engine/pixels.js';
-import { SOUL_RELEASE, appendDecay, blank, cut, departingSoul, fallFrameAt, paint, segment, turn } from './hero-fall.js';
+import { SOUL_RELEASE, appendDecay, blank, cut, fallFrameAt, paint, segment, sinkingSoul, turn } from './hero-fall.js';
 import { packedPalette } from './palette.js';
 
 // Hip and torso angle, rear and forward folds of the hem, then the wrists.
@@ -119,7 +119,7 @@ export function shadowFall(sprite) {
     anchorY: sprite.anchorY,
     outline: false,
     frameAt: seconds => fallFrameAt(poses, seconds),
-    wisp: { ...departingSoul, offsetX: 17, offsetY: -5 },
+    wisp: { ...sinkingSoul, offsetX: 17, offsetY: -5 },
     cues: [{ time: SOUL_RELEASE, sound: 'souldepart' }],
     gen() {
       if (frames) return frames;

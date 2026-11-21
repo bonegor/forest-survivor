@@ -15,22 +15,27 @@ import { flank } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
 import { IDENTIFICATION_RULE } from './menu-copy.js';
 import { gearPreview } from './gear-preview.js';
-import { HeroShowcase } from './hero-showcase.js';
+import { HeroShowcase, heroMenuScale } from './hero-showcase.js';
 
-export function heroSelectionLayout(W, H) {
-  const width = Math.min(608, W - 24), x = Math.round((W - width) / 2);
-  const stacked = W < 440 && H >= 430;
-  const cols = W >= 440 ? 9 : stacked ? 5 : 7, rows = Math.ceil(HERO_ORDER.length / cols);
-  const gap = 4, cardW = Math.floor((width - (cols - 1) * gap) / cols), cardH = H < 335 ? 31 : 36;
-  const top = 28 + rows * (cardH + gap) + 3;
-  const bottom = H - (stacked ? 54 : 34);
-  const height = bottom - top;
-  const stageW = Math.round(width * 0.38), stageH = clamp(height * 0.43, 72, 320);
+const ROW_H = 34, ROW_STEP = 36, ROSTER_HEADER = 19;
+
+export function heroSelectionLayout(W, H, count = HERO_ORDER.length) {
+  const width = Math.min(620, W - (W < 400 ? 12 : 24)), x = Math.round((W - width) / 2);
+  const rosterW = clamp(Math.round(width * .31), 78, 170);
+  const right = x + rosterW + 6, rightW = width - rosterW - 6;
+  const top = 30, twoFooters = width < 340;
+  const bottom = H - (twoFooters ? 50 : 30);
+  const stacked = rightW < 205;
+  const stageW = stacked ? rightW : clamp(Math.round(rightW * .30), 82, 118);
+  const stageH = Math.min(68, Math.round((bottom - top) * .34));
+  const stage = { x: right, y: top + (stacked ? 41 : 0), w: stageW, h: stageH };
+  const infoY = stage.y + stage.h + 5;
   return {
-    x, width, cols, rows, cardW, cardH, gap, stacked,
-    stage: { x, y: top, w: stacked ? width : stageW, h: stacked ? stageH : height },
-    info: { x: stacked ? x : x + stageW + 8, y: stacked ? top + stageH + 8 : top, w: stacked ? width : width - stageW - 8, h: stacked ? height - stageH - 8 : height },
-    play: { x: stacked ? x : x + width - 148, y: H - (stacked ? 45 : 23), w: stacked ? width : 148, h: 17 },
+    x, width, stacked, stage,
+    roster: { x, y: top, w: rosterW, h: Math.min(bottom - top, ROSTER_HEADER + count * ROW_STEP + 3) },
+    header: { x: stacked ? right : right + stageW + 3, y: top, w: stacked ? rightW : rightW - stageW - 3, h: stacked ? 38 : stageH },
+    info: { x: right, y: infoY, w: rightW, h: bottom - infoY },
+    play: { x: twoFooters ? x : x + width - 148, y: H - (twoFooters ? 45 : 23), w: twoFooters ? width : 148, h: 17 },
   };
 }
 
@@ -40,9 +45,9 @@ function heading(ctx, W) {
   flank(ctx, (W - c.width) / 2 - 4, (W + c.width) / 2 + 4, 16, Math.min(40, (W - c.width) / 2 - 12));
 }
 
-function fit(text, width) {
-  if (textWidth(text) <= width) return text;
-  while (text.length && textWidth(text + '…') > width) text = text.slice(0, -1);
+function fit(text, width, font = 'normal') {
+  if (textWidth(text, font) <= width) return text;
+  while (text.length && textWidth(text + '…', font) > width) text = text.slice(0, -1);
   return text + '…';
 }
 
@@ -81,7 +86,12 @@ export class HeroScreen {
   enter(app, params = {}) {
     this.app = app;
     this.t = 0;
-    this.lastHero = app.choice.hero || 'knight';
+    const owned = HERO_ORDER.filter(id => app.store.profile.heroes.includes(id));
+    this.lastHero = owned.includes(app.choice.hero) ? app.choice.hero : owned[0] || 'knight';
+    this.rosterScroll = 0;
+    this.rosterFocus = null;
+    this.scrollFocus = null;
+    this.rosterDrag = null;
     this.infoScroll = 0;
     // Returning to camp switches from the results' echo guitar to the menu piece.
     playAfterJingle('title');
@@ -109,42 +119,12 @@ export class HeroScreen {
       }
       return;
     }
-    const L = this.layout = heroSelectionLayout(W, H);
     ui.begin(dt);
-    const next = nextHeroUnlock(profile);
-    for (const [i, id] of HERO_ORDER.entries()) {
-      const h = heroLook(id, app.settings.skins), locked = !profile.heroes.includes(id);
-      const nextRecruit = locked && id === next;
-      const x = L.x + i % L.cols * (L.cardW + L.gap), y = 28 + Math.floor(i / L.cols) * (L.cardH + L.gap);
-      const activated = ui.item('h_' + id, x, y, L.cardW, L.cardH, { group: 'heroes', home: id === this.lastHero });
-      if (ui.focused('h_' + id)) this.lastHero = id;
-      if (activated && !locked) { app.choice.hero = id;ui.focus('hero_continue'); }
-      const on = this.lastHero === id;
-      panel(ctx, x, y, L.cardW, L.cardH, { rivets: false, fill: on ? '#292330' : '#14131f', trim: on ? ['#fee761', '#be4a2f'] : nextRecruit ? ['#feae34', '#59422f'] : ['#3a4466', '#262b44'] });
-      const spr = SPR[h.sprite], crop = heroCrop(spr), frame = idleFrame(spr, Math.floor(this.t * SPR[h.pose].fps));
-      const density = spr.hires || 1;
-      const portraitW = Math.min(L.cardW - 4, crop.w / density);
-      const portraitH = Math.min(L.cardH - 16, crop.h / density);
-      ctx.globalAlpha = nextRecruit ? 0.65 : locked ? 0.22 : 1;
-      ctx.drawImage(frame.c, crop.x + Math.floor((crop.w - portraitW * density) / 2), crop.y, portraitW * density, portraitH * density,
-        Math.round(x + (L.cardW - portraitW) / 2), y + 3, portraitW, portraitH);
-      ctx.globalAlpha = 1;
-      const label = locked ? nextRecruit ? 'NEXT' : 'LOCKED' : h.short.toUpperCase();
-      drawText(ctx, fit(label, L.cardW - 3), x + L.cardW / 2, y + L.cardH - 10, { align: 'center', color: on || nextRecruit ? '#fee761' : locked ? '#687186' : '#c0cbdc' });
-      // The next hero's card fills toward his five minutes with the hero before him: that hero's
-      // longest run (profile bt, the review's C4, 28 October 2026), the real distance only. Between
-      // the portrait (y + 26 at most) and the label.
-      if (nextRecruit) {
-        const k = clamp((profile.bt?.[HERO_ORDER[i - 1]] || 0) / heroUnlockTime(id), 0, 1), bw = L.cardW - 12;
-        if (k > 0) {
-          ctx.fillStyle = '#262b44';
-          ctx.fillRect(x + 6, y + L.cardH - 13, bw, 2);
-          ctx.fillStyle = '#feae34';
-          ctx.fillRect(x + 6, y + L.cardH - 13, Math.max(1, Math.round(bw * k)), 2);
-        }
-      }
-      if (on) { ctx.fillStyle = '#fee761';ctx.fillRect(x + 3, y + L.cardH - 2, L.cardW - 6, 1); }
-    }
+    const next = nextHeroUnlock(profile) || HERO_ORDER.find(id => !profile.heroes.includes(id));
+    const roster = HERO_ORDER.filter(id => profile.heroes.includes(id));
+    if (next && HERO_ORDER.includes(next)) roster.push(next);
+    const L = this.layout = heroSelectionLayout(W, H, roster.length);
+    this.drawRoster(ctx, ui, L.roster, roster, next);
 
     const id = this.lastHero, h = heroLook(id, app.settings.skins), locked = !profile.heroes.includes(id);
     if (!this.preview || this.preview.game.player.id !== id || this.preview.game.player.hero.sprite !== h.sprite) {
@@ -152,14 +132,14 @@ export class HeroScreen {
       this.infoScroll = 0;
     }
     this.preview.update(locked ? 0 : dt);
-    const stage = { ...L.stage, h: L.stage.h - 20 };
+    const stage = L.stage;
     this.preview.draw(ctx, stage, locked, app.settings);
     if (ui.item('preview_attack', stage.x, stage.y, stage.w, stage.h, { disabled: locked })) this.preview.attack();
     if (ui.focused('preview_attack') && !locked) {
       const hint = input.device === 'pad' ? `${padKey('A')}: ATTACK` : input.device === 'touch' ? 'TAP TO ATTACK' : ui.focusSource === 'pointer' ? 'CLICK TO ATTACK' : 'ENTER: ATTACK';
       drawText(ctx, hint, stage.x + stage.w / 2, stage.y + stage.h - 10, { align: 'center', color: '#fee761' });
     }
-    this.appearance(ctx, h, L.stage, locked);
+    this.identity(ctx, h, L.header, locked);
     this.details(ctx, ui, L.info, h, locked, dt);
 
     if (button(ctx, ui, 'back', L.x, H - 21, 44, 15, 'BACK', { fallback: true })) app.go('title');
@@ -172,15 +152,126 @@ export class HeroScreen {
     if (input.pressed('back') && ui.lockT <= 0) app.go('title');
   }
 
-  appearance(ctx, h, box, locked) {
-    const earned = featStars(this.app.store.profile, h.id).filter(s => s[2]);
-    const center = box.x + box.w / 2, bottom = box.y + box.h;
-    if (locked || !earned.length) {
-      drawText(ctx, locked ? 'NOT YET RECRUITED' : 'READY FOR THE NIGHT', center, bottom - 12, { align: 'center', color: locked ? '#8b9bb4' : '#c28569' });
-      return;
+  drawRoster(ctx, ui, box, ids, next) {
+    const { x, y, w, h } = box;
+    const top = y + ROSTER_HEADER, height = h - ROSTER_HEADER - 3;
+    const most = Math.max(0, ids.length * ROW_STEP - height);
+    const m = input.mouse;
+    const inside = m.x >= x && m.x < x + w && m.y >= top && m.y < top + height;
+    const track = most > 0 && m.x >= x + w - 8;
+    const thumb = Math.max(12, Math.round(height * height / (height + most)));
+    let at = ids.findIndex(id => ui.focused('h_' + id));
+    if (at >= 0 && ui.lockT <= 0) {
+      const dir = Number(input.pressed('down')) - Number(input.pressed('up'));
+      if (dir && ids[at + dir]) {
+        ui.take('up', 'down');
+        at += dir;
+        ui.focusId = 'h_' + ids[at];
+        ui.focusSource = 'keys';
+        this.scrollFocus = null;
+        sfx('ui');
+      }
     }
-    const x0 = Math.round(center - (earned.length * 7 - 2) / 2);
-    earned.forEach(([, col], i) => drawText(ctx, '★', x0 + i * 7, bottom - 12, { color: col }));
+    if (ui.focusId !== this.rosterFocus || this.rosterHeight !== height) {
+      const index = at >= 0 ? at : ids.indexOf(this.lastHero);
+      if (index >= 0) this.rosterScroll = clamp(this.rosterScroll, index * ROW_STEP + ROW_H - height, index * ROW_STEP);
+    }
+    this.rosterHeight = height;
+    if (inside && m.wheel) this.rosterScroll += m.wheel * ROW_STEP;
+    if (inside && most && m.down && !this.rosterDrag) {
+      if (track) this.rosterScroll = clamp((m.y - top - thumb / 2) / (height - thumb), 0, 1) * most;
+      this.rosterDrag = { y: m.y, scroll: this.rosterScroll, track, moved: track };
+    }
+    const drag = this.rosterDrag;
+    if (drag) {
+      const dy = m.y - drag.y;
+      if (Math.abs(dy) > 3) drag.moved = true;
+      if (drag.moved) this.rosterScroll = drag.scroll + dy * (drag.track ? most / (height - thumb) : -1);
+      if (!m.down) {
+        if (drag.moved) m.clicked = false;
+        this.rosterDrag = null;
+      }
+    }
+    this.rosterScroll = Math.round(clamp(this.rosterScroll, 0, most));
+
+    panel(ctx, x, y, w, h, { rivets: false, fill: '#14131f', trim: ['#5a5465', '#262b44'] });
+    const count = ids.length - Number(ids.includes(next));
+    drawText(ctx, `${count} RECRUITED`, x + 7, y + 5, { color: '#c0cbdc' });
+    const rowX = x + 3, rowW = w - (most ? 11 : 6);
+    const first = Math.floor(this.rosterScroll / ROW_STEP);
+    const end = Math.min(ids.length, Math.ceil((this.rosterScroll + height) / ROW_STEP));
+    // Keep keyboard navigation in the viewport during a swipe or wheel scroll.
+    // Moving focus for this purpose leaves the inspected hero in the preview.
+    if (at >= 0 && (at * ROW_STEP + ROW_H <= this.rosterScroll || at * ROW_STEP >= this.rosterScroll + height)) {
+      const visible = clamp(at, Math.ceil(this.rosterScroll / ROW_STEP), end - 1);
+      this.scrollFocus = ui.focusId = 'h_' + ids[visible];
+    }
+    if (this.scrollFocus !== ui.focusId) this.scrollFocus = null;
+    ctx.save();ctx.beginPath();ctx.rect(rowX, top, rowW, height);ctx.clip();
+    for (let i = first; i < end; i++) {
+      const id = ids[i], rowY = top + i * ROW_STEP - this.rosterScroll;
+      const hitTop = Math.max(top, rowY), hitBottom = Math.min(top + height, rowY + ROW_H);
+      if (hitBottom <= hitTop) continue;
+      const activated = ui.item('h_' + id, rowX, hitTop, rowW, hitBottom - hitTop, {
+        group: 'heroes', home: id === this.lastHero, noMouse: !!drag?.moved,
+      });
+      if (ui.focused('h_' + id)) {
+        const pointed = !drag?.moved && m.moved && m.x >= rowX && m.x < rowX + rowW && m.y >= hitTop && m.y < hitBottom;
+        if (activated || pointed) this.scrollFocus = null;
+        if (!this.scrollFocus) this.lastHero = id;
+      }
+      if (activated && id !== next) {
+        this.app.choice.hero = id;
+        ui.focus('hero_continue');
+      }
+      this.rosterRow(ctx, rowX, rowY, rowW, id, id === next);
+    }
+    ctx.restore();
+    if (most) {
+      const pos = Math.round((height - thumb) * this.rosterScroll / most);
+      ctx.fillStyle = '#282631';ctx.fillRect(x + w - 6, top, 3, height);
+      ctx.fillStyle = '#a39378';ctx.fillRect(x + w - 6, top + pos, 3, thumb);
+    }
+    this.rosterFocus = ui.focusId;
+  }
+
+  rosterRow(ctx, x, y, w, id, locked) {
+    const h = heroLook(id, this.app.settings.skins), selected = this.lastHero === id;
+    ctx.fillStyle = selected ? '#302a31' : '#1b1924';
+    ctx.fillRect(x, y, w, ROW_H);
+    if (selected) { ctx.fillStyle = '#fee761';ctx.fillRect(x, y, 2, ROW_H); }
+    const spr = SPR[h.sprite], crop = heroCrop(spr), frame = idleFrame(spr, Math.floor(this.t * SPR[h.pose].fps));
+    const slot = Math.min(39, Math.floor(w * .36));
+    const scale = Math.min(heroMenuScale() / (spr.hires || 1), (slot - 4) / crop.w, (ROW_H - 4) / crop.h);
+    const dw = Math.round(crop.w * scale), dh = Math.round(crop.h * scale);
+    ctx.globalAlpha = locked ? .55 : 1;
+    ctx.drawImage(frame.c, crop.x, crop.y, crop.w, crop.h, x + Math.round((slot - dw) / 2) + 1, y + Math.round((ROW_H - dh) / 2), dw, dh);
+    ctx.globalAlpha = 1;
+    const tx = x + slot + 2, room = w - slot - 5;
+    const label = textWidth(h.title) <= room ? h.title : h.short;
+    const sub = locked ? (room >= textWidth('Next recruit') ? 'Next recruit' : 'Next') : h.name;
+    const showSub = locked || textWidth(sub) <= room;
+    drawText(ctx, fit(label, room), tx, y + (showSub ? 6 : 12), { color: selected ? '#fee761' : '#ead4aa' });
+    if (showSub) drawText(ctx, sub, tx, y + 18, { color: locked ? '#e4a672' : '#8b9bb4' });
+    if (locked && !h.unlock) {
+      const previous = HERO_ORDER[HERO_ORDER.indexOf(id) - 1];
+      const progress = clamp((this.app.store.profile.bt?.[previous] || 0) / heroUnlockTime(id), 0, 1);
+      ctx.fillStyle = '#3d3540';ctx.fillRect(tx, y + 29, room, 2);
+      ctx.fillStyle = '#feae34';ctx.fillRect(tx, y + 29, Math.round(room * progress), 2);
+    }
+  }
+
+  identity(ctx, h, box, locked) {
+    const { x, y, w, h: height } = box;
+    panel(ctx, x, y, w, height, { rivets: false, fill: '#1c1923', trim: ['#59505b', '#262b44'] });
+    const earned = locked ? [] : featStars(this.app.store.profile, h.id).filter(s => s[2]);
+    const title = h.title.toUpperCase();
+    const wrapStars = earned.length && textWidth(title) + earned.length * 7 + 20 > w;
+    const top = y + Math.floor((height - (wrapStars ? 36 : 29)) / 2);
+    drawText(ctx, fit(h.name, w - 16, 'heading'), x + 8, top, { font: 'heading', color: ['#fff6c2', '#fee761', '#feae34'] });
+    drawText(ctx, fit(title, w - 16), x + 8, top + 17, { color: locked ? '#c28569' : '#c0cbdc' });
+    const starsX = wrapStars ? x + 8 : x + w - 6 - earned.length * 7;
+    earned.forEach(([, color], i) => drawText(ctx, '★', starsX + i * 7, top + (wrapStars ? 27 : 17), { color }));
   }
 
   details(ctx, ui, box, h, locked, dt) {
@@ -194,10 +285,6 @@ export class HeroScreen {
     const targeting = wrapText(`Field targeting · ${FIELD_TARGETING[h.id]}`, inner);
     const weaponDesc = wrapText(h.startDesc || WEAPONS[h.weapon].desc, inner);
     const ownedUltimate = openFor(profile, h.id).ult;
-    const weaponY = 70, descriptionY = weaponY + Math.max(16, weapons.length * 9) + 4;
-    const perkY = descriptionY + (targeting.length + weaponDesc.length) * 9 + 6;
-    const ultimateY = perkY + perk.length * 9 + 10;
-    const goalY = ultimateY + 13 + ult.length * 9 + 7;
     const next = nextHeroUnlock(profile), prev = HERO_ORDER[HERO_ORDER.indexOf(h.id) - 1];
     // Each hero's longest run on the clock, any mode (profile bt, the review's C4, 28 October 2026):
     // the next hero's note tells the one before him's, a hero of the save his own under the note.
@@ -206,7 +293,16 @@ export class HeroScreen {
     const note = locked ? h.unlock || `Survive ${heroUnlockTime(h.id) / 60} minutes with the ${HEROES[prev].title} to recruit this hero.${prevRun}` : !ownedUltimate ? `Survive ${fmtTime(PROGRESS.ultTime)} with this hero to use ${h.ultName} next run.` : goalText(nextGoal(profile));
     const notes = wrapText(note, inner);
     const runs = !locked && longest(h.id) ? wrapText(`Longest run with this hero: ${fmtTime(longest(h.id))}`, inner) : [];
-    const total = goalY + (notes.length + runs.length) * 9 + 8;
+    const statsY = locked ? notes.length * 9 + 20 : 0;
+    const cols = inner < 165 ? 2 : 4;
+    const rates = wrapText(`Attack ${Math.round(100 / p.cooldown)}% · Crit ${Math.round(p.crit * 100)}% · Regen ${Number(p.regen.toFixed(2))}`, inner);
+    const ratesY = statsY + 14 + (4 / cols) * 28;
+    const weaponY = ratesY + rates.length * 9 + 7;
+    const descriptionY = weaponY + Math.max(16, weapons.length * 9) + 4;
+    const perkY = descriptionY + (targeting.length + weaponDesc.length) * 9 + 6;
+    const ultimateY = perkY + perk.length * 9 + 10;
+    const goalY = ultimateY + 13 + ult.length * 9 + 7;
+    const total = goalY + (locked ? 0 : notes.length + runs.length) * 9 + 8;
     const most = Math.max(0, total - (height - 12));
     const mouse = input.mouse;
     if (mouse.x >= x && mouse.x < x + w && mouse.y >= y && mouse.y < y + height) this.infoScroll += Math.sign(mouse.wheel || 0) * 27;
@@ -214,18 +310,21 @@ export class HeroScreen {
     panel(ctx, x, y, w, height, { rivets: false, fill: '#14131f', trim: ['#3a4466', '#262b44'] });
     ctx.save();ctx.beginPath();ctx.rect(x + 4, y + 4, w - 8, height - 8);ctx.clip();
     const top = y + 7 - this.infoScroll;
-    drawText(ctx, h.name, tx, top, { font: 'heading', color: ['#fff6c2', '#fee761', '#feae34'] });
-    drawText(ctx, `${h.title.toUpperCase()} · EQUIPPED STATS`, tx, top + 19, { color: '#8b9bb4' });
+    if (locked) {
+      drawText(ctx, 'NEXT RECRUIT', tx, top, { color: '#feae34' });
+      notes.forEach((line, i) => drawText(ctx, line, tx, top + 12 + i * 9, { color: '#ead4aa' }));
+    }
+    drawText(ctx, locked ? 'STARTING STATS' : 'EQUIPPED STATS', tx, top + statsY, { color: '#8b9bb4' });
     const stats = [['HEALTH', p.maxHp], ['ARMOR', p.armor], ['DAMAGE', `${Math.round(p.might * 100)}%`], ['SPEED', `${Math.round(p.speedMul * 100)}%`]];
-    const sw = Math.floor((inner - 9) / 4);
+    const sw = Math.floor((inner - 3 * (cols - 1)) / cols);
     stats.forEach(([label, value], i) => {
-      const sx = tx + i * (sw + 3), sy = top + 33;
+      const sx = tx + i % cols * (sw + 3), sy = top + statsY + 13 + Math.floor(i / cols) * 28;
       ctx.fillStyle = '#201e2b';ctx.fillRect(sx, sy, sw, 25);
       drawText(ctx, label, sx + 4, sy + 3, { color: '#8b9bb4' });
       drawText(ctx, String(value), sx + 4, sy + 14, { color: '#ead4aa' });
       ctx.fillStyle = mix(h.color, '#3a4466', 0.55);ctx.fillRect(sx, sy + 24, sw, 1);
     });
-    drawText(ctx, fit(`Attack ${Math.round(100 / p.cooldown)}% · Crit ${Math.round(p.crit * 100)}% · Regen ${Number(p.regen.toFixed(2))}`, inner), tx, top + 63, { color: '#c0cbdc' });
+    rates.forEach((line, i) => drawText(ctx, line, tx, top + ratesY + i * 9, { color: '#c0cbdc' }));
     // The weapon line starts after the starting-stat caption.
     const wy = weaponY;
     ctx.drawImage(SPR[WEAPONS[h.weapon].icon].frames[0].c, tx, top + wy);
@@ -235,7 +334,7 @@ export class HeroScreen {
     perk.forEach((line, i) => drawText(ctx, line, tx, top + perkY + i * 9, { color: '#c0cbdc' }));
     drawText(ctx, fit(h.ultName.toUpperCase() + (ownedUltimate ? '' : ' · LOCKED'), inner), tx, top + ultimateY, { color: ownedUltimate ? '#f6757a' : '#b39aac' });
     ult.forEach((line, i) => drawText(ctx, line, tx, top + ultimateY + 11 + i * 9, { color: '#c0cbdc' }));
-    notes.forEach((line, i) => drawText(ctx, line, tx, top + goalY + i * 9, { color: '#c28569' }));
+    if (!locked) notes.forEach((line, i) => drawText(ctx, line, tx, top + goalY + i * 9, { color: '#c28569' }));
     runs.forEach((line, i) => drawText(ctx, line, tx, top + goalY + (notes.length + i) * 9, { color: '#8b9bb4' }));
     ctx.restore();
     if (most) {

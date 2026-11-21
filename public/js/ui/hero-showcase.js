@@ -2,7 +2,7 @@ import { Game, strikeClip } from '../game/game.js';
 import { Player } from '../game/player.js';
 import { SPR } from '../engine/sprites.js';
 import { bounds, rimRing } from '../engine/pixels.js';
-import { HERO_ORDER, heroLook } from '../data/heroes.js';
+import { view } from '../engine/view.js';
 import { metaBonuses } from '../shared/profile.js';
 import { moveFor } from '../data/difficulty.js';
 import { pixelEllipse, portraitBackdrop, mix } from './scenes.js';
@@ -22,6 +22,12 @@ export function showcaseAction(time) {
 }
 
 const extents = new Map();
+// Game.syncCam draws at least one device pixel per world pixel. Menus are
+// composited at view.S device pixels per menu pixel.
+export function heroMenuScale() {
+  return Math.max(1 / view.S, view.zoom);
+}
+
 export function showcaseBounds(spr) {
   if (extents.has(spr)) return extents.get(spr);
   let left = 0, right = 0, top = 0, bottom = 0;
@@ -71,27 +77,26 @@ export class HeroShowcase {
     } else p.strikeAt = null;
   }
 
-  draw(ctx, box, locked, settings) {
+  draw(ctx, box, locked) {
     const g = this.game, p = g.player, h = p.hero, spr = SPR[h.sprite];
     const { x, y, w, h: height } = box;
-    const models = HERO_ORDER.map(id => SPR[heroLook(id, settings.skins).sprite]);
-    const radius = Math.max(...models.map(s => showcaseBounds(s).radius));
-    const top = Math.min(...models.map(s => showcaseBounds(s).top));
-    const bottom = Math.max(...models.map(s => showcaseBounds(s).bottom));
-    const scale = Math.max(1, Math.min(7, Math.floor((w - 16) / (radius * 2)), Math.floor((height - 18) / Math.max(1, bottom - top))));
-    const foot = y + height - 12;
+    const { radius, top, bottom } = showcaseBounds(spr);
+    const scale = Math.min(heroMenuScale(), Math.max(1, w - 8) / (radius * 2),
+      Math.max(1, height - 14) / Math.max(1, bottom - top));
+    const foot = y + Math.round(Math.min(height - 8 - bottom * scale, Math.max(height * .80, 4 - top * scale)));
     const center = Math.round(x + w / 2);
     const camera = { S: scale, x: -center / scale, y: -foot / scale };
     this.geometry = { scale, foot, center, radius, top, bottom };
     ctx.save();
     ctx.beginPath();ctx.rect(x, y, w, height);ctx.clip();
     ctx.drawImage(portraitBackdrop(w, height, mix(h.color, '#15131f', 0.5), locked), x, y);
-    // Quiet architectural edges and a broad stone plinth tie the stage to the roster above.
+    // Keep the dais in proportion to the gameplay-sized figure as the panel widens.
     ctx.fillStyle = mix(h.color, '#0d0b14', locked ? 0.88 : 0.65);
     ctx.fillRect(x, y, 1, height);ctx.fillRect(x + w - 1, y, 1, height);
-    pixelEllipse(ctx, center, foot + 2, Math.round(w * 0.43), 9, '#13131f');
-    pixelEllipse(ctx, center, foot, Math.round(w * 0.4), 7, mix(h.color, '#262b44', 0.7));
-    pixelEllipse(ctx, center, foot, Math.round(w * 0.35), 5, '#191a27');
+    const plinth = Math.round(Math.min(34 * scale, w * .42));
+    pixelEllipse(ctx, center, foot + 2, plinth, 6, '#13131f');
+    pixelEllipse(ctx, center, foot, plinth, 5, mix(h.color, '#262b44', 0.7));
+    pixelEllipse(ctx, center, foot, Math.round(plinth * .88), 4, '#191a27');
     pixelEllipse(ctx, center, foot, Math.round(10 * scale), Math.max(2, scale), 'rgba(5,4,10,0.55)');
     if (locked) ctx.globalAlpha = 0.38;
     // Game.drawPlayer is the production renderer: native walk, attack and mirrored frames.
