@@ -240,7 +240,11 @@ export class Game {
     // (the tests, the bots, the tools) and for Ranked and the Dungeon Run.
     this.map = mapFor(o.mode, o.map);
     this.settings = o.settings || {};
-    this.seed = Math.floor(Math.random() * 2 ** 31);
+    // The run's seed (its weather, its crypts, an Abyss's lava or void), rolled; a Daily Night's
+    // own in its place (data/daily.js), the roll still made so the dice that follow fall as ever.
+    const rolled = Math.floor(Math.random() * 2 ** 31);
+    this.seed = Number.isInteger(o.seed) ? o.seed >>> 0 : rolled;
+    this.daily = typeof o.daily === 'string' ? o.daily : null; // the Daily Night's day, if it is one
     // The reactions' own (game/reactions.js): when each word was last said over the field, and
     // the splash bursts drawn this second.
     this.reactSaid = {};
@@ -2514,6 +2518,7 @@ export class Game {
       diff: this.diffId,
       nightmare: this.nightmare,
       oaths: this.oath.ids, // the night's oaths (data/oaths.js), for its gold and its best heat won
+      daily: this.daily, // a Daily Night's day (data/daily.js), for the Records' DAILY
       hero: p.id,
       time: Math.floor(this.mode === 's15' ? Math.min(this.time, this.duration) : this.time),
       gold: this.gold,

@@ -31,6 +31,7 @@ import { makeRunId } from '../shared/spoils.js';
 import { SpoilsReveal, SpoilsSelection, drawRewardReel, reelProgress } from './reward-reels.js';
 import { cardReaction } from '../data/reactions.js';
 import { heatOf } from '../data/oaths.js';
+import { recordDaily } from '../data/daily.js';
 
 export class GameScreen {
   enter(app, params = {}) {
@@ -40,16 +41,23 @@ export class GameScreen {
     this.runFrom = app.store.profile.runs;
     this.gearRev = app.store.profile.gearRev?.[hero] || 0;
     this.gearStart = app.store.profile.gear[hero] || {};
+    // The Daily Night (data/daily.js), when the Records' DAILY started this run: its map, Veteran,
+    // its oaths and its seed in place of the trial screen's, for this run alone (not a retry).
+    const daily = app.choice.daily || null;
+    app.choice.daily = null;
+    this.daily = daily;
     this.game = new Game({
       hero,
       mode,
       // The Survival map chosen on the trial screen, or the first night's by the prologue (data/maps.js);
       // none is the Darkwood (the tests, the bots, the tools), as Ranked and the Dungeon Run always are
       // (Game: mapFor). Its report names it (ResultsOverlay.submit).
-      map: app.choice.map,
-      diff: app.choice.diff || 'easy', // Normal, Veteran or Elite: Normal unless chosen, as the trial screen shows
-      nightmare: app.choice.nightmare === true, // three times the monsters, if ticked there (Elite only, never on Ranked)
-      oaths: app.choice.oaths || [], // the oaths sworn on the trial screen (data/oaths.js; Survival only, Game)
+      map: daily ? daily.map : app.choice.map,
+      diff: daily ? daily.diff : app.choice.diff || 'easy', // Normal, Veteran or Elite: Normal unless chosen, as the trial screen shows
+      nightmare: !daily && app.choice.nightmare === true, // three times the monsters, if ticked there (Elite only, never on Ranked)
+      oaths: daily ? daily.oaths : app.choice.oaths || [], // the oaths sworn on the trial screen (data/oaths.js; Survival only, Game)
+      seed: daily?.seed, // a Daily Night's own (its weather, its crypts, an Abyss's lava or void)
+      daily: daily?.key,
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       // The records a run can break as it goes (Game.checkRecords), as they stand now.
       records: { kills: app.store.profile.best.kills, level: app.store.profile.best.level, time: mode === 's15' ? app.store.profile.best.s15 : 0 },
@@ -1786,6 +1794,9 @@ class ResultsOverlay {
     this.noSpace = true; // as with level-ups: Space mashed for the ultimate through a fall mustn't leave for camp
     const res = this.g.result || (this.g.finish(false), this.g.result);
     this.res = res;
+    // A Daily Night: the first that day is the day's (data/daily.js), kept with the settings.
+    this.daily = recordDaily(gs.app.settings, res);
+    if (this.daily?.counted) saveSettings(gs.app.settings);
     this.wounds = woundLines(res);
     // Quit Run: no win and no fall (Game.finish's died). Its own neutral title, and the title piece.
     this.quit = !res.victory && !res.died;
@@ -1980,6 +1991,7 @@ class ResultsOverlay {
     if (this.reward && this.landed) {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
+      if (this.daily) notes.push([this.daily.counted ? `DAILY NIGHT · day ${this.daily.streak} in a row · share it from RECORDS` : 'DAILY NIGHT · practice: the first try today counted', '#8fb8ff']);
       // A night won under more heat of oaths than this hero had won under (shared/profile.js oh).
       if (this.reward.heatBest) notes.push([`★ OATHS ${this.reward.heat} · ${HEROES[res.hero].name.toUpperCase()}'S BEST ★`, '#f6757a']);
       for (const k of this.reward.unlocks || []) notes.push([unlockText(k), '#fee761']);

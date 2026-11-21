@@ -23,7 +23,8 @@ import { needsPrologue } from '../game/prologue.js';
 import { normalizeCombatMusic, normalizeMusicTracks } from '../engine/combat-music.js';
 import { CombatMusicPicker } from './music-picker.js';
 import { OathPicker } from './oath-picker.js';
-import { validOaths } from '../data/oaths.js';
+import { validOaths, heatOf } from '../data/oaths.js';
+import { dailyKey, dailyNight, dailyDate, dailyLine, dailyOaths } from '../data/daily.js';
 import { MusicMenu } from './music-menu.js';
 
 const UP_ICONS = {
@@ -987,11 +988,12 @@ export class RecordsScreen {
     if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('records_ranked');ui.lock(0.2); }return; }
     ui.begin(dt);
     // Three tabs side by side, narrower on a narrow screen.
-    const tabs = ['overview', 'heroes', 'ranked'], tw = Math.min(100, Math.floor((W - 24 - 8 * (tabs.length - 1)) / tabs.length));
+    const tabs = ['overview', 'heroes', 'ranked', 'daily'], tw = Math.min(100, Math.floor((W - 24 - 8 * (tabs.length - 1)) / tabs.length));
     const tx = Math.round(W / 2 - (tabs.length * tw + 8 * (tabs.length - 1)) / 2);
     for (const [i, id] of tabs.entries()) if (button(ctx, ui, 'records_' + id, tx + i * (tw + 8), 28, tw, 15, id.toUpperCase(), { on: this.tab === id })) this.tab = id;
     if (this.tab === 'heroes') this.drawHeroes(ctx, W, H, p);
-    const rows = this.tab === 'heroes' ? [] : this.tab === 'overview' ? [
+    if (this.tab === 'daily') this.drawDaily(ctx, W, H);
+    const rows = this.tab === 'heroes' || this.tab === 'daily' ? [] : this.tab === 'overview' ? [
       ['Nights won', String(p.wins.s15.reduce((a,b) => a+b, 0))],
       ['Dungeons cleared', String(p.wins.dungeon.reduce((a,b) => a+b, 0))],
       ['Runs played', fmtNum(p.runs)], ['Monsters slain', fmtNum(p.kills)],
@@ -1013,6 +1015,36 @@ export class RecordsScreen {
     });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
     ui.end();if (input.pressed('back')) app.go('title');
+  }
+
+  // DAILY (G5 of the 21 November 2026 review, data/daily.js): today's night, the same for everyone,
+  // to play with the hero last chosen; the first try today, as a line to paste anywhere (COPY), and
+  // how many days in a row have been played.
+  drawDaily(ctx, W, H) {
+    const app = this.app, ui = app.ui, key = dailyKey(), night = dailyNight(key), done = app.settings.daily;
+    const w = Math.min(380, W - 24), x = Math.round((W - w) / 2), cx = W / 2;
+    panel(ctx, x, 54, w, Math.min(H - 80, 150), { rivets: false, fill: '#15131f' });
+    drawText(ctx, `TODAY'S NIGHT · ${dailyDate(key)}`, cx, 62, { align: 'center', color: '#fee761' });
+    drawText(ctx, MAPS[night.map].name, cx, 74, { align: 'center', color: MAPS[night.map].color });
+    drawText(ctx, fitLine(`Veteran · ${dailyOaths(night)} · heat ${heatOf(night.oaths)}`, w - 12), cx, 86, { align: 'center', color: '#f6757a' });
+    const hero = HEROES[app.choice.hero] || HEROES.knight;
+    drawText(ctx, fitLine(`${hero.title} · the hero last chosen`, w - 12), cx, 98, { align: 'center', color: '#8b9bb4' });
+    if (button(ctx, ui, 'daily_play', Math.round(cx - 50), 110, 100, 15, 'PLAY', { color: '#fee761' })) {
+      app.choice.mode = 's15';
+      app.choice.daily = night;
+      app.startRun();
+      return;
+    }
+    const today = done && done.key === key;
+    drawText(ctx, today ? 'Played today: more tries are practice' : 'The first try each day counts', cx, 130, { align: 'center', color: '#8b9bb4' });
+    if (!done) return;
+    const line = dailyLine(done, MAPS[done.map]?.name || 'The Darkwood', HEROES[done.hero]?.title || '');
+    const lines = wrapText(line, w - 70).slice(0, 2);
+    lines.forEach((ln, i) => drawText(ctx, ln, x + 8, 144 + i * 9, { color: today ? '#ead4aa' : '#8b9bb4' }));
+    if (button(ctx, ui, 'daily_copy', x + w - 58, 144, 50, 13, this.copied === line ? 'COPIED' : 'COPY', { color: '#9ee562' })) {
+      try { navigator.clipboard?.writeText(line); this.copied = line; } catch { this.copied = null; }
+    }
+    drawText(ctx, `${today ? 'Today' : 'Last ' + dailyDate(done.key)} · ${done.streak || 1} day${(done.streak || 1) === 1 ? '' : 's'} in a row`, cx, 166, { align: 'center', color: '#8fb8ff' });
   }
 
   // HEROES: what each hero has won, by mode and difficulty (the review of 27 October 2026: the cards
