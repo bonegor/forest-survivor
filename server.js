@@ -299,7 +299,9 @@ export function createServer({ secret = loadSecret(ROOT), publicDir = PUBLIC, de
       packed.lastRun = { ...lastRun, truncated: true, spoils: lastRun.spoils.split('|').slice(-6).join('|') };
       header = cookieHeader(req, PROFILE_COOKIE, box.seal(PROFILE_COOKIE, packed));
     }
-    if (header.length > MAX_COOKIE) throw Error('Encrypted profile exceeds the cookie size limit');
+    // A 4xx, not a 500: the same save fails the same way every time, and the game keeps
+    // retrying a run the server answered with a 5xx, so a 500 here never let the player go.
+    if (header.length > MAX_COOKIE) throw Object.assign(Error('The save no longer fits in its cookie'), { status: 413 });
     return header;
   };
 
