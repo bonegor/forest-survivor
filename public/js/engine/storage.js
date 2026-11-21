@@ -629,6 +629,19 @@ export const store = {
 // desert (ui/prologue.js); none until then, when the trial screen shows its default (main.js).
 const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, combatMusic: DEFAULT_COMBAT_MUSIC, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {}, softFlash: false, boneKingLegs: false, rankedNote: false };
 
+// A setting of the wrong kind (a damaged or tampered save) is taken as its default, and the volumes
+// kept within 0 to 1: a volume that wasn't a number made initAudio throw half way (setTargetAtTime
+// NaN), and the game had no sound for the rest of the session.
+function wellFormed(s) {
+  for (const [k, d] of Object.entries(DEFAULT_SETTINGS)) {
+    const v = s[k];
+    if (typeof d === 'number') s[k] = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : d;
+    else if (typeof d === 'boolean' || typeof d === 'string') s[k] = typeof v === typeof d ? v : d;
+    else if (v === null || typeof v !== 'object' || Array.isArray(v)) s[k] = {};
+  }
+  return s;
+}
+
 export function loadSettings() {
   try {
     const raw = saveBox.read(SETTINGS);
@@ -636,7 +649,7 @@ export function loadSettings() {
     // The role-based soundtrack is a one-time upgrade to the new defaults.
     // Later choices, including the original songs, live in musicTracks.
     const musicTracks = normalizeMusicTracks(s?.musicTracks);
-    const settings = { ...DEFAULT_SETTINGS, ...s, musicTracks, combatMusic: musicTracks.battle };
+    const settings = wellFormed({ ...DEFAULT_SETTINGS, ...s, musicTracks, combatMusic: musicTracks.battle });
     if (raw && s && typeof s === 'object' && !Array.isArray(s) && !Object.hasOwn(s, 'musicTracks')) {
       try { saveSettings(settings); } catch { /* Keep the loaded settings if storage refuses the upgrade. */ }
     }
