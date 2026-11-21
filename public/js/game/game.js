@@ -2782,8 +2782,9 @@ export class Game {
     // (Player.update), as a boss never does; the foes on him are eased off alone. Wading in quicksand
     // (29 October 2026: it slows him, never holds him) they ease him only as much slower as he walks
     // (Player.sandPace), so the horde never carries him through it faster than he could wade. Never
-    // held nor wading in the Darkwood.
-    if (live && !p.dead && !p.held && (sx || sy)) {
+    // held nor wading in the Darkwood. Nor in the air: his leap alone carries him, and a push of over
+    // a pixel (at under 40 fps) read as being carried off mid-leap (Player.update), losing the landing's chop.
+    if (live && !p.dead && !p.held && !p.leap && (sx || sy)) {
       const H = CROWD.hero, k = 1 - Math.exp(-H.rate * dt), most = H.most * dt * p.sandPace;
       let mx = sx * k, my = sy * k;
       const m = Math.hypot(mx, my);
