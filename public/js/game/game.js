@@ -2406,7 +2406,7 @@ export class Game {
     e.burnT += dt;
     const k = Math.min(1, e.burnT / DAWN_BURN.boss);
     e.alpha = (e.def.alpha || 1) * (1 - k);
-    if (this.frame % 2 === 0) this.particles.burst(e.x + rand(-e.hr, e.hr), e.y, rand(4, e.h), 4, [PC.y, PC.o, PC.w], 60, 0.9, 1, P.GLOW | P.FADE, { vz: 60 });
+    if (Math.random() < 30 * dt) this.particles.burst(e.x + rand(-e.hr, e.hr), e.y, rand(4, e.h), 4, [PC.y, PC.o, PC.w], 60, 0.9, 1, P.GLOW | P.FADE, { vz: 60 });
     if (k >= 1) {
       e.dead = true;
       this.particles.burst(e.x, e.y, e.h / 2, 48, [PC.y, PC.o, PC.w], 110, 1.2, 2, P.GLOW | P.FADE, { vz: 80 });
@@ -2625,13 +2625,13 @@ export class Game {
     } else if (this.state === 'dawn') {
       this.dawnT += rdt;
       this.dawn = Math.min(1, this.dawnT / 2.5);
-      // Every foe burns away in the light; a boss slowly, in sight (burnBoss).
-      if (this.frame % 3 === 0) {
-        for (const e of this.enemies) {
-          if (!e.dead && !e.prop && !e.boss && Math.random() < 0.15) {
-            e.dead = true;
-            this.particles.burst(e.x, e.y - 6, 4, 8, [PC.y, PC.o, PC.w], 50, 0.8, 1, P.GLOW | P.FADE, { vz: 50 });
-          }
+      // Every foe burns away in the light; a boss slowly, in sight (burnBoss). By time, as 15% every
+      // third frame was at 60 fps: by frames, a 144 Hz screen burned the horde 2.4 times as fast.
+      const burn = 1 - Math.exp(-3.25 * rdt);
+      for (const e of this.enemies) {
+        if (!e.dead && !e.prop && !e.boss && Math.random() < burn) {
+          e.dead = true;
+          this.particles.burst(e.x, e.y - 6, 4, 8, [PC.y, PC.o, PC.w], 50, 0.8, 1, P.GLOW | P.FADE, { vz: 50 });
         }
       }
       for (const e of this.enemies) if (e.boss && !e.dead) this.burnBoss(e, rdt);
