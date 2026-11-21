@@ -1764,6 +1764,7 @@ class ResultsOverlay {
     this.reward = null;
     this.shown = 0;
     this.lockTime = 1;
+    this.noSpace = true; // as with level-ups: Space mashed for the ultimate through a fall mustn't leave for camp
     const res = this.g.result || (this.g.finish(false), this.g.result);
     this.res = res;
     this.wounds = woundLines(res);
@@ -1924,7 +1925,7 @@ class ResultsOverlay {
     if (!this.landed && this.t > 0.3 && (input.anyKey || input.mouse.clicked)) {
       this.skip();
       input.mouse.clicked = false;
-      ui.lock(0.25);
+      ui.lock(Math.max(ui.lockT, 0.25)); // never cutting short the second the results open with
     }
     this.backdrop(ctx, W, H);
     // A Survival win on a map spent in the sun (its look's sun, 28 October 2026) saw no dawn: a victory, as the Dungeon's.
