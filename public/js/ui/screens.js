@@ -22,6 +22,8 @@ import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
 import { needsPrologue } from '../game/prologue.js';
 import { normalizeCombatMusic, normalizeMusicTracks } from '../engine/combat-music.js';
 import { CombatMusicPicker } from './music-picker.js';
+import { OathPicker } from './oath-picker.js';
+import { validOaths } from '../data/oaths.js';
 import { MusicMenu } from './music-menu.js';
 
 const UP_ICONS = {
@@ -301,6 +303,7 @@ export class ModeScreen {
     this.app = app;
     this.t = 0;
     this.musicPicker = new CombatMusicPicker();
+    this.oathPicker = new OathPicker(); // Survival's oaths (data/oaths.js), beside the Nightmare box
     app.settings.combatMusic = normalizeCombatMusic(app.settings.combatMusic);
     app.settings.musicTracks = normalizeMusicTracks(app.settings.musicTracks, app.settings.combatMusic);
     setCombatMusic(app.settings.combatMusic);
@@ -468,6 +471,9 @@ export class ModeScreen {
     ui.begin(dt);
     const musicWasOpen = this.musicPicker.open, musicLock = ui.lockT, musicFocus = ui.focusId, musicSource = ui.focusSource;
     if (musicWasOpen) ui.lockT = Infinity;
+    // The oaths' list, open, holds the screen as the music's does (OathPicker).
+    const oathWasOpen = this.oathPicker.open && mode === 's15';
+    if (oathWasOpen) ui.lockT = Infinity;
     const width = Math.min(360, W - 28), x = Math.round((W - width) / 2);
     panel(ctx, x, 44, width, 36, { rivets: false, fill: '#15131f' });
     drawText(ctx, `${MODES[mode].name} · ${HEROES[app.choice.hero].title}`, W / 2, 51, { align: 'center', color: '#ead4aa' });
@@ -489,9 +495,12 @@ export class ModeScreen {
       });
       const elite = app.choice.diff === ELITE.id, nightmare = elite && app.choice.nightmare === true;
       const label = elite ? NIGHTMARE.name.toUpperCase() : `${NIGHTMARE.name.toUpperCase()} · ELITE ONLY`;
-      if (checkbox(ctx, ui, 'nightmare', Math.round((W - checkboxWidth(label)) / 2), ty + 24, label, nightmare, { color: '#f6757a', disabled: !elite })) {
+      const boxX = Math.round((W - checkboxWidth(label)) / 2);
+      if (checkbox(ctx, ui, 'nightmare', boxX, ty + 24, label, nightmare, { color: '#f6757a', disabled: !elite })) {
         app.choice.nightmare = app.settings.nightmare = !nightmare;saveSettings(app.settings);
       }
+      // In Survival the OATHS button stands to its right (G4, 21 November 2026), the box still centred.
+      if (mode === 's15') this.oathPicker.draw(ctx, ui, Math.min(W - 82, boxX + checkboxWidth(label) + 8), ty + 24, 76, app.choice.oaths || []);
       const d = diffs.find(d => d.id === app.choice.diff) || NORMAL;
       const lines = wrapText(d.desc, width - 8);
       lines.slice(0, 3).forEach((line, i) => drawText(ctx, line, W / 2, ty + 43 + i * 9, { align: 'center', color: '#8b9bb4' }));
@@ -508,6 +517,15 @@ export class ModeScreen {
     const back = () => { this.step = 'destination';ui.focus('m_' + mode);ui.lock(0.2); };
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) back();
     keysHint(ctx, W, H);
+    if (oathWasOpen) {
+      ui.lockT = musicLock;ui.focusId = musicFocus;ui.focusSource = musicSource;
+      ui.items.length = 0;
+      this.oathPicker.drawMenu(ctx, ui, W, H, app.choice.oaths || [], prof.oh?.[app.choice.hero] || 0, (list) => {
+        app.choice.oaths = app.settings.oaths = validOaths(list);
+        saveSettings(app.settings);
+      });
+      ui.end();return;
+    }
     if (this.musicPicker.open) {
       if (musicWasOpen) { ui.lockT = musicLock;ui.focusId = musicFocus;ui.focusSource = musicSource; }
       ui.items.length = 0;
@@ -522,6 +540,8 @@ export class ModeScreen {
       if (ui.focusId?.startsWith('d_') && input.pressed('down')) ui.focus('nightmare');
       else if (ui.focusId === 'nightmare' && input.pressed('down')) ui.focus('begin');
       else if (ui.focusId === 'nightmare' && input.pressed('up')) ui.focus('d_' + app.choice.diff);
+      else if (ui.focusId === 'oaths' && input.pressed('down')) ui.focus('begin');
+      else if (ui.focusId === 'oaths' && input.pressed('up')) ui.focus('d_' + app.choice.diff);
       else if (ui.focusId === 'begin' && input.pressed('up')) ui.focus('nightmare');
     }
     if (ui.focusId === 'begin' && (input.pressed('left') || input.pressed('right')) && !input.pressed('up') && !input.pressed('down')) ui.focus('combat_music');

@@ -223,9 +223,11 @@ export class Player {
     // Worn gear adds to the relics' sums.
     const bonus = (k) => this.passiveSum(k, passives) + (q[k] || 0);
     const lv = levelBonus(this.level), regenMul = h.regenMul || 1, B = BLESSING;
+    // The night's oaths (data/oaths.js): Glass halves his health, Iron takes all his armor.
+    const oath = this.g.oath;
     return {
-      maxHp: Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * B.maxHp) * lv.hp),
-      armor: (h.armor || 0) + m.armor + bonus('armor') + lv.armor,
+      maxHp: Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * B.maxHp) * lv.hp * (oath?.glass ? 0.5 : 1)),
+      armor: oath?.iron ? 0 : (h.armor || 0) + m.armor + bonus('armor') + lv.armor,
       speedMul: (h.speed || 1) * m.speed * (1 + bonus('speed')),
       might: (h.might || 1) * m.might * (1 + bonus('might') + this.blessings * B.might) * lv.might,
       // The Blessings of Reach, counted up to B.reachMost, and of Haste, to the floor of 0.35

@@ -320,6 +320,8 @@ export class Enemy {
     this.lordEnraged = false;
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
     this.summoned = !!o.summoned; // called up round the hero by a boss (Game.summonRing)
+    this.risen = !!o.risen; // risen once more under the Oath of the Restless (Game.killEnemy): not again
+    this.fierce = false; // a boss under the Oath of Kings (Game.spawnBoss): his fiercest from the first
     this.steady = !!o.steady; // the steady horde's (Spawner.update): let go when left far behind (Game.relocate)
     // Whether it knows where the hero is. In a crypt one doesn't until it has seen him or been
     // hit (update); what is sent at him (o.aware: a ring, a swarm, a pack), a boss, one that

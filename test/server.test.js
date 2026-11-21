@@ -369,6 +369,7 @@ test('a maximal save of all 22 heroes, eight equipment slots and a full inventor
     p.feats[h] = Object.values(P.FEAT).reduce((a, b) => a | b, 0); // every win's mark too
     p.ranked[h] = 14400;
     p.bt[h] = 14400; // his longest run (28 October 2026)
+    p.oh[h] = 14; // his best heat of oaths won, the most there is (data/oaths.js MAX_HEAT, 21 November 2026)
     p.gear[h] = Object.fromEntries(I.SLOTS.map((s) => [s, legend(s, h)]));
     p.gearRev[h] = 1 + next(1e5);
   }

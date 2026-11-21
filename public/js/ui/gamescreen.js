@@ -30,6 +30,7 @@ import { MenuDialog } from './menu-dialog.js';
 import { makeRunId } from '../shared/spoils.js';
 import { SpoilsReveal, SpoilsSelection, drawRewardReel, reelProgress } from './reward-reels.js';
 import { cardReaction } from '../data/reactions.js';
+import { heatOf } from '../data/oaths.js';
 
 export class GameScreen {
   enter(app, params = {}) {
@@ -48,6 +49,7 @@ export class GameScreen {
       map: app.choice.map,
       diff: app.choice.diff || 'easy', // Normal, Veteran or Elite: Normal unless chosen, as the trial screen shows
       nightmare: app.choice.nightmare === true, // three times the monsters, if ticked there (Elite only, never on Ranked)
+      oaths: app.choice.oaths || [], // the oaths sworn on the trial screen (data/oaths.js; Survival only, Game)
       rankedBest: mode === 'ranked' ? app.store.profile.ranked?.[hero] || 0 : 0,
       // The records a run can break as it goes (Game.checkRecords), as they stand now.
       records: { kills: app.store.profile.best.kills, level: app.store.profile.best.level, time: mode === 's15' ? app.store.profile.best.s15 : 0 },
@@ -1845,7 +1847,7 @@ class ResultsOverlay {
     this.stamped = 0;
     this.stampAt = null;
     this.report ??= {
-      mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
+      mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, oaths: res.oaths, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found, copperWeapons: res.copperWeapons,
       effort: res.effort,
       spoils: res.spoils, sealedGear: res.sealedGear, selectSpoils: true, runId: this.gs.runId, runFrom: this.gs.runFrom, gearRev: this.gs.gearRev, gearStart: this.gs.gearStart,
@@ -1966,7 +1968,9 @@ class ResultsOverlay {
     // In Survival the map the night was spent on ('Sir Aldric · The Frostfell'; data/maps.js, 28
     // October 2026), each map's the same 15-minute night; elsewhere the trial and its length.
     const where = res.mode === 's15' && Object.hasOwn(MAPS, res.map ?? '') ? MAPS[res.map].name : `${MODES[res.mode].name} ${MODES[res.mode].sub}`;
-    let sub = `${HEROES[res.hero].name} · ${where}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}`;
+    // And the heat of its oaths (data/oaths.js), if it was sworn under any.
+    const heat = heatOf(res.oaths || []);
+    let sub = `${HEROES[res.hero].name} · ${where}${res.nightmare ? ` · ${NIGHTMARE.name}` : ''}${heat ? ` · Oaths ${heat}` : ''}`;
     if (res.died && res.stats.killedBy) sub += ` · slain by ${res.stats.killedBy}`;
     drawText(ctx, fitText(sub, W - 8), W / 2, 12 + L.height * s, { align: 'center', color: res.victory ? '#feae34' : '#8b9bb4' });
     if (this.t < TALLY.rows - 0.2) return null;
@@ -1976,6 +1980,8 @@ class ResultsOverlay {
     if (this.reward && this.landed) {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
+      // A night won under more heat of oaths than this hero had won under (shared/profile.js oh).
+      if (this.reward.heatBest) notes.push([`★ OATHS ${this.reward.heat} · ${HEROES[res.hero].name.toUpperCase()}'S BEST ★`, '#f6757a']);
       for (const k of this.reward.unlocks || []) notes.push([unlockText(k), '#fee761']);
       if (this.reward.gearConflict) notes.push(['Gear moved during the run. Current slots kept.', '#c28569']);
       if (this.reward.spoilsGold) notes.push([`Excess gear sold · +${fmtNum(this.reward.spoilsGold)} gold`, '#feae34']);

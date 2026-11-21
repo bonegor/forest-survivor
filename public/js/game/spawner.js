@@ -30,8 +30,9 @@ export { PER_MINUTE, minuteMore } from '../shared/population.js';
 // a Dungeon floor's phase does not track its elapsed time.
 export const hordeMore = (g, phase) => minuteMore(phase) * lateMore(g.diff, phase) * runMore(g);
 const nightmareLateFactor = (g) => g.nightmare && g.time >= NIGHTMARE.doubleAt ? 2 : 1;
-// Nightmare, Cursed Skulls and the map multiply the steady rate after its soft cap.
-export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0)) * (g.map?.foe.horde ?? 1) * nightmareLateFactor(g);
+// Nightmare, Cursed Skulls, the Oath of the Horde (data/oaths.js: a quarter more, as a skull's) and
+// the map multiply the steady rate after its soft cap.
+export const runMore = (g) => (g.nightmare ? NIGHTMARE.more : 1) * (1 + 0.25 * (g.skulls || 0)) * (g.oath?.horde ? 1.25 : 1) * (g.map?.foe.horde ?? 1) * nightmareLateFactor(g);
 
 // "make it more wave like, the generation of monsters ... it is too constant", then "not full on
 // waves, just occasionally ... base line, + wave every once in a while" (21 October 2026): the
@@ -318,7 +319,8 @@ export class Spawner {
     // Champions.
     this.eliteT -= dt * g.diff.elite;
     if (this.eliteT <= 0 && (g.mode === 'dungeon' || g.time >= CHAMPION.first)) {
-      this.eliteT = rand(...CHAMPION.every);
+      // Twice as often under the Oath of the Hunted (data/oaths.js).
+      this.eliteT = rand(...CHAMPION.every) / (g.oath?.hunted ? 2 : 1);
       this.spawnElite(phase);
     }
 

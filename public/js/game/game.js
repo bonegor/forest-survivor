@@ -1,6 +1,7 @@
 // A single run: owns every system and runs the update/draw loop.
 
 import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
+import { oathFlags } from '../data/oaths.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
 import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
@@ -232,6 +233,9 @@ export class Game {
     // A Nightmare, three times the monsters (data/difficulty.js NIGHTMARE), as chosen: Veteran only,
     // never on Ranked.
     this.nightmare = nightmareFor(o.mode, o.nightmare, this.diffId);
+    // The oaths the night is sworn under (data/oaths.js, G4 of 21 November 2026): flags (oath.iron
+    // and so on) every rule they change reads; none outside Survival.
+    this.oath = oathFlags(o.oaths, o.mode);
     // Where the night is spent (data/maps.js): Survival's map as chosen, the Darkwood without one
     // (the tests, the bots, the tools) and for Ranked and the Dungeon Run.
     this.map = mapFor(o.mode, o.map);
@@ -251,6 +255,8 @@ export class Game {
     // three of each, one more a rank of Arsenal or Reliquary), unless a run says otherwise (the
     // bots try what a hero can do with fewer slots); never more than MAX_WEAPONS, MAX_RELICS.
     this.maxWeapons = Math.min(MAX_WEAPONS, o.maxWeapons ?? o.meta?.weaponSlots ?? MAX_WEAPONS);
+    // The Oath of Few Hands: a slot fewer, though never fewer than he starts with (Player).
+    if (this.oath.hands) this.maxWeapons = Math.max(startWeapons(HEROES[o.hero] || HEROES.knight).length, this.maxWeapons - 1);
     this.copperLostWeapons = new Set();
     this.maxRelics = Math.min(MAX_RELICS, o.maxRelics ?? o.meta?.relicSlots ?? MAX_RELICS);
     // What the profile has opened (shared/profile.js openFor): { weapons, relics, ult }, the shared
@@ -384,7 +390,7 @@ export class Game {
     this.player = new Player(this, o.hero, o.meta);
     // The owner's (21 October 2026): the special ability locked at first. Until a run with the hero
     // lasts PROGRESS.ultTime his fury orb stays empty and the ultimate key does nothing (Player).
-    this.player.ultLocked = !!this.open && !this.open.ult;
+    this.player.ultLocked = (!!this.open && !this.open.ult) || this.oath.silence; // and under the Oath of Silence
     // The numbers keep clear of the hero and of the bosses' bodies (numbers.js).
     this.numbers.hero = this.player;
     this.numbers.bodies = this.topList;
@@ -1086,6 +1092,8 @@ export class Game {
     const mul = this.mode === 'dungeon' ? [0.65, 1.3, 4][this.floor - 1] : monsterHp(this.phase, this.mode) * 0.8;
     const e = this.spawnEnemy(id, x, y, { hpMul: this.diff.hp * mul * this.map.foe.hp, instant: true, always: true, ...o });
     if (!e) return null;
+    // The Oath of Kings: he fights as he would below half his health from the first (bosses.js).
+    e.fierce = this.oath.kings;
     // The Crypt's guardian is the gentler first boss: cramped rooms make every blow count.
     this.bossPower = this.mode === 'dungeon' && this.floor === 1 ? 0.75 : 1;
     if (!o.sleeping) this.bossIntro(e);
@@ -1306,6 +1314,9 @@ export class Game {
       const r = Math.random();
       if (r < 0.007 * luck) this.addPickup('coin', e.x, e.y, 1);
       else if (!p.ultLocked && r < (0.007 + 0.5 * FURY.hordeOrb * Math.max(p.killShare, FURY.orbFloor)) * luck) this.addPickup('fury', e.x, e.y);
+      // The Oath of the Restless: what rose from the ground rises once more where it fell, and
+      // pays nothing the second time (no soul gem: xpMul 0).
+      if (this.oath.restless && e.def.rise && !e.risen) this.spawnEnemy(e.type, e.x, e.y, { hpMul: monsterHp(this.phase, this.mode) * this.diff.hp * this.map.foe.hp, aware: true, xpMul: 0, risen: true });
     }
     if (e.def.split && !o.noSplit) {
       for (let i = 0; i < e.def.splitN; i++) {
@@ -1416,6 +1427,8 @@ export class Game {
     // A locked ultimate cannot consume fury. Leave its roll empty instead of
     // replacing it with extra potions and undoing the lower drop rate.
     if (kind === 'fury' && p.ultLocked) return;
+    // Nor is there a potion or an elixir under the Oath of Famine: its roll empty likewise.
+    if ((kind === 'potion' || kind === 'elixir') && this.oath.famine) return;
     // The owner's (22 October 2026): what a box held pops out a moment after it breaks (PROP_HOLD),
     // not under the hero's feet the instant he walks into it, and to one side (PROP_DROP).
     const [tx, ty] = this.propToss(e);
@@ -2500,6 +2513,7 @@ export class Game {
       map: this.mode === 's15' ? this.map.id : null, // the Survival map it was spent on (data/maps.js)
       diff: this.diffId,
       nightmare: this.nightmare,
+      oaths: this.oath.ids, // the night's oaths (data/oaths.js), for its gold and its best heat won
       hero: p.id,
       time: Math.floor(this.mode === 's15' ? Math.min(this.time, this.duration) : this.time),
       gold: this.gold,
@@ -3072,7 +3086,10 @@ export class Game {
     const flick = 0.94 + 0.06 * Math.sin(this.clock * 9) * Math.sin(this.clock * 5.3);
     this.light(p.x, p.y - 6, (this.mode === 'dungeon' ? 130 : 125) * flick, 'warm', 1);
     this.light(p.x, p.y - 8, 46, 'white', 0.7);
-    this.lighting.render(ctx, c, this.world.ambient());
+    // The Oath of the Dark dims the night's light outside the crypts (the monsters' own lift still
+    // reads the undimmed one, enemies.js nightFloor, so they stay as visible as ever).
+    const amb = this.world.ambient();
+    this.lighting.render(ctx, c, this.oath.dark && !this.inCrypt ? [amb[0] * 0.7, amb[1] * 0.7, amb[2] * 0.7] : amb);
     // By night the vignette darkens the scene, its fog and rain with it, before the horde is
     // lifted out of it, so the far monsters at the screen's edge stand out of the dark as the
     // near ones do (enemies.js NIGHT_EDGE); the glows, shots and numbers drawn after it go over it.

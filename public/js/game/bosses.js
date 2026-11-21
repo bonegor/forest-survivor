@@ -144,7 +144,8 @@ function warnBoneKingSweep(e) {
 export const BOSS_AI = {
   boneking(e, dt) {
     const g = e.g;
-    e.phase = e.hp / e.maxHp < 0.5 ? 1 : 0;
+    // His second phase below half his health, or from the first under the Oath of Kings (fierce).
+    e.phase = e.fierce || e.hp / e.maxHp < 0.5 ? 1 : 0;
     const inCast = casting(e, dt);
     if (inCast && e.pose !== 'sweepWind' && e.pose !== 'sweep') return [0, 0, 0];
     e.cdT -= dt;
@@ -191,7 +192,7 @@ export const BOSS_AI = {
 
   butcher(e, dt) {
     const g = e.g, p = g.player;
-    e.phase = e.hp / e.maxHp < 0.3 ? 1 : 0;
+    e.phase = e.fierce || e.hp / e.maxHp < 0.3 ? 1 : 0;
     if (e.phase && !e.data.enraged) {
       e.data.enraged = true;
       say(e, e.def.lines?.enrage ?? 'NOW I AM ANGRY!');
@@ -265,7 +266,7 @@ export const BOSS_AI = {
 
   lich(e, dt) {
     const g = e.g, p = g.player;
-    e.phase = e.hp / e.maxHp < 0.5 ? 1 : 0;
+    e.phase = e.fierce || e.hp / e.maxHp < 0.5 ? 1 : 0;
     if (casting(e, dt)) return [0, 0, 0];
     e.cdT -= dt;
     e.cd2 -= dt;
@@ -313,7 +314,7 @@ export const BOSS_AI = {
   demonlord(e, dt) {
     const g = e.g, p = g.player;
     const hpf = e.hp / e.maxHp;
-    const phase = hpf < 0.25 ? 2 : hpf < 0.55 ? 1 : 0;
+    const phase = hpf < 0.25 ? 2 : hpf < 0.55 || e.fierce ? 1 : 0;
     if (phase > e.phase) {
       e.phase = phase;
       const rage = e.def.lines?.rage;

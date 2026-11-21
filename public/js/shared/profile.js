@@ -34,6 +34,7 @@
 import { RARITIES, LEGENDARY, MAX_LORDS, SLOTS, POOLS, sanitizeGear, sanitizeItem, packGear, sameItem, itemPrice, powerWorn, statRange, itemIdentified, canEquipItem } from './items.js';
 import { FLOORS } from '../data/waves.js';
 import { PASSIVES } from '../data/passives.js';
+import { MAX_HEAT, heatOf, oathGold, validOaths } from '../data/oaths.js';
 import { PROGRESS, needText } from './progress.js';
 import { killCredit } from './population.js';
 import { MAX_CLAIMS, packSpoils, partitionRunSpoils, settledSpoils, unpackSpoils, validClaimIndices, validRunId } from './spoils.js';
@@ -228,6 +229,9 @@ export function defaultProfile() {
     // hero -> his longest run on the clock in seconds, in any mode (28 October 2026, the review's
     // C4): the hero screen, the results' NEXT bar and the Codex's ultimate bars.
     bt: {},
+    // hero -> the most heat of oaths a night he won was sworn under (data/oaths.js, G4 of 21
+    // November 2026), kept as bt is.
+    oh: {},
     gear: {}, // hero -> slot -> the item that hero wears there (shared/items.js)
     gearRev: {}, // incremented by transfers to reject outdated gear submissions
     stash: [], // shared inventory, including items whose enchantments remain unknown
@@ -286,6 +290,8 @@ export function sanitizeProfile(raw) {
     // His longest run, any mode; a save from before 28 October 2026 has his Ranked best for it.
     const b = Math.max(t, int(perHero(raw.bt, h), 0, MAX_TIME.ranked));
     if (b) p.bt[h] = b;
+    const oh = int(perHero(raw.oh, h), 0, MAX_HEAT);
+    if (oh) p.oh[h] = oh;
   }
   // The evolutions a save from before 27 October 2026 already tells of are known (SIGNATURE_EVO);
   // taken again every time, which changes nothing once they are in.
@@ -566,6 +572,8 @@ export function packProfile(p) {
   const { ev, ...rest } = p;
   const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), ranked: packPerHero(p.ranked), bt: packPerHero(p.bt), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
   if (!out.home?.length) delete out.home;
+  if (Object.keys(p.oh || {}).length) out.oh = packPerHero(p.oh);
+  else delete out.oh;
   if (p.stash?.length) out.stash = packSpoils(p.stash.map(item => ({ item, state: 'found' })));
   else delete out.stash;
   if (!p.identifications) delete out.identifications;
@@ -799,6 +807,10 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
   // Ranked. A win still counts as its difficulty's.
   // Elite's modifier (data/difficulty.js nightmareFor): a Normal or Veteran run is never one.
   const nightmare = raw.mode !== 'ranked' && diff === 'hard' && raw.nightmare === true;
+  // The oaths it was sworn under (data/oaths.js): known ones, in Survival only. The Horde's quarter
+  // more monsters and the Restless's dead risen again may slay more.
+  const oaths = validOaths(raw.oaths, raw.mode);
+  const oathMore = (oaths.includes('horde') ? 1.25 : 1) * (oaths.includes('restless') ? 1.5 : 1);
   // The Survival map the night was spent on (data/maps.js; 28 October 2026): one of shared/
   // progress.js maps, in Survival only. None in another mode (Ranked and the Dungeon Run keep to the
   // Darkwood) or where a report names none (an older client, the bots, the tools): that night was
@@ -807,12 +819,13 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
   // 240 a second: four times the 60 it was, for the horde doubled twice (difficulty.js CROWD), and
   // kept so with Veteran's now two thirds of that (VETERAN_CROWD); a Nightmare three times that, and
   // a map that sends more its more (MAP_MORE).
-  const kills = int(raw.kills, 0, 50 + time * 240 * (nightmare ? 3 : 1) * mapMore(map));
+  const kills = int(raw.kills, 0, 50 + time * 240 * (nightmare ? 3 : 1) * mapMore(map) * oathMore);
   return {
     mode: raw.mode,
     map,
     diff,
     nightmare,
+    oaths,
     hero: isId(raw.hero) ? raw.hero : 'knight',
     victory,
     // A complete, distinct copper loadout on a legitimate victory. An evolved disc still
@@ -849,11 +862,13 @@ export function sanitizeRun(raw, armoryGreed = TOP_GREED) {
 }
 
 export function runReward(run) {
-  const multiplier = DIFF_GOLD[run.diff] * (run.nightmare ? NIGHTMARE_GOLD : 1);
+  // The oaths' heat raises it all, a tenth a point (data/oaths.js oathGold).
+  const oath = oathGold(heatOf(run.oaths || []));
+  const multiplier = DIFF_GOLD[run.diff] * (run.nightmare ? NIGHTMARE_GOLD : 1) * oath;
   const collected = Math.round(run.gold * multiplier);
   // A wage for the time on the clock (PROGRESS.wage a second), at the same rate as the gold.
   const wage = Math.round(PROGRESS.wage * run.time * multiplier);
-  const bonus = run.victory ? Math.round(VICTORY_BONUS[run.mode] * DIFF_BONUS[run.diff]) : 0;
+  const bonus = run.victory ? Math.round(VICTORY_BONUS[run.mode] * DIFF_BONUS[run.diff] * oath) : 0;
   // `gold`: the gold credited, as picked up after the cap (sanitizeRun) and with any gear sold
   // (applyRun), for the results line to print what was paid for, not what was claimed.
   return { gold: run.gold, collected, wage, bonus, total: collected + wage + bonus, multiplier };
@@ -869,12 +884,16 @@ export function countedKills(kills, time, diff, nightmare, map, effort, mode = '
 }
 const effortFor = (run) => run.effort;
 
+// The gold multipliers a run's reward can have (runReward): its difficulty's rate, a Nightmare's,
+// and since 21 November 2026 its oaths' heat (data/oaths.js oathGold).
+const RECEIPT_MULTIPLIERS = [0.75, 1, 1.5, 2.25].flatMap((m) => Array.from({ length: MAX_HEAT + 1 }, (_, h) => m * oathGold(h)));
+
 function sanitizeReceipt(raw, runs) {
   if (!validRunId(raw?.id) || !HERO_ORDER.includes(raw.hero) || !Number.isInteger(raw.from) ||
       raw.from < 0 || raw.from >= runs || !raw.reward || typeof raw.reward !== 'object') return null;
   const r = raw.reward;
   const reward = Object.fromEntries(['gold', 'collected', 'wage', 'bonus', 'total'].map(key => [key, int(r[key], 0, 1e9)]));
-  reward.multiplier = [0.75, 1, 1.5, 2.25].includes(r.multiplier) ? r.multiplier : 1;
+  reward.multiplier = RECEIPT_MULTIPLIERS.find((m) => Math.abs(m - r.multiplier) < 1e-9) ?? 1;
   if (r.gearConflict === true) reward.gearConflict = true;
   if (r.spoilsGold > 0) reward.spoilsGold = int(r.spoilsGold, 0, 1e9);
   reward.unlocks = Array.isArray(r.unlocks) ? r.unlocks.slice(0, HERO_ORDER.length + 10).filter(key => {
@@ -1136,6 +1155,11 @@ export function applyRun(profile, rawRun) {
   p.best.time = Math.max(p.best.time, run.time);
   // His longest run, any mode (the clock that brings in the next hero and opens his ultimate).
   if (run.time > 0) p.bt[run.hero] = Math.max(p.bt[run.hero] || 0, run.time);
+  // A night won under oaths: his best heat won, and whether this one beat it (the results' NEW BEST).
+  const heat = run.victory ? heatOf(run.oaths || []) : 0;
+  reward.heat = heat;
+  reward.heatBest = heat > (p.oh[run.hero] || 0);
+  if (reward.heatBest) p.oh[run.hero] = heat;
   p.best.gold = Math.max(p.best.gold, pickedUp);
   p.best.bosses = Math.max(p.best.bosses, run.bosses);
   p.best.combo = Math.max(p.best.combo, run.combo);

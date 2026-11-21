@@ -5,6 +5,7 @@ import { initInput, input } from './engine/input.js';
 import { buildSprites } from './engine/sprites.js';
 import { store, loadSettings, saveSettings, DEBUG } from './engine/storage.js';
 import { RELEASE } from './engine/build.js';
+import { validOaths } from './data/oaths.js';
 import { initAudio, setVolumes, setMusicTracks, stopCombatMusicPreview } from './engine/audio.js';
 import { drawText } from './engine/font.js';
 import { makeCanvas } from './engine/util.js';
@@ -76,6 +77,8 @@ const app = {
 // them with the settings); a new player starts on Normal.
 app.choice.diff = ['easy', 'medium', 'hard'].includes(app.settings.diff) ? app.settings.diff : 'easy';
 app.choice.nightmare = app.settings.nightmare === true;
+// The oaths last sworn on the trial screen (data/oaths.js, settings.oaths), known ones only.
+app.choice.oaths = validOaths(app.settings.oaths);
 // The Survival map as last chosen on the trial screen (settings.map, data/maps.js), where it names
 // one; else none, and the trial screen shows its default (ui/screens.js shownMap: for a save from
 // before the maps, the Darkwood). A new player's first night, the prologue's, saves the desert.
