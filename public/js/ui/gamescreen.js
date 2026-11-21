@@ -33,7 +33,7 @@ import { TrophyOverlay } from './trophy.js';
 import { cardReaction } from '../data/reactions.js';
 import { heatOf } from '../data/oaths.js';
 import { recordDaily } from '../data/daily.js';
-import { recordRun, momentsLine } from '../shared/history.js';
+import { recordRun, momentsLine, loadHistory, saveHistory } from '../shared/history.js';
 
 export class GameScreen {
   enter(app, params = {}) {
@@ -1803,14 +1803,11 @@ class ResultsOverlay {
     // A Daily Night: the first that day is the day's (data/daily.js), kept with the settings.
     this.daily = recordDaily(gs.app.settings, res);
     if (this.daily?.counted) saveSettings(gs.app.settings);
-    // A fall's last moments under its wounds (G12, shared/history.js), and the run kept in the
-    // Records' HISTORY with the settings.
+    // A fall's last moments under its wounds (G12, shared/history.js), and the run kept for the
+    // Records' HISTORY (in this browser's localStorage alone).
     this.wounds = woundLines(res);
     if (res.died && res.lastBlows?.length) this.wounds.push([momentsLine(res.lastBlows), '#f6757a']);
-    if (gs.app.settings) {
-      recordRun(gs.app.settings, res);
-      saveSettings(gs.app.settings);
-    }
+    saveHistory(recordRun(loadHistory(), res));
     // Quit Run: no win and no fall (Game.finish's died). Its own neutral title, and the title piece.
     this.quit = !res.victory && !res.died;
     // The records as they stood before this run: a row beating one is stamped NEW BEST. All read

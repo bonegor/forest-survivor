@@ -25,7 +25,7 @@ import { CombatMusicPicker } from './music-picker.js';
 import { OathPicker } from './oath-picker.js';
 import { validOaths, heatOf } from '../data/oaths.js';
 import { dailyKey, dailyNight, dailyDate, dailyLine, dailyOaths } from '../data/daily.js';
-import { historyRow } from '../shared/history.js';
+import { historyRow, loadHistory } from '../shared/history.js';
 import { MusicMenu } from './music-menu.js';
 
 const UP_ICONS = {
@@ -1022,7 +1022,7 @@ export class RecordsScreen {
   // HISTORY (G12 of the 21 November 2026 review, shared/history.js): the last runs, the latest first,
   // each its day, hero, map or trial and time on the clock, and how it ended.
   drawHistory(ctx, W, H) {
-    const list = this.app.settings.history || [];
+    const list = (this.history ??= loadHistory()); // read once a visit
     const w = Math.min(380, W - 24), x = Math.round((W - w) / 2), step = Math.min(22, Math.floor((H - 86) / Math.max(1, list.length)));
     if (!list.length) {
       drawText(ctx, 'No run kept yet', W / 2, 70, { align: 'center', color: '#8b9bb4' });

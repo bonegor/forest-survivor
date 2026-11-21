@@ -1,7 +1,9 @@
 // Learning from a run (G12 of the 21 November 2026 gameplay review; the owner's "one by one, work
 // them"): the results of a fall tell its last moments, the blows of its last RECENT s by who struck
 // them (lastMoments, from Player.recent), and the Records' HISTORY keeps the last HISTORY_MOST runs
-// (recordRun, with the settings: a few short fields each, so a cookie keeps them where it must).
+// (recordRun), a few short fields each, in this browser's localStorage alone (HISTORY_KEY: a
+// convenience of its own, never a cookie, and never the settings, which a run writes at most once).
+// Where localStorage can't be used, there is no history.
 export const RECENT = 5;
 export const HISTORY_MOST = 10;
 
@@ -22,16 +24,31 @@ export function lastMoments(recent, now, span = RECENT) {
 // The results' line of them: "Last 5 s: 3× Death Knight 210 · 1× Cultist's bolt 40".
 export const momentsLine = (moments) => `Last ${RECENT} s: ${moments.map((m) => `${m.n}× ${m.who} ${Math.round(m.dmg)}`).join(' · ')}`;
 
-// A run ended (res: Game.result): kept first in settings.history, the oldest let go past HISTORY_MOST.
-export function recordRun(settings, res, now = Date.now()) {
+export const HISTORY_KEY = 'fs_history';
+export function loadHistory() {
+  try {
+    const list = JSON.parse(globalThis.localStorage?.getItem(HISTORY_KEY) || '[]');
+    return Array.isArray(list) ? list.filter((e) => e && typeof e.d === 'string' && typeof e.h === 'string').slice(0, HISTORY_MOST) : [];
+  } catch {
+    return [];
+  }
+}
+export function saveHistory(list) {
+  try {
+    globalThis.localStorage?.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    /* a full or blocked storage keeps no history */
+  }
+}
+
+// A run ended (res: Game.result): first of the list (a copy), the oldest let go past HISTORY_MOST.
+export function recordRun(list, res, now = Date.now()) {
   const entry = {
     d: new Date(now).toISOString().slice(0, 10), h: res.hero, m: res.mode === 's15' ? res.map || 'forest' : res.mode,
     t: Math.floor(res.time || 0), v: res.victory ? 1 : 0, k: res.kills || 0, l: res.level || 1,
     x: res.died ? res.stats?.killedBy || res.killedBy || '' : '', o: (res.oaths || []).length,
   };
-  const list = Array.isArray(settings.history) ? settings.history : [];
-  settings.history = [entry, ...list].slice(0, HISTORY_MOST);
-  return entry;
+  return [entry, ...(Array.isArray(list) ? list : [])].slice(0, HISTORY_MOST);
 }
 
 // A history row as the Records' HISTORY shows it: [what, how] ("21 Nov · Sir Aldric · The
