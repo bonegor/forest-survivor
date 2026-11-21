@@ -16,7 +16,6 @@ export class UI {
     this.focusSource = 'keys';
     this.t = 0;
     this.lockT = 0;
-    this.navSound = true;
     this.noSpace = false; // Space doesn't confirm: a choice that popped up mid-fight, where Space is the ultimate
     this.taken = new Set(); // directions a widget in focus uses itself this frame (take): they don't move the focus
   }
