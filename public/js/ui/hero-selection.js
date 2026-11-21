@@ -78,7 +78,7 @@ const FIELD_TARGETING = {
 
 const PERK_COPY = {
   knight: 'Bulwark: +1 armor. All regeneration is doubled.',
-  berserker: 'Bloodrage: up to +30% damage and +15% attack speed at low health.',
+  berserker: 'Bloodrage: up to +30% damage and +15% attack speed at low health; +15% speed.',
   witchhunter: 'Inquisition: +30% damage to bosses and elites, +10% crit.',
 };
 

@@ -1154,7 +1154,7 @@ export class OptionsScreen {
       app.go(this.back);
     }
     if (button(ctx, ui, 'controls', W / 2 - 104, H - 44, 100, 15, 'CONTROLS')) {
-      this.dialog = new MenuDialog('Controls', ['Move: WASD / arrows · gamepad stick / D-pad · drag on touch', `Ultimate: Space / E / Q · gamepad ${padKey('X')} / triggers · tap fury orb`, 'Crypt strike: X / Shift · shoulder buttons · second finger', 'Pause: Esc / P · Start · pause button', 'Map: Tab / M · gamepad Back', 'Fullscreen: F11 · F outside a fight', 'Menus: arrows to browse, Enter to choose, Escape to go back.', 'Level-up: 1–4 choose · R reroll · B banish']);ui.focus('detail_close');ui.lock(0.2);
+      this.dialog = new MenuDialog('Controls', ['Move: WASD / arrows · gamepad stick / D-pad · drag on touch', `Ultimate: Space / E / Q · gamepad ${padKey('X')} / triggers · tap fury orb`, 'Crypt strike: X / Shift · shoulder buttons · second finger', 'Pause: Esc / P · Start · pause button', 'Map: Tab / M · gamepad Back', 'Fullscreen: F11 · F outside a fight', 'Menus: arrows to browse, Enter to choose, Escape to go back.', 'Level-up: 1–5 choose · R reroll · B banish']);ui.focus('detail_close');ui.lock(0.2);
     }
     if (button(ctx, ui, 'credits', W / 2 + 4, H - 44, 100, 15, 'CREDITS')) {
       this.dialog = new MenuDialog('Credits', [
