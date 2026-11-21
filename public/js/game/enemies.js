@@ -16,6 +16,7 @@ import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { EnemyShot } from './projectiles.js';
 import { bossAI } from './bosses.js';
+import { shamanAI, gemEaterAI } from './pressure.js';
 import { bossFrame } from './boss-animation.js';
 import { merchantAI } from './eanasir-boss.js';
 import { faceAlong, faceAttack } from './facing.js';
@@ -119,6 +120,8 @@ export const PACE_OF = {
   wolf: 'quick', spider: 'quick', goblin: 'quick', slimelet: 'quick',
   skeleton: 'steady', ghost: 'steady', deathknight: 'steady', slime: 'steady', skeletonarcher: 'steady', skeletonmage: 'steady', eanasir: 'steady',
   zombie: 'slow', ogre: 'slow', orc: 'slow', cultist: 'slow',
+  // The pressure kinds (game/pressure.js).
+  gemeater: 'quick', shieldbearer: 'steady', bloater: 'slow', shaman: 'slow',
 };
 // The new maps' kinds walk in the class of the Darkwood kind each stands for (data/enemies.js
 // STANDS_FOR; 28 October 2026): a Carrion Scarab as a rat, a Yeti as an Orc Brute.
@@ -321,6 +324,9 @@ export class Enemy {
     this.dormant = !!o.dormant; // a crypt's sleeping pack, until the hero comes near
     this.summoned = !!o.summoned; // called up round the hero by a boss (Game.summonRing)
     this.risen = !!o.risen; // risen once more under the Oath of the Restless (Game.killEnemy): not again
+    this.hasteT = 0; // rallied by a Shaman (game/pressure.js): hasteK times its pace while it lasts
+    this.hasteK = 1;
+    this.ate = 0; // a Gem Eater's: the soul gems' worth it has eaten, given back as it falls
     this.fierce = false; // a boss under the Oath of Kings (Game.spawnBoss): his fiercest from the first
     this.steady = !!o.steady; // the steady horde's (Spawner.update): let go when left far behind (Game.relocate)
     // Whether it knows where the hero is. In a crypt one doesn't until it has seen him or been
@@ -336,7 +342,7 @@ export class Enemy {
     this.speech = null;
     this.shake = 0;
     // A boss fights as his kit's (data/enemies.js kit: a new map's boss with a night boss's attacks).
-    this.ai = def.ai === 'eanasir' ? merchantAI : this.boss ? bossAI(def, type) : null;
+    this.ai = def.ai === 'eanasir' ? merchantAI : this.boss ? bossAI(def, type) : def.ai === 'shaman' ? shamanAI : def.ai === 'gemeater' ? gemEaterAI : null;
     this.data = {};
     if (this.mod && this.mod.id === 'swift') this.spd *= 1.45;
     if (this.mod && this.mod.id === 'brutal') this.dmg *= 1.5;
@@ -439,6 +445,10 @@ export class Enemy {
     let sp = this.lord ? KNIGHT_PACE * CRYPT_LORD.pace * g.move
       : (this.paced ? this.spd * (g.nightmare ? NIGHTMARE_PACE : 1) : this.spd * g.diff.speed) * g.move * (g.diff.foePace ?? 1);
     if (this.slowT > 0) sp *= 1 - this.slowF;
+    if (this.hasteT > 0) {
+      this.hasteT -= dt;
+      sp *= this.hasteK;
+    }
     if (this.freezeT > 0 || this.rootT > 0 || this.lullT > 0) sp = 0;
     if (this.holdCd > 0) this.holdCd -= dt;
     if (this.holdT > 0) {

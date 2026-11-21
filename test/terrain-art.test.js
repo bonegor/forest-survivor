@@ -19,6 +19,7 @@ import { RELIC_EXPANSION_ART } from '../public/js/art/expansion-relics.js';
 import { MONSTER_ART } from '../public/js/art/monsters.js';
 import { BOSS_ART } from '../public/js/art/bosses.js';
 import { PICKUP_ART, PROJECTILE_ART, ICON_ART } from '../public/js/art/items.js';
+import { PRESSURE_ART } from '../public/js/art/monsters-pressure.js';
 import { PROC_ART } from '../public/js/art/procgen.js';
 import { PROP_ART } from '../public/js/art/props.js';
 import { LANDMARK_ART } from '../public/js/art/landmarks.js';
@@ -100,7 +101,7 @@ test('no name is in two of the art tables, but for the reforged bosses drawn ove
   // In art/defs.js's order: the reforged bosses (bosses-reforged.js) come after the night's and the
   // maps' bosses, and each of them replaces one of those, as intended; any other name in two tables
   // is a mistake, the later one silently drawn in place of the first.
-  const tables = [HERO_ART, MONSTER_ART, BOSS_ART, PICKUP_ART, PROJECTILE_ART, ICON_ART, RELIC_EXPANSION_ART, PROC_ART, PROP_ART, LANDMARK_ART,
+  const tables = [HERO_ART, MONSTER_ART, PRESSURE_ART, BOSS_ART, PICKUP_ART, PROJECTILE_ART, ICON_ART, RELIC_EXPANSION_ART, PROC_ART, PROP_ART, LANDMARK_ART,
     PALADIN_ITEMS, DRUID_ITEMS, BERSERKER_ITEMS, WITCHHUNTER_ITEMS, MAP_MONSTER_ART, MAP_BOSS_ART, REFORGED_BOSS_ART,
     FLORA_DESERT, FLORA_FROZEN, FLORA_MEADOW, FLORA_HELL, TERRAIN_ART, COPPER_ART];
   const seen = new Map();

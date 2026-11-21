@@ -4,6 +4,7 @@ import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { oathFlags } from '../data/oaths.js';
 import { BOONS, trophyChoices } from '../data/boons.js';
 import { FUSION, fusionOf, infuseOf } from '../data/fusions.js';
+import { Gas, shieldTakes } from './pressure.js';
 import { STALL, WARES, price } from './stall.js';
 import { lastMoments } from '../shared/history.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
@@ -1407,6 +1408,8 @@ export class Game {
       }
       d *= rand(0.9, 1.1);
       if (e.mod && e.mod.id === 'stone') d *= 0.65;
+      // A Shieldbearer's shield (game/pressure.js): a blow from the hero's side of it, the less.
+      if (e.def.shield) d *= shieldTakes(e, o, p);
       // Shatter (reactions.js): Frozen Heart's shards and, since 21 November 2026, every heavy
       // blow strike a frozen foe half again as hard, and a heavy one marks it to burst if it dies so.
       if (e.freezeT > 0 && (o.shatter || (!o.noReact && isHeavy(o.w)))) {
@@ -1553,6 +1556,9 @@ export class Game {
     if (e.shatterOnDeath && e.freezeT > 0) {
       explode(this, e.x, e.y, 22, 16 * (1 + this.phase * 0.05), null, 'frost', { kb: 1 });
     }
+    // The pressure kinds (game/pressure.js): a Bloater's gas where it burst; what a Gem Eater ate.
+    if (e.def.burst) this.effects.push(new Gas(this, e.x, e.y));
+    if (e.ate > 0) this.dropGem(e.x, e.y, e.ate);
   }
 
   deathFx(e, fr, sprite = e.spr) {

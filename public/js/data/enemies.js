@@ -43,6 +43,13 @@ export const ENEMIES = {
   },
   ogre: { name: 'Cyclops Ogre', sprite: 'ogre', hp: 300, spd: 24, dmg: 20, r: 10, xp: 30, ai: 'walker', mass: 8, anim: 3, death: 'blood', kbRes: 0.9 },
   deathknight: { name: 'Death Knight', sprite: 'deathknight', hp: 190, spd: 40, dmg: 15, r: 6, xp: 22, ai: 'walker', mass: 4, anim: 4, death: 'dark', kbRes: 0.8 },
+  // The pressure kinds (G10 of 21 November 2026, game/pressure.js): a Bloater bursts into gas where
+  // it dies (burst), a Shieldbearer's shield takes `shield` of a blow from the hero's side, a Shaman
+  // rallies the horde about it (rally), a Gem Eater runs for soul gems and gives back what it ate.
+  bloater: { name: 'Bloater', sprite: 'bloater', hp: 40, spd: 26, dmg: 7, r: 6, xp: 4, ai: 'walker', mass: 1.6, anim: 3.5, death: 'goo', burst: true },
+  shieldbearer: { name: 'Shieldbearer', sprite: 'shieldbearer', hp: 60, spd: 30, dmg: 8, r: 6, xp: 6, ai: 'walker', mass: 2.5, anim: 4, death: 'bones', kbRes: 0.7, shield: 0.7 },
+  shaman: { name: 'Shaman', sprite: 'shaman', hp: 45, spd: 28, dmg: 5, r: 5, xp: 6, ai: 'shaman', mass: 1.2, anim: 4, death: 'dark', rally: { r: 70, every: 3.5, haste: 1.3, dur: 3, heal: 0.08 } },
+  gemeater: { name: 'Gem Eater', sprite: 'gemeater', hp: 35, spd: 40, dmg: 6, r: 5, xp: 3, ai: 'gemeater', mass: 1.2, anim: 6, death: 'blood', eats: { r: 140, pace: 1.15 } },
   // Each of a crypt's lords (Spawner.spawnLord), boss-sized: it keeps its distance and shoots.
   // The archetype's base health is 600. spawnLord applies CRYPT_LORD.health before difficulty
   // and map scaling: 14,400 in the Darkwood on Elite, 4,320 on Normal/Veteran.

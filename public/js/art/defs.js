@@ -21,6 +21,7 @@
 
 import { HERO_ART } from './heroes.js';
 import { MONSTER_ART } from './monsters.js';
+import { PRESSURE_ART } from './monsters-pressure.js';
 import { BOSS_ART } from './bosses.js';
 import { PICKUP_ART, PROJECTILE_ART, ICON_ART } from './items.js';
 import { RELIC_EXPANSION_ART } from './expansion-relics.js';
@@ -43,7 +44,7 @@ import { COPPER_ART } from './eanasir.js';
 import { REFORGED_BOSS_ART } from './bosses-reforged.js';
 
 // The art as drawn, and as the game draws it: with the colour tunes baked from the sprite tuner.
-export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...RELIC_EXPANSION_ART, ...PROC_ART, ...PROP_ART, ...LANDMARK_ART,
+export const DRAWN = { ...HERO_ART, ...MONSTER_ART, ...PRESSURE_ART, ...BOSS_ART, ...PICKUP_ART, ...PROJECTILE_ART, ...ICON_ART, ...RELIC_EXPANSION_ART, ...PROC_ART, ...PROP_ART, ...LANDMARK_ART,
   // the four heroes of 20 October 2026: their weapons' icons and what those put on the field
   ...PALADIN_ITEMS, ...DRUID_ITEMS, ...BERSERKER_ITEMS, ...WITCHHUNTER_ITEMS,
   // the new Survival maps of 28 October 2026 (data/maps.js): their horde, their bosses, and the
