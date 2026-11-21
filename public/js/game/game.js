@@ -2,6 +2,7 @@
 
 import { diffFor, nightmareFor, moveFor } from '../data/difficulty.js';
 import { oathFlags } from '../data/oaths.js';
+import { BOONS, trophyChoices } from '../data/boons.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
 import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
@@ -335,6 +336,8 @@ export class Game {
     this.sigMiss = { lvl: null, before: 0, n: 0 };
     this.banished = new Set(); // 'weapon:axe', 'passive:might': out of the run (the level-up's BANISH)
     this.chestQueue = [];
+    this.trophyQueue = []; // a boss's trophies picked up, each its boons to choose from (ui/trophy.js)
+    this.bossPatches = []; // a map boss's quicksand and ice lying a while (boss-mechanics.js)
     this.showMap = false;
     this.floor = 1;
     this.objective = '';
@@ -996,6 +999,7 @@ export class Game {
   // evolves them all (the Phoenix Heart, which evolving doesn't use up).
   evolvable() {
     const p = this.player;
+    if (p.noEvolve) return []; // the Hollow Crown (data/boons.js)
     const any = [...p.passives.keys()].some((id) => PASSIVES[id].evolvesAny);
     return p.weapons.filter((w) => !w.evolved && w.level >= MAX_WEAPON_LEVEL && w.def.evo &&
       (w.def.evo.onlyPartner ? p.passives.has(w.def.evo.with) : any || p.passives.has(w.def.evo.with)));
@@ -1049,6 +1053,27 @@ export class Game {
   openChest(opts = {}) {
     this.chestQueue.push(opts.kind || 'elite');
     this.stats.chests++;
+  }
+
+  // A boss's trophy taken (pickups.js): its boons drawn now, to choose from once the screens before
+  // it have had their turn (ui/trophy.js); none if the hero already has every boon.
+  takeTrophy() {
+    const ids = trophyChoices(this.player.boons);
+    if (ids.length) this.trophyQueue.push({ title: 'TROPHY', cards: ids.map((id) => ({ kind: 'boon', id })) });
+  }
+
+  // What a trophy's card shows (ui/trophy.js): its name, icon, text and colour.
+  cardInfo(c) {
+    const b = BOONS[c.id];
+    return { name: b.name, icon: b.icon, desc: b.desc, color: '#f6757a' };
+  }
+
+  // A trophy's card taken: the boon is his for the run. What the banner says of it.
+  takeCard(c) {
+    const p = this.player;
+    p.boons.add(c.id);
+    p.recompute();
+    return { name: BOONS[c.id].name, sub: 'Yours for the rest of the night' };
   }
 
   // The director of the big beats. A boss or a crypt lord slain, a revive: for `secs` of real
@@ -1236,6 +1261,9 @@ export class Game {
       e.slowT = Math.max(e.slowT, o.slowT || 1.5);
       e.slowF = Math.max(e.slowF, o.slow);
     }
+    // The Frost-Bound Sigil (data/boons.js): any blow (not a burn's tick or a splash) may freeze.
+    const frosted = p.frostHit > 0 && !o.tick && !o.raw && !o.noReact && !e.boss && !e.prop && Math.random() < p.frostHit;
+    if (frosted && e.freezeT <= 0) e.freezeT = 1.6;
     if (o.freeze && !e.boss && !e.prop && (o.freeze >= 1 || Math.random() < o.freeze)) {
       if (e.freezeT <= 0) this.particles.burst(e.x, e.y - 6, 4, 6, [PC.w, PC.c], 40, 0.4, 1, P.GLOW | P.FADE, {});
       e.freezeT = Math.max(e.freezeT, 1.6);
@@ -1285,6 +1313,7 @@ export class Game {
     p.furyKill(e);
     // Kills that heal: the Paladin's Devotion (a little, KILL_HEAL), Red Frenzy's (FRENZY.heal each).
     if (p.hero.stats.killHeal) p.leech(p.hero.stats.killHeal);
+    if (p.boonLeech) p.leech(p.boonLeech); // the Blood Pact (data/boons.js)
     if (p.ult && p.ult.type === 'frenzy') p.heal(p.maxHp * FRENZY.heal, true);
     if (o.w) {
       o.w.kills++;
@@ -1511,6 +1540,9 @@ export class Game {
     for (let i = 0; i < 18; i++) this.addPickup('coin', at.x, at.y, 2);
     this.addPickup('goldpile', at.x, at.y, 60);
     this.addPickup('elixir', at.x + rand(-10, 10), at.y + rand(-10, 10));
+    // Its trophy beside its chest (G7, 21 November 2026): walked over, a choice of boons the hero
+    // hasn't (data/boons.js, trophyCards), while any is left.
+    if (trophyChoices(p.boons).length) this.addPickup('trophy', at.x + 16, at.y + 4, 0);
     // A Dungeon Run guardian's gear is secured directly, without a pickup on the ground.
     let gear = null;
     if (this.mode === 'dungeon') {
@@ -1817,7 +1849,8 @@ export class Game {
         this.stats.gold += v;
       } else if (pk.kind === 'item') this.queueItem(pk.opts.item);
       else if (pk.kind === 'chest') this.openChest(pk.opts);
-      else if (pk.kind === 'elixir' && !this.inCrypt) p.heal(p.maxHp);
+      else if (pk.kind === 'trophy') this.takeTrophy();
+      else if (pk.kind === 'elixir' && !this.inCrypt) p.heal(p.maxHp * p.potionMul);
       pk.dead = true;
     }
   }
@@ -2196,7 +2229,7 @@ export class Game {
   useShrine(s) {
     s.used = true;
     const p = this.player;
-    p.addBuff(s.type, 30);
+    p.addBuff(s.type, 30 * p.shrineMul); // twice as long under the Lantern of Truth (data/boons.js)
     if (s.type === 'protection') p.heal(p.maxHp * 0.25);
     const [title, sub] = SHRINE_INFO[s.type];
     this.banner(title, sub, SHRINE_COLORS[s.type], 2.6);

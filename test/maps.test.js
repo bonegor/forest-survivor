@@ -136,8 +136,9 @@ test('each map at least as hard as the one before it, its monsters\' health with
 });
 
 test('every new kind is the Darkwood kind it stands for in all but its looks: its health above all', () => {
-  // A kind's own: what it is called and looks like, how it dies, and a boss's own attacks.
-  const OWN = new Set(['name', 'title', 'sprite', 'death', 'color', 'split', 'shot', 'scale', 'kit', 'bolt', 'summon', 'blast', 'lines', 'sparks']);
+  // A kind's own: what it is called and looks like, how it dies, and a boss's own attacks (and
+  // since 21 November 2026 his map's own mechanic, game/boss-mechanics.js).
+  const OWN = new Set(['name', 'title', 'sprite', 'death', 'color', 'split', 'shot', 'scale', 'kit', 'bolt', 'summon', 'blast', 'lines', 'sparks', 'mech']);
   for (const [id, kind] of Object.entries(STANDS_FOR)) {
     const def = ENEMIES[id], base = ENEMIES[kind];
     assert.ok(def && base, `${id} stands for ${kind}`);

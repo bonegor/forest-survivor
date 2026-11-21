@@ -4,6 +4,7 @@ import { fmtNum } from '../engine/util.js';
 import { FILLERS, PASSIVES } from '../data/passives.js';
 import { MAX_WEAPON_LEVEL } from '../data/weapons.js';
 import { isCopper } from '../data/copper.js';
+import { BOONS } from '../data/boons.js';
 
 const CELL = 19, ROW = 20, BORDER = 4, HEADER = 11, GUTTER = 5;
 const SHRINES = { fury:'i_might', haste:'i_cooldown', fortune:'i_greed', wisdom:'i_growth', protection:'i_armor' };
@@ -35,6 +36,8 @@ export function loadoutItems(g, held) {
     if (rank) powers.push({ name:def.name, icon:def.icon, rank, blessing:true });
   }
   if (g.skulls) powers.push({ name:'Cursed Skull', icon:'i_skull', rank:g.skulls });
+  // The boons a boss's trophy gave (data/boons.js): one each, no ranks.
+  for (const id of p.boons || []) powers.push({ name:BOONS[id].name, icon:BOONS[id].icon, rank:1, boon:true });
   for (const [id, buff] of p.buffs) {
     const icon = SHRINES[id] || 'i_' + id;
     if (SPR[icon] && buff.t > 0) powers.push({ buff:id, icon, seconds:Math.ceil(buff.t), fraction:buff.t/buff.max });

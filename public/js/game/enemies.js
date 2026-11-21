@@ -15,7 +15,7 @@ import { rand, TAU, clamp, pick, makeCanvas, chance } from '../engine/util.js';
 import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { EnemyShot } from './projectiles.js';
-import { BOSS_AI } from './bosses.js';
+import { bossAI } from './bosses.js';
 import { bossFrame } from './boss-animation.js';
 import { merchantAI } from './eanasir-boss.js';
 import { faceAlong, faceAttack } from './facing.js';
@@ -336,7 +336,7 @@ export class Enemy {
     this.speech = null;
     this.shake = 0;
     // A boss fights as his kit's (data/enemies.js kit: a new map's boss with a night boss's attacks).
-    this.ai = def.ai === 'eanasir' ? merchantAI : this.boss ? BOSS_AI[def.kit ?? type] : null;
+    this.ai = def.ai === 'eanasir' ? merchantAI : this.boss ? bossAI(def, type) : null;
     this.data = {};
     if (this.mod && this.mod.id === 'swift') this.spd *= 1.45;
     if (this.mod && this.mod.id === 'brutal') this.dmg *= 1.5;

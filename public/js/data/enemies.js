@@ -162,19 +162,19 @@ const MAP_KINDS = [
   // Their bosses (data/maps.js bosses): the last of the night on the Sunscorch, the Frostfell and the
   // Bloomvale; in the Abyss its second, before Azgaroth.
   ['pharaoh', 'boneking', {
-    name: 'Neferkhet', title: 'The Undying Pharaoh', scale: 57 / 28, death: 'sand', color: '#fee761', kit: 'boneking', bolt: 'firebolt', summon: 'mummy', blast: 'holy',
+    name: 'Neferkhet', title: 'The Undying Pharaoh', scale: 57 / 28, death: 'sand', color: '#fee761', kit: 'boneking', bolt: 'firebolt', summon: 'mummy', blast: 'holy', mech: 'sands',
     lines: { summon: ['RISE FROM THE SANDS!', 'KNEEL BEFORE YOUR PHARAOH!', 'MY TOMB IS YOUR GRAVE!'] },
   }],
   ['frostgiant', 'butcher', {
-    name: 'Hrimgar', title: 'The Frost Giant', scale: 57 / 28, death: 'ice', color: '#2ce8f5', kit: 'butcher', blast: 'frost', sparks: 'wGX',
+    name: 'Hrimgar', title: 'The Frost Giant', scale: 57 / 28, death: 'ice', color: '#2ce8f5', kit: 'butcher', blast: 'frost', sparks: 'wGX', mech: 'rime',
     lines: { enrage: 'NOW YOU FREEZE!', dash: ['CRUSH!', 'NOWHERE TO RUN!', 'FALL BEFORE WINTER!'] },
   }],
   ['thornqueen', 'lich', {
-    name: 'Sylvaine', title: 'The Thorn Queen', scale: 57 / 28, death: 'sap', color: '#b55088', kit: 'lich', bolt: 'queenthorn', summon: 'pixie', sparks: 'iPYL',
+    name: 'Sylvaine', title: 'The Thorn Queen', scale: 57 / 28, death: 'sap', color: '#b55088', kit: 'lich', bolt: 'queenthorn', summon: 'pixie', sparks: 'iPYL', mech: 'briars',
     lines: { summon: ['BLOOM, MY CHILDREN!', 'THE THORNS REMEMBER YOU.', 'SLEEP AMONG MY ROSES.'] },
   }],
   ['pitlord', 'boneking', {
-    name: 'Belzakor', title: 'The Pit Lord', scale: 57 / 28, death: 'ash', color: '#be4a2f', kit: 'boneking', bolt: 'firebolt', summon: 'fiend', blast: 'fire',
+    name: 'Belzakor', title: 'The Pit Lord', scale: 57 / 28, death: 'ash', color: '#be4a2f', kit: 'boneking', bolt: 'firebolt', summon: 'fiend', blast: 'fire', mech: 'fault',
     lines: { summon: ['TO ME, MY LEGION!', 'KNEEL BEFORE THE PIT!', 'THE ABYSS HUNGERS!'] },
   }],
 ];

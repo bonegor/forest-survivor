@@ -18,6 +18,7 @@ import { BoneKingSweepWarning } from './boneking-sweep-fx.js';
 import { PC, P } from './particles.js';
 import { faceAttack } from './facing.js';
 import { foeName, shotName, bossOf } from './names.js';
+import { runMech } from './boss-mechanics.js';
 
 const distP = (e) => Math.hypot(e.g.player.x - e.x, e.g.player.y - e.y);
 const angP = (e) => Math.atan2(e.g.player.y - e.y, e.g.player.x - e.x);
@@ -139,6 +140,29 @@ function warnBoneKingSweep(e) {
       }
     },
   }));
+}
+
+// A boss's AI (Enemy.ai): its kit's, and a map boss's mechanic of his own after it (def.mech,
+// boss-mechanics.js), the kit standing still while Sylvaine is dazed by a loop of the Fae Thread.
+// One function a boss kind, made once.
+const AI_OF = new Map();
+export function bossAI(def, type) {
+  const kit = BOSS_AI[def.kit ?? type];
+  if (!def.mech || !kit) return kit;
+  let ai = AI_OF.get(type);
+  if (!ai) {
+    ai = (e, dt) => {
+      if (e.data.dazedT > 0) {
+        e.data.dazedT -= dt;
+        return [0, 0, 0];
+      }
+      const r = kit(e, dt);
+      runMech(e, dt);
+      return r;
+    };
+    AI_OF.set(type, ai);
+  }
+  return ai;
 }
 
 export const BOSS_AI = {

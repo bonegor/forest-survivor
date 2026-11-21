@@ -2,6 +2,7 @@
 
 import {PHOENIX_HEART_ICON} from './icons/phoenix-heart.js';
 import {EXILE_ICON} from './icons/exile.js';
+import {BOON_ICONS} from './icons/boons.js';
 import { SIGNATURE_ICONS } from './icons/hero-signatures.js';
 
 export const PICKUP_ART = {
@@ -457,6 +458,8 @@ export const ICON_ART = {
   ...SIGNATURE_ICONS,
   i_phoenix: PHOENIX_HEART_ICON,
   i_banish: EXILE_ICON,
+  // The boons and a boss's trophy (data/boons.js, 21 November 2026).
+  ...BOON_ICONS,
   // ---------------------------------------------------------------- weapons
   i_sword: {
     frames: [[

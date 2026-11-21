@@ -29,6 +29,7 @@ import { PC, P } from './particles.js';
 import { MAGNETIC } from './pickups.js';
 import { THREAD, Thread, area, inside, simplify, rasterCircle, strawPalette } from './fae-thread.js';
 import { sampleField, TMAX, TCHUNK } from './topology/terrain.js';
+import { daze } from './boss-mechanics.js';
 
 const CH = TCHUNK;
 // The moonblooms' sprites (art/flora-meadow.js; bloom_flower3 should one be missing), by kind (1, 2).
@@ -269,6 +270,9 @@ export class FaeCourt {
     g.grid.query(cx, cy, R + 1, TMP);
     for (let i = 0; i < TMP.length; i++) {
       const e = TMP[i];
+      // The Thorn Queen herself (G3, 21 November 2026): no boss ever sleeps, but she is dazed, her
+      // briars and her spells held a moment (boss-mechanics.js daze).
+      if (e.boss && e.def.mech === 'briars' && !e.dead && inside(S.poly, n, e.x, e.y)) daze(e);
       if (!e.movable || !inside(S.poly, n, e.x, e.y)) continue;
       e.lullT = T.lull;
       e.lockT = 0;

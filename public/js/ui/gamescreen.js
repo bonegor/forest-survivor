@@ -29,6 +29,7 @@ import { MusicMenu } from './music-menu.js';
 import { MenuDialog } from './menu-dialog.js';
 import { makeRunId } from '../shared/spoils.js';
 import { SpoilsReveal, SpoilsSelection, drawRewardReel, reelProgress } from './reward-reels.js';
+import { TrophyOverlay } from './trophy.js';
 import { cardReaction } from '../data/reactions.js';
 import { heatOf } from '../data/oaths.js';
 import { recordDaily } from '../data/daily.js';
@@ -161,6 +162,10 @@ export class GameScreen {
       } else if (ready && g.chestQueue.length) {
         g.state = 'chest';
         this.open(new ChestOverlay(this, g.chestQueue.shift()));
+      } else if (ready && g.trophyQueue.length) {
+        // A boss's trophy after the chests (G7): its boons, held still as a chest is.
+        g.state = 'chest';
+        this.open(new TrophyOverlay(this, g.trophyQueue.shift()));
       }
       if (g.state === 'over') this.open(new ResultsOverlay(this));
     } else if (!app.devHold) {

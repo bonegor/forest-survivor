@@ -7,6 +7,7 @@ import { rand } from '../engine/util.js';
 import { shadowSprite, glow, glint, beamSprite } from './fxsprites.js';
 import { tierOf, chestFrame } from './chests.js';
 import { PC, P } from './particles.js';
+import { MISER_FURY } from '../data/boons.js';
 
 // From the richest: [least XP, sprite, glow, light, palette key of its twinkles].
 const GEM_TIERS = [
@@ -33,6 +34,7 @@ const LOOK = {
   map: { sprite: 'map', glow: '#feae34', light: 'gold' },
   skull: { sprite: 'skull', glow: '#e43b44', light: 'red', anim: 2 },
   chest: { sprite: 'chest', glow: '#feae34', light: 'gold' },
+  trophy: { sprite: 'i_trophy', glow: '#f6757a', light: 'red' }, // a boss's (Game.takeTrophy)
 };
 
 // The light a piece of gear casts, by rarity.
@@ -219,6 +221,7 @@ export class Pickup {
         g.coinCombo = g.coinComboT > 0 ? Math.min(g.coinCombo + 1, COIN_COMBO.cap) : 0;
         g.coinComboT = COIN_COMBO.window;
         sfx('coin', { pitch: 1 + g.coinCombo * COIN_COMBO.step });
+        if (p.goldFury) p.addFury(this.kind === 'goldpile' ? MISER_FURY.pile : MISER_FURY.coin); // Miser's Ring
         if (this.kind === 'goldpile') {
           g.numbers.add(p.x, p.y - 20, v, 'gold');
           g.hud.fling(this.x, this.y); // a coin off the pile to the gold counter
@@ -227,11 +230,12 @@ export class Pickup {
         break;
       }
       case 'potion':
-        p.heal(Math.round(p.maxHp * 0.3));
+        // Halved by the Lantern of Truth, nothing under the Blood Pact (data/boons.js).
+        if (p.potionMul > 0) p.heal(Math.round(p.maxHp * 0.3 * p.potionMul));
         g.particles.burst(p.x, p.y - 8, 2, 14, [PC.L, PC.l, PC.w], 50, 0.6, 1, P.GLOW | P.FADE, { vz: 60 });
         break;
       case 'elixir':
-        p.heal(p.maxHp);
+        if (p.potionMul > 0) p.heal(p.maxHp * p.potionMul);
         g.particles.burst(p.x, p.y - 8, 2, 24, [PC.Y, PC.l, PC.w], 70, 0.8, 1, P.GLOW | P.FADE, { vz: 70 });
         break;
       case 'magnet':
@@ -259,7 +263,7 @@ export class Pickup {
       case 'fury': {
         // The fury is his at once; the look follows: a comet to the HUD orb (Hud.comet).
         const was = p.fury;
-        p.addFury(40);
+        if (!p.goldFury) p.addFury(40); // nothing under Miser's Ring (data/boons.js)
         g.hud.comet(this.x, this.y, p.fury - was);
         sfx('pick');
         g.particles.burst(p.x, p.y - 8, 2, 16, [PC.P, PC.i, PC.w], 70, 0.6, 1, P.GLOW | P.FADE, { vz: 60 });
@@ -267,6 +271,10 @@ export class Pickup {
       }
       case 'chest':
         g.openChest(this.opts);
+        break;
+      case 'trophy':
+        g.takeTrophy();
+        sfx('chestopen');
         break;
       case 'item':
         g.queueItem(this.opts.item);
@@ -336,7 +344,7 @@ export class Pickup {
     const sx = (this.x - cam.x) * S, sy = (this.y - this.z - 3 - cam.y) * S;
     if (sx < -60 || sy < -60 || sx > cam.pxW + 60 || sy > cam.pxH + 60) return;
     if (this.kind === 'gem') return this.drawBling(ctx, S, sx, sy);
-    const big = this.kind === 'chest' || this.kind === 'relic' || this.kind === 'elixir' || this.kind === 'item';
+    const big = this.kind === 'chest' || this.kind === 'relic' || this.kind === 'elixir' || this.kind === 'item' || this.kind === 'trophy';
     const s = (big ? 40 * (this.scale || 1) : this.kind === 'gem' ? 12 : 14) * S;
     if (this.kind === 'item') this.drawPillar(ctx, cam, sx, sy);
     // EVOLVE READY: while a weapon waits on a chest to evolve, every chest lying about glows orange.

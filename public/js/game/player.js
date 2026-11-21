@@ -11,6 +11,8 @@ import { faceAlong, faceAttack } from './facing.js';
 import { foeName } from './names.js';
 import { SURFACE } from './topology/index.js';
 import { pilgrimStep, sealDamage } from './expansion-relics.js';
+import { boonStats } from '../data/boons.js';
+import { bossPatchAt } from './boss-mechanics.js';
 
 export const BASE_SPEED = 70;
 export const BASE_MAGNET = 42;
@@ -146,6 +148,7 @@ export class Player {
     this.hastes = 0; // and the Blessings of Haste and Reach taken (data/passives.js BLESSING)
     this.reaches = 0;
     this.overcharges = 0; // Overcharges taken, of every weapon (Weapon.over, Game.applyChoice)
+    this.boons = new Set(); // the boons a boss's trophy gave (data/boons.js): they last the run
     this.weapons = [];
     this.gearWeapons = [];
     this.strikeAt = null; // when the last blow struck by hand began (Game.strike)
@@ -225,7 +228,7 @@ export class Player {
     const lv = levelBonus(this.level), regenMul = h.regenMul || 1, B = BLESSING;
     // The night's oaths (data/oaths.js): Glass halves his health, Iron takes all his armor.
     const oath = this.g.oath;
-    return {
+    const d = {
       maxHp: Math.round((h.maxHp ?? 100) * m.maxHp * (1 + bonus('maxHp') + this.blessings * B.maxHp) * lv.hp * (oath?.glass ? 0.5 : 1)),
       armor: oath?.iron ? 0 : (h.armor || 0) + m.armor + bonus('armor') + lv.armor,
       speedMul: (h.speed || 1) * m.speed * (1 + bonus('speed')),
@@ -261,7 +264,18 @@ export class Player {
       battleFury: bonus('battleFury'),
       marchHeal: bonus('marchHeal'),
       critMult: 2 + q.critMult,
+      // What the boons bend (data/boons.js boonStats), as they stand with none: blows taken, a
+      // hit's chance to freeze, shrines' time, potions' heal, a kill's heal, gold into fury, and
+      // whether anything may evolve.
+      hurtMul: 1,
+      frostHit: 0,
+      shrineMul: 1,
+      potionMul: 1,
+      boonLeech: 0,
+      goldFury: false,
+      noEvolve: false,
     };
+    return boonStats(d, this.boons);
   }
 
   recompute() {
@@ -391,9 +405,12 @@ export class Player {
   // once he is ICE.leave px off it his steering is his again, his pace easing from the slide's.
   // `landed`: a leap came down this frame.
   groundUnder(g, landed, dt) {
-    const w = g.world, s = w.surfaceAt(this.x, this.y);
+    // A map boss's own quicksand or ice (boss-mechanics.js: Neferkhet's, Hrimgar's) over the map's.
+    const w = g.world, bp = g.bossPatches?.length ? bossPatchAt(g, this.x, this.y) : null;
+    const s = bp ? bp.surface : w.surfaceAt(this.x, this.y);
+    const depth = () => (bp ? bp.depth : w.patchDepth(this.x, this.y));
     if (s === SURFACE.QUICKSAND && !this.leap) {
-      const k = clamp(w.patchDepth(this.x, this.y) / QUICKSAND.enter, 0, 1);
+      const k = clamp(depth() / QUICKSAND.enter, 0, 1);
       this.wade = k * k * (3 - 2 * k);
     } else this.wade = 0;
     if (this.sink || this.wade) {
@@ -401,7 +418,7 @@ export class Player {
       this.sink = this.sink < to ? Math.min(to, this.sink + most) : Math.max(to, this.sink - most);
     }
     if (s !== SURFACE.ICE && !this.slide && !this.onIce) return;
-    const pd = w.patchDepth(this.x, this.y);
+    const pd = depth();
     if (s === SURFACE.ICE && pd > ICE.enter && !this.slide && !this.held && !this.leap) {
       const v = Math.hypot(this.vx, this.vy);
       if (v > ICE.start && !landed) this.slide = { x: this.vx / v, y: this.vy / v };
@@ -682,7 +699,7 @@ export class Player {
     if (this.buff('protection')) dmg *= 0.5;
     if (kind !== 'projectile' && this.ult?.type === 'whirlwind') dmg *= 0.5;
     // Normal halves what he takes, after all of that (difficulty.js hurt). A blow always lands.
-    dmg = sealDamage(this, Math.max(1, Math.round(dmg * g.diff.hurt)));
+    dmg = sealDamage(this, Math.max(1, Math.round(dmg * g.diff.hurt * this.hurtMul))); // the Ember Crown's 10% more
     this.hp -= dmg;
     this.lastBlow = by || (src ? foeName(src) : null);
     // A moment's grace before the next blow can land: 0.22 s (the owner's, 23 October 2026; 0.6 s
