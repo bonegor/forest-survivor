@@ -1819,6 +1819,14 @@ class ResultsOverlay {
   submit(claimIndices) {
     const res = this.res;
     this.reward = null;
+    // SAVE AGAIN starts the gold's count afresh: the unsaved line had marked it landed, and a save
+    // that then went through showed +0 GOLD.
+    this.landed = false;
+    this.shown = 0;
+    this.goldAt = null;
+    this.plan = null;
+    this.stamped = 0;
+    this.stampAt = null;
     this.report ??= {
       mode: res.mode, map: res.map, diff: res.diff, nightmare: res.nightmare, hero: res.hero, victory: res.victory, died: res.died, time: res.time, gold: res.gold, kills: res.kills, combo: res.combo, level: res.level, bosses: res.bosses, evolved: res.evolved, evos: res.evos, floor: res.floor,
       gear: res.gear, realTime: res.realTime, found: res.found, copperWeapons: res.copperWeapons,
