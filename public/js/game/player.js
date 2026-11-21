@@ -13,6 +13,7 @@ import { SURFACE } from './topology/index.js';
 import { pilgrimStep, sealDamage } from './expansion-relics.js';
 import { boonStats } from '../data/boons.js';
 import { bossPatchAt } from './boss-mechanics.js';
+import { RECENT } from '../shared/history.js';
 
 export const BASE_SPEED = 70;
 export const BASE_MAGNET = 42;
@@ -157,6 +158,7 @@ export class Player {
     this.fury = 0;
     this.furyFullAt = null; // when the orb last filled (addFury)
     this.lastBlow = null; // who struck the last blow, as the results name it (hurt)
+    this.recent = []; // the blows of the last RECENT s (hurt): { t, who, dmg }, for a fall's last moments (shared/history.js)
     this.recentKills = 0; // the horde's kills, each fading over FURY.window seconds (killShare)
     this.ult = null; // active ultimate state
     this.invuln = 0;
@@ -717,6 +719,9 @@ export class Player {
     // shooter's (names.js).
     const who = src ? src.def.name : boss || by || 'Unknown';
     g.stats.wounds[who] = (g.stats.wounds[who] || 0) + dmg;
+    // The last moments' blows, kept RECENT s (the results of a fall tell them: shared/history.js).
+    this.recent.push({ t: g.clock, who, dmg });
+    while (this.recent[0].t < g.clock - RECENT) this.recent.shift();
     g.stats.minHp = Math.min(g.stats.minHp, Math.max(0, this.hp) / this.maxHp);
     // No number for his own wounds (the owner's, 28 October 2026: "not shown when deal on hero"):
     // the screen's red flash, the shake and his bar tell them.

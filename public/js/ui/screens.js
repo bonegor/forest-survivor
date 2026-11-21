@@ -25,6 +25,7 @@ import { CombatMusicPicker } from './music-picker.js';
 import { OathPicker } from './oath-picker.js';
 import { validOaths, heatOf } from '../data/oaths.js';
 import { dailyKey, dailyNight, dailyDate, dailyLine, dailyOaths } from '../data/daily.js';
+import { historyRow } from '../shared/history.js';
 import { MusicMenu } from './music-menu.js';
 
 const UP_ICONS = {
@@ -988,12 +989,13 @@ export class RecordsScreen {
     if (this.dialog) { if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null;ui.focus('records_ranked');ui.lock(0.2); }return; }
     ui.begin(dt);
     // Three tabs side by side, narrower on a narrow screen.
-    const tabs = ['overview', 'heroes', 'ranked', 'daily'], tw = Math.min(100, Math.floor((W - 24 - 8 * (tabs.length - 1)) / tabs.length));
+    const tabs = ['overview', 'heroes', 'ranked', 'daily', 'history'], tw = Math.min(100, Math.floor((W - 24 - 8 * (tabs.length - 1)) / tabs.length));
     const tx = Math.round(W / 2 - (tabs.length * tw + 8 * (tabs.length - 1)) / 2);
     for (const [i, id] of tabs.entries()) if (button(ctx, ui, 'records_' + id, tx + i * (tw + 8), 28, tw, 15, id.toUpperCase(), { on: this.tab === id })) this.tab = id;
     if (this.tab === 'heroes') this.drawHeroes(ctx, W, H, p);
     if (this.tab === 'daily') this.drawDaily(ctx, W, H);
-    const rows = this.tab === 'heroes' || this.tab === 'daily' ? [] : this.tab === 'overview' ? [
+    if (this.tab === 'history') this.drawHistory(ctx, W, H);
+    const rows = this.tab === 'heroes' || this.tab === 'daily' || this.tab === 'history' ? [] : this.tab === 'overview' ? [
       ['Nights won', String(p.wins.s15.reduce((a,b) => a+b, 0))],
       ['Dungeons cleared', String(p.wins.dungeon.reduce((a,b) => a+b, 0))],
       ['Runs played', fmtNum(p.runs)], ['Monsters slain', fmtNum(p.kills)],
@@ -1015,6 +1017,27 @@ export class RecordsScreen {
     });
     if (button(ctx, ui, 'back', 14, H - 20, 50, 13, 'BACK', { fallback: true })) app.go('title');
     ui.end();if (input.pressed('back')) app.go('title');
+  }
+
+  // HISTORY (G12 of the 21 November 2026 review, shared/history.js): the last runs, the latest first,
+  // each its day, hero, map or trial and time on the clock, and how it ended.
+  drawHistory(ctx, W, H) {
+    const list = this.app.settings.history || [];
+    const w = Math.min(380, W - 24), x = Math.round((W - w) / 2), step = Math.min(22, Math.floor((H - 86) / Math.max(1, list.length)));
+    if (!list.length) {
+      drawText(ctx, 'No run kept yet', W / 2, 70, { align: 'center', color: '#8b9bb4' });
+      return;
+    }
+    panel(ctx, x, 54, w, list.length * step + 12, { rivets: false, fill: '#15131f' });
+    list.forEach((e, i) => {
+      const y = 61 + i * step;
+      if (i % 2 === 0) { ctx.fillStyle = '#1d1b2a';ctx.fillRect(x + 3, y - 2, w - 6, step); }
+      const place = MAPS[e.m]?.name || MODES[e.m]?.name || '';
+      const [what, how] = historyRow(e, HEROES[e.h]?.title || '', place);
+      drawText(ctx, fitLine(what, w - 20), x + 10, y, { color: '#c0cbdc' });
+      if (step >= 18) drawText(ctx, fitLine(how, w - 20), x + 10, y + 9, { color: e.v ? '#9ee562' : e.x ? '#f6757a' : '#8b9bb4' });
+      else drawText(ctx, e.v ? 'WON' : e.x ? 'FELL' : 'LEFT', x + w - 10, y, { align: 'right', color: e.v ? '#9ee562' : '#f6757a' });
+    });
   }
 
   // DAILY (G5 of the 21 November 2026 review, data/daily.js): today's night, the same for everyone,

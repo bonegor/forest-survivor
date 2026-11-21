@@ -5,6 +5,7 @@ import { oathFlags } from '../data/oaths.js';
 import { BOONS, trophyChoices } from '../data/boons.js';
 import { FUSION, fusionOf, infuseOf } from '../data/fusions.js';
 import { STALL, WARES, price } from './stall.js';
+import { lastMoments } from '../shared/history.js';
 import { HEROES, startWeapons, weaponsFor } from '../data/heroes.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS, RANDOM_EVOLUTION } from '../data/weapons.js';
 import { COPPER_IDS, WHIP_ID, WHIP_EVOLUTION, isCopper, isCursedCopper } from '../data/copper.js';
@@ -2751,6 +2752,7 @@ export class Game {
       nightmare: this.nightmare,
       oaths: this.oath.ids, // the night's oaths (data/oaths.js), for its gold and its best heat won
       daily: this.daily, // a Daily Night's day (data/daily.js), for the Records' DAILY
+      lastBlows: lastMoments(p.recent, this.clock), // the blows of its last moments, by who struck them (shared/history.js)
       hero: p.id,
       time: Math.floor(this.mode === 's15' ? Math.min(this.time, this.duration) : this.time),
       gold: this.gold,
