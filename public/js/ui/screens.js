@@ -550,6 +550,10 @@ export class ModeScreen {
 
 // ----------------------------------------------------------------- armory --
 
+// A change made, but not one this browser kept (store.kept: a full localStorage, as on itch.io,
+// where every game shares one): said, as the hero screen's transfer says it, not a silent loss.
+const unkept = (app) => (app.store.kept === false ? 'This browser could not save the change.' : null);
+
 const UPGRADE_GROUPS = [
   ['power', 'POWER', ['might', 'haste', 'reach', 'endurance', 'velocity', 'echo']],
   ['survival', 'SURVIVAL', ['armor', 'vitality', 'recovery', 'swiftness', 'revival', 'phoenix']],
@@ -577,7 +581,7 @@ export class ArmoryScreen {
     this.busy = true;this.message = null;
     // One activation buys one rank. The current row and scroll position stay put while saving.
     Promise.resolve().then(() => DEBUG ? app.store.setUpgrades({ [u.id]: rank >= u.max ? 0 : rank + 1 }) : app.store.buy(u.id))
-      .then(ok => { if (ok) sfx('chest');else this.message = 'Purchase failed. Please try again.'; })
+      .then(ok => { if (ok) { sfx('chest');this.message = unkept(app); } else this.message = 'Purchase failed. Please try again.'; })
       .catch(() => { this.message = 'Purchase failed. Please try again.'; })
       .finally(() => { this.busy = false; });
   }
@@ -587,7 +591,7 @@ export class ArmoryScreen {
     header(ctx, W, 'The Armory');goldTag(ctx, app, W - 6, 9);
     if (this.dialog) {
       const action = this.dialog.draw(ctx, ui, W, H, dt);
-      if (action === 'refund' && !this.busy) { this.busy = true;Promise.resolve(app.store.refund()).catch(() => { this.message = 'Refund failed. Please try again.'; }).finally(() => { this.busy = false; }); }
+      if (action === 'refund' && !this.busy) { this.busy = true;Promise.resolve(app.store.refund()).then(() => { this.message = unkept(app); }).catch(() => { this.message = 'Refund failed. Please try again.'; }).finally(() => { this.busy = false; }); }
       if (action) { this.dialog = null;ui.focus('u_' + this.selected);ui.lock(0.2); }
       return;
     }
@@ -872,7 +876,7 @@ export class CodexScreen {
     if (this.busy) return;
     this.busy = true;
     const failed = () => { this.message = 'Could not save weapon choice. Try again.'; };
-    this.app.store.setHome(e.id, !e.home).then((ok) => { if (!ok) failed(); }).catch(failed).finally(() => { this.busy = false; });
+    this.app.store.setHome(e.id, !e.home).then((ok) => { if (!ok) failed();else this.message = unkept(this.app); }).catch(failed).finally(() => { this.busy = false; });
   }
 
   // Page Up and Page Down: the focus a screenful of rows up or down the grid (the grid follows it).
