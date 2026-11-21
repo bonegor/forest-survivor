@@ -150,10 +150,14 @@ export class Forest {
         }
       }
     }
-    if (this.chunks.size > 40) {
+    // The chunks within KEEP of the hero's stay. Only past (2·KEEP+1)² must one lie beyond: at 40, from
+    // 41 to 49 kept (all within), the trim and the caches' and topology's after it ran every frame
+    // and let nothing go.
+    const KEEP = 3;
+    if (this.chunks.size > (2 * KEEP + 1) ** 2) {
       const pcx = Math.floor(g.player.x / CH), pcy = Math.floor(g.player.y / CH);
       for (const [k, c] of this.chunks) {
-        if (Math.abs(c.cx - pcx) > 3 || Math.abs(c.cy - pcy) > 3) this.chunks.delete(k);
+        if (Math.abs(c.cx - pcx) > KEEP || Math.abs(c.cy - pcy) > KEEP) this.chunks.delete(k);
       }
       trimCaches(g.player.x, g.player.y);
       if (this.topo) this.topo.trim(g.player.x, g.player.y);
