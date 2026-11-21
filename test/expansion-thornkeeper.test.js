@@ -66,7 +66,7 @@ test('overlapping spokes cannot multiply lord damage, and evolution raises bound
   assert.equal(p.heroAttack.ang, Math.PI);
   for (let i = 0; i < 24; i++) cast.update(1 / 60);
   assert.equal(cast.hit.size, 1);
-  assert.ok(lord.maxHp - lord.hp >= 38 && lord.maxHp - lord.hp <= 48);
+  assert.ok(lord.maxHp - lord.hp >= 68 && lord.maxHp - lord.hp <= 86);
   assert.equal(lord.kx, 0);
   assert.equal(lord.stunT, 0);
   for (let rank = 1; rank < 8; rank++) w.levelUp();

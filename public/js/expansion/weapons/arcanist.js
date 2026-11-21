@@ -5,21 +5,21 @@ export default {
   weapon: {
     name: 'Meridian Pendulum', icon: 'i_arcanist_meridian_pendulum', kind: id,
     desc: 'Swing a crystal along a narrow arc at a foe’s distance. It cuts each body once and reverses direction each cast.',
-    base: { dmg: 42, cd: 1.1, area: 1, speed: 1, amount: 1, sweep: 0.68 },
+    base: { dmg: 113, cd: 1.1, area: 1, speed: 1, amount: 1, sweep: 0.68 },
     levels: [
-      { dmg: 5, text: 'Damage {+5}.' },
+      { dmg: 14, text: 'Damage {+14}.' },
       { area: 0.12, text: 'The arc’s cutting edge widens {12%}.' },
       { amount: 1, text: 'Each sweep can cut {1} more foe.' },
       { cd: -0.1, text: 'Cast {faster}.' },
-      { dmg: 6, sweep: 0.08, text: 'Damage {+6}. The crystal swings farther.' },
+      { dmg: 16, sweep: 0.08, text: 'Damage {+16}. The crystal swings farther.' },
       { amount: 1, speed: 0.12, text: '{+1} foe per sweep. The crystal swings {faster}.' },
-      { dmg: 7, area: 0.12, text: 'Damage {+7}. The arc’s cutting edge widens {12%}.' },
+      { dmg: 19, area: 0.12, text: 'Damage {+19}. The arc’s cutting edge widens {12%}.' },
     ],
     evo: { into: 'arcanist_astral_meridian', with: 'projspeed' },
   },
   evolution: {
     name: 'Astral Meridian', icon: 'i_arcanist_astral_meridian', kind: id, evolved: true,
     desc: 'An astral crystal sweeps a wider arc, cutting more foes on its way across.',
-    base: { dmg: 96, cd: 0.76, area: 1.52, speed: 1.28, amount: 6, sweep: 0.92 },
+    base: { dmg: 259, cd: 0.76, area: 1.52, speed: 1.28, amount: 6, sweep: 0.92 },
   },
 };

@@ -65,15 +65,15 @@ test('actual stride powers one longer cut with a bounded crowd budget and heavie
   assert.equal(p.heroAttack.weapon, w);
   assert.equal(w.cd, w.s.cd);
   assert.equal(g.effects.at(-1).charged, true);
-  assert.deepEqual(front.map(e => e.maxHp - e.hp), [44, 44, 54, 54, 0, 0]);
+  assert.deepEqual(front.map(e => e.maxHp - e.hp), [295, 295, 360, 360, 0, 0]);
   assert.equal(back.hp, back.maxHp);
   assert.equal(side.hp, side.maxHp);
   w.update(0.2);
-  assert.equal(w.dmgDealt, 196, 'no extra hits before the cooldown');
+  assert.equal(w.dmgDealt, 1310, 'no extra hits before the cooldown');
   g.time += w.s.cd;
   w.update(w.s.cd);
   assert.equal(g.effects.at(-1).charged, false);
-  assert.deepEqual(front.map(e => e.maxHp - e.hp), [88, 88, 54, 54, 0, 0]);
+  assert.deepEqual(front.map(e => e.maxHp - e.hp), [590, 590, 360, 360, 0, 0]);
 }));
 
 test('turning or running against a wall does not carry charge into the next cut', () => combat((g, p, w) => {
@@ -84,14 +84,14 @@ test('turning or running against a wall does not carry charge into the next cut'
   w.cd = 0;
   w.update(0);
   assert.equal(g.effects.at(-1).charged, false);
-  assert.equal(rear.maxHp - rear.hp, 44);
+  assert.equal(rear.maxHp - rear.hp, 295);
   const { x, y } = p;
   g.world.collide = entity => Object.assign(entity, { x, y });
   move(g, p, w, 75, -1);
   w.cd = 0;
   w.update(0);
   assert.equal(g.effects.at(-1).charged, false);
-  assert.equal(rear.maxHp - rear.hp, 88, 'the lord takes one ordinary hit per swing');
+  assert.equal(rear.maxHp - rear.hp, 590, 'the lord takes one ordinary hit per swing');
   assert.equal(rear.stunT, 0);
 }));
 
@@ -106,7 +106,7 @@ test('crypt damage follows the approved release, respects a wall and scales thro
   w.cd = 0;
   assert.ok(g.strike());
   w.update(0, true);
-  assert.equal(near.maxHp - near.hp, 44);
+  assert.equal(near.maxHp - near.hp, 295);
   assert.equal(hidden.hp, hidden.maxHp);
   for (let rank = 1; rank < 8; rank++) w.levelUp();
   const capped = w.s;

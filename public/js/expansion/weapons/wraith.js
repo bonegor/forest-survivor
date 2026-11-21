@@ -5,21 +5,21 @@ export default {
   weapon: {
     name: 'Aftercut Blade', icon: 'i_wraith_aftercut', kind: id, directional: true,
     desc: 'Cut ahead and leave a shade behind. Your next cut also strikes from the shade’s position. Each foe takes only one hit per cast.',
-    base: { dmg: 41, cd: 1.02, area: 1, amount: 1, dur: 1.6, kb: 0.9, echo: 0.56 },
+    base: { dmg: 94, cd: 1.02, area: 1, amount: 1, dur: 1.6, kb: 0.9, echo: 0.56 },
     levels: [
-      { dmg: 5, text: 'Damage {+5}.' },
+      { dmg: 12, text: 'Damage {+12}.' },
       { area: 0.14, text: 'Cut reach {+14%}.' },
       { amount: 1, text: 'Both cuts can hit {1} more foe.' },
       { cd: -0.1, text: 'Cut {faster}.' },
-      { dmg: 6, dur: 0.2, text: 'Damage {+6}. Shades last {+0.2s}.' },
+      { dmg: 14, dur: 0.2, text: 'Damage {+14}. Shades last {+0.2s}.' },
       { area: 0.12, echo: 0.08, text: 'Cut reach {+12%}. Shade damage {+8% of blade damage}.' },
-      { dmg: 7, amount: 1, text: 'Damage {+7}. Both cuts can hit {1} more foe.' },
+      { dmg: 16, amount: 1, text: 'Damage {+16}. Both cuts can hit {1} more foe.' },
     ],
     evo: { into: 'wraith_echo_of_the_veil', with: 'movespeed' },
   },
   evolution: {
     name: 'Echo of the Veil', icon: 'i_wraith_echo_of_the_veil', kind: id, directional: true, evolved: true,
     desc: 'Move away from your shade to stretch a spectral thread. Your next cut also strikes one foe between you and the shade.',
-    base: { dmg: 100, cd: 0.69, area: 1.52, amount: 5, dur: 2.1, kb: 1.05, echo: 0.75 },
+    base: { dmg: 230, cd: 0.69, area: 1.52, amount: 5, dur: 2.1, kb: 1.05, echo: 0.75 },
   },
 };

@@ -55,7 +55,7 @@ test('Ratchet Crossbow orders a fast sweep front to back and spends exactly thre
   assert.equal(bolts(g).length, 1, 'the weapon waits for its cooldown');
   sweep(g, 0.35);
   assert.deepEqual(strikes.map(([e]) => e), [first, second, third]);
-  assert.deepEqual(strikes.map(([, damage]) => Math.round(damage * 10)), [400, 448, 496]);
+  assert.deepEqual(strikes.map(([, damage]) => Math.round(damage * 10)), [1080, 1210, 1339]);
   assert.equal(far.hp, far.maxHp);
   assert.equal(w.dmgDealt, g.stats.damage);
   w.update(0.11);

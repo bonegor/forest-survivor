@@ -76,14 +76,14 @@ test('one sensed shot arms only the next cut and never multihits a lord', () => 
   w.update(0);
   assert.ok(!first.dead && !second.dead);
   assert.equal(w.shieldward.guard.seen.size, 1);
-  assert.equal(w.dmgDealt, 43);
+  assert.equal(w.dmgDealt, 206);
   g.eshots.length = 0;
   g.time = w.s.cd;
   w.update(w.s.cd);
-  assert.equal(w.dmgDealt, 43 + Math.round(43 * 1.28));
+  assert.equal(w.dmgDealt, 206 + Math.round(206 * 1.28));
   g.time += w.s.cd;
   w.update(w.s.cd);
-  assert.equal(w.dmgDealt, 86 + Math.round(43 * 1.28));
+  assert.equal(w.dmgDealt, 412 + Math.round(206 * 1.28));
   assert.equal(lord.maxHp - lord.hp, w.dmgDealt);
   assert.equal(lord.stunT, 0);
   assert.equal(lord.slowT, 0);

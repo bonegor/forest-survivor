@@ -5,21 +5,21 @@ export default {
   weapon: {
     name: 'Carrion Tithe', icon: 'i_gravebinder_carrion_tithe', kind: id,
     desc: 'Send a spectral crow at a foe. It siphons lesser foes nearby, adding their strength to one final strike.',
-    base: { dmg: 38, cd: 1.26, area: 1, amount: 2, siphon: 0.42, tithe: 0.10 },
+    base: { dmg: 220, cd: 1.26, area: 1, amount: 2, siphon: 0.42, tithe: 0.10 },
     levels: [
-      { dmg: 4, text: 'Damage {+4}.' },
+      { dmg: 23, text: 'Damage {+23}.' },
       { area: 0.15, text: 'Siphon radius {+15%}.' },
       { amount: 1, text: 'Siphon {+1} lesser foe.' },
       { cd: -0.12, text: 'Send the crow {faster}.' },
-      { dmg: 6, siphon: 0.03, text: 'Damage {+6}. Siphons take {more} health.' },
+      { dmg: 35, siphon: 0.03, text: 'Damage {+35}. Siphons take {more} health.' },
       { amount: 1, area: 0.15, text: 'Siphon {+1} foe, radius {+15%}.' },
-      { dmg: 7, tithe: 0.01, text: 'Damage {+7}. Siphons {feed} a stronger final strike.' },
+      { dmg: 41, tithe: 0.01, text: 'Damage {+41}. Siphons {feed} a stronger final strike.' },
     ],
     evo: { into: 'gravebinder_ravenous_edict', with: 'cooldown' },
   },
   evolution: {
     name: 'Ravenous Edict', icon: 'i_gravebinder_ravenous_edict', kind: id, evolved: true,
     desc: 'The raven collects a greater toll from more foes and strikes its target harder.',
-    base: { dmg: 94, cd: 0.84, area: 1.6, amount: 6, siphon: 0.6, tithe: 0.12 },
+    base: { dmg: 545, cd: 0.84, area: 1.6, amount: 6, siphon: 0.6, tithe: 0.12 },
   },
 };

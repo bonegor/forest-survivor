@@ -46,7 +46,7 @@ test('Splitpin stops on the first body, then pierces across the crowd', () => {
   assert.equal(g.projectiles.length, 1);
   assert.equal(p.heroAttack.weapon, w);
   fly(g);
-  assert.ok(hp - impact.hp >= 27 && hp - impact.hp <= 35, 'the primary takes exactly one full hit');
+  assert.ok(hp - impact.hp >= 89 && hp - impact.hp <= 115, 'the primary takes exactly one full hit');
   assert.equal(behind.hp, behind.maxHp, 'the pin never pierces forward');
   for (const e of side) assert.ok(e.hp < e.maxHp, 'both splinters pierce a second foe');
 });
