@@ -8,6 +8,8 @@ tools/out/
 output/
 # The itch.io release (tools/build-itch.mjs)
 dist/
+# A local copy of what the publish puts on GitHub Pages (pages.yml, tools/build-itch.mjs --out=_site/...)
+_site/
 tools/knight-variants/
 tools/mapgen/out/
 
