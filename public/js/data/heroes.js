@@ -153,20 +153,20 @@ export const HEROES = {
   berserker: {
     id: 'berserker',
     short: 'Berserk',
-    name: 'Ulfric',
+    name: 'Ylva Wolf-Tooth',
     title: 'Berserker',
     sprite: 'berserker',
     pose: 'berserker_pose',
     weapon: 'twinaxes',
     unique: ['twinaxes'],
     color: '#e43b44',
-    // Bloodrage: the lower his health, the harder and faster he strikes, up to rage.might more
+    // Bloodrage: the lower her health, the harder and faster she strikes, up to rage.might more
     // damage and rage.haste faster weapons at none left (Player.rage).
     stats: { maxHp: 40, speed: 1.15, rage: { might: 0.3, haste: 0.15 } },
     perk: 'Bloodrage: up to +30% damage & +15% attack speed as health falls, +15% speed',
     ult: 'frenzy',
     ultName: 'Red Frenzy',
-    ultDesc: 'For 5s he chops all round him without rest; each kill heals 3%.',
+    ultDesc: 'For 5s she chops in all directions. Each kill heals 3%.',
   },
   witchhunter: {
     id: 'witchhunter',

@@ -7,7 +7,7 @@ export const LEGACY_DESIGNS = {
   necromancer: 'heroes7-lich',
   paladin: 'heroes7-guardian-upg',
   druid: 'heroes7-druid',
-  berserker: 'heroes5-berserker',
+  berserker: 'ylva-wolf-tooth-low-ready',
   witchhunter: 'heroes7-crossbowman',
 };
 

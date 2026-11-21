@@ -10,7 +10,7 @@ import { isCopper } from '../data/copper.js';
 import { PASSIVES } from '../data/passives.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
-import { DEATH, FLASH_SOFT } from './game.js';
+import { FLASH_SOFT } from './game.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, COMET } from './ultimate.js';
 import { WARN, RECORD_GRACE } from './events.js';
@@ -1254,11 +1254,11 @@ export class Hud {
   // Fallen: "Slain by …" fades in over the drained world (Game DEATH.name), before the results.
   drawSlain(ctx, W, H) {
     const g = this.g;
-    if (g.state !== 'dying' || !g.player.dead || g.deathT < DEATH.name) return;
+    if (g.state !== 'dying' || !g.player.dead || g.deathT < g.deathTiming.name) return;
     const who = g.stats.killedBy;
     const c = textCanvas(who ? `SLAIN BY ${who.toUpperCase()}` : 'YOU HAVE FALLEN', ['#ffffff', '#f6757a', '#a22633'], '#181425');
     const s = c.width * 2 <= W - 16 ? 2 : 1;
-    ctx.globalAlpha = clamp((g.deathT - DEATH.name) / 0.5, 0, 1);
+    ctx.globalAlpha = clamp((g.deathT - g.deathTiming.name) / 0.5, 0, 1);
     // Leave the spirit's path above the fallen hero clear.
     const y = H * (SPR[g.player.hero.sprite]?.fall?.wisp ? 0.63 : 0.3);
     ctx.drawImage(c, Math.round(W / 2 - (c.width * s) / 2), Math.round(y), c.width * s, c.height * s);

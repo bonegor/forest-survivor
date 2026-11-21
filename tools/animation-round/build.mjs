@@ -14,6 +14,7 @@ import { fitPaladinFace } from './paladin-trail-face.mjs';
 import { fitPaladinArms } from './paladin-arms.mjs';
 import { colorTrailEyes, registerTrailIdleEyes, trailWalkPalette } from './trailblazer-eyes.mjs';
 import { sourceDetail } from './source-detail.mjs';
+import { buildYlvaProduction } from '../berserker-vikings/ylva-production.mjs';
 
 const TAU = Math.PI * 2;
 const equipment=JSON.parse(readFileSync(new URL('./baseline/equipment-masks.json',import.meta.url),'utf8'));
@@ -393,13 +394,33 @@ function flicker(frame, id, phase, palette) {
   return {...frame,d:out};
 }
 
+function idleContact(path, data, frames) {
+  const width = data.w * 8, height = data.h * Math.ceil(data.idle.length / 8);
+  const pixels = new Uint32Array(width * height);
+  for (const [i, index] of data.idle.entries()) {
+    const x = (i % 8) * data.w, top = Math.floor(i / 8) * data.h;
+    for (let y = 0; y < data.h; y++)
+      pixels.set(frames[index].d.subarray(y * data.w, (y+1) * data.w), (top+y) * width+x);
+  }
+  writePng(path, {w:width,h:height,d:pixels});
+}
+
 export function rebuild({version='v1',outputDir=version==='v2'?'tools/animation-round/variants/v2':'public/assets/heroes-approved',generatedDir=version==='v2'?'tools/animation-round/generated/v2':'tools/animation-round/generated',ids=null}={}) {
 if(!['v1','v2'].includes(version))throw Error('Unknown gait version: '+version);
 mkdirSync(outputDir,{recursive:true});
 mkdirSync(generatedDir,{recursive:true});
 const report={};
+const shipping = pathToFileURL(resolve(outputDir) + '/').href === new URL('../../public/assets/heroes-approved/', import.meta.url).href;
 for(const [id,base] of Object.entries(source)) {
   if(ids&&!ids.includes(id))continue;
+  if(shipping && id==='berserker') {
+    const data = buildYlvaProduction();
+    idleContact(`${generatedDir}/${id}-idle.png`, data, data.frames.map(frame => unpack(data, frame)));
+    report[id] = {idle:data.idle.length, idleFps:data.idleFps, walk:data.walk.length, walkFps:data.walkFps,
+      attack:data.attack.length, attackFps:data.attackFps, attackRelease:data.attackRelease, movingAttack:true,
+      frames:data.frames.length, note:'Ylva Wolf-Tooth, Low ready.', sourceSha256:data.sha256};
+    continue;
+  }
   const blueEyes=id==='trailblazer' && version==='v1';
   const rig=rigs[id], frames=base.frames.map((f,index)=>{
     const native=clean(unpack(base,f));
@@ -461,9 +482,7 @@ for(const [id,base] of Object.entries(source)) {
     ...detail?.metadata,
   });
   writeFileSync(`${outputDir}/${id}.js`,`// Rebuild: node tools/animation-round/build.mjs${version==='v2'?' --v2':''}\nexport default ${JSON.stringify(data)};\n`);
-  const fw=data.w,fh=data.h,contact={w:fw*8,h:fh*2,d:new Uint32Array(fw*8*fh*2)};
-  idle.forEach((idx,i)=>{const b=finalFrames[idx];for(let y=0;y<fh;y++)contact.d.set(b.d.subarray(y*fw,(y+1)*fw),(Math.floor(i/8)*fh+y)*contact.w+(i%8)*fw);});
-  writePng(`${generatedDir}/${id}-idle.png`,contact);
+  idleContact(`${generatedDir}/${id}-idle.png`, data, finalFrames);
   report[id]={idle:idle.length,idleFps,walk:walk.length,walkFps,attack:attack.length,attackFps,attackRelease,movingAttack:!!attackWalk,frames:frames.length,note:data.motionNotes,gait:nativeGait.settings||nativeGait.motion,
     ...(GROUNDED_MODELS[id]?{gaitSource:{file:`baseline/grounded-models/${GROUNDED_MODELS[id].source}`,sha256:GROUNDED_MODELS[id].sha256}}:{}),
     sourceSha256:createHash('sha256').update(JSON.stringify(base)).digest('hex')};

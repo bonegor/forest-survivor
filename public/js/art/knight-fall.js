@@ -2,7 +2,7 @@ import { APPROVED_HERO_ART } from './approved-heroes.js';
 import {
   SOUL_RELEASE, appendDecay, blank, cut, departingSoul, easeBetween, fallFrameAt,
   mix, paint, segment, turn,
-} from './hero-fall.js';
+} from './original-fall.js';
 
 // Each pose is drawn around Aldric's usual world pivot. The sword tip stays in
 // the same patch of earth while his hand slips away; the shield lands later.

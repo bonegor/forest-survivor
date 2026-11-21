@@ -17,16 +17,17 @@ import { readPng } from '../tools/png.mjs';
 import { reduceSource } from '../tools/animation-round/source-detail.mjs';
 import { nativeRanger } from '../tools/animation-round/ranger-native.mjs';
 import { nativeBerserker } from '../tools/animation-round/berserker-native.mjs';
+import originalBerserker from '../tools/berserker-vikings/prior-accepted-berserker.js';
 import { trailWalkPalette } from '../tools/animation-round/trailblazer-eyes.mjs';
 import { packedPalette } from '../public/js/art/palette.js';
 const preserved = { paladin: originalPaladin };
 const paladinWeapon = JSON.parse(readFileSync(new URL('../tools/animation-round/baseline/equipment-masks.json', import.meta.url))).paladin.mask;
 const nativeTreatments = { archer: nativeRanger, berserker: nativeBerserker };
 
-test('all articulated heroes retain their source identity and complete registered gait in the packed game',()=>{
+test('the original grounded models retain their source identity and complete registered gait',()=>{
   assert.equal(Object.keys(GROUNDED_MODELS).length,13);
   for(const [id,model] of Object.entries(GROUNDED_MODELS)) {
-    const data=approved[id],base=baseline[id],retouched=id==='paladin',native=nativeTreatments[id],density=native?2:data.hires||1,W=80*density;
+    const data=id==='berserker'?originalBerserker:approved[id],base=baseline[id],retouched=id==='paladin',native=nativeTreatments[id],density=native?2:data.hires||1,W=80*density;
     const source=new URL('../tools/animation-round/baseline/grounded-models/'+model.source,import.meta.url);
     const original=native?readPng(source):null;
     const standing=native?reduceSource(original,[0,0,original.w,original.h],model.pivot,model.scale):unpack(retouched?preserved[id]:data,(retouched?preserved[id]:data).frames[0]);

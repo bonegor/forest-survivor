@@ -5,8 +5,9 @@
 // records the run broke, and count the gold; what the Armory's next rank costs is told.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import '../tools/headless.mjs';
-import { Game, DEATH } from '../public/js/game/game.js';
+import { Game } from '../public/js/game/game.js';
 import { EnemyShot } from '../public/js/game/projectiles.js';
 import { shotName } from '../public/js/game/names.js';
 import { armoryLine } from '../public/js/ui/gamescreen.js';
@@ -83,9 +84,55 @@ test('the fall plays out before the results', () =>
       t += 1 / 60;
     }
     assert.equal(g.state, 'over');
-    assert.ok(t >= DEATH.end - 0.02 && t <= 3, `the results after ${t.toFixed(2)} s, at most 3`);
-    assert.ok(DEATH.drain <= 1 && DEATH.name < DEATH.end, 'drained within a second, the name before the results');
+    assert.ok(Math.abs(t - g.deathTiming.end) <= 1 / 60 + 1e-8, `the results follow the full sequence at ${t.toFixed(2)} s`);
+    assert.ok(g.deathTiming.drain <= 1 && g.deathTiming.name < g.deathTiming.end, 'drained within a second, the name before the results');
   }));
+
+test('the merchant retains the original defeat clock', () =>
+  game((g, p) => {
+    p.hurt(1e9);
+    assert.equal(g.deathTiming.name, 1.1);
+    assert.equal(g.deathTiming.end, 2.8);
+    for (let tick = 0; tick < 169; tick++) g.update(1 / 60);
+    assert.equal(g.state, 'over');
+  }, 'eanasir'));
+
+test('the Knight and Berserker retain their approved native fall frames and cues', () => {
+  for (const [hero, release, digest] of [
+    ['knight', 1.10, '0c5cf181888d1fec1e41f9793f8244df40a4fbafb687fa3329ed5098517d50b5'],
+    ['berserker', 1.85, '42f7bf8147fc3ac1974b3e93cfa0cacf57cc154f9e641705d5bf0667c662614b'],
+  ]) {
+    const fall = SPR[hero].fall, hash = createHash('sha256');
+    for (const { buf } of fall.frames) hash.update(new Uint8Array(buf.d.buffer));
+    assert.equal(hash.digest('hex'), digest, hero);
+    assert.equal(fall.wisp.release, release);
+    assert.equal(fall.cues.find(cue => cue.sound === 'souldepart').time, release);
+  }
+  assert.equal(SPR.knight.fall.cues.find(cue => cue.sound === 'shieldfall').time, .76);
+});
+
+test('Ylva holds the approved Low ready fall on all fours for 0.2 seconds, then collapses', () => {
+  const fall = SPR.berserker.fall;
+  const remains = fall.frames.at(-1).buf.d;
+  const frameAt = time => fall.frames[fall.frameAt(time)].buf;
+  const bodyBounds = frame => bounds({ ...frame, d: frame.d.map((pixel, i) => pixel === remains[i] ? 0 : pixel) });
+  const held = frameAt(1.05);
+  const brace = bodyBounds(held);
+  const landed = frameAt(fall.wisp.release - .01);
+  assert.ok(brace.y1 >= fall.anchorY - 2, 'Ylva meets the ground during the brace');
+  assert.ok(brace.y0 <= bodyBounds(landed).y0 - 4, 'Ylva supports her weight above the floor');
+  for (let tick = 0; tick < 24; tick++) {
+    assert.deepEqual(frameAt(1.05 + tick / 120).d, held.d, 'Ylva moves during the hold');
+  }
+  assert.notDeepEqual(frameAt(1.25 + 1 / 60).d, held.d, 'Ylva starts to fall within one tick of the pause ending');
+  let top = brace.y0;
+  for (let tick = 75; tick <= 108; tick++) {
+    const nextTop = bodyBounds(frameAt(tick / 60)).y0;
+    assert.ok(nextTop >= top - 1, 'Ylva rises back up during the collapse');
+    top = Math.max(top, nextTop);
+  }
+  assert.deepEqual(frameAt(1.70).d, landed.d, 'Ylva stays down after landing');
+});
 
 test('Aldric falls in either facing, his wisp rises, and only his sword and shield stay until results', () =>
   [1, -1].forEach(face => game((g, p) => {
@@ -103,12 +150,12 @@ test('Aldric falls in either facing, his wisp rises, and only his sword and shie
     p.hurt(1e9);
     assert.equal(at(0), p._rect[4].white(face < 0));
     const seen = new Set();
-    for (let tick = Math.ceil(DEATH.flash * 60); tick <= 60; tick++) seen.add(at(tick / 60));
+    for (let tick = Math.ceil(g.deathTiming.flash * 60); tick < fall.wisp.release * 60; tick++) seen.add(at(tick / 60));
     assert.ok(seen.size >= 5, 'distinct poses convey the brace, kneel and final collapse');
     const [shield, soul] = fall.cues;
     assert.deepEqual([shield.sound, soul.sound], ['shieldfall', 'souldepart']);
-    assert.ok(shield.time < soul.time && soul.time < DEATH.end);
-    const landedIndex = fall.frameAt(0.92);
+    assert.ok(shield.time < soul.time && soul.time < g.deathTiming.end);
+    const landedIndex = fall.frameAt(soul.time - 1 / 60);
     const landed = fall.frames[landedIndex];
     const remains = fall.frames.at(-1);
     assert.equal(at(soul.time - 1 / 60), landed.get(face < 0));
@@ -124,8 +171,8 @@ test('Aldric falls in either facing, his wisp rises, and only his sword and shie
     assert.ok(sword.y1 - sword.y0 > 2 * (sword.x1 - sword.x0), 'the planted blade stands upright');
     assert.ok(shieldOnGround.x1 - shieldOnGround.x0 > shieldOnGround.y1 - shieldOnGround.y0, 'the shield lies on its side');
     assert.ok(shieldOnGround.x0 - sword.x1 >= 10, 'the helmet and armour have cleared the ground between them');
-    assert.equal(at(DEATH.end - 0.25), remains.get(face < 0));
-    assert.equal(at(DEATH.end), remains.get(face < 0));
+    assert.equal(at(g.deathTiming.end - 0.25), remains.get(face < 0));
+    assert.equal(at(g.deathTiming.end), remains.get(face < 0));
   })));
 
 test('the Ranger drops her bow, leaves it planted at a slant and fully decays beneath the rising soul', () =>
@@ -149,15 +196,16 @@ test('the Ranger drops her bow, leaves it planted at a slant and fully decays be
     const row = y => [...bow.d.slice(y * bow.w, (y + 1) * bow.w)];
     assert.ok(row(box.y0).findIndex(Boolean) - row(box.y1).findIndex(Boolean) >= 5,
       'the upper tip leans several native pixels outward from the nock in the soil');
-    const landed = fall.frames[fall.frameAt(.94)].buf;
+    const release = fall.wisp.release;
+    const landed = fall.frames[fall.frameAt(release - .02)].buf;
     const exposedBody = frame => frame.d.filter((pixel, i) => pixel && !bow.d[i]).length;
-    for (const t of [1.1, 1.65, 1.9, 2.2, 2.4]) {
-      const f = fall.frames[fall.frameAt(t)].buf;
+    for (const age of [0, .55, .8, 1.1, 1.3]) {
+      const f = fall.frames[fall.frameAt(release + age)].buf;
       assert.ok(bow.d.every((pixel, i) => !pixel || f.d[i] === pixel), 'the planted bow holds still');
     }
-    const counts = [landed, fall.frames[fall.frameAt(1.9)].buf, bow].map(exposedBody);
+    const counts = [landed, fall.frames[fall.frameAt(release + .8)].buf, bow].map(exposedBody);
     assert.ok(counts[0] > counts[1] && counts[1] > counts[2]);
-    assert.equal(at(DEATH.end), fall.frames.at(-1).get(face < 0));
+    assert.equal(at(g.deathTiming.end), fall.frames.at(-1).get(face < 0));
     assert.deepEqual(fall.wisp.frames.map(f => f.buf), SPR.knight.fall.wisp.frames.map(f => f.buf));
     g.deathT = fall.wisp.release + .5;
     g.hud.drawDepartingSoul(ctx);
@@ -183,12 +231,12 @@ test('each of the other seven original heroes falls, releases a soul and leaves 
       const landed = fall.frames[fall.frameAt(wisp.release - .01)].buf;
       const remains = fall.frames.at(-1).buf;
       const box = bounds(remains);
-      assert.ok(box && box.y1 >= spr.anchorY - 2, `${hero}: gear meets the ground`);
+      assert.ok(box && Math.abs(box.y1 - fall.anchorY) <= 2, `${hero}: gear meets the fall's ground line`);
       assert.ok(box.x0 > 0 && box.x1 < remains.w - 1, `${hero}: settled gear fits inside the sprite canvas`);
       const body = { ...landed, d: landed.d.map((pixel, i) => remains.d[i] ? 0 : pixel) };
-      assert.ok(bounds(body).y0 >= spr.anchorY - 22, `${hero}: the body has dropped`);
+      assert.ok(bounds(body).y0 >= fall.anchorY - 22, `${hero}: the body has dropped`);
       const bodyPixels = frame => frame.buf.d.filter((pixel, i) => pixel && !remains.d[i]).length;
-      const frames = [wisp.release, 1.9, 2.68].map(t => fall.frames[fall.frameAt(t)]);
+      const frames = [0, .8, 1.58].map(age => fall.frames[fall.frameAt(wisp.release + age)]);
       const counts = frames.map(bodyPixels);
       assert.ok(counts[0] > counts[1] && counts[1] > counts[2] && counts[2] === 0, `${hero}: the body decays completely`);
       for (const buf of [landed, ...frames.map(frame => frame.buf)]) {
@@ -197,9 +245,74 @@ test('each of the other seven original heroes falls, releases a soul and leaves 
       g.deathT = wisp.release + .45;
       g.hud.drawDepartingSoul(ctx);
       assert.equal(shown, wisp.frames[wisp.frameAt(.45)].get(face < 0));
-      assert.equal(at(DEATH.end), fall.frames.at(-1).get(face < 0));
+      assert.equal(at(g.deathTiming.end), fall.frames.at(-1).get(face < 0));
     }, hero);
   }
+});
+
+test('Ylva staggers at her last foot position and leaves two axes when the results appear', () => {
+  for (const face of [1, -1]) game((g, p) => {
+    const sprite = SPR[p.hero.sprite], fall = sprite.fall;
+    const upright = sprite.frames[sprite.idle[0]].buf, first = fall.frames[fall.frameAt(0)].buf;
+    const dx = (first.w - upright.w) / 2, dy = fall.anchorY - sprite.anchorY;
+    for (let y = 0; y < upright.h; y++) {
+      const start = (y + dy) * first.w + dx;
+      assert.deepEqual(first.d.subarray(start, start + upright.w), upright.d.subarray(y * upright.w, (y + 1) * upright.w),
+        'the fall starts from the selected Low ready art at the same world position');
+    }
+    const ctx = document.createElement('canvas').getContext('2d');
+    let draw, origin;
+    ctx.translate = (x, y) => { origin = [x, y]; };
+    ctx.drawImage = (...args) => { draw = args; };
+    const cam = { x: p.x - 100, y: p.y - 80, S: 2, pxW: 480, pxH: 300 };
+    p.face = face;
+    g.placePlayer(cam);
+    p.face = -face;
+    p.hurt(1e9, null, 'A charging boar');
+    const at = (seconds, expected, anchor) => {
+      g.deathT = seconds;
+      g.drawFallen(ctx, cam);
+      assert.deepEqual(origin, [200, 160]);
+      assert.equal(draw[0], expected);
+      assert.deepEqual(draw.slice(1), [-expected.width, -2 * anchor, expected.width * 2, expected.height * 2]);
+    };
+    at(0, p._rect[4].white(face < 0), sprite.anchorY);
+    const landed = fall.frames[fall.frameAt(fall.wisp.release - .01)];
+    at(fall.wisp.release - .01, landed.get(face < 0), fall.anchorY);
+
+    const remains = fall.frames.at(-1);
+    const { w, h, d } = remains.buf;
+    const body = bounds({ ...landed.buf, d: landed.buf.d.map((color, i) => d[i] ? 0 : color) });
+    assert.ok(body.x1 - body.x0 > body.y1 - body.y0, 'her body is lying down at soul release');
+    const soulX = w / 2 + fall.wisp.offsetX, soulY = fall.anchorY + fall.wisp.offsetY;
+    assert.ok(soulX >= body.x0 && soulX <= body.x1 && soulY >= body.y0 && soulY <= body.y1,
+      'the rising soul starts inside her fallen silhouette');
+    assert.ok(!fall.wisp.sinks);
+    const axes = [];
+    for (let x = 0; x < w; x++) {
+      let lowest = -1;
+      for (let y = 0; y < h; y++) if (d[y * w + x]) lowest = y;
+      if (lowest === -1) continue;
+      const last = axes.at(-1);
+      if (last?.right === x - 1) {
+        last.right = x;
+        last.foot = Math.max(last.foot, lowest);
+      } else axes.push({ left: x, right: x, foot: lowest });
+    }
+    assert.equal(axes.length, 2, 'two separate weapon silhouettes remain');
+    for (const axe of axes) {
+      assert.ok(axe.right - axe.left >= 4, 'each surviving axe has a distinct blade');
+      assert.ok(Math.abs(axe.foot - fall.anchorY) <= 2, 'both axes rest at the world ground line');
+    }
+    // Complete the actual terminal hit and render the frozen scene beneath the results.
+    at(g.deathTiming.end - .02, remains.get(face < 0), fall.anchorY);
+    g.update(1 / 30);
+    assert.equal(g.state, 'over');
+    assert.equal(g.result.hero, 'berserker');
+    assert.equal(g.result.died, true);
+    assert.equal(g.result.stats.killedBy, 'A charging boar');
+    at(g.deathT, remains.get(face < 0), fall.anchorY);
+  }, 'berserker');
 });
 
 test('the wisp visibly crosses the top edge, tail last, before results in landscape and portrait', () =>
@@ -234,7 +347,7 @@ test('the wisp visibly crosses the top edge, tail last, before results in landsc
         assert.ok(crossed, 'part of the wisp remains on screen while its tip passes the upper edge');
         assert.ok(sample(wisp.duration - 0.001).bottom <= 0, 'the whole ribbon travels offscreen before it stops drawing');
         assert.equal(sample(wisp.duration + 0.01), null);
-        assert.ok(wisp.release + wisp.duration < DEATH.end);
+        assert.ok(wisp.release + wisp.duration < g.deathTiming.end);
       }
     } finally {
       Object.assign(view, { S, zoom, W, H, pxW, pxH });
@@ -268,7 +381,7 @@ test('Shadow and Necromancer souls descend through the ground in either facing',
         assert.ok(draw.h > 0 && draw.y + draw.h <= groundY);
       }
       assert.equal(sample(wisp.duration - .001), null, 'the tail clears the ground');
-      assert.equal(sample(DEATH.end - wisp.release), null);
+      assert.equal(sample(g.deathTiming.end - wisp.release), null);
     }, hero);
   }
 });
@@ -276,7 +389,7 @@ test('Shadow and Necromancer souls descend through the ground in either facing',
 test("the killer caption leaves Aldric's wisp, sword and shield visible", () =>
   game((g, p) => {
     p.hurt(1e9);
-    g.deathT = 2.1;
+    g.deathT = g.deathTiming.name + .5;
     const ctx = document.createElement('canvas').getContext('2d');
     let caption;
     ctx.drawImage = (_image, x, y, w, h) => { caption = { x, y, w, h }; };
@@ -288,13 +401,14 @@ test("the killer caption leaves Aldric's wisp, sword and shield visible", () =>
     }
   }));
 
-test('a revive is as it was: no fall, no name', () =>
-  game((g, p) => {
+test('a revive returns the Knight and Berserker to play with no fall or killer', () =>
+  ['knight', 'berserker'].forEach(hero => game((g, p) => {
     p.revivals = 1;
     p.hurt(1e9);
     assert.ok(!p.dead && g.state === 'play');
+    assert.equal(g.deathT, undefined);
     assert.equal(g.stats.killedBy, null);
-  }));
+  }, hero)));
 
 test('the results tell what the gold buys at the Armory', () => {
   const p = defaultProfile();

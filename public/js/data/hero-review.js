@@ -2,5 +2,5 @@
 export const HERO_SELECTED_LOOKS = Object.freeze({
   knight: 'Plumed Knight', archer: 'Moonsteel Huntress', mage: 'Ember Sage',
   rogue: 'Nightveil', necromancer: 'Bone Regent', paladin: 'Iron Vow',
-  druid: 'Oakwarden', berserker: 'Red Fang', witchhunter: 'Original',
+  druid: 'Oakwarden', berserker: 'Ylva Wolf-Tooth', witchhunter: 'Original',
 });

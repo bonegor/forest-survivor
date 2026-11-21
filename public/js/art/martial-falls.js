@@ -1,7 +1,7 @@
 import { fromRows } from '../engine/pixels.js';
 import {
   SOUL_RELEASE, appendDecay, blank, cut, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, turn,
-} from './hero-fall.js';
+} from './original-fall.js';
 
 const GROUND = 56;
 const TIMES = Array.from({ length: 35 }, (_, i) => [i / 32]);

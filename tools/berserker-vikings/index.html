@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Berserker alternatives · Forest Survivor</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="game-title">Forest Survivor</p><h1 id="title">Berserker alternatives</h1></div>
+      <div class="selectors">
+      <label class="view-choice" id="hero-choice" hidden>Hero <select id="hero" aria-label="Hero"></select></label>
+      <label class="view-choice">View <select id="view" aria-label="View">
+        <option value="roster">Roster</option><option value="close">Field close-up</option><option value="field">Full field</option><option value="native">Native sprite</option><option value="stage">Selection stage</option>
+      </select></label>
+      </div>
+    </header>
+    <div class="toolbar" aria-label="Preview controls">
+      <div class="group modes" aria-label="Movement">
+        <button data-mode="idle" aria-pressed="true">Idle</button>
+        <button data-mode="left" aria-pressed="false">Walk ←</button>
+        <button data-mode="right" aria-pressed="false">Walk →</button>
+        <button data-mode="diagonal" aria-pressed="false">Diagonal</button>
+        <button data-mode="attack" aria-pressed="false">Strike</button>
+        <button data-mode="attack-walk" aria-pressed="false">Moving strike</button>
+        <button data-mode="play" aria-pressed="false">Free move</button>
+        <button data-mode="death" id="death-mode" aria-pressed="false" hidden>Death</button>
+      </div>
+      <div class="group">
+        <button id="turn">Face left</button><button id="pause">Pause</button><button id="step">Step</button>
+      </div>
+    </div>
+    <p id="hint" role="status">Loading the roster…</p>
+    <div id="death-timeline" hidden>
+      <label for="death-age">Time</label><input id="death-age" type="range" min="0" max="3.55" step="0.016667" value="0">
+      <output for="death-age" id="death-readout">Before hit</output>
+    </div>
+    <section id="roster" aria-label="Sprites at game scale"></section>
+    <div id="looks" data-view="roster" hidden></div>
+    <p id="prior-link" hidden><a href="?v=3">Earlier Berserker comparison</a></p>
+  </main>
+  <template id="roster-slot"><figure><canvas width="64" height="54"></canvas><figcaption></figcaption></figure></template>
+  <template id="look-slot"><article><div class="plate"></div><h2></h2></article></template>
+  <template id="field-canvases">
+    <canvas class="native" width="168" height="116"></canvas>
+    <canvas class="crop" width="88" height="76"></canvas>
+    <canvas class="world" width="480" height="300"></canvas>
+    <canvas class="selection" width="88" height="76"></canvas>
+    <canvas class="death-field" width="136" height="96"></canvas>
+  </template>
+  <script type="importmap">{"imports":{"/public/":"/"}}</script>
+  <template id="sync-page">
+    <main class="sync-main">
+      <header>
+        <div><p class="game-title">Forest Survivor</p><h1>Hero fall comparison</h1></div>
+        <label class="view-choice">Layout <select id="sync-layout" aria-label="Layout">
+          <option value="auto">Automatic</option><option value="row">Single row</option><option value="grid">3 × 3 grid</option>
+        </select></label>
+      </header>
+      <div class="sync-controls">
+        <div class="group">
+          <button id="sync-replay" disabled>Replay</button><button id="sync-toggle" disabled>Pause</button>
+          <button id="sync-back" aria-label="Previous frame" title="Previous frame" disabled>−1 frame</button><button id="sync-next" aria-label="Next frame" title="Next frame" disabled>+1 frame</button>
+        </div>
+        <label class="sync-playhead" for="sync-time">Time <input type="range" id="sync-time" min="8" max="108" step="1" value="8" disabled>
+          <output id="sync-clock" for="sync-time">Preparing forest frames…</output>
+        </label>
+      </div>
+      <section id="sync-stage" data-layout="auto" aria-label="Synchronized hero falls"><div id="sync-tiles"></div></section>
+      <p class="sync-link"><a href="?v=8">Full death sequences</a></p>
+    </main>
+  </template>
+  <script type="module">
+    if (['9', '10'].includes(new URLSearchParams(location.search).get('v'))) {
+      document.querySelector('main').replaceWith(document.getElementById('sync-page').content.cloneNode(true));
+      await import('./synchronized-falls.js');
+    } else {
+      await import('./review.js');
+    }
+  </script>
+</body>
+</html>

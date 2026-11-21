@@ -1,13 +1,15 @@
 import { packedPalette } from './palette.js';
 import { bounds, makeBuf } from '../engine/pixels.js';
 
-export const SOUL_RELEASE = 1.10;
+export const BRACE_START = 1.05;
+export const BRACE_END = BRACE_START + .20;
+export const SOUL_RELEASE = 1.85;
 const DECAY_STEP = .05;
 const DECAY_FRAMES = 27;
 
-export function fallFrameAt(poses, seconds) {
-  if (seconds >= SOUL_RELEASE) {
-    const step = Math.floor((seconds - SOUL_RELEASE) / DECAY_STEP + 1e-9);
+export function fallFrameAt(poses, seconds, release = SOUL_RELEASE) {
+  if (seconds >= release) {
+    const step = Math.floor((seconds - release) / DECAY_STEP + 1e-9);
     return poses.length + Math.min(DECAY_FRAMES - 1, step);
   }
   const next = poses.findIndex(pose => pose[0] > seconds);
@@ -73,7 +75,7 @@ function shade(a, b, t) {
 }
 
 // Break up the fallen silhouette in small patches. Boots fade first and the head last.
-function sinkBody(out, body, t, depth, groundY) {
+function sinkBody(out, body, age, depth, groundY, timing) {
   for (let y = 0; y < body.h; y++) {
     for (let x = 0; x < body.w; x++) {
       const color = body.d[y * body.w + x];
@@ -82,16 +84,16 @@ function sinkBody(out, body, t, depth, groundY) {
       const cellX = Math.floor((x + Math.floor(y / 3) % 2) / 3);
       const cellY = Math.floor(y / 3);
       const seed = (cellX * 11 + cellY * 7) % 13;
-      const start = (head ? 1.77 : x < 38 ? 1.38 : 1.49) + seed * .014;
-      const split = easeBetween(t, start, start + .18);
-      const drop = easeBetween(t, start + .08, start + .46);
+      const start = (head ? timing.head : x < 38 ? timing.boots : timing.body) + seed * .014;
+      const split = easeBetween(age, start, start + .18);
+      const drop = easeBetween(age, start + .08, start + .46);
       const yy = y + Math.round(depth * drop);
       if (yy > groundY) continue;
       const xx = x + Math.round(((seed % 5) - 2) * split);
       if (xx < 0 || xx >= out.w) continue;
       const light = brightness(color);
       const soil = ash[light > 176 ? 3 : light > 100 ? 2 : light > 44 ? 1 : 0];
-      const tarnish = easeBetween(t, head ? 1.39 : 1.22, start + .20);
+      const tarnish = easeBetween(age, head ? timing.headFade : timing.fade, start + .20);
       out.d[yy * out.w + xx] = tarnish ? shade(color, soil, tarnish) : color;
     }
   }
@@ -144,13 +146,14 @@ export const sinkingSoul = {
 };
 
 // The weapon layer is already in its resting place when the body starts to decay.
-export function appendDecay(frames, remains, groundY = 57) {
+const relativeDecay = { start: 0, head: .67, boots: .28, body: .39, headFade: .29, fade: .12 };
+export function appendDecay(frames, remains, groundY = 57, timing = relativeDecay) {
   const landed = frames.at(-1);
   const body = { ...landed, d: landed.d.map((color, i) => remains.d[i] ? 0 : color) };
   const depth = Math.max(16, groundY + 1 - bounds(body).y0);
   for (let i = 0; i < DECAY_FRAMES; i++) {
     const out = makeBuf(body.w, body.h);
-    sinkBody(out, body, SOUL_RELEASE + DECAY_STEP * i, depth, groundY);
+    sinkBody(out, body, timing.start + DECAY_STEP * i, depth, groundY, timing);
     for (let j = 0; j < out.d.length; j++) if (remains.d[j]) out.d[j] = remains.d[j];
     frames.push(out);
   }

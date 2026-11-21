@@ -1,6 +1,6 @@
 import { fromRows } from '../engine/pixels.js';
 import { packedPalette } from './palette.js';
-import { SOUL_RELEASE, appendDecay, blank, cut, departingSoul, fallFrameAt, paint, segment, turn } from './hero-fall.js';
+import { SOUL_RELEASE, appendDecay, blank, cut, departingSoul, fallFrameAt, paint, segment, turn } from './original-fall.js';
 
 // Seconds, hip, torso tilt, rear knee and ankle, forward knee and ankle,
 // bow nock and tilt, then the rear and forward wrists after release.

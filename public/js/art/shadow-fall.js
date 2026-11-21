@@ -1,5 +1,5 @@
 import { fromRows, hexPack } from '../engine/pixels.js';
-import { SOUL_RELEASE, appendDecay, blank, cut, fallFrameAt, paint, segment, sinkingSoul, turn } from './hero-fall.js';
+import { SOUL_RELEASE, appendDecay, blank, cut, fallFrameAt, paint, segment, sinkingSoul, turn } from './original-fall.js';
 import { packedPalette } from './palette.js';
 
 // Hip and torso angle, rear and forward folds of the hem, then the wrists.

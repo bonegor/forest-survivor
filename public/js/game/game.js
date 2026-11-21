@@ -12,6 +12,7 @@ import { RANKS, heroUnlockTime, countedKills } from '../shared/profile.js';
 import { killCredit } from '../shared/population.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop, itemName, itemLines, canEquipItem } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
+import { SOUL_RELEASE } from '../art/hero-fall.js';
 import { sfx, playMusic, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
@@ -63,10 +64,10 @@ export const GUARDIAN_GEAR = [{ minute: 5, depth: 1 }, { minute: 10, depth: 2 },
 export const MILESTONES = [10, 25, 50, 100];
 // The most banners on screen at once.
 export const BANNERS_MOST = 2;
-// The hero's fall, in real seconds from the killing blow (onPlayerDeath): the music stops; the
-// world slows and drains to grey over `drain`. After the flash, Aldric plays his authored fall;
-// other heroes tip over in `fall`. "Slain by …" fades in from `name` (Hud); results at `end`.
-export const DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
+// Seconds from the killing blow. The staged falls need time for the hands-and-knees
+// pause, the final collapse and the departing soul before results appear.
+const ORIGINAL_DEATH = { drain: 1, flash: 0.12, fall: 0.45, name: 1.1, end: 2.8 };
+export const DEATH = { ...ORIGINAL_DEATH, name: SOUL_RELEASE, end: SOUL_RELEASE + 1.7 };
 // Any earlier boss left when the timer and final-boss objectives are met burns away during
 // the victory transition. The final boss itself must be slain (burnBoss).
 export const DAWN_BURN = { boss: 2.5 };
@@ -2248,6 +2249,10 @@ export class Game {
 
   // -------------------------------------------------------- end states --
 
+  get deathTiming() {
+    return SPR[this.player.hero.sprite]?.fall?.wisp?.release === DEATH.name ? DEATH : ORIGINAL_DEATH;
+  }
+
   onPlayerDeath() {
     this.state = 'dying';
     this.deathT = 0;
@@ -2559,7 +2564,7 @@ export class Game {
       for (const cue of SPR[p.hero.sprite]?.fall?.cues ?? []) {
         if (before < cue.time && this.deathT >= cue.time) sfx(cue.sound);
       }
-      if (this.deathT > DEATH.end) this.finish(false);
+      if (this.deathT > this.deathTiming.end) this.finish(false);
     } else if (this.state === 'faint') {
       // The world slows and goes dark; then the fade back in, outside (as a journey's).
       this.faintT += rdt;
@@ -3161,7 +3166,7 @@ export class Game {
 
   // The hero falls in colour over the darkening field, anchored where the blow landed.
   drawFallen(ctx, c) {
-    const p = this.player, D = DEATH, t = this.deathT, S = c.S;
+    const p = this.player, D = this.deathTiming, t = this.deathT, S = c.S;
     const k = clamp(t / D.drain, 0, 1);
     ctx.globalCompositeOperation = 'saturation';
     ctx.globalAlpha = k;

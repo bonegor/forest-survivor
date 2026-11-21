@@ -1,7 +1,7 @@
 import { fromRows } from '../engine/pixels.js';
 import {
   SOUL_RELEASE, appendDecay, blank, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, sinkingSoul, turn,
-} from './hero-fall.js';
+} from './original-fall.js';
 
 // Seconds, belt displacement, chest tilt, hem tilt and length, then the
 // rear knee and ankle and the front knee and ankle, measured from the belt's x.

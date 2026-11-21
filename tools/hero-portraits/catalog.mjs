@@ -39,9 +39,9 @@ const ORIGINAL_BRIEFS = {
     pose: 'Kneeling beside the ancient oak, quietly inspecting a new shoot between its roots, one hand touching mossy bark and the other steadying his staff. His head dips toward the plant, robes gather on the damp earth and boots settle into the leaves.',
   },
   berserker: {
-    identity: 'A muscular male warrior with a red mohawk and red beard, bare chest crossed by brown leather harness straps, pale fur shoulders, dark trousers and heavy boots, holding exactly two steel axes.',
+    identity: 'Ylva Wolf-Tooth, a lean Viking woman with a swept blond plait, a streak of blue-green warpaint, a wolf pelt on one shoulder, a deep teal tunic and leather boots. Each hand grips a short bearded steel axe.',
     scene: 'A rocky forest pass after a storm, broken branches and cold mist.',
-    pose: 'Crossing a shallow rocky stream with an ordinary careful step, knees softly bent and torso leaning forward for balance. Both axes hang low in separate hands, shoulders loose, eyes following the next foothold, boots disturbing a small ripple.',
+    pose: 'Crossing a shallow rocky stream with an ordinary careful step, knees softly bent and torso leaning forward for balance. Both hands are low at her belt, axe heads angled up and outward. Her eyes follow the next foothold as her boots disturb a small ripple.',
   },
   witchhunter: {
     identity: 'A female witch hunter with long auburn hair, a broad-brimmed charcoal pointed hat with a buckle, dark blue-grey leather coat, pale collar, leather belts and boots, and a compact wooden-and-steel crossbow.',

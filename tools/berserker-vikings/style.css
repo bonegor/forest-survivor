@@ -1,0 +1,82 @@
+:root { color-scheme:dark; font-family:'Barlow','Segoe UI',sans-serif; background:#151918; color:#eee7d6; }
+* { box-sizing:border-box; }
+body { margin:0; }
+main { max-width:1440px; margin:auto; padding:clamp(18px,3.5vw,54px); }
+header, .toolbar, .group,.view-choice { display:flex; align-items:center; }
+header { justify-content:space-between; gap:18px; flex-wrap:wrap; margin-bottom:22px; }
+.game-title { font-size:.78rem; letter-spacing:.11em; text-transform:uppercase; color:#baab91; margin:0 0 6px; }
+h1,h2 { font-family:'Baskervville',Georgia,serif; font-weight:normal; margin:0; line-height:1.1; }
+h1 { font-size:clamp(32px,4.4vw,58px); letter-spacing:-.04em; }
+.view-choice { gap:9px; font-size:.88rem; color:#c2bbaa; }
+.selectors { display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; }
+.view-choice[hidden] { display:none; }
+#death-timeline { max-width:640px; margin:0 auto 12px; display:grid; grid-template-columns:auto minmax(55px,1fr) minmax(8em,auto); gap:10px; align-items:center; color:#c2bbaa; font-size:.84rem; }
+#death-timeline[hidden] { display:none; }
+#death-age { width:100%; min-width:0; accent-color:#d3ba8e; }
+#death-readout { text-align:right; font-variant-numeric:tabular-nums; }
+.view-choice select { min-width:150px; padding:9px 11px; }
+.toolbar { border-block:1px solid #46483c; padding:11px 0; gap:8px 20px; justify-content:space-between; flex-wrap:wrap; }
+.group { gap:4px; flex-wrap:wrap; }
+button,select { border:1px solid #45493e; border-radius:3px; background:#202521; color:#e4ddce; padding:7px 10px; font:inherit; font-size:.84rem; cursor:pointer; }
+button:enabled:hover,select:hover { background:#30372e; }
+button:disabled { opacity:.52; cursor:default; }
+button[aria-pressed="true"] { background:#d3ba8e; color:#211e18; border-color:#d3ba8e; }
+button:focus-visible,select:focus-visible,input:focus-visible { outline:2px solid #f8d287; outline-offset:3px; }
+#hint { font-size:.85rem; min-height:1.25em; margin:11px 0 15px; color:#b8b5a8; }
+#roster { --sprite-scale:2; display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); overflow:hidden; padding:20px 0 18px; background:#2b3331; border:1px solid #454a40; border-radius:4px; }
+#roster figure { min-width:0; margin:0; padding:0; text-align:center; }
+#roster canvas { display:block; margin:auto; width:min(100%,calc(64px * var(--sprite-scale))); height:auto; }
+#roster figcaption { padding:10px 3px; line-height:1.25; color:#d3d1c4; font-size:clamp(12px,1.13vw,16px); }
+#roster .candidate figcaption { color:#f1d3a1; font-weight:600; }
+#roster[hidden],#looks[hidden] { display:none; }
+.grips #roster { grid-template-columns:repeat(4,minmax(0,1fr)); }
+#prior-link { margin:20px 0; font-size:.85rem; }
+#prior-link a { color:#c5b79d; text-underline-offset:.2em; }
+#looks { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:clamp(12px,2vw,26px); }
+article { min-width:0; background:#20251f; border:1px solid #414538; border-radius:4px; overflow:hidden; }
+article[hidden] { display:none; }
+article[data-id="current"] { order:3; }
+article:only-child { max-width:580px; }
+.plate { position:relative; aspect-ratio:1.45; background:#151815; overflow:hidden; }
+canvas { display:none; image-rendering:pixelated; max-width:100%; }
+.plate canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+[data-view="native"] .native,[data-view="close"] .crop,[data-view="stage"] .selection,[data-view="field"] .world { display:block; }
+[data-view="close"] .crop { object-fit:cover; }
+.selected #looks { justify-items:center; }
+.selected #looks article { width:min(100%,640px); max-width:none; }
+.selected [data-view="menu"] .plate { aspect-ratio:16 / 9; }
+.selected [data-view="menu"] .hero-menu { display:block; }
+.selected [data-mode="death"][data-view="close"] .crop { display:none; }
+.selected [data-mode="death"][data-view="close"] .death-field { display:block; }
+.death-review #hint:empty { display:none; }
+.death-review #death-timeline { margin-block:16px; margin-inline:auto; }
+.death-review #looks[data-mode="death"][data-view="close"] article { width:min(100%,522px); }
+.death-review [data-mode="death"][data-view="close"] .plate { aspect-ratio:104 / 86; }
+article h2 { padding:14px 16px 16px; border-top:1px solid #414538; font-size:clamp(20px,2vw,30px); }
+@media (min-width:1240px) { #roster { --sprite-scale:3; } }
+@media (max-width:860px) { #roster { grid-template-columns:repeat(3,minmax(0,1fr)); row-gap:18px; } }
+@media (max-width:620px) {
+  header { margin-bottom:14px; }
+  #roster { padding-block:10px; row-gap:8px; }
+  .grips #roster { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+.sync-main { max-width:1920px; padding:clamp(15px,2.6vw,42px); }
+.sync-main h1 { font-size:clamp(31px,4.1vw,54px); }
+.sync-controls { display:flex; flex-wrap:wrap; gap:10px 24px; align-items:center; border-block:1px solid #46483c; padding:11px 0; margin-bottom:18px; }
+.sync-playhead { flex:1; min-width:min(100%,300px); display:grid; grid-template-columns:auto minmax(40px,1fr) 12em; gap:10px; align-items:center; font-size:.85rem; color:#c2bbaa; }
+.sync-playhead input { width:100%; min-width:0; accent-color:#d3ba8e; }
+.sync-playhead output { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+#sync-stage { overflow-x:auto; padding-bottom:6px; }
+#sync-tiles { display:grid; min-width:1080px; grid-template-columns:repeat(9,minmax(0,1fr)); gap:4px; }
+#sync-tiles figure { margin:0; min-width:0; background:#222825; }
+#sync-tiles canvas { display:block; width:100%; height:auto; }
+#sync-tiles figcaption { text-align:center; padding:9px 2px 11px; font-size:clamp(12px,1.15vw,18px); color:#ecdfc7; }
+#sync-tiles figcaption small { display:block; margin-top:2px; color:#b5b5a5; font-size:clamp(10px,.9vw,13px); }
+.fall-proposals .sync-playhead { grid-template-columns:auto minmax(40px,1fr) 8.3em; }
+#sync-stage[data-layout="grid"] #sync-tiles { grid-template-columns:repeat(3,minmax(0,1fr)); min-width:0; max-width:850px; margin-inline:auto; }
+.sync-link { margin:15px 0; font-size:.85rem; }
+.sync-link a { color:#c5b79d; text-underline-offset:.2em; }
+@media (max-width:1150px) {
+  #sync-stage[data-layout="auto"] #sync-tiles { grid-template-columns:repeat(3,minmax(0,1fr)); min-width:0; max-width:clamp(340px,calc(157svh - 440px),850px); margin-inline:auto; }
+}
