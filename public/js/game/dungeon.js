@@ -499,8 +499,9 @@ export class Dungeon {
 
   bake() {
     const { W, H, theme } = this;
-    // The floor and the seed: by the floor alone, every crypt (each a floor 1) shared one floor's shading.
-    const rng = mulberry32(((this.seed >>> 0) ^ (this.floor * 1013 + 7)) >>> 0);
+    // Its torches, cracks and cobwebs by the floor, as ever (where its torches stand moves the dice
+    // their embers roll); each tile's shading by the seed too (hash), so no two crypts share it.
+    const rng = mulberry32(this.floor * 1013 + 7);
     const pw = W * T, ph = H * T;
     const c = (this.canvas = makeCanvas(pw, ph));
     const ctx = c.getContext('2d');
