@@ -12,8 +12,6 @@ import { NIGHTMARE } from '../data/difficulty.js';
 import { steadyRate, minuteMore, lateMore } from '../shared/population.js';
 import { PACE_OF } from './enemies.js';
 
-const SHRINE_TYPES = ['fury', 'haste', 'fortune', 'wisdom', 'protection'];
-
 // The monsters that shoot (Cultists) or lunge (Dire Wolves, Orc Brutes, Hellhounds), of which
 // Normal sends a third as many (difficulty.js few).
 export const isFew = (type) => !!(ENEMIES[type]?.shot || ENEMIES[type]?.charge);
@@ -119,7 +117,6 @@ export class Spawner {
     this.eliteT = 0;
     this.thiefT = rand(140, 220);
     this.propT = 4;
-    this.shrineT = 45;
     this.joltT = null; // the next jolt, rolled at the first update (so a new Game draws no random number for it)
     this.bossIdx = 0;
     this.loopAt = 0; // Ranked: next looping event, in phase minutes (put in events when near)
@@ -341,14 +338,6 @@ export class Spawner {
         // standing where he fought never stop new ones coming ahead of him.
         if (g.propCount >= PROP_SITES.most) g.propCount -= this.letPropsGo(g.propCount - PROP_SITES.most + PROP_SITES.boxes[1]);
         if (g.propCount < PROP_SITES.most) this.spawnProps();
-      }
-      this.shrineT -= dt;
-      if (this.shrineT <= 0 && !g.world.mapShrines) {
-        this.shrineT = rand(95, 135);
-        if (g.shrines.filter((s) => !s.used).length < 2) {
-          const a = rand(TAU), r = rand(170, 230);
-          g.addShrine(g.player.x + Math.cos(a) * r, g.player.y + Math.sin(a) * r, pick(SHRINE_TYPES));
-        }
       }
       if (g.mode === 'ranked') {
         // One lord at a time; the next waits until the last has fallen.
