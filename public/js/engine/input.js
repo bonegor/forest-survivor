@@ -195,8 +195,12 @@ export function initInput(canvas) {
   // The game left behind: a click on the page around its frame (itch.io), an alt-tab, another tab
   // or app. Keys held let go, and the frame is marked away for the game screen to pause the run
   // (GameScreen.pause). The tests' stand-in document may be missing or hear nothing, hence the ?.
+  // Fingers and the mouse button too: switching apps with a thumb on the stick sends no touchend,
+  // and the hero walked on when the game came back.
   const away = () => {
     input.held.clear();
+    input.releaseTouches();
+    input.mouse.down = false;
     input.away = true;
   };
   window.addEventListener('blur', away);
