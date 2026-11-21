@@ -3,7 +3,7 @@ const id = 'wraith_aftercut';
 export default {
   id,
   weapon: {
-    name: 'Aftercut Blade', icon: 'i_shadowblade', kind: id, directional: true,
+    name: 'Aftercut Blade', icon: 'i_wraith_aftercut', kind: id, directional: true,
     desc: 'Cut ahead and leave a shade behind. Your next cut also strikes from the shade’s position. Each foe takes only one hit per cast.',
     base: { dmg: 41, cd: 1.02, area: 1, amount: 1, dur: 1.6, kb: 0.9, echo: 0.56 },
     levels: [
@@ -18,8 +18,8 @@ export default {
     evo: { into: 'wraith_echo_of_the_veil', with: 'movespeed' },
   },
   evolution: {
-    name: 'Echo of the Veil', icon: 'i_shadowstrike', kind: id, directional: true, evolved: true,
-    desc: 'A longer blade leaves a stronger shade. Each foe can still take only one hit per cast.',
+    name: 'Echo of the Veil', icon: 'i_wraith_echo_of_the_veil', kind: id, directional: true, evolved: true,
+    desc: 'Move away from your shade to stretch a spectral thread. Your next cut also strikes one foe between you and the shade.',
     base: { dmg: 100, cd: 0.69, area: 1.52, amount: 5, dur: 2.1, kb: 1.05, echo: 0.75 },
   },
 };

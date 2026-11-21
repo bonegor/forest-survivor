@@ -805,4 +805,4 @@ export class Player {
   }
 }
 
-export const ULT_DURATION = { whirlwind: 3.5, arrowstorm: 3, cataclysm: 2.6, shadowdance: 3, deadrise: 0.8, sanctum: 5, overgrowth: 3, frenzy: 5, purge: 4 };
+export const ULT_DURATION = { whirlwind: 3.5, arrowstorm: 3, cataclysm: 2.6, liquidation: 2.4, shadowdance: 3, deadrise: 0.8, sanctum: 5, overgrowth: 3, frenzy: 5, purge: 4 };

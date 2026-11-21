@@ -20,6 +20,7 @@ export const view = {
   S: 4,
   W: 480,
   H: 270,
+  safe: { left: 0, right: 0, bottom: 0 },
   zoom: 0.8, // world scale relative to the HUD: 0.8 shows 25% more each way
   listeners: [],
 };
@@ -56,6 +57,11 @@ function resize() {
   view.S = Math.max(1, Math.round(Math.min(pxW, pxH) / 300));
   view.W = Math.ceil(pxW / view.S);
   view.H = Math.ceil(pxH / view.S);
+  const style = window.getComputedStyle?.(view.canvas);
+  for (const edge of Object.keys(view.safe)) {
+    const inset = parseFloat(style?.getPropertyValue('--hud-' + edge)) || 0;
+    view.safe[edge] = Math.ceil(inset * dpr / view.S);
+  }
   view.ui.width = view.W;
   view.ui.height = view.H;
   view.uctx.imageSmoothingEnabled = false;

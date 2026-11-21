@@ -3,8 +3,8 @@ const id = 'templar_votive_edge';
 export default {
   id,
   weapon: {
-    name: 'Votive Edge', icon: 'i_excalibur', kind: id, directional: true,
-    desc: 'Carve a short ward ahead. It cuts each foe that touches the line once and briefly slows ordinary foes.',
+    name: 'Votive Edge', icon: 'i_templar_votive_edge', kind: id, directional: true,
+    desc: 'Carve a ward that cuts and slows foes. Step onto its gold seal to recover 30% of a swing.',
     base: { dmg: 38, cd: 1.2, area: 1, amount: 1, dur: 0.88, slow: 0.16 },
     levels: [
       { dmg: 4, text: 'Damage {+4}.' },
@@ -18,8 +18,8 @@ export default {
     evo: { into: 'templar_hallowed_boundary', with: 'area' },
   },
   evolution: {
-    name: 'Hallowed Boundary', icon: 'i_excalibur', kind: id, directional: true, evolved: true,
-    desc: 'A wider, brighter ward holds the ground longer and cuts down more foes that cross it.',
+    name: 'Hallowed Boundary', icon: 'i_templar_hallowed_boundary', kind: id, directional: true, evolved: true,
+    desc: 'A wider ward cuts more foes and lasts longer. Step onto its gold seal to recover 45% of a swing.',
     base: { dmg: 100, cd: 0.78, area: 1.52, amount: 6, dur: 1.3, slow: 0.3 },
   },
 };

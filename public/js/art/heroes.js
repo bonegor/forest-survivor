@@ -7,6 +7,8 @@ import { paladinFall, witchHunterFall } from './martial-falls.js';
 import { ylvaFall } from './ylva-fall.js';
 import { rangerFall } from './ranger-fall.js';
 import { shadowFall } from './shadow-fall.js';
+import { RECRUITS } from '../expansion/roster.js';
+import { recruitFall } from './recruit-falls.js';
 import { HOODED_TRAIL_ART, HOODED_TRAIL_POSE } from './trail-hood.js';
 
 export const HERO_ART = {
@@ -21,6 +23,9 @@ export const HERO_ART = {
   druid: { ...APPROVED_HERO_ART.druid, fall: casterFall('druid', APPROVED_HERO_ART.druid) },
   berserker: { ...APPROVED_HERO_ART.berserker, fall: ylvaFall },
   witchhunter: { ...APPROVED_HERO_ART.witchhunter, fall: witchHunterFall(APPROVED_HERO_ART.witchhunter) },
-  trailblazer: HOODED_TRAIL_ART,
+  ...Object.fromEntries(RECRUITS.map(({ id }) => {
+    const living = id === 'trailblazer' ? HOODED_TRAIL_ART : APPROVED_HERO_ART[id];
+    return [id, { ...living, fall: recruitFall(id, living) }];
+  })),
   trailblazer_pose: HOODED_TRAIL_POSE,
 };

@@ -25,6 +25,7 @@ import { heroAttackPose, strikeClip } from './hero-animation.js';
 export { strikeClip } from './hero-animation.js';
 import { runSpoils } from '../shared/spoils.js';
 import { Weapon, aimAt } from './weapons.js';
+import { CopperRecall } from './weapons-copper.js';
 import { Enemy, makeEnemyPool, drawNightEdge, THIEF_LOOT } from './enemies.js';
 import { maskHorde, maskBosses, keepHorde, putHorde } from './horde-over.js';
 import { Pickup } from './pickups.js';
@@ -145,7 +146,7 @@ const IN_ROCK = 1e12;
 // The ultimates laid over the world rather than about the hero: Overgrowth's vines and the foes
 // they hold, the Arrow Rain's storm. A change of world (a crypt's door, the stairs, a faint) ends
 // them (Game.clearTransient); those about him (persistent effects) go with him.
-const WORLD_ULTS = new Set(['overgrowth', 'arrowstorm']);
+const WORLD_ULTS = new Set(['overgrowth', 'arrowstorm', 'liquidation']);
 
 // Game.dropSpots: how far apart two drops lie, side by side or one above the other, and where the
 // second goes from the first when neither way is open (a tile on, any way).
@@ -1768,6 +1769,7 @@ export class Game {
     p.strikeBuf = 0;
     // An ultimate over the world he leaves ends with it, its receipt next frame (ultReceipt).
     if (p.ult && WORLD_ULTS.has(p.ult.type)) p.ult = null;
+    this.copperSeal = null;
     for (const w of p.combatWeapons) {
       // Its pending hit and follow-up volley belong to the world left behind,
       // as does the target (which may now be returned to the enemy pool).
@@ -2168,7 +2170,9 @@ export class Game {
     ultFlash(this, p);
     if (type === 'whirlwind') this.effects.push(new Whirl(this, dur));
     else if (type === 'arrowstorm') this.effects.push(new ArrowRain(this, dur));
-    else if (type === 'shadowdance') {
+    else if (type === 'liquidation') {
+      for (let i = 0; i < 3; i++) this.effects.push(new CopperRecall(this, i * .75, 100 + i * 18));
+    } else if (type === 'shadowdance') {
       this.effects.push(new ShadowDance(this, dur));
       p.invuln = dur;
     } else if (type === 'deadrise') {
@@ -2250,7 +2254,19 @@ export class Game {
   // -------------------------------------------------------- end states --
 
   get deathTiming() {
-    return SPR[this.player.hero.sprite]?.fall?.wisp?.release === DEATH.name ? DEATH : ORIGINAL_DEATH;
+    const fall = SPR[this.player.hero.sprite]?.fall, soul = fall?.wisp;
+    if (soul?.walkOff) {
+      return { ...DEATH, end: Math.max(fall.remainsAt ?? DEATH.end, soul.release + this.soulDuration(soul)) + .18 };
+    }
+    return soul?.release === DEATH.name ? DEATH : ORIGINAL_DEATH;
+  }
+
+  soulDuration(soul) {
+    if (!soul.walkOff) return soul.duration;
+    const p = this.player, x = p.x - this.cam.x;
+    const left = p._rect ? p._rect[5] : p.face < 0;
+    const distance = Math.max(0, left ? x : this.cam.W - x);
+    return soul.walkOff.rise + (distance + soul.walkOff.clearance) / soul.walkOff.speed;
   }
 
   onPlayerDeath() {

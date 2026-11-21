@@ -1,51 +1,55 @@
+import { armFromSheet } from './fall-limbs.js';
 import { fromRows } from '../engine/pixels.js';
 import {
-  SOUL_RELEASE, appendDecay, blank, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, sinkingSoul, turn,
-} from './original-fall.js';
+  BRACE_START, BRACE_END, SOUL_RELEASE, appendDecay, blank, departingSoul, easeBetween,
+  fallFrameAt, mix, paint, segment, sinkingSoul, turn,
+} from './hero-fall.js';
 
-// Seconds, belt displacement, chest tilt, hem tilt and length, then the
-// rear knee and ankle and the front knee and ankle, measured from the belt's x.
-// A trailing knee takes the weight while the chest is still nearly upright.
-// The leading knee comes down as the two hands extend to meet the ground.
+// Belt position, chest and skirt angles, skirt length, then knee and ankle
+// coordinates relative to the standing belt's x. Each fall has its own support.
 const staggers = {
+  // His back gives first. The robe gathers beneath the hip; the knees and
+  // boots stay out in front even after his head rolls back onto the ground.
   mage: [
-    [0,      0, 0,   0,  0, 1,   -5,49, -7,53,   5,49,  6,53],
-    [.12,   -1, 0, -11, -4, 1,   -7,49, -8,53,   6,48,  8,51],
-    [.23,   -2, 1,  -9,  3,.91,  -7,51,-10,53,   8,48, 10,52],
-    [.34,   -1, 5,   4, 16,.64,  -6,54,-11,53,   8,48, 11,53],
-    [.44,    0, 5,  10, 22,.62,  -6,54,-11,53,   8,49, 11,53],
-    [.55,    1, 6,  26, 31,.62,  -6,54,-11,53,   8,51, 11,53],
-    [.64,    2, 5,  43, 44,.69,  -6,54,-11,53,   7,54, 10,53],
-    [.73,    2, 5,  51, 56,.74,  -6,54,-11,53,   7,54, 10,53],
-    [.83,    4, 7,  78, 70,.88,  -6,54,-11,53,   4,54,  0,53],
-    [.92,    4, 7,  89, 77,.96,  -7,54,-12,53,   1,54, -4,53],
-    [1.0,    4, 7,  91, 79,.98,  -8,54,-13,53,   0,54, -5,53],
+    [0,    0,0,   0,  0,1,   -5,49,-7,53,  5,49,6,53],
+    [.20,  0,0,  -6,  0,1,   -6,49,-7,53,  5,49,6,53],
+    [.43, -1,2,  -9, -8,.86, -4,49,-7,53,  7,48,8,53],
+    [.67, -1,5,  -6,-29,.80, -1,50,-3,54,  8,48,10,54],
+    [.86, -2,7,  -9,-56,.82,  1,49, 5,54,  8,48,13,54],
+    [BRACE_START,-2,9,-15,-76,.85, 1,49, 7,54,  8,48,14,54],
+    [BRACE_END,  -2,9,-15,-76,.85, 1,49, 7,54,  8,48,14,54],
+    [1.35,-3,9, -33,-82,.89,  1,49, 7,54,  8,48,14,54],
+    [1.46,-4,9, -54,-88,.94,  1,49, 7,54,  7,49,14,54],
+    [1.57,-5,9, -73,-93,.98,  1,50, 8,54,  7,50,14,54],
+    [1.67,-5,9, -86,-96,1.0,  1,51, 8,54,  7,50,14,54],
   ],
+  // He hugs the book rather than reaching for the floor. The robe pools as
+  // both shins disappear underneath; his head and shoulders bow over its spine.
   necromancer: [
-    [0,      0, 0,   0,  0, 1,   -3,49, -3,53,   6,49,  7,53],
-    [.12,    1, 1,   7,  2, 1,   -4,49, -5,53,   6,48,  8,51],
-    [.22,    0, 1,  -7, -2,.92,  -4,51, -7,53,   8,48, 10,52],
-    [.33,    0, 5,   5, 12,.64,  -4,54, -9,53,   8,48, 10,53],
-    [.45,    0, 5,   9, 19,.62,  -4,54, -9,53,   8,49, 10,53],
-    [.54,    1, 6,  24, 28,.65,  -4,54, -9,53,   8,50, 10,53],
-    [.65,    2, 6,  42, 37,.68,  -4,54, -9,53,   7,53, 10,53],
-    [.74,    3, 5,  51, 48,.73,  -4,54, -9,53,   7,54,  9,53],
-    [.83,    5, 7,  76, 61,.87,  -5,54,-10,53,   4,54,  0,53],
-    [.92,    5, 6,  88, 74,.95,  -6,54,-11,53,   1,54, -4,53],
-    [1.0,    5, 6,  91, 77,.96,  -7,54,-12,53,   0,54, -6,53],
+    [0,    0,0,  0,  0,1,   -3,49,-3,53,  6,49,7,53],
+    [.22,  0,1,  4,  1,.94, -3,49,-4,53,  5,49,7,53],
+    [.44,  0,3, 10,  3,.79, -4,51,-6,53,  5,51,6,53],
+    [.67, -1,5, 19,  5,.61, -4,53,-7,53,  5,52,4,53],
+    [.85, -1,7, 28,  6,.50, -4,54,-8,53,  5,54,1,53],
+    [BRACE_START,-1,8,39,9,.45, -4,54,-9,53,  5,54,0,53],
+    [BRACE_END,  -1,8,39,9,.45, -4,54,-9,53,  5,54,0,53],
+    [1.37, 0,8, 55, 12,.46, -4,54,-9,53,  5,54,0,53],
+    [1.50, 1,8, 72, 18,.47, -4,54,-9,53,  5,54,0,53],
+    [1.65, 2,8, 88, 24,.49, -4,54,-9,53,  5,54,0,53],
   ],
+  // He draws the forward boot inward, then takes the weight on the folded
+  // sleeve and hip. His leaf mantle rolls over the shoulder like a blanket.
   druid: [
-    [0,      0, 0,   0,  0, 1,   -5,49, -6,53,   4,49,  4,53],
-    [.12,   -1, 0,  -8, -2, 1,   -6,49, -7,53,   5,48,  6,51],
-    [.23,   -2, 1,  -7,  4,.91,  -6,51, -8,53,   7,48,  9,52],
-    [.35,   -1, 4,   7, 14,.65,  -5,54,-10,53,   8,49, 10,53],
-    [.45,    0, 5,  13, 21,.61,  -5,54,-10,53,   8,49, 10,53],
-    [.54,    1, 6,  28, 32,.63,  -5,54,-10,53,   8,51, 10,53],
-    [.64,    2, 5,  45, 43,.70,  -5,54,-10,53,   7,54,  9,53],
-    [.73,    3, 5,  53, 52,.76,  -5,54,-10,53,   7,54,  9,53],
-    [.82,    4, 7,  76, 63,.88,  -5,54,-11,53,   4,54,  0,53],
-    [.92,    4, 7,  88, 73,.95,  -7,54,-12,53,   1,54, -4,53],
-    [1.0,    4, 7,  90, 75,.96,  -8,54,-12,53,   0,54, -5,53],
+    [0,    0,0,  0,  0,1,   -5,49,-6,53,  4,49,4,53],
+    [.18, -1,0, -4, -2,.99, -5,49,-6,53,  4,48,5,52],
+    [.41,  0,2,  9, -5,.89, -5,51,-6,53,  5,47,7,51],
+    [.60,  0,4, 21, -8,.70, -4,52,-7,53,  6,47,7,52],
+    [.80,  1,6, 43,-13,.55, -3,54,-6,53,  6,48,6,53],
+    [BRACE_START,2,7,61,-17,.50, -2,54,-6,53,  7,49,5,53],
+    [BRACE_END,  2,7,61,-17,.50, -2,54,-6,53,  7,49,5,53],
+    [1.35, 2,8, 70,-20,.48, -2,54,-6,53,  7,49,5,53],
+    [1.48, 3,8, 81,-24,.48, -1,54,-5,53,  8,50,5,53],
+    [1.62, 3,8, 96,-29,.49,  0,54,-5,53,  8,50,5,53],
   ],
 };
 
@@ -55,27 +59,38 @@ const sheetRig = {
     seams: [[34, 53], [35, 53], [32, 48]],
     sleeve: [[50, 40], [33, 40], [49, 42]],
     skin: [[35, 37], [35, 39]],
-    reach: [7, -5], rearGrip: true, hands: [12, 19],
-    grip: [35, 38], tip: [34, 50], release: .33, contact: .55, plantX: 27, slant: -25,
-    soul: [16, -6],
+    arms: [[[-4,-8],[-5,-4],[-7,-6]], [[4,-7],[6,-2],[10,-5]]],
+    // The staff slips through the rear hand. The free hand cradles its spark,
+    // then folds into the lap. Angles belong to upper arm and forearm separately.
+    armKeys: [[0,0,0,0,0],[.37,4,-8,8,-12],[.69,-24,-54,32,-50],
+      [BRACE_START,-37,-72,48,-73],[BRACE_END,-37,-72,48,-73],[1.67,-23,-53,39,-83]],
+    holding: 0,
+    grip: [35, 38], tip: [34, 50], release: .38, contact: .74, plantX: 21, slant: -23,
+    soul: [-12, -5],
   },
   necromancer: {
     belt: [39, 44], rearBoot: [36, 53], foreBoot: [46, 53],
     seams: [[42, 44], [42, 45], [43, 46]],
     sleeve: [[39, 41], [41, 41], [42, 41]],
     skin: [[44, 41], [43, 40]],
-    reach: [-4, -3], hands: [13, 21],
-    grip: [44, 40], tip: [51, 44], release: .28, contact: .53, plantX: 67, slant: 41,
-    soul: [15, -6],
+    arms: [[[-3,-8],[-5,-4],[-2,-3]], [[2,-8],[3,-4],[5,-4]]],
+    armKeys: [[0,0,0,0,0],[.44,-8,-26,9,-24],[.76,-27,-59,22,-53],
+      [BRACE_START,-33,-70,30,-72],[BRACE_END,-33,-70,30,-72],[1.65,-32,-78,40,-85]],
+    holding: 1,
+    grip: [44, 40], tip: [50, 44], release: .80, contact: 1.00, plantX: 49, slant: 67,
+    soul: [5, -7],
   },
   druid: {
     belt: [40, 44], rearBoot: [34, 53], foreBoot: [44, 53],
     seams: [[45, 53], [43, 53], [44, 54]],
-    sleeve: [[45, 44], [42, 41], [48, 43]],
-    skin: [[46, 41], [47, 41]],
-    reach: [-3, -4], hands: [13, 20],
-    grip: [48, 40], tip: [49, 55], release: .42, contact: .59, plantX: 61, slant: 13,
-    soul: [14, -6],
+    sleeve: [[45, 44], [34, 40], [35, 44]],
+    skin: [[48, 41], [47, 40]],
+    arms: [[[-3,-8],[-5,-3],[-2,-3]], [[3,-7],[5,-2],[8,-4]]],
+    armKeys: [[0,0,0,0,0],[.40,7,-7,-4,2],[.73,-8,-66,29,-55],
+      [BRACE_START,-18,-95,49,-77],[BRACE_END,-18,-95,49,-77],[1.62,-24,-107,55,-89]],
+    holding: 1,
+    grip: [48, 40], tip: [49, 55], release: .50, contact: .79, plantX: 55, slant: 26,
+    soul: [12, -5],
   },
 };
 
@@ -181,7 +196,7 @@ function separate(id, standing, rig) {
     sleeve: fromRows(['.kkk.', 'kdllk', 'kdllk', 'kddlk', '.kkk.'], { k: cuff, d: dark, l: cloth }),
     forearm: fromRows(['.kl.', 'kdll', 'kdll', 'kddk', '.kk.'], { k: cuff, d: dark, l: cloth }),
     hand: fromRows(['.k..', 'kssk', 'kshk', 'kkkk'], { k: cuff, s: skin, h: glint }),
-    palm: fromRows(['.kk..', 'kshsk', 'kkkkk'], { k: cuff, s: skin, h: glint }),
+    spark: id === 'mage' ? layer(standing, 50, 31, 6, 8, (x,y) => y <= 37) : null,
     weapon: id === 'necromancer' ? tome(standing) : timber(id, standing, ownsWeapon),
   };
 }
@@ -196,30 +211,24 @@ function drawLeg(out, parts, boot, pivot, joint, knee, ankle, angle) {
   paintLayer(out, boot, pivot, ankle, angle);
 }
 
-function drawArm(out, parts, shoulder, hand, elapsed, near) {
-  const catchStart = near ? .62 : .66;
-  const contact = easeBetween(elapsed, catchStart - .08, catchStart);
-  const elbowFold = easeBetween(elapsed, .74, .91);
-  const elbow = [
-    mix(shoulder[0], hand[0], near ? .50 : .42) - (1 + elbowFold * 5),
-    mix(shoulder[1], hand[1], .50) + 1 - 2.5 * contact,
-  ];
-  segment(out, parts.sleeve, shoulder, elbow);
-  segment(out, parts.forearm, elbow, hand);
-  if (contact < .75) paint(out, parts.hand, [1.5, 1.5], hand, -28 * contact);
-  else paint(out, parts.palm, [1.5, 1], hand);
+function joints(rig, belt, lean, elapsed) {
+  const [, rearUpper, rearFore, nearUpper, nearFore] = valueAt(rig.armKeys, elapsed);
+  return [armFromSheet(rig.arms[0], belt, lean, rearUpper, rearFore),
+    armFromSheet(rig.arms[1], belt, lean, nearUpper, nearFore)];
 }
 
-function weaponHand(rig, keys, elapsed) {
-  const { belt, grip, release } = rig;
-  const [, dx, dy, lean] = valueAt(keys, Math.min(elapsed, release));
-  return turn([grip[0] - belt[0], grip[1] - belt[1]], lean, [belt[0] + dx, belt[1] + dy]);
+function drawArm(out, parts, [shoulder, elbow, wrist]) {
+  segment(out, parts.sleeve, shoulder, elbow);
+  segment(out, parts.forearm, elbow, wrist);
+  paint(out, parts.hand, [1.5, 1.5], wrist);
 }
 
 function drawWeapon(out, weapon, rig, keys, elapsed) {
   const { grip, tip, release, contact, slant, plantX } = rig;
-  const [, , , lean] = valueAt(keys, Math.min(elapsed, release));
-  const hand = weaponHand(rig, keys, elapsed);
+  const heldTime = Math.min(elapsed, release);
+  const [, dx, dy, lean] = valueAt(keys, heldTime);
+  const belt = [rig.belt[0] + dx, rig.belt[1] + dy];
+  const hand = joints(rig, belt, lean, heldTime)[rig.holding][2];
   const heldAngle = lean * .72;
   if (elapsed < release) {
     paintLayer(out, weapon, grip, hand, heldAngle);
@@ -229,25 +238,11 @@ function drawWeapon(out, weapon, rig, keys, elapsed) {
   const flight = Math.min(1, (elapsed - release) / (contact - release));
   const restTip = out.h - .4;
   const impactAge = Math.max(0, elapsed - contact);
-  const impact = Math.min(1, impactAge / .18);
+  const impact = Math.min(1, impactAge / Math.min(.16, BRACE_START - contact));
   // The tip stays pinned below the surface while the top rocks once on impact.
-  const angle = mix(heldAngle, slant, flight) + Math.sign(slant) * 11 * Math.sin(impact * Math.PI * 2) * (1 - impact);
+  const angle = mix(heldAngle, slant, flight) + Math.sign(slant) * 4 * Math.sin(impact * Math.PI * 2) * (1 - impact);
   const target = [mix(startX, plantX, flight), mix(startY, restTip, flight * flight)];
   paintLayer(out, weapon, tip, target, angle);
-}
-
-function handsAt(rig, keys, belt, lean, elapsed, ground) {
-  const weapon = weaponHand(rig, keys, elapsed);
-  return rig.hands.map((reach, index) => {
-    const holdsWeapon = index === (rig.rearGrip ? 0 : 1);
-    const ready = holdsWeapon ? weapon : turn(rig.reach, lean, belt);
-    const armReach = easeBetween(elapsed, holdsWeapon ? rig.release : .34, index === 0 ? .66 : .62);
-    const buckle = easeBetween(elapsed, .75, .94);
-    return [
-      mix(ready[0], rig.belt[0] + reach - 2 * buckle, armReach),
-      mix(ready[1], ground - 1, armReach),
-    ];
-  });
 }
 
 function drawFall(standing, parts, rig, keys, elapsed, ground) {
@@ -257,23 +252,30 @@ function drawFall(standing, parts, rig, keys, elapsed, ground) {
   if (elapsed < rig.release) drawWeapon(visible, parts.weapon, rig, keys, elapsed);
   const [bx, by] = rig.belt;
   const belt = [bx + x, by + y];
-  const flatten = easeBetween(elapsed, .74, .93);
-  const [rearHand, foreHand] = handsAt(rig, keys, belt, lean, elapsed, ground);
+  const flatten = easeBetween(elapsed, BRACE_END, 1.60);
+  const [rearArm, foreArm] = joints(rig, belt, lean, elapsed);
   drawLeg(visible, parts, parts.rearBoot, rig.rearBoot, turn([-3, 1], hemAngle / 2, belt),
-    [bx + rkx, rky], [bx + rax, ray], -55 * easeBetween(elapsed, .17, .43));
-  paintLayer(visible, parts.hem, rig.belt, belt, hemAngle, hemLength, 1 - .29 * flatten);
+    [bx + rkx, rky], [bx + rax, ray], -55 * easeBetween(elapsed, .65, .92));
+
   drawLeg(visible, parts, parts.foreBoot, rig.foreBoot, turn([3, 1], hemAngle / 2, belt),
-    [bx + fkx, fky], [bx + fax, fay], -62 * easeBetween(elapsed, .70, .99));
-  drawArm(visible, parts, turn([-4, -9], lean, belt), rearHand, elapsed, false);
+    [bx + fkx, fky], [bx + fax, fay], -62 * easeBetween(elapsed, .83, BRACE_START));
+  paintLayer(visible, parts.hem, rig.belt, belt, hemAngle, hemLength, 1 - .29 * flatten);
+  drawArm(visible, parts, rearArm);
   paintLayer(visible, parts.torso, rig.belt, belt, lean, 1, 1 - .14 * flatten);
-  drawArm(visible, parts, turn([3, -9], lean, belt), foreHand, elapsed, true);
+  drawArm(visible, parts, foreArm);
+  if (parts.spark && elapsed < .43) {
+    const dim = 1 - easeBetween(elapsed, .12, .44);
+    paintLayer(visible, parts.spark, [52,39], foreArm[2], lean, .45 + .55 * dim, dim);
+  }
   if (elapsed >= rig.release) drawWeapon(visible, parts.weapon, rig, keys, elapsed);
   return out;
 }
 
 export function casterFall(id, sprite) {
   const rig = sheetRig[id], keys = staggers[id];
-  const poses = Array.from({ length: 21 }, (_, index) => [index / 20]);
+  const poses = Array.from({ length: Math.ceil(SOUL_RELEASE * 20) }, (_, index) => [index / 20]);
+  // Show the first display tick after the held pose as well as the 20 Hz keys.
+  poses.splice(Math.round(BRACE_END * 20) + 1, 0, [BRACE_END + 1 / 60]);
   const [offsetX, offsetY] = rig.soul;
   const soul = id === 'necromancer' ? sinkingSoul : departingSoul;
   let frames;

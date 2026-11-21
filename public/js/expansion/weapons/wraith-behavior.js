@@ -2,11 +2,15 @@ import { sfx } from '../../engine/audio.js';
 import { angleDiff, TAU } from '../../engine/util.js';
 import { slashFrame } from '../../game/fxsprites.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
+import { SPR } from '../../engine/sprites.js';
+import { hexPack, tint } from '../../engine/pixels.js';
+import { reachesFeet } from '../../game/hitbox.js';
 
 const REACH = 32, ARC = Math.PI * 0.58, MAX_ECHO_GAP = 104;
 const CUT_DURATION = 0.18, CUT_FRAMES = 6;
 const BLADE = ['#342046', '#704c92', '#a67cc6', '#e6d3f4', '#fff3ff'];
 const SHADE = ['#262240', '#4c3a73', '#7255a2', '#af8dcc', '#d9c3ed'];
+const mist = buf => tint(buf, hexPack('#a381ce'), .68);
 
 const openLine = (world, x, y, tx, ty) => !world.solid(tx, ty) && world.lineOfSight(x, y, tx, ty);
 
@@ -46,13 +50,19 @@ class ShadeAnchor {
     ctx.fillStyle = '#af8dcc';
     ctx.fillRect(x - 2 * S, y - S, 4 * S, 2 * S);
     ctx.fillRect(tipX - S, tipY - S, 2 * S, 2 * S);
+    const spr = SPR.wraith, blade = spr.frames[spr.attack[spr.attackRelease ?? 0]];
+    const image = blade.variant('veil-shade', mist, Math.cos(this.ang) < 0);
+    const scale = S / spr.hires;
+    ctx.globalAlpha *= .47;
+    ctx.drawImage(image, Math.round(x - image.width * scale / 2), Math.round(y - spr.anchorY * scale),
+      image.width * scale, image.height * scale);
     ctx.restore();
   }
 }
 
 class VeilCut {
-  constructor(w, x, y, ang, radius, echo) {
-    Object.assign(this, { w, x, y, radius, echo, t: 0 });
+  constructor(w, x, y, ang, radius, echo, threadEnd) {
+    Object.assign(this, { w, x, y, radius, echo, threadEnd, t: 0 });
     this.angleIdx = (Math.round(ang * 32 / TAU) + 32) % 32;
   }
 
@@ -66,12 +76,23 @@ class VeilCut {
     const phase = Math.min(CUT_FRAMES - 1, Math.floor(this.t * CUT_FRAMES / CUT_DURATION));
     const image = slashFrame(this.radius, ARC, this.angleIdx, phase, CUT_FRAMES, this.echo ? SHADE : BLADE);
     const S = cam.S, x = this.x - cam.x, y = this.y - cam.y - 7;
+    if (this.threadEnd) {
+      const dx = this.threadEnd.x - this.x, dy = this.threadEnd.y - this.y;
+      const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)));
+      ctx.save();
+      ctx.globalAlpha *= Math.max(0, 1 - this.t / CUT_DURATION);
+      for (let i = 0; i <= steps; i++) {
+        ctx.fillStyle = (i + phase) % 6 < 2 ? SHADE[4] : SHADE[2];
+        ctx.fillRect(Math.round((x + dx * i / steps) * S), Math.round((y + dy * i / steps) * S), S, S);
+      }
+      ctx.restore();
+    }
     ctx.drawImage(image, Math.round((x - image.width / 2) * S), Math.round((y - image.height / 2) * S),
       Math.round(image.width * S), Math.round(image.height * S));
   }
 }
 
-function cut(w, { x, y, ang }, hit, echo) {
+function cut(w, { x, y, ang }, hit, echo, threadEnd) {
   const { g, s } = w, radius = Math.round(Math.min(65, REACH * s.area));
   const max = Math.min(echo ? 5 : 7, s.amount + (echo ? 1 : 2));
   const choices = [];
@@ -92,7 +113,7 @@ function cut(w, { x, y, ang }, hit, echo) {
     g.hitEnemy(e, s.dmg * (echo ? s.echo : 1), { w, type: 'dark', kb: s.kb * (echo ? 0.35 : 1),
       kx: dx / (gap || 1), ky: dy / (gap || 1) });
   }
-  g.effects.push(new VeilCut(w, x, y, ang, radius, echo));
+  g.effects.push(new VeilCut(w, x, y, ang, radius, echo, threadEnd));
 }
 
 export default {
@@ -108,8 +129,17 @@ export default {
     recordHeroAttack(w, ang);
     cut(w, anchor, hit, false);
     if (prior) {
-      if (!prior.dead && prior.world === g.world && g.effects.includes(prior) &&
-          Math.hypot(anchor.x - prior.x, anchor.y - prior.y) <= MAX_ECHO_GAP) cut(w, prior, hit, true);
+      const gap = Math.hypot(anchor.x - prior.x, anchor.y - prior.y);
+      if (!prior.dead && prior.world === g.world && g.effects.includes(prior) && gap <= MAX_ECHO_GAP) {
+        const stretched = w.evolved && gap >= 24 && openLine(g.world, prior.x, prior.y, anchor.x, anchor.y);
+        cut(w, prior, hit, true, stretched ? { x:anchor.x, y:anchor.y } : null);
+        if (stretched) {
+          const mx = (anchor.x + prior.x) / 2, my = (anchor.y + prior.y) / 2;
+          const foe = g.nearestEnemy(mx, my, gap / 2 + 4, e => !hit.has(e.id) &&
+            reachesFeet(e, prior.x, prior.y, anchor.x, anchor.y, 3) && openLine(g.world, mx, my, e.x, e.y));
+          if (foe) g.hitEnemy(foe, w.s.dmg * w.s.echo, { w, type:'dark', kb:0 });
+        }
+      }
       prior.dead = true;
     }
     w.fx = anchor;

@@ -3,7 +3,7 @@ const id = 'arcanist_meridian_pendulum';
 export default {
   id,
   weapon: {
-    name: 'Meridian Pendulum', icon: 'i_arcane', kind: id,
+    name: 'Meridian Pendulum', icon: 'i_arcanist_meridian_pendulum', kind: id,
     desc: 'Swing a crystal along a narrow arc at a foe’s distance. It cuts each body once and reverses direction each cast.',
     base: { dmg: 42, cd: 1.1, area: 1, speed: 1, amount: 1, sweep: 0.68 },
     levels: [
@@ -18,7 +18,7 @@ export default {
     evo: { into: 'arcanist_astral_meridian', with: 'projspeed' },
   },
   evolution: {
-    name: 'Astral Meridian', icon: 'i_prismatic', kind: id, evolved: true,
+    name: 'Astral Meridian', icon: 'i_arcanist_astral_meridian', kind: id, evolved: true,
     desc: 'An astral crystal sweeps a wider arc, cutting more foes on its way across.',
     base: { dmg: 96, cd: 0.76, area: 1.52, speed: 1.28, amount: 6, sweep: 0.92 },
   },

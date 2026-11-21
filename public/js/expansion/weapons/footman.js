@@ -3,7 +3,7 @@ const id = 'footman_linebreaker';
 export default {
   id,
   weapon: {
-    name: 'Linebreaker', icon: 'i_sword', kind: id, directional: true,
+    name: 'Linebreaker', icon: 'i_footman_linebreaker', kind: id, directional: true,
     desc: 'Cut into the first foe ahead. The impact staggers it and sends a shock through the rank behind it.',
     base: { dmg: 42, cd: 1.08, area: 1, amount: 1, kb: 0.95, dur: 0.3 },
     levels: [
@@ -18,7 +18,7 @@ export default {
     evo: { into: 'footman_iron_advance', with: 'armor' },
   },
   evolution: {
-    name: 'Iron Advance', icon: 'i_sword', kind: id, evolved: true, directional: true,
+    name: 'Iron Advance', icon: 'i_footman_iron_advance', kind: id, evolved: true, directional: true,
     desc: 'An unyielding cut drives a wider, stronger shock through more of the ranks behind the lead foe.',
     base: { dmg: 112, cd: 0.72, area: 1.58, amount: 6, kb: 1.22, dur: 0.48 },
   },

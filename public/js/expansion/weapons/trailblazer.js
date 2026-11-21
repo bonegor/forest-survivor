@@ -3,7 +3,7 @@ export const TRAILBLAZER_WEAPON = 'trailblazer_wayline';
 export default {
   id: TRAILBLAZER_WEAPON,
   weapon: {
-    name: 'Wayline Bow', icon: 'i_bow', kind: TRAILBLAZER_WEAPON,
+    name: 'Wayline Bow', icon: 'i_trailblazer_wayline', kind: TRAILBLAZER_WEAPON,
     desc: 'An arrow pins a tripline along its flight. Other foes that touch it take damage and slow.',
     base: { dmg: 39, cd: 0.92, amount: 1, area: 1, speed: 1, dur: 1.25, kb: 0.65, slow: 0.2 },
     levels: [
@@ -18,7 +18,7 @@ export default {
     evo: { into: 'trailblazer_runewire', with: 'duration' },
   },
   evolution: {
-    name: 'Runewire', icon: 'i_stormstring', kind: TRAILBLAZER_WEAPON, evolved: true,
+    name: 'Runewire', icon: 'i_trailblazer_runewire', kind: TRAILBLAZER_WEAPON, evolved: true,
     desc: 'A stronger arrow leaves a wider, longer tripline that deals more damage and slows harder.',
     base: { dmg: 90, cd: 0.62, amount: 5, area: 1.42, speed: 1.14, dur: 2.1, kb: 0.8, slow: 0.28 },
   },

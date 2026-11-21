@@ -265,15 +265,20 @@ export function buildSprite(name, def) {
     fitW: def.fitW || frames[0].w, fitH: def.fitH || frames[0].h,
     fps: def.fps || 0, hires: def.hires || 1, small: def.small || null, picture: def.picture || null, w: frames[0].w, h: frames[0].h };
   if (def.fall) {
-    sprite.fall = {
-      ...buildFrames({ ...def.fall, palette: def.palette, rim: def.rim }),
-      frameAt: def.fall.frameAt, cues: def.fall.cues,
-    };
-    const wisp = def.fall.wisp;
-    if (wisp) {
-      const { frameAt, release, duration, offsetX, offsetY, sinks } = wisp;
-      sprite.fall.wisp = { ...buildFrames(wisp), frameAt, release, duration, offsetX, offsetY, sinks };
-    }
+    // A run can play only its own hero's death. Defer the other heroes'
+    // paired facing canvases until a review or a later run actually uses them.
+    let fall;
+    Object.defineProperty(sprite, 'fall', { enumerable: true, get() {
+      if (fall) return fall;
+      const built = { ...buildFrames({ ...def.fall, palette: def.palette, rim: def.rim }),
+        frameAt: def.fall.frameAt, cues: def.fall.cues, remainsAt: def.fall.remainsAt };
+      const wisp = def.fall.wisp;
+      if (wisp) {
+        const { frameAt, release, duration, offsetX, offsetY, sinks, walkOff } = wisp;
+        built.wisp = { ...buildFrames(wisp), frameAt, release, duration, offsetX, offsetY, sinks, walkOff };
+      }
+      return (fall = built);
+    } });
   }
   return sprite;
 }

@@ -2,6 +2,7 @@
 
 import {PHOENIX_HEART_ICON} from './icons/phoenix-heart.js';
 import {EXILE_ICON} from './icons/exile.js';
+import { SIGNATURE_ICONS } from './icons/hero-signatures.js';
 
 export const PICKUP_ART = {
   gem1: { emissive: 'cwU', frames: [['..c..', '.cwU.', 'cUUUu', '.Uuu.', '..u..'], ['..w..', '.cwU.', 'cUwUu', '.Uuu.', '..u..']] },
@@ -142,6 +143,10 @@ export const PICKUP_ART = {
 
 export const PROJECTILE_ART = {
   arrow: { emissive: '', frames: [['ww........g.', 'rbBBBBBBBBGw', 'ww........g.']] },
+  wayline_anchor: { frames: [['.DD......Z..', 'CBBb....Zgg.', '.bCBbBBBBgGX', '.CD......Zg.', '..........Z.']] },
+  meridian_crystal: { frames: [['..CC..', '..DC..', '.jpXj.', 'jXPjjp', '.Pjjp.', '..jp..', '..p...']] },
+  astral_crystal: { frames: [['..CCC..', '.C.D.C.', 'C.jwP.C', 'CjXjjpC', '.CPjpC.', '..CjC..', '...p...']] },
+  liquidation_ingot: { frames: [['..fffff.', '.tBTBtdB', 'tddddBbm', '.BBBBbm.']] },
   // Display-only bolt variants. Projectile.shape keeps the original silver bolt's
   // bounds, so these identities do not change the weapons' reach or damage.
   splitpin_bolt: { emissive: 'w', frames: [['yy......G.w', 'BbGGGGGGG..', 'yy......G.w']] },
@@ -449,6 +454,7 @@ export const PROJECTILE_ART = {
 
 // 14×14 item icons (16×16 once outlined).
 export const ICON_ART = {
+  ...SIGNATURE_ICONS,
   i_phoenix: PHOENIX_HEART_ICON,
   i_banish: EXILE_ICON,
   // ---------------------------------------------------------------- weapons

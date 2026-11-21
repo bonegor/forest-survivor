@@ -7,6 +7,45 @@ import { nearbyWeaponProp } from './weapon-targets.js';
 const HEIGHT = 18, DURATION = 0.22;
 export const whipReach = w => Math.min(100, 48 * w.s.area);
 
+// The merchant can keep one clay seal open. Remember the creature's id as
+// well as its pooled object, so a newly spawned enemy cannot inherit a debt.
+class CopperSeal {
+  constructor(g, foe) {
+    this.g = g;
+    this.foe = foe;
+    this.id = foe.id;
+    this.world = g.world;
+    this.until = g.clock + 2.5;
+  }
+  active() {
+    return !this.dead && this.g.world === this.world && this.g.clock < this.until &&
+      !this.foe.dead && this.foe.id === this.id;
+  }
+  update() {
+    if (this.active()) return true;
+    if (this.g.copperSeal === this) this.g.copperSeal = null;
+    return false;
+  }
+  draw(ctx, cam) {
+    if (!this.active() || !this.g.inView(this.foe)) return;
+    const { S } = cam;
+    const x = Math.round((this.foe.x - cam.x) * S);
+    const y = Math.round((this.foe.y - cam.y - this.foe.h - 5) * S);
+    ctx.fillStyle = '#57332f'; ctx.fillRect(x - 4 * S, y - 3 * S, 8 * S, 6 * S);
+    ctx.fillStyle = '#b86f50'; ctx.fillRect(x - 3 * S, y - 2 * S, 6 * S, 4 * S);
+    ctx.fillStyle = '#ffd6a0'; ctx.fillRect(x - 2 * S, y - S, 3 * S, S); ctx.fillRect(x, y, S, 2 * S);
+  }
+}
+
+export function privateCopperDamage(disc, foe) {
+  const { g } = disc, seal = g.copperSeal;
+  if (!seal || seal.foe !== foe || !seal.active()) return disc.dmg;
+  if (g.player.dead || (g.inCrypt && !g.world.lineOfSight(g.player.x, g.player.y, foe.x, foe.y))) return disc.dmg;
+  seal.dead = true;
+  g.copperSeal = null;
+  return disc.dmg * 1.5;
+}
+
 export class MerchantLash {
   constructor(w, angle) {
     this.w = w;
@@ -23,6 +62,7 @@ export class MerchantLash {
 
   strike() {
     const { w } = this, { g } = w, radius = 3 * Math.min(2, w.s.area);
+    let claimant = null, farthest = -Infinity;
     for (const e of g.grid.foes(this.x, this.y, whipReach(w) + 12)) {
       if (e.dead || this.hit.has(e.id) || e.spawnT > .3 || !g.inView(e)) continue;
       if (!g.world.lineOfSight(this.x, this.y, e.x, e.y)) continue;
@@ -34,6 +74,14 @@ export class MerchantLash {
       if (!contact) continue;
       this.hit.add(e.id);
       g.hitEnemy(e, w.s.dmg, { w, type: 'normal', kb: w.s.kb, kx: this.dx, ky: this.dy });
+      const along = (e.x - this.x) * this.dx + (e.y - this.y) * this.dy;
+      if (!e.dead && !e.prop && along > farthest) { claimant = e; farthest = along; }
+    }
+    if (!this.sealed && claimant) {
+      this.sealed = true;
+      if (g.copperSeal) g.copperSeal.dead = true;
+      g.copperSeal = new CopperSeal(g, claimant);
+      g.effects.push(g.copperSeal);
     }
   }
 

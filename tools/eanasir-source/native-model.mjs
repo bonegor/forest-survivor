@@ -11,8 +11,8 @@ export const STONE_PALETTE=Object.freeze(Object.fromEntries(Object.entries({
  leather:'#5b483a',leatherLight:'#8d6c50',
 }).map(([key,hex])=>[key,hexPack(hex)])));
 const P=STONE_PALETTE,TAU=Math.PI*2,R=Math.round,wrap=t=>((t%1)+1)%1;
-function painter(d,ox=0,oy=0){
- const put=(x,y,k)=>{x=R(x+ox);y=R(y+oy);if(x>=0&&x<W&&y>=0&&y<H)d[y*W+x]=P[k];};
+function painter(d,ox=0,oy=0,hem=1){
+ const put=(x,y,k)=>{x=R(x+ox);y=R((y>34?34+(y-34)*hem:y)+oy);if(x>=0&&x<W&&y>=0&&y<H)d[y*W+x]=P[k];};
  const rect=(x,y,w,h,k)=>{for(let j=0;j<h;j++)for(let i=0;i<w;i++)put(x+i,y+j,k);};
  const line=(a,b,k,width=1)=>{let x=R(a[0]),y=R(a[1]),x1=R(b[0]),y1=R(b[1]);const dx=Math.abs(x1-x),sx=x<x1?1:-1,dy=-Math.abs(y1-y),sy=y<y1?1:-1;let err=dx+dy;for(;;){rect(x-Math.floor(width/2),y-Math.floor(width/2),width,width,k);if(x===x1&&y===y1)break;const e=2*err;if(e>=dy){err+=dy;x+=sx;}if(e<=dx){err+=dx;y+=sy;}}};
  const poly=(pts,k)=>{for(let y=Math.floor(Math.min(...pts.map(p=>p[1])));y<=Math.ceil(Math.max(...pts.map(p=>p[1])));y++)for(let x=Math.floor(Math.min(...pts.map(p=>p[0])));x<=Math.ceil(Math.max(...pts.map(p=>p[0])));x++){let hit=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const a=pts[i],b=pts[j];if((a[1]>y+.5)!==(b[1]>y+.5)&&x+.5<(b[0]-a[0])*(y+.5-a[1])/(b[1]-a[1])+a[0])hit=!hit;}if(hit)put(x,y,k);}};
@@ -21,7 +21,8 @@ function painter(d,ox=0,oy=0){
 }
 // Forward contact, compression, passing and reach; support knee stays quiet.
 function foot(phase,far){const p=wrap(phase+(far?.5:0)),support=.6;if(p<support)return{x:4.5*(1-2*p/support),y:0};const q=(p-support)/(1-support);return{x:-4.5*Math.cos(q*Math.PI),y:-2.7*Math.sin(q*Math.PI)};}
-function leg(a,phase,far,moving){const f=moving?foot(phase,far):{x:0,y:0},hx=far?42:36,ax=hx+f.x,kx=hx+f.x*.48-(f.y?1:0),ay=54+f.y;
+function leg(a,phase,far,moving,stride=1){const f=moving?foot(phase,far):{x:0,y:0};f.x*=stride;f.y*=Math.sqrt(stride);
+ const hx=far?42:36,ax=hx+f.x,kx=hx+f.x*.48-(f.y?1:0),ay=54+f.y;
  a.line([hx,44],[kx,49+f.y*.25],'k',4);a.line([kx,49+f.y*.25],[ax,ay],'k',4);
  a.line([hx,44],[kx,49+f.y*.25],far?'D':'T',2);a.line([kx,49+f.y*.25],[ax,ay],far?'S':'t',2);
  a.shape([[ax-2,ay-1],[ax+1,ay-1],[ax+3,ay+1],[ax+3,ay+2],[ax-3,ay+2]],far?'S':'t');a.line([ax-1,ay],[ax+1,ay+1],far?'t':'T');return f;}
@@ -52,9 +53,12 @@ function head(a){
  }
 }
 export const ATTACK_GRIPS=[[38,34],[27,28],[44,38],[45,38],[38,34]];
-export function nativeFrame({phase=0,moving=false,attack=-1,idle=false}={}){
- const d=new Uint32Array(W*H),a=painter(d),t=phase*TAU,breath=idle&&Math.cos(t)<-.15?-1:0,shift=moving&&Math.sin(t)>.65?1:0,bob=moving&&Math.cos(t*2)<-.35?1:breath,lean=attack===1?-1:attack===2?2:attack===3?3:0;
- const far=leg(a,phase,true,moving),near=leg(a,phase,false,moving),top=painter(d,shift,bob),up=painter(d,shift+lean,bob),left=30+R(near.x*.28),right=48+R(far.x*.28),liftL=R(near.y*.45),liftR=R(far.y*.45);
+export function nativeFrame({phase=0,moving=false,attack=-1,idle=false,layer=null,unarmed=false}={}){
+ const d=new Uint32Array(W*H),hidden=(layer||unarmed)&&new Uint32Array(W*H);
+ const part=(name,x=0,y=0)=>painter((layer&&layer!==name)||(unarmed&&(name==='copper'||name==='whip'))?hidden:d,x,y,unarmed&&name==='skirt'?.79:1);
+ const a=part('bust'),t=phase*TAU,breath=idle&&Math.cos(t)<-.15?-1:0,shift=moving&&Math.sin(t)>.65?1:0,bob=moving&&Math.cos(t*2)<-.35?1:breath,lean=attack===1?-1:attack===2?2:attack===3?3:0;
+ const stride=unarmed?1.9:1;
+ const far=leg(part('farFoot'),phase,true,moving,stride),near=leg(part('nearFoot'),phase,false,moving,stride),top=part('skirt',shift,bob),up=part('bust',shift+lean,bob),left=30+R(near.x*.28),right=48+R(far.x*.28),liftL=R(near.y*.45),liftR=R(far.y*.45);
  // Calm cylindrical stone body: broad top-left planes, no fabric wrap or belt.
  top.shape([[33,34],[44,34],[46,41],[right,52+liftR],[right-1,54+liftR],[43,55+liftR],[40,54],[37,55+liftL],[33,54+liftL],[left,52+liftL],[31,43]],'C');
  top.poly([[33,35],[40,35],[42,42],[41,54],[35,54+liftL],[32,51],[32,43]],'s');
@@ -80,19 +84,24 @@ export function nativeFrame({phase=0,moving=false,attack=-1,idle=false}={}){
  up.poly([[43,29],[46,30],[45,35],[43,38],[42,37]],'S');
  // Both resting arms bend inward like the reference's clasped hands. Copper
  // is a small muted game accessory cradled near the chest, not a large shield.
- up.line([45,29],[47,33],'k',4);up.line([47,33],[44,36],'k',4);
- up.line([45,29],[47,33],'S',2);up.line([47,33],[44,36],'t',2);
- up.shape([[44,31],[47,30],[50,32],[51,35],[49,38],[46,38],[43,36],[43,33]],'copper');
- up.poly([[44,32],[47,31],[49,32],[47,35],[44,35]],'copperLight');
- up.poly([[48,34],[50,33],[50,36],[48,37],[46,37]],'copperDark');up.put(45,32,'T');
- up.line([43,36],[46,36],'k',3);up.line([43,36],[46,36],'t',2);up.put(44,35,'T');
+ const swing=unarmed?Math.round(-near.x*.47):0;
+ const farElbow=unarmed?[45-swing*.6,34]:[47,33],farPalm=unarmed?[46-swing,38]:[44,36];
+ up.line([45,29],farElbow,'k',4);up.line(farElbow,farPalm,'k',4);
+ up.line([45,29],farElbow,'S',2);up.line(farElbow,farPalm,'t',2);
+ const metal=part('copper',shift+lean,bob);
+ metal.shape([[44,31],[47,30],[50,32],[51,35],[49,38],[46,38],[43,36],[43,33]],'copper');
+ metal.poly([[44,32],[47,31],[49,32],[47,35],[44,35]],'copperLight');
+ metal.poly([[48,34],[50,33],[50,36],[48,37],[46,37]],'copperDark');metal.put(45,32,'T');
+ if(!unarmed){up.line([43,36],[46,36],'k',3);up.line([43,36],[46,36],'t',2);up.put(44,35,'T');}
  // The visible hand meets the actual game lash origin on release.
  const rawHand=attack>=0?ATTACK_GRIPS[attack]:[38+(moving?R(Math.sin(t)*.6):0),34+(idle&&Math.sin(t)>.5?1:0)],hand=attack>=0?rawHand:[rawHand[0]+shift,rawHand[1]+bob];
- const shoulder=[32+shift+lean,29+bob],elbow=attack===1?[27,32]:attack===2||attack===3?[36+lean,37]:[30+shift,36+bob];
+ if(unarmed){hand[0]=33+shift+swing;hand[1]=38+bob;}
+ const shoulder=[32+shift+lean,29+bob],elbow=unarmed?[31+shift+swing*.6,35+bob]:attack===1?[27,32]:attack===2||attack===3?[36+lean,37]:[30+shift,36+bob];
  a.line(shoulder,elbow,'k',4);a.line(elbow,hand,'k',4);a.line(shoulder,elbow,'t',2);a.line(elbow,hand,'t',2);a.put(shoulder[0]-1,shoulder[1],'T');a.line([hand[0]-1,hand[1]-1],[hand[0]+1,hand[1]-1],'B',2);
  const whip=attack===2||attack===3?[[0,0],[3,0]]:attack===1?[[0,0],[-4,-2],[-7,0],[-6,5],[-3,6]]:[[0,0],[-5,3],[-9,7],[-10,9],[-8,10],[-5,9],[-3,6],[-3,3],[0,0]];
- for(let i=1;i<whip.length;i++)a.line([hand[0]+whip[i-1][0],hand[1]+whip[i-1][1]],[hand[0]+whip[i][0],hand[1]+whip[i][1]],'leather',2);
- for(let i=1;i<whip.length;i++)a.line([hand[0]+whip[i-1][0],hand[1]+whip[i-1][1]],[hand[0]+whip[i][0],hand[1]+whip[i][1]],'leatherLight');
+ const lash=part('whip');
+ for(let i=1;i<whip.length;i++)lash.line([hand[0]+whip[i-1][0],hand[1]+whip[i-1][1]],[hand[0]+whip[i][0],hand[1]+whip[i][1]],'leather',2);
+ for(let i=1;i<whip.length;i++)lash.line([hand[0]+whip[i-1][0],hand[1]+whip[i-1][1]],[hand[0]+whip[i][0],hand[1]+whip[i][1]],'leatherLight');
  a.rect(hand[0]-1,hand[1]-1,3,3,'t');a.put(hand[0],hand[1]-1,'T');a.put(hand[0]+1,hand[1]+1,'S');
  head(up);return{w:W,h:H,d};
 }

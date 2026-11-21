@@ -8,6 +8,23 @@ import { SPR } from '../public/js/engine/sprites.js';
 import { Game } from '../public/js/game/game.js';
 import { Weapon, KINDS } from '../public/js/game/weapons.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
+import { SIGNATURES } from '../public/js/expansion/signatures.js';
+
+test('the twelve expansion weapons and their evolutions have distinct native slot silhouettes', () => {
+  const silhouettes = new Set();
+  for (const { weapon, evolution } of Object.values(SIGNATURES)) {
+    for (const def of [weapon, evolution]) {
+      const icon = SPR[def.icon];
+      assert.equal(icon?.name, def.icon, def.name);
+      const { w, h, d } = icon.frames[0].buf;
+      assert.deepEqual([w, h], [16, 16], def.name);
+      const mask = Array.from(d, c => c >>> 24 ? '1' : '0').join('');
+      assert.ok(!silhouettes.has(mask), def.name);
+      silhouettes.add(mask);
+    }
+  }
+  assert.equal(silhouettes.size, 24);
+});
 
 test('Splitpin and Ratchet draw distinct bolts without changing their collision sprite or state', () => {
   const drawings = [];

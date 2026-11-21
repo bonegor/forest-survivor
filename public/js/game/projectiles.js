@@ -67,6 +67,7 @@ const GLOWS = {
 // silhouette differs. This also keeps pooled projectiles free of extra state.
 const DISPLAY_SPRITES = {
   splitpin: 'splitpin_bolt', splitpinShard: 'splitpin_shard', ratchetBolt: 'ratchet_bolt',
+  waylineArrow: 'wayline_anchor',
 };
 
 export class Projectile {
@@ -90,6 +91,7 @@ export class Projectile {
     this.max = o.life;
     this.r = o.r ?? 3;
     this.dmg = o.dmg ?? 0;
+    this.damageAt = o.damageAt || null;
     this.pierce = o.pierce ?? 0;
     this.kb = o.kb ?? 1;
     this.w = o.w || null;
@@ -285,7 +287,8 @@ export class Projectile {
           this.hits.add(e.id);
         }
         const sp = Math.hypot(this.vx, this.vy) || 1;
-        g.hitEnemy(e, this.bane && this.wicked(e) ? this.dmg * (1 + this.bane) : this.dmg, {
+        const damage = this.damageAt ? this.damageAt(this, e) : this.dmg;
+        g.hitEnemy(e, this.bane && this.wicked(e) ? damage * (1 + this.bane) : damage, {
           w: this.w, type: this.type, kb: this.kb, kx: this.vx / sp, ky: this.vy / sp, crit: this.crit,
           slow: this.slow, slowT: this.slowT, freeze: this.freeze, shatter: this.shatter, noFury: this.noFury, ult: this.ult,
         });

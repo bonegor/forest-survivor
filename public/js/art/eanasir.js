@@ -1,8 +1,9 @@
 import { EANASIR_MODEL_ART } from './eanasir-source.js';
+import { merchantFall } from './eanasir-fall.js';
 
 // Ea-nāṣir's meme likeness: the standing, bearded Mesopotamian worshipper
 // requested by the player (Met 40.156, as pictured on Wikipedia). The complete
-// source model/rig lives in tools/eanasir-source; copper art below is unchanged.
+// source model and rig live in tools/eanasir-source.
 const W = 80, H = 64;
 const blank = (w = W, h = H) => Array.from({ length: h }, () => Array(w).fill('.'));
 const rows = a => a.map(r => r.join(''));
@@ -38,9 +39,16 @@ const DISC = [
   '..bbOObb...',
   '...bbb.....',
 ];
-const REFINED_DISC = DISC.map(row => row.replaceAll('O', 'd').replaceAll('B', 't'));
+// The merchant strikes a wedge and upright into each disc he keeps for himself.
+const STOCK_DISC = [...DISC];
+STOCK_DISC[3] = 'btyttttOObb';
+STOCK_DISC[4] = 'btdOtbdtOOb';
+STOCK_DISC[5] = 'bdddtbdtOOb';
+STOCK_DISC[6] = 'bddObbOOObb';
+const REFINED_DISC = [...STOCK_DISC];
 REFINED_DISC[1] = '..btYyddb..';
 REFINED_DISC[2] = '.btzttdddb.';
+REFINED_DISC[3] = 'btyYYyYddbb';
 
 // Hero motion is reconstructed from the retained statue source model.
 const icon = blank(16, 16);
@@ -49,8 +57,8 @@ stamp(icon, 3, 3, DISC);
 dot(icon, 8, 7, 'E'); dot(icon, 9, 7, 'e'); dot(icon, 7, 10, 'E');
 
 const mediumIcon = blank(16, 16), highIcon = blank(16, 16);
-stamp(mediumIcon, 3, 3, DISC);
-stamp(highIcon, 3, 3, DISC);
+stamp(mediumIcon, 3, 3, STOCK_DISC);
+stamp(highIcon, 3, 3, REFINED_DISC);
 line(highIcon, 4, 6, 7, 3, 'Y'); line(highIcon, 5, 7, 8, 4, 't');
 line(highIcon, 11, 1, 11, 5, 'z'); line(highIcon, 9, 3, 13, 3, 'z');
 function whipIcon(evolved) {
@@ -94,6 +102,7 @@ function evolutionIcon(kind) {
 export const EANASIR_ART = {
   ...EANASIR_MODEL_ART,
   copper_disc: { frames: [DISC], outline: false },
+  merchant_stock_disc: { frames: [STOCK_DISC], outline: false },
   copper_refined_disc: { frames: [REFINED_DISC], outline: false },
   i_copper: { frames: [rows(icon)], outline: false },
   i_mediumcopper: { frames: [rows(mediumIcon)], outline: false },
@@ -102,5 +111,8 @@ export const EANASIR_ART = {
   ...Object.fromEntries(['furnace', 'crown', 'return', 'hail', 'arc', 'foundry'].map(kind => ['i_copper_' + kind, evolutionIcon(kind)])),
 };
 
-export const EANASIR_HERO_ART = { eanasir: EANASIR_ART.eanasir, eanasir_pose: EANASIR_ART.eanasir_pose };
+export const EANASIR_HERO_ART = {
+  eanasir: { ...EANASIR_ART.eanasir, fall: merchantFall(EANASIR_ART.eanasir) },
+  eanasir_pose: EANASIR_ART.eanasir_pose,
+};
 export const COPPER_ART = Object.fromEntries(Object.entries(EANASIR_ART).filter(([key]) => !Object.hasOwn(EANASIR_HERO_ART, key)));

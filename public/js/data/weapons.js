@@ -608,7 +608,7 @@ export const WEAPONS = {
     name: 'Twin Axes',
     icon: 'i_twinaxes',
     kind: 'leap',
-    desc: 'Leaps on a foe ahead and chops all round where he lands.',
+    desc: 'Ylva leaps at a foe ahead and swings both axes around her landing spot.',
     base: { dmg: 15, cd: 1.1, amount: 1, area: 1, kb: 1.2 },
     levels: [
       { dmg: 9, text: 'Damage {+9}.' },
@@ -841,7 +841,7 @@ export const WEAPONS = {
     icon: 'i_bloodstorm',
     kind: 'leap',
     evolved: true,
-    desc: 'Every landing chops twice in a wide circle, and each kill heals him a little.',
+    desc: 'Ylva chops twice in a wide circle on landing. Each kill heals her.',
     base: { dmg: 60, cd: 0.65, amount: 2, area: 1.8, kb: 1.4, heal: 1 },
   },
   tether: {

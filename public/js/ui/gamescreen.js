@@ -6,9 +6,10 @@ import { sfx, playMusic, stopCombatMusicPreview } from '../engine/audio.js';
 import { view } from '../engine/view.js';
 import { SPR, smoothScaled } from '../engine/sprites.js';
 import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
-import { Game, MILESTONES, isFiller, FLASH_SOFT } from '../game/game.js';
+import { Game, MILESTONES, isFiller, FLASH_SOFT, POWER_UPS } from '../game/game.js';
 import { tierOf, chestFrame, chestTease, revealOrder, chestSlots, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
-import { clockCountsDown, clockTime, heldBuild, revealOn, SLOT_LIT, slotsLeftOf } from '../game/hud.js';
+import { clockCountsDown, clockTime, heldBuild, revealOn, SHRINE_INFO, SLOT_LIT, slotsLeftOf } from '../game/hud.js';
+import { loadoutItems } from '../game/loadout.js';
 import { levelBonus } from '../game/player.js';
 import { heroStats } from '../game/weapons.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, RANDOM_EVOLUTION } from '../data/weapons.js';
@@ -77,10 +78,11 @@ export class GameScreen {
     this.regions = (x, y) => {
       const r = this.finishRect;
       if (this.game.state === 'cleared' && r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return 'finish-level';
-      const W = view.W, H = view.H;
+      const W = view.W, H = view.H - view.safe.bottom;
+      if (y >= H) return null;
       if (x > W / 2 - 14 && x < W / 2 + 14 && y > H - 22) return 'pause';
       if ((this.game.inCrypt || this.game.mode === 'dungeon') && x >= W / 2 + 19 && x < W / 2 + 51 && y >= H - 20) return 'map';
-      if (x > W - 56 && y > H - 56) return 'ult';
+      if (x > W - view.safe.right - 56 && x < W - view.safe.right && y > H - 56) return 'ult';
       return null;
     };
     this.touchFor(null);
@@ -181,12 +183,13 @@ export class GameScreen {
       ui.lock(0.35);
     }
     const bh = input.device === 'touch' ? 32 : 18;
-    const pw = Math.min(260, W - 20), x = Math.round((W - pw) / 2), y = H - bh - 70;
+    const pw = Math.min(260, W - 20), x = Math.round((W - pw) / 2);
+    const y = Math.min(H - bh - 70, this.game.hud.loadout(W, H).y - bh - 47);
     panel(ctx, x, y, pw, bh + 44, { title: 'LEVEL COMPLETE' });
     drawText(ctx, 'Collect loot, then finish to bank rewards', W / 2, y + 15, { align: 'center', color: '#c0cbdc' });
     ui.begin(dt);
     const label = input.device === 'touch' ? 'FINISH LEVEL' : `FINISH · ${input.device === 'pad' ? padKey('A') : 'ENTER'}`;
-    this.finishRect = { x: Math.round(W / 2 - 70), y: H - bh - 32, w: 140, h: bh };
+    this.finishRect = { x: Math.round(W / 2 - 70), y: y + 38, w: 140, h: bh };
     const r = this.finishRect;
     const finish = button(ctx, ui, 'finish-level', r.x, r.y, r.w, r.h, label) || (ui.lockT <= 0 && input.pressed('finish-level'));
     if (finish && this.game.finishLevel()) {
@@ -1443,6 +1446,13 @@ export class PauseOverlay {
 
   draw(ctx, W, H, dt) {
     const ui = this.gs.app.ui, g = this.g, app = this.gs.app;
+    if (this.powerDetails) {
+      if (this.powerDetails.draw(ctx, ui, W, H, dt)) {
+        this.powerDetails = null;
+        ui.focus('pause_powers');
+      }
+      return null;
+    }
     if (this.rankGear) {
       if (this.rankGear.draw(ctx, ui, W, H, dt)) {
         this.rankGear = null;
@@ -1468,8 +1478,14 @@ export class PauseOverlay {
     }
     dim(ctx, W, H, 0.6);
     const p = g.player, auto = FILLERS[g.autoPick]?.short;
+    const powers = loadoutItems(g).powers.map(item => {
+      const name = item.name || (SHRINE_INFO[item.buff] || POWER_UPS[item.buff])[0];
+      const tag = item.seconds != null ? `${item.seconds}s` : item.blessing ? `×${item.rank}` : String(item.rank);
+      return [item.icon, name, tag, item.seconds != null ? '#97dcde' : item.blessing ? '#d7b7ed' : '#c0cbdc'];
+    });
     // As tall as the build it shows (its longer column), the buttons and, if any, the ALWAYS line.
-    const listed = Math.max(1, p.weapons.length, p.passives.size);
+    const visiblePowers = Math.max(1, Math.min(6, Math.floor((H - 144 - (auto ? 18 : 0)) / 15)));
+    const listed = Math.max(1, p.weapons.length, Math.min(visiblePowers, powers.length));
     const pw = Math.min(W - 16, 320), ph = Math.min(H - 20, 26 + 12 + listed * 15 + 8 + 76 + (auto ? 18 : 0));
     const x = Math.round(W / 2 - pw / 2), y = Math.round(H / 2 - ph / 2) + 4;
     panel(ctx, x, y, pw, ph, { title: 'PAUSED' });
@@ -1504,10 +1520,15 @@ export class PauseOverlay {
       return ry;
     };
     const wy = column(x + 10, mid - 8, 'WEAPONS', p.weapons.map((w) => [w.def.icon, w.def.name, w.evolved ? 'MAX' : `LV ${w.level}/${MAX_WEAPON_LEVEL}`, w.evolved ? '#f77622' : '#c0cbdc', w.evolved ? null : g.evoState(w.id)]));
-    const ry = column(mid + 8, x + pw - 10, 'RELICS', [...p.passives].map(([id, r]) => [PASSIVES[id].icon, PASSIVES[id].name, `${r}`, '#c0cbdc']));
+    const ry = column(mid + 8, x + pw - 10, 'POWERS', powers.slice(0, visiblePowers));
     ctx.fillStyle = '#3a4466';
     ctx.fillRect(mid, top, 1, Math.max(wy, ry) - top - 4);
     ui.begin(dt);
+    if (powers.length && button(ctx, ui, 'pause_powers', x + pw - 61, top - 4, 51, 12, 'DETAILS', { pointer:false })) {
+      this.powerDetails = new MenuDialog('Powers', powers.map(([, name, tag, color]) => ({ text:`${name} · ${tag}`, color })));
+      ui.focus('detail_close');
+      ui.lock(0.2);
+    }
     // RESUME, MUSIC, OPTIONS and QUIT RUN one under another at the foot (the owner's, 23 October 2026:
     // menus that "respect left, right, up, down"), the way out last.
     const bw = 110, bx = Math.round(W / 2 - bw / 2), row = (k) => y + ph - 20 - (3 - k) * 18;

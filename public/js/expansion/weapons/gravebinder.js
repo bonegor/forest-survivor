@@ -3,7 +3,7 @@ const id = 'gravebinder_carrion_tithe';
 export default {
   id,
   weapon: {
-    name: 'Carrion Tithe', icon: 'i_hex', kind: id,
+    name: 'Carrion Tithe', icon: 'i_gravebinder_carrion_tithe', kind: id,
     desc: 'Send a spectral crow at a foe. It siphons lesser foes nearby, adding their strength to one final strike.',
     base: { dmg: 38, cd: 1.26, area: 1, amount: 2, siphon: 0.42, tithe: 0.10 },
     levels: [
@@ -18,7 +18,7 @@ export default {
     evo: { into: 'gravebinder_ravenous_edict', with: 'cooldown' },
   },
   evolution: {
-    name: 'Ravenous Edict', icon: 'i_doom', kind: id, evolved: true,
+    name: 'Ravenous Edict', icon: 'i_gravebinder_ravenous_edict', kind: id, evolved: true,
     desc: 'The raven collects a greater toll from more foes and strikes its target harder.',
     base: { dmg: 94, cd: 0.84, area: 1.6, amount: 6, siphon: 0.6, tithe: 0.12 },
   },

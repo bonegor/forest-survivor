@@ -105,3 +105,26 @@ test('crypt blows honor their release and walls, and evolution clears the prior 
   assert.equal(prior.update(0), false);
   assert.ok(w.s.dmg > capped.dmg && w.s.cd < capped.cd && w.s.echo > capped.echo);
 }));
+
+test('Echo of the Veil cuts one foe between casts along an unbroken thread', () => {
+  for (const blocked of [false,true]) combat((g,p,w) => {
+    while (!w.maxed) w.levelUp();
+    w.evolve();
+    w.cd = 0;
+    const start = p.x;
+    g.world.solid = () => false;
+    g.world.lineOfSight = (ax,ay,bx,by) => !blocked || (ax-start-34)*(bx-start-34) >= 0;
+    p.face = -1;
+    foe(g,-15);
+    refresh(g);
+    w.update(0);
+    p.x += 82;
+    p.face = 1;
+    const between = foe(g,-41), beside = foe(g,-42,20), end = foe(g,16);
+    refresh(g);
+    w.update(w.s.cd + .01);
+    assert.ok(end.hp < end.maxHp);
+    assert.equal(between.hp < between.maxHp,!blocked);
+    assert.equal(beside.hp,beside.maxHp);
+  });
+});

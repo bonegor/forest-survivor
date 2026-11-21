@@ -54,7 +54,7 @@ for (let i = 0; i < COPPER_IDS.length; i++) {
 COPPER_WEAPONS[GOOD_COPPER_ID] = {
   name: 'Medium Quality Copper', icon: 'i_mediumcopper', kind: 'copper',
   copper: true, goodCopper: true, special: true,
-  desc: 'Copper discs seek the nearest foe, even in crypts. Rank 8 + Phoenix Heart + a chest forges High Quality Copper (not for sale). Evolve the Whip first to open the Heart.',
+  desc: 'Discs seek the nearest foe, even in crypts. A whip seal breaks for 50% extra damage. Rank 8 + Phoenix Heart + a chest refines the discs.',
   base: { dmg: 16, cd: 1.4, amount: 1, area: 1, speed: 1, pierce: 1, kb: 0.35 },
   levels: COPPER_WEAPONS.pqc1.levels.map(level => ({ ...level })),
   evo: { into: HIGH_COPPER_ID, with: 'phoenix', onlyPartner: true },
@@ -63,13 +63,13 @@ COPPER_WEAPONS[GOOD_COPPER_ID] = {
 COPPER_WEAPONS[HIGH_COPPER_ID] = {
   name: 'High Quality Copper (not for sale)', icon: 'i_highcopper', kind: 'copper_shoot',
   copper: true, goodCopper: true, special: true, evolved: true,
-  desc: 'Phoenix-refined private stock: three fast, piercing copper discs seek the nearest foe. Absolutely not for sale.',
+  desc: 'Three fast, piercing discs from the private stock. The first to strike a whip seal breaks it for 50% extra damage.',
   base: { dmg: 40, cd: 0.8, amount: 3, area: 1.5, speed: 1.5, pierce: 4, kb: 0.5 },
 };
 
 COPPER_WEAPONS[WHIP_ID] = {
   name: 'Whip', icon: 'i_merchantwhip', kind: 'merchant_whip', special: true,
-  desc: 'Cracks through nearby foes and boxes in a long lash. Rank 8 + Gauntlets of Might + a chest evolves it and opens Phoenix Heart.',
+  desc: 'A long lash cracks foes and boxes. It seals one surviving foe for the next private copper disc. Rank 8 + Gauntlets of Might + a chest opens Phoenix Heart.',
   base: { dmg: 14, cd: 1.25, area: 1, kb: 0.7 },
   levels: [
     { dmg: 4, text: 'Damage {+4}.' },
@@ -84,6 +84,6 @@ COPPER_WEAPONS[WHIP_ID] = {
 };
 COPPER_WEAPONS[WHIP_EVOLUTION] = {
   name: "Lion's Lash", icon: 'i_lionslash', kind: 'merchant_whip', special: true, evolved: true,
-  desc: 'A longer, copper-studded lash tears through every foe along its path. Phoenix Heart can now be offered.',
+  desc: 'A longer, copper-studded lash tears through foes and seals one survivor for a copper disc. Phoenix Heart can now be offered.',
   base: { dmg: 48, cd: 0.8, area: 1.6, kb: 1.2 },
 };

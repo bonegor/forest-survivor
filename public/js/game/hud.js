@@ -7,7 +7,8 @@ import { input, padKey } from '../engine/input.js';
 import { fmtTime, fmtNum, clamp, makeCanvas, hexToRgb, TAU, ease } from '../engine/util.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, MAX_WEAPONS, MAX_RELICS } from '../data/weapons.js';
 import { isCopper } from '../data/copper.js';
-import { PASSIVES } from '../data/passives.js';
+import { FILLERS, PASSIVES } from '../data/passives.js';
+import { blessingTypes, drawLoadout, loadoutItems, loadoutLayout } from './loadout.js';
 import { view } from '../engine/view.js';
 import { ringSprite } from './fxsprites.js';
 import { FLASH_SOFT } from './game.js';
@@ -263,8 +264,9 @@ const AT = { x: 0, y: 0 };
 // [id, rank], the gold.
 export function heldBuild(g) {
   return {
-    weapons: g.player.weapons.map((w) => ({ w, icon: w.def.icon, level: w.level, evolved: w.evolved })),
+    weapons: g.player.weapons.map((w) => ({ w, icon: w.def.icon, level: w.level, rankBonus: w.effectiveRank(1) - 1, evolved: w.evolved })),
     relics: [...g.player.passives.entries()],
+    blessings: Object.fromEntries(blessingTypes.map(def => [def.count, g.player[def.count]])),
     gold: g.gold,
   };
 }
@@ -299,7 +301,7 @@ export function revealOn(held, it, g) {
     else {
       const w = g.player.weapons.find((x) => x.id === it.id);
       if (!w) return null;
-      i = held.weapons.push({ w, icon: w.def.icon, level: it.level, evolved: false }) - 1;
+      i = held.weapons.push({ w, icon: w.def.icon, level: it.level, rankBonus: w.effectiveRank(1) - 1, evolved: false }) - 1;
     }
     return { row: 'w', i };
   } else if (it.type === 'passive') {
@@ -307,6 +309,8 @@ export function revealOn(held, it, g) {
     if (i >= 0) held.relics[i][1] = it.level;
     else i = held.relics.push([it.id, it.level]) - 1;
     return { row: 'r', i };
+  } else if (FILLERS[it.type]?.count && held.blessings) {
+    held.blessings[FILLERS[it.type].count]++;
   }
   return null;
 }
@@ -375,19 +379,20 @@ export class Hud {
   // dt: real seconds since the last frame (the falling bar runs by it).
   draw(ctx, W, H, t, dt = 1 / 60) {
     const g = this.g, p = g.player;
+    const belt = this.loadout(W, H);
     this.lastDt = dt;
     this.drawRingWarnings(ctx, W, H, t);
     this.drawUltLaunch(ctx, W, H);
     this.drawXp(ctx, W, p, dt);
-    this.drawSlots(ctx, p, null, MAX_WEAPONS, true);
+    drawLoadout(ctx, belt, t);
     this.drawTop(ctx, W, t, dt);
-    this.drawOrbs(ctx, W, H, p, t);
+    this.drawOrbs(ctx, W, H, p, t, belt);
     this.drawBoss(ctx, W, dt, H);
     this.drawNames(ctx, W, H);
-    this.drawCryptStrike(ctx, W, H);
+    this.drawCryptStrike(ctx, W, H, belt);
     this.drawCryptDoor(ctx, W);
-    this.drawIndicators(ctx, W, H, t);
-    this.drawMapHint(ctx, W, H);
+    this.drawIndicators(ctx, W, H, t, belt);
+    this.drawMapHint(ctx, W, H, belt);
     this.drawSpeech(ctx, W, H);
     // No kill-streak count at the right edge since 28 October 2026 (game.js COMBO: the owner's "the
     // combo counter on the right actually doesn't make sense"); the damage numbers flash instead.
@@ -397,6 +402,10 @@ export class Hud {
     if (g.showMap && g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, true);
     if (input.device === 'touch') this.drawTouch(ctx, W, H, p);
     if (g.state === 'dying') this.drawDepartingSoul(ctx);
+  }
+
+  loadout(W, H) {
+    return loadoutLayout(W, H, input.device === 'touch', loadoutItems(this.g, this.held), view.safe);
   }
 
   // dt: real seconds since the last frame (the wrap runs on it, under the cards too: XP_WRAP).
@@ -600,9 +609,7 @@ export class Hud {
       : g.mode === 'ranked' && g.bestBeaten
         ? ['#ffffff', '#9ee562', '#63c74d']
         : ['#ffffff', '#ffffff', '#c0cbdc'];
-    const clock = fmtTime(remain), slots = Math.min(MAX_WEAPONS, Math.max(g.maxWeapons, g.player.weapons.length));
-    const clockX = Math.max(Math.floor(W / 2), 3 + slots * 18 + textWidth(clock) / 2 + 4);
-    drawText(ctx, clock, Math.round(clockX), 8, { align: 'center', color });
+    drawText(ctx, fmtTime(remain), Math.floor(W / 2), 8, { align: 'center', color });
     // Gold, rolling up to what it is (never down: a fresh run, or a shown chest's held gold, snaps).
     const want = this.held ? this.held.gold : g.gold;
     if (want < this.goldRoll) this.goldRoll = want;
@@ -640,16 +647,16 @@ export class Hud {
     }
   }
 
-  drawOrbs(ctx, W, H, p, t) {
+  drawOrbs(ctx, W, H, p, t, belt = this.loadout(W, H)) {
     const g = this.g;
     const hpImg = this.hp.render(p.hp / p.maxHp, t, false);
-    const ox = 4, oy = H - hpImg.height - 4;
+    const ox = 4 + view.safe.left, oy = H - view.safe.bottom - hpImg.height - 4;
     ctx.drawImage(hpImg, ox, oy);
     drawText(ctx, `${Math.ceil(p.hp)}`, ox + hpImg.width / 2, oy + hpImg.height / 2 - 4, { align: 'center', color: '#ffffff' });
     const shown = this.shownFury();
     const full = p.fury >= 100 && shown >= 100, almost = !full && shown >= FURY_ORB.almost;
     const fImg = (full ? this.furyFull : this.fury).render(shown / 100, t, full ? 1 : almost ? FURY_ORB.glow : 0);
-    const fx = W - fImg.width - 4, fy = H - fImg.height - 4;
+    const fx = W - view.safe.right - fImg.width - 4, fy = H - view.safe.bottom - fImg.height - 4;
     const ocx = fx + fImg.width / 2, ocy = fy + fImg.height / 2;
     // His ultimate not open yet (shared/progress.js ultTime; Player.ultLocked): the orb stands
     // empty and dim behind a padlock, with nothing to press.
@@ -681,12 +688,12 @@ export class Hud {
     if (p.ultLocked) {
       // Nothing over a locked orb.
     } else if (p.ult) {
-      drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: '#f6757a' });
+      drawText(ctx, this.ultLabel(), fx + fImg.width, this.ultLabelY(W, H, belt), { align: 'right', color: '#f6757a' });
     } else if (full) {
       const key = input.device === 'pad' ? padKey('X') : input.device === 'touch' ? 'TAP' : 'SPACE';
       const blink = Math.floor(t * 3) % 2 === 0;
       drawText(ctx, key, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: blink ? '#ffffff' : '#fee761' });
-      drawText(ctx, this.ultLabel(), fx + fImg.width, fy - 11, { align: 'right', color: blink ? '#fee761' : '#f6757a' });
+      drawText(ctx, this.ultLabel(), fx + fImg.width, this.ultLabelY(W, H, belt), { align: 'right', color: blink ? '#fee761' : '#f6757a' });
     } else {
       drawText(ctx, `${Math.floor(shown)}%`, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: '#e8b796' });
     }
@@ -694,7 +701,9 @@ export class Hud {
     const run = g.ultRun;
     if (run && run.kills > 0) {
       const c = textCanvas(`×${run.kills}`, ['#ffffff', '#f6757a', '#be4a2f'], '#181425', null, 'bold');
-      ctx.drawImage(c, Math.round(fx - c.width * 2 - 4), Math.round(ocy - c.height), c.width * 2, c.height * 2);
+      const x = Math.round(fx - c.width * 2 - 4);
+      const y = x < belt.x + belt.w ? Math.min(ocy - c.height, belt.y - 2 * c.height - 2) : ocy - c.height;
+      ctx.drawImage(c, x, Math.round(y), c.width * 2, c.height * 2);
     }
     // Fury comets on their way: a bright head and a tail, landing in the orb.
     for (let i = (this.comets || []).length - 1; i >= 0; i--) {
@@ -734,6 +743,13 @@ export class Hud {
   // The ultimate's name as the HUD shows it.
   ultLabel() {
     return (this.ultName ??= this.g.player.hero.ultName.toUpperCase());
+  }
+
+  ultLabelY(W, H, belt) {
+    const y = H - view.safe.bottom - ORB_S - 15;
+    const left = W - view.safe.right - 5 - textWidth(this.ultLabel());
+    return left < belt.x + belt.w && y + GLYPH_H + 1 >= belt.y && y <= belt.y + belt.h
+      ? belt.y - GLYPH_H - 3 : y;
   }
 
   // The clock and level sit just below the experience bar; the weapon row is reserved separately.
@@ -995,7 +1011,7 @@ export class Hud {
     }
   }
 
-  drawCryptStrike(ctx, W, H) {
+  drawCryptStrike(ctx, W, H, belt = this.loadout(W, H)) {
     const g = this.g, p = g.player;
     if (!g.caveStrike || p.dead) return;
     const weapon = g.mainWeapon();
@@ -1008,7 +1024,7 @@ export class Hud {
     const color = ready ? '#fee761' : '#c0cbdc';
     if ((g.inCrypt.strikes || 0) < 10) {
       const width = textWidth(label) + 10, left = Math.round(clamp(x - width / 2, 2, W - width - 2));
-      const top = Math.round(clamp(y + 12, 0, H - 17));
+      const top = Math.round(clamp(y + 12, 0, belt.y - 15));
       ctx.fillStyle = '#181425';
       ctx.fillRect(left, top, width, 13);
       drawText(ctx, label, left + width / 2, top + 2, { align: 'center', color });
@@ -1044,10 +1060,10 @@ export class Hud {
     return input.device === 'touch' ? 'TAP MAP TO EXPLORE' : input.device === 'pad' ? `PRESS ${input.pad.ps ? 'SHARE' : 'VIEW'} FOR MAP` : 'PRESS M FOR MAP';
   }
 
-  drawMapHint(ctx, W, H) {
+  drawMapHint(ctx, W, H, belt = this.loadout(W, H)) {
     const label = this.mapHint();
     if (!label) return;
-    const width = textWidth(label) + 12, x = Math.round((W - width) / 2), y = H - 39;
+    const width = textWidth(label) + 12, x = Math.round((W - width) / 2), y = Math.min(H - 39, belt.y - 15);
     ctx.fillStyle = '#181425';
     ctx.fillRect(x, y, width, 13);
     drawText(ctx, label, W / 2, y + 3, { align: 'center', color: '#c0cbdc' });
@@ -1102,10 +1118,10 @@ export class Hud {
   // In a duststorm (the Sunscorch's: Hazards.hazeR, 28 October 2026) what stands on the screen but is
   // lost in the sand beyond the hero's clear sight shows its icon where it stands (hazeMark); what is off
   // the screen keeps its arrow. Without a haze (the Darkwood, every other map, a clear sky) as ever.
-  drawIndicators(ctx, W, H, t) {
+  drawIndicators(ctx, W, H, t, belt = this.loadout(W, H)) {
     const g = this.g, m = marks();
     this.hazeR = g.hazards ? g.hazards.hazeR : null;
-    this.markerBand(W, H);
+    this.markerBand(W, H, belt);
     if (g.boss && !g.boss.dead) this.pointer(ctx, W, H, t, g.boss.x, g.boss.y - 10, '#e43b44', m.boss);
     for (const s of g.shrines) if (!s.used) this.pointer(ctx, W, H, t, s.x, s.y - 10, SHRINE_COLORS[s.type], m.shrine[s.type]);
     for (const d of g.crypts) if (!d.sealed) this.pointer(ctx, W, H, t, d.x, d.y - 12, '#b55088', m.crypt);
@@ -1150,26 +1166,25 @@ export class Hud {
 
   // Edge markers keep clear of the weapon row, corner orbs, revival feather,
   // ultimate name, and the crypt's entry map reminder.
-  markerBand(W, H) {
+  markerBand(W, H, belt = this.loadout(W, H)) {
     const g = this.g, p = g.player;
     BAND.top = this.topLines() + MARK_R + 2;
-    BAND.bottom = H - 30;
-    BAND.left = 14;
-    BAND.right = W - 14;
+    BAND.bottom = H - view.safe.bottom - 30;
+    BAND.left = view.safe.left + 14;
+    BAND.right = W - view.safe.right - 14;
     keepN = 0;
-    const evo = !this.held && p.weapons.some(w => !w.evolved && g.evoReady.includes(w));
-    keep(0, 7, 5 + 18 * Math.min(MAX_WEAPONS, Math.max(g.maxWeapons, this.held ? this.held.weapons.length : p.weapons.length)), evo ? 30 : 23);
-    keep(0, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
-    keep(W - ORB_S - 4, H - ORB_S - 4, ORB_S + 4, ORB_S + 4);
-    if (p.revives > 0) keep(ORB_S - 2, H - ORB_S - 12, 12, 12);
+    keep(belt.x, belt.y, belt.w, belt.h);
+    keep(view.safe.left, H - view.safe.bottom - ORB_S - 4, ORB_S + 4, ORB_S + 4);
+    keep(W - view.safe.right - ORB_S - 4, H - view.safe.bottom - ORB_S - 4, ORB_S + 4, ORB_S + 4);
+    if (p.revives > 0) keep(view.safe.left + ORB_S - 2, H - view.safe.bottom - ORB_S - 12, 12, 12);
     if (p.ult || p.fury >= 100) {
       const tw = textWidth(this.ultLabel());
-      keep(W - 5 - tw, H - ORB_S - 16, tw + 2, GLYPH_H + 2);
+      keep(W - view.safe.right - 5 - tw, this.ultLabelY(W, H, belt) - 1, tw + 2, GLYPH_H + 2);
     }
     const mapHint = this.mapHint();
     if (mapHint) {
       const width = textWidth(mapHint) + 12;
-      keep(Math.round((W - width) / 2), H - 39, width, 13);
+      keep(Math.round((W - width) / 2), Math.min(H - 39, belt.y - 15), width, 13);
     }
   }
 
@@ -1223,13 +1238,23 @@ export class Hud {
     const wisp = SPR[p.hero.sprite]?.fall?.wisp;
     if (!wisp) return;
     const age = g.deathT - wisp.release;
-    if (age < 0 || age >= wisp.duration) return;
+    if (age < 0 || age >= g.soulDuration(wisp)) return;
 
     const frame = wisp.frames[wisp.frameAt(age)];
     const flip = p._rect ? p._rect[5] : p.face < 0;
     const scale = c.S / view.S; // World pixels expressed on the HUD canvas.
-    const u = age / wisp.duration;
     const groundY = (p.y - c.y) * scale;
+    if (wisp.walkOff) {
+      const { rise, speed } = wisp.walkOff;
+      const steps = Math.max(0, age - rise) * speed * (flip ? -1 : 1);
+      const x = (p.x - c.x + steps - frame.w / 2) * scale;
+      ctx.save();
+      ctx.globalAlpha *= .86 * clamp(age / .24, 0, 1);
+      ctx.drawImage(frame.get(flip), Math.round(x), Math.round(groundY - wisp.anchorY * scale), frame.w * scale, frame.h * scale);
+      ctx.restore();
+      return;
+    }
+    const u = age / wisp.duration;
     const startY = groundY + (wisp.offsetY - wisp.anchorY) * scale;
     const drift = (wisp.sinks ? 1.75 : 4) * Math.sin(age * 3.5);
     const x = (p.x - c.x + (flip ? -1 : 1) * (wisp.offsetX + drift) - frame.w / 2) * scale;
@@ -1290,6 +1315,7 @@ export class Hud {
   }
 
   drawTouch(ctx, W, H, p) {
+    H -= view.safe.bottom;
     const s = input.stick;
     if (s.active) {
       ctx.globalAlpha = 0.35;

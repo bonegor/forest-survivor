@@ -5,6 +5,8 @@ import { Game } from '../public/js/game/game.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 import { WHIP_EVOLUTION, GOOD_COPPER_ID, HIGH_COPPER_ID } from '../public/js/data/copper.js';
 import { MerchantLash } from '../public/js/game/merchant-whip.js';
+import { CopperRecall } from '../public/js/game/weapons-copper.js';
+import { SPR } from '../public/js/engine/sprites.js';
 
 function arena() {
   const g = new Game({ hero: 'eanasir', mode: 's15', diff: 'easy', headless: true,
@@ -65,4 +67,76 @@ test('High Quality Copper launches three fast piercing discs and damages foes', 
   assert.equal(g.projectiles.length, 3);
   assert.ok(g.projectiles.every(pr => pr.w === w && pr.vx > 300));
   assert.ok(w.dmgDealt > 0); assert.ok(e.hp < e.maxHp);
+});
+
+test('one whip seal pays only the next private-stock disc and expires on a recycled enemy', () => {
+  const g = arena(), player = g.player, whip = g.mainWeapon();
+  const near = foe(g, 18, 0), far = foe(g, 37, 0), stock = player.weapons[1];
+  player.crit = 0;
+  whip.cd = 0;
+  whip.update(0);
+  assert.equal(g.copperSeal.foe, far);
+  const fire = w => {
+    w.cd = 0;
+    w.update(0);
+    const pr = g.projectiles.at(-1);
+    for (let i = 0; i < 30; i++) if (!pr.update(1 / 60)) break;
+  };
+  const curse = g.addWeapon('pqc1');
+  fire(curse);
+  assert.equal(g.projectiles.at(-1).sprite, SPR.copper_disc);
+  assert.equal(g.copperSeal.foe, far);
+  const values = [];
+  const hit = g.hitEnemy.bind(g);
+  g.hitEnemy = (e, damage, options) => {
+    if (e === far && options.w === stock) values.push(damage);
+    return hit(e, damage, options);
+  };
+  const hp = far.hp, nearHp = near.hp;
+  fire(stock);
+  assert.equal(g.projectiles.at(-1).sprite, SPR.merchant_stock_disc);
+  assert.ok(near.hp < nearHp);
+  assert.ok(far.hp < hp);
+  assert.equal(g.copperSeal, null);
+  const plain = far.hp;
+  fire(stock);
+  assert.ok(far.hp < plain);
+  assert.deepEqual(values, [stock.s.dmg * 1.5, stock.s.dmg]);
+  whip.cd = 0;
+  whip.update(0);
+  const stale = g.copperSeal;
+  far.id += 1000;
+  assert.equal(stale.update(), false);
+  assert.equal(g.copperSeal, null);
+});
+
+test('Liquidation recalls three copper bands to the original cast site and pulls each visible foe once per band', () => {
+  const g = arena(), p = g.player;
+  const near = foe(g, 39, 0), rim = foe(g, 97, 0);
+  const beyond = foe(g, 174, 0), blocked = foe(g, -49, 0);
+  const castX = p.x, castY = p.y;
+  g.world.lineOfSight = (x, y, targetX) => targetX >= castX;
+  const strikes = [];
+  const hit = g.hitEnemy.bind(g);
+  g.hitEnemy = (e, damage, options) => {
+    strikes.push([e, options]);
+    return hit(e, damage, options);
+  };
+  assert.equal(p.hero.ult, 'liquidation');
+  g.startUlt(p.hero.ult);
+  const bands = g.effects.filter(fx => fx instanceof CopperRecall);
+  assert.equal(bands.length, 3);
+  p.x += 30; p.y += 20;
+  assert.deepEqual(bands.map(b => [b.x, b.y]), Array(3).fill([castX, castY]));
+  for (const band of bands) {
+    for (let tick = 0; tick < 150 && band.update(1 / 60); tick++) {}
+  }
+  assert.deepEqual(strikes.map(([e]) => e), [rim, near, rim, near, rim, near]);
+  assert.ok(strikes.every(([, options]) => options.ult && options.kx === -1 && options.ky === 0));
+  assert.ok(g.ultRun.dmg > 0);
+  assert.equal(beyond.hp, beyond.maxHp);
+  assert.equal(blocked.hp, blocked.maxHp);
+  g.clearTransient();
+  assert.equal(p.ult, null);
+  assert.ok(!g.effects.some(fx => fx instanceof CopperRecall));
 });

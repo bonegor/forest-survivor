@@ -1,10 +1,16 @@
+import { armFromSheet } from './fall-limbs.js';
 import { fromRows } from '../engine/pixels.js';
 import {
-  SOUL_RELEASE, appendDecay, blank, cut, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, turn,
-} from './original-fall.js';
+  BRACE_START, BRACE_END, SOUL_RELEASE, appendDecay, blank, cut, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, turn,
+} from './hero-fall.js';
 
 const GROUND = 56;
-const TIMES = Array.from({ length: 35 }, (_, i) => [i / 32]);
+const TIMES = [
+  ...Array.from({ length: 27 }, (_, i) => [i / 25]),
+  [BRACE_START],
+  [BRACE_END + 1 / 60],
+  ...Array.from({ length: 10 }, (_, i) => [BRACE_END + (i + 1) / 25]),
+];
 
 const at = (buf, x, y) => buf.d[y * buf.w + x];
 
@@ -48,99 +54,44 @@ function paladinParts(buf) {
   return {
     upper, pivot: [6, 20],
     arm: lineArt(at(buf, 35, 36), at(buf, 35, 39), at(buf, 33, 40), true),
-    cuff: lineArt(at(buf, 27, 42), at(buf, 27, 41), at(buf, 28, 43), true),
-    palm: palmArt(at(buf, 27, 42), at(buf, 27, 41), at(buf, 28, 43)),
+    cuff: lineArt(at(buf, 30, 40), at(buf, 34, 39), at(buf, 31, 40), true),
+    palm: palmArt(at(buf, 30, 40), at(buf, 34, 39), at(buf, 31, 40)),
     leg: lineArt(at(buf, 33, 48), at(buf, 36, 48), at(buf, 32, 49), true),
     shin: lineArt(at(buf, 32, 54), at(buf, 33, 55), at(buf, 32, 52), true),
     boots: [cut(buf, 52, rectangular(28, 34, 5)), cut(buf, 52, rectangular(39, 47, 5))],
     bootPivots: [[4, 2], [3, 2]],
     gear: [
-      { art: sword, grip: [4, 2.5], tip: [17, 3],
-        track: [[0,30,42,142], [.17,28,41,116], [.30,27,40,99], [.40,26,41,81]],
-        land: [.49, 25, 81, 67] },
-      { art: shield, grip: [3, 7], tip: [3, 15],
-        track: [[0,45,41,0], [.18,44,42,-10], [.34,46,43,9], [.49,50,47,31], [.54,52,48,51]],
-        land: [.75, 63, 73, 72] },
+      { art: sword, grip: [4, 2.5], tip: [17, 3] },
+      { art: shield, grip: [3, 7], tip: [3, 15] },
     ],
   };
 }
 
-function berserkerParts(buf) {
-  const upper = cut(buf, 26, [
-    ...rectangular(33, 41, 8), [30,41], [29,42], [28,43], [28,43], [28,43],
-    [31,42], [31,41], [32,41], [32,41], [32,41], [32,41], [32,42],
-    [32,43], [32,43], [32,42], [32,42],
-  ]);
-  const axe = pixels(buf, {
-    e: [24,41], d: [25,42], m: [24,43], L: [24,44], w: [23,44],
-    b: [36,47], h: [38,44], g: [37,45],
-  }, [
-    '..................',
-    '...........edm....',
-    '...........edL....',
-    'bbbbbbbbbbbeed....',
-    'bghghghghghddde...',
-    'bbbbbbbbbbbmLLe...',
-    '..........mmLLde..',
-    '.........mmLwLde..',
-    '.........LwwLLde..',
-    '..........wwde....',
-  ]);
-  return {
-    upper, pivot: [9, 20],
-    arm: lineArt(at(buf, 36, 38), at(buf, 35, 42), at(buf, 34, 39), true),
-    cuff: lineArt(at(buf, 46, 44), at(buf, 47, 45), at(buf, 46, 45), true),
-    palm: palmArt(at(buf, 46, 44), at(buf, 47, 45), at(buf, 46, 45)),
-    leg: lineArt(at(buf, 34, 48), at(buf, 33, 49), at(buf, 35, 49), true),
-    shin: lineArt(at(buf, 33, 51), at(buf, 30, 52), at(buf, 33, 53), true),
-    boots: [cut(buf, 51, rectangular(29, 34, 5)), cut(buf, 51, rectangular(39, 46, 5))],
-    bootPivots: [[3, 2], [2, 2]],
-    gear: [
-      { art: axe, grip: [4, 4], tip: [15, 8],
-        track: [[0,29,44,162], [.17,27,43,145], [.35,25,41,110], [.45,24,43,85]],
-        land: [.57, 23, 91, 101] },
-      { art: axe, grip: [4, 4], tip: [15, 8],
-        track: [[0,46,44,6], [.17,44,43,-16], [.30,46,44,9], [.46,49,45,36], [.51,51,45,52]],
-        land: [.67, 65, 69, 84] },
-    ],
-  };
-}
 
 function witchHunterParts(buf) {
-  const upper = cut(buf, 25, [
-    ...rectangular(28, 47, 10), [31,42], [30,42], [30,40], [30,40], [29,39],
-    [29,37], [29,36], [30,36], [30,35], [29,34], [29,35], [29,37], [29,38], [28,38],
+  const coat = cut(buf,35,[
+    [32,41],[31,41],[30,41],[30,40],[29,39],[29,38],[29,38],[30,39],
+    [30,39],[29,39],[29,39],[29,39],[29,40],[28,40],[28,40],
   ]);
-  const crossbow = pixels(buf, {
-    e: [47,40], d: [49,42], m: [43,42], l: [44,42], s: [46,42], S: [44,40], w: [46,40],
-  }, [
-    '.........sw.......',
-    '.........SSs......',
-    '.........s.sS.....',
-    '.........s..wS....',
-    '.ddddddssssssSSd..',
-    'deemmmllmmmmmmSSe.',
-    'demmlmmllmmmdSSwdS',
-    'edddmmmmmdedsSde..',
-    '.e..dddde..wS.....',
-    '.........ssS......',
-    '.........sS.......',
+  const face = cut(buf,31,[[32,42],[32,42],[32,42],[32,42],[32,42],[32,42],[33,41]]);
+  const hat = cut(buf,25,rectangular(28,47,8));
+  // The actual polished stirrup, string, and stock from her idle. Leave
+  // out the collar and sleeve which flank the stock in the living drawing.
+  const crossbow=cut(buf,37,[
+    [43,45],[43,46],[43,47],[40,49],[34,50],[35,50],
+    [39,48],[42,47],[42,46],[42,45],[42,44],
   ]);
   return {
-    upper, pivot: [10, 22],
-    arm: lineArt(at(buf, 33, 40), at(buf, 31, 43), at(buf, 30, 39), true),
-    cuff: lineArt(at(buf, 45, 42), at(buf, 42, 46), at(buf, 43, 43), true),
-    palm: palmArt(at(buf, 45, 42), at(buf, 42, 46), at(buf, 43, 43)),
+    coat, face, hat,
+    arm: lineArt(at(buf,32,38),at(buf,32,39),at(buf,33,37),false),
+    cuff: lineArt(at(buf,35,41),at(buf,33,42),at(buf,43,42),false),
+    glove: pixels(buf,{e:[33,42],m:[32,41],l:[33,40]},['.em','mlm','ee.']),
     leg: lineArt(at(buf, 34, 47), at(buf, 36, 50), at(buf, 34, 49), true),
     shin: lineArt(at(buf, 32, 54), at(buf, 30, 53), at(buf, 32, 52), true),
     boots: [cut(buf, 51, rectangular(29, 35, 6)), cut(buf, 51, rectangular(39, 46, 6))],
     bootPivots: [[3, 2], [2, 2]],
-    gear: [
-      { art: crossbow, grip: [6, 6], tip: [17, 6],
-        track: [[0,41,42,0], [.14,41,42,-15], [.29,43,43,3], [.42,47,44,39], [.50,52,44,54]],
-        land: [.67, 67, 78, 103] },
-    ],
-    twoHanded: true,
+    gear: {art:crossbow,grip:[4,5]},
+
   };
 }
 
@@ -152,74 +103,66 @@ function tween(rows, t) {
   return from.slice(1).map((n, i) => mix(n, to[i + 1], k));
 }
 
-function onImpact(item, row, angle) {
-  const [, x] = item.land;
-  const [gx, gy] = item.grip, [tx, ty] = item.tip;
-  return [...turn([gx - tx, gy - ty], angle, [x, row]), angle];
+const shieldKneel = [
+  [0,    36,44,  0, 31,50,30,53, 40,50,42,53,  0,0,   0,0],
+  [.20,  35,44, -4, 31,50,30,53, 41,49,42,53,  5,2,  -5,-4],
+  [.40,  35,45,  1, 31,52,29,53, 42,48,44,53,  0,4,   5,-8],
+  [.62,  35,47,  5, 31,54,27,53, 43,48,45,54,-12,-16, 10,-10],
+  [.82,  35,49,  8, 32,55,26,53, 43,49,45,54,-18,-27, 13,-11],
+  [BRACE_START,35,50,16, 32,55,26,53, 43,49,45,54,-23,-45, 13,-16],
+  [BRACE_END,  35,50,16, 32,55,26,53, 43,49,45,54,-23,-45, 13,-16],
+  [1.37, 36,50, 35, 32,55,26,53, 43,51,45,54,-28,-56, 16,-19],
+  [1.48, 37,51, 58, 32,55,26,53, 43,53,44,54,-34,-71, 17,-24],
+  [1.57, 38,51, 74, 32,55,26,53, 42,54,41,54,-38,-79, 18,-29],
+  [1.65, 39,51, 86, 33,55,27,53, 42,54,39,54,-41,-83, 19,-32],
+];
+
+
+// Mercy guards the ribs beneath her coat. The hip settles behind her boots;
+// the brim comes down across her eyes as the shoulder rolls onto the coat.
+const hunterSeat = [
+  // time, hip, chest angle, back knee, back ankle, lead knee, lead ankle, chin dip
+  [0,    37,47,  0, 34,51,32,54, 41,50,43,54, 0],
+  [.13,  37,47, -2, 34,51,32,54, 42,50,44,54, 2],
+  [.24,  36,47, -5, 33,51,32,54, 42,49,44,54, 5],
+  [.36,  35,48, -7, 33,51,32,54, 41,49,44,54, 7],
+  [.48,  35,49,-10, 33,51,32,54, 41,49,44,54, 9],
+  [.59,  34,50,-12, 33,51,32,54, 40,49,44,54,11],
+  [.72,  33,51,-15, 33,51,33,54, 39,49,44,54,13],
+  [.87,  33,52,-17, 34,51,34,54, 39,49,45,54,15],
+  [1.05, 33,53,-18, 34,51,35,54, 39,49,45,54,17],
+  [1.25, 33,53,-21, 34,51,35,54, 39,49,45,54,18],
+  [1.35, 33,54,-32, 34,51,36,54, 39,49,45,54,20],
+  [1.45, 33,54,-49, 35,52,37,54, 40,50,45,54,23],
+  [1.54, 33,54,-65, 35,53,38,54, 40,51,45,54,25],
+  [1.64, 33,54,-80, 35,53,38,54, 41,52,45,54,26],
+];
+const hunterDrop=[
+  [0,38,42,0],[.20,38,42,0],[.33,39,43,3],[.43,42,45,7],
+  [.55,46,48,11],[.65,48,50,14],[.72,49,51,15],
+];
+const hunterTimes=Array.from({length:34},(_,i)=>[i/20]);
+
+function seatedHunter(standing,parts,t) {
+  const out=blank(standing.w,standing.h), clip={...out,h:GROUND+1};
+  const [x,y,tilt,kx,ky,ax,ay,fx,fy,bx,by,chin]=tween(hunterSeat,t);
+  const hip=[x,y], neck=turn([0,-10],tilt,hip);
+  drawLeg(clip,parts,[x-2,y],[kx,ky],[ax,ay],0,-10);
+  drawLeg(clip,parts,[x+2,y],[fx,fy],[bx,by],1,9);
+  paint(clip,parts.coat,[9,12],hip,tilt);
+  paint(clip,parts.face,[5,6],neck,tilt+chin);
+  const brow=turn([0,-5],tilt+chin,neck);
+  paint(clip,parts.hat,[9,7],brow,tilt+chin+chin*.25);
+  // The gloved fist comes inward onto the ribs. Real shoulder/elbow/wrist
+  // offsets come from the crossbow arm in the production idle.
+  const inward=easeBetween(t,.20,.75);
+  const [shoulder,elbow,wrist]=armFromSheet([[-3,-9],[-4,-5],[1,-5]],hip,tilt,-17*inward,-47*inward);
+  segment(clip,parts.arm,shoulder,elbow);
+  segment(clip,parts.cuff,elbow,wrist);
+  paint(clip,parts.glove,[1,1],wrist,tilt-18*inward);
+  drawGear(out,parts.gear,tween(hunterDrop,t));
+  return out;
 }
-
-function gearPose(item, t) {
-  const [contact, , angle, rest] = item.land;
-  const end = item.track.at(-1)[0];
-  if (t <= end) return tween(item.track, t);
-  const impact = onImpact(item, GROUND + .8, angle);
-  if (t < contact) return tween([item.track.at(-1), [contact, ...impact]], t);
-  const rock = t - contact;
-  return onImpact(item, GROUND + 1.9, tween([
-    [0, angle], [.05, rest + (rest - angle) * .44], [.1, rest - (rest - angle) * .20], [.17, rest],
-  ], rock)[0]);
-}
-
-// Time, pelvis displacement and body pitch, rear knee and ankle, lead knee
-// and ankle, rear and lead wrist. Limb x positions are relative to the starting hip.
-// Keep the dropped knee still while the other foot bears weight. Then pin the
-// wrists as the hips tip forward and the bent arms fold under the torso.
-const shieldStumble = [
-  [0,    0, 0,  0, -5,51,-6,53,   4,51, 4,53,  -6,42, 9,41],
-  [.10, -1, 0,-10, -6,51,-7,53,   4,50, 5,52,  -7,41, 8,42],
-  [.20, -1, 1, -6, -6,51,-8,53,   5,48, 7,49,  -8,40, 9,43],
-  [.29,  0, 3,  5, -5,53,-9,53,   7,47, 9,52,  -8,41,10,44],
-  [.37,  1, 5, 10, -3,54,-9,53,   8,47,10,53,  -6,44,13,46],
-  [.46,  1, 5, 15, -3,54,-9,53,   8,47,10,53,   4,47,15,48],
-  [.54,  2, 5, 28, -3,54,-9,53,   9,49,10,53,  11,52,18,50],
-  [.61,  3, 5, 40, -3,54,-9,53,   7,51,10,53,  14,55,20,53],
-  [.67,  4, 5, 49, -3,54,-9,53,   5,54, 8,53,  14,55,22,55],
-  [.73,  5, 5, 64, -4,55,-10,53,  2,54, 3,54,  14,55,22,55],
-  [.80,  6, 5, 90, -5,55,-12,53, -1,53,-3,54,  14,55,22,55],
-  [.88,  6, 5, 94, -5,55,-12,53, -2,53,-4,54,  14,55,22,55],
-];
-
-// The Berserker keeps the lead leg further out as both axes pull free.
-const axeStumble = [
-  [0,    0, 0,  0, -4,50,-5,53,   4,50, 4,53,  -8,44, 9,44],
-  [.11, -1,-1,-11, -5,50,-6,53,   4,50, 5,53,  -9,43, 8,43],
-  [.22, -2, 0, -7, -6,50,-7,51,   6,49, 7,52, -11,42, 9,44],
-  [.31, -1, 2,  4, -5,52,-9,53,   8,48, 9,53, -11,42,11,44],
-  [.40,  0, 4, 13, -3,54,-10,53,  9,48,11,53,  -9,45,13,45],
-  [.48,  1, 4, 24, -3,54,-10,53,  9,49,11,53,   4,49,15,49],
-  [.55,  2, 4, 35, -3,54,-10,53,  8,50,11,53,  11,52,18,52],
-  [.62,  3, 4, 46, -3,54,-10,53,  7,53,10,53,  13,55,20,55],
-  [.68,  4, 4, 53, -3,54,-10,53,  5,54, 8,53,  13,55,20,55],
-  [.75,  5, 4, 69, -5,55,-11,53,  2,54, 2,53,  13,55,20,55],
-  [.83,  6, 4, 89, -6,54,-12,53, -1,53,-4,53,  13,55,20,55],
-  [.90,  6, 4, 94, -6,54,-12,53, -2,53,-5,53,  13,55,20,55],
-];
-
-// The Hunter lets go with both hands and catches herself with a wider brace.
-const hunterStumble = [
-  [0,    0, 0,  0, -4,50,-6,53,   3,50, 3,53,   0,42, 3,42],
-  [.11, -1,-1, -8, -4,49,-6,53,   3,49, 4,53,  -1,42, 3,42],
-  [.21, -2, 0,-10, -5,50,-7,53,   5,48, 7,50,   0,42, 4,42],
-  [.31, -1, 1,  3, -5,52,-9,53,   7,48, 9,52,   2,43, 6,43],
-  [.41,  0, 3, 13, -3,54,-10,53,  8,48,10,53,   6,44, 9,44],
-  [.50,  1, 3, 20, -3,54,-10,53,  8,48,10,53,   9,46,12,45],
-  [.57,  2, 3, 32, -3,54,-10,53,  8,49,10,53,  10,52,17,50],
-  [.64,  3, 3, 43, -3,54,-10,53,  7,52,10,53,  12,55,20,54],
-  [.70,  4, 3, 51, -3,54,-10,53,  4,54, 8,53,  12,55,21,55],
-  [.76,  5, 3, 64, -4,55,-11,53,  2,54, 3,53,  12,55,21,55],
-  [.84,  6, 3, 87, -5,55,-12,53, -1,53,-3,53,  12,55,21,55],
-  [.92,  6, 3, 93, -5,55,-12,53, -2,53,-4,53,  12,55,21,55],
-];
 
 function drawLeg(out, parts, hip, knee, foot, index, tilt) {
   segment(out, parts.leg, hip, knee);
@@ -227,80 +170,101 @@ function drawLeg(out, parts, hip, knee, foot, index, tilt) {
   paint(out, parts.boots[index], parts.bootPivots[index], foot, tilt);
 }
 
-function drawArm(out, parts, shoulder, hand, open, bend) {
-  const elbow = [
-    mix(shoulder[0], hand[0], .46) - bend,
-    mix(shoulder[1], hand[1], .46) + mix(2, -1, open),
-  ];
-  segment(out, parts.arm, shoulder, elbow);
-  segment(out, parts.cuff, elbow, hand);
-  if (open > .5) paint(out, parts.palm, [1, 1.5], hand, mix(22, 0, open));
-}
-
-function artFall(sprite, makeParts, body) {
-  let frames;
-  return {
-    anchorY: sprite.anchorY,
-    outline: false,
-    frameAt: seconds => fallFrameAt(TIMES, seconds),
-    wisp: { ...departingSoul, offsetX: body.x + 13 - 40, offsetY: -6 },
-    cues: [...body.cues, { time: SOUL_RELEASE, sound: 'souldepart' }],
-    gen() {
-      if (frames) return frames;
-      const standing = sprite.gen()[sprite.idle[0]];
-      const parts = makeParts(standing);
-      const poses = TIMES.map(([t], i) => i === 0 ? standing : drawFallFrame(standing, parts, body, t));
-      const remains = blank(standing.w, standing.h);
-      for (const item of parts.gear) drawGear(remains, item, gearPose(item, SOUL_RELEASE));
-      appendDecay(poses, remains, GROUND);
-      return (frames = poses);
-    },
-  };
-}
 
 function drawGear(out, item, [x, y, angle]) {
   paint({ ...out, h: GROUND + 1 }, item.art, item.grip, [x, y], angle);
 }
 
-function drawFallFrame(standing, parts, body, t) {
-  const out = blank(standing.w, standing.h);
-  const clip = { ...out, h: GROUND + 1 };
-  const [x, y, angle, kx, ky, ax, ay, fx, fy, bx, by, rearX, rearY, frontX, frontY] = tween(body.motion, t);
-  const hip = [body.x + x, body.y + y];
-  const gear = parts.gear.map(item => gearPose(item, t));
-  const hand = (index, targetX, targetY, gripOffset = 0) => {
-    const item = parts.gear[index];
-    const letGo = item.track.at(-1)[0];
-    const grip = t <= letGo ? gear[index] : item.track.at(-1).slice(1);
-    const open = easeBetween(t, letGo, letGo + .09);
-    return {
-      position: [mix(grip[0] + gripOffset, body.x + targetX, open), mix(grip[1], targetY, open)],
-      open,
-    };
-  };
-  const rearShoulder = turn([-4, -7], angle, hip);
-  const frontShoulder = turn([3, -8], angle, hip);
-  const rearHand = hand(0, rearX, rearY, parts.twoHanded ? -3 : 0);
-  const frontHand = hand(parts.twoHanded ? 0 : 1, frontX, frontY);
 
-  drawArm(clip, parts, rearShoulder, rearHand.position, rearHand.open, 2.2);
-  drawLeg(clip, parts, [hip[0] - 2, hip[1]], [body.x + kx, ky], [body.x + ax, ay], 0, -Math.min(46, Math.max(0, ky - 51) * 12));
-  drawLeg(clip, parts, [hip[0] + 2, hip[1]], [body.x + fx, fy], [body.x + bx, by], 1, Math.max(0, angle - 50) * .32);
-  paint(clip, parts.upper, parts.pivot, hip, angle);
-  drawArm(clip, parts, frontShoulder, frontHand.position, frontHand.open, 1.6);
-  for (let i = 0; i < parts.gear.length; i++) drawGear(out, parts.gear[i], gear[i]);
-  return out;
+const paladinArms = [
+  [[-3,-7], [-5,-4], [-6,-2]],
+  [[3,-7], [6,-4], [9,-3]],
+];
+
+function kneelingPaladin(t) {
+  const [x,y,lean,kx,ky,ax,ay,fx,fy,bx,by,ru,rf,nu,nf] = tween(shieldKneel, t);
+  const hip = [x, y];
+  return { hip, lean, backKnee: [kx,ky], backBoot: [ax,ay], frontKnee: [fx,fy], frontBoot: [bx,by],
+    rear: armFromSheet(paladinArms[0], hip, lean, ru, rf), near: armFromSheet(paladinArms[1], hip, lean, nu, nf) };
 }
 
-export const paladinFall = sprite => artFall(sprite, paladinParts, {
-  x: 36, y: 44, motion: shieldStumble,
-  cues: [{ time: .75, sound: 'shieldfall' }],
-});
+function paladinEquipment(out, parts, time) {
+  const [sword, shield] = parts.gear;
+  const swordRelease = .39, swordContact = .63, shieldContact = .88;
+  const swordAngle = mix(142, 92, easeBetween(time, .08, swordRelease));
+  const swordWrist = kneelingPaladin(Math.min(time, swordRelease)).rear[2];
+  if (time <= swordRelease) drawGear(out, sword, [...swordWrist, swordAngle]);
+  else {
+    const tip = turn([sword.tip[0] - sword.grip[0], sword.tip[1] - sword.grip[1]], swordAngle, swordWrist);
+    const slip = easeBetween(time, swordRelease, swordContact);
+    paint(out, sword.art, sword.tip, [mix(tip[0], 27, slip), mix(tip[1], GROUND + 1, slip)],
+      mix(swordAngle, 76, slip));
+  }
 
-export const berserkerFall = sprite => artFall(sprite, berserkerParts, {
-  x: 37, y: 46, motion: axeStumble, cues: [],
-});
+  // The shield follows the actual wrist until the lower rim takes its weight.
+  // It pivots on that contact while she folds over it.
+  const lastGrip = kneelingPaladin(Math.min(time, shieldContact)).near[2];
+  const angle = mix(0, 10, easeBetween(time, .22, shieldContact));
+  if (time < shieldContact) drawGear(out, shield, [...lastGrip, angle]);
+  else {
+    const tip = turn([shield.tip[0] - shield.grip[0], shield.tip[1] - shield.grip[1]], angle, lastGrip);
+    const tilt = 10 + 10 * easeBetween(time, shieldContact, BRACE_START)
+      + 44 * easeBetween(time, BRACE_END, 1.63);
+    paint(out, shield.art, shield.tip, [tip[0], GROUND], tilt);
+  }
+}
 
-export const witchHunterFall = sprite => artFall(sprite, witchHunterParts, {
-  x: 38, y: 47, motion: hunterStumble, cues: [],
-});
+export function paladinFall(sprite) {
+  let frames;
+  return {
+    anchorY: sprite.anchorY, outline: false, frameAt: seconds => fallFrameAt(TIMES, seconds),
+    wisp: { ...departingSoul, offsetX: 7, offsetY: -7 },
+    cues: [{ time: .88, sound: 'shieldfall' }, { time: SOUL_RELEASE, sound: 'souldepart' }],
+    gen() {
+      if (frames) return frames;
+      const standing = sprite.gen()[sprite.idle[0]];
+      const parts = paladinParts(standing);
+      const arm = (out, [shoulder, elbow, wrist]) => {
+        segment(out, parts.arm, shoulder, elbow);
+        segment(out, parts.cuff, elbow, wrist);
+        paint(out, parts.palm, [1.5,1.5], wrist);
+      };
+      frames = TIMES.map(([t], i) => {
+        if (!i) return standing;
+        const frame = blank(standing.w, standing.h), out = { ...frame, h: GROUND + 1 };
+        const k = kneelingPaladin(t), [x,y] = k.hip;
+        drawLeg(out, parts, [x-2,y], k.backKnee, k.backBoot, 0, -46 * easeBetween(t,.26,.83));
+        drawLeg(out, parts, [x+2,y], k.frontKnee, k.frontBoot, 1, -25 * easeBetween(t,BRACE_END,1.65));
+        arm(out, k.rear);
+        paint(out, parts.upper, parts.pivot, k.hip, k.lean);
+        arm(out, k.near);
+        paladinEquipment(out, parts, t);
+        return frame;
+      });
+      const remains = blank(standing.w, standing.h);
+      paladinEquipment({ ...remains, h: GROUND + 1 }, parts, SOUL_RELEASE);
+      appendDecay(frames, remains, GROUND);
+      return frames;
+    },
+  };
+}
+
+
+export function witchHunterFall(sprite) {
+  let frames;
+  return {
+    anchorY:sprite.anchorY,outline:false,
+    frameAt:seconds=>fallFrameAt(hunterTimes,seconds),
+    wisp:{...departingSoul,offsetX:-12,offsetY:-6},
+    cues:[{time:SOUL_RELEASE,sound:'souldepart'}],
+    gen(){
+      if(frames)return frames;
+      const standing=sprite.gen()[sprite.idle[0]],parts=witchHunterParts(standing);
+      frames=hunterTimes.map(([t],i)=>i?seatedHunter(standing,parts,t):standing);
+      const rest=blank(standing.w,standing.h);
+      drawGear(rest,parts.gear,tween(hunterDrop,SOUL_RELEASE));
+      appendDecay(frames,rest,GROUND);
+      return frames;
+    },
+  };
+}

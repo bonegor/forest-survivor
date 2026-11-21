@@ -192,8 +192,8 @@ export const HEROES = {
     startDesc: 'Whip + Medium Quality Copper. Evolve Whip with Gauntlets of Might to open Phoenix Heart; the Heart forges rank-8 copper into High Quality Copper (not for sale). Evolutions require a chest.',
     stats: { maxHp: 100, armor: 1, greed: 1.25 },
     perk: 'Private stock: +25% gold; never encounters himself',
-    ult: 'cataclysm', ultName: 'Liquidation',
-    ultDesc: 'Liquidate the battlefield in a storm of blazing meteors.',
+    ult: 'liquidation', ultName: 'Liquidation',
+    ultDesc: 'Three rings of stamped copper close on your casting spot, striking foes and drawing them inward.',
     unlock: 'Accept all six Poor Quality Copper weapons from Ea-nāṣir, then win the run with them. Phoenix evolutions count.',
   },
 };

@@ -16,8 +16,8 @@ import { moveFor } from '/js/data/difficulty.js';
 const byId = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const baselineOnly = params.get('baseline') === '1';
-const foundingHeroes = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
-let chosenHero = foundingHeroes.includes(params.get('hero')) ? params.get('hero') : 'berserker';
+const reviewHeroes = Object.keys(HEROES);
+let chosenHero = reviewHeroes.includes(params.get('hero')) ? params.get('hero') : 'berserker';
 const editions = {
   3: { ids: ['current', 'skardi', 'ylva'], order: ['skardi', 'ylva', 'current'], references: ['knight', 'archer', 'paladin'],
     scaleHint: 'The two alternatives and four current heroes share the same scale.' },
@@ -29,7 +29,8 @@ const editions = {
   8: { ids: ['live-hero'], references: [], title: 'Death sequence', previous: ['?v=6', 'Ylva’s movement review'] },
 };
 const revision = baselineOnly ? '3' : params.get('v') ?? '8';
-const deathReview = revision === '7' || revision === '8';
+const fieldReview = revision === '11';
+const deathReview = revision === '7' || revision === '8' || fieldReview;
 const singleHero = revision === '6' || deathReview;
 const editionId = deathReview ? '8' : revision;
 const edition = Object.hasOwn(editions, editionId) ? editions[editionId] : editions[3];
@@ -83,8 +84,14 @@ function buildLayout() {
   if (deathReview) {
     document.body.classList.add('death-review');
     byId('hero-choice').hidden = false;
-    for (const id of foundingHeroes) byId('hero').add(new Option(HEROES[id].title, id));
+    for (const id of reviewHeroes) byId('hero').add(new Option(id === 'eanasir' ? HEROES[id].name + ' · ' + HEROES[id].title : HEROES[id].title, id));
     byId('hero').value = chosenHero;
+  }
+  if (fieldReview) {
+    byId('title').textContent = 'Hero field review';
+    document.title = 'Hero field review · Forest Survivor';
+    byId('example-choice').hidden = false;
+    byId('prior-link').hidden = true;
   }
 }
 
@@ -176,6 +183,11 @@ function reset() {
       const hero = s.heroId ?? 'berserker';
       const game = new Game({ hero, mode: 's15', map: 'forest', diff: 'easy', settings, meta: metaBonuses(profile), crypts: false });
       s.game = game;
+      if (fieldReview && byId('example-upgrades').checked) {
+        for (const id of [game.player.hero.weapon, 'blades']) game.applyChoice({type:'weapon', id}, true);
+        for (const id of ['armor', 'might', 'might']) game.applyChoice({type:'passive', id}, true);
+        game.applyChoice({type:'reach'}, true);
+      }
       s.leadIn = 0;
       s.stage = new HeroShowcase(hero, profile, settings);
       game.spawner.update = () => {};
@@ -287,7 +299,7 @@ function drawScene(s) {
   stage.draw(selection, { x: 0, y: 0, w: selection.canvas.width, h: selection.canvas.height }, false);
   if (s.menu && byId('view').value === 'menu') {
     if (!s.heroScreen) {
-      const menuProfile = { ...profile, heroes: deathReview ? foundingHeroes : [...new Set([...profile.heroes, player.id])] };
+      const menuProfile = { ...profile, heroes: deathReview ? reviewHeroes : [...new Set([...profile.heroes, player.id])] };
       s.heroScreen = new HeroScreen();
       s.heroScreen.enter({ ui: new UI(), store: { profile: menuProfile }, settings,
         scene: new MenuScene(), choice: { hero: player.id } });
@@ -353,7 +365,8 @@ function drawTimeline({ deathT, dead }) {
   let label = 'Fall';
   if (!dead) label = 'Before hit';
   else if (age < timing.flash) label = 'Hit';
-  else if (age >= timing.name + sprite.fall.wisp.duration) label = 'Aftermath';
+  else if (age >= timing.name + game.soulDuration(sprite.fall.wisp)) label = 'Aftermath';
+  else if (sprite.fall.wisp.walkOff && age >= timing.name) label = age < timing.name + sprite.fall.wisp.walkOff.rise ? 'Spirit rises' : 'Spirit walks away';
   else if (age >= timing.name) label = 'Soul departs';
   else if (game.player.id === 'berserker') {
     label = age < BRACE_START ? 'Stagger' : age < BRACE_END ? 'Hands and knees' : age < 1.60 ? 'Collapse' : 'Grounded';
@@ -373,7 +386,7 @@ function seekDeath(age) {
 }
 
 function selectHero(id) {
-  if (!deathReview || !foundingHeroes.includes(id)) return;
+  if (!deathReview || !reviewHeroes.includes(id)) return;
   chosenHero = id;
   const hero = HEROES[id], s = scenes[0];
   s.heroId = id; s.sprite = SPR[hero.sprite]; s.heroScreen = null; s.menuClock = null;
@@ -470,6 +483,7 @@ async function start() {
   Object.assign(view, { canvas: scenes[0].world.canvas, ctx: scenes[0].world, ui, uctx: ui.getContext('2d'),
     S: 1, zoom: 1, W: 480, H: 300, pxW: 480, pxH: 300 });
   byId('view').onchange = () => setView(byId('view').value);
+  byId('example-upgrades').onchange = reset;
   byId('hero').onchange = () => {
     const heldTime = paused && records[0]?.state === 'dying' ? records[0].deathT : null;
     selectHero(byId('hero').value);
@@ -495,7 +509,11 @@ async function start() {
   });
   window.addEventListener('keyup', event => input.held.delete(event.code));
   window.addEventListener('blur', () => input.held.clear());
-  if (deathReview) { mode = 'death'; selectHero(chosenHero); }
+  if (fieldReview) {
+    mode = params.get('mode') === 'death' ? 'death' : 'attack';
+    setView(mode === 'death' ? 'close' : 'field');
+    selectHero(chosenHero);
+  } else if (deathReview) { mode = 'death'; selectHero(chosenHero); }
   else if (revision === '6' && params.get('mode') === 'death') setMode('death');
   else reset();
   window.berserkerReview = { setMode, setView, pause, step, selectHero, seekDeath, states: () => records,

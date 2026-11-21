@@ -1,5 +1,6 @@
 import { sfx } from '../../engine/audio.js';
 import { clamp } from '../../engine/util.js';
+import { SPR } from '../../engine/sprites.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { reachesFeet } from '../../game/hitbox.js';
 import { nearbyWeaponProp } from '../../game/weapon-targets.js';
@@ -72,7 +73,7 @@ class MeridianSweep {
     return this.t < this.dur + TAIL;
   }
 
-  drawGround(ctx, cam) {
+  draw(ctx, cam) {
     const fade = clamp((this.dur + TAIL - this.t) / TAIL, 0, 1);
     const trail = Math.min(0.28, this.progress);
     const { S } = cam;
@@ -81,11 +82,24 @@ class MeridianSweep {
       const [x, y] = this.point(this.progress - trail * i / 6);
       if (!visible(this.world, this.x, this.y, x, y)) continue;
       const sx = Math.round((x - cam.x) * S), sy = Math.round((y - cam.y) * S);
-      const r = Math.max(1, Math.round((i === 0 ? this.edge : 2) * S));
+      if (i === 0) {
+        // A few short links lead into the crystal. The unlit rest of the
+        // radius stays clear because targets there take no damage.
+        ctx.globalAlpha = fade;
+        const direction = this.start + this.arc * this.progress;
+        for (let link = 2; link <= Math.min(17, this.radius); link += 4) {
+          ctx.fillStyle = link % 8 === 2 ? '#d2c393' : '#9e8c60';
+          ctx.fillRect(sx - Math.round(Math.cos(direction) * link) * S, sy - Math.round(Math.sin(direction) * link) * S, S, S);
+        }
+        const image = SPR[this.evolved ? 'astral_crystal' : 'meridian_crystal'].frames[0].c;
+        ctx.drawImage(image, sx - Math.floor(image.width / 2) * S, sy - Math.floor(image.height / 2) * S, image.width * S, image.height * S);
+        continue;
+      }
+      const r = Math.max(1, Math.round(2 * S));
       ctx.globalAlpha = fade * (1 - i / 8);
       ctx.fillStyle = this.evolved ? '#8f5bb0' : '#5b3566';
       ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
-      ctx.fillStyle = i === 0 ? '#f0c5fb' : this.evolved ? '#c789ed' : '#a868bd';
+      ctx.fillStyle = this.evolved ? '#c789ed' : '#a868bd';
       const core = Math.max(1, Math.round(r * 0.55));
       ctx.fillRect(sx - core, sy - core, core * 2, core * 2);
     }

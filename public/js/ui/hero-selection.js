@@ -52,7 +52,7 @@ function fit(text, width, font = 'normal') {
 }
 
 const FIELD_TARGETING = {
-  eanasir: 'Whip cracks at nearby foes; copper seeks them even in crypts',
+  eanasir: 'Whip seals a foe. Your next copper disc hits it 50% harder',
   knight: 'Slashes left or right, toward the side you face',
   archer: 'Fires along your last movement direction',
   mage: 'Fires at nearby foes and bursts on impact',
@@ -64,7 +64,7 @@ const FIELD_TARGETING = {
   witchhunter: 'Prioritizes strong foes',
   footman: 'Cuts the first foe ahead; a shock hits the rank behind it',
   marksman: 'Aimed bolt splits sideways on its first impact',
-  templar: 'Sets a short ward ahead; foes crossing it are cut once',
+  templar: 'Ward cuts passing foes. Step on its seal to ready your blade',
   trailblazer: 'Fires at a nearby foe and leaves a tripline',
   thornkeeper: 'Thorns converge inward around the nearest visible foe',
   wraith: 'Cuts in front and from the previous shade',

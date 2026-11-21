@@ -10,7 +10,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { Game, FLASH_SOFT } from '../public/js/game/game.js';
-import { XP_WRAP } from '../public/js/game/hud.js';
+import { XP_WRAP, heldBuild, revealOn } from '../public/js/game/hud.js';
+import { loadoutItems, loadoutLayout } from '../public/js/game/loadout.js';
+import { FILLERS, PASSIVES } from '../public/js/data/passives.js';
 import { GameScreen, PauseOverlay } from '../public/js/ui/gamescreen.js';
 import { UI } from '../public/js/ui/ui.js';
 import { HEROES } from '../public/js/data/heroes.js';
@@ -95,15 +97,16 @@ function chestsAround(g, W, H, n = 1500) {
 
 // What the markers keep off, as the HUD draws it.
 function keepOff(g, W, H) {
+  const belt = g.hud.loadout(W, H);
   const out = {
-    'the weapon row': [0, 7, 5 + 18 * Math.min(6, Math.max(g.maxWeapons, g.player.weapons.length)), g.evoReady.length ? 30 : 23],
+    'the loadout': [belt.x, belt.y, belt.w, belt.h],
     'the health orb': [0, H - 52, 52, 52],
     'the fury orb': [W - 52, H - 52, 52, 52],
   };
   const p = g.player;
-  if (p.ult || p.fury >= 100) out["the ultimate's name"] = textBox(p.hero.ultName.toUpperCase(), W - 4, H - 52 - 11, 'right');
+  if (p.ult || p.fury >= 100) out["the ultimate's name"] = textBox(p.hero.ultName.toUpperCase(), W - 4, g.hud.ultLabelY(W, H, belt), 'right');
   const hint = g.hud.mapHint();
-  if (hint) out['the map reminder'] = [(W - textWidth(hint) - 12) / 2, H - 39, textWidth(hint) + 12, 13];
+  if (hint) out['the map reminder'] = [(W - textWidth(hint) - 12) / 2, Math.min(H - 39, belt.y - 15), textWidth(hint) + 12, 13];
   return out;
 }
 
@@ -341,7 +344,7 @@ test('the clock stays small in every mode, without extra counters', () => {
   }, { mode });
 });
 
-test('actual play draws XP, owned and free weapon slots, and exploration arrows', () => game((g, p) => {
+test('actual play draws XP, bottom weapon and relic slots, and exploration arrows', () => game((g, p) => {
   const { ctx, calls } = recorder();
   g.maxWeapons = 4;
   const weapon = g.addWeapon('sword', 2);
@@ -354,15 +357,78 @@ test('actual play draws XP, owned and free weapon slots, and exploration arrows'
   g.hud.draw(ctx, 480, 270, 0);
   assert.ok(calls.some(c => c[0] === 'fillRect' && c.slice(1).join() === '1,1,239,5'), 'the actual HUD paints the half-full XP bar');
   assert.ok(calls.some(c => c[0] === 'drawImage' && c[1] === SPR[weapon.def.icon].frames[0].c), 'the owned weapon icon is visible');
-  assert.equal(calls.filter(c => c[0] === 'fillRect' && c[2] === 9 && c[3] === 17 && c[4] === 17).length, 4, 'one owned plus three free slots, no extra locks');
-  assert.equal(calls.filter(c => c[0] === 'fillRect' && c[2] === 30 && c[3] === 17 && c[4] === 17).length, 0, 'no unsolicited passive row');
+  assert.equal(calls.filter(c => c[0] === 'fillRect' && c[2] > 220 && c[3] === 18 && c[4] === 18).length, 5, 'four unlocked weapon slots plus the selected relic');
+  assert.ok(calls.some(c => c[0] === 'drawImage' && c[1] === SPR[PASSIVES.might.icon].frames[0].c && c[3] > 220));
   assert.equal(calls.filter(c => c[0] === 'translate').length, 3, 'chest, shrine and crypt arrows are actually drawn');
   calls.length = 0;
   g.addWeapon('bow'); g.addWeapon('fireball');
   g.maxWeapons = 2;
   g.hud.draw(ctx, 480, 270, 0);
-  assert.equal(calls.filter(c => c[0] === 'fillRect' && c[2] === 9 && c[3] === 17 && c[4] === 17).length, 3, 'all owned weapons still show when copper has expanded the build');
+  assert.equal(loadoutItems(g).weapons.length, 3, 'all owned weapons still show when copper has expanded the build');
 }));
+
+test('the loadout follows level-ups, evolutions, blessings, worn ranks and timed pickups', () => game((g, p) => {
+  const sword = g.addWeapon('sword', 1);
+  g.applyChoice({ type:'weapon', id:'sword' });
+  assert.equal(loadoutItems(g).weapons[0].rank, 2);
+  const held = heldBuild(g);
+  for (const type of ['bless','haste','reach']) {
+    g.applyChoice({ type }); g.applyChoice({ type });
+    assert.ok(loadoutItems(g).powers.some(item => item.icon === FILLERS[type].icon && item.rank === 2));
+  }
+  assert.equal(loadoutItems(g,held).powers.length, 0, 'a chest reveals its snapshot in order');
+  revealOn(held,{ type:'bless' },g);
+  assert.equal(loadoutItems(g,held).powers[0].rank, 1);
+  assert.ok(sword.evolve());
+  assert.equal(loadoutItems(g).weapons[0].icon, sword.def.icon);
+  assert.equal(loadoutItems(g).weapons[0].evolved, true);
+  p.passives.set('might', 2); p.gearRanks.passives.add('might'); p.gearRanks.passives.add('armor');
+  const powers = loadoutItems(g).powers;
+  assert.ok(powers.some(i => i.icon === PASSIVES.might.icon && i.rank === 3));
+  assert.ok(powers.some(i => i.icon === PASSIVES.armor.icon && i.rank === 1));
+  p.addBuff('mirror', 4); p.addBuff('wisdom', 20);
+  assert.ok(loadoutItems(g).powers.some(i => i.icon === 'i_mirror' && i.seconds === 4));
+  assert.ok(loadoutItems(g).powers.some(i => i.icon === 'i_growth' && i.seconds === 20));
+  p.buffs.delete('mirror');
+  assert.ok(!loadoutItems(g).powers.some(i => i.icon === 'i_mirror'));
+}));
+
+test('the pause menu identifies every power in belt order, including shared icons', () => game((g, p) => {
+  p.passives.set('might', 2);
+  for (const type of ['bless', 'haste', 'reach']) g.applyChoice({ type }, true);
+  g.cursedSkull();
+  p.addBuff('mirror', 4);
+  p.addBuff('wisdom', 20);
+  const ui = new UI(), pause = new PauseOverlay({ game:g, app:{ ui, settings:{} } });
+  const ctx = document.createElement('canvas').getContext('2d');
+  try {
+    pause.draw(ctx, 260, 500, 0.3);
+    const entry = ui.items.find(it => it.id === 'pause_powers');
+    Object.assign(input.mouse, { x:entry.x + 3, y:entry.y + 3, clicked:true });
+    pause.draw(ctx, 260, 500, 0.3);
+    assert.deepEqual(pause.powerDetails.lines.map(line => line.text), [
+      `${PASSIVES.might.name} · 2`, 'Blessing of Valor · ×1', 'Blessing of Haste · ×1', 'Blessing of Reach · ×1',
+      'Cursed Skull · 1', 'Mirror Shard · 4s', 'Shrine of Wisdom · 20s',
+    ]);
+  } finally { input.endFrame(); }
+}));
+
+test('the full bottom loadout fits both orbs, side insets and the touch-button strip', () => {
+  const items = { weapons:Array(6).fill(null), powers:Array(12).fill(null) };
+  for (const [W,H,touch,safe] of [
+    [480,270,false,{left:0,right:0,bottom:0}], [320,568,true,{left:0,right:0,bottom:14}],
+    [240,210,true,{left:0,right:0,bottom:0}], [570,265,true,{left:23,right:12,bottom:9}],
+  ]) {
+    const belt = loadoutLayout(W,H,touch,items,safe);
+    for (const group of belt.groups) {
+      assert.ok(group.x >= safe.left + 52 && group.x + group.w <= W - safe.right - 52);
+      assert.ok(group.y > 0 && group.y + group.h <= H - safe.bottom - (touch ? 22 : 0));
+      assert.ok(group.cols > 0 && group.cols <= group.slots.length);
+    }
+    const [a,b] = belt.groups;
+    assert.ok(!hit([a.x,a.y,a.w,a.h],[b.x,b.y,b.w,b.h]));
+  }
+});
 
 test('the full map remains available on request', () => game((g) => {
   const { ctx } = recorder();

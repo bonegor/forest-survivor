@@ -3,7 +3,7 @@ const id = 'seraph_sunwing_edge';
 export default {
   id,
   weapon: {
-    name: 'Sunwing Edge', icon: 'i_excalibur', kind: id, directional: true,
+    name: 'Sunwing Edge', icon: 'i_seraph_sunwing_edge', kind: id, directional: true,
     desc: 'Cleave ahead and send two golden wings sweeping out to the flanks. Each foe can be cut once per swing.',
     base: { dmg: 42, cd: 1.12, amount: 1, area: 1, speed: 1, kb: 0.8, wing: 0.62 },
     levels: [
@@ -18,7 +18,7 @@ export default {
     evo: { into: 'seraph_aureole_sundering', with: 'area' },
   },
   evolution: {
-    name: 'Aureole Sundering', icon: 'i_aegis', kind: id, directional: true, evolved: true,
+    name: 'Aureole Sundering', icon: 'i_seraph_aureole_sundering', kind: id, directional: true, evolved: true,
     desc: 'A greater cleave splits into wider, faster wings of light that cut more foes.',
     base: { dmg: 104, cd: 0.76, amount: 6, area: 1.55, speed: 1.3, kb: 0.95, wing: 0.75 },
   },

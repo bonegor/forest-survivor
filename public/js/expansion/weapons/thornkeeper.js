@@ -3,7 +3,7 @@ const id = 'thornkeeper_briar_compass';
 export default {
   id,
   weapon: {
-    name: 'Briar Compass', icon: 'i_thorns', kind: id,
+    name: 'Briar Compass', icon: 'i_thornkeeper_briar_compass', kind: id,
     desc: 'Send thorns sweeping inward from around a foe. Each body can be struck once per convergence.',
     base: { dmg: 43, cd: 1.07, area: 1, speed: 1, amount: 1, pierce: 1, kb: 0.45 },
     levels: [
@@ -18,7 +18,7 @@ export default {
     evo: { into: 'thornkeeper_heartwood_convergence', with: 'area' },
   },
   evolution: {
-    name: 'Heartwood Convergence', icon: 'i_worldroot', kind: id, evolved: true,
+    name: 'Heartwood Convergence', icon: 'i_thornkeeper_heartwood_convergence', kind: id, evolved: true,
     desc: 'More and stronger thorns converge across a wider clearing.',
     base: { dmg: 90, cd: 0.76, area: 1.55, speed: 1.3, amount: 5, pierce: 4, kb: 0.6 },
   },

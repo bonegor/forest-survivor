@@ -1,26 +1,29 @@
-import { fromRows, hexPack } from '../engine/pixels.js';
-import { SOUL_RELEASE, appendDecay, blank, cut, fallFrameAt, paint, segment, sinkingSoul, turn } from './original-fall.js';
+import { fromRows } from '../engine/pixels.js';
+import { SOUL_RELEASE, appendDecay, blank, cut, fallFrameAt, paint, sinkingSoul } from './hero-fall.js';
 import { packedPalette } from './palette.js';
 
-// Hip and torso angle, rear and forward folds of the hem, then the wrists.
-// Shadow's cloak bunches into a kneel as his hover fails. The palms stay put
-// while his shoulders sink and his elbows give way.
+// The suspended hem touches first. The shoulders settle into the mantle,
+// and then the hood bows over the hands. No legs appear under the hollow robe.
+// Time, collar, hood pitch, belt, mantle compression and breadth of the folded hem.
 const poses = [
-  [0,    42,44,   0,  36,49,43,50, 36,41,54,40],
-  [.12,  41,44, -10,  35,49,43,50, 35,40,52,41],
-  [.18,  40,45, -12,  35,50,44,50, 34,42,52,42],
-  [.24,  40,47,  -5,  36,52,46,50, 35,44,51,44],
-  [.30,  41,48,   5,  37,54,47,50, 37,45,51,45],
-  [.36,  41,49,  10,  37,54,47,49, 39,47,52,46],
-  [.41,  41,48,  12,  37,54,47,49, 41,47,54,46],
-  [.46,  42,48,  24,  37,54,47,50, 44,48,56,47],
-  [.52,  43,49,  39,  37,54,47,51, 48,51,60,51],
-  [.58,  44,49,  49,  37,54,47,52, 52,54,62,54],
-  [.64,  44,50,  55,  37,54,47,53, 52,54,62,54],
-  [.70,  45,51,  70,  38,54,46,54, 52,54,62,54],
-  [.78,  45,52,  87,  38,54,45,54, 52,54,62,54],
-  [.86,  45,52,  91,  38,54,45,54, 52,54,62,54],
-  [.94,  45,52,  92,  38,54,45,54, 52,54,62,54],
+  [0,    45,35, 0, 43,44,1,   1],
+  [.13,  45,35, 3, 43,44,.99,1],
+  [.23,  44,36, 6, 43,45,.97,1],
+  [.34,  44,37,10, 42,46,.94,1],
+  [.45,  44,38,15, 42,47,.91,1],
+  [.54,  43,39,18, 42,48,.87,1],
+  [.64,  43,40,23, 42,49,.83,1.03],
+  [.74,  43,41,26, 42,50,.79,1.06],
+  [.82,  42,42,29, 41,51,.75,1.10],
+  [.94,  42,43,32, 41,51,.71,1.12],
+  [1.04, 42,44,34, 41,52,.68,1.14],
+  [1.13, 42,45,36, 41,52,.66,1.16],
+  [1.23, 42,46,38, 41,52,.63,1.18],
+  [1.32, 42,47,40, 41,53,.60,1.20],
+  [1.40, 42,49,43, 41,53,.56,1.25],
+  [1.48, 42,51,47, 41,54,.53,1.29],
+  [1.57, 42,52,49, 41,54,.50,1.32],
+  [1.64, 42,53,51, 41,54,.48,1.34],
 ];
 
 const pal = packedPalette();
@@ -29,87 +32,56 @@ const dagger = fromRows([
   'nNNnk', ' kkK', ' kgK', ' kNK', '  n',
 ], pal);
 const offhand = fromRows([
-  '  g', ' gNk', ' Ggk', ' Ggk', ' gNk', ' gNk',
+  '  g', ' gNk', ' wGk', ' wGk', ' gNk', ' gNk',
   'nNNnk', ' kkK', ' knK', '  n',
 ], pal);
-const cloth = {
-  k: hexPack('#110521'), q: hexPack('#1f213c'), n: hexPack('#363b50'),
-  N: hexPack('#575a75'), g: hexPack('#a099ae'),
-};
-const sleeve = fromRows([' knk', 'kNNnk', 'kNnnk', 'knnqk', ' kqk'], cloth);
-const bracer = fromRows([' knk', 'knNnk', 'knNnk', ' kqk'], cloth);
-const palm = fromRows([' knk', 'knNnk', 'knNggk', ' kkkkk'], cloth);
-const foldedCloth = fromRows([' kqqk', 'kqnnqk', 'knNNnqk', 'kqnnnqk', ' kqqnk', '  kkk'], cloth);
-
-// After the knives leave the hands, these points follow their tips. Only the
-// pivot turns at impact, so neither blade slides along the ground as it settles.
+// The tips peel downward as the fingers open. Each blade then lies beside
+// the hem, leaving the jade eye and dark silhouette visible in the middle.
 const drops = [
-  [[58,31,49], [31,40,-24]],
-  [[57,29,63], [29,37,-48]],
-  [[58,33,84], [28,37,-72]],
-  [[62,37,110], [27,40,-106]],
-  [[65,43,133], [27,44,-128]],
-  [[67,50,148], [28,49,-142]],
-  [[69,57,152], [28,54,-149]],
-  [[69,57,160], [28,57,-149]],
-  [[69,57,156], [28,57,-159]],
-  [[69,57,156], [28,57,-154]],
-  [[69,57,156], [28,57,-154]],
-  [[69,57,156], [28,57,-154]],
+  [[59,35,52],[38,38,-14]], [[59,36,57],[38,39,-22]], [[59,37,62],[38,40,-31]],
+  [[59,39,76],[36,42,-46]], [[60,42,90],[34,44,-61]], [[61,45,105],[32,46,-75]],
+  [[61,48,100],[30,49,-84]], [[62,51,103],[28,51,-94]], [[63,54,106],[26,53,-100]],
+  [[64,56,109],[24,56,-105]],
 ];
 
 function splitCloak(standing) {
   return {
-    figure: cut(standing, 24, [
-      ...Array(11).fill([37,55]), ...Array(4).fill([40,53]),
-      [41,53], [41,53], [40,53], [40,51], [40,51], [39,50], [39,49], [39,48],
+    hood: cut(standing,24,[
+      ...Array(8).fill([37,55]),[38,55],[38,55],[39,55],[40,54],
     ]),
-    mantle: cut(standing, 32, [
-      [39,43], [39,44], [38,45], [32,45], [29,44], [27,43], [26,43],
-      [25,43], [25,42], [24,42], [24,41], [24,40], [24,29], [24,27],
+    cowl: cut(standing,34,[
+      [41,52],[41,53],[40,53],[40,54],[40,54],[40,54],
+      [41,54],[40,54],[40,54],[40,54],[39,53],[39,51],[39,50],
     ]),
-    hem: cut(standing, 42, [
-      [38,50], [36,50], [36,50], [35,50], [34,50], [34,48], [34,48],
-      [34,48], [35,47], [36,46], [36,44], [36,44], [36,41], [36,38],
+    mantle: cut(standing,32,[
+      [39,43],[39,44],[38,45],[32,45],[29,44],[27,43],[26,43],
+      [25,43],[25,42],[24,42],[24,41],[24,40],[24,29],[24,27],
+    ]),
+    hem: cut(standing,42,[
+      [38,50],[36,50],[36,50],[35,50],[34,50],[34,48],[34,48],
+      [34,48],[35,47],[36,46],[36,44],[36,44],[36,41],[36,38],
     ]),
   };
 }
 
 function drawDrops(out, index) {
-  const surface = { ...out, h: 56 };
-  const [[x, y, angle], [rearX, rearY, rearAngle]] = drops[index - 3];
-  paint(surface, offhand, [2, 0], [rearX, rearY], rearAngle);
-  paint(surface, dagger, [2, 0], [x, y], angle);
+  const surface={...out,h:56};
+  const [front,back]=drops[Math.min(index-1,drops.length-1)];
+  paint(surface,offhand,[2,0],back.slice(0,2),back[2]);
+  paint(surface,dagger,[2,0],front.slice(0,2),front[2]);
 }
 
-function drawPose(standing, parts, index) {
-  const [, x, y, tilt, nx, ny, fx, fy, rx, ry, hx, hy] = poses[index];
-  const hip = [x, y];
-  const out = blank(standing.w, standing.h);
-  const body = { ...out, h: 56 };
-  const arm = (offset, wrist, bend) => {
-    const shoulder = turn(offset, tilt, hip);
-    const elbow = [(shoulder[0] + wrist[0]) / 2 - bend, (shoulder[1] + wrist[1]) / 2 + 2];
-    segment(body, sleeve, shoulder, elbow);
-    segment(body, bracer, elbow, wrist);
-    paint(body, palm, [2, 1], wrist, wrist[1] >= 53 ? 0 : 36);
-  };
-  paint(body, parts.hem, [4, 2], hip, Math.min(72, tilt + 14), 1 - Math.min(.45, (y - 44) / 16));
-  if (index >= 3) {
-    segment(body, foldedCloth, [x + 2, y], [fx, fy]);
-    segment(body, foldedCloth, [fx, fy], [fx + 1, Math.min(54, fy + 4)]);
-    segment(body, foldedCloth, [x - 2, y], [nx, ny]);
-    segment(body, foldedCloth, [nx, ny], [nx - 5, 54]);
-  }
-  paint(body, parts.mantle, [17, 4], turn([-1, -8], tilt, hip), 8 - tilt * .19);
-  if (index >= 3) arm([-1, -9], [rx, ry], 1);
-  paint(body, parts.figure, [7, 20], hip, tilt);
-  arm([5, -7], [hx, hy], 2);
-  if (index < 3) {
-    paint(out, dagger, [2, 10], [hx, hy], tilt + 53);
-  } else {
-    drawDrops(out, index);
-  }
+function drawPose(standing,parts,index) {
+  const [,cx,cy,pitch,bx,by,squash,spread]=poses[index];
+  const out=blank(standing.w,standing.h), body={...out,h:56};
+  const sink=1-squash;
+  // Spill the long coattails against the floor before the shoulders arrive.
+  // Only cloth foreshortens. The hood and its eye retain their native size.
+  paint(body,parts.hem,[8,2],[bx,by],8+sink*57,squash,spread);
+  paint(body,parts.mantle,[18,3],[cx,cy+1],-sink*29,squash,1-sink*.20);
+  paint(body,parts.cowl,[3,1],[cx,cy+1],pitch*.43,.96-sink*.28);
+  paint(body,parts.hood,[8,10],[cx,cy],pitch,.99-sink*.10);
+  drawDrops(out,index);
   return out;
 }
 
@@ -119,7 +91,7 @@ export function shadowFall(sprite) {
     anchorY: sprite.anchorY,
     outline: false,
     frameAt: seconds => fallFrameAt(poses, seconds),
-    wisp: { ...sinkingSoul, offsetX: 17, offsetY: -5 },
+    wisp: { ...sinkingSoul, offsetX: 3, offsetY: -6 },
     cues: [{ time: SOUL_RELEASE, sound: 'souldepart' }],
     gen() {
       if (frames) return frames;
@@ -128,7 +100,7 @@ export function shadowFall(sprite) {
       frames = poses.map((_, index) => index ? drawPose(standing, parts, index) : standing);
       const remains = blank(standing.w, standing.h);
       drawDrops(remains, poses.length - 1);
-      appendDecay(frames, remains, sprite.anchorY);
+      appendDecay(frames, remains, sprite.anchorY - 1);
       return frames;
     },
   };

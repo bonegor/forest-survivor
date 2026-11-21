@@ -21,7 +21,15 @@ test('merchant uses opaque native statue-palette pixels with unchanged world geo
  assert.equal(spr.hires,1);assert.equal(spr.w/spr.hires,80);assert.equal(spr.h/spr.hires,64);
  assert.equal(spr.anchorY/spr.hires,56);assert.deepEqual(spr.body.map(n=>n/spr.hires),[25,44]);
  assert.equal(spr.below/spr.hires,7);assert.equal(SPR.eanasir_pose.hires,1);
- assert.deepEqual(COPPER_ART,beforeCopper,'all copper discs, weapon and evolution icons remain byte-for-byte definitions');
+ for(const [key,art] of Object.entries(beforeCopper)){
+  if(!['copper_refined_disc','i_mediumcopper','i_highcopper'].includes(key))assert.deepEqual(COPPER_ART[key],art,key);
+ }
+ const mask = art => art.frames[0].map(row => row.replace(/[^.]/g,'#'));
+ for(const key of ['merchant_stock_disc','copper_refined_disc']){
+  assert.deepEqual(mask(COPPER_ART[key]),mask(beforeCopper.copper_disc),'private stock keeps the same native collision bounds');
+  assert.notDeepEqual(COPPER_ART[key],COPPER_ART.copper_disc,'private stock shows the merchant stamp');
+ }
+ assert.notDeepEqual(COPPER_ART.merchant_stock_disc,COPPER_ART.copper_refined_disc);
 });
 
 test('scalp, beard and cylinder use one muted stone ramp while game equipment keeps separate accents',()=>{

@@ -88,13 +88,71 @@ test('the fall plays out before the results', () =>
     assert.ok(g.deathTiming.drain <= 1 && g.deathTiming.name < g.deathTiming.end, 'drained within a second, the name before the results');
   }));
 
-test('the merchant retains the original defeat clock', () =>
+test('the fallen merchant loses his copper and whip before his soul leaves the statue', () =>
   game((g, p) => {
+    const sprite = SPR.eanasir, fall = sprite.fall;
+    const at = t => fall.frames[fall.frameAt(t)].buf;
+    const last = fall.frames.at(-1).buf;
+    const standing = sprite.frames[sprite.idle[0]].buf;
+    const first = at(0), margin = (first.w - standing.w) / 2;
+    for (let y=0; y<first.h; y++) assert.deepEqual(first.d.slice(y*first.w+margin,y*first.w+margin+standing.w),
+      standing.d.slice(y*standing.w,(y+1)*standing.w));
+    const statue = t => at(t).d.filter((_,i) => i % first.w < first.w/2 + 17);
+    assert.deepEqual(statue(1.05),statue(1.20),'the statue stays still while the loose copper rolls');
+    const low = bounds(at(1.75));
+    assert.ok(low.y0 > bounds(at(1.05)).y0 + 8 && low.y1 === fall.anchorY);
+    const objects = [];
+    for (let x=0; x<last.w; x++) {
+      if (last.d.some((color,i) => color && i%last.w===x)) {
+        if (objects.at(-1)?.end === x-1) objects.at(-1).end=x;
+        else objects.push({start:x,end:x});
+      }
+    }
+    assert.equal(objects.length,2,'two distinct pieces of equipment survive');
+    assert.ok(objects[0].end < first.w/2 && objects[1].start > first.w/2);
+    assert.ok(at(2.95).d.filter((color,i)=>color && !last.d[i]).length > 50, 'the body is still there during his first steps');
+    assert.deepEqual(at(fall.remainsAt+.01),last);
     p.hurt(1e9);
-    assert.equal(g.deathTiming.name, 1.1);
-    assert.equal(g.deathTiming.end, 2.8);
-    for (let tick = 0; tick < 169; tick++) g.update(1 / 60);
+    assert.equal(g.deathTiming.name,fall.wisp.release);
+    assert.equal(fall.cues[0].time,fall.wisp.release);
+    assert.ok(g.deathTiming.end > fall.wisp.release + g.soulDuration(fall.wisp));
+    for (let tick = 0; tick <= Math.ceil(g.deathTiming.end*60); tick++) g.update(1 / 60);
     assert.equal(g.state, 'over');
+  }, 'eanasir'));
+
+test('Ea-Nasir rises from his own body and walks clear of either screen edge before results', () =>
+  game((g,p) => {
+    const {fall}=SPR.eanasir, soul=fall.wisp;
+    const saved={S:view.S, zoom:view.zoom, W:view.W, H:view.H, pxW:view.pxW, pxH:view.pxH};
+    const ctx=document.createElement('canvas').getContext('2d');
+    let drawn;
+    ctx.drawImage=(image,x,y,width,height)=>{drawn={image,x,y,width,height};};
+    try {
+      for (const [width,height] of [[240,400],[650,270]]) for (const face of [-1,1]) {
+        Object.assign(view,{S:2,zoom:.8,W:width,H:height,pxW:width*2,pxH:height*2});
+        g.syncCam(); g.snapCam();
+        p.face=face; g.placePlayer(g.cam);
+        const duration=g.soulDuration(soul);
+        const sample=age=>{
+          g.deathT=soul.release+age;
+          drawn=null; g.hud.drawDepartingSoul(ctx);
+          return drawn;
+        };
+        assert.equal(sample(-.01),null);
+        const emerging=sample(.01), first=soul.frames[0], upright=soul.frames[soul.frameAt(1)];
+        assert.ok(first.box[3]-first.box[1] < upright.box[3]-upright.box[1]-12,'first appears lying where the merchant fell');
+        assert.ok(emerging.x<width/2 && emerging.x+emerging.width>width/2);
+        const start=sample(soul.walkOff.rise+.01), stride=sample(soul.walkOff.rise+.24);
+        assert.notEqual(start.image,stride.image,'takes visible steps');
+        assert.ok((stride.x-start.x)*face > 8);
+        const age=duration-.001, exit=sample(age), frame=soul.frames[soul.frameAt(age)], box=frame.box;
+        const k=exit.width/frame.w;
+        if (face===1) assert.ok(exit.x+box[0]*k>=width,'whole figure clears right edge');
+        else assert.ok(exit.x+(frame.w-box[0])*k<=0,'whole mirrored figure clears left edge');
+        assert.equal(sample(duration+.01),null);
+        assert.ok(g.deathTiming.end > soul.release+duration);
+      }
+    } finally {Object.assign(view,saved);}
   }, 'eanasir'));
 
 test('the Knight and Berserker retain their approved native fall frames and cues', () => {

@@ -13,6 +13,15 @@ const idle=data.idle.map(i=>data.frames[i]);
 const x=Math.min(...idle.map(f=>f[0])),y=Math.min(...idle.map(f=>f[1]));
 const box={x,y,w:Math.max(...idle.map(f=>f[0]+f[2]))-x,h:Math.max(...idle.map(f=>f[1]+f[3]))-y};
 let worldFrames,portraitFrames;
+export function merchantFallParts() {
+ return Object.fromEntries(Object.entries(data.fallLayers).map(([name,packed])=>{
+  const [x,y,w,h]=packed;
+  return [name,{x,y,buf:unpack(packed,{x,y,w,h})}];
+ }));
+}
+export function merchantSoulWalk() {
+ return data.soulWalk.map(frame=>unpack(frame,{x:0,y:0,w:data.w,h:data.h}));
+}
 export const EANASIR_MODEL_ART={
  eanasir:{gen:()=>worldFrames??=data.frames.map(f=>unpack(f,{x:0,y:0,w:data.w,h:data.h})),
   ...Object.fromEntries(['hires','anchorY','below','body','idle','walk','attack','attackWalk','motionRate','idleRate','attackFps','attackRelease','manualDelay','selfBob','outline'].map(k=>[k,data[k]]))},

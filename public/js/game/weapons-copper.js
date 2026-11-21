@@ -8,10 +8,74 @@ import { PC } from './particles.js';
 import { reachesFeet, reachesBody, spriteRadius } from './hitbox.js';
 import { recordHeroAttack } from './hero-animation.js';
 import { sfx } from '../engine/audio.js';
-import { MERCHANT_WHIP } from './merchant-whip.js';
+import { MERCHANT_WHIP, privateCopperDamage } from './merchant-whip.js';
 import { nearbyWeaponProp } from './weapon-targets.js';
 
 const COPPER = '#b86f50', HEAT = '#feae34';
+
+// Liquidation calls the stock back to the spot where the merchant struck
+// his seal. Each narrowing band crosses a creature once, even on long ticks.
+export class CopperRecall {
+  constructor(g, delay, radius) {
+    this.g = g;
+    this.world = g.world;
+    this.x = g.player.x;
+    this.y = g.player.y;
+    this.range = radius;
+    this.radius = radius;
+    this.t = -delay;
+    this.dur = .83;
+    this.ult = true;
+    this.hit = new Set();
+  }
+
+  update(dt) {
+    if (this.dead || this.world !== this.g.world) return false;
+    const previous = this.radius;
+    this.t += dt;
+    if (this.t < 0) return true;
+    this.radius = this.range * Math.max(0, 1 - this.t / this.dur);
+    for (const e of this.g.grid.foes(this.x, this.y, previous + 4)) {
+      if (e.dead || e.spawnT > .3 || this.hit.has(e.id)) continue;
+      const dx = this.x - e.x, dy = this.y - e.y, distance = Math.hypot(dx, dy);
+      if (distance + e.hr < this.radius - 3 || distance - e.hr > previous + 3) continue;
+      if (this.world.solid(e.x, e.y) || !this.world.lineOfSight(this.x, this.y, e.x, e.y)) continue;
+      this.hit.add(e.id);
+      this.g.hitEnemy(e, 92, { ult: true, kb: 1.8, kx: dx / (distance || 1), ky: dy / (distance || 1) });
+    }
+    return this.t < this.dur;
+  }
+
+  drawGround(ctx, cam) {
+    if (this.t < 0 || this.radius < 2) return;
+    const { S } = cam;
+    const image = SPR.liquidation_ingot.frames[0].c;
+    let joined = false;
+    ctx.save();
+    ctx.lineWidth = S;
+    ctx.strokeStyle = '#d98e58';
+    ctx.beginPath();
+    const steps = 32;
+    for (let i = 0; i <= steps; i++) {
+      const angle = i / steps * TAU;
+      const x = this.x + this.radius * Math.cos(angle), y = this.y + this.radius * Math.sin(angle);
+      if (this.world.solid(x, y) || !this.world.lineOfSight(this.x, this.y, x, y)) {
+        joined = false;
+        continue;
+      }
+      const sx = Math.round((x - cam.x) * S), sy = Math.round((y - cam.y) * S);
+      if (joined) ctx.lineTo(sx, sy);
+      else ctx.moveTo(sx, sy);
+      joined = true;
+      if (i % 4 === 0 && i < steps) {
+        ctx.drawImage(image, sx - Math.floor(image.width / 2) * S, sy - Math.floor(image.height / 2) * S, image.width * S, image.height * S);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 const target = (w) => {
   const { g } = w, p = g.player;
   return g.nearestEnemy(p.x, p.y, 260, e => g.inView(e) && !g.world.solid(e.x, e.y) &&
@@ -21,10 +85,13 @@ const bearing = (p, e) => Math.atan2(e.y - p.y, e.x - p.x);
 
 function disc(w, ang, extra = {}) {
   const p = w.g.player, s = w.s;
+  let sprite = 'copper_disc';
+  if (w.def.goodCopper) sprite = w.evolved ? 'copper_refined_disc' : 'merchant_stock_disc';
   return spawnProjectile(w.g, {
-    kind: 'copper', sprite: w.def.goodCopper && w.evolved ? 'copper_refined_disc' : 'copper_disc', x: p.x, y: p.y - 1, z: 7,
+    kind: 'copper', sprite, x: p.x, y: p.y - 1, z: 7,
     ang, speed: 190 * s.speed, life: 1.5, r: 3 * s.area, scale: s.area,
     dmg: s.dmg, pierce: s.pierce, kb: s.kb, w, spin: 16,
+    damageAt: w.def.goodCopper ? privateCopperDamage : null,
     trail: w.evolved ? PC.o : null, ...extra,
   });
 }

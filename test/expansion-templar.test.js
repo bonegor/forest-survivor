@@ -79,6 +79,22 @@ test('the ward holds its world position, catches an entrant, and only hits a lor
   assert.equal(w.fx, null);
 }));
 
+test('stepping onto the ward centre recovers part of one swing, once per carving', () => combat((g, p, w) => {
+  const front = foe(g, 24, 0);
+  refresh(g);
+  w.update(0);
+  const ward = w.fx;
+  p.x = front.x;
+  p.y = front.y + 11;
+  ward.update(.1);
+  assert.equal(w.cd, w.s.cd, 'the ends of the ward still belong to enemy contact');
+  p.y = ward.y;
+  ward.update(.1);
+  assert.ok(Math.abs(w.cd - w.s.cd * .70) < 1e-8);
+  ward.update(.1);
+  assert.ok(Math.abs(w.cd - w.s.cd * .70) < 1e-8);
+}));
+
 test('crypt wards wait for the sword release and the line stops at stone', () => combat((g, p, w) => {
   const wallY = p.y + 8;
   const front = foe(g, 24, 0), blocked = foe(g, 24, 12);
