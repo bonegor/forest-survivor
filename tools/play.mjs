@@ -4,7 +4,10 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+// Playwright from this project (playwright-core) or wherever PLAYWRIGHT points, and a Chrome of
+// CHROME_PATH's where it has no browser of its own.
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright-core');
+const chrome = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {};
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
@@ -14,7 +17,7 @@ const URL = opt('url', 'http://localhost:3000/');
 const OUT = 'tools/out';
 mkdirSync(OUT, { recursive: true });
 
-const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ ...chrome, args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: Number(opt('dpr', 1)) });
 const errors = [];
 page.on('console', (m) => {

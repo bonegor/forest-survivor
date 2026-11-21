@@ -2,10 +2,13 @@
 //   node tools/watch.mjs --mode=s15 --diff=medium --from=150 --to=220 --every=8
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+// Playwright from this project (playwright-core) or wherever PLAYWRIGHT points, and a Chrome of
+// CHROME_PATH's where it has no browser of its own.
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright-core');
+const chrome = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {};
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
-const b = await chromium.launch();
+const b = await chromium.launch(chrome);
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 await p.goto('http://localhost:3000/');
 await p.waitForFunction(() => window.__fs && window.__fs.app.screen);

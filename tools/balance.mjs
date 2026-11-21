@@ -3,7 +3,10 @@
 //   node tools/balance.mjs --hero=knight --configs=s15:easy,s15:medium --runs=2 --parallel=3
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+// Playwright from this project (playwright-core) or wherever PLAYWRIGHT points, and a Chrome of
+// CHROME_PATH's where it has no browser of its own.
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright-core');
+const chrome = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {};
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
@@ -13,7 +16,7 @@ const runs = Number(opt('runs', 1));
 const parallel = Number(opt('parallel', 3));
 const cap = Number(opt('cap', 0));
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(chrome);
 const jobs = [];
 for (const c of configs) for (let i = 0; i < runs; i++) jobs.push(c);
 
