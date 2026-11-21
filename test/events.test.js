@@ -312,7 +312,7 @@ test('the last stand: every kind of the night in a ring, and a pack of champions
     // On Elite (few 1) every kind comes, the shooters and chargers too.
     const ring = asked.filter((a) => !a.elite);
     assert.deepEqual(new Set(ring.map((a) => a.type)), new Set(kindsBy(14)), 'every kind the night has brought');
-    assert.equal(kindsBy(14).length, 15);
+    assert.equal(kindsBy(14).length, 19, 'the fifteen and, since 21 November 2026, the four pressure kinds (game/pressure.js)');
     // Each as much of the ring as the night weighs it, the Cultists as few as anywhere (27 October
     // 2026: an even share made them a fifteenth of it, some 95 at once on Elite).
     const weights = kindWeightsBy(14), total = weights.reduce((s, [, w]) => s + w, 0);

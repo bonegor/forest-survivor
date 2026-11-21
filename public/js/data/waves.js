@@ -6,7 +6,8 @@
 // uses the pockets past minute 15. Timed events are listed separately below.
 const LATER_POCKETS = [
   // From minute 4 the pressure kinds join by ones (G10, 21 November 2026; game/pressure.js): the
-  // Bloater, then the Gem Eater, the Shieldbearer and the Shaman, a few of each.
+  // Bloater, then the Gem Eater, the Shieldbearer and the Shaman, a few of each, none ever weighed
+  // less than the Cultist once the last stand gathers the night's kinds (events.test.js).
   { minutes: [3, 4], spawn: { bat: 1, slime: 3, skeleton: 6, zombie: 4 } },
   { minutes: [4, 5], spawn: { bat: 1, slime: 2, skeleton: 6, zombie: 4, wolf: 3, bloater: 0.8 } },
   { minutes: [5, 6], spawn: { bat: 1, skeleton: 6, zombie: 4, wolf: 3, goblin: 5, bloater: 1, gemeater: 0.6 } },
@@ -15,9 +16,9 @@ const LATER_POCKETS = [
   { minutes: [8, 9], spawn: { bat: 1, skeleton: 4, zombie: 4, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 2, bloater: 1, gemeater: 0.6, shieldbearer: 1.5, shaman: 0.8 } },
   { minutes: [9, 10], spawn: { bat: 1, skeleton: 1.5, zombie: 4, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 3, deathknight: 1, bloater: 1.2, gemeater: 0.6, shieldbearer: 1.5, shaman: 0.8 } },
   { minutes: [10, 11], spawn: { bat: 1, skeleton: 1.5, wolf: 3, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, deathknight: 2, bloater: 1.2, gemeater: 0.6, shieldbearer: 1.5, shaman: 0.8 } },
-  { minutes: [11, 12], spawn: { bat: 1, skeleton: 1.5, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 2, ogre: 1, bloater: 1.2, gemeater: 0.6, shieldbearer: 1.5, shaman: 1 } },
-  { minutes: [12, 13.5], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 1.5, bloater: 1.2, gemeater: 0.6, shieldbearer: 1.5, shaman: 1 } },
-  { minutes: [13.5, 15], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 2, bloater: 1.2, gemeater: 0.6, shieldbearer: 1.5, shaman: 1 } },
+  { minutes: [11, 12], spawn: { bat: 1, skeleton: 1.5, goblin: 5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 2, ogre: 1, bloater: 1.2, gemeater: 1, shieldbearer: 1.5, shaman: 1 } },
+  { minutes: [12, 13.5], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 1.5, bloater: 1.2, gemeater: 1, shieldbearer: 1.5, shaman: 1 } },
+  { minutes: [13.5, 15], spawn: { bat: 1, skeleton: 1.5, spider: 3, ghost: 3, cultist: 1, orc: 3, imp: 4, hellhound: 3, deathknight: 3, ogre: 2, bloater: 1.2, gemeater: 1, shieldbearer: 1.5, shaman: 1 } },
   // Only Ranked gets past dawn.
   { minutes: [15, 19], spawn: { bat: 1, skeleton: 1.5, ghost: 3, cultist: 1, orc: 2, imp: 4, hellhound: 3, deathknight: 2, ogre: 1.1, bloater: 1.2, shieldbearer: 1.5, shaman: 1 } },
   { minutes: [19, Infinity], spawn: { bat: 1, skeleton: 1.5, cultist: 1, orc: 2, imp: 4, hellhound: 3, deathknight: 2, ogre: 1.1, bloater: 1.2, shieldbearer: 1.5, shaman: 1 } },
