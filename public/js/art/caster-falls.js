@@ -1,50 +1,51 @@
 import { fromRows } from '../engine/pixels.js';
 import {
-  SOUL_RELEASE, appendDecay, blank, departingSoul, fallFrameAt, mix, paint, segment, turn,
+  SOUL_RELEASE, appendDecay, blank, departingSoul, easeBetween, fallFrameAt, mix, paint, segment, turn,
 } from './hero-fall.js';
 
-// Times, displacement at the belt, chest and hem angles, hem compression,
-// then the displacement (x/y) and rotation of each boot. The moving foot
-// catches briefly before the knees give way and the upper body lands.
+// Seconds, belt displacement, chest tilt, hem tilt and length, then the
+// rear knee and ankle and the front knee and ankle, measured from the belt's x.
+// A trailing knee takes the weight while the chest is still nearly upright.
+// The leading knee comes down as the two hands extend to meet the ground.
 const staggers = {
   mage: [
-    [0,      0, 0,   0,   0, 1,     0, 0,  0,  0, 0,   0],
-    [.12,   -1, 0, -10,  -3, 1,    -1,-1, -4,  0, 0,   0],
-    [.22,   -3, 1, -17,  -4, .95,  -3, 0,  0,  1,-1,  -9],
-    [.31,   -3, 2,  -9,   3, .88,  -3, 0,  4,  3, 0,   0],
-    [.40,   -2, 3,   8,  10, .79,  -4, 0, 12,  3, 0,   0],
-    [.50,   -1, 5,  24,  21, .70,  -5, 0, 20,  3, 0,  -5],
-    [.60,    0, 6,  46,  32, .62,  -6, 0, 36,  2, 0, -12],
-    [.71,    2, 5,  72,  46, .72,  -3, 0, 50,  0, 0, -22],
-    [.80,    3, 5,  88,  62, .93,   0, 0, 60, -2, 0, -35],
-    [.88,    3, 4,  81,  60, .91,   0, 0, 60, -3, 0, -38],
-    [1.0,    3, 5,  88,  62, .93,   0, 0, 62, -3, 0, -38],
+    [0,      0, 0,   0,  0, 1,   -5,49, -7,53,   5,49,  6,53],
+    [.12,   -1, 0, -11, -4, 1,   -7,49, -8,53,   6,48,  8,51],
+    [.23,   -2, 1,  -9,  3,.91,  -7,51,-10,53,   8,48, 10,52],
+    [.34,   -1, 5,   4, 16,.64,  -6,54,-11,53,   8,48, 11,53],
+    [.44,    0, 5,  10, 22,.62,  -6,54,-11,53,   8,49, 11,53],
+    [.55,    1, 6,  26, 31,.62,  -6,54,-11,53,   8,51, 11,53],
+    [.64,    2, 5,  43, 44,.69,  -6,54,-11,53,   7,54, 10,53],
+    [.73,    2, 5,  51, 56,.74,  -6,54,-11,53,   7,54, 10,53],
+    [.83,    4, 7,  78, 70,.88,  -6,54,-11,53,   4,54,  0,53],
+    [.92,    4, 7,  89, 77,.96,  -7,54,-12,53,   1,54, -4,53],
+    [1.0,    4, 7,  91, 79,.98,  -8,54,-13,53,   0,54, -5,53],
   ],
   necromancer: [
-    [0,      0, 0,   0,   0, 1,     0, 0,  0,  0, 0,   0],
-    [.12,    1, 1,   9,   2, 1,     0, 0,  0,  1,-2,   8],
-    [.22,    2, 2,  15,   7, .96,  -1,-1, -8,  4, 0,   0],
-    [.32,    2, 4,   4,   8, .86,  -3, 0,  0,  4, 0,   0],
-    [.42,    1, 5, -14,   0, .78,  -3, 0,  0,  4, 0,  -7],
-    [.53,    1, 6, -32, -17, .72,  -2, 0,  8,  5, 0, -20],
-    [.64,    0, 6, -56, -33, .69,  -1, 0, 20,  5, 1, -32],
-    [.75,   -1, 5, -83, -45, .71,   0, 0, 33,  5, 1, -49],
-    [.82,   -2, 5, -91, -61, .79,   1, 1, 51,  5, 1, -54],
-    [.90,   -2, 4, -82, -60, .80,   3, 2, 55,  4, 1, -58],
-    [1.0,   -2, 5, -90, -65, .81,   4, 2, 58,  4, 1, -62],
+    [0,      0, 0,   0,  0, 1,   -3,49, -3,53,   6,49,  7,53],
+    [.12,    1, 1,   7,  2, 1,   -4,49, -5,53,   6,48,  8,51],
+    [.22,    0, 1,  -7, -2,.92,  -4,51, -7,53,   8,48, 10,52],
+    [.33,    0, 5,   5, 12,.64,  -4,54, -9,53,   8,48, 10,53],
+    [.45,    0, 5,   9, 19,.62,  -4,54, -9,53,   8,49, 10,53],
+    [.54,    1, 6,  24, 28,.65,  -4,54, -9,53,   8,50, 10,53],
+    [.65,    2, 6,  42, 37,.68,  -4,54, -9,53,   7,53, 10,53],
+    [.74,    3, 5,  51, 48,.73,  -4,54, -9,53,   7,54,  9,53],
+    [.83,    5, 7,  76, 61,.87,  -5,54,-10,53,   4,54,  0,53],
+    [.92,    5, 6,  88, 74,.95,  -6,54,-11,53,   1,54, -4,53],
+    [1.0,    5, 6,  91, 77,.96,  -7,54,-12,53,   0,54, -6,53],
   ],
   druid: [
-    [0,      0, 0,   0,   0, 1,     0, 0,   0,  0, 0,   0],
-    [.12,   -1, 0,  -7,  -1, 1,    -2, 0,  -2,  0, 0,   0],
-    [.22,   -2, 1,  -9,  -4, .97,  -3, 0,  -8,  2,-2,  -7],
-    [.32,   -1, 2,   4,   3, .92,  -3, 0,   0,  4, 0,   0],
-    [.42,    0, 3,  16,  12, .79,  -4, 0,  16,  4, 0,   0],
-    [.51,    1, 5,  28,  23, .71,  -5, 0,  24,  5, 0,   0],
-    [.60,    2, 5,  42,  39, .70,  -6, 0,  41,  4, 0,  -8],
-    [.70,    3, 4,  59,  50, .80,  -4, 0,  50,  3, 0, -15],
-    [.80,    4, 4,  84,  63, .91,  -1, 0,  57,  0, 0, -33],
-    [.87,    4, 3,  76,  61, .90,   0, 0,  62, -1, 0, -40],
-    [1.0,    4, 4,  83,  64, .91,   0, 0,  68, -2, 0, -43],
+    [0,      0, 0,   0,  0, 1,   -5,49, -6,53,   4,49,  4,53],
+    [.12,   -1, 0,  -8, -2, 1,   -6,49, -7,53,   5,48,  6,51],
+    [.23,   -2, 1,  -7,  4,.91,  -6,51, -8,53,   7,48,  9,52],
+    [.35,   -1, 4,   7, 14,.65,  -5,54,-10,53,   8,49, 10,53],
+    [.45,    0, 5,  13, 21,.61,  -5,54,-10,53,   8,49, 10,53],
+    [.54,    1, 6,  28, 32,.63,  -5,54,-10,53,   8,51, 10,53],
+    [.64,    2, 5,  45, 43,.70,  -5,54,-10,53,   7,54,  9,53],
+    [.73,    3, 5,  53, 52,.76,  -5,54,-10,53,   7,54,  9,53],
+    [.82,    4, 7,  76, 63,.88,  -5,54,-11,53,   4,54,  0,53],
+    [.92,    4, 7,  88, 73,.95,  -7,54,-12,53,   1,54, -4,53],
+    [1.0,    4, 7,  90, 75,.96,  -8,54,-12,53,   0,54, -5,53],
   ],
 };
 
@@ -52,20 +53,29 @@ const sheetRig = {
   mage: {
     belt: [42, 44], rearBoot: [35, 53], foreBoot: [48, 53],
     seams: [[34, 53], [35, 53], [32, 48]],
+    sleeve: [[50, 40], [33, 40], [49, 42]],
+    skin: [[35, 37], [35, 39]],
+    reach: [7, -5], rearGrip: true, hands: [12, 19],
     grip: [35, 38], tip: [34, 50], release: .33, contact: .55, plantX: 27, slant: -25,
-    soul: [12, -7],
+    soul: [16, -6],
   },
   necromancer: {
     belt: [39, 44], rearBoot: [36, 53], foreBoot: [46, 53],
     seams: [[42, 44], [42, 45], [43, 46]],
-    grip: [44, 40], tip: [51, 44], release: .28, contact: .53, plantX: 56, slant: 41,
-    soul: [-15, -7],
+    sleeve: [[39, 41], [41, 41], [42, 41]],
+    skin: [[44, 41], [43, 40]],
+    reach: [-4, -3], hands: [13, 21],
+    grip: [44, 40], tip: [51, 44], release: .28, contact: .53, plantX: 67, slant: 41,
+    soul: [15, -6],
   },
   druid: {
     belt: [40, 44], rearBoot: [34, 53], foreBoot: [44, 53],
     seams: [[45, 53], [43, 53], [44, 54]],
-    grip: [48, 40], tip: [49, 55], release: .42, contact: .59, plantX: 54, slant: 25,
-    soul: [14, -8],
+    sleeve: [[45, 44], [42, 41], [48, 43]],
+    skin: [[46, 41], [47, 41]],
+    reach: [-3, -4], hands: [13, 20],
+    grip: [48, 40], tip: [49, 55], release: .42, contact: .59, plantX: 61, slant: 13,
+    soul: [14, -6],
   },
 };
 
@@ -146,41 +156,70 @@ function timber(id, standing, owns) {
 
 function separate(id, standing, rig) {
   const ownsWeapon = id === 'necromancer' ? bookPixels : (x, y) => timberPixels(id, x, y);
-  const paintBody = (x, y) => !ownsWeapon(x, y) && !(id === 'mage' && x >= 49 && y < 38);
   const [bx, by] = rig.belt;
+  const sample = ([x, y]) => standing.d[y * standing.w + x];
+  // Keep the source sheet's magenta registration pixel out of moving pieces.
+  const paintBody = (x, y) => !ownsWeapon(x, y) && sample([x, y]) !== 0xffff00ff;
+  const chest = (x, y) => {
+    if (!paintBody(x, y)) return false;
+    if (id === 'mage') return x >= 36 && x <= (y < 30 ? 50 : y < 36 ? 48 : 47);
+    return y < 39 || x <= bx + 4;
+  };
   const front = rig.foreBoot[0];
   const boot = (cx, cy) => layer(standing, cx - 5, cy - 1, 11, 5,
     (x, y) => paintBody(x, y) && (cx < front ? x < bx : x >= bx));
-  const [edge, shadow, light] = rig.seams.map(([x, y]) => standing.d[y * standing.w + x]);
+  const [edge, shadow, light] = rig.seams.map(sample);
+  const [cuff, dark, cloth] = rig.sleeve.map(sample);
+  const [skin, glint] = rig.skin.map(sample);
   return {
-    torso: layer(standing, 24, 17, 32, by - 15, paintBody),
+    torso: layer(standing, 24, 17, 32, by - 15, chest),
     hem: layer(standing, 25, by - 1, 28, 55 - by, paintBody),
     rearBoot: boot(...rig.rearBoot),
     foreBoot: boot(...rig.foreBoot),
-    trousers: fromRows(['.kk.', 'kslk', 'kssk', 'kslk', '.kk.'], { k: edge, s: shadow, l: light }),
+    thigh: fromRows(['.kkl.', 'ksllk', 'ksllk', 'kslkk', '.kkk.'], { k: edge, s: shadow, l: light }),
+    shin: fromRows(['.kl.', 'kslk', 'kslk', 'kssk', '.kk.'], { k: edge, s: shadow, l: light }),
+    sleeve: fromRows(['.kkk.', 'kdllk', 'kdllk', 'kddlk', '.kkk.'], { k: cuff, d: dark, l: cloth }),
+    forearm: fromRows(['.kl.', 'kdll', 'kdll', 'kddk', '.kk.'], { k: cuff, d: dark, l: cloth }),
+    hand: fromRows(['.k..', 'kssk', 'kshk', 'kkkk'], { k: cuff, s: skin, h: glint }),
+    palm: fromRows(['.kk..', 'kshsk', 'kkkkk'], { k: cuff, s: skin, h: glint }),
     weapon: id === 'necromancer' ? tome(standing) : timber(id, standing, ownsWeapon),
   };
 }
 
-function paintLayer(out, part, pivot, world, angle, length = 1) {
-  paint(out, part.buf, [pivot[0] - part.x, pivot[1] - part.y], world, angle, length);
+function paintLayer(out, part, pivot, world, angle, length = 1, width = 1) {
+  paint(out, part.buf, [pivot[0] - part.x, pivot[1] - part.y], world, angle, length, width);
 }
 
-function drawLeg(out, leg, boot, pivot, joint, ankle, angle, direction, lean) {
-  const bend = Math.min(1, Math.abs(lean) / 50);
-  const knee = [
-    mix(joint[0], ankle[0], .48) + direction * bend * 1.2,
-    mix(joint[1], ankle[1], .52) - bend * 2,
-  ];
-  segment(out, leg, joint, knee);
-  segment(out, leg, knee, ankle);
+function drawLeg(out, parts, boot, pivot, joint, knee, ankle, angle) {
+  segment(out, parts.thigh, joint, knee);
+  segment(out, parts.shin, knee, ankle);
   paintLayer(out, boot, pivot, ankle, angle);
 }
 
-function drawWeapon(out, weapon, rig, keys, elapsed) {
-  const { belt, grip, tip, release, contact, slant, plantX } = rig;
+function drawArm(out, parts, shoulder, hand, elapsed, near) {
+  const catchStart = near ? .62 : .66;
+  const contact = easeBetween(elapsed, catchStart - .08, catchStart);
+  const elbowFold = easeBetween(elapsed, .74, .91);
+  const elbow = [
+    mix(shoulder[0], hand[0], near ? .50 : .42) - (1 + elbowFold * 5),
+    mix(shoulder[1], hand[1], .50) + 1 - 2.5 * contact,
+  ];
+  segment(out, parts.sleeve, shoulder, elbow);
+  segment(out, parts.forearm, elbow, hand);
+  if (contact < .75) paint(out, parts.hand, [1.5, 1.5], hand, -28 * contact);
+  else paint(out, parts.palm, [1.5, 1], hand);
+}
+
+function weaponHand(rig, keys, elapsed) {
+  const { belt, grip, release } = rig;
   const [, dx, dy, lean] = valueAt(keys, Math.min(elapsed, release));
-  const hand = turn([grip[0] - belt[0], grip[1] - belt[1]], lean, [belt[0] + dx, belt[1] + dy]);
+  return turn([grip[0] - belt[0], grip[1] - belt[1]], lean, [belt[0] + dx, belt[1] + dy]);
+}
+
+function drawWeapon(out, weapon, rig, keys, elapsed) {
+  const { grip, tip, release, contact, slant, plantX } = rig;
+  const [, , , lean] = valueAt(keys, Math.min(elapsed, release));
+  const hand = weaponHand(rig, keys, elapsed);
   const heldAngle = lean * .72;
   if (elapsed < release) {
     paintLayer(out, weapon, grip, hand, heldAngle);
@@ -197,19 +236,37 @@ function drawWeapon(out, weapon, rig, keys, elapsed) {
   paintLayer(out, weapon, tip, target, angle);
 }
 
+function handsAt(rig, keys, belt, lean, elapsed, ground) {
+  const weapon = weaponHand(rig, keys, elapsed);
+  return rig.hands.map((reach, index) => {
+    const holdsWeapon = index === (rig.rearGrip ? 0 : 1);
+    const ready = holdsWeapon ? weapon : turn(rig.reach, lean, belt);
+    const armReach = easeBetween(elapsed, holdsWeapon ? rig.release : .34, index === 0 ? .66 : .62);
+    const buckle = easeBetween(elapsed, .75, .94);
+    return [
+      mix(ready[0], rig.belt[0] + reach - 2 * buckle, armReach),
+      mix(ready[1], ground - 1, armReach),
+    ];
+  });
+}
+
 function drawFall(standing, parts, rig, keys, elapsed, ground) {
-  const [, x, y, lean, hemAngle, hemLength, rx, ry, ra, fx, fy, fa] = valueAt(keys, elapsed);
+  const [, x, y, lean, hemAngle, hemLength, rkx, rky, rax, ray, fkx, fky, fax, fay] = valueAt(keys, elapsed);
   const out = blank(standing.w, standing.h);
   const visible = { ...out, h: ground + 1 };
   if (elapsed < rig.release) drawWeapon(visible, parts.weapon, rig, keys, elapsed);
-  const rear = rig.rearBoot, fore = rig.foreBoot;
-  const belt = [rig.belt[0] + x, rig.belt[1] + y];
-  drawLeg(visible, parts.trousers, parts.rearBoot, rear, turn([-3, 2], hemAngle / 2, belt),
-    [rear[0] + rx, rear[1] + ry], ra, -1, lean);
-  drawLeg(visible, parts.trousers, parts.foreBoot, fore, turn([3, 2], hemAngle / 2, belt),
-    [fore[0] + fx, fore[1] + fy], fa, 1, lean);
-  paintLayer(visible, parts.hem, rig.belt, belt, hemAngle, hemLength);
-  paintLayer(visible, parts.torso, rig.belt, belt, lean);
+  const [bx, by] = rig.belt;
+  const belt = [bx + x, by + y];
+  const flatten = easeBetween(elapsed, .74, .93);
+  const [rearHand, foreHand] = handsAt(rig, keys, belt, lean, elapsed, ground);
+  drawLeg(visible, parts, parts.rearBoot, rig.rearBoot, turn([-3, 1], hemAngle / 2, belt),
+    [bx + rkx, rky], [bx + rax, ray], -55 * easeBetween(elapsed, .17, .43));
+  paintLayer(visible, parts.hem, rig.belt, belt, hemAngle, hemLength, 1 - .29 * flatten);
+  drawLeg(visible, parts, parts.foreBoot, rig.foreBoot, turn([3, 1], hemAngle / 2, belt),
+    [bx + fkx, fky], [bx + fax, fay], -62 * easeBetween(elapsed, .70, .99));
+  drawArm(visible, parts, turn([-4, -9], lean, belt), rearHand, elapsed, false);
+  paintLayer(visible, parts.torso, rig.belt, belt, lean, 1, 1 - .14 * flatten);
+  drawArm(visible, parts, turn([3, -9], lean, belt), foreHand, elapsed, true);
   if (elapsed >= rig.release) drawWeapon(visible, parts.weapon, rig, keys, elapsed);
   return out;
 }

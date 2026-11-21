@@ -184,6 +184,7 @@ test('each of the other seven original heroes falls, releases a soul and leaves 
       const remains = fall.frames.at(-1).buf;
       const box = bounds(remains);
       assert.ok(box && box.y1 >= spr.anchorY - 2, `${hero}: gear meets the ground`);
+      assert.ok(box.x0 > 0 && box.x1 < remains.w - 1, `${hero}: settled gear fits inside the sprite canvas`);
       const body = { ...landed, d: landed.d.map((pixel, i) => remains.d[i] ? 0 : pixel) };
       assert.ok(bounds(body).y0 >= spr.anchorY - 22, `${hero}: the body has dropped`);
       const bodyPixels = frame => frame.buf.d.filter((pixel, i) => pixel && !remains.d[i]).length;
