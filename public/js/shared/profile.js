@@ -346,8 +346,16 @@ export function sanitizeProfile(raw) {
 
 const LOCKS = PROGRESS.locks;
 const ALL_LOCKS = 2 ** LOCKS.length - 1;
-const ALL_ULTS = 2 ** HERO_ORDER.length - 1;
-const heroBit = (h) => 1 << HERO_ORDER.indexOf(h);
+// The order a save keeps each hero's bit (heroes, uu) and list place (packPerHero) in: append-only,
+// apart from HERO_ORDER, the order they unlock in. A hero added to the roster lands at its end, so a
+// recruit put in ahead of Ea-nāṣir never moves the bits of a save made before (the review of 21
+// November 2026).
+const SAVE_HEROES = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter',
+  'footman', 'marksman', 'templar', 'trailblazer', 'thornkeeper', 'wraith', 'gravebinder', 'arcanist', 'praetorian',
+  'seraph', 'boltguard', 'swordbearer', 'eanasir'];
+for (const h of HERO_ORDER) if (!SAVE_HEROES.includes(h)) SAVE_HEROES.push(h);
+const ALL_ULTS = 2 ** SAVE_HEROES.length - 1;
+const heroBit = (h) => 1 << SAVE_HEROES.indexOf(h);
 // The locks are more than a 32-bit number's bits, so they are kept with plain arithmetic: a
 // number's bit i is 2 ** i, safe up to 53 of them (test/progress.test.js keeps the table to 50).
 const hasBit = (n, i) => Math.floor((n || 0) / 2 ** i) % 2 === 1;
@@ -570,13 +578,13 @@ export function packProfile(p) {
 const GIFTS = ['arsenal', 'reliquary', 'reroll', 'banish'];
 const packGift = (gift) => GIFTS.reduce((n, id, i) => n + Math.min(3, gift?.[id] || 0) * 4 ** i, 0);
 const giftOf = (raw, id) => (typeof raw === 'number' ? Math.floor(raw / 4 ** GIFTS.indexOf(id)) % 4 : raw?.[id]);
-// Each hero's time (ranked, bt) as a cookie keeps it: base 36 in HERO_ORDER's order, '.' between,
+// Each hero's time (ranked, bt) as a cookie keeps it: base 36 in SAVE_HEROES' order, '.' between,
 // none after the last kept (28 October 2026: nine heroes' Ranked bests as an object took 146
 // characters; packed, both lists take less than that one did). A save from before keeps an
 // object; both read back (perHero), and his marks (feats) either way too, though the cookie keeps
 // those as an object (packProfile).
-const packPerHero = (o) => HERO_ORDER.map((h) => (o?.[h] ? Math.floor(o[h]).toString(36) : '')).join('.').replace(/\.+$/, '');
-const perHero = (raw, h) => (typeof raw === 'string' ? parseInt(raw.slice(0, 200).split('.')[HERO_ORDER.indexOf(h)] || '', 36) : raw?.[h]);
+const packPerHero = (o) => SAVE_HEROES.map((h) => (o?.[h] ? Math.floor(o[h]).toString(36) : '')).join('.').replace(/\.+$/, '');
+const perHero = (raw, h) => (typeof raw === 'string' ? parseInt(raw.slice(0, 200).split('.')[SAVE_HEROES.indexOf(h)] || '', 36) : raw?.[h]);
 
 // ------------------------------------------------------------- the ladder --
 
