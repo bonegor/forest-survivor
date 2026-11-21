@@ -540,6 +540,18 @@ export class SpoilsScreen {
     ui.begin(dt);
     if (this.error?.down && !this.saving && button(ctx, ui, 'resume_run', center - 48, y - 7, 96, 15, 'SAVE AGAIN')) this.resume();
     if (!this.saving && button(ctx, ui, 'back', center - 48, y + 13, 96, 15, 'BACK TO CAMP')) app.go('title');
+    // A run kept to save again blocks every new one (App.go), so one that fails every time (a
+    // server that always errs, a disk that always refuses) needs a way out: asked twice.
+    const kept = this.error?.down && !this.saving && app.store.pendingRun;
+    if (kept && button(ctx, ui, 'drop_run', center - 48, y + 33, 96, 15, this.dropArmed ? 'SURE? DROP IT' : 'DROP THIS RUN', { color: '#e43b44' })) {
+      if (this.dropArmed) {
+        app.store.clearReport(kept.runId);
+        app.go('title');
+      } else {
+        this.dropArmed = true;
+        ui.lock(0.4);
+      }
+    }
     ui.end();
   }
 }
