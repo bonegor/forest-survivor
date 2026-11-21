@@ -503,15 +503,22 @@ export class SpoilsScreen {
   async resume(report = this.app.store.pendingRun) {
     this.saving = true;
     const store = this.app.store;
-    if (report) {
-      this.error = await store.resumeRun(report);
-      if (this.error?.chooseSpoils) this.selection = new SpoilsSelection(this.app.ui, this.error.chooseSpoils, claimIndices => {
-        this.selection = null;
-        this.resume({ ...report, claimIndices });
-      }, this.error.volatile);
+    // Whatever throws, saving ends: BACK TO CAMP shows only then, and a screen stuck on
+    // "Saving your spoils…" had no way out.
+    try {
+      if (report) {
+        this.error = await store.resumeRun(report);
+        if (this.error?.chooseSpoils) this.selection = new SpoilsSelection(this.app.ui, this.error.chooseSpoils, claimIndices => {
+          this.selection = null;
+          this.resume({ ...report, claimIndices });
+        }, this.error.volatile);
+      }
+      if (store.pendingReveal) this.reveal = new SpoilsReveal(this.app, store.pendingReveal);
+    } catch (e) {
+      this.error = { unsaved: true, down: true, error: e?.message };
+    } finally {
+      this.saving = false;
     }
-    if (store.pendingReveal) this.reveal = new SpoilsReveal(this.app, store.pendingReveal);
-    this.saving = false;
   }
 
   draw(ctx, W, H, dt) {

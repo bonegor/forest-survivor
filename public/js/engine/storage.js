@@ -47,17 +47,25 @@ export function unlockEverything(p) {
 const SETTINGS = 'fs_settings';
 const MAX_AGE = 60 * 60 * 24 * 400;
 
+// A sandboxed frame throws on document.cookie, as a page with storage switched off does on
+// localStorage: no cookie there, never a game stuck on its loading screen.
 function readCookie(name) {
   if (!globalThis.document) return null;
-  const m = document.cookie?.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
-  return m ? m[1] : null;
+  try {
+    const m = document.cookie?.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
 }
 
 function writeCookie(name, value) {
   if (!globalThis.document) return;
   const secure = globalThis.location?.protocol === 'https:' ? '; Secure' : '';
-  if (value == null) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
-  else document.cookie = `${name}=${value}; Path=/; Max-Age=${MAX_AGE}; SameSite=Lax${secure}`;
+  try {
+    if (value == null) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
+    else document.cookie = `${name}=${value}; Path=/; Max-Age=${MAX_AGE}; SameSite=Lax${secure}`;
+  } catch {}
 }
 
 const COOKIE_PART = 3700, MAX_COOKIE_PARTS = 3;
@@ -183,10 +191,20 @@ export const seenBox = {
   },
 };
 
+// No answer in this long is no answer at all: thrown as a TypeError, as a dropped connection is
+// (serverDown), so a run is kept to save again rather than left counting on the results screen.
+const API_WAIT = 20000;
+
 async function api(path, body) {
-  const res = await fetch('/api/' + path, body === undefined
-    ? { credentials: 'same-origin', cache: 'no-store' }
-    : { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const signal = globalThis.AbortSignal?.timeout?.(API_WAIT);
+  let res;
+  try {
+    res = await fetch('/api/' + path, body === undefined
+      ? { credentials: 'same-origin', cache: 'no-store', signal }
+      : { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal });
+  } catch (e) {
+    throw e instanceof TypeError ? e : new TypeError(e?.message || 'No answer from the game server');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || res.statusText), { data, status: res.status });
   return data;
@@ -326,51 +344,61 @@ export const store = {
 
   // The run's reward. When the server doesn't take the run nothing changes, and the reward
   // comes back with unsaved set (down: worth trying again) for the results screen to say so.
+  // Never rejects: the results and spoils screens wait on it, and a throw (a disk error on the
+  // desktop, a storage that refuses) left them counting for ever. Such a run stays to save again.
   async submitRun(run) {
     return withProfileLock(async () => {
-      this.reload();
-      const modern = validRunId(run?.runId);
-      if (modern) {
-        const waiting = this.waitingReport();
-        if (waiting && waiting.runId !== run.runId && this.pendingRun) return unsavedRun('Another run is waiting to be saved');
-        if (waiting?.runId === run.runId && waiting.runFrom === run.runFrom && waiting.claimIndices !== undefined) run = waiting;
-        // Write before making any request. Until the reveal is acknowledged, this also
-        // supplies the full gear ledger when a server cookie could only fit its tail.
-        this.runOutbox = run;
-        const packed = P.encodeState(run);
-        saveBox.write(RUN_OUTBOX, packed);
-        if (run.sealedGear === true && run.selectSpoils === true && run.claimIndices === undefined) {
-          const finds = sealedFinds(run.spoils, P.sanitizeRun(run)?.found ?? 0);
-          if (finds.length > MAX_CLAIMS) return { chooseSpoils: finds, volatile: saveBox.read(RUN_OUTBOX) !== packed };
-        }
+      try {
+        return await this.settleRun(run);
+      } catch (e) {
+        return unsavedRun(e?.message || 'The run could not be saved', true);
       }
-      if (this.mode === 'server') {
-        try {
-          const data = await api('run', run);
-          if (!data.profile || !data.reward || modern && data.profile.lastRun?.id !== run.runId) {
-            throw new TypeError('The run receipt was interrupted');
-          }
-          this.profile = P.sanitizeProfile(data.profile);
-          this.lastReward = data.reward;
-          if (modern && !this.profile.lastRun?.pending) this.clearReport(run.runId);
-          return data.reward;
-        } catch (e) {
-          const down = serverDown(e);
-          if (modern && !down) this.clearReport(run.runId);
-          return unsavedRun(e.message, down);
-        }
-      }
-      const r = P.applyRun(this.profile, run);
-      if (!r.ok) {
-        if (modern) this.clearReport(run.runId);
-        return unsavedRun(r.error);
-      }
-      this.profile = r.profile;
-      this.saveLocal();
-      this.lastReward = r.reward;
-      if (modern && this.kept && !this.profile.lastRun?.pending) this.clearReport(run.runId);
-      return this.kept ? r.reward : { ...r.reward, volatile: true };
     });
+  },
+
+  async settleRun(run) {
+    this.reload();
+    const modern = validRunId(run?.runId);
+    if (modern) {
+      const waiting = this.waitingReport();
+      if (waiting && waiting.runId !== run.runId && this.pendingRun) return unsavedRun('Another run is waiting to be saved');
+      if (waiting?.runId === run.runId && waiting.runFrom === run.runFrom && waiting.claimIndices !== undefined) run = waiting;
+      // Write before making any request. Until the reveal is acknowledged, this also
+      // supplies the full gear ledger when a server cookie could only fit its tail.
+      this.runOutbox = run;
+      const packed = P.encodeState(run);
+      saveBox.write(RUN_OUTBOX, packed);
+      if (run.sealedGear === true && run.selectSpoils === true && run.claimIndices === undefined) {
+        const finds = sealedFinds(run.spoils, P.sanitizeRun(run)?.found ?? 0);
+        if (finds.length > MAX_CLAIMS) return { chooseSpoils: finds, volatile: saveBox.read(RUN_OUTBOX) !== packed };
+      }
+    }
+    if (this.mode === 'server') {
+      try {
+        const data = await api('run', run);
+        if (!data.profile || !data.reward || modern && data.profile.lastRun?.id !== run.runId) {
+          throw new TypeError('The run receipt was interrupted');
+        }
+        this.profile = P.sanitizeProfile(data.profile);
+        this.lastReward = data.reward;
+        if (modern && !this.profile.lastRun?.pending) this.clearReport(run.runId);
+        return data.reward;
+      } catch (e) {
+        const down = serverDown(e);
+        if (modern && !down) this.clearReport(run.runId);
+        return unsavedRun(e.message, down);
+      }
+    }
+    const r = P.applyRun(this.profile, run);
+    if (!r.ok) {
+      if (modern) this.clearReport(run.runId);
+      return unsavedRun(r.error);
+    }
+    this.profile = r.profile;
+    this.saveLocal();
+    this.lastReward = r.reward;
+    if (modern && this.kept && !this.profile.lastRun?.pending) this.clearReport(run.runId);
+    return this.kept ? r.reward : { ...r.reward, volatile: true };
   },
 
   async acknowledgeReveal(id) {

@@ -148,7 +148,14 @@ async function boot() {
   initView(canvas);
   initInput(canvas);
   buildSprites();
-  await store.init();
+  try {
+    await store.init();
+  } catch (e) {
+    // The save can't be opened at all (a disk error on the desktop): said, not torches for ever.
+    const loading = document.getElementById('loading');
+    if (loading) loading.textContent = 'THE SAVE COULD NOT BE OPENED: ' + (e?.message || e);
+    throw e;
+  }
   setVolumes(app.settings.music, app.settings.sfx);
   setMusicTracks(app.settings.musicTracks);
   // Browsers only allow audio after a user gesture.
