@@ -166,6 +166,9 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => 
 // `to`, both included, or null when `to` can't be reached. blocked(tx, ty): what can't be walked.
 const SQRT2 = Math.SQRT2;
 const STEPS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, SQRT2], [1, -1, SQRT2], [-1, 1, SQRT2], [-1, -1, SQRT2]];
+// Its working arrays, kept between calls and refilled: asked again on every tile the hero steps
+// onto once the way out is lit (updateWay), it made three floor-sized arrays each time.
+let scratch = null;
 export function findPath(W, H, blocked, from, to) {
   const N = W * H;
   if (from < 0 || to < 0 || from >= N || to >= N) return null;
@@ -176,7 +179,11 @@ export function findPath(W, H, blocked, from, to) {
     const dx = Math.abs((i % W) - tx), dy = Math.abs(Math.floor(i / W) - ty);
     return dx + dy + (SQRT2 - 2) * Math.min(dx, dy);
   };
-  const cost = new Float64Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), done = new Uint8Array(N);
+  if (scratch?.N !== N) scratch = { N, cost: new Float64Array(N), came: new Int32Array(N), done: new Uint8Array(N) };
+  const { cost, came, done } = scratch;
+  cost.fill(Infinity);
+  came.fill(-1);
+  done.fill(0);
   // A binary heap of [estimate, tile].
   const heap = [];
   const push = (f, i) => {
