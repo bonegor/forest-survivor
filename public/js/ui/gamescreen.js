@@ -1493,7 +1493,7 @@ export class PauseOverlay {
     // or, once QUIT RUN is pressed, what quitting means.
     const stats = `${clockCountsDown(g) ? 'TIME LEFT' : 'TIME'} ${fmtTime(clockTime(g))} · LV ${p.level} · KILLS ${fmtNum(g.kills)} · GOLD ${fmtNum(g.gold)}`;
     const note = this.confirm ? 'Quitting ends the run. The gold you found is kept.' : stats;
-    drawText(ctx, note, W / 2, y + 11, { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' });
+    drawText(ctx, fitText(note, pw - 12), W / 2, y + 11, { align: 'center', color: this.confirm ? '#c0cbdc' : '#feae34' }); // a phone held upright is narrower than the line
     // The build in two columns, a rule between: weapons and their levels, relics and their ranks.
     // The owner's (27 October 2026): after each weapon not yet evolved, its partner relic
     // (Game.evoState): its icon full if owned, dimmed if it may still come, dimmed under a red ×
