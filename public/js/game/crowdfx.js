@@ -5,7 +5,7 @@
 // they only hurt it.
 
 import { sfx } from '../engine/audio.js';
-import { rand, TAU, lerp, pick, angleDiff, clamp } from '../engine/util.js';
+import { rand, TAU, lerp, pick, angleDiff, clamp, hash2, ease } from '../engine/util.js';
 import { Pool, Ring, explode } from './effects.js';
 import { discSprite, ringSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
@@ -44,9 +44,69 @@ export function gust(g, w, foes) {
   const n = full ? 46 : 26;
   for (let i = 0; i < n; i++) {
     const a = full ? rand(TAU) : p.aim + rand(-s.arc, s.arc), v = rand(140, 300) * Math.sqrt(s.area);
-    g.particles.emit(p.x + Math.cos(a) * 8, p.y - 4 + Math.sin(a) * 8, 4, Math.cos(a) * v, Math.sin(a) * v, 0, rand(0.25, 0.5), 1, pick([PC.w, PC.c, PC.G]), P.GLOW | P.FADE, 2);
+    g.particles.emit(p.x + Math.cos(a) * 8, p.y - 4 + Math.sin(a) * 8, 4, Math.cos(a) * v, Math.sin(a) * v, 0, rand(0.25, 0.5), 2, pick([PC.w, PC.c, PC.G]), P.GLOW | P.FADE | P.SHRINK, 2);
   }
+  // Seen all round from a half-arc of 3 on (Tempest's 3.14 is all round, a hair under Math.PI).
+  g.effects.push(new GaleWave(id, p.x, p.y - 4, p.aim, GALE_R * s.area, s.arc, s.arc > 3));
   sfx('blade', { pitch: 0.6 });
+}
+
+// The gust seen (the graphics review of 22 November 2026: 26-46 one-px sparks, the horde thrown
+// back by nothing to be seen): streaks of wind two art px deep, white before cyan, racing out to
+// the gust's reach across its cone (Tempest's all round), a second, fainter front slower behind
+// the first. Drawn on the art grid, lit and then as light (by night too). Cosmetic: where each
+// streak lies comes from hash2 of the blast, never from the dice.
+const WAVE = { dur: 0.3, slow: 0.45, cone: 9, full: 18, cols: ['#ffffff', '#c0f0ff', '#2ce8f5'] };
+class GaleWave {
+  constructor(id, x, y, aim, R, arc, full) {
+    Object.assign(this, { id, x, y, aim, R, arc, full, t: 0 });
+    this.dur = WAVE.slow;
+  }
+
+  update(dt) {
+    this.t += dt;
+    return this.t < this.dur;
+  }
+
+  draw(ctx, cam) {
+    this.paint(ctx, cam, 1);
+  }
+
+  drawGlow(ctx, cam) {
+    this.paint(ctx, cam, 0.5);
+  }
+
+  paint(ctx, cam, strength) {
+    const S = cam.S, n = this.full ? WAVE.full : WAVE.cone;
+    // One art px at (X, Y), its edges on the screen's px so neighbours meet without a seam.
+    const dot = (X, Y) => {
+      const x0 = Math.round((X - cam.x) * S), y0 = Math.round((Y - cam.y) * S);
+      ctx.fillRect(x0, y0, Math.round((X + 1 - cam.x) * S) - x0, Math.round((Y + 1 - cam.y) * S) - y0);
+    };
+    for (const [dur, k, seed] of [[WAVE.dur, 1, 31], [WAVE.slow, 0.5, 57]]) {
+      const u = this.t / dur;
+      if (u >= 1) continue;
+      const front = 8 + (this.R - 8) * ease.outCubic(u);
+      ctx.globalAlpha = strength * k * (1 - u * u);
+      for (let i = 0; i < n; i++) {
+        const h = hash2(this.id, i, seed), h2 = hash2(this.id, i, seed + 1);
+        const a = this.full ? ((i + h * 0.7) / n) * TAU : this.aim + ((i + 0.5) / n - 0.5) * 2 * this.arc + (h - 0.5) * (this.arc / n);
+        // Each a little behind the front, and as long as 8-18 art px along it (shorter near him).
+        const r = Math.max(4, front - h2 * 9), half = ((8 + h * 10) * Math.min(1, front / 40)) / 2;
+        const steps = Math.max(1, Math.round(half * 2));
+        for (let j = 0; j <= steps; j++) {
+          const q = j / steps, b = a + ((q - 0.5) * half * 2) / r, c = Math.cos(b), sn = Math.sin(b);
+          // Its ends taper to the cyan alone; the middle has the white edge outside.
+          const end = q < 0.2 || q > 0.8;
+          ctx.fillStyle = WAVE.cols[end ? 2 : 0];
+          dot(Math.round(this.x + c * r), Math.round(this.y + sn * r));
+          ctx.fillStyle = WAVE.cols[end ? 2 : 1];
+          dot(Math.round(this.x + c * (r - 1)), Math.round(this.y + sn * (r - 1)));
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ------------------------------------------------------------------ hook --

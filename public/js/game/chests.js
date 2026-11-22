@@ -1,10 +1,10 @@
 // Chests by tier (the reward ladder: a champion's < a crypt lord's < a boss's). One sprite, recoloured
 // in code: a champion's or a thief's (`elite`) wood and bronze, a lord's iron and silver, a boss's
-// gold and half again as big. Each tier has its own glow and light on the ground and its own room
+// gold and half again as big (in the world, drawn at that size: worldChest). Each tier has its own glow and light on the ground and its own room
 // light, rays and number of shakes on the chest screen. What a chest holds is drawn as before
 // (Game.rollChest); this only says how it is shown.
 
-import { SPR } from '../engine/sprites.js';
+import { SPR, buildSprite } from '../engine/sprites.js';
 import { hexPack } from '../engine/pixels.js';
 import { PAL } from '../art/palette.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, statsAt } from '../data/weapons.js';
@@ -31,11 +31,47 @@ export const tierOf = (kind) => CHEST_TIERS[kind] || CHEST_TIERS.elite;
 
 // A tier's chest frame (0 shut, 1 open), recoloured once and kept.
 export function chestFrame(kind, open = false) {
-  const tier = tierOf(kind), fr = SPR.chest.frames[open ? 1 : 0];
+  return recoloured(SPR.chest.frames[open ? 1 : 0], kind);
+}
+const recoloured = (fr, kind) => {
+  const tier = tierOf(kind);
   return fr.variant('tier-' + kind, (b) => {
     const map = new Map(Object.entries(OWN).map(([k, c]) => [hexPack(c), hexPack(tier.look[k])]));
     return { w: b.w, h: b.h, d: b.d.map((c) => map.get(c) ?? c) };
   });
+};
+
+// The shut chest as it lies in the world, drawn a px to an art px as the world is. A boss's, half
+// again as big (its tier's scale, 1.5), is the same chest drawn at that size (art/items.js chest,
+// 14x10, here 21x15): blown up by 1.5 as it was drawn, its px came out 1 and 2 art px wide side by
+// side, chunkier than the champion's and the lord's beside it (the graphics review of 22 November
+// 2026). The chest's screen (ui/gamescreen.js) still draws chestFrame at its tier's scale.
+const BIG_CHEST = {
+  frames: [
+    [
+      '...bbbbbbbbbbbbbbb...',
+      '.bbBBBBBBBBBBBBBBBbb.',
+      'bBBBBBBBBBBBBBBBBBBBb',
+      'byyyyyyyyyyyyyyyyyyyb',
+      'bBBBBBBBBBBBBBBBBBBBb',
+      'bBBBBBBBBBBBBBBBBBBBb',
+      'bBBBBBBBByyyBBBBBBBBb',
+      'yyyyyyyyyYYYyyyyyyyyy',
+      'bBBBBBBBByoyBBBBBBBBb',
+      'bBBBBBBBByyyBBBBBBBBb',
+      'bBBBBBBBBBBBBBBBBBBBb',
+      'bBBBBBBBBBBBBBBBBBBBb',
+      'byyBBBBBBBBBBBBBBByyb',
+      'byyBBBBBBBBBBBBBBByyb',
+      'bbbbbbbbbbbbbbbbbbbbb',
+    ],
+  ],
+};
+let bigChest = null;
+export function worldChest(kind) {
+  if (tierOf(kind).scale === 1) return chestFrame(kind);
+  bigChest ??= buildSprite('chest_big', BIG_CHEST);
+  return recoloured(bigChest.frames[0], kind);
 }
 
 // The tease, always true: as many beams leak from the crack as the chest holds things, one of them

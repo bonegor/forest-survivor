@@ -6,7 +6,7 @@
 // Effect interface as in effects.js: update(dt) -> keep?; drawGround / draw / drawGlow(ctx, cam).
 
 import { sfx } from '../engine/audio.js';
-import { rand, TAU, clamp, angleDiff, ease, pick, hash2 } from '../engine/util.js';
+import { rand, TAU, clamp, angleDiff, ease, pick, hash2, makeCanvas, hexToRgb } from '../engine/util.js';
 import { glow, glint } from './fxsprites.js';
 import { PC, P } from './particles.js';
 import { Ring, brandFoe } from './effects.js';
@@ -75,26 +75,34 @@ export class Lantern {
     return true;
   }
 
+  // The beams in art px, blown up a px to an art px as the sprites are (the graphics review of 22
+  // November 2026: a smooth gradient at the screen's size, off the pixel grid): each a cone in
+  // LAMP_BANDS of light, brightest at the lamp, drawn into a canvas of art px round him (lampLayer).
   drawGlow(ctx, cam) {
-    const g = this.g, p = g.player, s = this.w.s, n = Math.round(s.amount), half = this.half;
-    const [sx, sy] = toScreen(cam, p.x, p.y - 4);
-    const R = this.reach * cam.S, col = s.mark ? '190,235,255' : '255,244,214';
+    const g = this.g, p = g.player, s = this.w.s, n = Math.round(s.amount), half = this.half, S = cam.S;
+    const R = this.reach, col = s.mark ? '190,235,255' : '255,244,214';
+    const cx = p.x, cy = p.y - 4, D = Math.ceil(2 * R + 4);
+    const x0 = Math.floor(cx) - (D >> 1), y0 = Math.floor(cy) - (D >> 1), ox = cx - x0, oy = cy - y0;
+    const layer = lampLayer(D), lc = layer.g;
+    lc.clearRect(0, 0, D, D);
     for (let k = 0; k < n; k++) {
       const a = this.ang + (k / n) * TAU;
-      ctx.save();
-      ctx.translate(sx, sy);
-      ctx.rotate(a);
-      const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
-      gr.addColorStop(0, `rgba(${col},0.6)`);
-      gr.addColorStop(0.55, `rgba(${col},0.3)`);
-      gr.addColorStop(1, `rgba(${col},0)`);
-      ctx.fillStyle = gr;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, R, -half, half);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
+      // Whole cones from the widest in, each over the last by what brings it to its band's light
+      // (no seam where two bands meet).
+      let under = 0;
+      for (const [r, alpha] of LAMP_BANDS) {
+        lc.fillStyle = `rgba(${col},${(alpha - under) / (1 - under)})`;
+        lc.beginPath();
+        lc.moveTo(ox, oy);
+        lc.arc(ox, oy, r * R, a - half, a + half);
+        lc.closePath();
+        lc.fill();
+        under = alpha;
+      }
+    }
+    ctx.drawImage(layer.c, 0, 0, D, D, Math.round((x0 - cam.x) * S), Math.round((y0 - cam.y) * S), D * S, D * S);
+    for (let k = 0; k < n; k++) {
+      const a = this.ang + (k / n) * TAU;
       // The ground it lights: soft lights along the beam, wider the farther they lie.
       const key = s.mark ? 'cold' : 'white';
       for (let j = 1; j <= 4; j++) {
@@ -104,6 +112,19 @@ export class Lantern {
     }
     g.light(p.x, p.y, 36, 'warm', 0.45);
   }
+}
+
+// A beam's light in bands, widest first: out to a share of its reach, how strong (the gradient it
+// was drawn in: 0.6 at the lamp, 0.3 at 0.55 of the reach, none at its end); and the canvas they
+// are drawn in, art px, one for every lantern and grown as a beam needs.
+const LAMP_BANDS = [[1, 0.05], [0.85, 0.15], [0.7, 0.25], [0.55, 0.34], [0.4, 0.43], [0.22, 0.54]];
+let lamp = null;
+function lampLayer(D) {
+  if (!lamp || lamp.size < D) {
+    const c = makeCanvas(D, D);
+    lamp = { c, g: c.getContext('2d'), size: D };
+  }
+  return lamp;
 }
 
 // ---------------------------------------------------------------- runestone --
@@ -286,28 +307,60 @@ export class Sweep {
     return this.t < this.dur;
   }
 
+  // Drawn in art px and blown up a px to an art px, as the sprites are (the graphics review of 22
+  // November 2026: drawn as paths at the screen's size, its haft a hairline and its wake a smooth
+  // arc, it was the one thing on the field off the pixel grid): the blades drawn as before into a
+  // canvas of art px round him (sweepLayer), every px of them made whole (none half see-through),
+  // and the wake laid under them px by px in its bands.
   draw(ctx, cam) {
-    const p = this.g.player, S = cam.S, L = this.look, R = this.R * S, k0 = this.alpha;
-    const [sx, sy] = toScreen(cam, p.x, p.y - 3);
-    ctx.save();
-    ctx.lineCap = 'butt';
-    for (let k = 0; k < this.n; k++) {
-      const a = this.ang(k);
-      // The wake: a band of ghost-light just inside the point's reach, fading out behind it.
-      const seg = 0.11, m = L.wake.length * 2;
-      for (let i = 0; i < m; i++) {
-        const to = a - this.dir * i * seg, from = to - this.dir * seg;
-        ctx.globalAlpha = (1 - i / m) * 0.75 * k0;
-        ctx.strokeStyle = L.wake[i >> 1];
-        ctx.lineWidth = Math.max(1, (7 - i * 0.45) * S);
-        ctx.beginPath();
-        ctx.arc(sx, sy, R - 4 * S, Math.min(from, to), Math.max(from, to));
-        ctx.stroke();
+    const p = this.g.player, S = cam.S, R = this.R, k0 = this.alpha, n = this.n;
+    const cx = p.x, cy = p.y - 3, D = Math.ceil(2 * R + 16);
+    const x0 = Math.floor(cx) - (D >> 1), y0 = Math.floor(cy) - (D >> 1), ox = cx - x0, oy = cy - y0;
+    const layer = sweepLayer(D), lc = layer.g;
+    lc.clearRect(0, 0, D, D);
+    lc.lineCap = 'butt';
+    for (let k = 0; k < n; k++) this.drawBlade(lc, ox, oy, this.ang(k), R, 1);
+    // Read back (a context that keeps no pixels, as the bots' headless one, gives none: the blades
+    // are blitted as they were drawn, with no wake).
+    const img = lc.getImageData(0, 0, D, D), d = img?.data;
+    if (d) this.pixelPass(lc, img, d, D, ox, oy);
+    ctx.globalAlpha = k0;
+    ctx.drawImage(layer.c, 0, 0, D, D, Math.round((x0 - cam.x) * S), Math.round((y0 - cam.y) * S), D * S, D * S);
+    ctx.globalAlpha = 1;
+  }
+
+  // The blades' px made whole, and the wake laid under them (draw).
+  pixelPass(lc, img, d, D, ox, oy) {
+    const L = this.look, R = this.R, n = this.n;
+    for (let i = 3; i < d.length; i += 4) d[i] = d[i] >= SWEEP_SOLID ? 255 : 0;
+    // The wake: a band of ghost-light just inside the point's reach (rc), fading out behind each
+    // blade in segments of `seg` radians, each its colour, strength and width (art px).
+    const seg = 0.11, m = L.wake.length * 2, rc = R - 4, rgb = L.wake.map(hexToRgb), angs = [];
+    for (let k = 0; k < n; k++) angs.push(this.ang(k));
+    for (let y = 0; y < D; y++) {
+      const dy = y + 0.5 - oy;
+      if (Math.abs(dy) > rc + 4) continue;
+      for (let x = 0; x < D; x++) {
+        const j = (y * D + x) * 4;
+        if (d[j + 3]) continue;
+        const dx = x + 0.5 - ox, off = Math.abs(Math.hypot(dx, dy) - rc);
+        if (off > 3.5) continue;
+        const th = Math.atan2(dy, dx);
+        for (let k = 0; k < n; k++) {
+          let back = ((angs[k] - th) * this.dir) % TAU;
+          if (back < 0) back += TAU;
+          const i = Math.floor(back / seg);
+          if (i >= m || off > (7 - i * 0.45) / 2) continue;
+          const c = rgb[i >> 1];
+          d[j] = c[0];
+          d[j + 1] = c[1];
+          d[j + 2] = c[2];
+          d[j + 3] = Math.round((1 - i / m) * 0.75 * 255);
+          break;
+        }
       }
-      ctx.globalAlpha = k0;
-      this.drawBlade(ctx, sx, sy, a, R, S);
     }
-    ctx.restore();
+    lc.putImageData(img, 0, 0);
   }
 
   // The haft from his hands out toward the reach, and at its head the blade, its back bowing out
@@ -362,6 +415,19 @@ export class Sweep {
     }
     ctx.globalAlpha = 1;
   }
+}
+
+// The canvas the Scythe is drawn in (Sweep.draw), art px, one for every sweep and grown as a
+// sweep needs; read back each frame, so kept where reading it is cheap. A px the blade's paths
+// cover at least this much (of 255) is the blade's whole, else none of it.
+let sweep = null;
+const SWEEP_SOLID = 96;
+function sweepLayer(D) {
+  if (!sweep || sweep.size < D) {
+    const c = makeCanvas(D, D);
+    sweep = { c, g: c.getContext('2d', { willReadFrequently: true }), size: D };
+  }
+  return sweep;
 }
 
 // A reaped foe's mark: a small skull of ghost-light rising from where it fell, fading.

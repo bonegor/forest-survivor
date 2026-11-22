@@ -9,6 +9,7 @@ export { REACT, isHeavy } from '../data/reactions.js';
 
 // The same word over the field no oftener than this, in s of the game's clock.
 const WORD_EVERY = 0.4;
+const WORD_UP = 16;
 // Splash bursts drawn a second at most; past it the splash still lands, unseen.
 const BURSTS = { per: 1, most: 10 };
 
@@ -69,6 +70,8 @@ export function react(g, e, kind, d, w) {
   const W = REACT_WORD[kind], at = g.reactSaid;
   if ((at[kind] ?? -Infinity) > g.clock - WORD_EVERY) return;
   at[kind] = g.clock;
-  if (g.numbers.enabled) g.numbers.text(e.x, e.y - e.h - 6, W.word, W.style);
+  // The word loud (Numbers.text), WORD_UP px over the foe's head: above where its splash's numbers
+  // are born, and drawn over them.
+  if (g.numbers.enabled) g.numbers.text(e.x, e.y - e.h - WORD_UP, W.word, W.style, true);
   g.hints?.saw(kind);
 }

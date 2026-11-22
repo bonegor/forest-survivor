@@ -1,11 +1,11 @@
 // Things to pick up: soul gems (XP), gold, potions, scrolls, relics, chests, gear.
 
-import { SPR } from '../engine/sprites.js';
+import { SPR, buildSprite } from '../engine/sprites.js';
 import { RARITIES } from '../shared/items.js';
 import { sfx } from '../engine/audio.js';
 import { rand } from '../engine/util.js';
 import { shadowSprite, glow, glint, beamSprite } from './fxsprites.js';
-import { tierOf, chestFrame } from './chests.js';
+import { tierOf, worldChest } from './chests.js';
 import { PC, P } from './particles.js';
 import { MISER_FURY } from '../data/boons.js';
 
@@ -18,6 +18,42 @@ const GEM_TIERS = [
 ];
 // Soul gems are drawn half again their sprites' size; their shadow, glow and twinkles grow with them.
 const GEM_SIZE = 1.5;
+// ... drawn as art of their own at that size (art/items.js gem1-4, 5x5 to 7x8, here 9x9 to 11x12, in
+// the same colours and light), a px to an art px as the world is: blown up by 1.5 as they were
+// drawn, their px came out 1 and 2 art px wide side by side (the graphics review of 22 November
+// 2026). A gem's `sprite` stays the gem's own (SPR.gem1-4); `art` is what is drawn.
+const GEM_ART = {
+  gem1: {
+    emissive: 'cwU',
+    frames: [
+      ['....c....', '...cwU...', '..cwUUU..', '.cwUUUUu.', 'cUUUUUUuu', '.UUUUuuu.', '..UUuuu..', '...Uuu...', '....u....'],
+      ['....w....', '...cwU...', '..cwUUU..', '.cwUUUUu.', 'cUUUwUUuu', '.UUUUuuu.', '..UUuuu..', '...Uuu...', '....u....'],
+    ],
+  },
+  gem2: {
+    emissive: 'lwL',
+    frames: [
+      ['....ll....', '...lwLL...', '..lwwLLL..', '.lwLLLLLe.', 'llLLLLLLee', 'LLLLLLLeee', '.LLLLLeee.', '..LLLeee..', '...Leee...', '....ee....'],
+      ['....lw....', '...lwwL...', '..lwwLLL..', '.lwLLLLLe.', 'llLLLLLLee', 'LLLLwLLeee', '.LLLLLeee.', '..LLLeee..', '...Leee...', '....ee....'],
+    ],
+  },
+  gem3: {
+    emissive: 'iwrx',
+    frames: [
+      ['.....i.....', '....iwr....', '...iwwrr...', '..iwwrrrr..', '.iwrrrrrrR.', 'iirrrrrrrRR', '.rrrrrrRRR.', '..rrrrRRR..', '...rrRRR...', '....rRR....', '.....R.....'],
+      ['.....w.....', '....iwr....', '...iwwrr...', '..iwwwrrr..', '.iwrrrrrrR.', 'iirrwrrrrRR', '.rrrrrrRRR.', '..rrrrRRR..', '...rrRRR...', '....rRR....', '.....R.....'],
+    ],
+  },
+  gem4: {
+    emissive: 'wYyo',
+    frames: [
+      ['.....Y.....', '....YwY....', '...YwYYy...', '..YwYYYyy..', '.YwYYYYyyy.', 'YwYYYYyyyyo', 'yYYYYyyyyoo', '.yYYyyyyoo.', '..yyyyyoo..', '...yyyoo...', '....yoo....', '.....o.....'],
+      ['.....w.....', '....YwY....', '...YwwYy...', '..YwYYYyy..', '.YwYYYYyyy.', 'YwYYwYyyyyo', 'yYYYYyyyyoo', '.yYYyyyyoo.', '..yyywyoo..', '...yyyoo...', '....yoo....', '.....o.....'],
+    ],
+  },
+};
+const gemArt = {};
+const gemSprite = (name) => (gemArt[name] ??= buildSprite(name, GEM_ART[name]));
 
 const LOOK = {
   coin: { sprite: 'coin', glow: '#feae34', anim: 10 },
@@ -105,25 +141,26 @@ export class Pickup {
       const i = GEM_TIERS.findIndex((t) => this.value >= t[0]);
       const tier = GEM_TIERS[i];
       this.sprite = SPR[tier[1]];
+      this.art = gemSprite(tier[1]);
       this.glowColor = tier[2];
       this.lightKey = tier[3];
       this.rank = GEM_TIERS.length - 1 - i; // 0 for the smallest gem, 3 for the gold one
       this.twinkle = PC[tier[4]];
     } else if (this.kind === 'item') {
       const it = this.opts.item;
-      this.sprite = SPR['g_' + it.slot];
+      this.sprite = this.art = SPR['g_' + it.slot];
       this.glowColor = RARITIES[it.rarity].color;
       this.lightKey = GEAR_LIGHT[it.rarity];
     } else if (this.kind === 'chest') {
       // Its tier's colours (chests.js): a champion's bronze, a lord's silver, a boss's gold.
       const T = tierOf(this.opts.kind);
-      this.sprite = SPR.chest;
+      this.sprite = this.art = SPR.chest;
       this.glowColor = T.glow;
       this.lightKey = T.light;
       this.scale = T.scale;
     } else {
       const L = LOOK[this.kind];
-      this.sprite = SPR[L.sprite];
+      this.sprite = this.art = SPR[L.sprite];
       this.glowColor = L.glow;
       this.lightKey = L.light;
     }
@@ -301,21 +338,22 @@ export class Pickup {
     this._rect = null;
     if (this.hold > 0) return;
     if (sx < -40 || sy < -40 || sx > cam.pxW + 40 || sy > cam.pxH + 40) return;
-    const big = this.kind === 'chest', k = this.kind === 'gem' ? GEM_SIZE : big ? this.scale : 1;
+    const big = this.kind === 'chest';
     shadows ||= [shadowSprite(14), shadowSprite(5 * GEM_SIZE), shadowSprite(6)];
     const sh = shadows[big ? 0 : this.kind === 'gem' ? 1 : 2];
     ctx.globalAlpha = 0.45;
     ctx.drawImage(sh, Math.round(sx - (sh.width * S) / 2), Math.round(sy - (sh.height * S) / 2), sh.width * S, sh.height * S);
     ctx.globalAlpha = 1;
     const look = LOOK[this.kind];
-    const frames = this.sprite.frames;
+    const frames = this.art.frames;
     let fi = 0;
     if (this.kind === 'gem') fi = Math.floor(this.t * 2.5) % 5 === 0 ? 1 : 0;
     else if (look && look.anim) fi = Math.floor(this.t * look.anim) % frames.length;
     fi = Math.min(fi, frames.length - 1);
-    const img = big ? chestFrame(this.opts.kind) : frames[fi].c;
+    // A px to an art px, a boss's big chest and the gems too (worldChest, GEM_ART).
+    const img = big ? worldChest(this.opts.kind) : frames[fi].c;
     const bob = big || this.pulled ? 0 : Math.sin(this.t * 4) * 1.2;
-    const w = img.width * S * k, h = img.height * S * k;
+    const w = img.width * S, h = img.height * S;
     const X = Math.round(sx - w / 2), Y = Math.round(sy - h - (this.z + bob + 1) * S);
     ctx.drawImage(img, X, Y, w, h);
     if (this.kind === 'skull') {
@@ -344,7 +382,7 @@ export class Pickup {
     const r = this._rect;
     if (!r) return;
     const X = r[0], Y = r[1], w = r[2], h = r[3];
-    const em = this.sprite.frames[r[4]].em;
+    const em = this.art.frames[r[4]].em;
     if (em) ctx.drawImage(em, X, Y, w, h);
   }
 

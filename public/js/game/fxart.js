@@ -22,11 +22,61 @@ export function fxFrames(name) {
 const unlitKeys = (keys) => (keys ? new Set([...keys].map((k) => packedPalette()[k])) : null);
 
 // A vfx.js sprite's glow frames (its light, baked at half size: drawn twice as big, adding light),
-// or null if it has none.
+// or null if it has none. Baked in 7 levels dithered between, the light doubled with nearest
+// sampling (and then by the world's scale) laid a checker of 2 art px round every zap, meteor and
+// ult (the graphics review of 22 November 2026): softened once here (softLight) and drawn smoothed
+// (VfxBurst.drawGlow), it is light again, no grid. Its strength is the same: the blur keeps it.
 const glows = {};
 export function glowFrames(name) {
   const g = VFX[name] && VFX[name].glow;
-  return g ? (glows[name] ??= bakedBuffers(g).map((b) => new Frame(b))) : null;
+  return g ? (glows[name] ??= bakedBuffers(g).map((b) => new Frame(softLight(b)))) : null;
+}
+
+// A light buffer blurred 1-4-6-4-1 each way (which melts a 4x4 Bayer dither), weighed by its alpha
+// so its hues stay as they were where the light is faint.
+const BLUR = [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16];
+function softLight(b) {
+  const { w, h, d } = b, n = w * h;
+  const pass = (src, horiz) => {
+    const out = new Float32Array(n * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let r = 0, g = 0, bl = 0, a = 0;
+        for (let k = -2; k <= 2; k++) {
+          const xx = horiz ? x + k : x, yy = horiz ? y : y + k;
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+          const j = (yy * w + xx) * 4, f = BLUR[k + 2];
+          r += src[j] * f;
+          g += src[j + 1] * f;
+          bl += src[j + 2] * f;
+          a += src[j + 3] * f;
+        }
+        const i = (y * w + x) * 4;
+        out[i] = r;
+        out[i + 1] = g;
+        out[i + 2] = bl;
+        out[i + 3] = a;
+      }
+    }
+    return out;
+  };
+  // Colour times alpha, so a faint pixel's hue counts for as little as its light.
+  const pre = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const c = d[i], a = c >>> 24;
+    pre[i * 4] = (c & 255) * a;
+    pre[i * 4 + 1] = ((c >>> 8) & 255) * a;
+    pre[i * 4 + 2] = ((c >>> 16) & 255) * a;
+    pre[i * 4 + 3] = a;
+  }
+  const soft = pass(pass(pre, true), false), out = new Uint32Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = soft[i * 4 + 3];
+    if (a < 1) continue;
+    const r = Math.round(soft[i * 4] / a), g = Math.round(soft[i * 4 + 1] / a), bl = Math.round(soft[i * 4 + 2] / a);
+    out[i] = ((Math.round(a) << 24) | (bl << 16) | (g << 8) | r) >>> 0;
+  }
+  return { w, h, d: out };
 }
 
 // What vfx.js holds for a sprite (its origin ox, oy in the frame, fps, variants ...), or undefined.
@@ -189,9 +239,12 @@ export class VfxBurst extends FxBurst {
       ctx.globalCompositeOperation = op;
     }
     if (this.glowFr) {
-      const gl = this.glowFr[i];
+      // Light, not pixels: smoothed as it is blown up (glowFrames), as the night's light map is.
+      const gl = this.glowFr[i], smooth = ctx.imageSmoothingEnabled;
       ctx.globalAlpha = this.alpha * this.glowAlpha;
+      ctx.imageSmoothingEnabled = true;
       this.place(ctx, cam, gl.get(this.flip), gl.w * 2, gl.h * 2);
+      ctx.imageSmoothingEnabled = smooth;
     }
     ctx.globalAlpha = 1;
   }

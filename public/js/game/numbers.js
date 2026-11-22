@@ -18,7 +18,7 @@
 // of a lower tier never pushes out one of a higher. No hit on the horde is shown within CLEAR px
 // of the hero, and no number but a boss's own is born on a boss's or a lord's body.
 
-import { textCanvas } from '../engine/font.js';
+import { textCanvas, textWidth } from '../engine/font.js';
 import { rand, ease, clamp } from '../engine/util.js';
 import { glint } from './fxsprites.js';
 
@@ -65,6 +65,11 @@ export const CLEAR = 10;
 export const HELD = 0.5;
 const LIFE = 0.85;
 const TEXT_LIFE = 1.6; // words last longer than numbers (Numbers.text)
+// A loud word (a reaction's SCALD, COMBUST or SHATTER, the one sign that teaches them) is in the
+// bold digits' font about a crit's size (st.scale × this ≈ 1 font px to a world px), and never
+// lands on the hero: born over him (his body, his bar, LOUD_CLEAR px to each side of the word), it
+// goes up over his head (LOUD_ABOVE px over his feet) instead.
+const LOUD_BOOST = 1.6, LOUD_CLEAR = 8, LOUD_ABOVE = 34;
 // The shine's sweep across the digits: when, and how wide (text pixels).
 const SHINE_FROM = 0.05, SHINE_FOR = 0.32, SHINE_W = 3;
 // The white flash every number pops in with (seconds), and a crit's (draw).
@@ -166,17 +171,24 @@ export class Numbers {
 
   // A few words rather than a number (a level-up the run's auto-pick took: "Blessing ×17"), in
   // a style's colours, rising slowly and lasting longer. Shown even with damage numbers off:
-  // it is the only word of what the level gave.
-  text(x, y, str, style = 'gold') {
+  // it is the only word of what the level gave. Words are drawn over every number (draw). loud: a
+  // reaction's word (LOUD_BOOST), off the hero.
+  text(x, y, str, style = 'gold', loud = false) {
     const n = this.spawn(x, y, style, TIER.big);
     n.x = x;
     n.vx = 0;
     n.vz = 22;
     n.grav = 0;
     n.life = TEXT_LIFE;
-    n.boost = 1.1;
+    n.boost = loud ? LOUD_BOOST : 1.1;
     n.str = str;
-    n.font = 'normal';
+    n.font = loud ? 'bold' : 'normal';
+    n.word = true;
+    const p = this.hero;
+    if (loud && p) {
+      const hw = (textWidth(str, 'bold') * STYLES[style].scale * LOUD_BOOST) / 2 + LOUD_CLEAR;
+      if (Math.abs(x - p.x) < hw && y > p.y - LOUD_ABOVE && y < p.y + 12) n.y = p.y - LOUD_ABOVE;
+    }
   }
 
   // A number from the pool, of a tier. At MAX it takes the place of the oldest of the lowest tier
@@ -211,6 +223,7 @@ export class Numbers {
     n.value = 0;
     n.style = style;
     n.font = 'bold';
+    n.word = false;
     n.alive = true;
     n.spin = 0;
     n.seed = (Math.random() * 1000) | 0;
@@ -253,68 +266,72 @@ export class Numbers {
     }
   }
 
+  // The numbers, then the words over them (a reaction's word over its own splash's numbers).
   draw(ctx, cam) {
+    for (const n of this.list) if (!n.word) this.drawOne(ctx, cam, n);
+    for (const n of this.list) if (n.word) this.drawOne(ctx, cam, n);
+    ctx.globalAlpha = 1;
+  }
+
+  // The bitmap font is crisp only at a whole number of screen px to its px (unit): its size steps
+  // through whole sizes as it pops (at a world scale of 3.2, a plain hit's 1 -> 3 -> 2), at least one
+  // up at the pop's height (on a 720p screen too, where a small hit is 1), and keeps its size as it
+  // fades. A crit shakes a font px or two each way as it lands, never turned off the grid.
+  drawOne(ctx, cam, n) {
     const S = cam.S;
-    for (const n of this.list) {
-      const st = STYLES[n.style];
-      const t = n.t;
-      let k;
-      if (t < 0.06) k = 0.3 + (1.75 - 0.3) * (t / 0.06);
-      else if (t < 0.2) k = 1.75 - 0.75 * ease.outCubic((t - 0.06) / 0.14);
-      else k = 1 - Math.max(0, t - (n.life - 0.3)) * 0.6;
-      const scale = st.scale * n.boost * k * S;
-      const alpha = clamp(t > n.life * 0.65 ? 1 - (t - n.life * 0.65) / (n.life * 0.35) : 1, 0, 1);
-      const sx = (n.x - cam.x) * S;
-      const sy = (n.y - n.z - cam.y) * S;
-      if (sx < -200 || sy < -200 || sx > cam.pxW + 200 || sy > cam.pxH + 200) continue;
-      const color = st.cycle ? (this.steady ? st.cycle[0] : st.cycle[(Math.floor(t * 16) + n.seed) % st.cycle.length]) : st.color;
-      const c = textCanvas(n.str, color, '#181425', st.edge || null, n.font);
-      const w = c.width * scale, h = c.height * scale;
-      const spin = n.spin && t < 0.3;
-      ctx.globalAlpha = alpha;
-      if (spin) {
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(n.spin * (1 - t / 0.3) * Math.sin(t * 45));
-      }
-      // Top-left of the number, around the origin while it spins; a held one stands on its foe's head.
-      const X = spin ? -w / 2 : Math.round(sx - w / 2), Y = spin ? -h / 2 : n.style === 'held' ? Math.round(sy - h) : Math.round(sy - h / 2);
-      ctx.drawImage(c, X, Y, Math.round(w), Math.round(h));
-      // The shine: a band of the digits drawn white, sweeping left to right as it lands.
-      if (!st.plain && t > SHINE_FROM && t < SHINE_FROM + SHINE_FOR) {
-        const wc = textCanvas(n.str, '#ffffff', '#181425', st.edge || null, n.font);
-        const at = Math.round(-SHINE_W + ((t - SHINE_FROM) / SHINE_FOR) * (c.width + SHINE_W));
-        const x0 = Math.max(0, at), x1 = Math.min(c.width, at + SHINE_W);
-        if (x1 > x0) {
-          ctx.globalAlpha = alpha * 0.9;
-          ctx.drawImage(wc, x0, 0, x1 - x0, c.height, X + x0 * scale, Y, (x1 - x0) * scale, h);
-        }
-      }
-      // White-hot flash on the first frames of a crit, and on a held number a crit was just added to.
-      if ((st.crit && t < CRIT_FLASH) || n.critT > 0) {
-        const fc = textCanvas(n.str, '#ffffff', '#ffffff', st.edge ? '#ffffff' : null, 'bold');
-        ctx.globalAlpha = 0.85 * (1 - t / CRIT_FLASH);
-        ctx.drawImage(fc, X, Y, Math.round(w), Math.round(h));
-      } else if (t < POP_FLASH && !this.steady) {
-        // Every other number flashes white as it pops, and again as a hit merged into it re-pops it
-        // (add: its clock set back to 0.05); never with FLASHES: SOFT.
-        const fc = textCanvas(n.str, '#ffffff', '#ffffff', st.edge ? '#ffffff' : null, n.font);
-        ctx.globalAlpha = alpha * 0.8 * (1 - t / POP_FLASH);
-        ctx.drawImage(fc, X, Y, Math.round(w), Math.round(h));
-      }
-      if (spin) ctx.restore();
-      // Twinkles circling a crit or gold, each breathing in turn.
-      if (st.stars && t > 0.04) {
-        const kk = Math.max(1, Math.round(S * 0.75));
-        for (let i = 0; i < st.stars; i++) {
-          const a = n.seed + (i / st.stars) * Math.PI * 2 + t * 2.2;
-          const tw = Math.abs(Math.sin(t * 13 + i * 2.1));
-          ctx.globalAlpha = alpha * (0.35 + 0.65 * tw);
-          glint(ctx, sx + Math.cos(a) * (w / 2 + 2 * S), sy + Math.sin(a) * (h / 2 + 2 * S), S * (0.6 + 1.6 * tw), kk, i % 2 ? '#ffffff' : '#fee761');
-        }
+    const st = STYLES[n.style];
+    const t = n.t;
+    let k;
+    if (t < 0.06) k = 0.3 + (1.75 - 0.3) * (t / 0.06);
+    else if (t < 0.2) k = 1.75 - 0.75 * ease.outCubic((t - 0.06) / 0.14);
+    else k = 1;
+    const size = st.scale * n.boost * S, base = Math.max(1, Math.round(size));
+    let unit = k > 1.2 ? Math.max(base + 1, Math.round(size * k)) : Math.max(1, Math.round(size * k));
+    if (n.word) unit = Math.min(unit, base + 1); // a word, long already, pops by one size only
+    const alpha = clamp(t > n.life * 0.65 ? 1 - (t - n.life * 0.65) / (n.life * 0.35) : 1, 0, 1);
+    const sx = (n.x - cam.x) * S;
+    const sy = (n.y - n.z - cam.y) * S;
+    if (sx < -200 || sy < -200 || sx > cam.pxW + 200 || sy > cam.pxH + 200) return;
+    const color = st.cycle ? (this.steady ? st.cycle[0] : st.cycle[(Math.floor(t * 16) + n.seed) % st.cycle.length]) : st.color;
+    const c = textCanvas(n.str, color, '#181425', st.edge || null, n.font);
+    const w = c.width * unit, h = c.height * unit;
+    const shake = n.spin && t < 0.3 ? Math.round(n.spin * 8 * (1 - t / 0.3) * Math.sin(t * 45)) * unit : 0;
+    ctx.globalAlpha = alpha;
+    // Top-left of the number; a held one stands on its foe's head.
+    const X = Math.round(sx - w / 2) + shake, Y = n.style === 'held' ? Math.round(sy - h) : Math.round(sy - h / 2);
+    ctx.drawImage(c, X, Y, w, h);
+    // The shine: a band of the digits drawn white, sweeping left to right as it lands.
+    if (!st.plain && t > SHINE_FROM && t < SHINE_FROM + SHINE_FOR) {
+      const wc = textCanvas(n.str, '#ffffff', '#181425', st.edge || null, n.font);
+      const at = Math.round(-SHINE_W + ((t - SHINE_FROM) / SHINE_FOR) * (c.width + SHINE_W));
+      const x0 = Math.max(0, at), x1 = Math.min(c.width, at + SHINE_W);
+      if (x1 > x0) {
+        ctx.globalAlpha = alpha * 0.9;
+        ctx.drawImage(wc, x0, 0, x1 - x0, c.height, X + x0 * unit, Y, (x1 - x0) * unit, h);
       }
     }
-    ctx.globalAlpha = 1;
+    // White-hot flash on the first frames of a crit, and on a held number a crit was just added to.
+    if ((st.crit && t < CRIT_FLASH) || n.critT > 0) {
+      const fc = textCanvas(n.str, '#ffffff', '#ffffff', st.edge ? '#ffffff' : null, 'bold');
+      ctx.globalAlpha = 0.85 * (1 - t / CRIT_FLASH);
+      ctx.drawImage(fc, X, Y, w, h);
+    } else if (t < POP_FLASH && !this.steady) {
+      // Every other number flashes white as it pops, and again as a hit merged into it re-pops it
+      // (add: its clock set back to 0.05); never with FLASHES: SOFT.
+      const fc = textCanvas(n.str, '#ffffff', '#ffffff', st.edge ? '#ffffff' : null, n.font);
+      ctx.globalAlpha = alpha * 0.8 * (1 - t / POP_FLASH);
+      ctx.drawImage(fc, X, Y, w, h);
+    }
+    // Twinkles circling a crit or gold, each breathing in turn.
+    if (st.stars && t > 0.04) {
+      const kk = Math.max(1, Math.round(S * 0.75));
+      for (let i = 0; i < st.stars; i++) {
+        const a = n.seed + (i / st.stars) * Math.PI * 2 + t * 2.2;
+        const tw = Math.abs(Math.sin(t * 13 + i * 2.1));
+        ctx.globalAlpha = alpha * (0.35 + 0.65 * tw);
+        glint(ctx, sx + Math.cos(a) * (w / 2 + 2 * S), sy + Math.sin(a) * (h / 2 + 2 * S), S * (0.6 + 1.6 * tw), kk, i % 2 ? '#ffffff' : '#fee761');
+      }
+    }
   }
 }
 
