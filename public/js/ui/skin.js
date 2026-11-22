@@ -5,6 +5,7 @@
 import PIECES from '../../assets/ui/pieces.js';
 import { bufToCanvas } from '../engine/sprites.js';
 import { hexPack } from '../engine/pixels.js';
+import { makeCanvas } from '../engine/util.js';
 
 const decoded = new Map();
 function piece(name) {
@@ -62,8 +63,10 @@ export function nine(ctx, img, x, y, w, h, m, sy = 0, sh = img.height) {
 const INK = '#0d0b14';
 
 // Lucifer's panel, its frame in trim and its corner brackets in gold when it has rivets. The
-// inside is left clear for the caller's fill. Needs w, h of 25 or more.
-export const PANEL_MIN = 25;
+// inside is left clear for the caller's fill. Its corners are 13 wide and 12 high: the bracket's
+// arm along the top and the bottom ends in column 12 (and 35), and a column in the stretched middle
+// would draw that arm longer the wider the panel. Needs w, h of 26 or more.
+export const PANEL_MIN = 26;
 export function panelFrame(ctx, x, y, w, h, trim, rivets) {
   const lit = rivets ? '#feae34' : trim;
   const img = skin('panel', (px, py, col) => {
@@ -72,7 +75,7 @@ export function panelFrame(ctx, x, y, w, h, trim, rivets) {
     const corner = (px < 6 || px > 41) && (py < 6 || py > 41);
     return corner ? lit : trim;
   }, `${trim}|${lit}`);
-  nine(ctx, img, x, y, w, h, [12, 12, 12, 12]);
+  nine(ctx, img, x, y, w, h, [13, 12, 13, 12]);
 }
 
 // Lucifer's pointed button, in rows 1-13 of its sheet: the rim, the face, the face's shade, the
@@ -85,12 +88,35 @@ const BUTTON = {
   off: { '#8d8d8d': '#4a3540', '#757575': '#221820', '#393a3b': '#1a1219', '#28221f': '#0d0b14', '#000000': INK },
 };
 export function buttonFace(ctx, x, y, w, h, state = 'idle') {
-  // The points take 9 pixels a side; a narrow button keeps them shorter.
-  const side = Math.max(2, Math.min(9, Math.floor(w / 2) - 2));
+  const img = skin('button', BUTTON[state] || BUTTON.idle, state);
   // A short one (under 13) keeps its top and bottom rows and loses the middle.
   const top = Math.min(6, h >> 1), bottom = Math.min(6, h - top);
-  nine(ctx, skin('button', BUTTON[state] || BUTTON.idle, state), x, y, w, h, [side, top, side, bottom], 1, 13);
+  // The points take 9 pixels a side. A button under 22 wide (the scroll arrows) has no room for
+  // them, and slicing off their outer columns left a '+' cross: it takes steeper points instead.
+  if (w >= 22) nine(ctx, img, x, y, w, h, [9, top, 9, bottom], 1, 13);
+  else nine(ctx, steepButton(img, state), x, y, w, h, [5, top, 5, bottom], 1, 13);
 }
+// The button with points 5 wide, a pixel a row: every other column of the 2-pixel slope (0, 1, 3,
+// 5, 7 and their mirrors), so each point keeps its outline, rim, shade and drop shadow. Down to
+// 10 wide.
+const STEEP = [0, 1, 3, 5, 7];
+const steep = new Map();
+function steepButton(img, state) {
+  let c = steep.get(state);
+  if (c) return c;
+  const sw = img.width, mid = sw - 18;
+  c = makeCanvas(mid + 10, img.height);
+  const g = c.getContext('2d');
+  STEEP.forEach((sx, i) => {
+    g.drawImage(img, sx, 0, 1, img.height, i, 0, 1, img.height);
+    g.drawImage(img, sw - 1 - sx, 0, 1, img.height, mid + 9 - i, 0, 1, img.height);
+  });
+  g.drawImage(img, 9, 0, mid, img.height, 5, 0, mid, img.height);
+  steep.set(state, c);
+  return c;
+}
+// The shade of a button's face in a state (BUTTON's '#393a3b'): its label's shadow.
+export const buttonShade = (state) => (BUTTON[state] || BUTTON.idle)['#393a3b'];
 // How far in from a button's ends its points reach at mid-height.
 export const BUTTON_TIP = 2;
 

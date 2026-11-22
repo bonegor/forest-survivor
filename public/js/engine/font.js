@@ -33,7 +33,8 @@ function parsePixtura(src) {
 // h: the glyph box's height; cap: the rows a gradient spreads over; lead: room on the left for
 // ink that reaches back past the pen (Pixtura's capitals). The blackletters are for titles, in
 // mixed case, as their capitals alone don't read: 'gothic' is Pixtura12, 'title' Jacquard 24
-// (the logo) and 'heading' Jacquard 12 (screen titles).
+// (the logo) and 'heading' Jacquard 12 (screen titles, and the panels' plates: Pixtura's own
+// capitals misread there at 12 high, U as V, N as ll).
 const FONTS = {
   normal: { g: parseFont(GLYPHS), h: GLYPH_H_, cap: 7, lead: 0 },
   bold: { g: parseFont(BOLD), h: GLYPH_H_, cap: 7, lead: 0 },

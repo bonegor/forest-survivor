@@ -20,8 +20,11 @@ export class MenuDialog {
     });
     const actions = [...this.actions, { id: 'close', label: 'BACK' }];
     const foot = actions.length * 21 + 12;
-    const h = Math.min(H - 36, Math.max(120, rows.length * 10 + foot + 22));
-    const y = Math.round((H - h) / 2), top = y + 14, room = h - foot - 22;
+    // A tall one leaves the top 38 clear: its plate reaches 12 above it, and centred it covered the
+    // screen's own title (header(), rows 7-25) with the title's ends showing either side. Short
+    // ones stay centred.
+    const h = Math.min(H - 44, Math.max(120, rows.length * 10 + foot + 22));
+    const y = Math.max(38, Math.round((H - h) / 2)), top = y + 14, room = h - foot - 22;
     const most = Math.max(0, rows.length * 10 - room);
     this.scroll = clamp(this.scroll + Math.sign(input.mouse.wheel || 0) * 30, 0, most);
     panel(ctx, x, y, w, h, { title: this.title, fill: '#15131f', rivets: false });

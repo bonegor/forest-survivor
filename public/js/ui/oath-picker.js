@@ -11,6 +11,9 @@ const ROW = 15, PAD = 8, HEAD = 18, FOOT = 46;
 const optionId = (id) => 'oath_' + id;
 const inside = (pt, r) => pt.x >= r.x && pt.y >= r.y && pt.x < r.x + r.w && pt.y < r.y + r.h;
 const ON = '#f6757a';
+// Room at a row's right end for its heat, a pip a point: the ribbons all end this far short of the
+// panel's padding, one column, their pips after them.
+const PIPS = Math.max(...OATHS.map((o) => o.heat)) * 7 + 16;
 
 export class OathPicker {
   constructor() {
@@ -51,7 +54,7 @@ export class OathPicker {
     drawText(ctx, `OATHS · HEAT ${heat} · GOLD ×${oathGold(heat).toFixed(1)}`, W / 2, y + PAD, { align: 'center', color: heat ? ON : '#ead4aa' });
     for (let i = 0; i < rows; i++) {
       const o = OATHS[i], on = oaths.includes(o.id), ry = y + PAD + HEAD + i * ROW;
-      if (checkbox(ctx, ui, optionId(o.id), x + PAD, ry, o.name, on, { color: ON })) {
+      if (checkbox(ctx, ui, optionId(o.id), x + PAD, ry, o.name, on, { color: ON, w: w - PAD * 2 - PIPS })) {
         onChange(on ? oaths.filter((id) => id !== o.id) : [...oaths, o.id]);
       }
       // Its heat, a pip a point.

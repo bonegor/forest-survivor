@@ -2,8 +2,8 @@ import { input } from '../engine/input.js';
 import { COMBAT_MUSIC, normalizeCombatMusic } from '../engine/combat-music.js';
 import { previewCombatMusic, stopCombatMusicPreview } from '../engine/audio.js';
 import { clamp } from '../engine/util.js';
-import { button, drawText, panel, textWidth } from './ui.js';
-import { buttonFace } from './skin.js';
+import { button, dim, drawText, panel, textWidth } from './ui.js';
+import { buttonFace, buttonShade } from './skin.js';
 
 const ROW = 18, PAD = 4, HEAD = 12, FOOT = 20;
 const optionId = (id) => 'music_' + id;
@@ -38,10 +38,15 @@ export class CombatMusicPicker {
       ui.focus(optionId(id));
       ui.lock(0.12);
     }
-    const lit = this.open || ui.focused('combat_music');
-    const y = r.y + Math.floor((r.h - 8) / 2);
-    drawText(ctx, 'MUSIC', r.x + 9, y, { color: lit ? '#fee761' : '#ead4aa' });
-    drawText(ctx, fit(track.name, r.w - 64), r.x + 43, y, { color: lit ? '#ffffff' : '#c0cbdc' });
+    this.face(ctx, track, this.open || ui.focused('combat_music'));
+  }
+
+  // What the control shows on its face: MUSIC, the track chosen and the caret. The text goes in the
+  // face's shade, not the dark ring, as a button's label does (ui.js button()).
+  face(ctx, track, lit) {
+    const r = this.rect, y = r.y + Math.floor((r.h - 8) / 2), shade = { outline: null, shadow: buttonShade(lit ? 'focus' : 'idle') };
+    drawText(ctx, 'MUSIC', r.x + 9, y, { color: lit ? '#fee761' : '#ead4aa', ...shade });
+    drawText(ctx, fit(track.name, r.w - 64), r.x + 43, y, { color: lit ? '#ffffff' : '#c0cbdc', ...shade });
     ctx.fillStyle = '#feae34';
     for (let row = 0; row < 3; row++) ctx.fillRect(r.x + r.w - 13 + row, r.y + Math.floor(r.h / 2) - 1 + row, 5 - row * 2, 1);
   }
@@ -49,15 +54,17 @@ export class CombatMusicPicker {
   menuBounds(W, H) {
     if (!this.rect) return null;
     const w = Math.min(Math.max(this.rect.w, 178), W - 12);
+    // The list keeps off the top 34, where the screen's title and its step line stand (rows 7-33):
+    // it cut through them, half a glyph showing.
     const below = this.rect.y + this.rect.h + 2;
-    const available = Math.max(this.rect.y - 8, H - below - 6);
+    const available = Math.max(this.rect.y - 36, H - below - 6);
     const allHeight = PAD * 2 + HEAD + COMBAT_MUSIC.length * ROW;
     const rows = allHeight <= available ? COMBAT_MUSIC.length : Math.max(1, Math.floor((available - PAD * 2 - HEAD - FOOT) / ROW));
     const pages = Math.ceil(COMBAT_MUSIC.length / rows);
     const h = PAD * 2 + HEAD + rows * ROW + (pages > 1 ? FOOT : 0);
     return {
       x: Math.round(clamp(this.rect.x, 6, W - w - 6)),
-      y: Math.round(clamp(below + h <= H - 6 ? below : this.rect.y - h - 2, 6, H - h - 6)),
+      y: Math.round(clamp(below + h <= H - 6 ? below : this.rect.y - h - 2, 34, H - h - 6)),
       w, h, rows, pages,
     };
   }
@@ -103,6 +110,10 @@ export class CombatMusicPicker {
       if (input.pressed('pageDown') || input.pressed('right')) this.movePage(1, bounds, ui);
       else if (input.pressed('pageUp') || input.pressed('left')) this.movePage(-1, bounds, ui);
     }
+    // Dimmed behind, as the oaths' list is, with the control it drops from lit again above that.
+    dim(ctx, W, H, 0.55);
+    buttonFace(ctx, this.rect.x, this.rect.y, this.rect.w, this.rect.h, 'on');
+    this.face(ctx, COMBAT_MUSIC[chosenIndex], true);
     panel(ctx, bounds.x, bounds.y, bounds.w, bounds.h, { fill: '#15131f', trim: ['#feae34', '#733e39'], rivets: false });
     drawText(ctx, '10 SECOND PREVIEW', bounds.x + PAD + 5, bounds.y + PAD + 1, { color: '#8b9bb4' });
     ui.take('left', 'right');

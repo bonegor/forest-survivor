@@ -7,7 +7,7 @@ import { drawText, textCanvas, textWidth, drawRich, wrapText, textMask, capHeigh
 import { makeCanvas, clamp, hexToRgb } from '../engine/util.js';
 import * as px from '../engine/pixels.js';
 import { bufToCanvas } from '../engine/sprites.js';
-import { panelFrame, PANEL_MIN, buttonFace, pointer } from './skin.js';
+import { panelFrame, PANEL_MIN, buttonFace, buttonShade, pointer } from './skin.js';
 
 export class UI {
   constructor() {
@@ -214,37 +214,52 @@ export function panel(ctx, x, y, w, h, o = {}) {
   if (o.title) panelTitle(ctx, x, y, w, o.title);
 }
 
-// A panel's name on a bronze plate across its top edge, in the gothic font: written in capitals
-// by the callers, so set in title case here ("SIR ALDRIC — KNIGHT" reads "Sir Aldric - Knight").
+// A panel's name on a bronze plate across its top edge, in Jacquard 12 as the screens' titles are:
+// Pixtura's small capitals misread there (U as V, N as ll, R as k, x as r). Written in capitals by
+// the callers, so set in title case here ("SIR ALDRIC — KNIGHT" reads "Sir Aldric - Knight"). The
+// plate stands 20 high with its foot where the old 16-high one's was (y + 7), so what the panel
+// holds under it keeps its room, though never above the screen's top (a panel as tall as the
+// screen lets): it comes down instead. A panel too narrow for it keeps the small gothic, 16 high.
 const titleCase = (s) => s.toLowerCase().replace(/(^|[\s(—-])(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
+const PLATE_INK = ['#fff6c2', '#fee761', '#feae34', '#d77643'];
 function panelTitle(ctx, x, y, w, title) {
-  const text = titleCase(title), tw = textWidth(text, 'gothic') + 26;
-  const tx = Math.round(x + w / 2 - tw / 2);
-  buttonFace(ctx, tx, y - 8, tw, 16, 'on');
-  drawText(ctx, text, x + w / 2, y - 7, { align: 'center', color: ['#fff6c2', '#fee761', '#feae34', '#d77643'], font: 'gothic' });
+  const text = titleCase(title), big = textWidth(text, 'heading') + 26 <= w - 24;
+  const font = big ? 'heading' : 'gothic', tw = textWidth(text, font) + 26;
+  const py = big ? Math.max(0, y - 12) : y - 8;
+  buttonFace(ctx, Math.round(x + w / 2 - tw / 2), py, tw, big ? 20 : 16, 'on');
+  drawText(ctx, text, x + w / 2, py + (big ? 2 : 1), { align: 'center', color: PLATE_INK, font });
 }
 
 // Lucifer's pointed button (skin.js): iron at rest, bronze when it is the one chosen (o.on), rimmed
 // in pulsing gold with focus, with Lucifer's gold arrow pointing at it.
+// Text on a button's face goes without the dark ring: round letters a pixel apart, the ring fills
+// the gaps into a slab over the face and its top rim. A shadow in the face's own shade instead.
+const onFace = (state) => ({ outline: null, shadow: buttonShade(state) });
 export function button(ctx, ui, id, x, y, w, h, label, o = {}) {
   const hit = ui.item(id, x, y, w, h, o);
   const f = ui.focused(id);
   x = Math.round(x);
   y = Math.round(y);
   const lit = f && !o.disabled;
-  buttonFace(ctx, x, y, w, h, o.disabled ? 'off' : lit ? (Math.sin(ui.t * 6) > 0 ? 'pulse' : 'focus') : o.on ? 'on' : 'idle');
+  const state = o.disabled ? 'off' : lit ? (Math.sin(ui.t * 6) > 0 ? 'pulse' : 'focus') : o.on ? 'on' : 'idle';
+  buttonFace(ctx, x, y, w, h, state);
   const color = o.disabled ? '#5d4a52' : f ? ['#ffffff', '#fee761', '#feae34'] : o.color || '#ead4aa';
-  drawText(ctx, label, x + w / 2, y + Math.floor((h - 8) / 2), { align: 'center', color });
-  if (lit && o.pointer !== false) pointer(ctx, x - 2 + Math.round(Math.sin(ui.t * 8)), y + Math.floor((h - 1) / 2));
+  drawText(ctx, label, x + w / 2, y + Math.floor((h - 8) / 2), { align: 'center', color, ...onFace(state) });
+  // The arrow reaches 17 to the left. Not in a row of choices (o.group: tabs, difficulties), whose
+  // pulsing rim marks the one in focus, nor where it would land on a control drawn before this one
+  // (BEGIN beside the music, a pair of buttons 4 apart); o.pointer asks for it or not outright.
+  const ay = y + Math.floor((h - 1) / 2);
+  const crowded = () => ui.items.some((i) => i.id !== id && i.x < x - 1 && i.x + i.w > x - 17 && i.y < ay + 7 && i.y + i.h > ay - 6);
+  if (lit && (o.pointer ?? !o.group) && !crowded()) pointer(ctx, x - 2 + Math.round(Math.sin(ui.t * 8)), ay);
   return hit;
 }
 
 // Left/right selector: returns -1/0/+1.
 export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
   const hit = button(ctx, ui, id, x, y, w, 13, '', { pointer: true });
-  const f = ui.focused(id);
-  drawText(ctx, label, x + 14, y + 2, { color: f ? '#fee761' : '#ead4aa' });
-  drawText(ctx, `< ${value} >`, x + w - 14, y + 2, { align: 'right', color: f ? '#ffffff' : '#c28569' });
+  const f = ui.focused(id), face = onFace(f ? 'focus' : 'idle');
+  drawText(ctx, label, x + 14, y + 2, { color: f ? '#fee761' : '#ead4aa', ...face });
+  drawText(ctx, `< ${value} >`, x + w - 14, y + 2, { align: 'right', color: f ? '#ffffff' : '#c28569', ...face });
   if (f) ui.take('left', 'right');
   if (!f || ui.lockT > 0) return hit ? 1 : 0;
   if (input.pressed('left')) return -1;
@@ -256,13 +271,13 @@ export function stepper(ctx, ui, id, x, y, w, label, value, o = {}) {
   return 0;
 }
 
-// A box to tick, its label beside it, as wide as checkboxWidth makes it. Returns true when it is
-// clicked, tapped or confirmed (Enter, Space, the pad's A): the caller flips what it shows.
-// color: the tick's and the label's while ticked.
+// A box to tick, its label beside it, as wide as checkboxWidth makes it, or o.w (a list of them,
+// all one width). Returns true when it is clicked, tapped or confirmed (Enter, Space, the pad's
+// A): the caller flips what it shows. color: the tick's and the label's while ticked.
 const TICK = [[0, 2], [1, 3], [2, 4], [3, 3], [4, 2], [5, 1], [6, 0]];
 export const checkboxWidth = (label) => textWidth(label) + 30;
 export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
-  const hit = button(ctx, ui, id, x, y, checkboxWidth(label), 13, '', { pointer: true, disabled: o.disabled });
+  const hit = button(ctx, ui, id, x, y, o.w ?? checkboxWidth(label), 13, '', { pointer: true, disabled: o.disabled });
   const f = ui.focused(id), color = o.disabled ? '#5d4a52' : o.color || '#fee761';
   const bx = Math.round(x) + 9, by = Math.round(y) + 2;
   ctx.fillStyle = on ? color : o.disabled ? '#4a3540' : '#9e5b47';
@@ -273,7 +288,7 @@ export function checkbox(ctx, ui, id, x, y, label, on, o = {}) {
     ctx.fillStyle = color;
     for (const [tx, ty] of TICK) ctx.fillRect(bx + 1 + tx, by + 1 + ty, 1, 2);
   }
-  drawText(ctx, label, bx + 13, y + 2, { color: o.disabled ? color : f ? '#fee761' : on ? color : '#c28569' });
+  drawText(ctx, label, bx + 13, y + 2, { color: o.disabled ? color : f ? '#fee761' : on ? color : '#c28569', ...onFace(o.disabled ? 'off' : f ? 'focus' : 'idle') });
   return hit;
 }
 
@@ -291,7 +306,14 @@ export function logo(text, colors = ['#fff6c2', '#fee761', '#feae34', '#f77622',
   const ON = px.pack(255, 255, 255);
   for (let i = 0; i < w * h; i++) if (tm.mask[i]) m.d[i] = ON;
   const times = font === 'normal' ? 2 : font === 'title' ? 0 : 1;
-  for (let i = 0; i < times; i++) m = px.scale2x(m);
+  for (let i = 0; i < times; i++) {
+    // Scale2x may fill a step but never eat a corner: every pixel of the plain 2x stays. Left to
+    // cut, the buffer's clamped edge and meeting diagonals punch pinholes the outline then paints
+    // dark, and D loses the square corners that tell it from O ('RUN ENOEO').
+    const s = px.scale2x(m);
+    for (let yy = 0; yy < s.h; yy++) for (let xx = 0; xx < s.w; xx++) if (m.d[(yy >> 1) * m.w + (xx >> 1)]) s.d[yy * s.w + xx] = ON;
+    m = s;
+  }
   const capH = font === 'normal' ? m.h : capHeight(font) << times;
   const out = px.makeBuf(m.w + 4, m.h + 6);
   const cols = colors.map((c) => px.hexPack(c));
