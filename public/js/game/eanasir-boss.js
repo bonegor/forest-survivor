@@ -12,6 +12,12 @@ export const MERCHANT = {
   copperWind: 0.85, copperCooldown: 4.8, copperSpeed: 135, copperDamage: 1,
 };
 
+// How far over a crypt lord's head (Ea-nāṣir's, or a lord's: Enemy.caster) its 'ENRAGED' goes up,
+// world px: over its overhead bar and the name on it (Hud.drawBoss) and Ea-nāṣir's speech bubble,
+// pop and all. Born at the bar (8 px), the word was hidden behind it, then behind the name, for most
+// of its life (the 22 November 2026 review).
+export const ENRAGED_UP = 34;
+
 // Kept on the enemy's clock, so a freeze cannot make its tell finish before the blow.
 class WhipLane {
   constructor(e, angle) {
@@ -119,7 +125,7 @@ export function merchantAI(e, dt) {
   const g = e.g, p = g.player;
   if (!e.lordEnraged && e.hp <= e.maxHp * CRYPT_LORD.enrageAt) {
     e.lordEnraged = true;
-    g.numbers.text(e.x, e.y - e.h - 8, 'ENRAGED', 'fire');
+    g.numbers.text(e.x, e.y - e.h - ENRAGED_UP, 'ENRAGED', 'fire');
   }
   const haste = e.lordEnraged ? CRYPT_LORD.cooldown : 1;
   e.cdT -= dt;

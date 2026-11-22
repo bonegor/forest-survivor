@@ -7,7 +7,7 @@ import { HEROES } from '../data/heroes.js';
 import { UPGRADES } from '../shared/profile.js';
 import { BASE_SPEED } from './player.js';
 import { SPR, TINTS, nightBuf, NIGHT_PAD, canvasFromBuf } from '../engine/sprites.js';
-import { hexPack, makeBuf, pack } from '../engine/pixels.js';
+import { hexPack, makeBuf, pack, outline } from '../engine/pixels.js';
 import { OUTLINE } from '../art/palette.js';
 import { shade, hexOfPacked } from '../art/tune.js';
 import { sfx } from '../engine/audio.js';
@@ -18,7 +18,7 @@ import { EnemyShot } from './projectiles.js';
 import { bossAI } from './bosses.js';
 import { shamanAI, gemEaterAI } from './pressure.js';
 import { bossFrame } from './boss-animation.js';
-import { merchantAI } from './eanasir-boss.js';
+import { merchantAI, ENRAGED_UP } from './eanasir-boss.js';
 import { faceAlong, faceAttack } from './facing.js';
 import { shotName, bossOf } from './names.js';
 import { spriteExtent } from './hitbox.js';
@@ -90,9 +90,11 @@ let nextId = 1;
 // is at the ambient's brightness M; with f of the rest unlit, M + f·(1 − M) = floor), none once
 // the light is that bright (dawn). With it, 1 px outside its ink outline, a ring of `ring` at
 // `ringA` of that alpha, a light edge parting it from the ground. Within `near` px of the hero,
-// whose own light shows it, it fades out to nothing at him. Bosses and crypt lords have a light
-// and rim of their own and get none, nor do boxes; champions keep their gold outline with no
-// ring round it; the Necromancer's allies are ringed in `allyRing`.
+// whose own light shows it, it fades out to `hole` of it at him: no further, as his light shows a
+// monster only in its plain colours, so one fading out altogether was the dullest on the screen
+// as it came at him (the 22 November 2026 review). Bosses and crypt lords have a light and rim of
+// their own and get none, nor do boxes; champions keep their gold edge, their ink outside it and
+// no ring round that; the Necromancer's allies are ringed in `allyRing`.
 // The owner's (20 October 2026) "Make the monsters brighter because they are not visible": the
 // layer is drawn in their own colours lifted (nightLift: `lift` and `gamma` as the sprite tuner's
 // sliders, art/tune.js shade), the darkest the most, their hues kept and their ink outline left
@@ -135,7 +137,7 @@ export function hordePace(type, o = {}) {
   return KNIGHT_PACE * PACE_CLASS[PACE_OF[type]] * (def.paceMul ?? 1);
 }
 
-export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast: 25, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.4, haloA: 0.16, near: 60 };
+export const NIGHT_EDGE = { floor: 0.95, lift: 90, gamma: 20, sat: 40, contrast: 25, ring: '#8b9bb4', allyRing: '#63c74d', ringA: 0.4, haloA: 0.16, near: 60, hole: 0.5 };
 
 // A flyer is drawn up off the ground, bobbing a little (draw, body).
 const HOVER = { up: 6, bob: 2 };
@@ -183,6 +185,9 @@ export class Enemy {
     this._bob = undefined; // draw
     this._look = -1; // draw: its night look (NIGHT_LOOKS), -1 for none
     this._img = null; // draw: the picture it was drawn as
+    this._flashA = 0; // draw: how strongly a blow's white flash is over it (1 white, FLASH_HIT_SOFT faint)
+    this._vis = 0; // draw: of a foe rising from the ground, how many of its frame's rows show
+    this._ring = null; // draw: a champion's ink round its gold edge, as drawn round _rect
     this._cell = undefined; // grid.js
     this._shown = undefined; // hud.js, a boss's health shown
     this._mTick = undefined; // minions.js
@@ -806,7 +811,7 @@ export class Enemy {
     const g = this.g, p = g.player, s = this.def.shot;
     if (this.lord && !this.lordEnraged && this.hp <= this.maxHp * CRYPT_LORD.enrageAt) {
       this.lordEnraged = true;
-      g.numbers.text(this.x, this.y - this.h - 8, 'ENRAGED', 'fire');
+      g.numbers.text(this.x, this.y - this.h - ENRAGED_UP, 'ENRAGED', 'fire');
     }
     const dx = p.x - this.x, dy = p.y - this.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -935,31 +940,43 @@ export class Enemy {
     const S = cam.S;
     const sprite = this.drawSprite;
     const fr = sprite.frames[this.frameIndex()];
-    const flip = this.face < 0;
+    const flip = this.face < 0, soft = this.g.settings.softFlash === true, elite = this.elite;
     let img, look = 0;
-    if (this.flash > 0) {
-      img = fr.white(flip);
-      look = -1;
-    } else if (this.burnT > 0 && (this.g.settings.softFlash === true || Math.floor(this.burnT * 10) % 2 === 0)) {
+    if (this.burnT > 0 && (soft || Math.floor(this.burnT * 10) % 2 === 0)) {
       // Burning in the sunrise (Game.burnBoss): the burn's tint flickering, held steady with
       // FLASHES: SOFT, never a white frame.
-      img = fr.variant('burn', TINTS.burn, flip);
+      img = tinted(fr, 'burn', elite, flip);
       look = 2;
     } else if (this.freezeT > 0) {
-      img = fr.variant('frozen', TINTS.frozen, flip);
+      img = tinted(fr, 'frozen', elite, flip);
       look = 1;
-    } else if (this.state === 'wind' && Math.floor(this.life * 20) % 2) {
-      img = fr.variant('burn', TINTS.burn, flip);
+    } else if (this.state === 'wind' && (soft || Math.floor(this.life * 20) % 2)) {
+      // Winding up: the burn's tint flickering at 10 Hz, held steady with FLASHES: SOFT as the
+      // sunrise's is.
+      img = tinted(fr, 'burn', elite, flip);
       look = 2;
     } else if (this.lullT > 0) {
       // Asleep in a fae-sown circle (the Bloomvale's thread, game/fae.js): charmed pink, and ringed in
       // pink by night.
-      img = fr.variant('charmed', TINTS.charmed, flip);
+      img = tinted(fr, 'charmed', elite, flip);
       look = 6;
-    } else if (this.elite) img = fr.variant('eliteo', eliteOutlineBuf, flip);
+    } else if (elite) img = fr.variant('eliteo', eliteOutlineBuf, flip);
     else img = fr.get(flip);
-    // Its night look, as drawn (a champion's unringed). A white flash needs no lifting.
-    this._look = look < 0 || this.boss || this.lord || this.prop ? -1 : this.elite ? look + 3 : look;
+    // Its night look, as drawn: a champion's in its gold edge (CHAMPION_LOOK), whatever it suffers.
+    this._look = this.boss || this.lord || this.prop ? -1 : elite ? CHAMPION_LOOK[look] : look;
+    // A blow's flash: white, its ink kept dark so a crowd struck at once stays so many figures
+    // (whiteInkBuf), over its look by day and by night alike (drawNightEdge lays it over its night
+    // look as well: drawn here alone, under the lighting, it came out the dark's slate grey, darker
+    // than the foe; the 22 November 2026 review). With FLASHES: SOFT it is laid over the foe faintly
+    // (FLASH_HIT_SOFT) instead. A boss or crypt lord, in a white light of its own (Game.draw) and with
+    // no night look, flashes in its plain white silhouette.
+    let flash = null;
+    this._flashA = 0;
+    if (this.flash > 0) {
+      flash = this.boss || this.lord ? fr.white(flip) : fr.variant('white-ink', whiteInkBuf, flip);
+      this._flashA = soft ? FLASH_HIT_SOFT : 1;
+      if (!soft) img = flash;
+    }
     this._img = img;
 
     // The sword keeps the scale of the marked area even when the boss flashes.
@@ -981,22 +998,46 @@ export class Enemy {
     r[4] = flip ? 1 : 0;
     this._rect = r;
     let alpha = this.alpha;
+    this._ring = null;
     if (this.spawnT > 0 && this.def.rise) {
+      // Rising from the ground: the rows of it up out of it, standing on it. Its night look goes
+      // with it (drawNightEdge), cropped the same, so it comes up in its night colours.
       const k = 1 - this.spawnT / this.spawnMax;
       const vis = Math.max(1, Math.round(img.height * k));
-      ctx.drawImage(img, 0, 0, img.width, vis, Math.round(X), Math.round(by + h - vis * S * sy), Math.round(w), Math.round(vis * S * sy));
-      this._look = -1;
+      this._vis = vis;
+      drawRows(ctx, img, X, by, w, h, vis);
+      if (img !== flash && flash) {
+        ctx.globalAlpha = this._flashA;
+        drawRows(ctx, flash, X, by, w, h, vis);
+        ctx.globalAlpha = 1;
+      }
       return;
     }
     if (this.spawnT > 0) alpha *= 1 - this.spawnT / this.spawnMax;
     if (alpha < 1) ctx.globalAlpha = alpha;
     ctx.drawImage(img, Math.round(X), Math.round(by), Math.round(w), Math.round(h));
+    // A champion's ink outside its gold edge (eliteRingBuf), a pixel of the frame out all round, so
+    // it is edged dark on sand and snow by day as a plain foe is, the gold alone being as light as
+    // the sand (the 22 November 2026 review). Its picture and rectangle (_img, _rect) stay the
+    // frame's, as the night's cut and the horde's mask (horde-over.js) take them. Drawn at the
+    // body's own scale round its rounded rectangle, so ring and body meet on the same pixels.
+    if (elite && img !== flash) {
+      const W0 = Math.round(w), H0 = Math.round(h), ux = W0 / img.width, uy = H0 / img.height;
+      this._ring = fr.variant('elite-ring', eliteRingBuf, flip);
+      ctx.drawImage(this._ring, Math.round(X) - ux, Math.round(by) - uy, W0 + 2 * ux, H0 + 2 * uy);
+    }
     if (alpha < 1) ctx.globalAlpha = 1;
     // A sealed guardian's ice over it (FROST), thinning as its seal breaks. The night's cut (_img)
     // is the frame's own shape all the same.
-    if (this.sealed && this.flash <= 0) {
+    if (this.sealed && img !== flash) {
       ctx.globalAlpha = alpha * this.frost();
       ctx.drawImage(fr.variant('frozen', TINTS.frozen, flip), Math.round(X), Math.round(by), Math.round(w), Math.round(h));
+      ctx.globalAlpha = 1;
+    }
+    // A soft flash, over it all.
+    if (flash && img !== flash) {
+      ctx.globalAlpha = alpha * this._flashA;
+      ctx.drawImage(flash, Math.round(X), Math.round(by), Math.round(w), Math.round(h));
       ctx.globalAlpha = 1;
     }
   }
@@ -1015,7 +1056,8 @@ export class Enemy {
     const sprite = this.drawSprite;
     const fr = sprite.frames[index];
     const r = this._rect, X = r[0], Y = r[1], w = r[2], h = r[3], flip = r[4];
-    if (fr.em && this.flash <= 0) {
+    // Under a white flash its eyes go out with the rest of it; under a soft one they stay lit.
+    if (fr.em && this._flashA < 1) {
       ctx.globalAlpha = this.alpha;
       ctx.drawImage(flip ? fr.emf : fr.em, Math.round(X), Math.round(Y), Math.round(w), Math.round(h));
       ctx.globalAlpha = 1;
@@ -1026,7 +1068,7 @@ export class Enemy {
       if (this.brandT > 0) this.drawBrand(ctx, cam, X, markY, w);
       if (this.curseT > 0 || this.confuseT > 0) this.drawMarks(ctx, cam, X, markY, w);
     }
-    if ((this.boss || this.lord) && this.flash <= 0) {
+    if ((this.boss || this.lord) && this._flashA < 1) {
       // A sealed guardian's outline burns icy for as much as its ice is on it (FROST), in its own
       // colour for the rest.
       const a = this.alpha * (0.7 + 0.3 * Math.sin(this.life * 6)), ice = this.frost();
@@ -1043,18 +1085,29 @@ export class Enemy {
     const S = cam.S, img = spr.frames[Math.floor(this.life * 6) % spr.frames.length].c;
     const bob = Math.round(Math.sin(this.life * 5 + this.wob) * 1) * S;
     ctx.globalAlpha = Math.min(1, this.brandT * 2) * 0.95;
-    ctx.drawImage(img, Math.round(X + w / 2 - (img.width * S) / 2), Math.round(Y - (img.height + 2) * S + bob), img.width * S, img.height * S);
+    ctx.drawImage(img, Math.round(X + w / 2 - (img.width * S) / 2), Math.round(Y - (img.height + 2) * S + bob), Math.round(img.width * S), Math.round(img.height * S));
     ctx.globalAlpha = 1;
   }
 
   // A curse's hourglass (violet, its sand running down with the curse) and a confusion's three
-  // circling sparks, over the foe's head. X, Y, w: where it was drawn, on the screen.
+  // circling sparks, over the foe's head, stacked: from 2 px over it, where Smite's brand sits
+  // (drawBrand), or over the brand and its bob when it bears that too, the sparks, then the
+  // hourglass over them. Each on whole screen pixels: filled at the world scale's fractions
+  // (cam.S 2.4, 3.2) their edges came out blended, and the two marks lay over the brand (the 22
+  // November 2026 review). X, Y, w: where it was drawn, on the screen.
   drawMarks(ctx, cam, X, Y, w) {
-    const S = cam.S, cx = Math.round(X + w / 2), top = Math.round(Y - 3 * S);
+    const S = cam.S, cx = Math.round(X + w / 2), brand = this.brandT > 0 && SPR[WEAPON_SPRITES.brand];
+    let foot = Y - 2 * S; // the bottom of the next mark up
+    if (brand) foot -= (brand.frames[0].h + 2) * S;
+    const sparks = this.confuseT > 0 ? foot - 3 * S : null; // the sparks' middle
+    if (sparks !== null) foot -= 6 * S;
     if (this.curseT > 0) {
+      const top = foot - 5 * S;
       const px = (dx, dy, wd, c) => {
+        const x0 = Math.round(cx + dx * S), x1 = Math.round(cx + (dx + wd) * S);
+        const y0 = Math.round(top + dy * S), y1 = Math.round(top + (dy + 1) * S);
         ctx.fillStyle = c;
-        ctx.fillRect(cx + dx * S, top + dy * S - 8 * S, wd * S, S);
+        ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
       };
       const sand = Math.min(1, this.curseT / 3);
       px(-2, 0, 5, '#8f5bb0');
@@ -1063,21 +1116,24 @@ export class Enemy {
       px(-1, 3, 3, sand > 0.5 ? '#68386c' : '#b55088');
       px(-2, 4, 5, '#8f5bb0');
     }
-    if (this.confuseT > 0) {
+    if (sparks !== null) {
+      // Round their middle, 5 px out to each side and 1.5 up and down, each 2 px square.
+      const k = Math.max(2, Math.round(2 * S));
       for (let i = 0; i < 3; i++) {
         const a = this.life * 7 + (i * TAU) / 3;
         ctx.fillStyle = i ? '#fee761' : '#ffffff';
-        ctx.fillRect(Math.round(cx + Math.cos(a) * 5 * S), Math.round(top - 2 * S + Math.sin(a) * 1.5 * S), 2 * S, 2 * S);
+        ctx.fillRect(Math.round(cx + Math.cos(a) * 5 * S - k / 2), Math.round(sparks + Math.sin(a) * 1.5 * S - k / 2), k, k);
       }
     }
   }
 
   // How much of its night layer shows (NIGHT_EDGE): as much as of its body, fading in as that
-  // does when it appears, and over NIGHT_RISE seconds once it has risen from the ground.
+  // does when it appears. A foe rising from the ground is drawn whole as far as it is up (draw),
+  // and so is its layer (drawNightEdge): faded in only once it was up, it came up in the dark's
+  // dull colours and then lit up, and the foe behind it showed through it as it did.
   nightShare() {
     let a = this.alpha;
-    if (this.spawnT > 0) a *= 1 - this.spawnT / this.spawnMax;
-    else if (this.def.rise && this.life < this.spawnMax + NIGHT_RISE) a *= Math.max(0, this.life - this.spawnMax) / NIGHT_RISE;
+    if (this.spawnT > 0 && !this.def.rise) a *= 1 - this.spawnT / this.spawnMax;
     return a;
   }
 
@@ -1116,16 +1172,158 @@ export class Enemy {
     const s = this.h * 2.6 * S;
     const col = this.boss ? this.def.color : this.mod ? this.mod.color : this.def.color || '#feae34';
     ctx.globalAlpha = 0.28 + 0.1 * Math.sin(this.life * 5);
-    ctx.drawImage(glow(col), sx - s / 2, sy - s / 2, s, s);
+    auraOver(ctx, glow(col), sx - s / 2, sy - s / 2, s, this, cam);
     ctx.globalAlpha = 1;
   }
 }
 
+// A champion's or a boss's aura (img, over x, y, s × s on the screen), added to the scene
+// ('lighter', Game.draw) round it and not over it, nor over the monsters and allies about it:
+// drawn first into a canvas of its own, with their shapes as drawn cut out of it. Added over them,
+// its bright middle washed the champion's own colours and shading out to a flat pastel and dyed
+// its neighbours (the 22 November 2026 review).
+let auraC = null;
+function auraOver(ctx, img, x, y, s, e, cam) {
+  const ox = Math.floor(x), oy = Math.floor(y), W = Math.ceil(x + s) - ox, H = Math.ceil(y + s) - oy;
+  if (W <= 0 || H <= 0) return;
+  if (!auraC) auraC = makeCanvas(W, H);
+  if (auraC.width < W || auraC.height < H) {
+    auraC.width = Math.max(auraC.width, W);
+    auraC.height = Math.max(auraC.height, H);
+  }
+  const a = auraC.getContext('2d'), smooth = ctx.imageSmoothingEnabled !== false;
+  a.globalCompositeOperation = 'source-over';
+  a.globalAlpha = 1;
+  a.clearRect(0, 0, W, H);
+  a.imageSmoothingEnabled = smooth;
+  a.drawImage(img, x - ox, y - oy, s, s);
+  a.globalCompositeOperation = 'destination-out';
+  a.imageSmoothingEnabled = false;
+  cutAura(a, e, ox, oy, W, H, cam);
+  const g = e.g;
+  if (g?.drawList) for (const o of g.drawList) if (o !== e) cutAura(a, o, ox, oy, W, H, cam);
+  if (g?.topList) for (const o of g.topList) if (o !== e) cutAura(a, o, ox, oy, W, H, cam);
+  a.globalCompositeOperation = 'source-over';
+  a.globalAlpha = 1;
+  ctx.drawImage(auraC, 0, 0, W, H, ox, oy, W, H);
+}
+
+// One monster's or ally's shape, as it was drawn, cut out of the aura's canvas (at ox, oy on the
+// screen, W × H) where it lies over it, as much as it shows (a wraith, one fading in).
+function cutAura(a, o, ox, oy, W, H, cam) {
+  if (o.minion) {
+    if (o.rise > 0) return;
+    const S = cam.S, mx = (o.x - cam.x) * S, my = (o.y - cam.y) * S, m = 40 * S;
+    if (mx < ox - m || mx > ox + W + m || my < oy - m || my > oy + H + m) return;
+    const { img, X, Y, w, h } = o.rect(cam);
+    a.globalAlpha = o.life < 1 ? o.life : 1;
+    a.drawImage(img, X - ox, Y - oy, w, h);
+    return;
+  }
+  if (!(o instanceof Enemy) || o.prop || !o._rect || !o._img) return;
+  const r = o._rect, X = Math.round(r[0]), Y = Math.round(r[1]), w = Math.round(r[2]), h = Math.round(r[3]);
+  if (X > ox + W || Y > oy + H || X + w < ox || Y + h < oy) return;
+  const rising = o.spawnT > 0 && o.def.rise;
+  let al = o.alpha < 1 ? o.alpha : 1;
+  if (o.spawnT > 0 && !rising) al *= 1 - o.spawnT / o.spawnMax;
+  a.globalAlpha = al;
+  if (rising) drawRows(a, o._img, r[0] - ox, r[1] - oy, r[2], r[3], o._vis);
+  else a.drawImage(o._img, X - ox, Y - oy, w, h);
+  // A champion's ink round its gold too (Enemy.draw), to stay dark.
+  if (o._ring) {
+    const ux = w / o._img.width, uy = h / o._img.height;
+    a.drawImage(o._ring, X - ux - ox, Y - uy - oy, w + 2 * ux, h + 2 * uy);
+  }
+}
+
+// The top `rows` rows of img, standing on the bottom of its rectangle (X, Y, w, h): a foe
+// rising from the ground, as far as it is up (Enemy.draw).
+function drawRows(ctx, img, X, Y, w, h, rows) {
+  const k = h / img.height;
+  ctx.drawImage(img, 0, 0, img.width, rows, Math.round(X), Math.round(Y + h - rows * k), Math.round(w), Math.round(rows * k));
+}
+
 const GOLD = hexPack('#feae34');
-// Champions get a gold outline instead of the ink one (a tuned sprite's own ink: b.ink).
-function eliteOutlineBuf(b) {
-  const out = { w: b.w, h: b.h, d: b.d.slice() }, ink = b.ink ?? OUTLINE;
-  for (let i = 0; i < out.d.length; i++) if (out.d[i] === ink) out.d[i] = GOLD;
+// The ink (a tuned sprite's own: b.ink) on a frame's silhouette's edge, as a mask: what lies
+// beside the clear space round the figure, flood-filled in from the frame's border (through a
+// tuned sprite's rim, b.rim, which lies outside its ink), or on the border itself. A hole inside
+// the body is not outside it, so the ink inside (eyes, mouths, visor slits, rib gaps, a hood's
+// void, the line between an arm and the body) is not on the edge.
+function edgeInk(b) {
+  const { w, h, d } = b, ink = b.ink ?? OUTLINE, rim = b.rim, n = w * h;
+  const out = new Uint8Array(n), outside = new Uint8Array(n), stack = [];
+  const seed = (i) => {
+    if (!outside[i] && (!(d[i] >>> 24) || d[i] === rim)) {
+      outside[i] = 1;
+      stack.push(i);
+    }
+  };
+  for (let x = 0; x < w; x++) {
+    seed(x);
+    seed(n - w + x);
+  }
+  for (let y = 0; y < h; y++) {
+    seed(y * w);
+    seed(y * w + w - 1);
+  }
+  while (stack.length) {
+    const i = stack.pop(), x = i % w;
+    if (x > 0) seed(i - 1);
+    if (x < w - 1) seed(i + 1);
+    if (i >= w) seed(i - w);
+    if (i < n - w) seed(i + w);
+  }
+  for (let i = 0; i < n; i++) {
+    if (d[i] !== ink) continue;
+    const x = i % w;
+    if (x === 0 || x === w - 1 || i < w || i >= n - w || outside[i - 1] || outside[i + 1] || outside[i - w] || outside[i + w]) out[i] = 1;
+  }
+  return out;
+}
+// Champions are edged in gold (b's edge ink turned gold) over `over`: b itself, or b tinted
+// (frozen, burning, charmed), so a champion stays one whatever it suffers. Only the edge: turning
+// every ink pixel gold filled their faces, visors, hoods and eye sockets in gold too (the 22
+// November 2026 review).
+function gild(b, over = b) {
+  const edge = edgeInk(b), out = { w: over.w, h: over.h, d: over.d.slice() };
+  for (let i = 0; i < edge.length; i++) if (edge[i]) out.d[i] = GOLD;
+  return out;
+}
+const eliteOutlineBuf = (b) => gild(b);
+// The ink round a champion's gold edge (Enemy.draw), a pixel out from its frame all round: the
+// frame outlined (a tuned sprite's own ink), the frame itself left clear.
+function eliteRingBuf(b) {
+  const out = outline(b, b.ink ?? OUTLINE);
+  for (let y = 0; y < b.h; y++) {
+    for (let x = 0; x < b.w; x++) if (b.d[y * b.w + x] >>> 24) out.d[(y + 1) * out.w + x + 1] = 0;
+  }
+  return out;
+}
+// A status's tint (TINTS) as Enemy.draw shows it, a champion's over its gold edge.
+const CHAMPION_TINTS = {
+  burn: ['burn-e', (b) => gild(b, TINTS.burn(b))],
+  frozen: ['frozen-e', (b) => gild(b, TINTS.frozen(b))],
+  charmed: ['charmed-e', (b) => gild(b, TINTS.charmed(b))],
+};
+function tinted(fr, key, elite, flip) {
+  if (!elite) return fr.variant(key, TINTS[key], flip);
+  const [k, fn] = CHAMPION_TINTS[key];
+  return fr.variant(k, fn, flip);
+}
+// A champion's night look (NIGHT_LOOKS) for each of a plain foe's: plain, frozen, burning, charmed.
+const CHAMPION_LOOK = { 0: 3, 1: 4, 2: 5, 6: 7 };
+// How strongly a blow's white flash goes over a foe with FLASHES: SOFT: as the screen's white
+// flashes are held then (game.js FLASH_SOFT).
+const FLASH_HIT_SOFT = 0.2;
+// A blow's white flash (Enemy.draw): the frame white, each pixel at its own alpha, but its ink
+// (and a tuned sprite's rim) as dark as drawn, so foes struck together stay apart.
+function whiteInkBuf(b) {
+  const ink = b.ink ?? OUTLINE, out = makeBuf(b.w, b.h);
+  for (let i = 0; i < b.d.length; i++) {
+    const c = b.d[i];
+    if (!(c >>> 24)) continue;
+    out.d[i] = c === ink || c === b.rim ? c : ((c & 0xff000000) | 0xffffff) >>> 0;
+  }
   return out;
 }
 
@@ -1139,12 +1337,13 @@ export function nightFloor(amb) {
 
 // The night layers are drawn first into a canvas of their own the size of the screen, in the
 // order Game.draw drew the scene (its y-sorted list, then the bosses over it), each over those
-// behind it as the figures themselves are; and whatever else was drawn there (a tree, a box, the
-// hero, a crypt, a foe flashing white, a boss) cuts its own shape out of them. So nothing shows
+// behind it as the figures themselves are, a foe's blow's white flash over its own (Enemy.draw),
+// a foe still rising from the ground as far as it is up; and whatever else was drawn there (a
+// tree, a box, the hero, a crypt, a boss) cuts its own shape out of them. So nothing shows
 // through what stands in front of it, a foe through a tree or through another foe. A hole round
-// the hero fades them out near him; then the one canvas goes over the lit scene at the floor's
-// alpha. Called after the lighting, before the unlit layers (eyes, glows) that go over it.
-// `n`: the night canvas's context (tests pass their own).
+// the hero fades them out near him, to NIGHT_EDGE.hole of them at him; then the one canvas goes
+// over the lit scene at the floor's alpha. Called after the lighting, before the unlit layers
+// (eyes, glows) that go over it. `n`: the night canvas's context (tests pass their own).
 export function drawNightEdge(ctx, cam, g, n = nightContext(cam)) {
   const f = nightFloor(g.world.ambient());
   if (f <= 0) return;
@@ -1155,9 +1354,11 @@ export function drawNightEdge(ctx, cam, g, n = nightContext(cam)) {
   n.clearRect(0, 0, cam.pxW, cam.pxH);
   let any = false, cut = false;
   for (const o of g.drawList) {
-    let fr, key, fn, flip, X, Y, w, h, a;
+    let fr, key, fn, flip, X, Y, w, h, a, rows = 0, flash = 0;
     if (o instanceof Enemy && o._look >= 0) {
       a = o.nightShare();
+      if (o.spawnT > 0 && o.def.rise) rows = o._vis;
+      flash = o._flashA;
       const r = o._rect, look = NIGHT_LOOKS[o._look];
       fr = o.spr.frames[o.frameIndex()];
       key = look[0];
@@ -1189,15 +1390,19 @@ export function drawNightEdge(ctx, cam, g, n = nightContext(cam)) {
     cut = false;
     const ux = (NIGHT_PAD * w) / fr.w, uy = (NIGHT_PAD * h) / fr.h;
     n.globalAlpha = a;
-    n.drawImage(fr.variant(key, fn, flip), X - ux, Y - uy, w + 2 * ux, h + 2 * uy);
+    nightDraw(n, fr.variant(key, fn, flip), X, Y, w, h, ux, uy, rows, fr.h);
+    if (flash > 0) {
+      n.globalAlpha = a * flash;
+      nightDraw(n, fr.variant('night-flash', nightFlashBuf, flip), X, Y, w, h, ux, uy, rows, fr.h);
+    }
     any = true;
   }
   if (!any) return;
   for (const e of g.topList) cut = nightCut(n, e, p, cut);
-  // Fading out near the hero, to nothing at the middle of his light.
+  // Fading out near the hero, to NIGHT_EDGE.hole of it at the middle of his light.
   const S = cam.S, R = NIGHT_EDGE.near * S;
   n.globalCompositeOperation = 'destination-out';
-  n.globalAlpha = 1;
+  n.globalAlpha = NIGHT_EDGE.hole;
   n.imageSmoothingEnabled = true;
   n.drawImage(nightHole(), (p.x - cam.x) * S - R, (p.y - 6 - cam.y) * S - R, R * 2, R * 2);
   n.imageSmoothingEnabled = false;
@@ -1207,17 +1412,27 @@ export function drawNightEdge(ctx, cam, g, n = nightContext(cam)) {
   ctx.globalAlpha = 1;
 }
 
+// A night layer (NIGHT_PAD pixels of the frame, ux × uy on the screen, round it) over a figure
+// drawn at X, Y, w, h; of a foe still rising from the ground, only its top `rows` rows of frame
+// and the pad over them, standing on the ground as Enemy.draw shows it.
+function nightDraw(n, img, X, Y, w, h, ux, uy, rows, frH) {
+  if (!rows) return n.drawImage(img, X - ux, Y - uy, w + 2 * ux, h + 2 * uy);
+  const k = h / frH;
+  n.drawImage(img, 0, 0, img.width, rows + NIGHT_PAD, X - ux, Y + h - rows * k - uy, w + 2 * ux, (rows + NIGHT_PAD) * k);
+}
+
 // One thing drawn in the scene and not lifted, cutting its shape out of the night layers behind
-// it: a foe (as drawn: _img over _rect), the hero, or a tree, box, crypt or shrine (_rect, its
-// frame last). Returns that the night canvas is cutting now.
+// it: a foe (as drawn: _img over _rect, one still rising as far as it is up), the hero, or a tree,
+// box, crypt or shrine (_rect, its frame last). Returns that the night canvas is cutting now.
 function nightCut(n, o, p, cut) {
   const r = o._rect;
-  const foe = o instanceof Enemy;
-  if (!r || (o === p && p.dead) || (foe && o.spawnT > 0 && o.def.rise)) return cut;
+  const foe = o instanceof Enemy, rising = foe && o.spawnT > 0 && o.def.rise;
+  if (!r || (o === p && p.dead) || (rising && !o._vis)) return cut;
   if (!cut) n.globalCompositeOperation = 'destination-out';
   n.globalAlpha = 1;
   // Exactly where it was drawn: a foe rounds its rectangle as it draws, the rest draw at theirs.
-  if (foe) n.drawImage(o._img, Math.round(r[0]), Math.round(r[1]), Math.round(r[2]), Math.round(r[3]));
+  if (rising) drawRows(n, o._img, r[0], r[1], r[2], r[3], o._vis);
+  else if (foe) n.drawImage(o._img, Math.round(r[0]), Math.round(r[1]), Math.round(r[2]), Math.round(r[3]));
   else n.drawImage(r[4].get(r[5]), r[0], r[1], r[2], r[3]);
   return true;
 }
@@ -1246,8 +1461,6 @@ export function nightHoleBuf(size = 64) {
 }
 const nightHole = () => (holeC ??= canvasFromBuf(nightHoleBuf()));
 
-// How long a risen foe's night layer takes to fade in (s).
-const NIGHT_RISE = 0.3;
 // A posed boss's idle, frames a second (frameIndex).
 const IDLE_FPS = 8;
 // A ring colour, at its share of the layer's alpha; its halo, the fainter pixel round it.
@@ -1283,31 +1496,42 @@ export function nightLift(b) {
   }
   return out;
 }
-// A foe's night looks, by Enemy._look: as drawn plain, frozen, winding up; then a champion's,
-// unringed round its gold outline. Each is lifted first (nightLift), then tinted or outlined in
-// gold as drawn. [variant key, how it is built from the frame]
+// A champion's night look: lifted (nightLift), then tinted as drawn (tint, if any), edged in gold
+// (gild) and its ink round that (as Enemy.draw draws it by day), with no ring.
+function championNight(b, tint) {
+  const lifted = nightLift(b);
+  return nightBuf(gild(lifted, tint ? tint(lifted) : lifted), b.ink ?? OUTLINE);
+}
+// A foe's night looks, by Enemy._look: as drawn plain, frozen, winding up; then a champion's
+// (CHAMPION_LOOK), unringed round its gold edge. Each is lifted first (nightLift), then tinted or
+// edged in gold as drawn. [variant key, how it is built from the frame]
 export const NIGHT_LOOKS = [
   ['night', (b) => nightBuf(nightLift(b), RING, HALO)],
   ['night-frozen', (b) => nightBuf(TINTS.frozen(nightLift(b)), RING, HALO)],
   ['night-burn', (b) => nightBuf(TINTS.burn(nightLift(b)), RING, HALO)],
-  ['night-eliteo', (b) => nightBuf(eliteOutlineBuf(nightLift(b)), 0)],
-  ['night-frozen-e', (b) => nightBuf(TINTS.frozen(nightLift(b)), 0)],
-  ['night-burn-e', (b) => nightBuf(TINTS.burn(nightLift(b)), 0)],
+  ['night-eliteo', (b) => championNight(b)],
+  ['night-frozen-e', (b) => championNight(b, TINTS.frozen)],
+  ['night-burn-e', (b) => championNight(b, TINTS.burn)],
   // A fae-sown circle's sleepers (the Bloomvale's thread, game/fae.js, 29 October 2026): charmed and
   // ringed in pink, so the sleepers read apart from the free horde's grey-blue. Appended, so 0-5 keep
   // their meaning.
   ['night-charmed', (b) => nightBuf(TINTS.charmed(nightLift(b)), CHARM_RING, CHARM_HALO)],
+  // A champion asleep in one: charmed, in its gold (before, look 6 + 3 had no look at all).
+  ['night-charmed-e', (b) => championNight(b, TINTS.charmed)],
 ];
+// A blow's white flash by night (Enemy.draw, drawNightEdge), over the foe's own night look.
+const nightFlashBuf = (b) => nightBuf(whiteInkBuf(b), 0);
 // An ally's, lifted as the horde's and ringed in green so that a skeleton of the hero's reads
 // apart from the horde's.
 const ALLY_RING = ringOf(NIGHT_EDGE.allyRing), ALLY_HALO = haloOf(NIGHT_EDGE.allyRing);
 export const ALLY_LOOK = ['night-ally', (b) => nightBuf(nightLift(b), ALLY_RING, ALLY_HALO)];
 
-// Just a boss's outline, in its colour: drawn unlit over the boss.
+// Just a boss's or crypt lord's outline, in its colour: drawn unlit over it. Its silhouette's
+// edge only (edgeInk): the ink inside it burning too drew its face and ribs as a glowing wireframe.
 function rimBuf(b, color) {
-  const c = hexPack(color), ink = b.ink ?? OUTLINE;
+  const c = hexPack(color), edge = edgeInk(b);
   const out = { w: b.w, h: b.h, d: new Uint32Array(b.d.length) };
-  for (let i = 0; i < out.d.length; i++) if (b.d[i] === ink) out.d[i] = c;
+  for (let i = 0; i < out.d.length; i++) if (edge[i]) out.d[i] = c;
   return out;
 }
 
