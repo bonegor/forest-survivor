@@ -2,6 +2,7 @@ import { input, padKey } from '../engine/input.js';
 import { SPR, idleFrame } from '../engine/sprites.js';
 import { sfx, playAfterJingle } from '../engine/audio.js';
 import { clamp, fmtTime } from '../engine/util.js';
+import { GLYPH_H } from '../engine/font.js';
 import { HEROES, HERO_ORDER, heroLook, startWeapons } from '../data/heroes.js';
 import { WEAPONS } from '../data/weapons.js';
 import { PROGRESS } from '../shared/progress.js';
@@ -154,12 +155,16 @@ export class HeroScreen {
 
   drawRoster(ctx, ui, box, ids, next) {
     const { x, y, w, h } = box;
-    const top = y + ROSTER_HEADER, height = h - ROSTER_HEADER - 3;
-    const most = Math.max(0, ids.length * ROW_STEP - height);
+    // The rows' window holds whole rows and the list comes to rest on whole rows, so no name or
+    // portrait is ever cut through at the window's edge (a sliver of one reads as a glitch). What
+    // the panel has left under the last row stays empty; the scrollbar runs its full length.
+    const room = h - ROSTER_HEADER - 3, gap = ROW_STEP - ROW_H;
+    const top = y + ROSTER_HEADER, height = room < ROW_H ? room : Math.floor((room + gap) / ROW_STEP) * ROW_STEP - gap;
+    const most = Math.max(0, ids.length * ROW_STEP - gap - height);
     const m = input.mouse;
-    const inside = m.x >= x && m.x < x + w && m.y >= top && m.y < top + height;
+    const inside = m.x >= x && m.x < x + w && m.y >= top && m.y < top + room;
     const track = most > 0 && m.x >= x + w - 8;
-    const thumb = Math.max(12, Math.round(height * height / (height + most)));
+    const thumb = Math.max(12, Math.round(room * height / (height + most)));
     let at = ids.findIndex(id => ui.focused('h_' + id));
     if (at >= 0 && ui.lockT <= 0) {
       const dir = Number(input.pressed('down')) - Number(input.pressed('up'));
@@ -179,20 +184,22 @@ export class HeroScreen {
     this.rosterHeight = height;
     if (inside && m.wheel) this.rosterScroll += m.wheel * ROW_STEP;
     if (inside && most && m.down && !this.rosterDrag) {
-      if (track) this.rosterScroll = clamp((m.y - top - thumb / 2) / (height - thumb), 0, 1) * most;
+      if (track) this.rosterScroll = clamp((m.y - top - thumb / 2) / (room - thumb), 0, 1) * most;
       this.rosterDrag = { y: m.y, scroll: this.rosterScroll, track, moved: track };
     }
     const drag = this.rosterDrag;
     if (drag) {
       const dy = m.y - drag.y;
       if (Math.abs(dy) > 3) drag.moved = true;
-      if (drag.moved) this.rosterScroll = drag.scroll + dy * (drag.track ? most / (height - thumb) : -1);
+      if (drag.moved) this.rosterScroll = drag.scroll + dy * (drag.track ? most / (room - thumb) : -1);
       if (!m.down) {
         if (drag.moved) m.clicked = false;
         this.rosterDrag = null;
       }
     }
-    this.rosterScroll = Math.round(clamp(this.rosterScroll, 0, most));
+    // Only a drag holds the list between rows; let go, it settles on the nearest.
+    const rest = this.rosterDrag?.moved ? this.rosterScroll : Math.round(this.rosterScroll / ROW_STEP) * ROW_STEP;
+    this.rosterScroll = Math.round(clamp(rest, 0, most));
 
     panel(ctx, x, y, w, h, { rivets: false, fill: '#14131f', trim: ['#5a5465', '#262b44'] });
     const count = ids.length - Number(ids.includes(next));
@@ -228,8 +235,8 @@ export class HeroScreen {
     }
     ctx.restore();
     if (most) {
-      const pos = Math.round((height - thumb) * this.rosterScroll / most);
-      ctx.fillStyle = '#282631';ctx.fillRect(x + w - 6, top, 3, height);
+      const pos = Math.round((room - thumb) * this.rosterScroll / most);
+      ctx.fillStyle = '#282631';ctx.fillRect(x + w - 6, top, 3, room);
       ctx.fillStyle = '#a39378';ctx.fillRect(x + w - 6, top + pos, 3, thumb);
     }
     this.rosterFocus = ui.focusId;
@@ -242,10 +249,21 @@ export class HeroScreen {
     if (selected) { ctx.fillStyle = '#fee761';ctx.fillRect(x, y, 2, ROW_H); }
     const spr = SPR[h.sprite], crop = heroCrop(spr), frame = idleFrame(spr, Math.floor(this.t * SPR[h.pose].fps));
     const slot = Math.min(39, Math.floor(w * .36));
-    const scale = Math.min(heroMenuScale() / (spr.hires || 1), (slot - 4) / crop.w, (ROW_H - 4) / crop.h);
-    const dw = Math.round(crop.w * scale), dh = Math.round(crop.h * scale);
+    // At the menus' whole scale (heroMenuScale) wherever he is no wider than his slot: a smaller
+    // blit on the UI canvas drops whole rows and columns of the art. One taller than the row stands
+    // in it from the head down, his feet cut by the row's own edge, as by a portrait's frame. Only
+    // a slot too narrow for him (a phone held upright) still shrinks him, whole.
+    const whole = heroMenuScale() / (spr.hires || 1);
     ctx.globalAlpha = locked ? .55 : 1;
-    ctx.drawImage(frame.c, crop.x, crop.y, crop.w, crop.h, x + Math.round((slot - dw) / 2) + 1, y + Math.round((ROW_H - dh) / 2), dw, dh);
+    if (crop.w * whole <= slot + 1) {
+      const dw = Math.round(crop.w * whole), dy = Math.max(1, Math.round((ROW_H - crop.h * whole) / 2));
+      const rows = Math.min(crop.h, Math.floor((ROW_H - dy) / whole));
+      ctx.drawImage(frame.c, crop.x, crop.y, crop.w, rows, x + Math.round((slot - dw) / 2) + 1, y + dy, dw, Math.round(rows * whole));
+    } else {
+      const scale = Math.min(whole, (slot - 4) / crop.w, (ROW_H - 4) / crop.h);
+      const dw = Math.round(crop.w * scale), dh = Math.round(crop.h * scale);
+      ctx.drawImage(frame.c, crop.x, crop.y, crop.w, crop.h, x + Math.round((slot - dw) / 2) + 1, y + Math.round((ROW_H - dh) / 2), dw, dh);
+    }
     ctx.globalAlpha = 1;
     const tx = x + slot + 2, room = w - slot - 5;
     const label = textWidth(h.title) <= room ? h.title : h.short;
@@ -309,33 +327,38 @@ export class HeroScreen {
     this.infoScroll = clamp(this.infoScroll, 0, most);
     panel(ctx, x, y, w, height, { rivets: false, fill: '#14131f', trim: ['#3a4466', '#262b44'] });
     ctx.save();ctx.beginPath();ctx.rect(x + 4, y + 4, w - 8, height - 8);ctx.clip();
+    // Only whole lines, stat boxes and icons show in the window: one cut through its middle at
+    // the edge reads as a glitch, and the arrows and the scrollbar already tell there is more.
+    const shown = (sy, sh) => sy >= y + 4 && sy + sh <= y + height - 4;
+    const text = (str, sx, sy, o) => { if (shown(sy, GLYPH_H)) drawText(ctx, str, sx, sy, o); };
     const top = y + 7 - this.infoScroll;
     if (locked) {
-      drawText(ctx, 'NEXT RECRUIT', tx, top, { color: '#feae34' });
-      notes.forEach((line, i) => drawText(ctx, line, tx, top + 12 + i * 9, { color: '#ead4aa' }));
+      text('NEXT RECRUIT', tx, top, { color: '#feae34' });
+      notes.forEach((line, i) => text(line, tx, top + 12 + i * 9, { color: '#ead4aa' }));
     }
-    drawText(ctx, locked ? 'STARTING STATS' : 'EQUIPPED STATS', tx, top + statsY, { color: '#8b9bb4' });
+    text(locked ? 'STARTING STATS' : 'EQUIPPED STATS', tx, top + statsY, { color: '#8b9bb4' });
     const stats = [['HEALTH', p.maxHp], ['ARMOR', p.armor], ['DAMAGE', `${Math.round(p.might * 100)}%`], ['SPEED', `${Math.round(p.speedMul * 100)}%`]];
     const sw = Math.floor((inner - 3 * (cols - 1)) / cols);
     stats.forEach(([label, value], i) => {
       const sx = tx + i % cols * (sw + 3), sy = top + statsY + 13 + Math.floor(i / cols) * 28;
+      if (!shown(sy, 25)) return;
       ctx.fillStyle = '#201e2b';ctx.fillRect(sx, sy, sw, 25);
       drawText(ctx, label, sx + 4, sy + 3, { color: '#8b9bb4' });
       drawText(ctx, String(value), sx + 4, sy + 14, { color: '#ead4aa' });
       ctx.fillStyle = mix(h.color, '#3a4466', 0.55);ctx.fillRect(sx, sy + 24, sw, 1);
     });
-    rates.forEach((line, i) => drawText(ctx, line, tx, top + ratesY + i * 9, { color: '#c0cbdc' }));
+    rates.forEach((line, i) => text(line, tx, top + ratesY + i * 9, { color: '#c0cbdc' }));
     // The weapon line starts after the starting-stat caption.
-    const wy = weaponY;
-    ctx.drawImage(SPR[WEAPONS[h.weapon].icon].frames[0].c, tx, top + wy);
-    weapons.forEach((line, i) => drawText(ctx, line, tx + 20, top + wy + 3 + i * 9, { color: '#fee761' }));
-    targeting.forEach((line, i) => drawText(ctx, line, tx, top + descriptionY + i * 9, { color: '#ead4aa' }));
-    weaponDesc.forEach((line, i) => drawText(ctx, line, tx, top + descriptionY + (targeting.length + i) * 9, { color: '#c0cbdc' }));
-    perk.forEach((line, i) => drawText(ctx, line, tx, top + perkY + i * 9, { color: '#c0cbdc' }));
-    drawText(ctx, fit(h.ultName.toUpperCase() + (ownedUltimate ? '' : ' · LOCKED'), inner), tx, top + ultimateY, { color: ownedUltimate ? '#f6757a' : '#b39aac' });
-    ult.forEach((line, i) => drawText(ctx, line, tx, top + ultimateY + 11 + i * 9, { color: '#c0cbdc' }));
-    if (!locked) notes.forEach((line, i) => drawText(ctx, line, tx, top + goalY + i * 9, { color: '#c28569' }));
-    runs.forEach((line, i) => drawText(ctx, line, tx, top + goalY + (notes.length + i) * 9, { color: '#8b9bb4' }));
+    const wy = weaponY, icon = SPR[WEAPONS[h.weapon].icon].frames[0].c;
+    if (shown(top + wy, icon.height)) ctx.drawImage(icon, tx, top + wy);
+    weapons.forEach((line, i) => text(line, tx + 20, top + wy + 3 + i * 9, { color: '#fee761' }));
+    targeting.forEach((line, i) => text(line, tx, top + descriptionY + i * 9, { color: '#ead4aa' }));
+    weaponDesc.forEach((line, i) => text(line, tx, top + descriptionY + (targeting.length + i) * 9, { color: '#c0cbdc' }));
+    perk.forEach((line, i) => text(line, tx, top + perkY + i * 9, { color: '#c0cbdc' }));
+    text(fit(h.ultName.toUpperCase() + (ownedUltimate ? '' : ' · LOCKED'), inner), tx, top + ultimateY, { color: ownedUltimate ? '#f6757a' : '#b39aac' });
+    ult.forEach((line, i) => text(line, tx, top + ultimateY + 11 + i * 9, { color: '#c0cbdc' }));
+    if (!locked) notes.forEach((line, i) => text(line, tx, top + goalY + i * 9, { color: '#c28569' }));
+    runs.forEach((line, i) => text(line, tx, top + goalY + (notes.length + i) * 9, { color: '#8b9bb4' }));
     ctx.restore();
     if (most) {
       const bh = Math.max(12, Math.round((height - 8) ** 2 / total));
