@@ -4,12 +4,12 @@
 import { input, padKey } from '../engine/input.js';
 import { sfx, playMusic, stopCombatMusicPreview } from '../engine/audio.js';
 import { view } from '../engine/view.js';
-import { SPR, smoothScaled } from '../engine/sprites.js';
-import { fmtTime, fmtNum, clamp, ease, rand, TAU } from '../engine/util.js';
+import { SPR } from '../engine/sprites.js';
+import { fmtTime, fmtNum, clamp, ease, rand, TAU, makeCanvas, ctx2d } from '../engine/util.js';
 import { Game, MILESTONES, isFiller, FLASH_SOFT, POWER_UPS } from '../game/game.js';
 import { tierOf, chestFrame, chestTease, revealOrder, chestSlots, chestTimeline, CHEST_TIME, CEREMONY, evolvedFrom, evolveLines, iconColor } from '../game/chests.js';
-import { clockCountsDown, clockTime, heldBuild, revealOn, SHRINE_INFO, SLOT_LIT, slotsLeftOf } from '../game/hud.js';
-import { loadoutItems } from '../game/loadout.js';
+import { clockCountsDown, clockTime, heldBuild, revealOn, SHRINE_INFO, SLOT_LIT } from '../game/hud.js';
+import { drawLoadout, loadoutItems } from '../game/loadout.js';
 import { levelBonus } from '../game/player.js';
 import { heroStats } from '../game/weapons.js';
 import { WEAPONS, MAX_WEAPON_LEVEL, RANDOM_EVOLUTION } from '../data/weapons.js';
@@ -178,7 +178,9 @@ export class GameScreen {
     // HUD + overlay on the UI canvas.
     const ctx = view.uctx, W = view.W, H = view.H;
     ctx.clearRect(0, 0, W, H);
-    if (g.state !== 'over' || !this.overlay) g.hud.draw(ctx, W, H, g.clock, dt); // the clock that keeps going in crypts
+    // The HUD under every overlay but the results, and the Options opened from the pause: a full
+    // screen of its own, whose BACK and key line at the foot fell on the HP orb and the plates.
+    if ((g.state !== 'over' || !this.overlay) && !this.overlay?.options) g.hud.draw(ctx, W, H, g.clock, dt); // the clock that keeps going in crypts
     if (!this.overlay && g.state === 'cleared') this.drawFinish(ctx, W, H, dt);
     if (this.overlay) {
       const r = this.overlay.draw(ctx, W, H, dt);
@@ -464,6 +466,29 @@ const backOf = (c, completes) => (completes ? 'gold' : c.isNew ? (c.type === 'we
 // (Game.eventWarning, the owner's "N of M"). Nothing for a level alone. ({ at, of }:
 // LevelUpOverlay.chain.)
 export const chainStamp = ({ at, of }) => (of <= 1 ? '' : at === 1 ? `×${of}` : `${at} of ${of}`);
+// A stamp's word set aslant at its own size, each letter whole on a baseline that steps (about the
+// 0.12 rad the stamps lean), so drawn at twice its size every pixel stays a block of four: turned
+// on the screen with ctx.rotate, the letters' pixels broke into strokes one pixel and two wide.
+// rise: the right end up (LUCKY!), else down (the chain's). Kept, each made once.
+const TILT = Math.tan(0.12), tilted = new Map();
+function tiltedStamp(str, colors, rise) {
+  const key = `${rise}|${colors}|${str}`;
+  let c = tilted.get(key);
+  if (c) return c;
+  const full = textCanvas(str, colors, '#181425'), drift = Math.round((full.width - 1) * TILT);
+  c = makeCanvas(full.width, full.height + drift);
+  const g = ctx2d(c);
+  let pen = 0;
+  for (const ch of str) {
+    // Each glyph's canvas carries the outline's pixel round it, as the word's does: drawn at its
+    // pen, it stands where it stands in the word.
+    const gc = textCanvas(ch, colors, '#181425'), dy = Math.round((pen + gc.width / 2) * TILT);
+    g.drawImage(gc, pen, rise ? drift - dy : dy);
+    pen += textWidth(ch) + 1;
+  }
+  tilted.set(key, c);
+  return c;
+}
 // FIRST FIND (the review's C5, 28 October 2026): a level-up card's tag the first time this browser is
 // offered a weapon or relic a milestone opened (shared/progress.js locks), in place of NEW WEAPON or
 // NEW RELIC. offerKey: its key in the seen list (engine/storage.js seenBox; ui/ladder.js seenKey's
@@ -676,29 +701,21 @@ export class LevelUpOverlay {
     // Four cards: LUCKY!, stamped beside the title (where the screen is narrow, over its right end,
     // clear of the line under it).
     if (this.choices.length === 4 && !this.fillersOnly) {
-      const c = textCanvas('LUCKY!', ['#ffffff', '#9ee562', '#63c74d'], '#181425');
+      const c = tiltedStamp('LUCKY!', ['#ffffff', '#9ee562', '#63c74d'], true);
       const k = this.t < 0.25 ? 2.2 - 1.2 * ease.outBack(this.t / 0.25) : 1, cw = c.width * 2 * k, ch = c.height * 2 * k;
       const right = W / 2 + (L.width * s) / 2 + 6, fits = right + c.width * 2 <= W - 2;
-      const cx = fits ? right + cw / 2 : W - 4 - cw / 2, cy = fits ? 18 + L.height / 2 : 14;
-      ctx.save();
-      ctx.translate(Math.round(cx), Math.round(cy));
-      ctx.rotate(-0.12);
-      ctx.drawImage(c, Math.round(-cw / 2), Math.round(-ch / 2), Math.round(cw), Math.round(ch));
-      ctx.restore();
+      const cx = fits ? right + cw / 2 : W - 4 - cw / 2, cy = fits ? 18 + L.height / 2 : Math.max(14, c.height + 1);
+      ctx.drawImage(c, Math.round(cx - cw / 2), Math.round(cy - ch / 2), Math.round(cw), Math.round(ch));
     }
     // A chain of levels (chainStamp): "×3", then "2 of 3", stamped left of the title as LUCKY! is
     // right of it (where the screen is narrow, over its left end).
     const stamp = chainStamp(this.chain());
     if (stamp) {
-      const c = textCanvas(stamp, mile ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#c0f8ff', '#2ce8f5'], '#181425');
+      const c = tiltedStamp(stamp, mile ? ['#ffffff', '#fee761', '#feae34'] : ['#ffffff', '#c0f8ff', '#2ce8f5'], false);
       const k = this.t < 0.25 ? 2.2 - 1.2 * ease.outBack(this.t / 0.25) : 1, cw = c.width * 2 * k, ch = c.height * 2 * k;
       const left = W / 2 - (L.width * s) / 2 - 6, fits = left - c.width * 2 >= 2;
-      const cx = fits ? left - cw / 2 : 4 + cw / 2, cy = fits ? 18 + L.height / 2 : 14;
-      ctx.save();
-      ctx.translate(Math.round(cx), Math.round(cy));
-      ctx.rotate(0.12);
-      ctx.drawImage(c, Math.round(-cw / 2), Math.round(-ch / 2), Math.round(cw), Math.round(ch));
-      ctx.restore();
+      const cx = fits ? left - cw / 2 : 4 + cw / 2, cy = fits ? 18 + L.height / 2 : Math.max(14, c.height + 1);
+      ctx.drawImage(c, Math.round(cx - cw / 2), Math.round(cy - ch / 2), Math.round(cw), Math.round(ch));
     }
 
     ui.begin(dt);
@@ -832,13 +849,19 @@ export class LevelUpOverlay {
       const first = this.first?.[i], full = first ? 'FIRST FIND' : info.tag, short = first ? 'FIRST!' : info.isNew ? 'NEW!' : info.tag;
       const tagColor = first ? (blink && this.g.settings.softFlash !== true ? '#ffffff' : '#9ee562') : info.isNew ? (blink ? '#fee761' : '#feae34') : '#8b9bb4';
       if (vertical) {
-        // The icon at the left over its pips; name and tag on top, the text under them.
-        ctx.drawImage(smoothScaled(icon, 1), x + 6, y + lift + 5);
-        drawPips(ctx, x + 22, y + lift + 41, c.level, info.max, this.t);
+        // The icon at the left over its pips; name and tag on top, the text under them. A short
+        // card (a low screen's) has the icon at its own size, centred with its pips in the card,
+        // as twice it and the pips under it reach 46 px down, past a frame that short.
+        const tall = h >= 50, ic = icon.c, iw = tall ? ic.width * 2 : ic.width, ih = tall ? ic.height * 2 : ic.height;
+        const iy = tall ? 5 : Math.max(3, (h - ih - (info.max > 1 ? 5 : 0)) >> 1);
+        ctx.drawImage(ic, x + 22 - (iw >> 1), y + lift + iy, iw, ih);
+        drawPips(ctx, x + 22, y + lift + (tall ? 41 : iy + ih + 2), c.level, info.max, this.t);
         drawText(ctx, info.name, x + 44, y + lift + 6, { color: info.color });
         const tag = textWidth(info.name) + textWidth(full) + 58 <= w ? full : short;
         if (tag) drawText(ctx, tag, x + w - 6, y + lift + 6, { align: 'right', color: tagColor });
-        const lines = wrapText(info.desc, w - 52), room = Math.min(gold || info.hint ? 3 : 4, Math.floor((h - 26) / 9));
+        // The lines that fit over the frame's foot, or over the gold line or the evolution's at it.
+        const low = gold ? 33 : info.hint && h >= 64 ? 35 : 22;
+        const lines = wrapText(info.desc, w - 52), room = clamp(Math.floor((h - low) / 9), 0, gold || info.hint ? 3 : 4);
         // Its change in numbers (cardChange), in green, on the lines the text leaves free.
         const change = info.change ? wrapText(info.change, w - 52) : [];
         const told = lines.slice(0, room), more = change.slice(0, room - told.length);
@@ -856,8 +879,10 @@ export class LevelUpOverlay {
           else drawText(ctx, '?', hx + 6, hy + 4, { color: '#8b9bb4' });
         }
       } else {
-        const big = smoothScaled(icon, 1);
-        ctx.drawImage(big, Math.round(x + w / 2 - big.width / 2), y + lift + 8);
+        // Twice its size, each pixel a block of four, as the merchant's, the chest's and the
+        // evolution's icons are (no Scale2x here alone).
+        const ic = icon.c;
+        ctx.drawImage(ic, Math.round(x + w / 2 - ic.width), y + lift + 8, ic.width * 2, ic.height * 2);
         let ty = y + lift + 44;
         for (const ln of wrapText(info.name, w - 10)) {
           drawText(ctx, ln, x + w / 2, ty, { align: 'center', color: info.color });
@@ -982,7 +1007,7 @@ export class LevelUpOverlay {
       // the first level-up screen's teaching line keeps them too (27 October 2026: it took their
       // place on the one screen a new player needs them most).
       const take = touch ? ['Tap a card to take it', 'Tap: take'] : pad ? [`${padKey('A')} takes the card in focus`, `${padKey('A')}: take`] : [`Enter or 1-${n} takes a card`, `Enter/1-${n}: take`];
-      let tip, color = '#5a6988';
+      let tip, color = '#8b9bb4'; // light enough to read over the dimmed day's snow and sand
       if (this.banishing) {
         tip = fit(['Choose a card to banish: it is gone for the rest of the run', 'Choose a card to banish', 'Banish which?']);
         color = '#e43b44';
@@ -1101,7 +1126,7 @@ export class ChestOverlay {
     this.coins = []; // the burst as the lid opens
     this.flyers = []; // coins on their way to the HUD's gold counter, each with its share of the gold
     this.coinsIn = 0; // of them, landed
-    this.lit = []; // the build's slots the things shown have raised, each { row, i, at } (drawSlots' lit)
+    this.lit = []; // the build's slots the things shown have raised, each { row, i, at } (litCell)
     this.lockTime = 0.6;
     this.noSpace = true; // as with level-ups and gear: Space mashed for the ultimate mustn't skip the reveal, nor collect
     sfx('chest', { size: this.kind === 'boss' ? 3 : this.kind === 'lord' ? 2 : 1 });
@@ -1146,20 +1171,23 @@ export class ChestOverlay {
     // An evolution's ceremony (drawCeremony), and EVOLUTION! over the screen's top once it is over.
     const ceremony = this.evo && t >= this.evoAt && t < this.evoAt + CEREMONY.dur;
     const evoLogo = this.evo && t >= this.evoAt + CEREMONY.dur ? evolutionLogo(W) : null;
-    // The build's slots and the gold counter again, over the dim (28 October 2026): under it the
-    // HUD shows them at a third of their light, so what the chest gives now lands on them in full
-    // light, each slot it raises lit for a moment (SLOT_LIT), its gold coming in coin by coin
-    // (drawFlyers). Not while an evolution's ceremony plays: its slot holds the new weapon from the
-    // first crack, which the ceremony is there to show, so they wait under its dim with the rest.
-    // Nor under EVOLUTION!, which on a narrow screen (a phone held upright) reaches over the
-    // slots: from the first it covers on, they are left to the HUD under the dim.
+    // What the chest gives lands on the build as the HUD shows it (28 October 2026): each cell of
+    // the WEAPONS and POWERS plates it raises comes up out of the dim in full light for a moment
+    // (SLOT_LIT), framed and washed in white, fading back as the next comes (litCell; until the
+    // plates came, a strip of the old slots was drawn at the top left for this, in their old skin).
+    // The gold counter again over the dim, its gold coming in coin by coin (drawFlyers). Not while
+    // an evolution's ceremony plays: its cell holds the new weapon from the first crack, which the
+    // ceremony is there to show, so it waits under its dim with the rest.
     if (!ceremony) {
-      const lit = [];
+      const lit = new Map();
       for (const l of this.lit) {
-        const u = (t - l.at) / SLOT_LIT;
-        if (u >= 0 && u < 1) lit.push({ row: l.row, i: l.i, k: 1 - u });
+        const u = (t - l.at) / SLOT_LIT, key = l.row + l.i;
+        if (u >= 0 && u < 1 && !(lit.get(key)?.k >= 1 - u)) lit.set(key, { row: l.row, i: l.i, k: 1 - u });
       }
-      g.hud.drawSlots(ctx, g.player, lit, evoLogo ? slotsLeftOf(evoLogo.x) : undefined);
+      if (lit.size) {
+        const belt = g.hud.loadout(W, H);
+        for (const l of lit.values()) this.litCell(ctx, belt, l, t);
+      }
       g.hud.drawGold(ctx, W);
     }
     // Shut, it shakes in sets (a champion's one, a lord's two, a boss's three), each stronger and a
@@ -1292,6 +1320,36 @@ export class ChestOverlay {
     return res;
   }
 
+  // One cell of the HUD's plates a chest has raised (l: { row: 'w' a weapon's or 'r' a relic's, i,
+  // k its light, 1 down to 0 }), over the dim: the plates as they stand (drawLoadout, the held
+  // build) cut to the cell and the gaps round it, at k of their light over their dimmed selves, a
+  // white frame in the gaps and a white wash over the icon (FLASHES: SOFT: the frame in gold and
+  // the wash held to FLASH_SOFT, as a boss's chest raises up to five in a row). Its weapons are
+  // held.weapons in order, its powers held.relics first (loadoutItems), as revealOn counts them.
+  litCell(ctx, belt, l, t) {
+    const group = belt.groups.find((gr) => gr.name === (l.row === 'w' ? 'WEAPONS' : 'POWERS'));
+    if (!group || l.i >= group.slots.length) return;
+    const left = group.x + Math.floor((group.w - group.cols * BELT_CELL) / 2);
+    const x = left + (l.i % group.cols) * BELT_CELL, y = group.y + (group.header ?? BELT_HEADER) + Math.floor(l.i / group.cols) * BELT_ROW;
+    const c = (this.cellCanvas ??= makeCanvas(20, 20)), cc = ctx2d(c);
+    cc.setTransform(1, 0, 0, 1, 0, 0);
+    cc.clearRect(0, 0, 20, 20);
+    cc.translate(1 - x, 1 - y);
+    drawLoadout(cc, belt, t);
+    cc.setTransform(1, 0, 0, 1, 0, 0);
+    const soft = this.g.settings.softFlash === true;
+    ctx.globalAlpha = l.k;
+    ctx.drawImage(c, x - 1, y - 1);
+    ctx.fillStyle = soft ? '#fee761' : '#ffffff';
+    ctx.fillRect(x - 1, y - 1, 20, 1);
+    ctx.fillRect(x - 1, y + 18, 20, 1);
+    ctx.fillRect(x - 1, y, 1, 18);
+    ctx.fillRect(x + 18, y, 1, 18);
+    ctx.globalAlpha = (soft ? FLASH_SOFT : 0.45) * l.k;
+    ctx.fillRect(x + 1, y + 1, 16, 16);
+    ctx.globalAlpha = 1;
+  }
+
   // The evolution's ceremony, u seconds in (CEREMONY): the room darker still; the old icon at 3x
   // trembling as cracks run through it; one flash; the new icon at 4x with rays in its colour, its
   // name in the logo's letters and what changed; for the hero's own weapon, him beside it and the
@@ -1359,8 +1417,11 @@ export class ChestOverlay {
     if (this.signature) {
       // The hero beside his own weapon, and the word.
       const pose = SPR[this.g.player.hero.pose] || SPR[this.g.player.hero.sprite];
-      const pf = pose.frames[0].c, ps = Math.min(2, 64 / pf.height);
-      ctx.drawImage(pf, Math.round(cx - 64 - pf.width * ps), Math.round(cy - (pf.height * ps) / 2), Math.round(pf.width * ps), Math.round(pf.height * ps));
+      // At twice his size, every hero alike: a whole scale, as 64 px over his height (1.39-1.94
+      // for most) drew some of his rows one pixel tall and others two. His feet kept clear of the
+      // weapon's name under him (at cy + 40), a tall pose standing higher.
+      const pf = pose.frames[0].c, ps = 2, pw = pf.width * ps, ph = pf.height * ps;
+      ctx.drawImage(pf, Math.max(2, Math.round(cx - 64 - pw)), Math.round(Math.min(cy - ph / 2, cy + 38 - ph)), pw, ph);
       const c = textCanvas('SIGNATURE', ['#ffffff', '#fee761', '#feae34'], '#181425');
       ctx.drawImage(c, Math.round(cx - c.width), cy - 52, c.width * 2, c.height * 2);
     }
@@ -1415,6 +1476,9 @@ export const chestItemScale = (W, n) => ((W - 16) / Math.max(1, n) >= CHEST_ITEM
 // CHEST_ROW px a scale (the icon and up to three lines); under them the gold line and COLLECT take
 // CHEST_FOOT px to the screen's foot; the chest's lid stays below CHEST_TOP (clear of EVOLUTION!).
 const CHEST_SCALE = 3, CHEST_ROW = 34 + 3 * 9, CHEST_FOOT = 4 + 22 + 4 + 22, CHEST_TOP = 44;
+// Where a cell stands on the HUD's plates (game/loadout.js: its cells 19 px apart, rows 20, under
+// an 11-px header), for a chest's screen to light the one it raised (ChestOverlay.litCell).
+const BELT_CELL = 19, BELT_ROW = 20, BELT_HEADER = 11;
 
 // Where a chest's n things go on a W x H screen, the chest drawn at its tier's scale: at twice
 // today's size where the width allows (chestItemScale) and the row, its gold line and COLLECT fit
@@ -1517,10 +1581,17 @@ export class PauseOverlay {
       return [item.icon, name, tag, item.seconds != null ? '#97dcde' : item.blessing ? '#d7b7ed' : '#c0cbdc'];
     });
     // As tall as the build it shows (its longer column), the buttons and, if any, the ALWAYS line.
-    const visiblePowers = Math.max(1, Math.min(6, Math.floor((H - 144 - (auto ? 18 : 0)) / 15)));
+    // It stands clear of the HUD's WEAPONS and POWERS plates at the foot, the powers it lists cut
+    // to the room above them (DETAILS has them all); where the weapons alone don't fit there (a
+    // full build on a low screen), it covers the plates whole, the same build, rather than half.
+    const belt = g.hud.loadout(W, H), above = belt.y - 6 - 14;
+    const rowsIn = (room) => Math.floor((room - 122 - (auto ? 18 : 0)) / 15);
+    const clear = Math.max(1, p.weapons.length) <= rowsIn(above);
+    const visiblePowers = Math.max(1, Math.min(6, rowsIn(clear ? above : H - 22)));
     const listed = Math.max(1, p.weapons.length, Math.min(visiblePowers, powers.length));
     const pw = Math.min(W - 16, 320), ph = Math.min(H - 20, 26 + 12 + listed * 15 + 8 + 76 + (auto ? 18 : 0));
-    const x = Math.round(W / 2 - pw / 2), y = Math.round(H / 2 - ph / 2) + 4;
+    const centred = Math.round(H / 2 - ph / 2) + 4;
+    const x = Math.round(W / 2 - pw / 2), y = Math.max(14, clear ? Math.min(centred, belt.y - 6 - ph) : belt.y + belt.h - ph);
     panel(ctx, x, y, pw, ph, { title: 'PAUSED' });
     // The run so far along the top (the clock as the HUD showed it: in a timed run, the time left),
     // or, once QUIT RUN is pressed, what quitting means.
@@ -1683,7 +1754,10 @@ export function goldSteps(r, span) {
 // The formula's parts, in the longest of its three forms whose whole line fits w: the gold found
 // (with its rate, where that is no stamp of its own), then one part for each stamp.
 export function goldParts(r, gold, time, plan, w) {
-  const m = r.multiplier, own = plan.stamps.some((st) => st.key === 'mult');
+  // The rate as it reads (× 2.4, × 0.825), not as the float it is kept in (2.4000000000000004):
+  // each is a difficulty's rate times its oaths' (1 + 0.1 a heat), three decimals at most. What is
+  // paid is still the kept rate's (runReward), which the receipt's check matches as it is.
+  const m = +Number(r.multiplier).toFixed(3), own = plan.stamps.some((st) => st.key === 'mult');
   const forms = [0, 1, 2].map((form) => {
     const part = { mult: ` × ${m}`, wage: ` + ${r.wage} ${form === 0 ? `wage for ${fmtTime(time)}` : 'wage'}`, bonus: ` + ${r.bonus} ${form < 2 ? 'victory bonus' : 'bonus'}` };
     return [`${form < 2 ? 'Collected' : 'Gold'} ${gold}${own ? '' : ` × ${m}`}`, ...plan.stamps.map((st) => part[st.key])];
@@ -1787,6 +1861,16 @@ export function woundLines(res) {
     ['Wounds: ' + top.map(([who, d]) => `${who} ${Math.round((100 * d) / all)}%`).join(' · '), '#c0cbdc'],
     [WOUND_TIPS[worst], '#8b9bb4'],
   ];
+}
+
+// The results' weapons in `lines` lines of the panel: all of them where they fit; else those that
+// dealt most, in their order, and a line for how many more (none where only one line is left).
+//   { shown: the weapons to list, more: how many are left out }
+export function weaponLines(list, lines) {
+  if (lines >= list.length) return { shown: list, more: 0 };
+  const keep = Math.max(1, lines - 1), top = new Set([...list].sort((a, b) => b.dmg - a.dmg).slice(0, keep));
+  const shown = list.filter((w) => top.has(w));
+  return { shown, more: lines > 1 ? list.length - shown.length : 0 };
 }
 
 class ResultsOverlay {
@@ -1996,9 +2080,11 @@ class ResultsOverlay {
     drawText(ctx, fitText(sub, W - 8), W / 2, 12 + L.height * s, { align: 'center', color: res.victory ? '#feae34' : '#8b9bb4' });
     if (this.t < TALLY.rows - 0.2) return null;
     // Personal bests and anything this run unlocked, shown above the gold once it has landed; a
-    // fall's wounds over them, in what room is left (below).
+    // fall's wounds over them, in what room is left (below). Their room is kept from the moment
+    // the store answers, as the unlocked's is, so nothing moves when they show (nor the weapons,
+    // which give way to them on a low screen).
     const notes = [];
-    if (this.reward && this.landed) {
+    if (this.reward) {
       const rk = this.reward.ranked;
       if (rk) notes.push(rk.personalBest ? ['★ NEW PERSONAL BEST ★', '#63c74d'] : [`Personal best: ${fmtTime(rk.best)}`, '#8b9bb4']);
       if (this.daily) notes.push([this.daily.counted ? `DAILY NIGHT · day ${this.daily.streak} in a row · share it from RECORDS` : 'DAILY NIGHT · practice: the first try today counted', '#8fb8ff']);
@@ -2011,7 +2097,7 @@ class ResultsOverlay {
       // its weapons marked NEW in the Codex (ui/ladder.js isNewEntry).
       const circle = this.firstNight && !this.reward.unsaved;
       if (circle) notes.push([`THE SECOND CIRCLE STIRS · ${SECOND_CIRCLE} weapons revealed`, '#fee761']);
-      if (!this.announced && (this.reward.unlocks?.length || rk?.personalBest || circle)) {
+      if (this.landed && !this.announced && (this.reward.unlocks?.length || rk?.personalBest || circle)) {
         this.announced = true;
         sfx(rk?.personalBest ? 'record' : 'unlock');
       }
@@ -2023,17 +2109,21 @@ class ResultsOverlay {
     // is kept from the moment the store answers, so nothing moves when they show. They take the
     // room the rows and weapons leave (tight: what those, the notes and the gold need), the panel
     // growing for them where the screen allows; on a low screen the locks give way first, then
-    // the rows of the unlocked down to one.
+    // the rows of the unlocked down to one. The gold's block and the lines under it stand on a
+    // foot of 4 px (the 59 of need, 182 of base): on the frame's trim and bracket, the last line's
+    // descenders had cut them.
     const saved = this.reward && !this.reward.unsaved;
     const unlocked = saved ? this.reward.unlocked || [] : [];
     const near = saved ? (this.near ??= nearestLocks(this.gs.app.store.profile, 2)) : [];
     const cap = H - 52 - L.height * s;
-    const need = () => 16 + Math.max(this.rows.length * 10, side ? nw * 15 : 0) + (side ? 0 : nw * 15 + 4) + notes.length * 10 + 55;
+    let shownW = nw; // the weapons' lines (weaponLines): fewer than the weapons where they give way
+    const need = () => 16 + Math.max(this.rows.length * 10, side ? shownW * 15 : 0) + (side ? 0 : shownW * 15 + 4) + notes.length * 10 + 59;
     let tight = need();
     // The rows give way before the unlocked do (28 October 2026): where not even one row of them
     // fits under the rows (a 240-high screen), Damage dealt is left out, as the Gold found row had
     // put it under the chips. It is never a record, and each weapon's damage is told beside it.
-    if (unlocked.length && cap - tight < UNLOCK_ROW && this.rows[this.rows.length - 1][0] === 'Damage dealt') {
+    // (Not where the weapons beside the rows are the longer column: that frees nothing.)
+    if (unlocked.length && cap - tight < UNLOCK_ROW && this.rows[this.rows.length - 1][0] === 'Damage dealt' && (!side || this.rows.length * 10 > nw * 15)) {
       this.rows.pop();
       this.ticked = Math.min(this.ticked, this.rows.length);
       tight = need();
@@ -2044,13 +2134,26 @@ class ResultsOverlay {
     if (chips.length > fit) chips = chipRows(unlocked, pw - 16 - 10 - textWidth('9/9'));
     const nChips = Math.min(chips.length, fit);
     const unH = unlocked.length ? nChips * UNLOCK_ROW : 0;
+    // Where even that is more than the panel holds (a low screen: a full build's weapons down from
+    // the top met the gold, the notes and the unlocked up from the foot, printed over them), Damage
+    // dealt and the weapons give way in turn, the weapons that dealt least first, a line saying how
+    // many more; side by side, each only while its column is the longer.
+    while (tight + unH > cap) {
+      const rowsH = this.rows.length * 10, wH = shownW * 15;
+      if (this.rows[this.rows.length - 1][0] === 'Damage dealt' && (!side || rowsH >= wH)) {
+        this.rows.pop();
+        this.ticked = Math.min(this.ticked, this.rows.length);
+      } else if (shownW > 1 && (!side || wH >= rowsH)) shownW--;
+      else break;
+      tight = need();
+    }
     // A fall's wounds and their tip (woundLines) take the room the rest leaves, the tip giving way
     // first, then the wounds, before the nearest locks do (27 October 2026: on a 480x270 screen
     // they pushed a fall's unlocked down onto its sixth weapon).
     const nWounds = clamp(Math.floor((cap - tight - unH) / 10), 0, this.wounds.length);
     notes.unshift(...this.wounds.slice(0, nWounds));
     tight += nWounds * 10;
-    const base = 178 + notes.length * 10 + (side ? 0 : nw * 15 - 10);
+    const base = 182 + notes.length * 10 + (side ? 0 : shownW * 15 - 10);
     const nNear = clamp(Math.floor((cap - tight - unH) / 10), 0, near.length);
     const ph = Math.min(cap, Math.max(base, tight + unH + nNear * 10));
     const x = Math.round(W / 2 - pw / 2), y = Math.round(24 + L.height * s);
@@ -2079,7 +2182,8 @@ class ResultsOverlay {
     const wx = side ? x + 166 : x + 8;
     // The one that dealt the most, marked MVP (the review's C8a, 28 October 2026), where there are two or more.
     const mvp = res.weapons.length > 1 ? res.weapons.slice(0, 6).reduce((a, w) => (w.dmg > a.dmg ? w : a)) : null;
-    res.weapons.slice(0, 6).forEach((w, j) => {
+    const { shown: weapons, more } = weaponLines(res.weapons.slice(0, 6), shownW);
+    weapons.forEach((w, j) => {
       if (this.t < wFrom + j * TALLY.weapon) return;
       const def = WEAPONS[w.id], star = w === mvp && w.dmg > 0;
       ctx.drawImage(SPR[def.icon].frames[0].c, wx, wy - 3);
@@ -2090,9 +2194,10 @@ class ResultsOverlay {
       drawText(ctx, `${fmtNum(w.dmg)}  ${fmtNum(w.dmg / secs)}/s`, x + pw - 8, wy + 1, { align: 'right', color: '#feae34' });
       wy += 15;
     });
+    if (more && this.t >= wFrom + weapons.length * TALLY.weapon) drawText(ctx, `+${more} more`, wx + 18, wy + 1, { color: '#8b9bb4' });
     // The gold, counting up once the rows are in and the store has answered; then what next.
-    const gy = y + ph - 51 - nNear * 10;
-    notes.forEach(([text, color], i) => drawText(ctx, fitText(text, pw - 12), W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
+    const gy = y + ph - 55 - nNear * 10;
+    notes.forEach(([text, color], i) => (i < nWounds || this.landed) && drawText(ctx, fitText(text, pw - 12), W / 2, gy - 4 - (notes.length - i) * 10, { align: 'center', color }));
     if (this.landed && unH) {
       this.chipsAt ??= this.t;
       const pages = chipPages(chips, nChips), view = chipView(pages, this.t - this.chipsAt);
@@ -2167,8 +2272,8 @@ class ResultsOverlay {
     const armoryRank = this.landed && this.reward ? cheapestArmoryRank(prof) : null;
     if (this.landed && this.reward) {
       // What next: the next goal, and what the gold buys.
-      nearLines(near.slice(0, nNear), pw - 12).forEach((line, i) => drawText(ctx, line, W / 2, y + ph - 20 - (nNear - i) * 10, { align: 'center', color: '#c28569' }));
-      const goal = nextGoal(prof), bw = 40, bar = heroGoalBar(goal, res, pw - 12 - bw - 4), ny = y + ph - 20;
+      nearLines(near.slice(0, nNear), pw - 12).forEach((line, i) => drawText(ctx, line, W / 2, y + ph - 24 - (nNear - i) * 10, { align: 'center', color: '#c28569' }));
+      const goal = nextGoal(prof), bw = 40, bar = heroGoalBar(goal, res, pw - 12 - bw - 4), ny = y + ph - 24;
       if (bar) {
         // The distance as a bar before its words (heroGoalBar, in the form that fits); a pale tick
         // where his longest run before this one stood, if it went further.
@@ -2181,7 +2286,7 @@ class ResultsOverlay {
         }
         drawText(ctx, text, bx + bw + 4, ny, { color: '#feae34' });
       } else drawText(ctx, fitText('NEXT: ' + goalText(goal), pw - 12), W / 2, ny, { align: 'center', color: '#feae34' });
-      drawText(ctx, fitText(this.reward.volatile ? 'Progress kept for this session only' : armoryLine(prof, armoryRank), pw - 12), W / 2, y + ph - 11, { align: 'center', color: '#c0cbdc' });
+      drawText(ctx, fitText(this.reward.volatile ? 'Progress kept for this session only' : armoryLine(prof, armoryRank), pw - 12), W / 2, y + ph - 14, { align: 'center', color: '#c0cbdc' });
     }
     ui.begin(dt);
     if (unsaved && this.reward.down && button(ctx, ui, 'resubmit', Math.round(W / 2 - 50), gy + 10, 100, 13, 'SAVE AGAIN')) this.submit();
