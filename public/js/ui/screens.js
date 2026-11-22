@@ -5,6 +5,7 @@ import { sfx, playMusic, playAfterJingle, setVolumes, initAudio, setCombatMusic,
 import { SPR } from '../engine/sprites.js';
 import { saveSettings, DEBUG, seenBox } from '../engine/storage.js';
 import { presentBackdrop } from '../engine/view.js';
+import { campTop } from './background.js';
 import { fmtTime, fmtNum, clamp } from '../engine/util.js';
 import { HEROES, HERO_ORDER } from '../data/heroes.js';
 import { trialScene, SCENE, heroCrop, PORTRAIT } from './scenes.js';
@@ -147,8 +148,15 @@ export class TitleScreen {
     const firstJourney = needsPrologue(app.store.profile, app.settings);
     const items = [['play', firstJourney ? 'BEGIN ADVENTURE' : 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
     if (!firstJourney) items.push(['prologue', 'REPLAY INTRO']);
-    const bw = 104, bh = 15, gap = 4;
-    let y = Math.round(Math.max(my + 20, H * 0.5 - (items.length * (bh + gap)) / 2 + 6));
+    // The buttons and the NEXT line under them stay above the campfire's ring (background.js
+    // campTop), which stands on a share of the screen's height while they are centred on it: on a
+    // short screen (a 1080p one full, 270 high) they would run across the heroes' heads. There the
+    // stack rises, and if that is not enough closes up; where even then the line has no room, it is
+    // said in the footer instead.
+    const goal = nextGoal(app.store.profile), camp = campTop(H) - 2, below = goal ? 14 : 0;
+    const tight = my + 20 + items.length * 19 + below > camp;
+    const bw = 104, bh = tight ? 13 : 15, gap = tight ? 2 : 4;
+    let y = Math.round(Math.max(my + 20, Math.min(H * 0.5 - (items.length * (bh + gap)) / 2 + 6, camp - below - items.length * (bh + gap))));
     // A pool of shadow under the buttons, so the trees behind don't fight them.
     const mh = items.length * (bh + gap), cy = y + mh / 2;
     const well = ctx.createRadialGradient(W / 2, cy, 8, W / 2, cy, bw);
@@ -163,10 +171,10 @@ export class TitleScreen {
       if (id === 'armory' && this.marks.armory) ctx.drawImage(SPR.h_coin.frames[0].c, bx + bw - 14, y + 5);
       y += bh + gap;
     }
-    const goal = nextGoal(app.store.profile);
-    if (goal && y + 13 < H - 17) {
+    const floor = Math.min(H - 17, camp), under = goal && y + 13 < floor;
+    if (under) {
       const width = Math.min(320, W - 24), text = `NEXT · ${goalText(goal)}`;
-      const lines = y + 23 < H - 17 ? wrapText(text, width).slice(0, 2) : [fitLine(text, width)];
+      const lines = y + 23 < floor ? wrapText(text, width).slice(0, 2) : [fitLine(text, width)];
       lines.forEach((line, i) => drawText(ctx, line, W / 2, y + 5 + i * 10, { align: 'center', color: '#fee761' }));
     }
     ui.end();
@@ -177,6 +185,7 @@ export class TitleScreen {
     ctx.drawImage(SPR.h_trophy.frames[0].c, W - 14 - textWidth(String(wins)), H - 13);
     drawText(ctx, String(wins), W - 5, H - 12, { align: 'right', color: '#fee761' });
     if (DEBUG) drawText(ctx, 'Debug: everything unlocked, saved apart from your own progress', W / 2, H - 12, { align: 'center', color: '#feae34' });
+    else if (goal && !under) drawText(ctx, fitLine(`NEXT · ${goalText(goal)}`, W - 112), W / 2, H - 12, { align: 'center', color: '#fee761' });
     else drawText(ctx, 'Progress saved automatically after each run', W / 2, H - 12, { align: 'center', color: '#8b9bb4', outline: null });
   }
 
@@ -202,8 +211,9 @@ export class TitleScreen {
       ui.focus('fresh');
       this.freshFocus = true;
     }
-    const bw = 124;
-    if (button(ctx, ui, 'fresh', Math.round(W / 2 - bw / 2), y + ph - 20, bw, 13, 'START A NEW ADVENTURE')) {
+    // Wide enough that its words stand clear of its pointed ends (124 put them on both points).
+    const label = 'START A NEW ADVENTURE', bw = Math.max(124, textWidth(label) + 28);
+    if (button(ctx, ui, 'fresh', Math.round(W / 2 - bw / 2), y + ph - 20, bw, 13, label)) {
       sfx('select');
       app.store.startFresh().catch(() => {});
       ui.focus('play');
@@ -375,20 +385,23 @@ export class ModeScreen {
         drawText(ctx, 'SELECTED', x + cw / 2, y + ch - 11, { align: 'center', color: '#3e2731', outline: null });
       }
       drawText(ctx, M.name.toUpperCase(), x + cw / 2, y + 52, { align: 'center', color: !open ? '#5a6988' : f || sel ? '#fee761' : '#c0cbdc' });
-      // Under Survival the map's name in its colour (every map's is the same 15-minute night).
-      const sub = !open ? 'LOCKED' : m === 's15' ? fitLine(MAPS[map].name, cw - 6) : M.sub;
-      drawText(ctx, sub, x + cw / 2, y + 61, { align: 'center', color: !open ? '#5a6988' : m === 's15' ? MAPS[map].color : '#8b9bb4' });
-      // This hero's record here: stars for wins, or the best Ranked time.
-      if (m === 'ranked') {
-        const best = prof.ranked[hero];
-        if (best && open) drawText(ctx, (cw >= 90 ? 'BEST ' : '') + fmtTime(best), x + 6, y + 5, { color: '#feae34' });
-      } else if (open) {
-        const stars = featStars(prof, hero).filter((s) => s[3] === m); // any win, then Veteran, Elite, Nightmare
-        let sx = x + 6;
-        for (const [, col, got] of stars) {
-          if (got) drawText(ctx, '★', sx, y + 5, { color: col });
-          sx += 7;
-        }
+      // Under Survival the map's name in its colour (every map's is the same 15-minute night); under
+      // Ranked, after its 'Endless', this hero's best time there, in amber. Both off the picture:
+      // the time printed over its top edge ran across the blood moon's sky.
+      const best = m === 'ranked' && open ? prof.ranked[hero] : 0;
+      if (best) {
+        const line = [`${M.sub} · {best ${fmtTime(best)}}`, `${M.sub} · {${fmtTime(best)}}`].find((s) => textWidth(s.replace(/[{}]/g, '')) <= cw - 6);
+        drawRich(ctx, line || `{${fmtTime(best)}}`, x + cw / 2, y + 61, { align: 'center', color: '#8b9bb4', hi: '#feae34' });
+      } else {
+        const sub = !open ? 'LOCKED' : m === 's15' ? fitLine(MAPS[map].name, cw - 6) : M.sub;
+        drawText(ctx, sub, x + cw / 2, y + 61, { align: 'center', color: !open ? '#5a6988' : m === 's15' ? MAPS[map].color : '#8b9bb4' });
+      }
+      // This hero's wins here, a star for each (any win, then Veteran, Elite, Nightmare), down the
+      // margin left of the picture, each in its own place whether the ones before it are won or not;
+      // in a row along the top, the third and fourth stood on the picture.
+      if (open && m !== 'ranked') {
+        const stars = featStars(prof, hero).filter((s) => s[3] === m), sx = Math.round((x + 1 + sx0) / 2 - 2.5);
+        stars.forEach(([, col, got], i) => { if (got) drawText(ctx, '★', sx, y + 6 + i * 8, { color: col }); });
       }
       x += cw + 6;
     }
@@ -603,8 +616,11 @@ export class ArmoryScreen {
     ui.begin(dt);
     drawText(ctx, 'Permanent upgrades · all heroes', W / 2, 26, { align: 'center', color: '#8b9bb4' });
     const ids = UPGRADE_GROUPS.flatMap(g => g[2]);
-    const width = Math.min(W - 24, 540), x = Math.round((W - width) / 2), top = 43, height = H - top - 34;
-    const listW = Math.min(190, Math.floor(width * 0.46)), gap = 10, detailX = x + listW + gap, detailW = width - listW - gap, step = 21;
+    // The list's rows 20 high, so the small frame's inner lines (ui.js panel) clear every 16-pixel
+    // icon (19 high, the icons crossed them); its window a whole number of rows, and every place
+    // it scrolls to a row's edge, so no row shows cut through its middle.
+    const step = 22, width = Math.min(W - 24, 540), x = Math.round((W - width) / 2), top = 43, height = Math.floor((H - top - 34) / step) * step;
+    const listW = Math.min(190, Math.floor(width * 0.46)), gap = 10, detailX = x + listW + gap, detailW = width - listW - gap;
     const detailH = Math.min(height, detailW < 150 ? 200 : 170);
     const most = Math.max(0, ids.length * step - height), m = input.mouse;
     const focused = ids.findIndex(id => ui.focusId === 'u_' + id);
@@ -618,7 +634,7 @@ export class ArmoryScreen {
     if (this.drag) {
       if (Math.abs(m.y - this.drag.y) > 4) this.drag.moved = true;
       if (this.drag.moved) { this.scroll = this.drag.from - (m.y - this.drag.y);dragged = true; }
-      if (!m.down) { if (this.drag.moved) m.clicked = false;this.drag = null; }
+      if (!m.down) { if (this.drag.moved) { m.clicked = false;this.scroll = Math.round(this.scroll / step) * step; }this.drag = null; }
     }
     this.scroll = clamp(this.scroll, 0, most);
     ctx.save();ctx.beginPath();ctx.rect(x - 3, top, listW + 6, height);ctx.clip();
@@ -641,9 +657,16 @@ export class ArmoryScreen {
     const selected = UPGRADES.find(u => u.id === this.selected), rank = p.up[selected.id] || 0, open = upgradeOpen(p, selected), maxed = rank >= selected.max;
     const cost = upgradeCost(selected.id, rank);
     panel(ctx, detailX, top, detailW, detailH, { rivets: false, fill: '#15131f' });
+    // As the Codex's panel tells of its entry: the upgrade's icon three times over at its left
+    // where there is room, its name in the gold gothic of the Codex's plate (the plain yellow line
+    // made the two sibling panels look like two skins), then what it gives.
+    const big = detailW >= 200, tx = detailX + (big ? 65 : 9), tw = detailW - (big ? 74 : 18);
+    if (big) { ctx.save();ctx.translate(detailX + 9, top + 10);ctx.scale(3, 3);ctx.drawImage(SPR[UP_ICONS[selected.id]].frames[0].c, 0, 0);ctx.restore(); }
     let dy = top + 10;
-    for (const [text, color] of [[selected.name, '#fee761'], [selected.desc, '#c0cbdc'], [`Rank ${rank}/${selected.max}`, '#ead4aa'], [`Current: ${upgradeEffect(p, selected.id)}`, '#8b9bb4'], [!open ? shortNeed(needText(PROGRESS.locks.find(l => l.id === selected.lock))) : maxed ? 'Fully upgraded' : `Next: ${upgradeEffect({ ...p, up: { ...p.up, [selected.id]: rank + 1 } }, selected.id)}`, maxed ? '#9ee562' : '#feae34']]) {
-      for (const line of wrapText(text, detailW - 18)) { if (dy < top + detailH - 37) drawText(ctx, line, detailX + 9, dy, { color });dy += 9; }
+    drawText(ctx, selected.name, tx, dy - 2, { color: ['#fff6c2', '#fee761', '#feae34', '#d77643'], font: 'gothic' });
+    dy += 17;
+    for (const [text, color] of [[selected.desc, '#c0cbdc'], [`Rank ${rank}/${selected.max}`, '#ead4aa'], [`Current: ${upgradeEffect(p, selected.id)}`, '#8b9bb4'], [!open ? shortNeed(needText(PROGRESS.locks.find(l => l.id === selected.lock))) : maxed ? 'Fully upgraded' : `Next: ${upgradeEffect({ ...p, up: { ...p.up, [selected.id]: rank + 1 } }, selected.id)}`, maxed ? '#9ee562' : '#feae34']]) {
+      for (const line of wrapText(text, tw)) { if (dy < top + detailH - 37) drawText(ctx, line, tx, dy, { color });dy += 9; }
       dy += 7;
     }
     const canBuy = !this.busy && (DEBUG || (!maxed && open && p.gold >= cost));
@@ -709,11 +732,17 @@ export function codexTab(profile, tab) {
 const tabOf = (e) => (e.type === 'feature' ? 'weapon' : e.type);
 const tileId = (e) => `cx_${e.type}_${e.id}`;
 
-// One horizontal browsing row, with a fixed detail panel beneath it.
+// One horizontal browsing row, with a fixed detail panel beneath it. The row holds whole tiles
+// (cols of them, as wide as fill it), so that every place it scrolls to (a tile at a time, by the
+// keys, the wheel or a drag let go) shows them whole: a tile cut at the row's edge left slivers of
+// its frame and icon there. The panel is as wide as the row.
 export function codexLayout(W, H, n) {
-  const C = CODEX_TILE, gw = Math.min(620, W - 32), cw = Math.min(C.max, Math.max(C.min, Math.floor((gw - C.gap) / 3)));
-  const step = cw + C.gap, most = Math.max(0, n * step - C.gap - gw);
-  return { cols: Math.max(1, Math.floor((gw + C.gap) / step)), rows: 1, total: n, cw, ch: C.h, step, view: gw, most, gw,
+  const C = CODEX_TILE, room = Math.min(620, W - 32);
+  let cols = Math.max(1, Math.ceil((room + C.gap) / (C.max + C.gap)));
+  if (cols > 1 && Math.floor((room - (cols - 1) * C.gap) / cols) < C.min) cols--;
+  const cw = Math.min(C.max, Math.floor((room - (cols - 1) * C.gap) / cols));
+  const step = cw + C.gap, gw = cols * step - C.gap, most = Math.max(0, n * step - C.gap - gw);
+  return { cols, rows: 1, total: n, cw, ch: C.h, step, view: gw, most, gw,
     detail: Math.max(60, Math.min(180, H - C.top - C.h - C.foot - 34)), x0: Math.round((W - gw) / 2), y0: C.top };
 }
 
@@ -898,19 +927,23 @@ export class CodexScreen {
     sfx('ui');
   }
 
-  // The panel under the grid: the entry's name on its plate, then all codexDetail tells of it, the
-  // lines past its room cut short; a failed save first, in red.
+  // The panel under the grid: the entry's name on its plate, its icon three times over at its left
+  // where the panel has room (the tile's 16 pixels alone left the panel a box of a line or two),
+  // then all codexDetail tells of it, the lines past its room cut short; a failed save first, in
+  // red. The hidden weapons' card has no icon to show.
   drawDetail(ctx, e, x, y, w, h) {
     panel(ctx, x, y, w, h, { title: tileName(e), fill: '#15131f', rivets: false });
+    const big = w >= 300 && h >= 64 && !e.hidden, tx = x + (big ? 68 : 10), tw = w - (big ? 78 : 20);
+    if (big) { ctx.save();ctx.translate(x + 10, y + 12);ctx.scale(3, 3);codexIcon(ctx, e, 0, 0);ctx.restore(); }
     const lines = codexDetail(e, this.app.store.profile);
     if (this.message) lines.unshift({ text: this.message, color: '#f6757a' });
     const rows = lines.flatMap((l) => {
       const o = typeof l === 'string' ? { text: l } : l;
-      return wrapText(o.text, w - 20).map((text) => ({ text, color: o.color || '#c0cbdc' }));
+      return wrapText(o.text, tw).map((text) => ({ text, color: o.color || '#c0cbdc' }));
     });
     const room = Math.floor((h - 16) / 9);
-    if (rows.length > room) rows[room - 1].text = fitLine(rows[room - 1].text + '…', w - 20);
-    rows.slice(0, room).forEach((r, i) => drawRich(ctx, r.text, x + 10, y + 11 + i * 9, { color: r.color, hi: '#fee761' }));
+    if (rows.length > room) rows[room - 1].text = fitLine(rows[room - 1].text + '…', tw);
+    rows.slice(0, room).forEach((r, i) => drawRich(ctx, r.text, tx, y + 11 + i * 9, { color: r.color, hi: '#fee761' }));
   }
 
   // The wheel moves one card; dragging the row scrolls without activating a weapon.
@@ -922,7 +955,8 @@ export class CodexScreen {
       if (Math.abs(m.x - this.drag.x) > 4) this.drag.moved = true;
       if (this.drag.moved) this.want = this.scroll = clamp(this.drag.from - (m.x - this.drag.x), 0, L.most);
       if (!m.down) {
-        if (this.drag.moved) m.clicked = false;
+        // Let go, it eases on to the nearest tile's edge: whole tiles in the row (codexLayout).
+        if (this.drag.moved) { m.clicked = false;this.want = Math.round(this.want / L.step) * L.step; }
         this.drag = null;
       }
     }
@@ -937,14 +971,18 @@ export class CodexScreen {
   tile(ctx, e, x, y, w, h, f) {
     const open = e.open, sw = e.type === 'weapon' && open;
     panel(ctx, x, y, w, h, { trim: f ? ['#fee761', '#be4a2f'] : open ? ['#5a6988', '#3a4466'] : ['#3a4466', '#262b44'], rivets: false, fill: open ? '#15131f' : '#120e18' });
+    // The name, two lines and the bar laid inside the frame's lines (its trim two rows in, its
+    // brackets' arms a row further), the name's outline a row under the trim, the bar clear of the
+    // bracket at its foot: the name drawn at y + 3 had its outline on the trim, and the bar at the
+    // foot lay on the frame's bottom lines.
     codexIcon(ctx, e, x + 4, y + Math.floor((h - 16) / 2));
-    const tx = x + 23, room = w - 27;
-    drawText(ctx, fitLine(tileName(e), sw ? room - 17 : room), tx, y + 3, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
+    const tx = x + 23, room = w - 27, ty = y + 6;
+    drawText(ctx, fitLine(tileName(e), sw ? room - 17 : room), tx, ty, { color: !open ? (f ? '#c0cbdc' : '#8b9bb4') : f ? '#fee761' : '#ead4aa' });
     const lines = wrapText(e.home ? 'Excluded from runs' : codexSummary(e), room);
     if (lines.length > 2) lines[1] = fitLine(lines.slice(1).join(' '), room);
-    lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, y + 12 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
-    if (!open || (e.type === 'feature' && e.next)) codexBar(ctx, tx, y + h - 4, room, e.progress, '#feae34');
-    if (sw) codexSwitch(ctx, x + w - 18, y + 4, !e.home);
+    lines.slice(0, 2).forEach((line, i) => drawText(ctx, line, tx, ty + 9 + i * 9, { color: e.home ? '#f6757a' : open ? '#c0cbdc' : '#c28569' }));
+    if (!open || (e.type === 'feature' && e.next)) codexBar(ctx, tx, y + h - 9, room - 3, e.progress, '#feae34');
+    if (sw) codexSwitch(ctx, x + w - 18, ty + 1, !e.home);
     // New since this browser last looked (the review's C5): a green dot in its corner.
     if (isNewEntry(e, this.fresh)) newDot(ctx, x + 2, y + 2);
   }

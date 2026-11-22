@@ -9,22 +9,110 @@
 // THEMES below); the Bloomvale's round hills in blossom at twilight, petals on the breeze; the
 // Abyss's spires of rock under the black sun, the fire glowing up from below and embers rising.
 // Without one, or with 'forest' (the title, every other menu), it is the Darkwood it always was,
-// pixel for pixel, the title's campfire and all.
+// the title's campfire and all.
 
-import { SPR, idleFrame } from '../engine/sprites.js';
+import { SPR, idleFrame, buildSprite } from '../engine/sprites.js';
 import { makeCanvas, mulberry32, clamp, rand, TAU, hexToRgb } from '../engine/util.js';
 
 // The campfire's heroes in a ring round it: their sheet, how far across from the fire (left of
 // it facing right, right of it facing left) and how far down from its base (up is beyond it),
-// back to front: the Shadow straight behind the flames, the Sorcerer and Necromancer beyond
-// it either side, the Knight and Ranger on this side.
+// back to front: the Shadow straight behind the flames, near enough that their tips lick up in
+// front of his hem (further back he hung over the fire, in its sparks), the Sorcerer and
+// Necromancer beyond it either side, the Knight and Ranger on this side.
 const CAMP = [
-  ['rogue', 0, -24],
+  ['rogue', 0, -20],
   ['mage', -48, -16],
   ['necromancer', 48, -16],
   ['knight', -70, 6],
   ['archer', 70, 6],
 ];
+
+// The title's campfire, drawn at the heroes' own density: a pixel of it is a pixel of theirs (the
+// world's 14 x 9 'campfire' prop, scaled up twice beside them, was the only thing on the screen
+// built of bigger pixels; the graphics review of 22 November 2026). As wide and as tall as that
+// was, so the ring round it stands where it stood: a ring of stones, lit warm on top where the
+// fire reaches them, two logs crossed under the flames, embers in the ash; the flames, unoutlined
+// (thin), licking up in three frames at the same 8 a second.
+const CAMPFIRE = {
+  emissive: 'oyYfO',
+  thin: 'oyYfO',
+  frames: [
+    [
+      '...............O............',
+      '...............Oo...........',
+      '..........O...OoO...........',
+      '..........Oo..Ooo...........',
+      '..........oO..oyo..O........',
+      '.........Ooo.OoyoO.oO.......',
+      '.........oyoOoyYyO.oo.......',
+      '........OoyooyYYyoOyo.......',
+      '........oyYyoyYfYyoyO.......',
+      '.......OoyYYyYffYyyyo.......',
+      '....SStoyYYYYfffYYyyoSSt....',
+      '...SBBSoyYYYfffYYYyyOBBSb...',
+      '..SNBBbOyYYfffffYYyyoBBbNS..',
+      '.gNNnmBBoyYYfffYYyyoBBmnNNg.',
+      'gNNnKBbbmOyyYYYYyyOmbbBKnNNg',
+      'NNnnKbmm.mOmhOmmOh..mmbKnnNN',
+      '.KKKSg.SgS...SS..SgS..mSSKK.',
+      '...gNNgNNNNngNNngNNNNngNNn..',
+      '..gNNnNNNnnKNnnKNNNnnKNnnK..',
+      '...nKK.KKKK..KK..KKKK..KK...',
+    ],
+    { from: 0, rows: {
+      0: '..............O.............',
+      1: '..............oO............',
+      2: '.............OoO............',
+      3: '........O....Ooo..O.........',
+      4: '........oO...oyoO.O.........',
+      5: '........Ooo.OoyoO.oO........',
+      6: '.........oyOoyYyo.ooO.......',
+      7: '........OoyooyYYyOoyo.......',
+      8: '........oyYyoyYfYyoyo.......',
+      9: '.......OoyYYyYffYyyyO.......',
+      11: '...SBBSoyYYYfffYYYyyoBBSb...',
+      12: '..SNBBbOyYYfffffYYyyOBBbNS..',
+    } },
+    { from: 0, rows: {
+      0: '................O...........',
+      1: '................oO..........',
+      2: '.........O.....OoO..........',
+      3: '.........oO....Ooo.O........',
+      4: '.........Ooo..Ooyo.oO.......',
+      5: '........Ooyo..oyyo.oo.......',
+      6: '........oyyoOOoyYoOyo.......',
+      7: '........oyYooyYYyooyO.......',
+      8: '.......OoyYyoyYfYyoyo.......',
+      9: '.......oyYYyyYffYyyyo.......',
+      10: '....SStoyYYYYfffYYyyOSSt....',
+      11: '...SBBSoyYYYfffYYYyyoBBSb...',
+    } },
+  ],
+};
+let campfire = null; // built the first time the title draws it
+
+// The fire's base on a screen H tall.
+const campY = (H) => Math.round(H * 0.9);
+
+// The highest row the campfire's ring reaches on a screen H tall: the top of the tallest head,
+// hood or lantern beyond the fire, in any of its idle frames. The title keeps its buttons and its
+// NEXT line above it (screens.js), so that no text runs across the heroes.
+let reach = 0;
+export function campTop(H) {
+  if (!reach) {
+    for (const [name, , dy] of CAMP) {
+      if (dy >= 0) continue;
+      const spr = SPR[name], density = spr.hires || 1;
+      for (const i of spr.idle || [0]) {
+        const b = spr.frames[i].buf;
+        let top = 0;
+        while (top < b.h && !b.d.subarray(top * b.w, (top + 1) * b.w).some((c) => c >>> 24)) top++;
+        reach = Math.max(reach, Math.ceil((spr.anchorY - top) / density) - dy);
+      }
+    }
+  }
+  return campY(H) - reach;
+}
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5);
 
@@ -354,10 +442,14 @@ function orb(r, o) {
   const c = makeCanvas(r * 2 + 1, r * 2 + 1), g = c.getContext('2d'), [crater, edge, shade, light] = o.cols;
   for (let y = -r; y <= r; y++) {
     for (let x = -r; x <= r; x++) {
+      // Out to r + 0.5, the disc's edge rounded to the nearest pixel: cut at r exactly, only the
+      // four pixels on its axes (d = r) stood out past their neighbours (d just over r), a nub at
+      // the top, the bottom and either side. The rim and the black sun's inner ring move out by the
+      // same half pixel, so they keep their width.
       const d = Math.hypot(x, y);
-      if (d > r) continue;
+      if (d > r + 0.5) continue;
       const pit = !o.sun && !o.dark && (Math.hypot(x + r * 0.3, y - r * 0.2) < r * 0.25 || Math.hypot(x - r * 0.35, y + r * 0.3) < r * 0.18);
-      g.fillStyle = pit ? crater : d > r - 1.2 ? edge : o.dark ? (d > r - 2.2 ? shade : light) : o.sun ? (d < r * 0.6 ? light : shade) : x + y > r * 0.4 ? shade : light;
+      g.fillStyle = pit ? crater : d > r - 0.7 ? edge : o.dark ? (d > r - 1.7 ? shade : light) : o.sun ? (d < r * 0.6 ? light : shade) : x + y > r * 0.4 ? shade : light;
       g.fillRect(x + r, y + r, 1, 1);
     }
   }
@@ -377,8 +469,10 @@ function motes(W, H, m) {
 // Each look's sky and land: the sky's stops (gradientCanvas); its stars by night (one to `per` px²
 // over the top `top` of the screen, by how bright they twinkle and the big ones' cross); the moon
 // or the sun (orb: where, its radius as a share of H and at least, its halo's reach and colours);
-// the clouds' colour and how high; the strips far to near, three (the Frostfell's four: a fir wood
-// in front of its snowfield), each a painter and its own settings, the ground's top as
+// the clouds' colour, how high the first and how far apart (dy, 0.07 of H by default: the
+// Bloomvale's and the Abyss's closer, so that the last passes behind the trial cards and not out
+// of the map tabs under them); the strips far to near, three (the Frostfell's four: a fir wood in
+// front of its snowfield), each a painter and its own settings, the ground's top as
 // round(H × share) + px; the mist over the far two; what drifts (motes, or the Darkwood's
 // fireflies); the glow from below; by day a lighter vignette at the corners than the night's. The
 // Darkwood's are the numbers it always had.
@@ -437,7 +531,7 @@ const THEMES = {
     sky: [[0, '#0e1030'], [0.3, '#262c5e'], [0.5, '#4a3f86'], [0.64, '#8a4f96'], [0.76, '#d0708e'], [1, '#f6b08a']],
     stars: { per: 1400, top: 0.42, cols: ['#ffffff', '#ffd0d8', '#8f7ab8', '#f6757a'] },
     orb: { x: 0.18, y: 0.34, r: [0.06, 10], reach: 5, halo: ['rgba(255,200,215,0.28)', 'rgba(255,200,215,0)'], cols: ['#ecc4cc', '#f4d4d8', '#fbe6e6', '#fff6f2'] },
-    clouds: { y: 0.14, col: 'rgba(70,50,110,0.35)' },
+    clouds: { y: 0.14, dy: 0.05, col: 'rgba(70,50,110,0.35)' },
     layers: [
       { paint: hills, seed: 11, base: [0.74, 0], height: 0.12, color: '#4b3f7e', rim: '#6a5aa0', trees: 3, crown: 0.03, trunk: '#3a2e5e', bloom: ['#8a4f96', '#b05aa0', '#d07ab8'], density: 1, speed: 2 },
       { paint: hills, seed: 23, base: [0.82, 0], height: 0.1, color: '#2a5a48', rim: '#4f9a50', trees: 3, crown: 0.045, trunk: '#3e2731', bloom: ['#b55088', '#f6757a', '#ffd0d8'], density: 1, speed: 5 },
@@ -451,7 +545,7 @@ const THEMES = {
     sky: [[0, '#050206'], [0.4, '#1a0610'], [0.62, '#3e0c16'], [0.8, '#7a1a1c'], [1, '#c03a1e']],
     stars: { per: 5000, top: 0.5, cols: ['#f6757a', '#a22633', '#5c1826', '#e43b44'] },
     orb: { x: 0.8, y: 0.28, r: [0.06, 10], reach: 3.5, dark: true, halo: ['rgba(247,118,34,0.5)', 'rgba(247,118,34,0)'], cols: [null, '#feae34', '#be4a2f', '#0d0b14'] },
-    clouds: { y: 0.16, col: 'rgba(12,4,8,0.6)' },
+    clouds: { y: 0.16, dy: 0.05, col: 'rgba(12,4,8,0.6)' },
     layers: [
       { paint: spires, seed: 11, base: [0.72, 0], height: 0.34, color: '#3e1018', rim: '#6a1a24', density: 1.3, speed: 2 },
       { paint: spires, seed: 23, base: [0.8, 0], height: 0.3, color: '#200810', rim: '#7a1f2a', hot: '#a22633', density: 1.3, speed: 5 },
@@ -492,6 +586,11 @@ function scenery(W, H, th) {
     motes: th.motes ? motes(W, H, th.motes) : null,
   };
 }
+
+// A cloud's rows, top to foot, for one w wide: each [from its left, share of w, px more] wide.
+// One rectangle a row and none overlapping, as the clouds' colour is see-through and a doubled
+// row would show as a darker seam.
+const CLOUD = [[22, 0, 14], [16, 0, 30], [6, 0, 52], [0, 1, 0], [4, 0.9, 0], [14, 0.5, 0]];
 
 // No options: the title's call, its campfire lit.
 const NONE = {};
@@ -550,13 +649,14 @@ export class MenuScene {
     ctx.fillStyle = b.halo;
     ctx.fillRect(b.x - b.R, b.y - b.R, b.R * 2, b.R * 2);
     ctx.drawImage(b.c, b.x - b.r, b.y - b.r);
-    // Clouds drifting across the moon (by day, white across the sun).
+    // Clouds drifting across the moon (by day, white across the sun): long low banks, a puff on
+    // top and the foot drawn in (CLOUD), so that one passing behind a panel reads as a cloud and
+    // not as a stray line; th.clouds.dy apart.
     ctx.fillStyle = th.clouds.col;
     for (let i = 0; i < 4; i++) {
-      const cx = ((t * (3 + i) + i * 140) % (W + 160)) - 80;
-      const cy = H * (th.clouds.y + i * 0.07);
-      ctx.fillRect(Math.round(cx), Math.round(cy), 70 + i * 10, 3);
-      ctx.fillRect(Math.round(cx + 10), Math.round(cy - 2), 40, 2);
+      const cx = Math.round(((t * (3 + i) + i * 140) % (W + 160)) - 80);
+      const cy = Math.round(H * (th.clouds.y + i * (th.clouds.dy || 0.07))), w = 70 + i * 10;
+      for (let r = 0; r < CLOUD.length; r++) ctx.fillRect(cx + CLOUD[r][0], cy - 3 + r, Math.round(w * CLOUD[r][1]) + CLOUD[r][2], 1);
     }
     // Parallax tree lines (or dunes, crags, a fir wood, hills, spires).
     for (let i = 0; i < s.layers.length; i++) {
@@ -642,7 +742,7 @@ export class MenuScene {
 
   drawCamp(ctx, W, H, dt) {
     const t = this.t;
-    const fx = Math.round(W / 2), fy = Math.round(H * 0.9);
+    const fx = Math.round(W / 2), fy = campY(H);
     // Firelight on the ground.
     const r = H * 0.35 * (0.95 + 0.05 * Math.sin(t * 13) * Math.sin(t * 7));
     const lg = ctx.createRadialGradient(fx, fy - 4, 0, fx, fy - 4, r);
@@ -669,9 +769,9 @@ export class MenuScene {
       if (fr.em) ctx.drawImage(flip ? fr.emf : fr.em, ix, iy, w, h);
     };
     for (const h of CAMP) if (h[2] < 0) hero(h);
-    const fire = SPR.campfire.frames[Math.floor(t * 8) % 3].c;
-    const fs = 2;
-    ctx.drawImage(fire, fx - (fire.width * fs) / 2, fy - fire.height * fs, fire.width * fs, fire.height * fs);
+    campfire ??= buildSprite('campfire_menu', CAMPFIRE);
+    const fire = campfire.frames[Math.floor(t * 8) % 3].c;
+    ctx.drawImage(fire, Math.round(fx - fire.width / 2), fy - fire.height);
     for (const h of CAMP) if (h[2] >= 0) hero(h);
     // Embers.
     if (Math.random() < dt * 14) this.embers.push({ x: fx + rand(-6, 6), y: fy - 14, vx: rand(-6, 6), vy: rand(-22, -12), life: rand(1.2, 2.4) });
