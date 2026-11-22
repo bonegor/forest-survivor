@@ -6,7 +6,7 @@ import {SPR} from '../public/js/engine/sprites.js';
 import {HEROES} from '../public/js/data/heroes.js';
 import {input} from '../public/js/engine/input.js';
 import {defaultProfile,metaBonuses} from '../public/js/shared/profile.js';
-import {bounds,flipX} from '../public/js/engine/pixels.js';
+import {bounds,flipX,snapAlpha} from '../public/js/engine/pixels.js';
 import data from '../public/assets/heroes-approved/archer.js';
 import donor from '../tools/animation-round/baseline/trailblazer.js';
 import {unpack} from '../tools/animation-round/build.mjs';
@@ -39,7 +39,7 @@ test('ranger sheets share a foot anchor with no clipped pixels or broken mirrors
 });
 
 test('Ranger wears Trailblazer’s face and ear through the original idle and walk cycles',()=>{
-  const trail = unpack(donor, donor.frames[0]);
+  const trail = snapAlpha(unpack(donor, donor.frames[0])); // as the game snaps its sheets' alpha
   // The donor coordinates cover the forehead, pointed ear, both irises and jaw.
   const samples = [[39,31],[40,32],[34,33],[35,33],[38,33],[41,33],[38,34],[41,34],[39,35],[40,36]];
   for (const index of [...RANGER.idle, ...RANGER.walk]) {

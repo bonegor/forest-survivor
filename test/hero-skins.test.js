@@ -6,6 +6,7 @@ import { HEROES, heroLook } from '../public/js/data/heroes.js';
 import { HERO_ART } from '../public/js/art/heroes.js';
 import { APPROVED_HERO_ART } from '../public/js/art/approved-heroes.js';
 import { SPR } from '../public/js/engine/sprites.js';
+import { snapAlpha } from '../public/js/engine/pixels.js';
 import { releaseFiles } from '../tools/build-itch.mjs';
 import approved from '../public/assets/heroes-approved/index.js';
 import { APPROVED_DESIGNS } from '../public/js/expansion/roster.js';
@@ -37,7 +38,8 @@ test('packed sheets reconstruct the native art underlying every registered sprit
         const color = bytes.readUIntLE(p * data.indexBytes, data.indexBytes);
         expected[(y + Math.floor(p / w)) * data.w + x + p % w] = data.palette[color];
       }
-      assert.deepEqual(frames[index].d,expected,`${id}: approved frame ${index}`);
+      // The game snaps a sheet's near-clear dust to clear and its near-solid body to solid (snapAlpha).
+      assert.deepEqual(frames[index].d,id === 'trailblazer' ? expected : snapAlpha({ d: expected }).d,`${id}: approved frame ${index}`);
     }
   }
 });

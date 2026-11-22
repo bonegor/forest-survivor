@@ -55,12 +55,13 @@ test('pointer and touch-style taps choose exactly one track, never the opening c
   assert.equal(p.picker.open, true);
   assert.deepEqual(p.choices, []);
   p.frame();
-  const target = p.ui.items.find((it) => it.id === 'music_spark-rush');
+  // On the list's first page (7 rows at 480x270, the list kept off the screen's title).
+  const target = p.ui.items.find((it) => it.id === 'music_lantern-guard');
   Object.assign(input.mouse, { x: target.x + 3, y: target.y + 3, moved: true });
   p.frame();
   assert.deepEqual(p.choices, [], 'hover only focuses the option');
   p.click(target);
-  assert.deepEqual(p.choices, ['spark-rush']);
+  assert.deepEqual(p.choices, ['lantern-guard']);
   assert.equal(input.mouse.clicked, false);
 });
 

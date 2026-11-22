@@ -32,7 +32,7 @@ view.pxH = 1080;
 
 // What the code gave on 16 October 2026 (see the top), and the same as the code before the change.
 const FIX = {
-  orbs: ["d293ac53ea82f2df","224bd7966553e103","8c338af70924272d","3f8997b362031117","65835f9326b14d84","5eb7a4b2288f8e08"],
+  orbs: ["9e1862faee216f5a","c02fefe50e2609a5","c4ed0139afb66d88","9879e73ac3db4b2a","66cbebd67bd66ff3","a90674b672bad219"],
   // Each arrow: [x, y, angle, colour], at two moments. Moved since (hud.test.js): with a boss's bar
   // up they stand below its name, and they point from where they stand; 3 px lower since order 2
   // item 8 moved the bar down for the marks under the night's bar.
@@ -365,7 +365,7 @@ test('a pickup is drawn where it was, with its shadow and glow, and has no recta
       pk.t += 0.37;
       const { ctx, calls } = recorder();
       pk.draw(ctx, c);
-      const r = [...pk._rect], frame = pk.sprite.frames[r[4]], drawn = calls.filter((q) => q[0] === 'drawImage');
+      const r = [...pk._rect], frame = pk.art.frames[r[4]], drawn = calls.filter((q) => q[0] === 'drawImage');
       rects.push(r);
       assert.equal(drawn[0][1], shadowSprite(pk.kind === 'gem' ? 7.5 : 6), `${pk.kind}: its shadow`);
       assert.deepEqual(drawn[1], ['drawImage', frame.c, ...r.slice(0, 4)], `${pk.kind}: drawn at its rectangle`);

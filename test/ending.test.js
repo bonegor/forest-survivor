@@ -157,7 +157,7 @@ test('Ea-Nasir rises from his own body and walks clear of either screen edge bef
 
 test('the Knight and Berserker retain their approved native fall frames and cues', () => {
   for (const [hero, release, digest] of [
-    ['knight', 1.10, '0c5cf181888d1fec1e41f9793f8244df40a4fbafb687fa3329ed5098517d50b5'],
+    ['knight', 1.10, '237a89ba1b4c4a2c91676cf43b22c3284fcf4e132a1cc6530b594236752908ec'],
     ['berserker', 1.85, '42f7bf8147fc3ac1974b3e93cfa0cacf57cc154f9e641705d5bf0667c662614b'],
   ]) {
     const fall = SPR[hero].fall, hash = createHash('sha256');

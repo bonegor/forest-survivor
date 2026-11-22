@@ -112,7 +112,7 @@ test('the merchant can be previewed when his special unlock is the last remainin
   assert.equal(ui.items.find(item => item.id === 'hero_continue').disabled, true);
 });
 
-test('the showcase draws the selected hero at gameplay size on phone and desktop displays', () => {
+test('the showcase draws the selected hero one menu pixel per art pixel on phone and desktop displays', () => {
   const { S, zoom } = view;
   try {
     for (const [uiScale, worldZoom] of [[1, .8], [2, .8], [4, .8]]) {
@@ -125,8 +125,11 @@ test('the showcase draws the selected hero at gameplay size on phone and desktop
       preview.game.syncCam();
       preview.game.placePlayer({ ...preview.game.cam, x: 0, y: 0 });
       const [, , fieldW, fieldH] = preview.game.player._rect;
-      assert.ok(Math.abs(menuW * uiScale - fieldW) <= uiScale);
-      assert.ok(Math.abs(menuH * uiScale - fieldH) <= uiScale);
+      // Whole menu pixels (heroMenuScale 1), so none of the art is dropped: the field draws the
+      // same art at the camera's scale.
+      const camS = preview.game.cam.S;
+      assert.ok(Math.abs(menuW * camS - fieldW) <= camS);
+      assert.ok(Math.abs(menuH * camS - fieldH) <= camS);
     }
   } finally {
     Object.assign(view, { S, zoom });
