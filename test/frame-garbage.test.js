@@ -93,9 +93,9 @@ const FIX = {
     [834.88,465.4475841255709,51.2,28.8],
   ],
   pickupRects: [
-    [994,461,43.2,43.2,1],
+    [994,462,41.6,41.6,1],
     [819,576,22.400000000000002,22.400000000000002,1],
-    [994,466,43.2,43.2,0],
+    [994,468,41.6,41.6,0],
   ],
   // For each of three rings of blades: every drawImage (x, y, w, h) and alpha set, in order; then the lights.
   orbit: [
