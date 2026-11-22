@@ -226,28 +226,39 @@ export function paintTerrain(tc, px, glow, look, topo) {
         if (h < fh) {
           if (h < 1.2) col = P.foot;
           else if (h > fh - 1.5) col = P.lip;
-          else {
-            const along = f >= side ? wx : wy; // the strata run down the face
-            let t = (hash2(along >> 1, 0, 7) * 3 + (h / fh) * 3) | 0;
-            if ((h + hash2(along >> 3, 1, 8) * 5) % 9 < 1) t -= 1; // a ledge
+          else if (f >= side) {
+            let t = (hash2(wx >> 1, 0, 7) * 3 + (h / fh) * 3) | 0; // the strata run down the face
+            if ((h + hash2(wx >> 3, 1, 8) * 5) % 9 < 1) t -= 1; // a ledge
+            col = P.face[t < 0 ? 0 : t > 4 ? 4 : t];
+          } else {
+            // A side face (graphics review world-12, 22 November 2026): courses of stone along it, 8 px
+            // each, one tone a course (lighter into the rock), a dark seam at each course's foot, its
+            // top row catching the light. A new tone every 2 px, as the strata down a face are, read
+            // as a soft, noisy strip beside the crisp terraces.
+            const r = wy & 7;
+            const t = r === 7 ? 0 : (hash2(wy >> 3, 0, 7) * 2 + (h / fh) * 2.2 + (r ? 0 : 1)) | 0;
             col = P.face[t < 0 ? 0 : t > 4 ? 4 : t];
           }
         } else if (fh < 14 && h < fh + 2.4) col = h < fh + 1.2 ? P.lip : P.rock[5];
-        else if (ridge < 0.05 + bay * 0.03) col = P.rock[0]; // a crevice
         else {
           const fs = Math.max(0, Math.min(1, (-ry - 0.05) / 0.4)); // how much a step's riser shows
-          const q = (h - fh + ridge * 36) / 22, step = Math.floor(q), fr = q - step, riser = 0.07 + 0.2 * fs;
-          if (fr < riser) {
-            if (fs < 0.3) col = P.rock[0];
-            else {
-              const t = Math.floor((fr / riser) * 3.2 + (((Math.imul(wx >> 1, 73856093) ^ Math.imul(step, 19349663)) >>> 0) % 8) * 0.2);
-              col = P.face[t < 0 ? 0 : t > 4 ? 4 : t];
-            }
-          } else if (fr < riser + 0.07) col = P.snow || P.rock[5];
-          else if (P.snow && (fr < riser + 0.16 + bay * 0.06 || ridge > 0.86 + bay * 0.06)) col = P.snow;
+          // A crevice along the ridges' valleys, only where the steps' risers show and it runs with
+          // them: across the side cliffs' terraces it smeared over three steps at one height.
+          if (fs >= 0.3 && ridge < 0.05 + bay * 0.03) col = P.rock[0];
           else {
-            const t = Math.floor(1.4 + Math.min(2, step * 0.55) + ridge * 1.2 + lit + bay * 0.9);
-            col = P.rock[t < 1 ? 1 : t > 5 ? 5 : t];
+            const q = (h - fh + ridge * 36) / 22, step = Math.floor(q), fr = q - step, riser = 0.07 + 0.2 * fs;
+            if (fr < riser) {
+              if (fs < 0.3) col = P.rock[0];
+              else {
+                const t = Math.floor((fr / riser) * 3.2 + (((Math.imul(wx >> 1, 73856093) ^ Math.imul(step, 19349663)) >>> 0) % 8) * 0.2);
+                col = P.face[t < 0 ? 0 : t > 4 ? 4 : t];
+              }
+            } else if (fr < riser + 0.07) col = P.snow || P.rock[5];
+            else if (P.snow && (fr < riser + 0.16 + bay * 0.06 || ridge > 0.86 + bay * 0.06)) col = P.snow;
+            else {
+              const t = Math.floor(1.4 + Math.min(2, step * 0.55) + ridge * 1.2 + lit + bay * 0.9);
+              col = P.rock[t < 1 ? 1 : t > 5 ? 5 : t];
+            }
           }
         }
         px[k] = col;

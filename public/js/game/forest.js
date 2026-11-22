@@ -23,6 +23,12 @@ import { blobSdf } from './topology/shapes.js';
 import { paintTerrain, groundRows } from './topology/paint.js';
 import { drawLavaTiles, drawSwirls, drawTells } from './topology/draw.js';
 
+// How far past the view the props' chunks are looked through (collectProps): past the tallest prop.
+const PROP_REACH = 96;
+// Ranked's blood moon, risen whole (Forest.bloodMoon): the night's light pulled k of the way to `sky`,
+// and its vignette's colour and strength to `vignette`'s, in `steps`.
+const BLOOD_MOON = { sky: [190, 56, 64], k: 0.8, vignette: [[48, 4, 10], 0.75], steps: 6 };
+
 // Half the width of each tree's trunk at its foot (a look's own trees: its `trunks`).
 const TRUNK = { oak1: 3.5, oak2: 3.5, oak3: 3.5, pine1: 2.5, pine2: 2.5, deadtree1: 2.5, deadtree2: 2.5 };
 // Shrines come into play within this distance of the hero (the next crossroads down each road)
@@ -71,7 +77,7 @@ export class Forest {
     this.dustColor = look.dust.step;
     this.riseDust = look.dust.rise;
     this.chargeDust = look.dust.charge;
-    this.vignette = look.vignette; // Game.draw, by night
+    this._vig = []; // the vignette's steps under a blood moon (vignette)
     this.flicker = new Set(look.flicker);
     this.fog = makeFogTexture(seed, look.fog.rgb);
     this.windX = 0; // how far the weather's wind has carried the fog (drawOverlay)
@@ -346,9 +352,11 @@ export class Forest {
     });
   }
 
-  // Adds y-sortable props within view to `list`.
+  // Adds y-sortable props within view to `list`. The chunks looked through reach PROP_REACH px past
+  // the view, more than the tallest prop stands (the skull tree, 84 px; the gibbet, 70), so one whose
+  // foot lies below the screen's bottom edge is drawn as soon as its top shows, never popping in.
   collectProps(cam, list) {
-    this.forEachVisible(cam, 60, (c) => {
+    this.forEachVisible(cam, PROP_REACH, (c) => {
       for (const p of c.props) {
         const w = p.spr.w, h = p.spr.h;
         if (p.x + w < cam.x || p.x - w > cam.x + cam.W || p.y - h > cam.y + cam.H || p.y < cam.y - 8) continue;
@@ -413,6 +421,24 @@ export class Forest {
     if (this.court) this.court.addLights(g);
   }
 
+  // How far Ranked's blood moon has risen: 0 until the endless night's phase 30, whole by 45.
+  bloodMoon() {
+    const g = this.g;
+    return g.mode === 'ranked' && g.phase > 30 ? clamp((g.phase - 30) / 15, 0, 1) : 0;
+  }
+
+  // The night's vignette (Game.draw): the look's, its colour pulled toward the blood moon's red as it
+  // rises, in BLOOD_MOON.steps steps, so only a handful of vignettes are ever made (fxsprites.js).
+  get vignette() {
+    const v = this.look.vignette, n = BLOOD_MOON.steps, k = Math.ceil(this.bloodMoon() * n);
+    if (!k) return v;
+    if (!this._vig[k]) {
+      const a = v[0].split(',').map(Number), b = BLOOD_MOON.vignette, f = k / n;
+      this._vig[k] = [a.map((x, i) => Math.round(lerp(x, b[0][i], f))).join(','), +lerp(v[1], b[1], f).toFixed(3)];
+    }
+    return this._vig[k];
+  }
+
   // The night's light (its look's, the Darkwood's NIGHT): deepening, under the weather, and
   // brought to its dawn's by the sunrise.
   ambient() {
@@ -434,10 +460,13 @@ export class Forest {
     const [t0, c0] = night[i], [t1, c1] = night[i + 1];
     const k = clamp((u - t0) / (t1 - t0), 0, 1);
     let c = [lerp(c0[0], c1[0], k), lerp(c0[1], c1[1], k), lerp(c0[2], c1[2], k)];
-    if (g.mode === 'ranked' && g.phase > 30) {
-      // A blood moon rises as the endless night turns lethal.
-      const r = clamp((g.phase - 30) / 15, 0, 1) * 0.45;
-      c = [lerp(c[0], 170, r), lerp(c[1], 70, r), lerp(c[2], 90, r)];
+    const moon = this.bloodMoon();
+    if (moon > 0) {
+      // A blood moon rises as the endless night turns lethal: red enough to be seen through the
+      // rain's dimming and the vignette (graphics review world-15, 22 November 2026; a lerp of 0.45
+      // to a muted mauve was lost under them).
+      const r = moon * BLOOD_MOON.k, to = BLOOD_MOON.sky;
+      c = [lerp(c[0], to[0], r), lerp(c[1], to[1], r), lerp(c[2], to[2], r)];
     }
     if (g.weather) c = g.weather.tint(c);
     if (g.dawn > 0) {
@@ -456,14 +485,25 @@ export class Forest {
     const scale = S * 3;
     const tw = fog.width * scale, th = fog.height * scale;
     const haze = F.haze && w && w.shown ? 1 + (w.now.haze || 0) * F.haze : 1;
+    // The fog is soft, as the light and the haze are: smoothed as it is stretched, its tiles' edges
+    // on whole screen pixels so they meet without a seam. Stretched nearest neighbour, its texels
+    // came out as hard squares 3 art px a side, off the art's grid, crawling as it drifted.
+    ctx.imageSmoothingEnabled = true;
     for (let layer = 0; layer < 2; layer++) {
       const drift = time * (layer ? F.drift[1] : F.drift[0]) + this.windX * (layer ? 1.3 : 1);
       const ox = -((((cam.x * (layer ? 1.15 : 0.85) - drift) * S) % tw + tw) % tw) - tw;
       const oy = -(((cam.y * (layer ? 1.15 : 0.85) + time * (layer ? F.rise[1] : F.rise[0])) * S) % th) - th;
       ctx.globalAlpha = (layer ? F.alpha[1] : F.alpha[0]) * haze;
-      for (let y = oy; y < cam.pxH; y += th) for (let x = ox; x < cam.pxW; x += tw) ctx.drawImage(fog, x, y, tw, th);
+      for (let y = oy; y < cam.pxH; y += th) {
+        const Y0 = Math.round(y), Y1 = Math.round(y + th);
+        for (let x = ox; x < cam.pxW; x += tw) {
+          const X0 = Math.round(x);
+          ctx.drawImage(fog, X0, Y0, Math.round(x + tw) - X0, Y1 - Y0);
+        }
+      }
     }
     ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = false;
   }
 
   // ---------------------------------------------------- world interface --

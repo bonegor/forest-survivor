@@ -11,7 +11,8 @@
 // along the shortest walk there (A*).
 
 import { SPR, Frame, bufToCanvas } from '../engine/sprites.js';
-import { drawText } from '../engine/font.js';
+import { textWidth } from '../engine/font.js';
+import { panel } from '../ui/ui.js';
 import { makeCanvas, mulberry32, hexToRgb, clamp, rand, TAU, pick, shuffle, hash2 } from '../engine/util.js';
 import { bakedBuffers } from '../art/baked.js';
 import CRYPT_ART from '../../assets/art/crypts.js';
@@ -28,6 +29,8 @@ const T = TILE;
 // How far a monster sees the hero, given a clear line between them: as far as he sees (reveal).
 export const SIGHT = 10 * T;
 const FLOOR = 0, WALL = 1, LAVA = 2, PROP = 3;
+// The whole map's panel: its frame's width, the map that far inside it (drawMinimap).
+const MAP_PAD = 5;
 // A crypt's lit way out: its pulses run this fast (px/s), this far apart (px).
 const WAY_SPEED = 90, WAY_GAP = 72;
 // How far from the hero (tiles' walk) the wall breaks open on a crypt's way out.
@@ -287,6 +290,25 @@ function sealPool(grid, W, x0, y0, x1, y1) {
       }
     }
     if (!out) for (const i of seen) grid[i] = LAVA;
+  }
+}
+
+// A floor's baked canvas (its ground, or the Inferno's glow) on the screen in fixed blocks of the
+// world, BLIT px a side, each block's edges rounded from the world, as the Survival ground's chunks
+// are (Forest.drawGround). Blitted whole from a pixel cut at the camera, the floor's art pixels took
+// their widths from where that cut fell, so at a fractional scale the bricks and flagstones slipped a
+// screen pixel against the props and the actors standing on them whenever the camera moved on.
+const BLIT = 128;
+function blitWorld(ctx, cam, img) {
+  const S = cam.S, W = img.width, H = img.height;
+  const bx0 = Math.max(0, Math.floor(cam.x / BLIT)), by0 = Math.max(0, Math.floor(cam.y / BLIT));
+  const bx1 = Math.min(Math.ceil(W / BLIT), Math.floor((cam.x + cam.W) / BLIT) + 1), by1 = Math.min(Math.ceil(H / BLIT), Math.floor((cam.y + cam.H) / BLIT) + 1);
+  for (let by = by0; by < by1; by++) {
+    const y = by * BLIT, h = Math.min(BLIT, H - y), Y0 = Math.round((y - cam.y) * S), Y1 = Math.round((y + h - cam.y) * S);
+    for (let bx = bx0; bx < bx1; bx++) {
+      const x = bx * BLIT, w = Math.min(BLIT, W - x), X0 = Math.round((x - cam.x) * S), X1 = Math.round((x + w - cam.x) * S);
+      ctx.drawImage(img, x, y, w, h, X0, Y0, X1 - X0, Y1 - Y0);
+    }
   }
 }
 
@@ -1608,31 +1630,33 @@ export class Dungeon {
   }
 
   drawGround(ctx, cam) {
-    const S = cam.S;
-    const sx = Math.max(0, Math.floor(cam.x)), sy = Math.max(0, Math.floor(cam.y));
-    const sw = Math.min(this.canvas.width - sx, Math.ceil(cam.W) + 2), sh = Math.min(this.canvas.height - sy, Math.ceil(cam.H) + 2);
-    if (sw <= 0 || sh <= 0) return;
-    ctx.drawImage(this.canvas, sx, sy, sw, sh, Math.round((sx - cam.x) * S), Math.round((sy - cam.y) * S), sw * S, sh * S);
+    blitWorld(ctx, cam, this.canvas);
     if (this.traps.length) this.drawTraps(ctx, cam);
   }
 
   // The spike plates: an iron plate with its holes, glowing red as it is about to rise, its spikes up.
+  // Every edge is a world pixel's, rounded to the screen alike (as drawLava's), so at a fractional
+  // scale the holes and spikes stay crisp and keep their place on the floor.
   drawTraps(ctx, cam) {
     const S = cam.S;
+    const box = (x0, y0, x1, y1) => {
+      const X = Math.round((x0 - cam.x) * S), Y = Math.round((y0 - cam.y) * S);
+      ctx.fillRect(X, Y, Math.round((x1 - cam.x) * S) - X, Math.round((y1 - cam.y) * S) - Y);
+    };
     for (const t of this.traps) {
       if (t.x + T < cam.x || t.x > cam.x + cam.W || t.y + T < cam.y || t.y > cam.y + cam.H) continue;
-      const x = Math.round((t.x - cam.x) * S), y = Math.round((t.y - cam.y) * S), st = this.trapState(t);
+      const x = t.x, y = t.y, st = this.trapState(t);
       ctx.fillStyle = '#262b44';
-      ctx.fillRect(x + S, y + S, (T - 2) * S, (T - 2) * S);
+      box(x + 1, y + 1, x + T - 1, y + T - 1);
       ctx.fillStyle = st === 'warn' ? '#e43b44' : '#181425';
-      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) ctx.fillRect(x + (3 + i * 4) * S, y + (3 + j * 4) * S, 2 * S, 2 * S);
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) box(x + 3 + i * 4, y + 3 + j * 4, x + 5 + i * 4, y + 5 + j * 4);
       if (st !== 'up') continue;
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
           ctx.fillStyle = '#c0cbdc';
-          ctx.fillRect(x + (3 + i * 4) * S, y + j * 4 * S, 2 * S, 4 * S);
+          box(x + 3 + i * 4, y + j * 4, x + 5 + i * 4, y + j * 4 + 4);
           ctx.fillStyle = '#ffffff';
-          ctx.fillRect(x + (3 + i * 4) * S, y + j * 4 * S, 2 * S, S);
+          box(x + 3 + i * 4, y + j * 4, x + 5 + i * 4, y + j * 4 + 1);
         }
       }
     }
@@ -1734,13 +1758,9 @@ export class Dungeon {
       ctx.globalCompositeOperation = 'source-over';
     }
     if (this.look === 'inferno') {
-      const sx = Math.max(0, Math.floor(cam.x)), sy = Math.max(0, Math.floor(cam.y));
-      const sw = Math.min(this.emissive.width - sx, Math.ceil(cam.W) + 2), sh = Math.min(this.emissive.height - sy, Math.ceil(cam.H) + 2);
-      if (sw > 0 && sh > 0) {
-        ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 2.2);
-        ctx.drawImage(this.emissive, sx, sy, sw, sh, Math.round((sx - cam.x) * S), Math.round((sy - cam.y) * S), sw * S, sh * S);
-        ctx.globalAlpha = 1;
-      }
+      ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 2.2);
+      blitWorld(ctx, cam, this.emissive);
+      ctx.globalAlpha = 1;
     }
     if (this.stairs) {
       ctx.globalCompositeOperation = 'lighter';
@@ -1786,17 +1806,69 @@ export class Dungeon {
     ctx.imageSmoothingEnabled = false;
   }
 
+  // The map: the corner one (big false), and the whole one (M), framed as the HUD's panels are and
+  // opaque, so neither the banners nor the game show through it (graphics review hud-10, 22 November
+  // 2026). The whole one stands between the lines at the top (room left for its title's plate) and
+  // the weapons' and powers' plates (the HUD's belt), never over them. Its scale is the floor's,
+  // fitted to the whole of it, so a tile never changes size as more is seen; and it holds only what
+  // is seen and what it marks, 2 tiles about them, in the middle: early in a crypt a small map, not
+  // a big dark box with the room in its corner.
   drawMinimap(ctx, W, H, big) {
-    const scale = big ? Math.max(2, Math.floor(Math.min((W - 40) / this.W, (H - 60) / this.H))) : 1;
-    const mw = this.W * scale, mh = this.H * scale;
-    const ox = big ? Math.floor(W / 2 - mw / 2) : W - mw - 4;
-    const oy = big ? Math.floor(H / 2 - mh / 2) + 6 : 36;
-    ctx.globalAlpha = big ? 0.85 : 0.7;
-    ctx.fillStyle = '#0d0b14';
-    ctx.fillRect(ox - 2, oy - 2, mw + 4, mh + 4);
-    ctx.globalAlpha = big ? 1 : 0.85;
-    for (let y = 0; y < this.H; y++) {
-      for (let x = 0; x < this.W; x++) {
+    const p = this.g.player;
+    let scale = 1, x0 = 0, y0 = 0, x1 = this.W, y1 = this.H, ox, oy;
+    if (big) {
+      const hud = this.g.hud, belt = hud ? hud.loadout(W, H) : null;
+      const top = (hud ? hud.topLines() : 12) + 16 + MAP_PAD, bottom = (belt ? belt.y : H - 20) - 4 - MAP_PAD;
+      scale = Math.max(2, Math.floor(Math.min((W - 40) / this.W, (bottom - top) / this.H)));
+      // What is seen, and every mark, in tiles.
+      let bx0 = this.W, by0 = this.H, bx1 = -1, by1 = -1;
+      const take = (tx, ty) => {
+        tx = clamp(Math.floor(tx), 0, this.W - 1);
+        ty = clamp(Math.floor(ty), 0, this.H - 1);
+        if (tx < bx0) bx0 = tx;
+        if (tx > bx1) bx1 = tx;
+        if (ty < by0) by0 = ty;
+        if (ty > by1) by1 = ty;
+      };
+      for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) if (this.seen[y * this.W + x]) take(x, y);
+      this.mapMarks(true, scale, (wx, wy) => take(wx / T, wy / T));
+      take(p.x / T, p.y / T);
+      x0 = Math.max(0, bx0 - 2);
+      y0 = Math.max(0, by0 - 2);
+      x1 = Math.min(this.W, bx1 + 3);
+      y1 = Math.min(this.H, by1 + 3);
+      // On a screen too small for the whole floor even at 2 px a tile, the part about the hero.
+      const cw = Math.floor((W - 40) / scale), chh = Math.floor((bottom - top) / scale);
+      if (x1 - x0 > cw) {
+        x0 = clamp(Math.floor(p.x / T) - (cw >> 1), x0, x1 - cw);
+        x1 = x0 + cw;
+      }
+      if (y1 - y0 > chh) {
+        y0 = clamp(Math.floor(p.y / T) - (chh >> 1), y0, y1 - chh);
+        y1 = y0 + chh;
+      }
+      const mw = (x1 - x0) * scale, mh = (y1 - y0) * scale;
+      ox = Math.round(W / 2 - mw / 2) - x0 * scale;
+      oy = Math.round((top + bottom) / 2 - mh / 2) - y0 * scale;
+      // The panel: as wide as its title's plate needs, the map in its middle.
+      const name = this.crypt ? this.info.name.toUpperCase() : `FLOOR ${this.floor} — ${this.info.name.toUpperCase()}`;
+      const pw = Math.min(W - 8, Math.max(mw + 2 * MAP_PAD, textWidth(name, 'gothic') + 40)), ph = mh + 2 * MAP_PAD;
+      panel(ctx, Math.round(ox + x0 * scale + mw / 2 - pw / 2), oy + y0 * scale - MAP_PAD, pw, ph, { fill: '#0d0b14', title: name });
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ox + x0 * scale, oy + y0 * scale, mw, mh);
+      ctx.clip();
+    } else {
+      const mw = this.W * scale, mh = this.H * scale;
+      ox = W - mw - 4;
+      oy = 36;
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#0d0b14';
+      ctx.fillRect(ox - 2, oy - 2, mw + 4, mh + 4);
+      ctx.globalAlpha = 0.85;
+    }
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
         const i = y * this.W + x;
         if (!this.seen[i]) continue;
         const t = this.grid[i];
@@ -1808,30 +1880,30 @@ export class Dungeon {
         ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
       }
     }
-    const p = this.g.player;
-    const dot = (wx, wy, col, s = 2) => {
+    this.mapMarks(big, scale, (wx, wy, col, s, a) => {
+      ctx.globalAlpha = a;
       ctx.fillStyle = col;
       ctx.fillRect(Math.round(ox + (wx / T) * scale - s / 2), Math.round(oy + (wy / T) * scale - s / 2), s, s);
-    };
-    if (this.stairs) dot(this.stairs.x, this.stairs.y, '#63c74d', big ? 5 : 3);
-    // The lit way out, its pulses running along it here too.
-    if (this.way) {
-      for (const pt of this.way.path) {
-        ctx.globalAlpha = (big ? 0.35 : 0.25) + 0.6 * (this.wayGlow(pt) - 0.3);
-        dot(pt.x, pt.y, '#8fd3ff', big ? Math.max(2, scale - 1) : 1);
-      }
-      ctx.globalAlpha = big ? 1 : 0.85;
-    }
-    if (this.entrance) dot(this.entrance.x, this.entrance.y, '#2ce8f5', big ? 5 : 3);
-    if (this.exit && this.exit.hole) dot(this.exit.x, this.exit.y - T, '#2ce8f5', big ? 5 : 3);
-    // The guardian, or each of a crypt's lords still standing, once seen; a Dungeon Run floor's
-    // guardian always once it hunts the hero, through walls whose insides he has never seen.
-    for (const gd of this.crypt ? this.lordsLeft() : [this.guardian]) {
-      if (gd && !gd.dead && (this.seen[Math.floor(gd.y / T) * this.W + Math.floor(gd.x / T)] || (this.throughWalls && !gd.sleeping))) dot(gd.x, gd.y, '#e43b44', big ? 5 : 3);
-    }
-    for (const s of this.g.shrines) if (!s.used && this.seen[Math.floor(s.y / T) * this.W + Math.floor(s.x / T)]) dot(s.x, s.y, '#feae34', big ? 4 : 2);
-    dot(p.x, p.y, Math.floor(this.g.clock * 4) % 2 ? '#ffffff' : '#2ce8f5', big ? 4 : 2);
+    });
     ctx.globalAlpha = 1;
-    if (big) drawText(ctx, this.crypt ? this.info.name.toUpperCase() : `FLOOR ${this.floor} — ${this.info.name.toUpperCase()}`, W / 2, oy - 14, { align: 'center', color: '#c0cbdc' });
+    if (big) ctx.restore();
+  }
+
+  // What the map marks, each handed to fn(wx, wy, colour, size, alpha) in the order drawn: the stairs
+  // down, the lit way out (its pulses running along it here too), the stairs up and the hole out, the
+  // guardian or each of a crypt's lords still standing once seen (a Dungeon Run floor's guardian
+  // always once he hunts the hero, through walls whose insides he has never seen), the shrines not
+  // used, and the hero, blinking.
+  mapMarks(big, scale, fn) {
+    const a = big ? 1 : 0.85, p = this.g.player;
+    if (this.stairs) fn(this.stairs.x, this.stairs.y, '#63c74d', big ? 5 : 3, a);
+    if (this.way) for (const pt of this.way.path) fn(pt.x, pt.y, '#8fd3ff', big ? Math.max(2, scale - 1) : 1, (big ? 0.35 : 0.25) + 0.6 * (this.wayGlow(pt) - 0.3));
+    if (this.entrance) fn(this.entrance.x, this.entrance.y, '#2ce8f5', big ? 5 : 3, a);
+    if (this.exit && this.exit.hole) fn(this.exit.x, this.exit.y - T, '#2ce8f5', big ? 5 : 3, a);
+    for (const gd of this.crypt ? this.lordsLeft() : [this.guardian]) {
+      if (gd && !gd.dead && (this.seen[Math.floor(gd.y / T) * this.W + Math.floor(gd.x / T)] || (this.throughWalls && !gd.sleeping))) fn(gd.x, gd.y, '#e43b44', big ? 5 : 3, a);
+    }
+    for (const s of this.g.shrines) if (!s.used && this.seen[Math.floor(s.y / T) * this.W + Math.floor(s.x / T)]) fn(s.x, s.y, '#feae34', big ? 4 : 2, a);
+    fn(p.x, p.y, Math.floor(this.g.clock * 4) % 2 ? '#ffffff' : '#2ce8f5', big ? 4 : 2, a);
   }
 }

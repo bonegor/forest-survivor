@@ -5,7 +5,7 @@
 // near the hero outlined over the horde, so none is ever hidden under its feet (REQS2: readable).
 
 import { SPR, bufToCanvas } from '../../engine/sprites.js';
-import { hash2 } from '../../engine/util.js';
+import { hash2, makeCanvas } from '../../engine/util.js';
 import { bakedBuffers } from '../../art/baked.js';
 import CRYPT_ART from '../../../assets/art/crypts.js';
 
@@ -39,16 +39,37 @@ export function drawSwirls(ctx, cam, time, p) {
   ctx.globalAlpha = 1;
 }
 
-// A patch's outline (its 48 points round the rim) in the tell's colour, 1 world px, at half alpha.
+// A patch's outline (its 48 points round the rim) in the tell's colour, one art pixel wide, at half
+// alpha: traced once a pixel at a time into a canvas of its own (traceTell, made when first drawn),
+// then drawn as a sprite is, on the art's grid. Stroked as a path each frame it was an antialiased
+// curve thinner than an art pixel, the one vector line in a pixel world (graphics review world-13,
+// 22 November 2026).
 export function drawTells(ctx, cam, p, color) {
-  const S = cam.S, pts = p.pts, n = pts.length / 2;
+  let t = p._tellArt;
+  if (!t || t.color !== color) t = p._tellArt = traceTell(p, color);
+  const S = cam.S, X = Math.round((t.x - cam.x) * S), Y = Math.round((t.y - cam.y) * S);
   ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = S;
-  ctx.beginPath();
-  ctx.moveTo((pts[0] - cam.x) * S, (pts[1] - cam.y) * S);
-  for (let k = 1; k < n; k++) ctx.lineTo((pts[2 * k] - cam.x) * S, (pts[2 * k + 1] - cam.y) * S);
-  ctx.closePath();
-  ctx.stroke();
+  ctx.drawImage(t.img, X, Y, Math.round((t.x + t.img.width - cam.x) * S) - X, Math.round((t.y + t.img.height - cam.y) * S) - Y);
   ctx.globalAlpha = 1;
+}
+
+// The rim's pixels: from each point to the next a pixel at a time along the longer axis (as
+// Bresenham's), each the world pixel the line passes through.
+function traceTell(p, color) {
+  const pts = p.pts, n = pts.length / 2;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let k = 0; k < n; k++) {
+    x0 = Math.min(x0, Math.floor(pts[2 * k]));
+    x1 = Math.max(x1, Math.floor(pts[2 * k]));
+    y0 = Math.min(y0, Math.floor(pts[2 * k + 1]));
+    y1 = Math.max(y1, Math.floor(pts[2 * k + 1]));
+  }
+  const img = makeCanvas(x1 - x0 + 1, y1 - y0 + 1), g = img.getContext('2d');
+  g.fillStyle = color;
+  for (let k = 0; k < n; k++) {
+    const ax = pts[2 * k], ay = pts[2 * k + 1], bx = pts[(2 * k + 2) % (2 * n)], by = pts[(2 * k + 3) % (2 * n)];
+    const m = Math.max(1, Math.round(Math.max(Math.abs(bx - ax), Math.abs(by - ay))));
+    for (let i = 0; i < m; i++) g.fillRect(Math.floor(ax + ((bx - ax) * i) / m) - x0, Math.floor(ay + ((by - ay) * i) / m) - y0, 1, 1);
+  }
+  return { img, x: x0, y: y0, color };
 }

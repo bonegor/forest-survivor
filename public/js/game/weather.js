@@ -117,6 +117,24 @@ export function forecast(seed, duration, first = { kind: 'clear', at: 0, until: 
 
 const smooth = (k) => k * k * (3 - 2 * k);
 
+// A box of whole world (art) pixels, (wx, wy) and w x h of them, added to the context's path, its
+// edges rounded to the screen as the world's are, so what is drawn this way sits on the art's grid.
+function artRect(ctx, c, wx, wy, w, h) {
+  const S = c.S, X = Math.round((wx - c.x) * S), Y = Math.round((wy - c.y) * S);
+  ctx.rect(X, Y, Math.round((wx + w - c.x) * S) - X, Math.round((wy + h - c.y) * S) - Y);
+}
+// A line in world px, a whole pixel at a time along its longer axis (as Bresenham's), its end too,
+// added to the path as artRect's: one pixel wide, or `wide` pixels more either side across it.
+function artLine(ctx, c, x0, y0, x1, y1, wide = 0) {
+  const dx = x1 - x0, dy = y1 - y0, n = Math.max(1, Math.round(Math.max(Math.abs(dx), Math.abs(dy)))), steep = Math.abs(dy) >= Math.abs(dx);
+  for (let i = 0; i <= n; i++) {
+    const px = Math.round(x0 + (dx * i) / n), py = Math.round(y0 + (dy * i) / n);
+    if (!wide) artRect(ctx, c, px, py, 1, 1);
+    else if (steep) artRect(ctx, c, px - wide, py, 1 + 2 * wide, 1);
+    else artRect(ctx, c, px, py - wide, 1, 1 + 2 * wide);
+  }
+}
+
 export class Weather {
   // climate: the night's look's (game/biomes.js `weather`); the Darkwood's (CLIMATE) without one.
   constructor(g, climate = null) {
@@ -351,18 +369,18 @@ export class Weather {
   drawMotes(ctx, c, m) {
     const S = c.S, s = m.s, t = this.g.clock, nc = m.fill.length;
     if (s.kind === 'grain') {
-      ctx.lineWidth = Math.max(1, Math.round(S / 2));
+      // Each grain a streak of art pixels along the wind, one pixel tall (artLine), all of a colour in
+      // one path filled once.
       for (let k = 0; k < nc; k++) {
-        ctx.strokeStyle = m.fill[k];
+        ctx.fillStyle = m.fill[k];
         ctx.beginPath();
         for (let i = k; i < m.n; i += nc) {
-          const x = (m.x[i] - c.x) * S, y = (m.y[i] - m.z[i] - c.y) * S;
+          const wx = m.x[i], wy = m.y[i] - m.z[i], x = (wx - c.x) * S, y = (wy - c.y) * S;
           if (x < -40 || y < -40 || x > c.pxW + 40 || y > c.pxH + 40) continue;
-          const len = (s.len[0] + (s.len[1] - s.len[0]) * ((m.p[i] / TAU) % 1)) * S;
-          ctx.moveTo(x, y);
-          ctx.lineTo(x - len, y + len * 0.12);
+          const len = s.len[0] + (s.len[1] - s.len[0]) * ((m.p[i] / TAU) % 1);
+          artLine(ctx, c, wx, wy, wx - len, wy + len * 0.12);
         }
-        ctx.stroke();
+        ctx.fill();
       }
       return;
     }
@@ -410,49 +428,46 @@ export class Weather {
   draw(ctx, c) {
     if (!this.shown) return;
     const S = c.S, w = this.now;
+    // The rain on the art's grid (graphics review world-13, 22 November 2026): each drop a column one
+    // art pixel wide, its splash three art pixels, not half-pixel strokes greyed at their edges.
     if (this.n) {
-      const lw = Math.max(1, Math.round(S / 2)), k = 0.028;
-      ctx.strokeStyle = `rgba(165,185,230,${(0.18 + 0.17 * w.rain).toFixed(3)})`;
-      ctx.lineWidth = lw;
+      const k = 0.028;
+      ctx.fillStyle = `rgba(165,185,230,${(0.18 + 0.17 * w.rain).toFixed(3)})`;
       ctx.beginPath();
       for (let i = 0; i < this.n; i++) {
         const x = (this.dx[i] - c.x) * S, y = (this.dy[i] - this.dz[i] - c.y) * S;
         if (x < -20 || y < -40 || x > c.pxW + 20 || y > c.pxH + 20) continue;
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y - this.dv[i] * k * S);
+        const len = Math.max(1, Math.round(this.dv[i] * k));
+        artRect(ctx, c, Math.round(this.dx[i]), Math.round(this.dy[i] - this.dz[i]) - len, 1, len);
       }
-      ctx.stroke();
+      ctx.fill();
     }
     if (this.splash.length) {
       ctx.fillStyle = 'rgb(175,195,235)';
-      const px = Math.max(1, Math.round(S / 2));
       for (const s of this.splash) {
-        const x = (s.x - c.x) * S, y = (s.y - c.y) * S, o = (1 + s.t * 14) * S * 0.5;
+        const x = Math.round(s.x), y = Math.round(s.y), o = Math.round((1 + s.t * 14) * 0.5);
         ctx.globalAlpha = 0.45 * (1 - s.t / 0.22);
-        ctx.fillRect(x - o - px, y - px, px, px);
-        ctx.fillRect(x + o, y - px, px, px);
-        ctx.fillRect(x - px / 2, y - px - s.t * 10 * S, px, px);
+        ctx.beginPath();
+        artRect(ctx, c, x - o - 1, y - 1, 1, 1);
+        artRect(ctx, c, x + o, y - 1, 1, 1);
+        artRect(ctx, c, x, y - 1 - Math.round(s.t * 10), 1, 1);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
     }
     for (let k = 0; k < this.motes.length; k++) if (this.motes[k].n) this.drawMotes(ctx, c, this.motes[k]);
     if (this.bolt) {
       const b = this.bolt, a = (b.t > 0.14 || b.t < 0.07 ? 1 : 0.35) * Math.min(1, b.t * 8), B = this.climate.bolt || BOLT;
+      // On the art's grid: a core one art pixel wide, its glow an art pixel either side of it, each
+      // one path filled once (so the glow, added, never doubles where its pixels overlap).
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      for (let i = 0; i < b.pts.length; i += 2) {
-        const x = (b.pts[i] - c.x) * S, y = (b.pts[i + 1] - c.y) * S;
-        if (i) ctx.lineTo(x, y);
-        else ctx.moveTo(x, y);
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.fillStyle = pass ? `rgba(${B.core},${a.toFixed(3)})` : `rgba(${B.glow},${(0.35 * a).toFixed(3)})`;
+        ctx.beginPath();
+        for (let i = 2; i < b.pts.length; i += 2) artLine(ctx, c, b.pts[i - 2], b.pts[i - 1], b.pts[i], b.pts[i + 1], pass ? 0 : 1);
+        ctx.fill();
       }
-      ctx.strokeStyle = `rgba(${B.glow},${(0.35 * a).toFixed(3)})`;
-      ctx.lineWidth = S * 3;
-      ctx.stroke();
-      ctx.strokeStyle = `rgba(${B.core},${a.toFixed(3)})`;
-      ctx.lineWidth = Math.max(1, S * 0.75);
-      ctx.stroke();
       ctx.restore();
     }
   }

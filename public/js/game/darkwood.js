@@ -751,6 +751,13 @@ export const GROUND = {
   pebbles: 90,
 };
 const DAY_GROUND = { ...GROUND, zones: DAY_GRASS, road: DAY_ROAD };
+// How much of the ground's zone edges (zb, zn) and tone steps (tb, tn) the 4 x 4 Bayer matrix decides
+// and how much the hash's noise. The Darkwood's (by night and on the prologue's road by day) as it
+// always was, pixel for pixel (test/biomes.test.js). Every other look's mostly noise (graphics review
+// world-8, 22 November 2026): where a zone is weak but not gone its colour fell only on the matrix's
+// lowest cells, a regular dot every 4 px over the Frostfell's flat snow, a screen door, and moire at
+// a fractional scale.
+const DITHER = { darkwood: { zb: 0.9, zn: 0.3, tb: 0.22, tn: 0.12 }, look: { zb: 0.25, zn: 0.55, tb: 0.12, tn: 0.2 } };
 
 // Paints a chunk's ground into px, CHUNK x CHUNK packed pixels. The slow fields are sampled
 // every 8 px and interpolated; the exact distance to a path is worked out only near the paths.
@@ -762,6 +769,7 @@ const DAY_GROUND = { ...GROUND, zones: DAY_GRASS, road: DAY_ROAD };
 // all the same, so the rows painted are as they would be.
 export function paintChunk(cd, px, glow = null, rows = null) {
   const G = cd.ground || (cd.daylight ? DAY_GROUND : GROUND), RP = G.ripple, GL = G.glint, CK = G.cracks;
+  const DZ = G === GROUND || G === DAY_GROUND ? DITHER.darkwood : DITHER.look;
   const { cx, cy, sampleF, pathDist } = cd;
   const x0 = cx * CHUNK, y0 = cy * CHUNK, N = CHUNK / 8 + 1;
   const grid = (fn) => {
@@ -812,9 +820,9 @@ export function paintChunk(cd, px, glow = null, rows = null) {
         if (Math.abs(u - 0.55) < 0.08 + b * 0.05 && hash2(wx >> 2, wy >> 2, SEED + 3) > 0.45 && u < 0.9) t = 0.22; // cart ruts
         col = roadColors[clamp(Math.floor(t * roadColors.length), 0, roadColors.length - 1)];
       } else {
-        const zt = 0.5 + b * 0.9 + n * 0.3, z = lerp4(cursedG, c, N, w00, w10, w01, w11) > zt ? 2 : lerp4(pineG, c, N, w00, w10, w01, w11) > zt ? 1 : 0;
+        const zt = 0.5 + b * DZ.zb + n * DZ.zn, z = lerp4(cursedG, c, N, w00, w10, w01, w11) > zt ? 2 : lerp4(pineG, c, N, w00, w10, w01, w11) > zt ? 1 : 0;
         const patch = lerp4(patchG, c, N, w00, w10, w01, w11);
-        let t = patch * 1.25 - 0.12 + b * 0.22 + n * 0.12 - lerp4(groveG, c, N, w00, w10, w01, w11) * 0.26 + lerp4(clearG, c, N, w00, w10, w01, w11) * 0.1;
+        let t = patch * 1.25 - 0.12 + b * DZ.tb + n * DZ.tn - lerp4(groveG, c, N, w00, w10, w01, w11) * 0.26 + lerp4(clearG, c, N, w00, w10, w01, w11) * 0.1;
         if (d < 5 + edge) t += G.verge; // trodden verge (a snow bank's lighter)
         if (RP && RP.zones[z]) {
           // Ripples across the dunes, bending with the patches: a lit crest, its lee in shadow.
