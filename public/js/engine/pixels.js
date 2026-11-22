@@ -71,20 +71,47 @@ export function flipX(buf) {
   return out;
 }
 
+// Painted sheets' export dust, snapped off in place (engine/sprites.js spriteBuffers): a pixel
+// under alpha 15 (under 6%, which no eye finds on the ground, yet every alpha>0 test took it for
+// solid, so a hero's hit flash grew a blob round him) is cleared, and a near-opaque one (240-254,
+// which let the ground show through his body) made whole. The art's own soft edges between keep
+// their alpha. The graphics review of 22 November 2026. Returns buf.
+export function snapAlpha(buf) {
+  const d = buf.d;
+  for (let i = 0; i < d.length; i++) {
+    const a = d[i] >>> 24;
+    if (a === 0 || a === 255) continue;
+    if (a < 15) d[i] = 0;
+    else if (a >= 240) d[i] = (d[i] | 0xff000000) >>> 0;
+  }
+  return buf;
+}
+
+// A flat silhouette in `color` (the hit flash's white). Each pixel keeps its own alpha, so it
+// covers just what is drawn: with every faint pixel made solid, the flash swallowed the Druid's
+// staff and the Arcanist's brim and stood a block over the Knight's shield.
 export function silhouette(buf, color) {
-  const out = makeBuf(buf.w, buf.h);
-  for (let i = 0; i < buf.d.length; i++) if (buf.d[i] >>> 24) out.d[i] = color;
+  const out = makeBuf(buf.w, buf.h), rgb = color & 0xffffff;
+  for (let i = 0; i < buf.d.length; i++) {
+    const a = buf.d[i] & 0xff000000;
+    if (a) out.d[i] = (a | rgb) >>> 0;
+  }
   return out;
 }
 
-// Blend every opaque pixel toward `color` by `t` (0..1).
-export function tint(buf, color, t) {
+// Blend every opaque pixel toward `color` by `t` (0..1). Colours in `keep` (a Set of packed
+// colours: an outline) stay as they are.
+export function tint(buf, color, t, keep = null) {
   const [tr, tg, tb] = unpack(color);
   const out = makeBuf(buf.w, buf.h);
   for (let i = 0; i < buf.d.length; i++) {
     const c = buf.d[i];
     const a = c >>> 24;
     if (!a) continue;
+    if (keep && keep.has(c)) {
+      out.d[i] = c;
+      continue;
+    }
     const r = c & 255, g = (c >>> 8) & 255, b = (c >>> 16) & 255;
     out.d[i] = pack(r + (tr - r) * t, g + (tg - g) * t, b + (tb - b) * t, a);
   }

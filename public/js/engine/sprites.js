@@ -245,7 +245,10 @@ export function spriteBuffers(def) {
   const emissive = def.emissive ? keys(def.emissive) : def.glow && def.glow.length ? new Set(def.glow.map((c) => swap(map, c))) : null;
   const thin = keys(def.thin);
   let frames = resolveFrames(def).map((raw) => {
-    let b = Array.isArray(raw) ? px.fromRows(raw, pal) : raw;
+    // Painted and baked art comes as pixel buffers: its export dust is snapped off (px.snapAlpha)
+    // where it lies, the sheet's own cached frames, so every use of them sees it clean and the
+    // heroes' frames (some 166 MB) are not held twice.
+    let b = Array.isArray(raw) ? px.fromRows(raw, pal) : px.snapAlpha(raw);
     if (map) b = recoloured(b, map);
     if (def.outline !== false) b = px.outline(b, ink, false, thin);
     return b;
@@ -338,14 +341,19 @@ export function sprite(name) {
   return s;
 }
 
-// Tints: a frozen or winding-up foe (enemies.js), a shrine used up (Game.drawShrine).
+// Tints: a frozen or winding-up foe (enemies.js), a shrine used up (Game.drawShrine). A frozen,
+// burning or charmed foe keeps its outline (a tuned sprite's own: b.ink) and rim (b.rim) as drawn,
+// the dark edge that parts it from the ground and its neighbours: tinted with the body, the ink
+// went pale (#62889d frozen) and the foe looked out of focus (the graphics review of 22 November
+// 2026).
+const asDrawn = (b) => new Set(b.rim ? [b.ink ?? OUTLINE, b.rim] : [b.ink ?? OUTLINE]);
 export const TINTS = {
-  frozen: (b) => px.tint(b, px.hexPack('#9ee7ff'), 0.55),
-  burn: (b) => px.tint(b, px.hexPack('#ff6a3d'), 0.35),
+  frozen: (b) => px.tint(b, px.hexPack('#9ee7ff'), 0.55, asDrawn(b)),
+  burn: (b) => px.tint(b, px.hexPack('#ff6a3d'), 0.35, asDrawn(b)),
   dim: (b) => px.tint(b, px.hexPack('#181425'), 0.55),
   // A sleeper in a fae-sown circle (the Bloomvale's Fae Thread, game/fae.js, 29 October 2026):
   // charmed pink, apart from the frozen's ice and the burn's orange.
-  charmed: (b) => px.tint(b, px.hexPack('#ffb8d8'), 0.45),
+  charmed: (b) => px.tint(b, px.hexPack('#ffb8d8'), 0.45, asDrawn(b)),
 };
 
 // The night look of a frame (enemies.js NIGHT_EDGE, which lifts its colours first: nightLift):
