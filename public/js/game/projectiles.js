@@ -400,12 +400,17 @@ function drawCentered(ctx, img, sx, sy, scale) {
 // Queen's thorns, thrown as she floats), and ends in a burst of its own colours (burst; the old
 // violet, SHOT_BURST, for the rest). Whether it flies through is its kind's, so a boss's that does
 // is a kind of its own: a caster of the horde throws one that breaks where his base's would (the
-// Thorn Witch's thorn on a crypt's wall, as the Cultist's bolt).
+// Thorn Witch's thorn on a crypt's wall, as the Cultist's bolt). An orb (upright) has no heading,
+// so it is drawn as it was drawn, never turned: turned a pixel at a time, the Cultist's round orb
+// snapped to a white plus on a magenta square, a health pack's mark on a foe's shot (the review of
+// 22 November 2026), and the crypt's fireball to a plus as well.
 const SHOT_GROW = 1.25;
+// The least of its size a shot of a boss's volley is drawn at, leaving his chest (EnemyShot.bloom).
+const BLOOM_LEAST = 0.4;
 const SHOT_BURST = [PC.P, PC.i, PC.p];
 const SHOT_LOOK = {
   // The Cultist's: a big, slow orb, easy to see coming.
-  darkbolt: { sprite: 'darkbolt', glow: '#b55088', light: 'purple', scale: 1.5 },
+  darkbolt: { sprite: 'darkbolt', glow: '#b55088', light: 'purple', scale: 1.5, upright: true },
   // The Bone King's: tumbling bones with burning gold at the knobs, so they can't hide in the
   // dark or the horde. A sprite of their own size, drawn only the quarter bigger (19 px long; at
   // three times the old 9 px sprite they were 33 px slabs that stacked into a checkerboard). A
@@ -414,12 +419,13 @@ const SHOT_LOOK = {
   bone: { sprite: 'bone', glow: '#feae34', light: 'gold', spin: 14, reach: 9, r: 4 },
   skullbolt: { sprite: 'skullbolt', glow: '#9ee562', light: 'green', through: true },
   firebolt: { sprite: 'firebolt', glow: '#f77622', light: 'fire' },
-  cryptfireball: { sprite: 'fireball', glow: '#f77622', light: 'fire', scale: 1.5, r: 4, burst: [PC.o, PC.y, PC.Y] },
+  cryptfireball: { sprite: 'fireball', glow: '#f77622', light: 'fire', scale: 1.5, r: 4, upright: true, burst: [PC.o, PC.y, PC.Y] },
   pqc: { sprite: 'copper_disc', glow: '#e4a672', light: 'gold', spin: 16, r: 5, burst: [PC.t, PC.o, PC.Y] },
   arrow: { sprite: 'arrow', glow: null, light: null },
   // The new maps' (28 October 2026). The Frost Witch's, in the Cultist's place: his big, slow orb in
-  // black ice round a cold heart, spiked with rime, dark enough to read on snow, bursting in ice.
-  iceshard: { sprite: 'iceshard', glow: '#2ce8f5', light: 'cyan', scale: 1.5, burst: [PC.w, PC.X, PC.c] },
+  // black ice round a cold heart, spiked with rime, dark enough to read on snow, bursting in ice;
+  // upright, so the rime stays on its upper facets.
+  iceshard: { sprite: 'iceshard', glow: '#2ce8f5', light: 'cyan', scale: 1.5, upright: true, burst: [PC.w, PC.X, PC.c] },
   // The Thorn Witch's: a thorn off a glowing rosebud, a little smaller than the Cultist's orb (the
   // Queen's, the same thorn, come in rings of sixteen), bursting in petals and leaf; it breaks on a
   // wall as his orb does (she is his recolour, and plays as he does).
@@ -466,6 +472,11 @@ export class EnemyShot {
     this.by = opts.by || null; // its shooter's, as the results name it (names.js shotName)
     this.boss = opts.boss || null; // a boss's name alone, for the results' wounds (names.js bossOf)
     this.swept = opts.swept === true; // fast crypt shots test the space crossed, not only the endpoint
+    // A boss's volley (bosses.js ring and fan): the turn from one shot to the next, and how far
+    // out from his chest it set off, for how big it is drawn as the volley spreads (bloom).
+    this.gap = opts.gap || 0;
+    this.x0 = x - Math.cos(ang) * (opts.out || 0);
+    this.y0 = y - Math.sin(ang) * (opts.out || 0);
   }
 
   update(dt) {
@@ -520,17 +531,30 @@ export class EnemyShot {
     return d < this.r + HERO_BODY.r;
   }
 
+  // How big it is drawn, of its size, as its volley spreads: a boss's ring or fan sets off all
+  // from his chest, and drawn whole there its shots were one black-outlined knot over him for a
+  // third of a second (a ring of twelve skulls; the review of 22 November 2026). Drawn no wider
+  // than the room between it and the next (its gap, that far out from his chest), the volley opens
+  // like a flower, one shot from the first frame. Only a picture: each hits as it always did
+  // (touches), from where it always set off. One that hits as drawn (reach) is drawn whole.
+  bloom() {
+    if (!this.gap || this.look.reach) return 1;
+    const across = SPR[this.look.sprite].frames[0].h * this.size;
+    const d = Math.hypot(this.x - this.x0, this.y - this.y0);
+    return Math.min(1, Math.max(BLOOM_LEAST, (d * this.gap) / across));
+  }
+
   draw(ctx, cam) {
     const S = cam.S;
     const f = SPR[this.look.sprite].frames[0];
-    const img = this.look.spin ? f.rotated(this.rot, 16) : f.rotated(this.ang, 32);
-    drawCentered(ctx, img, (this.x - cam.x) * S, (this.y - this.z - cam.y) * S, S * this.size);
+    const img = this.look.spin ? f.rotated(this.rot, 16) : this.look.upright ? f.c : f.rotated(this.ang, 32);
+    drawCentered(ctx, img, (this.x - cam.x) * S, (this.y - this.z - cam.y) * S, S * this.size * this.bloom());
   }
 
   drawGlow(ctx, cam) {
     if (!this.look.glow) return;
     const S = cam.S, k = this.size;
-    const s = 20 * S * k;
+    const s = 20 * S * k * this.bloom();
     ctx.drawImage(glow(this.look.glow), (this.x - cam.x) * S - s / 2, (this.y - this.z - cam.y) * S - s / 2, s, s);
     this.g.light(this.x, this.y, 30 * k, this.look.light, 0.8);
   }

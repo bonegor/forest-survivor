@@ -52,14 +52,21 @@ function sparksOf(e) {
   return cols;
 }
 
-// The ring round a boss's blast, by its style: a fire's gold, a frost's ice, a holy one's gold, and
-// the old pink for the rest (the Bone King's dark, the Butcher's blood).
-const BLAST_RING = { fire: '#fee761', frost: '#c8f4ec', holy: '#fee761' };
+// The ring round a boss's blast, by its style: a fire's gold, a frost's ice, a holy one's gold, the
+// Bone King's dark nova's grave violet and the Butcher's slam's blood (the old pink for any other).
+const BLAST_RING = { fire: '#fee761', frost: '#c8f4ec', holy: '#fee761', dark: '#68386c', blood: '#a22633' };
+// And the blast's own look over its style's (effects.js EXPLO): the dark nova and the bloody slam
+// were one pink-white flash, neither dark nor bloody (the review of 22 November 2026), so each burns
+// in its own colours, its ring rimmed dark, round no white heart.
+const BLAST_LOOK = {
+  dark: { ring: '#b55088', edge: '#181425', glow: '#68386c', core: false },
+  blood: { ring: '#e43b44', edge: '#3e2731', glow: '#a22633', core: false },
+};
 
 // by: who struck it, as the results name the blow that slew the hero; boss: the boss's name alone,
 // for the results' wounds (names.js bossOf).
 function blast(g, x, y, r, dmg, style, by, boss = null) {
-  g.effects.push(new Explosion(g, x, y, r, style));
+  g.effects.push(new Explosion(g, x, y, r, style, undefined, BLAST_LOOK[style]));
   g.effects.push(new Ring(g, x, y, 4, r * 1.1, 0.4, BLAST_RING[style] || '#f6757a'));
   const p = g.player;
   // As a boss's touch grows with the night (Enemy.update): 0.6 of the night's own growth (Game.dmgScale), so a
@@ -76,14 +83,18 @@ function shoot(g, e, ang, kind, speed, dmg, opts) {
   g.eshots.push(new EnemyShot(g, e.x + Math.cos(ang) * out, e.y - 10 * e.scale + Math.sin(ang) * out, ang, speed, dmg * g.dmgScale * g.bossPower, kind, { ...opts, by: shotName(e, kind), boss: bossOf(e) }));
 }
 
+// A ring's and a fan's shots know the turn from one to the next (gap), so each is drawn no wider
+// than the room it has as the volley opens (EnemyShot.bloom: only a picture).
 function ring(g, e, n, kind, speed, dmg, off = 0, opts) {
-  for (let i = 0; i < n; i++) shoot(g, e, off + (i / n) * TAU, kind, speed, dmg, opts);
+  const o = { ...opts, gap: TAU / n };
+  for (let i = 0; i < n; i++) shoot(g, e, off + (i / n) * TAU, kind, speed, dmg, o);
   sfx('enemyshot');
 }
 
 function fan(g, e, n, spread, kind, speed, dmg, opts) {
   const a0 = opts?.aim ?? angP(e);
-  for (let i = 0; i < n; i++) shoot(g, e, a0 + (i - (n - 1) / 2) * spread, kind, speed, dmg, opts);
+  const o = { ...opts, gap: spread };
+  for (let i = 0; i < n; i++) shoot(g, e, a0 + (i - (n - 1) / 2) * spread, kind, speed, dmg, o);
   sfx('enemyshot');
 }
 

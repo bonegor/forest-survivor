@@ -152,12 +152,16 @@ export class Slash {
 // -------------------------------------------------------------- explosion --
 
 // art: the blast's sprite (fxart.js), played over its ring. glowK: how strong its haze and flash
-// are (a Thunderstorm's many shocks: faint, so the horde reads through them).
+// are (a Thunderstorm's many shocks: faint, so the horde reads through them). core: false for no
+// white flash at its heart (a boss's dark or bloody blast: bosses.js BLAST_LOOK). edge: a darker
+// rim either side of its ring, so a white one still reads on white ground (a frost's on the
+// Frostfell's snow, where its white ring, haze and flash were all gone: the review of 22 November
+// 2026).
 const EXPLO = {
   fire: { ring: '#fee761', glow: '#f77622', light: 'fire', parts: [PC.Y, PC.y, PC.o, PC.O], num: 'fire', art: 'fx_explosion' },
   shock: { ring: '#ffffff', glow: '#2ce8f5', light: 'cyan', parts: [PC.w, PC.c, PC.U], num: 'shock', glowK: 0.4 },
   holy: { ring: '#ffffff', glow: '#feae34', light: 'holy', parts: [PC.w, PC.Y, PC.y], num: 'holy' },
-  frost: { ring: '#ffffff', glow: '#2ce8f5', light: 'cyan', parts: [PC.w, PC.c, PC.U, PC.G], num: 'frost' },
+  frost: { ring: '#ffffff', edge: '#124e89', glow: '#2ce8f5', light: 'cyan', parts: [PC.w, PC.c, PC.U, PC.G], num: 'frost' },
   dark: { ring: '#f6757a', glow: '#b55088', light: 'purple', parts: [PC.P, PC.p, PC.i], num: 'dark' },
   blood: { ring: '#e43b44', glow: '#a22633', light: 'red', parts: [PC.r, PC.R, PC.x], num: 'normal' },
   soul: { ring: '#9ee562', glow: '#63c74d', light: 'green', parts: [PC.l, PC.L, PC.w], num: 'normal' },
@@ -224,14 +228,17 @@ export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
   sfx('explode', { size: clamp(R / 28, 0.6, 1.8), pan: clamp((x - g.player.x) / 200, -1, 1), pitch: rand(0.85, 1.1) });
 }
 
-// art: a sprite for the blast in place of its style's (a meteor's crash: Meteor.update).
+// art: a sprite for the blast in place of its style's (a meteor's crash: Meteor.update). look:
+// colours of its own over its style's (ring, edge, glow, core: a boss's, bosses.js BLAST_LOOK),
+// never its sparks.
 export class Explosion {
-  constructor(g, x, y, R, style, art) {
+  constructor(g, x, y, R, style, art, look) {
     this.g = g;
     this.x = x;
     this.y = y;
     this.R = R;
     this.st = EXPLO[style] || EXPLO.fire;
+    if (look) this.st = { ...this.st, ...look, parts: this.st.parts };
     this.style = style;
     this.t = 0;
     this.vfx = null; // its baked effect, if explode played one (EXPLO_VFX)
@@ -259,10 +266,13 @@ export class Explosion {
     const u = this.t / 0.3;
     if (u >= 1) return;
     const r = Math.max(2, this.R * ease.outCubic(u));
-    const img = ringSprite(r, this.st.ring, 2);
     const [sx, sy] = toScreen(cam, this.x, this.y);
     ctx.globalAlpha = 1 - u;
-    blitCentered(ctx, img, sx, sy, cam.S);
+    blitCentered(ctx, ringSprite(r, this.st.ring, 2), sx, sy, cam.S);
+    if (this.st.edge) {
+      blitCentered(ctx, ringSprite(r + 1, this.st.edge, 1), sx, sy, cam.S);
+      if (r > 3) blitCentered(ctx, ringSprite(r - 2, this.st.edge, 1), sx, sy, cam.S);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -277,7 +287,7 @@ export class Explosion {
     const k = this.st.glowK ?? 1;
     ctx.globalAlpha = Math.max(0, 1 - u * 1.4) * k;
     ctx.drawImage(glow(this.st.glow), sx - s / 2, sy - s / 2, s, s);
-    if (u < 0.2) {
+    if (u < 0.2 && this.st.core !== false) {
       const c = this.R * 1.6 * cam.S;
       ctx.globalAlpha = (1 - u * 5) * k;
       ctx.drawImage(glow('#ffffff'), sx - c / 2, sy - c / 2, c, c);
@@ -909,6 +919,20 @@ export class Aura {
 
 // ------------------------------------------------------------------- bolt --
 
+// A line from world point (x0, y0) to (x1, y1) on the art grid, added to the path being built: a
+// world px a cell, as the sprites are drawn, walked a cell at a time along its longer axis with a
+// run of 2 * half + 1 cells across it at each step.
+function gridLine(ctx, cam, x0, y0, x1, y1, half) {
+  const S = cam.S, dx = x1 - x0, dy = y1 - y0, flat = Math.abs(dx) >= Math.abs(dy);
+  const n = Math.max(1, Math.round(Math.max(Math.abs(dx), Math.abs(dy))));
+  const w = flat ? 1 : 2 * half + 1, h = flat ? 2 * half + 1 : 1;
+  for (let i = 0; i <= n; i++) {
+    const cx = Math.floor(x0 + (dx * i) / n) - (flat ? 0 : half), cy = Math.floor(y0 + (dy * i) / n) - (flat ? half : 0);
+    const X = Math.round((cx - cam.x) * S), Y = Math.round((cy - cam.y) * S);
+    ctx.rect(X, Y, Math.round((cx + w - cam.x) * S) - X, Math.round((cy + h - cam.y) * S) - Y);
+  }
+}
+
 // A lightning bolt between two points ('sky': down from the sky, 'chain': foe to foe), or a
 // straight ray ('ray': Arcane Ray's beam, no jitter and no fork, in its colour and a pink core).
 export class Bolt {
@@ -964,40 +988,27 @@ export class Bolt {
   }
 
   drawGlow(ctx, cam) {
-    const S = cam.S;
     const fade = 1 - this.t / this.dur;
     if (this.art) {
       this.g.light(this.b.x, this.b.y, 60, 'cyan', fade);
       return;
     }
-    const path = () => {
+    // Its path on the art grid (gridLine), not a smoothed round-capped stroke, which drew it as a
+    // vector line in a pixel world (the review of 22 November 2026). Each layer in one fill, so a
+    // cell two runs share is lit once: its colour 3 cells wide (a ray's 5), a ray's pink core 3, a
+    // white core 1.
+    const layer = (half, color, alpha) => {
+      const p = this.pts, f = this.fork;
       ctx.beginPath();
-      for (let i = 0; i < this.pts.length; i += 2) {
-        const x = (this.pts[i] - cam.x) * S, y = (this.pts[i + 1] - cam.y) * S;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      if (!this.fork) return;
-      ctx.moveTo((this.fork[0] - cam.x) * S, (this.fork[1] - cam.y) * S);
-      ctx.lineTo((this.fork[2] - cam.x) * S, (this.fork[3] - cam.y) * S);
+      for (let i = 2; i < p.length; i += 2) gridLine(ctx, cam, p[i - 2], p[i - 1], p[i], p[i + 1], half);
+      if (f) gridLine(ctx, cam, f[0], f[1], f[2], f[3], half);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.fill();
     };
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    path();
-    ctx.globalAlpha = 0.35 * fade;
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = S * (this.straight ? 5 : 4);
-    ctx.stroke();
-    if (this.straight) {
-      ctx.globalAlpha = 0.8 * fade;
-      ctx.strokeStyle = '#f6757a';
-      ctx.lineWidth = S * 2.4;
-      ctx.stroke();
-    }
-    ctx.globalAlpha = fade;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = S * 1.2;
-    ctx.stroke();
+    layer(this.straight ? 2 : 1, this.color, 0.35 * fade);
+    if (this.straight) layer(1, '#f6757a', 0.8 * fade);
+    layer(0, '#ffffff', fade);
     ctx.globalAlpha = 1;
     this.g.light(this.b.x, this.b.y, 60, this.straight ? 'purple' : 'cyan', fade);
   }
@@ -1187,6 +1198,79 @@ export class Ring {
 
 // -------------------------------------------------------------- telegraph --
 
+// A straight lane on the art grid, a world px a cell, as the sprites are drawn (and the Bone King's
+// sweep warning, boneking-sweep-fx.js): a line telegraph's band. A turned fillRect is smoothed
+// whatever imageSmoothingEnabled says, so the band was the one soft-edged stripe on a pixel floor
+// (the review of 22 November 2026). From its start (0, 0) along `ang` for `len`, `w` wide: each row
+// it crosses as [x, y, n] (the n cells from x on row y whose centres lie in it), top to bottom; its
+// rim, the cells of it with a side to a cell outside, as rows the same; and its heading (c, s).
+function laneCells(ang, len, w) {
+  const c = Math.cos(ang), s = Math.sin(ang), h = w / 2;
+  const pts = [[-s * h, c * h], [s * h, -c * h], [len * c + s * h, len * s - c * h], [len * c - s * h, len * s + c * h]];
+  const top = Math.floor(Math.min(...pts.map((p) => p[1]))), bottom = Math.ceil(Math.max(...pts.map((p) => p[1])));
+  const rows = [];
+  for (let y = top; y < bottom; y++) {
+    const yc = y + 0.5;
+    let x0 = Infinity, x1 = -Infinity;
+    for (let i = 0, j = 3; i < 4; j = i++) {
+      const [ax, ay] = pts[j], [bx, by] = pts[i];
+      if (ay > yc === by > yc) continue;
+      const x = ax + ((bx - ax) * (yc - ay)) / (by - ay);
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+    }
+    const a = Math.ceil(x0 - 0.5), b = Math.floor(x1 - 0.5) + 1;
+    if (b > a) rows.push([a, y, b - a]);
+  }
+  // A cell is inside the rim when the cells either side of it and the rows above and below reach
+  // over it; the rest of each row is rim (all of it on the top and bottom rows).
+  const rim = [];
+  for (let i = 0; i < rows.length; i++) {
+    const [a, y, n] = rows[i], b = a + n, up = rows[i - 1], dn = rows[i + 1];
+    let l = a + 1, r = b - 1;
+    for (const o of [up, dn]) {
+      if (o && Math.abs(o[1] - y) === 1) (l = Math.max(l, o[0])), (r = Math.min(r, o[0] + o[2]));
+      else r = l;
+    }
+    if (r <= l) rim.push([a, y, n]);
+    else rim.push([a, y, l - a], [r, y, b - r]);
+  }
+  return { rows, rim, c, s };
+}
+
+// Rows of cells (laneCells) laid round world point (ox, oy), in one fill. With a lane, each row is
+// cut where a cell's centre lies more than `reach` along it, for a fill growing down the lane.
+function paintCells(ctx, cam, ox, oy, rows, color, alpha, lane = null, reach = 0) {
+  const S = cam.S, x = ox - cam.x, y = oy - cam.y;
+  ctx.beginPath();
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i], t = row[1];
+    let a = row[0], b = a + row[2];
+    if (lane) {
+      // A cell x on this row lies (x + 0.5) c + along down the lane.
+      const along = (t + 0.5) * lane.s;
+      if (Math.abs(lane.c) < 1e-6) {
+        if (along > reach) continue;
+      } else {
+        const last = (reach - along) / lane.c - 0.5;
+        if (lane.c > 0) b = Math.min(b, Math.floor(last) + 1);
+        else a = Math.max(a, Math.ceil(last));
+      }
+      if (b <= a) continue;
+    }
+    const x0 = Math.round((x + a) * S), y0 = Math.round((y + t) * S);
+    ctx.rect(x0, y0, Math.round((x + b) * S) - x0, Math.round((y + t + 1) * S) - y0);
+  }
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+// o: shape ('circle': x, y, r; 'line': from x, y along ang for len, w wide), dur, follow, onDone,
+// and its colours: color, the ground it warns of (the faint whole of it; red when none), and fill,
+// the part grown as it comes (color when none, red when neither: a map boss's quicksand and ice,
+// boss-mechanics.js, warn in their own colours, so they are not read as one more red blast; the
+// review of 22 November 2026). The flashing outline (drawThreat) is the one red of every warning.
 export class Telegraph {
   constructor(g, o) {
     this.g = g;
@@ -1221,20 +1305,11 @@ export class Telegraph {
       ctx.globalAlpha = 0.18 + 0.2 * u;
       blitCentered(ctx, ringSprite(o.r, o.color || '#e43b44', 99), sx, sy, S);
       ctx.globalAlpha = 0.35 + 0.4 * u;
-      blitCentered(ctx, ringSprite(Math.max(1, o.r * u), '#ff0044', 99), sx, sy, S);
+      blitCentered(ctx, ringSprite(Math.max(1, o.r * u), o.fill || o.color || '#ff0044', 99), sx, sy, S);
     } else if (o.shape === 'line') {
-      const [ax, ay] = toScreen(cam, o.x, o.y);
-      const ang = o.ang, len = o.len * S, wid = o.w * S;
-      ctx.save();
-      ctx.translate(ax, ay);
-      ctx.rotate(ang);
-      ctx.globalAlpha = 0.22;
-      ctx.fillStyle = '#e43b44';
-      ctx.fillRect(0, -wid / 2, len, wid);
-      ctx.globalAlpha = 0.45;
-      ctx.fillStyle = '#ff0044';
-      ctx.fillRect(0, -wid / 2, len * u, wid);
-      ctx.restore();
+      const lane = (this.lane ??= laneCells(o.ang, o.len, o.w));
+      paintCells(ctx, cam, o.x, o.y, lane.rows, o.color || '#e43b44', 0.22);
+      paintCells(ctx, cam, o.x, o.y, lane.rows, o.fill || o.color || '#ff0044', 0.45, lane, o.len * u);
     }
     ctx.globalAlpha = 1;
   }
@@ -1242,17 +1317,14 @@ export class Telegraph {
   drawThreat(ctx, cam) {
     const o = this.o, S = cam.S;
     const [x, y] = toScreen(cam, o.x, o.y);
+    const alpha = this.g.settings.softFlash ? 0.9 : 0.65 + 0.35 * Math.sin(this.t * 30);
     ctx.save();
-    ctx.globalAlpha = this.g.settings.softFlash ? 0.9 : 0.65 + 0.35 * Math.sin(this.t * 30);
+    ctx.globalAlpha = alpha;
     if (o.shape === 'circle') {
       blitCentered(ctx, ringSprite(o.r, '#ff0044', 1), x, y, S);
     } else if (o.shape === 'line') {
-      const half = o.w * S / 2, length = o.len * S;
-      ctx.translate(x, y);
-      ctx.rotate(o.ang);
-      ctx.fillStyle = '#ff0044';
-      ctx.fillRect(0, -half, length, S);
-      ctx.fillRect(0, half - S, length, S);
+      const lane = (this.lane ??= laneCells(o.ang, o.len, o.w));
+      paintCells(ctx, cam, o.x, o.y, lane.rim, '#ff0044', alpha);
     }
     ctx.restore();
   }
@@ -1822,6 +1894,9 @@ export class Sanctum {
 // (bosses and lords slowed) for the rest of the ultimate's time, one that comes onto it while it
 // lasts too; those held take a lesser blow every OVERGROWTH.tick s.
 export const OVERGROWTH = { dmg: 12, late: 8, tick: 0.5, tickDmg: 4, vines: 70 };
+// How long the green pulse of its burst lasts, s, and which of its vines cast light (every sixth:
+// twelve of the seventy). Only a picture (Overgrowth.drawGlow).
+const OVERGROWTH_PULSE = 0.4, OVERGROWTH_LIT = 6;
 export class Overgrowth {
   constructor(g, dur) {
     this.g = g;
@@ -1876,6 +1951,36 @@ export class Overgrowth {
     this.held.forEach((id, e) => {
       if (!e.dead && e.id === id) drawRoot(ctx, cam, img, e.x + 3, e.y + 1, u);
     });
+  }
+
+  // Lit, the dark roots were lost on the night's grass, and the Druid's ultimate read as nothing
+  // but its numbers (the review of 22 November 2026). Now the vines' green tips are unlit (their
+  // art's emissive keys, laid over as fxart.js lays a sprite's), a green pulse sweeps the screen as
+  // they burst, and every OVERGROWTH_LIT-th vine casts a green light while it stands.
+  drawGlow(ctx, cam) {
+    const spr = SPR[WEAPON_SPRITES.root];
+    if (!spr) return;
+    const left = this.dur - this.t, op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'source-over';
+    for (const v of this.vines) {
+      const lt = this.t - v.at;
+      if (lt <= 0) continue;
+      const fr = spr.frames[rootFrame(spr, lt, left)], em = v.flip ? fr.emf : fr.em;
+      if (em) drawRoot(ctx, cam, em, v.x, v.y, Math.min(1, lt / ROOT_RISE));
+    }
+    ctx.globalCompositeOperation = op;
+    const u = this.t / OVERGROWTH_PULSE;
+    if (u < 1) {
+      ctx.globalAlpha = (this.g.settings.softFlash ? 0.15 : 0.3) * (1 - u);
+      ctx.fillStyle = '#63c74d';
+      ctx.fillRect(0, 0, cam.pxW, cam.pxH);
+      ctx.globalAlpha = 1;
+    }
+    const k = clamp(left / ROOT_SINK, 0, 1);
+    for (let i = 0; i < this.vines.length; i += OVERGROWTH_LIT) {
+      const v = this.vines[i], lt = this.t - v.at;
+      if (lt > 0) this.g.light(v.x, v.y - 6, 48, 'green', 0.9 * k * Math.min(1, lt / ROOT_RISE));
+    }
   }
 }
 
