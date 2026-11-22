@@ -7,6 +7,8 @@ import { isCopper } from '../data/copper.js';
 import { BOONS } from '../data/boons.js';
 
 const CELL = 19, ROW = 20, BORDER = 4, HEADER = 11, GUTTER = 5;
+// A plate's top without its caption (loadoutLayout, on a short screen).
+const BARE = 3;
 const SHRINES = { fury:'i_might', haste:'i_cooldown', fortune:'i_greed', wisdom:'i_growth', protection:'i_armor' };
 export const blessingTypes = Object.values(FILLERS).filter(def => def.count);
 
@@ -47,18 +49,39 @@ export function loadoutItems(g, held) {
 
 // Leave the orb glass and its touch target clear. When those two corners leave
 // too little room, wrap at the full width just above them instead.
+// Stacked plates on a short screen leave the hero clear (at 240x210 a full build's
+// plates came up past the middle, where the camera keeps him, over his feet and
+// his bar): until they end below `clear`, first their captions go, then the
+// powers past the rows that fit show as one last '+N' cell (the pause menu lists
+// them all).
 export function loadoutLayout(W, H, touch, items, safe) {
   const width = W - safe.left - safe.right;
   const aboveOrbs = width < 228;
   const room = Math.max(CELL + 2 * BORDER, width - (aboveOrbs ? 8 : 112));
   const bottom = H - safe.bottom - (aboveOrbs ? 69 : touch ? 25 : 3);
+  const clear = Math.ceil(H / 2) + 24;
+  let belt = arrange(items, width, room, bottom, safe, HEADER, Infinity);
+  if (!belt.beside && belt.y < clear) {
+    belt = arrange(items, width, room, bottom, safe, BARE, Infinity);
+    const powers = belt.groups.find(group => group.name === 'POWERS');
+    if (belt.y < clear && powers) {
+      const rows = Math.max(1, Math.ceil(powers.slots.length / powers.cols) - Math.ceil((clear - belt.y) / ROW));
+      belt = arrange(items, width, room, bottom, safe, BARE, rows);
+    }
+  }
+  return belt;
+}
+
+// The plates laid out with tops `header` tall and at most `powerRows` rows of powers.
+function arrange(items, width, room, bottom, safe, header, powerRows) {
   const groups = [];
-  for (const [name, slots] of [['WEAPONS', items.weapons], ['POWERS', items.powers]]) {
-    if (!slots.length) continue;
-    const cols = Math.min(slots.length, Math.max(1, Math.floor((room - 2 * BORDER) / CELL)));
-    const w = Math.max(cols * CELL, textWidth(name) + 7) + 2 * BORDER;
-    const h = HEADER + Math.ceil(slots.length / cols) * ROW + 3;
-    groups.push({ name, slots, cols, w, h });
+  for (const [name, all] of [['WEAPONS', items.weapons], ['POWERS', items.powers]]) {
+    if (!all.length) continue;
+    const cols = Math.min(all.length, Math.max(1, Math.floor((room - 2 * BORDER) / CELL)));
+    const keep = powerRows * cols, slots = name === 'POWERS' && all.length > keep ? [...all.slice(0, keep - 1), { more: all.length - keep + 1 }] : all;
+    const w = Math.max(cols * CELL, header === HEADER ? textWidth(name) + 7 : 0) + 2 * BORDER;
+    const h = header + Math.ceil(slots.length / cols) * ROW + 3;
+    groups.push({ name, slots, cols, w, h, header });
   }
   const joined = groups.reduce((n, group) => n + group.w, 0) + GUTTER * Math.max(0, groups.length - 1);
   const beside = joined <= room;
@@ -71,10 +94,10 @@ export function loadoutLayout(W, H, touch, items, safe) {
     group.y = beside ? bottom - group.h : nextY;
     nextX += group.w + GUTTER; nextY += group.h + 2;
   }
-  return { x, y, w, h, groups };
+  return { x, y, w, h, groups, beside };
 }
 
-function plate(ctx, { x, y, w, h, name }) {
+function plate(ctx, { x, y, w, h, name, header }) {
   // Stepped end caps, a cast bronze rim and inset black iron.
   ctx.fillStyle = '#171217';
   ctx.fillRect(x + 2, y, w - 4, h); ctx.fillRect(x, y + 2, w, h - 4);
@@ -83,6 +106,7 @@ function plate(ctx, { x, y, w, h, name }) {
   ctx.fillStyle = '#30292a'; ctx.fillRect(x + w - 3, y + 3, 2, h - 6);
   ctx.fillStyle = '#625044'; ctx.fillRect(x + 3, y + h - 2, w - 6, 1);
   ctx.fillStyle = '#29252a'; ctx.fillRect(x + 3, y + 2, w - 6, h - 5);
+  if (header !== HEADER) return; // captionless: its rivets would sit under the first cells
   ctx.fillStyle = '#ad8c5e';
   ctx.fillRect(x + 3, y + 4, 2, 2); ctx.fillRect(x + w - 5, y + 4, 2, 2);
   drawText(ctx, name, x + Math.floor(w / 2), y + 2, { align:'center', color:'#c5ad88', outline:null });
@@ -96,6 +120,11 @@ function cell(ctx, x, y, item, power, t) {
   ctx.fillStyle = '#38333a'; ctx.fillRect(x + 1, y + 1, w - 2, w - 2);
   ctx.fillStyle = '#211e25'; ctx.fillRect(x + 2, y + 2, w - 3, w - 3);
   if (!item) return;
+  if (item.more) {
+    // The powers a short screen has no room for, counted.
+    drawText(ctx, `+${item.more}`, x + 9, y + 5, { align:'center', color:'#f2e5c9', outline:'#171417' });
+    return;
+  }
   if (item.dormant) ctx.globalAlpha = .4;
   ctx.drawImage(SPR[item.icon].frames[0].c, x + 1, y + 1, 16, 16);
   const timed = item.seconds != null;
@@ -118,7 +147,7 @@ export function drawLoadout(ctx, layout, t) {
     plate(ctx,group);
     const left = group.x + Math.floor((group.w - group.cols * CELL) / 2);
     for (let i = 0; i < group.slots.length; i++) {
-      cell(ctx, left + i % group.cols * CELL, group.y + HEADER + Math.floor(i / group.cols) * ROW, group.slots[i], group.name === 'POWERS', t);
+      cell(ctx, left + i % group.cols * CELL, group.y + group.header + Math.floor(i / group.cols) * ROW, group.slots[i], group.name === 'POWERS', t);
     }
   }
 }

@@ -42,7 +42,10 @@ const GLASS = new Uint8Array(ORB_S * ORB_S);
       else if (r > R - 0.5) SHAPE[p] = INK;
       else {
         SHAPE[p] = LIQUID;
-        if (Math.hypot(dx + R * 0.38, dy + R * 0.42) < R * 0.28) GLASS[p] = 1;
+        // The sheen, a crescent up on the lit side: its circle less the same circle moved about 2 px
+        // toward the middle (a whole lightened disc read as a sticker on the glass).
+        const hx = dx + R * 0.38, hy = dy + R * 0.42;
+        if (Math.hypot(hx, hy) < R * 0.28 && Math.hypot(hx - 1.3, hy - 1.5) >= R * 0.28) GLASS[p] = 1;
         else if (r > R - 2.5 && dx + dy > R * 0.6) GLASS[p] = 2;
       }
     }
@@ -64,14 +67,16 @@ class Orb {
     this.img = this.g.createImageData(s, s);
     this.shown = 1;
     // Each tone (deep, mid, top, foam, then the empty dark) under clear glass, its sheen and its
-    // shaded edge, as red, green, blue; and the same lit by the glow of a full orb, each frame.
+    // shaded edge, as red, green, blue; and the same lit by the glow of a full orb, each frame. The
+    // sheen lifts the liquid a third toward white, the empty dark only a little (a third of the way
+    // made a grey moon on every empty or low orb).
     const rgb = [...this.colors, EMPTY_RGB];
     this.tones = new Float64Array(rgb.length * 9);
     rgb.forEach((col, k) => {
       for (let ch = 0; ch < 3; ch++) {
         const c = col[ch], i = k * 9 + ch;
         this.tones[i] = c;
-        this.tones[i + 3] = c + (255 - c) * 0.35;
+        this.tones[i + 3] = c + (255 - c) * (k === EMPTY ? 0.08 : 0.35);
         this.tones[i + 6] = c * 0.75;
       }
     });
@@ -99,12 +104,18 @@ class Orb {
     const level = cy + R - 2 * R * clamp(this.shown, 0, 1);
     const shine = 40 * glow * (0.5 + 0.5 * Math.sin(t * 8));
     for (let k = 0; k < tones.length; k++) lit[k] = glow ? Math.min(255, tones[k] + shine) : tones[k];
+    // The surface's swell calms as the orb nears empty: at nought no stray liquid shows at its foot.
+    const swell = Math.min(1, this.shown * 8);
     for (let x = 0; x < s; x++) {
-      WAVE[x] = Math.sin(x * 0.45 + t * 3) * 1.1 + Math.sin(x * 0.2 - t * 2) * 0.8;
+      WAVE[x] = (Math.sin(x * 0.45 + t * 3) * 1.1 + Math.sin(x * 0.2 - t * 2) * 0.8) * swell;
       BUBBLE[x] = Math.floor((t * 7 + x * 13) % 9) === 0 ? 1 : 0;
     }
+    // The tones by depth over the liquid there is, at least half an orb's: a low orb darkens toward
+    // its foot as a full one does (by the whole orb's depth it was all foam and top, paler than full),
+    // and a sliver of one still never goes all to the deepest.
+    const deep = Math.max(R, cy + R - level);
     for (let y = 0; y < s; y++) {
-      const depth = (y - level) / (2 * R);
+      const depth = (y - level) / deep;
       const tone = depth < 0.08 ? FOAM : depth < 0.3 ? TOP : depth < 0.65 ? MID : DEEP;
       // Rising bubbles.
       const bubbles = Math.floor(y + t * 20) % 11 === 0;
@@ -127,6 +138,163 @@ class Orb {
 function orbRing(ctx, cx, cy, r, color) {
   const img = ringSprite(r, color);
   ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(cy - img.height / 2));
+}
+
+// The fury orb not open yet (Player.ultLocked): the same glass, opaque as every other piece of the
+// HUD (it was the orb at 45%, the grass showing through it), in quiet slate rims round a flat dark
+// inside with its shaded edge, no sheen and no liquid; its padlock goes over it. Made once.
+let LOCKED_ORB = null;
+function lockedOrb() {
+  if (LOCKED_ORB) return LOCKED_ORB;
+  const s = ORB_S, c = makeCanvas(s, s), g = c.getContext('2d'), img = g.createImageData(s, s), d = img.data;
+  const cols = [null, RIMS[INK], hexToRgb('#5a6988'), hexToRgb('#3a4466'), hexToRgb('#1d1928')];
+  for (let p = 0; p < s * s; p++) {
+    const col = cols[SHAPE[p]];
+    if (!col) continue;
+    const k = GLASS[p] === 2 ? 0.75 : 1;
+    d[p * 4] = col[0] * k;
+    d[p * 4 + 1] = col[1] * k;
+    d[p * 4 + 2] = col[2] * k;
+    d[p * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return (LOCKED_ORB = c);
+}
+
+// A line of text cut to w px with an ellipsis, whole when it fits (as gamescreen.js's).
+function fitText(s, w) {
+  if (textWidth(s) <= w) return s;
+  while (s.length > 1 && textWidth(s + '…') > w) s = s.slice(0, -1);
+  return s + '…';
+}
+
+// The rows of a picture that are really there (alpha at least half), { top, bottom, h }: a hero's
+// pose is cut from his idle frames' box, which takes in their faint fringe. Measured once a canvas.
+const SOLID = new WeakMap();
+function solidRows(c) {
+  let r = SOLID.get(c);
+  if (r) return r;
+  const d = c.getContext('2d').getImageData?.(0, 0, c.width, c.height)?.data; // none on a dummy canvas
+  let top = -1, bottom = c.height - 1;
+  for (let y = 0; d && y < c.height; y++) {
+    let on = false;
+    for (let x = 0; x < c.width && !on; x++) on = d[(y * c.width + x) * 4 + 3] >= 128;
+    if (on) {
+      if (top < 0) top = y;
+      bottom = y;
+    }
+  }
+  if (top < 0) top = 0;
+  r = { top, bottom, h: bottom - top + 1 };
+  SOLID.set(c, r);
+  return r;
+}
+
+// The ultimate's name for its cut-in, never drawn below its own size (a fraction dropped rows and
+// columns of its letters): the logo if it fits w across, else on two lines split nearest the middle
+// if they fit h; the same with the bold logo at half the size; else the bold text itself.
+const ULT_COLORS = ['#ffffff', '#fee761', '#f6757a', '#be4a2f', '#73172d'];
+const ultLogos = new Map();
+function ultLogo(text, w, h) {
+  const key = `${text}|${w}|${h}`;
+  let c = ultLogos.get(key);
+  if (c) return c;
+  const words = text.split(' ');
+  for (const font of ['normal', 'bold']) {
+    const make = (s) => logo(s, ULT_COLORS, '#181425', font);
+    c = make(text);
+    if (c.width <= w) break;
+    let best = null;
+    for (let i = 1; i < words.length; i++) {
+      const a = make(words.slice(0, i).join(' ')), b = make(words.slice(i).join(' '));
+      if (!best || Math.max(a.width, b.width) < Math.max(best[0].width, best[1].width)) best = [a, b];
+    }
+    // Each logo carries its outline and shadow below its letters: the second line tucks 3 px up.
+    if (best && Math.max(best[0].width, best[1].width) <= w && best[0].height + best[1].height - 3 <= h) {
+      c = makeCanvas(Math.max(best[0].width, best[1].width), best[0].height + best[1].height - 3);
+      const g = c.getContext('2d');
+      g.drawImage(best[1], Math.round((c.width - best[1].width) / 2), best[0].height - 3);
+      g.drawImage(best[0], Math.round((c.width - best[0].width) / 2), 0);
+      break;
+    }
+    c = null;
+  }
+  c ??= textCanvas(text, ULT_COLORS.slice(0, 3), '#181425', null, 'bold');
+  ultLogos.set(key, c);
+  return c;
+}
+
+// The edge markers' arrows and the crypt's aim chevron in whole pixels, never a rotated path (its
+// edges came out as half-tone pixels on the HUD's canvas, then blown up S×S): for each of TURNS
+// headings, the runs of ink and of colour round the point they are drawn at. inside(u, v), in the
+// shape's own frame (u along its heading): 2 its colour, 1 its ink, 0 clear; any clear pixel beside
+// its colour is ink too, so the rim is closed all round.
+const TURNS = 32;
+function bakeTurns(inside, reach) {
+  const n = 2 * reach, turns = [];
+  for (let i = 0; i < TURNS; i++) {
+    const a = (i / TURNS) * TAU, cs = Math.cos(a), sn = Math.sin(a), at = new Uint8Array(n * n);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const px = x - reach + 0.5, py = y - reach + 0.5;
+        at[y * n + x] = inside(px * cs + py * sn, -px * sn + py * cs);
+      }
+    }
+    const col = (x, y) => x >= 0 && y >= 0 && x < n && y < n && at[y * n + x] === 2;
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) if (!at[y * n + x] && (col(x - 1, y) || col(x + 1, y) || col(x, y - 1) || col(x, y + 1))) at[y * n + x] = 1;
+    }
+    const runs = [[], []];
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; ) {
+        const k = at[y * n + x];
+        let e = x + 1;
+        while (e < n && at[y * n + e] === k) e++;
+        if (k) runs[k - 1].push(x - reach, y - reach, e - x);
+        x = e;
+      }
+    }
+    turns.push(runs);
+  }
+  return turns;
+}
+const turnOf = (a) => ((Math.round((a / TAU) * TURNS) % TURNS) + TURNS) % TURNS;
+// A baked shape at heading a, round the context's origin: its ink, then its colour.
+function drawTurn(ctx, turns, a, color) {
+  const [ink, col] = turns[turnOf(a)];
+  ctx.fillStyle = '#181425';
+  for (let i = 0; i < ink.length; i += 3) ctx.fillRect(ink[i], ink[i + 1], ink[i + 2], 1);
+  ctx.fillStyle = color;
+  for (let i = 0; i < col.length; i += 3) ctx.fillRect(col[i], col[i + 1], col[i + 2], 1);
+}
+// The triangle from (tip, 0) back to (back, ±half).
+const inTriangle = (u, v, tip, back, half) => u <= tip && u >= back && Math.abs(v) <= (half * (tip - u)) / (tip - back);
+let ARROWS = null, CHEVRONS = null;
+// The marker's arrow: its point 4 px ahead, 3 back, 6 wide, in an ink rim a pixel or two round it.
+const arrows = () => (ARROWS ??= bakeTurns((u, v) => (inTriangle(u, v, 4, -3, 3) ? 2 : inTriangle(u, v, 6, -4, 5) ? 1 : 0), 7));
+// The aim chevron: (-2, -4) to (3, 0) to (-2, 4), a pixel thick in a pixel of ink.
+function segDist(u, v, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0, k = clamp(((u - x0) * dx + (v - y0) * dy) / (dx * dx + dy * dy), 0, 1);
+  return Math.hypot(u - x0 - k * dx, v - y0 - k * dy);
+}
+const chevrons = () => (CHEVRONS ??= bakeTurns((u, v) => {
+  const d = Math.min(segDist(u, v, -2, -4, 3, 0), segDist(u, v, 3, 0, -2, 4));
+  return d < 0.8 ? 2 : d < 1.5 ? 1 : 0;
+}, 7));
+
+// A ring w px wide round (cx, cy), rx across and ry down, in whole pixels: a run or two a row.
+function ringBand(ctx, cx, cy, rx, ry, w) {
+  const ix = rx - w, iy = ry - w;
+  for (let y = -ry; y < ry; y++) {
+    const yc = y + 0.5, ox = Math.round(rx * Math.sqrt(Math.max(0, 1 - (yc / ry) ** 2)));
+    if (ox <= 0) continue;
+    const inx = Math.abs(yc) < iy ? Math.round(ix * Math.sqrt(1 - (yc / iy) ** 2)) : 0;
+    if (inx <= 0) ctx.fillRect(cx - ox, cy + y, 2 * ox, 1);
+    else {
+      ctx.fillRect(cx - ox, cy + y, ox - inx, 1);
+      ctx.fillRect(cx + inx, cy + y, ox - inx, 1);
+    }
+  }
 }
 
 // Where a line of text drawn at y ends, its outline and all.
@@ -259,6 +427,27 @@ const NAMED = 3;
 const NEAR = new Array(NAMED).fill(null), NEAR_D = new Float64Array(NAMED);
 // Over a foe's head, in HUD pixels (overHead).
 const AT = { x: 0, y: 0 };
+// How much higher a flyer's head is, in world px: it is drawn off the ground and bobs (enemies.js
+// HOVER, up 6 and bob 2), and its name and bar sat on its body.
+const FLY_LIFT = 8;
+// What the elites' names keep off this frame (drawNames): the bars, the hero and the names placed
+// before, each [x, y, w, h]. Reused from frame to frame.
+const TAKEN = [];
+let takenN = 0;
+function take(x, y, w, h) {
+  const r = (TAKEN[takenN++] ??= [0, 0, 0, 0]);
+  r[0] = x;
+  r[1] = y;
+  r[2] = w;
+  r[3] = h;
+}
+function untaken(x, y, w, h) {
+  for (let i = 0; i < takenN; i++) {
+    const r = TAKEN[i];
+    if (x < r[0] + r[2] && x + w > r[0] && y < r[1] + r[3] && y + h > r[1]) return false;
+  }
+  return true;
+}
 
 // The build as the HUD shows it, copied so it stays as it is (Hud.held): each weapon (w, the weapon
 // itself, for the crypt's dimming; its icon, level and whether it had evolved), each relic's
@@ -349,6 +538,12 @@ export class Hud {
     this.barLabel = '';
     this.barShown = 0;
     this.fall = null;
+    // The banners as laid out this frame, and the block they make, which a boss's bar keeps off
+    // (layoutBanners).
+    this.bannerRows = [];
+    this.bannerSpan = null;
+    // Where the ultimate's kill count stands while it counts, which the edge markers keep off.
+    this.killBox = null;
     // The gold counter as shown: it rolls up to the gold (Game.gold, or a chest's held gold) over
     // about half a second, pulsing as it gains; coins flung to it from gold piles (fling).
     this.goldRoll = 0;
@@ -382,14 +577,19 @@ export class Hud {
     const g = this.g, p = g.player;
     const belt = this.loadout(W, H);
     this.lastDt = dt;
+    // What belongs to the world first, under the HUD's own chrome: the rings on the ground, the
+    // ultimate's dimming, the elites' names and the hero's bar (they printed over the plates and
+    // orbs), and a night boss's letterbox bars (they cut the orbs and plates in half).
     this.drawRingWarnings(ctx, W, H, t);
-    this.drawUltLaunch(ctx, W, H);
+    this.drawUltDim(ctx, W, H);
+    this.drawNames(ctx, W, H);
+    this.drawLetterbox(ctx, W, H);
     this.drawXp(ctx, W, p, dt);
     drawLoadout(ctx, belt, t);
     this.drawTop(ctx, W, t, dt);
     this.drawOrbs(ctx, W, H, p, t, belt, dt);
+    this.layoutBanners(W, H); // the block the boss's bar keeps off
     this.drawBoss(ctx, W, dt, H);
-    this.drawNames(ctx, W, H);
     this.drawCryptStrike(ctx, W, H, belt);
     this.drawCryptDoor(ctx, W);
     this.drawIndicators(ctx, W, H, t, belt);
@@ -401,6 +601,9 @@ export class Hud {
     this.drawArrival(ctx, W, H);
     this.drawSlain(ctx, W, H);
     if (g.showMap && g.world.drawMinimap) g.world.drawMinimap(ctx, W, H, true);
+    // The ultimate's cut-in over all of it (its band hid nothing: the hero's bar, the markers, the
+    // banners and its own name printed across it); the touch stick stays over it, as he still moves.
+    this.drawUltBand(ctx, W, H);
     if (input.device === 'touch') this.drawTouch(ctx, W, H, p);
     if (g.state === 'dying') this.drawDepartingSoul(ctx);
   }
@@ -610,7 +813,8 @@ export class Hud {
       : g.mode === 'ranked' && g.bestBeaten
         ? ['#ffffff', '#9ee562', '#63c74d']
         : ['#ffffff', '#ffffff', '#c0cbdc'];
-    drawText(ctx, fmtTime(remain), Math.floor(W / 2), 8, { align: 'center', color });
+    // On the level's line (topLines): at 8 its outline ran into the experience bar's frame.
+    drawText(ctx, fmtTime(remain), Math.floor(W / 2), 9, { align: 'center', color });
     // Gold, rolling up to what it is (never down: a fresh run, or a shown chest's held gold, snaps).
     const want = this.held ? this.held.gold : g.gold;
     if (want < this.goldRoll) this.goldRoll = want;
@@ -660,13 +864,10 @@ export class Hud {
     const fx = W - view.safe.right - fImg.width - 4, fy = H - view.safe.bottom - fImg.height - 4;
     const ocx = fx + fImg.width / 2, ocy = fy + fImg.height / 2;
     // His ultimate not open yet (shared/progress.js ultTime; Player.ultLocked): the orb stands
-    // empty and dim behind a padlock, with nothing to press.
+    // empty and dark in slate behind a padlock, with nothing to press (lockedOrb).
     if (p.ultLocked) {
-      ctx.globalAlpha = 0.45;
-      ctx.drawImage(fImg, fx, fy);
-      ctx.globalAlpha = 0.85;
+      ctx.drawImage(lockedOrb(), fx, fy);
       padlock(ctx, ocx - 9, ocy - 9, 2, '#3a4466', '#5a6988');
-      ctx.globalAlpha = 1;
     } else ctx.drawImage(fImg, fx, fy);
     if (almost) {
       // ALMOST: the rim glows, pulsing.
@@ -685,28 +886,8 @@ export class Hud {
       orbRing(ctx, ocx, ocy, ORB_R + 1 + k * 10, '#fee761');
       ctx.globalAlpha = 1;
     }
-    // The ultimate's name above the orb, flush with its right edge (centred, a long one ran off).
-    if (p.ultLocked) {
-      // Nothing over a locked orb.
-    } else if (p.ult) {
-      drawText(ctx, this.ultLabel(), fx + fImg.width, this.ultLabelY(W, H, belt), { align: 'right', color: '#f6757a' });
-    } else if (full) {
-      const key = input.device === 'pad' ? padKey('X') : input.device === 'touch' ? 'TAP' : 'SPACE';
-      const blink = Math.floor(t * 3) % 2 === 0;
-      drawText(ctx, key, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: blink ? '#ffffff' : '#fee761' });
-      drawText(ctx, this.ultLabel(), fx + fImg.width, this.ultLabelY(W, H, belt), { align: 'right', color: blink ? '#fee761' : '#f6757a' });
-    } else {
-      drawText(ctx, `${Math.floor(shown)}%`, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: '#e8b796' });
-    }
-    // The ultimate's own kills, counting beside the orb while it lasts.
-    const run = g.ultRun;
-    if (run && run.kills > 0) {
-      const c = textCanvas(`×${run.kills}`, ['#ffffff', '#f6757a', '#be4a2f'], '#181425', null, 'bold');
-      const x = Math.round(fx - c.width * 2 - 4);
-      const y = x < belt.x + belt.w ? Math.min(ocy - c.height, belt.y - 2 * c.height - 2) : ocy - c.height;
-      ctx.drawImage(c, x, Math.round(y), c.width * 2, c.height * 2);
-    }
-    // Fury comets on their way: a bright head and a tail, landing in the orb.
+    // Fury comets on their way, in the orb's own magenta: a tail of pixels fading back along the
+    // arc and a small star for a head, sinking into the orb under its count (drawn after them).
     for (let i = (this.comets || []).length - 1; i >= 0; i--) {
       const c = this.comets[i];
       c.t += this.lastDt || 1 / 60;
@@ -717,26 +898,60 @@ export class Hud {
         continue;
       }
       const e = ease.inQuad(k), at = (kk) => [c.x + (ocx - c.x) * kk, c.y + (ocy - c.y) * kk - Math.sin(kk * Math.PI) * 30];
-      // The tail, fading back along its arc; then a glow and the bright head.
-      for (let j = 10; j >= 1; j--) {
-        const [x, y] = at(Math.max(0, e - j * 0.03)), r = Math.max(1, 4 - j * 0.35);
-        ctx.globalAlpha = 0.75 - j * 0.065;
-        ctx.fillStyle = j > 5 ? '#be4a2f' : '#f6757a';
-        ctx.fillRect(Math.round(x - r / 2), Math.round(y - r / 2), Math.round(r), Math.round(r));
+      for (let j = 8; j >= 1; j--) {
+        const [x, y] = at(Math.max(0, e - j * 0.035)), r = j > 4 ? 1 : 2;
+        ctx.globalAlpha = 1 - j * 0.1;
+        ctx.fillStyle = j > 6 ? '#68386c' : j > 2 ? '#b55088' : '#f6757a';
+        ctx.fillRect(Math.round(x - r / 2), Math.round(y - r / 2), r, r);
       }
-      const [hx, hy] = at(e);
-      ctx.globalAlpha = 0.45;
-      ctx.fillStyle = '#feae34';
-      ctx.fillRect(Math.round(hx - 4), Math.round(hy - 4), 8, 8);
+      const [hx, hy] = at(e), x = Math.round(hx), y = Math.round(hy);
       ctx.globalAlpha = 1;
+      ctx.fillStyle = '#b55088';
+      ctx.fillRect(x - 2, y - 1, 5, 3);
+      ctx.fillRect(x - 1, y - 2, 3, 1);
+      ctx.fillRect(x - 1, y + 2, 3, 1);
+      ctx.fillStyle = '#f6757a';
+      ctx.fillRect(x - 1, y - 1, 3, 3);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(Math.round(hx - 2), Math.round(hy - 2), 5, 5);
+      ctx.fillRect(x, y - 1, 1, 3);
+      ctx.fillRect(x - 1, y, 3, 1);
     }
     if (this.cometHit > 0) {
       this.cometHit -= this.lastDt || 1 / 60;
       ctx.globalAlpha = clamp(this.cometHit / 0.15, 0, 1);
       orbRing(ctx, ocx, ocy, ORB_R + 2, '#ffffff');
       ctx.globalAlpha = 1;
+    }
+    // The ultimate's name above the orb, flush with its right edge (centred, a long one ran off);
+    // not while its cut-in is up, which shows it big (its band's rule ran through this one).
+    const cutIn = (this.ultT() ?? Infinity) < ULT_LAUNCH.dur;
+    if (p.ultLocked) {
+      // Nothing over a locked orb.
+    } else if (p.ult) {
+      if (!cutIn) drawText(ctx, this.ultLabel(), fx + fImg.width, this.ultLabelY(W, H, belt), { align: 'right', color: '#f6757a' });
+    } else if (full) {
+      const key = input.device === 'pad' ? padKey('X') : input.device === 'touch' ? 'TAP' : 'SPACE';
+      const blink = Math.floor(t * 3) % 2 === 0;
+      drawText(ctx, key, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: blink ? '#ffffff' : '#fee761' });
+      drawText(ctx, this.ultLabel(), fx + fImg.width, this.ultLabelY(W, H, belt), { align: 'right', color: blink ? '#fee761' : '#f6757a' });
+    } else {
+      drawText(ctx, `${Math.floor(shown)}%`, fx + fImg.width / 2, fy + fImg.height / 2 - 4, { align: 'center', color: '#e8b796' });
+    }
+    // The ultimate's own kills, counting beside the orb while it lasts; the edge markers keep off it
+    // (markerBand: killBox).
+    const run = g.ultRun;
+    this.killBox = null;
+    if (run && run.kills > 0) {
+      const c = textCanvas(`×${run.kills}`, ['#ffffff', '#f6757a', '#be4a2f'], '#181425', null, 'bold');
+      const x = Math.round(fx - c.width * 2 - 4);
+      const y = Math.round(x < belt.x + belt.w ? Math.min(ocy - c.height, belt.y - 2 * c.height - 2) : ocy - c.height);
+      ctx.drawImage(c, x, y, c.width * 2, c.height * 2);
+      const kb = (this.killBoxAt ??= [0, 0, 0, 0]);
+      kb[0] = x;
+      kb[1] = y;
+      kb[2] = c.width * 2;
+      kb[3] = c.height * 2;
+      this.killBox = kb;
     }
     if (g.player.revives > 0) ctx.drawImage(SPR.i_revival.frames[0].c, ox + hpImg.width - 6, oy - 8, 12, 12);
   }
@@ -755,7 +970,7 @@ export class Hud {
 
   // The clock and level sit just below the experience bar; the weapon row is reserved separately.
   topLines() {
-    return lineBottom(8);
+    return lineBottom(9);
   }
 
   // The boss's (or lord's) bar. When the one it showed falls, its bar stays on, empty, then flashes
@@ -767,20 +982,23 @@ export class Hud {
     if (was && (was.dead || was.id !== this.barId) && !this.fall) this.fall = { t: 0, label: this.barLabel, shown: this.barShown, point: this.barPoint, pieces: null };
     this.barE = null;
     if (this.fall) {
-      this.barFall(ctx, W, dt);
+      this.barFall(ctx, W, dt, H);
       return;
     }
-    if (!b || b.speech || !this.overHead(b, W, H) || !seenBy(g, b)) return;
+    // While it speaks too (its bar went away for every line, often just as an attack wound up): its
+    // words then take its name's place over the bar (drawSpeech).
+    if (!b || !this.overHead(b, W, H) || !seenBy(g, b)) return;
     if (AT.x < 0 || AT.y < 0 || AT.x > W || AT.y > H) return;
     // It slams in at its time (Game.bossIntro: after a night boss's name card), dropping from
     // above with a white flash.
     const since = b.introT === undefined ? 9 : b.introT - (b.slamAt || 0);
     if (since < 0) return;
     const drop = Math.round((1 - ease.outBack(clamp(since / ARRIVAL.slam, 0, 1))) * 8);
-    const w = BAR_W(W), x = Math.round(clamp(AT.x - w / 2, 3, W - w - 3)), y = Math.round(clamp(AT.y - 6, this.topLines() + 16, H - 12)) - drop;
+    const label = (b.lord ? b.name : b.def.name).toUpperCase();
+    const w = BAR_W(W), x = Math.round(clamp(AT.x - w / 2, 3, W - w - 3));
+    const y = this.barClear(x + w / 2, w, label, Math.round(clamp(AT.y - 6, this.topLines() + 16, H - 12)), H) - drop;
     const f = clamp(b.hp / b.maxHp, 0, 1);
     b._shown = b._shown === undefined ? f : b._shown + (f - b._shown) * (1 - Math.pow(0.94, dt * 60)); // by time, as the orbs
-    const label = (b.lord ? b.name : b.def.name).toUpperCase();
     this.barPoint = { x, y, cx: x + w / 2 };
     this.barE = b;
     this.barId = b.id;
@@ -807,17 +1025,40 @@ export class Hud {
       ctx.fillRect(x - 1, y - 1, w + 2, 8);
       ctx.globalAlpha = 1;
     }
+    if (b.speech) return; // its words stand where its name does
     const hw = textWidth(label) / 2 + 2;
     drawText(ctx, label, Math.round(clamp(x + w / 2, hw, W - hw)), y - 11, { align: 'center', color: BAR_NAME });
   }
 
-  // The ultimate's launch (Game.launchUlt, ULT_LAUNCH): the screen dims round a light on the hero and
-  // a cut-in slides across, his menu pose and the ultimate's name in the logo font.
-  drawUltLaunch(ctx, W, H) {
-    const g = this.g, L = g.ultLaunch;
-    if (!L) return;
-    const T = ULT_LAUNCH, t = L.started ? T.stop + L.t : T.stop - g.ultStop;
-    const fade = t < 0.08 ? t / 0.08 : t > T.dur - 0.15 ? clamp((T.dur - t) / 0.15, 0, 1) : 1;
+  // Where a boss's bar at y (its name over it, centred on cx) stands clear of the banners
+  // (bannerSpan): at y if they don't meet; else just above their block or just below it, whichever
+  // is nearer and on the screen. The banners keep their line (a slain, dawn or swarm banner ran
+  // across the bar and its name); the bar, which moves with its boss anyway, gives way.
+  barClear(cx, w, label, y, H = view.H) {
+    const span = this.bannerSpan;
+    if (!span) return y;
+    const hw = Math.max(w, textWidth(label) + 4) / 2;
+    // The name's outline from y - 12, the bar's frame to y + 7.
+    if (cx + hw <= span.x0 || cx - hw >= span.x1 || y + 8 <= span.top || y - 12 >= span.bottom) return y;
+    const above = span.top - 9, below = span.bottom + 13;
+    const up = above >= this.topLines() + 16, down = below <= H - 12;
+    if (up && (!down || y - above <= below - y)) return above;
+    return down ? below : y;
+  }
+
+  // How far the ultimate's launch has run (Game.launchUlt, ULT_LAUNCH), in seconds from its key:
+  // its cut-in has gone at T.dur; null with none.
+  ultT() {
+    const g = this.g, L = g.ultLaunch, T = ULT_LAUNCH;
+    return L ? (L.started ? T.stop + L.t : T.stop - g.ultStop) : null;
+  }
+
+  // The ultimate's launch: the screen dims round a light on the hero, under the HUD (the hero and
+  // the HUD go on), and a cut-in slides across over everything (drawUltBand).
+  drawUltDim(ctx, W, H) {
+    const t = this.ultT(), T = ULT_LAUNCH;
+    if (t == null) return;
+    const g = this.g, fade = t < 0.08 ? t / 0.08 : t > T.dur - 0.15 ? clamp((T.dur - t) / 0.15, 0, 1) : 1;
     const cam = g.cam, z = cam.S / view.S, hx = (g.player.x - cam.x) * z, hy = (g.player.y - 10 - cam.y) * z;
     const grad = ctx.createRadialGradient(hx, hy, 18, hx, hy, Math.hypot(W, H) * 0.5);
     grad.addColorStop(0, 'rgba(10,6,16,0)');
@@ -825,9 +1066,23 @@ export class Hud {
     grad.addColorStop(1, `rgba(10,6,16,${(0.8 * fade).toFixed(3)})`);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
-    // The cut-in: a band sliding in from the left, holding, then away to the right.
+  }
+
+  // The cut-in: a band sliding in from the left, holding, then away to the right, with his menu
+  // pose and the ultimate's name in the logo font.
+  drawUltBand(ctx, W, H) {
+    const t = this.ultT(), T = ULT_LAUNCH;
+    if (t == null || t >= T.dur) return;
+    const hero = this.g.player.hero, pose = SPR[hero.pose] || SPR[hero.sprite], pf = pose.frames[0].c;
+    // The pose a whole number of pixels to each of its own (at a fraction some rows and columns came
+    // out a pixel wider than the rest), as near the band's own height as that allows, by the rows
+    // that are really there (solidRows); the band as tall as it must be to hold him under its top,
+    // at most 40% of the screen, and its foot kept above the orbs.
+    const solid = solidRows(pf), bh0 = Math.round(H * 0.26);
+    const ps = Math.max(1, Math.min(Math.round((bh0 - 6) / solid.h), Math.floor((H * 0.4 - 12) / solid.h)));
+    const bh = Math.max(bh0, solid.h * ps + 12), by = Math.min(Math.round(H * 0.62 - bh / 2), H - view.safe.bottom - ORB_S - 6 - bh);
     const k = t < T.slideIn ? ease.outCubic(t / T.slideIn) : t < T.slideOut ? 1 : 1 + ease.inCubic(clamp((t - T.slideOut) / (T.dur - T.slideOut), 0, 1));
-    const bh = Math.round(H * 0.26), by = Math.round(H * 0.62 - bh / 2), off = Math.round((k - 1) * W);
+    const off = Math.round((k - 1) * W);
     ctx.save();
     ctx.translate(off, 0);
     ctx.globalAlpha = 0.92;
@@ -842,16 +1097,31 @@ export class Hud {
     ctx.fillRect(0, by + bh - 3, W, 2);
     ctx.fillRect(0, by + 4, W, 1);
     ctx.globalAlpha = 1;
-    const hero = g.player.hero, pose = SPR[hero.pose] || SPR[hero.sprite], pf = pose.frames[0].c, ps = (bh - 6) / pf.height;
-    ctx.drawImage(pf, Math.round(W * 0.18 - (pf.width * ps) / 2), by + 3, Math.round(pf.width * ps), Math.round(pf.height * ps));
-    const name = logo(hero.ultName.toUpperCase(), ['#ffffff', '#fee761', '#f6757a', '#be4a2f', '#73172d']), ns = Math.min(1, (W * 0.62) / name.width);
-    ctx.drawImage(name, Math.round(W * 0.34), Math.round(by + bh / 2 - (name.height * ns) / 2), Math.round(name.width * ns), Math.round(name.height * ns));
+    // He stands on the lower rule, his head under the band's top (it rose over the upper rule).
+    const pw = pf.width * ps, ph = pf.height * ps;
+    ctx.drawImage(pf, Math.round(W * 0.18 - pw / 2), by + bh - 3 - (solid.bottom + 1) * ps, pw, ph);
+    const left = Math.round(W * 0.34), name = ultLogo(hero.ultName.toUpperCase(), W - left - 6, bh - 8);
+    ctx.drawImage(name, left, Math.round(by + bh / 2 - name.height / 2));
     ctx.restore();
   }
 
+  // A night boss's letterbox bars as it comes (arrival.js), drawn before the HUD's chrome: over the
+  // world alone, the XP bar, clock, orbs and plates sitting whole on them (drawn last, they cut the
+  // orbs and plates in half along their edge).
+  drawLetterbox(ctx, W, H) {
+    const c = this.g.card;
+    if (!c || !c.letterbox) return;
+    const t = c.t, gone = c.end != null ? clamp(1 - (t - c.end) / CARD_END, 0, 1) : 1;
+    const L = ARRIVAL.letterbox, k = gone * (t < 0.15 ? t / 0.15 : t < L ? 1 : clamp(1 - (t - L) / 0.25, 0, 1));
+    const bh = Math.round(H * 0.12 * ease.outCubic(k));
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, W, bh);
+    ctx.fillRect(0, H - bh, W, bh);
+  }
+
   // A boss's arrival (arrival.js): before it, the screen's edges darken with "Something stirs in the
-  // dark…"; as it comes, its name card (its name big in its colour, its title under it) and, for a
-  // night's boss, the letterbox bars.
+  // dark…"; as it comes, its name card (its name big in its colour, its title under it), over a
+  // night's boss's letterbox bars (drawLetterbox).
   drawArrival(ctx, W, H) {
     const g = this.g, s = g.stir, c = g.card;
     if (s) {
@@ -869,16 +1139,12 @@ export class Hud {
     }
     if (!c) return;
     const t = c.t, gone = c.end != null ? clamp(1 - (t - c.end) / CARD_END, 0, 1) : 1;
-    if (c.letterbox) {
-      const L = ARRIVAL.letterbox, k = gone * (t < 0.15 ? t / 0.15 : t < L ? 1 : clamp(1 - (t - L) / 0.25, 0, 1));
-      const bh = Math.round(H * 0.12 * ease.outCubic(k));
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, W, bh);
-      ctx.fillRect(0, H - bh, W, bh);
-    }
     const a = gone * (t < 0.12 ? t / 0.12 : clamp((ARRIVAL.card - t) / 0.6, 0, 1));
     const name = textCanvas(c.name.toUpperCase(), ['#ffffff', c.color, c.color], '#181425', null, 'bold');
-    const big = c.letterbox ? 3 : 2, pop = t < 0.2 ? 1 + 0.6 * (1 - ease.outCubic(t / 0.2)) : 1, s2 = Math.min(big * pop, (W - 20) / name.width);
+    // Its pop in whole steps, one size up then its own (a fraction drew some strokes a pixel wider
+    // than others), and never wider than the screen.
+    const big = c.letterbox ? 3 : 2, pop = t < 0.2 ? 1 + 0.6 * (1 - ease.outCubic(t / 0.2)) : 1;
+    const s2 = Math.max(1, Math.min(big + 1, Math.round(big * pop), Math.floor((W - 20) / name.width)));
     const y = Math.round(H * 0.34);
     ctx.globalAlpha = a;
     ctx.drawImage(name, Math.round(W / 2 - (name.width * s2) / 2), Math.round(y - (name.height * s2) / 2), Math.round(name.width * s2), Math.round(name.height * s2));
@@ -889,8 +1155,10 @@ export class Hud {
   // A fallen boss's bar (drawBoss): empty for BAR_FALL.hold s while what it had shown drains away,
   // white for BAR_FALL.flash s, then in BAR_FALL.pieces pieces that tumble and fade for
   // BAR_FALL.drop s, its name fading with them. Real time, so it plays out under the cards too.
-  barFall(ctx, W, dt) {
-    const F = this.fall, H = BAR_FALL, w = BAR_W(W), { x, y, cx } = F.point;
+  barFall(ctx, W, dt, screenH = view.H) {
+    const F = this.fall, H = BAR_FALL, w = BAR_W(W), { x, cx } = F.point;
+    // Off the banners too: the slain banner comes up as it falls (barClear).
+    const y = this.barClear(cx, w, F.label, F.point.y, screenH);
     F.t += dt;
     const t = F.t;
     if (t >= H.hold + H.flash + H.drop) {
@@ -943,7 +1211,7 @@ export class Hud {
     // World positions to HUD pixels: the world is drawn smaller than the HUD.
     const z = cam.S / view.S;
     AT.x = (e.x - cam.x) * z;
-    AT.y = (e.y - e.h - 6 - cam.y) * z;
+    AT.y = (e.y - e.h - 6 - (e.def?.fly ? FLY_LIFT : 0) - cam.y) * z;
     return AT.x >= -40 && AT.y >= -20 && AT.x <= W + 40 && AT.y <= H + 20;
   }
 
@@ -966,22 +1234,24 @@ export class Hud {
       NEAR[i] = e;
       NEAR_D[i] = d;
     }
+    // What their names keep off (TAKEN): every bar drawn below, and the names placed; the names go
+    // after the bars. And the hero's head and body (not his legs: a champion just below him has its
+    // head there).
+    takenN = 0;
+    const hx = (p.x - 9 - cam.x) * z, hy = (p.y - 34 - cam.y) * z, hw = 18 * z, hh = 24 * z;
     for (const e of g.enemies) {
       if (e.dead || e === g.boss || e.speech || (!e.elite && e.type !== 'thief') || !this.overHead(e, W, H) || !seenBy(g, e)) continue;
       const x = AT.x, y = AT.y;
       if (e.elite) {
-        // A name kept whole on the screen, never cut at its edge.
-        if (NEAR.includes(e)) {
-          const hw = textWidth(e.name) / 2 + 2;
-          drawText(ctx, e.name, Math.round(clamp(x, hw, W - hw)), Math.round(clamp(y - 9, 2, H - 12)), { align: 'center', color: e.mod ? e.mod.color : '#feae34' });
-        }
         const w = 26, f = clamp(e.hp / e.maxHp, 0, 1);
         ctx.fillStyle = '#181425';
         ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 4);
         ctx.fillStyle = '#e43b44';
         ctx.fillRect(Math.round(x - w / 2), Math.round(y + 2), Math.round(w * f), 2);
+        take(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 4);
       } else if (e.type === 'thief') {
         const w = 22, f = clamp(e.hp / e.maxHp, 0, 1);
+        take(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 6);
         ctx.fillStyle = '#181425';
         ctx.fillRect(Math.round(x - w / 2 - 1), Math.round(y + 1), w + 2, 6);
         ctx.fillStyle = '#feae34';
@@ -996,8 +1266,31 @@ export class Hud {
         if (e.chest) {
           const c = marks().chest;
           ctx.drawImage(c, Math.round(x - c.width / 2), Math.round(y - c.height));
+          take(Math.round(x - c.width / 2), Math.round(y - c.height), c.width, c.height);
         }
       }
+    }
+    // The names, nearest first, each kept whole on the screen, never cut at its edge: over its own
+    // bar, or a line or two higher where that is taken (a pack's names printed over one another, and
+    // over the hero). Never lifted onto the hero (over him it read as his): one that can only go on
+    // him is left out, its bar still there; one with no other line free stays over its bar, as ever.
+    for (const e of NEAR) {
+      if (!e || !this.overHead(e, W, H)) continue;
+      const half = textWidth(e.name) / 2 + 2, x = Math.round(clamp(AT.x, half, W - half));
+      const bx = Math.round(x - half + 1), bw = Math.round(2 * half - 2), own = Math.round(clamp(AT.y - 9, 2, H - 12));
+      const onHero = (y) => !p.dead && bx < hx + hw && bx + bw > hx && y - 1 < hy + hh && y + GLYPH_H + 1 > hy;
+      let at = onHero(own) ? null : own;
+      for (let up = 0; up <= 2; up++) {
+        const y = own - up * (GLYPH_H + 2);
+        if (y < 2 || (up > 0 && onHero(y))) break;
+        if (!onHero(y) && untaken(bx, y - 1, bw, GLYPH_H + 2)) {
+          at = y;
+          break;
+        }
+      }
+      if (at === null) continue;
+      take(bx, at - 1, bw, GLYPH_H + 2);
+      drawText(ctx, e.name, x, at, { align: 'center', color: e.mod ? e.mod.color : '#feae34' });
     }
     // Player health bar (classic survivors style).
     if (!p.dead) {
@@ -1041,17 +1334,7 @@ export class Hud {
     if (weapon.def.kind === 'sword') angle = faceAttack(p.face, p.moving, Math.cos(angle), Math.sin(angle)) < 0 ? Math.PI : 0;
     ctx.save();
     ctx.translate(Math.round(x + Math.cos(angle) * 16), Math.round(y - 8 + Math.sin(angle) * 16));
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.moveTo(-2, -4);
-    ctx.lineTo(3, 0);
-    ctx.lineTo(-2, 4);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#181425';
-    ctx.stroke();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = color;
-    ctx.stroke();
+    drawTurn(ctx, chevrons(), angle, color);
     ctx.restore();
   }
 
@@ -1097,14 +1380,15 @@ export class Hud {
     drawText(ctx, key, x + w / 2, y + 29, { align: 'center', color: info.k > 0 ? '#fee761' : '#8b9bb4' });
   }
 
-  // What a boss says: after the names and the edge markers, over them; on the screen, and below
-  // its own name at the top, not on it.
+  // What a boss says: after the names and the edge markers, over them; on the screen, below the
+  // clock. A boss whose bar is up keeps it: its words stand over the bar in its name's place
+  // (drawBoss leaves the name out), their tail on the bar.
   drawSpeech(ctx, W, H) {
     const top = this.topLines() + 1;
     for (const e of this.g.enemies) {
       if (e.dead || !e.speech || !this.overHead(e, W, H)) continue;
-      const tw = textWidth(e.speech.text);
-      const x = Math.round(clamp(AT.x, tw / 2 + 5, W - tw / 2 - 5)), y = Math.round(Math.max(AT.y, top + 14));
+      const tw = textWidth(e.speech.text), base = e === this.barE ? this.barPoint.y - 2 : AT.y;
+      const x = Math.round(clamp(AT.x, tw / 2 + 5, W - tw / 2 - 5)), y = Math.round(Math.max(base, top + 14));
       ctx.fillStyle = '#181425';
       ctx.fillRect(Math.round(x - tw / 2 - 4), y - 14, tw + 8, 13);
       ctx.fillStyle = '#ead4aa';
@@ -1154,13 +1438,10 @@ export class Hud {
     for (const w of g.warnings) {
       if ((w.ev.type !== 'ring' && w.ev.type !== 'stand') || w.t < WARN.lead - WARN.ring) continue;
       const k = clamp((w.t - (WARN.lead - WARN.ring)) / WARN.ring, 0, 1);
-      const x = (g.player.x - cam.x) * z, y = (g.player.y - 4 - cam.y) * z, r = Math.min(W, H) * (0.46 - 0.12 * k);
+      const x = Math.round((g.player.x - cam.x) * z), y = Math.round((g.player.y - 4 - cam.y) * z), r = Math.round(Math.min(W, H) * (0.46 - 0.12 * k));
       ctx.globalAlpha = (0.18 + 0.22 * k) * (0.75 + 0.25 * Math.sin(t * 12));
-      ctx.strokeStyle = '#e43b44';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(x, y, r, r * 0.8, 0, 0, TAU);
-      ctx.stroke();
+      ctx.fillStyle = '#e43b44';
+      ringBand(ctx, x, y, r, Math.round(r * 0.8), 2); // whole pixels: a stroked ellipse came out in half-tones
       ctx.globalAlpha = 1;
     }
   }
@@ -1182,6 +1463,9 @@ export class Hud {
       const tw = textWidth(this.ultLabel());
       keep(W - view.safe.right - 5 - tw, this.ultLabelY(W, H, belt) - 1, tw + 2, GLYPH_H + 2);
     }
+    // The ultimate's kill count beside the fury orb (a marker landed on its ×3 for the whole ult).
+    const kb = this.killBox;
+    if (kb && g.ultRun?.kills > 0) keep(kb[0] - 2, kb[1] - 2, kb[2] + 4, kb[3] + 4);
     const mapHint = this.mapHint();
     if (mapHint) {
       const width = textWidth(mapHint) + 12;
@@ -1204,19 +1488,7 @@ export class Hud {
     const bob = Math.sin(t * 6) * 1.5;
     ctx.save();
     ctx.translate(Math.round(x + Math.cos(a) * bob), Math.round(y + Math.sin(a) * bob));
-    ctx.rotate(a);
-    ctx.fillStyle = '#181425';
-    ctx.beginPath();
-    ctx.moveTo(6, 0);
-    ctx.lineTo(-4, -5);
-    ctx.lineTo(-4, 5);
-    ctx.fill();
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.moveTo(4, 0);
-    ctx.lineTo(-3, -3);
-    ctx.lineTo(-3, 3);
-    ctx.fill();
+    drawTurn(ctx, arrows(), a, col);
     ctx.restore();
     if (icon) ctx.drawImage(icon, Math.round(x + IN_X[SPOT.edge] * MARK_IN - icon.width / 2), Math.round(y + IN_Y[SPOT.edge] * MARK_IN - icon.height / 2));
   }
@@ -1291,26 +1563,80 @@ export class Hud {
     ctx.globalAlpha = 1;
   }
 
-  drawBanners(ctx, W, H) {
-    const g = this.g;
+  // The banners shown this frame, top to bottom (bannerRows: each its banner, title canvas, scale,
+  // top, sub-line, width and height), and the block they make (bannerSpan: x0, x1, top, bottom),
+  // which a boss's bar keeps off (barClear); none under a card, chest, gear or pause screen.
+  layoutBanners(W, H) {
+    const g = this.g, rows = this.bannerRows, pool = (this.bannerPool ??= []);
+    rows.length = 0;
+    this.bannerSpan = null;
     // Under a card, chest, gear or pause screen they stay hidden (they still run out, but for a
     // first-run hint and a lock of the Codex reached, which wait: Game.fadeReal).
-    if (g.state === 'levelup' || g.state === 'chest' || g.state === 'item' || g.state === 'paused') return;
-    if (g.card) return; // a boss's name card has the screen; they wait (Game.fadeReal)
+    if (g.state === 'levelup' || g.state === 'chest' || g.state === 'item' || g.state === 'paused') return rows;
+    if (g.card) return rows; // a boss's name card has the screen; they wait (Game.fadeReal)
     // Below the lines at the top: a boss's own banner came down on its name.
-    let y = Math.max(Math.round(H * 0.22), this.topLines() + 4);
+    const top = Math.max(Math.round(H * 0.22), this.topLines() + 4);
     const held = g.hintsHeld;
+    let y = top, x0 = W, x1 = 0;
     for (const b of g.banners) {
       if (b.hint && held) continue; // a first-run hint waits its turn (Game.hintsHeld)
-      const u = b.t / b.dur;
-      const a = u < 0.12 ? u / 0.12 : u > 0.8 ? (1 - u) / 0.2 : 1;
+      // Twice its size where that fits the screen, else at its own (as drawSlain), cut short only
+      // if even that is too wide; its sub-line cut to the screen (an ultimate's receipt ran off both
+      // edges of a phone).
+      let c = textCanvas(b.title, ['#ffffff', b.color, b.color], '#181425');
+      const s = c.width * 2 <= W - 8 ? 2 : 1;
+      if (c.width > W - 8) c = textCanvas(fitText(b.title, W - 10), ['#ffffff', b.color, b.color], '#181425');
+      const sub = b.sub ? fitText(b.sub, W - 8) : '', th = c.height * s;
+      const w = Math.max(c.width * s, sub ? textWidth(sub) + 2 : 0), h = sub ? th + GLYPH_H : th;
+      const r = (pool[rows.length] ??= {});
+      r.b = b;
+      r.c = c;
+      r.s = s;
+      r.y = y;
+      r.sub = sub;
+      r.w = w;
+      r.h = h;
+      rows.push(r);
+      x0 = Math.min(x0, Math.floor(W / 2 - w / 2));
+      x1 = Math.max(x1, Math.ceil(W / 2 + w / 2));
+      y += sub ? th + 12 : th + 2;
+    }
+    if (rows.length) {
+      const span = (this.span ??= {}), last = rows[rows.length - 1];
+      span.x0 = x0;
+      span.x1 = x1;
+      span.top = top;
+      span.bottom = last.y + last.h;
+      this.bannerSpan = span;
+    }
+    return rows;
+  }
+
+  drawBanners(ctx, W, H) {
+    const sun = !!this.g.look?.sun;
+    for (const r of this.layoutBanners(W, H)) {
+      const b = r.b, c = r.c, u = b.t / b.dur;
+      const a = clamp(u < 0.12 ? u / 0.12 : u > 0.8 ? (1 - u) / 0.2 : 1, 0, 1);
+      // By day (the Sunscorch, the Frostfell) the light ground took the white of the letters and the
+      // sub-line's grey: a dark backing behind each banner, stepped at its ends.
+      if (sun) {
+        const w = r.w + 8, x = Math.round(W / 2 - w / 2), y = r.y - 1, h = r.h + 2;
+        ctx.globalAlpha = 0.5 * a;
+        ctx.fillStyle = '#181425';
+        ctx.fillRect(x + 2, y, w - 4, 1);
+        ctx.fillRect(x + 1, y + 1, w - 2, 1);
+        ctx.fillRect(x, y + 2, w, h - 4);
+        ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+        ctx.fillRect(x + 2, y + h - 1, w - 4, 1);
+      }
+      // It pops in one size up, then its own, in whole steps (a fraction drew some strokes a pixel
+      // wider than others), the step up only where it fits.
       const pop = u < 0.12 ? 1.6 - ease.outCubic(u / 0.12) * 0.6 : 1;
-      ctx.globalAlpha = clamp(a, 0, 1);
-      const c = textCanvas(b.title, [ '#ffffff', b.color, b.color ], '#181425');
-      const s = 2 * pop;
-      ctx.drawImage(c, Math.round(W / 2 - (c.width * s) / 2), Math.round(y - (c.height * (s - 2)) / 2), Math.round(c.width * s), Math.round(c.height * s));
-      if (b.sub) drawText(ctx, b.sub, Math.round(W / 2), y + 21, { align: 'center', color: '#c0cbdc' });
-      y += b.sub ? 34 : 24;
+      let s = Math.round(r.s * pop);
+      if (c.width * s > W - 8) s = r.s;
+      ctx.globalAlpha = a;
+      ctx.drawImage(c, Math.round(W / 2 - (c.width * s) / 2), Math.round(r.y - (c.height * (s - r.s)) / 2), c.width * s, c.height * s);
+      if (r.sub) drawText(ctx, r.sub, Math.round(W / 2), r.y + c.height * r.s - 1, { align: 'center', color: '#c0cbdc' });
     }
     ctx.globalAlpha = 1;
   }
@@ -1319,28 +1645,27 @@ export class Hud {
     H -= view.safe.bottom;
     const s = input.stick;
     if (s.active) {
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = '#c0cbdc';
-      ctx.beginPath();
-      ctx.arc(s.ox, s.oy, 22, 0, TAU);
-      ctx.fill();
-      ctx.globalAlpha = 0.7;
-      ctx.beginPath();
+      // Crisp pixel discs, still see-through (canvas arcs came out with soft half-tone rims): the
+      // base a ring round a faint fill, the knob solid.
+      const base = ringSprite(22, '#c0cbdc', 1, ['#c0cbdc', 128]), knob = ringSprite(9, '#c0cbdc', 99);
       const dx = s.x - s.ox, dy = s.y - s.oy, l = Math.hypot(dx, dy), k = Math.min(1, 22 / (l || 1));
-      ctx.arc(s.ox + dx * k, s.oy + dy * k, 9, 0, TAU);
-      ctx.fill();
+      ctx.globalAlpha = 0.6;
+      ctx.drawImage(base, Math.round(s.ox - base.width / 2), Math.round(s.oy - base.height / 2));
+      ctx.globalAlpha = 0.7;
+      ctx.drawImage(knob, Math.round(s.ox + dx * k - knob.width / 2), Math.round(s.oy + dy * k - knob.height / 2));
       ctx.globalAlpha = 1;
     }
-    // Pause button.
+    // Pause button, on whole pixels at any width (at an odd one, W / 2 put its edges on half pixels).
+    const cx = Math.floor(W / 2);
     ctx.fillStyle = '#181425';
-    ctx.fillRect(W / 2 - 9, H - 18, 18, 14);
+    ctx.fillRect(cx - 9, H - 18, 18, 14);
     ctx.fillStyle = '#c0cbdc';
-    ctx.fillRect(W / 2 - 4, H - 15, 3, 8);
-    ctx.fillRect(W / 2 + 1, H - 15, 3, 8);
+    ctx.fillRect(cx - 4, H - 15, 3, 8);
+    ctx.fillRect(cx + 1, H - 15, 3, 8);
     if (this.g.inCrypt || this.g.mode === 'dungeon') {
       ctx.fillStyle = '#181425';
-      ctx.fillRect(W / 2 + 19, H - 20, 32, 18);
-      drawText(ctx, 'MAP', W / 2 + 35, H - 15, { align: 'center', color: this.g.showMap ? '#2ce8f5' : '#c0cbdc' });
+      ctx.fillRect(cx + 19, H - 20, 32, 18);
+      drawText(ctx, 'MAP', cx + 35, H - 15, { align: 'center', color: this.g.showMap ? '#2ce8f5' : '#c0cbdc' });
     }
   }
 }
