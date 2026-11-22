@@ -6,7 +6,7 @@
 // since the previous render, so effects that register their light while
 // drawing their glow simply light up one frame later.
 
-import { makeCanvas } from '../engine/util.js';
+import { makeCanvas, clamp } from '../engine/util.js';
 
 export const LIGHT_COLORS = {
   warm: [255, 186, 120],
@@ -52,6 +52,17 @@ function lightSprite(key) {
     sprites[key] = c;
   }
   return c;
+}
+
+// By day the sun is the light. A lamp's, a fire's or the hero's own pool added onto a near-white sun
+// clamped one channel after another, red first: a bleached disc round the hero with an orange or
+// pink rim, orange blotches round the props (the review of 22 November 2026, world-2). So by day the
+// lights count only as far as the sun is dimmed: in full below a sun of luma `full` (0-255, a
+// night's), none at all from `none` up (a clear day's), next to none in a duststorm or a blizzard.
+export const DAY_LIGHT = { none: 215, full: 125 };
+export function dayLightShare(amb) {
+  const L = 0.299 * amb[0] + 0.587 * amb[1] + 0.114 * amb[2];
+  return clamp((DAY_LIGHT.none - L) / (DAY_LIGHT.none - DAY_LIGHT.full), 0, 1);
 }
 
 export const LS = 2; // world pixels per light-map pixel (forest.js keeps the cracks' glow at this grain)
@@ -103,7 +114,8 @@ export class Lighting {
     this.ga[i] = a;
   }
 
-  render(ctx, cam, ambient) {
+  // share: how much the lights and the glowing ground count (dayLightShare by day; in full by night).
+  render(ctx, cam, ambient, share = 1) {
     const lw = Math.ceil(cam.W / LS) + 3;
     const lh = Math.ceil(cam.H / LS) + 3;
     if (this.c.width !== lw || this.c.height !== lh) {
@@ -118,17 +130,18 @@ export class Lighting {
     g.fillStyle = `rgb(${ambient[0] | 0},${ambient[1] | 0},${ambient[2] | 0})`;
     g.fillRect(0, 0, lw, lh);
     g.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < this.n; i++) {
+    const n = share > 0 ? this.n : 0;
+    for (let i = 0; i < n; i++) {
       const r = this.lr[i] / LS;
       const x = this.lx[i] / LS - bx, y = this.ly[i] / LS - by;
       if (x + r < 0 || y + r < 0 || x - r > lw || y - r > lh) continue;
-      g.globalAlpha = Math.min(1, this.li[i]);
+      g.globalAlpha = Math.min(1, this.li[i]) * share;
       g.drawImage(lightSprite(this.lk[i]), x - r, y - r, r * 2, r * 2);
     }
     for (let i = 0; i < this.m; i++) {
       const x = this.gx[i] / LS - bx, y = this.gy[i] / LS - by, w = this.gw[i] / LS, h = this.gh[i] / LS;
-      if (x + w > 0 && y + h > 0 && x < lw && y < lh) {
-        g.globalAlpha = Math.max(0, Math.min(1, this.ga[i]));
+      if (share > 0 && x + w > 0 && y + h > 0 && x < lw && y < lh) {
+        g.globalAlpha = Math.max(0, Math.min(1, this.ga[i])) * share;
         g.drawImage(this.gi[i], x, y, w, h);
       }
       this.gi[i] = null; // a chunk let go is not kept for its glow

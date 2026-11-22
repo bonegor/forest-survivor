@@ -17,7 +17,7 @@ import { mapFor } from '../data/maps.js';
 import { RANKS, heroUnlockTime, countedKills } from '../shared/profile.js';
 import { killCredit } from '../shared/population.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop, itemName, itemLines, canEquipItem } from '../shared/items.js';
-import { SPR, TINTS, walkFrame, idleFrame } from '../engine/sprites.js';
+import { SPR, TINTS, walkFrame, idleFrame, PALETTE_CSS } from '../engine/sprites.js';
 import { SOUL_RELEASE } from '../art/hero-fall.js';
 import { sfx, playMusic, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
@@ -25,7 +25,7 @@ import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
 import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE, LOCK_KIND, LOCK_GAP } from './events.js';
 import { view } from '../engine/view.js';
 import { input, padKey } from '../engine/input.js';
-import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease } from '../engine/util.js';
+import { rand, pick, chance, TAU, clamp, damp, weighted, mulberry32, hash2, ease, hexToRgb, makeCanvas } from '../engine/util.js';
 import { Player, ULT_DURATION, FURY, COOLDOWN_FLOOR, QUICKSAND } from './player.js';
 import { heroAttackPose, strikeClip } from './hero-animation.js';
 export { strikeClip } from './hero-animation.js';
@@ -37,7 +37,7 @@ import { maskHorde, maskBosses, keepHorde, putHorde } from './horde-over.js';
 import { Pickup } from './pickups.js';
 import { Particles, PC, P } from './particles.js';
 import { Numbers } from './numbers.js';
-import { Lighting } from './lighting.js';
+import { Lighting, LIGHT_COLORS, dayLightShare } from './lighting.js';
 import { SpatialGrid } from './grid.js';
 import { jostle, CROWD } from './crowd.js';
 import { Spawner } from './spawner.js';
@@ -385,6 +385,8 @@ export class Game {
     this.eshots = [];
     this.pickups = [];
     this.effects = [];
+    this.fxLook = null; // a boss's death blast's look while it is thrown (deathBlast)
+    this.lightAs = null; // and the key its lights take while it is drawn (drawDeathFx)
     this.decals = [];
     this.shrines = [];
     this.drawList = [];
@@ -1720,10 +1722,12 @@ export class Game {
     this.slowT = 1.1;
     this.whiteFlash = 0.6;
     sfx('bossslain');
+    const fx = this.deathBlast(deathLook(e));
     explode(this, e.x, e.y - 8, 60, 0, null, 'fire');
     for (let i = 0; i < 6; i++) {
       this.effects.push(new Meteor(this, null, e.x + rand(-30, 30), e.y + rand(-24, 24), 20, 0, 0.1 + i * 0.12, { fall: 0.01 }));
     }
+    this.dressDeath(fx);
     // A Dungeon Run floor's guardian is gone for good: its body goes back to the pool and walks
     // again as another foe, which its minimap dot and marker would follow (Dungeon.drawMap, marker).
     if (this.world.guardian === e) this.world.guardian = null;
@@ -1789,7 +1793,9 @@ export class Game {
     this.slowT = 0.8;
     this.whiteFlash = 0.4;
     sfx('lordslain');
+    const fx = this.deathBlast(deathLook(e));
     explode(this, e.x, e.y - 8, 40, 0, null, 'fire');
+    this.dressDeath(fx);
     for (let i = 0; i < 10; i++) this.addPickup('coin', e.x, e.y, 2);
     this.addPickup('goldpile', e.x, e.y, left ? 20 : 30);
     const drop = lordDrop(Math.random());
@@ -1814,6 +1820,40 @@ export class Game {
       this.addPickup('altar', at.x, at.y, 0);
     }
     if (!next) playMusic('crypt');
+  }
+
+  // A boss's or a crypt lord's death blast (bossDefeated, lordDefeated) is thrown as it always was,
+  // the same blast and shower with the same dice whoever falls; only its look is the fallen one's
+  // (bosses-10, the review of 22 November 2026: every one went up in the same hellfire, and the
+  // horde was drawn over it). deathBlast notes where what it throws begins (in the effects and the
+  // particles) and puts its look on while it is thrown (fxLook: addDecal's splat); dressDeath dresses
+  // what was thrown: its effects drawn over the horde in its colour (drawDeathFx), its sparks and
+  // smoke in that colour's shades.
+  deathBlast(look) {
+    this.fxLook = look;
+    return { look, n: this.effects.length, k: this.particles.n };
+  }
+
+  dressDeath({ look, n, k }) {
+    for (let i = n; i < this.effects.length; i++) this.effects[i].deathLook = look;
+    const ps = this.particles;
+    if (look.parts) for (let i = k; i < ps.n; i++) ps.col[i] = look.parts[ps.col[i]];
+    this.fxLook = null;
+  }
+
+  // The effects, one after another as updateList goes; a boss's death blast's (deathLook) dresses
+  // what it throws as it goes on (its shower's crashes, their domes, sparks and scorch) as it is
+  // dressed itself.
+  updateEffects(dt) {
+    const list = this.effects;
+    let j = 0;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i], fx = o.deathLook ? this.deathBlast(o.deathLook) : null;
+      const keep = o.update(dt);
+      if (fx) this.dressDeath(fx);
+      if (keep) list[j++] = o;
+    }
+    list.length = j;
   }
 
   descend() {
@@ -2259,8 +2299,9 @@ export class Game {
 
   // ------------------------------------------------------------- juice --
 
+  // A light, in its key's colour; a boss's death blast's in its own (lightAs, drawDeathFx).
   light(x, y, r, key, i = 1) {
-    this.lighting.add(x, y, r, key, i);
+    this.lighting.add(x, y, r, this.lightAs || key, i);
   }
 
   shake(a) {
@@ -2294,10 +2335,12 @@ export class Game {
     return this.state !== 'play' || this.warnings.length > 0 || !!this.ultLaunch || !!this.card || !!(this.stir && !this.stir.done);
   }
 
+  // A boss's death blast leaves its own death's splat where a fire's scorch would be (fxLook,
+  // deathBlast): the same roll, the same life.
   addDecal(kind, x, y, r) {
     let img;
     if (kind === 'bones') img = SPR.bonepile.frames[0].c;
-    else img = splatSprite(kind, Math.floor(rand(6)), r);
+    else img = splatSprite((kind === 'scorch' && this.fxLook && this.fxLook.splat) || kind, Math.floor(rand(6)), r);
     this.decals.push({ img, x, y, t: 0, life: kind === 'scorch' ? 6 : 14 });
     if (this.decals.length > 240) this.decals.shift();
   }
@@ -2994,7 +3037,7 @@ export class Game {
     }
     if (this.boss && this.boss.dead) this.boss = null;
 
-    updateList(this.effects, dt);
+    this.updateEffects(dt);
     updateList(this.pickups, dt);
     for (let i = this.decals.length - 1; i >= 0; i--) {
       const d = this.decals[i];
@@ -3222,16 +3265,85 @@ export class Game {
     if (this.weather) this.weather.draw(ctx, c);
   }
 
+  // The unlit layers (eyes, embers, a foe's marks, a boss's burning rim, a crypt's door, a prop's
+  // glowing parts, a pickup's shine) over the lit scene, but never over what stands in front of them
+  // (bosses-1 and world-1, the review of 22 November 2026: the horde's eyes and the gems under a
+  // boss were stamped on his body, eyes floated on the canopies, an ember tree's cracks and a
+  // crypt's door glowed over the monsters before them). They go into a layer of their own in the
+  // order the scene was drawn (the pickups on the ground, the y-sorted list, the bosses over it all),
+  // each thing cutting its shape out of the glows behind it before its own go on, as drawNightEdge
+  // cuts the night layer; and only where a glow already lies (UNLIT_CELL). A foe or a minion cuts
+  // only a prop's or a crypt's glow (STILL): the crowd's eyes over one another and the pickups'
+  // shine at its feet stay as they were, a cut for every foe of the horde being too dear. The hero,
+  // drawn last over it all, cuts nothing; his own glow goes with him (drawHero).
+  drawUnlit(ctx, c, list, tops, p) {
+    const l = screenLayer(0, c);
+    unlitCells(c);
+    const S = c.S;
+    for (const pk of this.pickups) {
+      pk.drawEmissive(l);
+      const r = pk._rect;
+      if (r) unlitMark(r[0], r[1], r[2], r[3], GROUND);
+    }
+    for (const o of list) {
+      if (o === p) continue;
+      const figure = !!(o.def || o.minion), drawn = drawnAs(o, c);
+      if (drawn) unlitCut(l, figure ? STILL : ANY_GLOW);
+      if (figure) {
+        o.drawEmissive(l, c);
+        // A foe's marks (a brand, a curse, a confusion) stand over its head.
+        if (drawn) unlitMark(DRAWN[0], DRAWN[1] - 14 * S, DRAWN[2], DRAWN[3] + 14 * S, FIGURE);
+      } else if (o.crypt) {
+        this.drawCryptEmissive(l, o);
+        if (drawn && !o.sealed && o._rect[4].em) unlitMark(DRAWN[0], DRAWN[1], DRAWN[2], DRAWN[3], STILL);
+      } else if (!o.shrine && this.world.drawPropEmissive) {
+        this.world.drawPropEmissive(l, o);
+        if (drawn && o._rect[4].em) unlitMark(DRAWN[0], DRAWN[1], DRAWN[2], DRAWN[3], STILL);
+      }
+    }
+    for (const e of tops) {
+      const drawn = drawnAs(e, c);
+      if (drawn) unlitCut(l, ANY_GLOW);
+      e.drawEmissive(l, c);
+      if (drawn) unlitMark(DRAWN[0], DRAWN[1] - 14 * S, DRAWN[2], DRAWN[3] + 14 * S, FIGURE);
+    }
+    if (unlitAny) ctx.drawImage(layers[0], 0, 0, c.pxW, c.pxH);
+  }
+
+  // What a boss's or a lord's death blast throws (deathBlast) in one of the effects' passes
+  // ('drawGround', 'draw', or 'drawGlow' as light is added): each look's into a layer of its own,
+  // laid on in its colour (deathTint) with its lights in their own key (lightAs); a fire's (Azgaroth's,
+  // the Pit Lord's) as it is.
+  drawDeathFx(ctx, c, pass) {
+    const looks = DEATH_LOOKS_DRAWN;
+    looks.length = 0;
+    for (const e of this.effects) if (e.deathLook && e[pass] && !looks.includes(e.deathLook)) looks.push(e.deathLook);
+    for (const look of looks) {
+      this.lightAs = look.light;
+      const l = look.col ? screenLayer(0, c) : ctx;
+      if (l !== ctx && pass === 'drawGlow') l.globalCompositeOperation = 'lighter';
+      for (const e of this.effects) if (e.deathLook === look && e[pass]) e[pass](l, c);
+      if (l !== ctx) deathTint(ctx, c, look.col);
+      this.lightAs = null;
+    }
+  }
+
   draw(ctx) {
     this.syncCam();
     const c = this.cam;
     const S = c.S;
     // Screen shake offsets the camera for this frame only. The camera sits on
     // whole screen pixels, so a fractional scale keeps a steady pixel pattern.
+    // It is put there from the hero's own place, rounded, less his offset from the damped camera,
+    // rounded: the camera's rounding and his were apart, and beat against each other as he walked,
+    // so he twitched a screen pixel to and fro against the world (pipeline-7, the review of 22
+    // November 2026). Now he moves on the screen only as that offset does, the world still in whole
+    // pixels. The shake's two rolls as ever, x then y.
     const sh = this.trauma * this.trauma;
-    const bx = c.x, by = c.y;
-    c.x = Math.round((bx + (Math.random() - 0.5) * 9 * sh) * S) / S;
-    c.y = Math.round((by + (Math.random() - 0.5) * 9 * sh) * S) / S;
+    const bx = c.x, by = c.y, p = this.player;
+    const shx = (Math.random() - 0.5) * 9 * sh, shy = (Math.random() - 0.5) * 9 * sh;
+    c.x = (Math.round(p.x * S) - Math.round((p.x - bx - shx) * S)) / S;
+    c.y = (Math.round(p.y * S) - Math.round((p.y - by - shy) * S)) / S;
 
     ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = 'source-over';
@@ -3253,11 +3365,11 @@ export class Game {
     // A gust gathering on the snow, under everything standing (game/hazards/gusts.js).
     if (this.hazards) this.hazards.drawGround(ctx, c);
 
-    for (const e of this.effects) if (e.drawGround) e.drawGround(ctx, c);
+    for (const e of this.effects) if (e.drawGround && !e.deathLook) e.drawGround(ctx, c);
+    this.drawDeathFx(ctx, c, 'drawGround');
     for (const pk of this.pickups) pk.draw(ctx, c);
 
     // Shadows.
-    const p = this.player;
     for (const e of this.enemies) {
       if (!e.dead && onScreen(c, e.x, e.y, 40) && this.inView(e)) e.drawShadow(ctx, c);
     }
@@ -3265,7 +3377,7 @@ export class Game {
     if (!p.dead) {
       const shd = shadowSprite(10);
       ctx.globalAlpha = 0.55;
-      ctx.drawImage(shd, Math.round((p.x - c.x) * S - (shd.width * S) / 2), Math.round((p.y - c.y) * S - (shd.height * S) / 2), shd.width * S, shd.height * S);
+      ctx.drawImage(shd, Math.round((p.x - c.x) * S) - Math.round((shd.width * S) / 2), Math.round((p.y - c.y) * S) - Math.round((shd.height * S) / 2), shd.width * S, shd.height * S);
       ctx.globalAlpha = 1;
       this.drawHeroRing(ctx, c);
     }
@@ -3309,8 +3421,11 @@ export class Game {
     let horde = armed && maskHorde(c, list, p);
     if (horde) keepHorde(ctx, c);
     for (const pr of this.projectiles) pr.draw(ctx, c);
-    for (const e of this.effects) if (e.draw) e.draw(ctx, c);
+    for (const e of this.effects) if (e.draw && !e.deathLook) e.draw(ctx, c);
     if (horde) putHorde(ctx);
+    // A boss's or a lord's death blast over the horde: no weapon's, the night's great moment
+    // (deathBlast). Under the bosses still standing and the hero.
+    this.drawDeathFx(ctx, c, 'draw');
     this.particles.draw(ctx, c, false);
     // Bosses and crypt lords over everything of the world but the hero (the trees, the horde, the
     // weapons' shots and blasts), each in a light of its own so the night can't hide it either:
@@ -3334,8 +3449,10 @@ export class Game {
     this.light(p.x, p.y - 8, 46, 'white', 0.7);
     // The Oath of the Dark dims the night's light outside the crypts (the monsters' own lift still
     // reads the undimmed one, enemies.js nightFloor, so they stay as visible as ever).
+    // By day the lights count only as far as the sun is dimmed (lighting.js dayLightShare), the
+    // world's own sun: the Oath's dimming doesn't bring the night's lights back by day.
     const amb = this.world.ambient();
-    this.lighting.render(ctx, c, this.oath.dark && !this.inCrypt ? [amb[0] * 0.7, amb[1] * 0.7, amb[2] * 0.7] : amb);
+    this.lighting.render(ctx, c, this.oath.dark && !this.inCrypt ? [amb[0] * 0.7, amb[1] * 0.7, amb[2] * 0.7] : amb, this.world.daylight ? dayLightShare(amb) : 1);
     // By night the vignette darkens the scene, its fog and rain with it, before the horde is
     // lifted out of it, so the far monsters at the screen's edge stand out of the dark as the
     // near ones do (enemies.js NIGHT_EDGE); the glows, shots and numbers drawn after it go over it.
@@ -3352,20 +3469,14 @@ export class Game {
     drawNightEdge(ctx, c, this);
 
     // Unlit / additive layers.
-    for (const o of list) {
-      if (o.def || o.minion) o.drawEmissive(ctx, c);
-      else if (o === p) continue; // with him, last (drawHero)
-      else if (o.crypt) this.drawCryptEmissive(ctx, o);
-      else if (!o.shrine && this.world.drawPropEmissive) this.world.drawPropEmissive(ctx, o);
-    }
-    for (const e of tops) e.drawEmissive(ctx, c);
-    for (const pk of this.pickups) pk.drawEmissive(ctx);
+    this.drawUnlit(ctx, c, list, tops, p);
     // The weapons' glows under the monsters too, lit and lifted out of the dark by now.
     if (horde) keepHorde(ctx, c);
     ctx.globalCompositeOperation = 'lighter';
-    for (const e of this.effects) if (e.drawGlow) e.drawGlow(ctx, c);
+    for (const e of this.effects) if (e.drawGlow && !e.deathLook) e.drawGlow(ctx, c);
     for (const pr of this.projectiles) pr.drawGlow(ctx, c);
     if (horde) putHorde(ctx);
+    this.drawDeathFx(ctx, c, 'drawGlow');
     // The world's own glow over the horde (the Bloomvale's fae rings' lines: game/fae.js; 28 October 2026).
     if (this.world.drawGlow) this.world.drawGlow(ctx, c);
     for (const s of this.shrines) this.drawShrineGlow(ctx, c, s);
@@ -3481,7 +3592,10 @@ export class Game {
     const density = spr.hires || 1, pixelScale = S / density;
     const w = img.width * pixelScale, h = img.height * pixelScale;
     const sink = Math.round(p.sink);
-    const X = Math.round((p.x - c.x) * S - w / 2), Y = Math.round((p.y - c.y - spr.anchorY / density + bob - p.hop) * S) + Math.round(sink * S);
+    // His place on the screen rounded first and his picture's offsets from it after, each on its
+    // own, so he stands still on the screen as the camera follows him (Game.draw, pipeline-7).
+    const X = Math.round((p.x - c.x) * S) - Math.round(w / 2);
+    const Y = Math.round((p.y - c.y) * S) - Math.round((spr.anchorY / density - bob + p.hop) * S) + Math.round(sink * S);
     let alpha = 1;
     if (p.invuln > 0 && !(p.ult && p.ult.type === 'shadowdance') && Math.floor(p.invuln * 18) % 2 === 0) alpha = 0.45;
     if (p.ult && p.ult.type === 'shadowdance') alpha = 0.35 + 0.15 * Math.sin(this.clock * 20);
@@ -3532,7 +3646,7 @@ export class Game {
     const low = p.hp / p.maxHp < M.low;
     const img = groundRing(M.rx, M.ry, low ? M.hurt : p.hero.color);
     ctx.globalAlpha = k * ((low ? 0.7 : 0.55) + (low ? 0.3 : 0.25) * Math.sin(this.clock * (low ? 9 : 3)));
-    ctx.drawImage(img, Math.round((p.x - c.x) * S - (img.width * S) / 2), Math.round((p.y + 1 - c.y) * S - (img.height * S) / 2), img.width * S, img.height * S);
+    ctx.drawImage(img, Math.round((p.x - c.x) * S) - Math.round((img.width * S) / 2), Math.round((p.y - c.y) * S) + Math.round(S - (img.height * S) / 2), img.width * S, img.height * S);
     ctx.globalAlpha = 1;
   }
 
@@ -3558,7 +3672,7 @@ export class Game {
   // round his feet running down as the hold does, in the ice's colour (how long it holds him too).
   drawHold(ctx, c) {
     const p = this.player, h = p.held, S = c.S, M = HERO_MARK, lw = Math.max(1, Math.round(S));
-    const sx = (p.x - c.x) * S, sy = (p.y + 1 - c.y) * S;
+    const sx = Math.round((p.x - c.x) * S), sy = Math.round((p.y - c.y) * S) + S;
     const spr = p.sink > 0 && SPR.fx_quicksand;
     if (spr) {
       const img = spr.frames[Math.floor(this.clock * (spr.fps || 5)) % spr.frames.length].c, w = img.width * S, hh = img.height * S;
@@ -3631,6 +3745,174 @@ export class Game {
       if (!still) this.particles.emit(x, s.y - 14, 0, 0, 0, life, 0.8, 1, PC.w, P.GLOW | P.FADE, 0);
     }
   }
+}
+
+// ------------------------------------------------------ layers of the screen --
+
+// Canvases the size of the screen, drawn into and laid over the scene within a frame: 0 the unlit
+// layers' (Game.drawUnlit) and a death blast's (drawDeathFx), 1 that blast in its colour (deathTint).
+// Each comes cleared, drawn into as the scene is (no smoothing).
+const layers = [null, null];
+function screenLayer(i, c) {
+  const w = Math.max(1, c.pxW), h = Math.max(1, c.pxH);
+  let cv = layers[i];
+  if (!cv) cv = layers[i] = makeCanvas(w, h);
+  else if (cv.width !== w || cv.height !== h) {
+    cv.width = w;
+    cv.height = h;
+  }
+  const l = cv.getContext('2d');
+  l.globalCompositeOperation = 'source-over';
+  l.globalAlpha = 1;
+  l.imageSmoothingEnabled = false;
+  l.clearRect(0, 0, w, h);
+  return l;
+}
+
+// The unlit layer's cells, UNLIT_CELL screen px square (Game.drawUnlit): which hold a glow drawn so
+// far this frame, a figure's (FIGURE: a foe's, a minion's, a boss's), one standing still (STILL: a
+// prop's, a crypt's) or one on the ground (GROUND: a pickup's); and whether any was drawn at all.
+const UNLIT_CELL = 16, FIGURE = 1, STILL = 2, GROUND = 4, ANY_GLOW = FIGURE | STILL | GROUND;
+let cells = new Uint8Array(0), cellsW = 0, cellsH = 0, unlitAny = false;
+function unlitCells(c) {
+  cellsW = Math.ceil(c.pxW / UNLIT_CELL);
+  cellsH = Math.ceil(c.pxH / UNLIT_CELL);
+  if (cells.length < cellsW * cellsH) cells = new Uint8Array(cellsW * cellsH);
+  else cells.fill(0, 0, cellsW * cellsH);
+  unlitAny = false;
+}
+
+// The cells under a screen rectangle: marked with `bit` (unlitMark), or whether any holds one of
+// `bits` (unlitUnder).
+function unlitMark(X, Y, w, h, bit) {
+  unlitAny = true;
+  const x0 = Math.max(0, Math.floor(X / UNLIT_CELL)), x1 = Math.min(cellsW - 1, Math.floor((X + w) / UNLIT_CELL));
+  const y0 = Math.max(0, Math.floor(Y / UNLIT_CELL)), y1 = Math.min(cellsH - 1, Math.floor((Y + h) / UNLIT_CELL));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells[y * cellsW + x] |= bit;
+}
+function unlitUnder(X, Y, w, h, bits) {
+  const x0 = Math.max(0, Math.floor(X / UNLIT_CELL)), x1 = Math.min(cellsW - 1, Math.floor((X + w) / UNLIT_CELL));
+  const y0 = Math.max(0, Math.floor(Y / UNLIT_CELL)), y1 = Math.min(cellsH - 1, Math.floor((Y + h) / UNLIT_CELL));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (cells[y * cellsW + x] & bits) return true;
+  return false;
+}
+
+// Where a thing of the scene was drawn this frame, as its own draw drew it: DRAWN [X, Y, w, h] on
+// the screen, and its picture (drawnImg) and alpha (drawnAlpha). A foe its picture (Enemy _img) over
+// its rounded rectangle, a minion by Minion.rect, a tree, a box, a crypt or a shrine (a spent one
+// dimmed) its frame over its rectangle (_rect). False if it wasn't drawn whole: a foe or a minion
+// still rising out of the ground (as drawNightEdge's cut leaves it).
+const DRAWN = [0, 0, 0, 0];
+let drawnImg = null, drawnAlpha = 1;
+function drawnAs(o, c) {
+  if (o.minion) {
+    if (o.rise > 0) return false;
+    const m = o.rect(c);
+    DRAWN[0] = m.X;
+    DRAWN[1] = m.Y;
+    DRAWN[2] = m.w;
+    DRAWN[3] = m.h;
+    drawnImg = m.img;
+    drawnAlpha = o.life < 1 ? o.life : 1;
+    return true;
+  }
+  const r = o._rect;
+  if (!r) return false;
+  if (o.def) {
+    if (!o._img || (o.spawnT > 0 && o.def.rise)) return false;
+    DRAWN[0] = Math.round(r[0]);
+    DRAWN[1] = Math.round(r[1]);
+    DRAWN[2] = Math.round(r[2]);
+    DRAWN[3] = Math.round(r[3]);
+    drawnImg = o._img;
+    drawnAlpha = o.spawnT > 0 ? o.alpha * (1 - o.spawnT / o.spawnMax) : o.alpha;
+    return true;
+  }
+  DRAWN[0] = r[0];
+  DRAWN[1] = r[1];
+  DRAWN[2] = r[2];
+  DRAWN[3] = r[3];
+  drawnImg = r[4].c;
+  drawnAlpha = o.shrine && o.used ? 0.6 : 1;
+  return true;
+}
+
+// What drawnAs found, cut out of the unlit layer l (as much as it covers: its alpha) where a glow
+// of `bits` lies under it.
+function unlitCut(l, bits) {
+  if (!unlitUnder(DRAWN[0], DRAWN[1], DRAWN[2], DRAWN[3], bits)) return;
+  l.globalCompositeOperation = 'destination-out';
+  l.globalAlpha = drawnAlpha;
+  l.drawImage(drawnImg, DRAWN[0], DRAWN[1], DRAWN[2], DRAWN[3]);
+  l.globalCompositeOperation = 'source-over';
+  l.globalAlpha = 1;
+}
+
+// ------------------------------------------------------------ death blasts --
+
+// How a fallen boss's or crypt lord's death blast looks (Game.deathBlast), by the colour it burned
+// in (Enemy.rimColor) and how it dies: col, the colour it is laid on in (deathTint; null, a fire's
+// as it is: Azgaroth's and the Pit Lord's ash); light, its lights' key, the nearest of LIGHT_COLORS;
+// splat, what it leaves where a fire leaves its scorch (DEATH_SPLAT; null, the scorch); parts, each
+// particle colour (a palette index) to its shade in col.
+const DEATH_SPLAT = { blood: 'blood', ecto: 'goo', ice: 'ice', sand: 'sand', sap: 'sap', dark: 'dark' };
+const FIRE_LOOK = Object.freeze({ col: null, light: null, splat: null, parts: null });
+const deathLooks = new Map();
+const DEATH_LOOKS_DRAWN = []; // the looks of a pass (Game.drawDeathFx), gathered anew each time
+function deathLook(e) {
+  if (e.def.death === 'ash') return FIRE_LOOK;
+  const col = e.rimColor(), splat = DEATH_SPLAT[e.def.death] || null, key = `${col}|${splat}`;
+  let look = deathLooks.get(key);
+  if (!look) deathLooks.set(key, (look = { col, light: nearestLight(col), splat, parts: shadesIn(col) }));
+  return look;
+}
+
+// The key of LIGHT_COLORS nearest a colour.
+function nearestLight(col) {
+  const [r, g, b] = hexToRgb(col);
+  let best = 'white', d = Infinity;
+  for (const k in LIGHT_COLORS) {
+    const [R, G, B] = LIGHT_COLORS[k], q = (R - r) ** 2 + (G - g) ** 2 + (B - b) ** 2;
+    if (q < d) (d = q), (best = k);
+  }
+  return best;
+}
+
+// Each colour of the palette (a particle's: particles.js) to the palette's nearest to its shade in
+// col: col's hue and saturation at its own lightness, as deathTint lays a blast on (the 'color'
+// blend of the canvas, W3C compositing: SetLum and ClipColor).
+function shadesIn(col) {
+  const hue = hexToRgb(col), pal = PALETTE_CSS.map(hexToRgb), out = new Uint8Array(pal.length);
+  const lum = (v) => 0.3 * v[0] + 0.59 * v[1] + 0.11 * v[2];
+  for (let i = 0; i < pal.length; i++) {
+    const d = lum(pal[i]) - lum(hue);
+    let v = hue.map((x) => x + d);
+    const l = lum(v), lo = Math.min(...v);
+    if (lo < 0) v = v.map((x) => l + ((x - l) * l) / (l - lo));
+    const hi = Math.max(...v);
+    if (hi > 255) v = v.map((x) => l + ((x - l) * (255 - l)) / (hi - l));
+    let best = i, dist = Infinity;
+    for (let j = 0; j < pal.length; j++) {
+      const q = (pal[j][0] - v[0]) ** 2 + (pal[j][1] - v[1]) ** 2 + (pal[j][2] - v[2]) ** 2;
+      if (q < dist) (dist = q), (best = j);
+    }
+    out[i] = best;
+  }
+  return out;
+}
+
+// Layer 0 laid over ctx in colour col (in ctx's own way: added, in the glow pass): its hue and
+// saturation col's, its lightness and its alpha its own (the 'color' blend, cut back to its shape).
+function deathTint(ctx, c, col) {
+  const a = layers[0], t = screenLayer(1, c);
+  t.drawImage(a, 0, 0);
+  t.globalCompositeOperation = 'color';
+  t.fillStyle = col;
+  t.fillRect(0, 0, a.width, a.height);
+  t.globalCompositeOperation = 'destination-in';
+  t.drawImage(a, 0, 0);
+  t.globalCompositeOperation = 'source-over';
+  ctx.drawImage(layers[1], 0, 0, c.pxW, c.pxH);
 }
 
 // Whether a figure drawn after the hero stands over him: its body overlaps his on the screen.
