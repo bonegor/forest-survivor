@@ -465,9 +465,13 @@ const ATTACK = ATTACK_POSE.map((p, k) => {
   return { ...p, by, legs, cape: capeAt(ph, 1.1, p.back), cape2: capeIn(ph, 1.1, p.back), tail: tailAt(ph, 0.8, 0.5 + p.back * 0.4), skirt: k >= 3 ? -1 : 0 }
 })
 
-const ALL = [...IDLE, ...WALK, ...ATTACK]
+// Compose the attack arms/equipment with the complete walking lower body.
+// Re-render the figure in its original layer order; no cropped staffs or pasted waist seams.
+const ATTACK_WALK = ATTACK.flatMap(a => WALK.map(w => ({ ...a, by: w.by, legs: w.legs, cape: w.cape, cape2: w.cape2, skirt: w.skirt })))
+meta({ attackRelease: 3, attackWalk: ATTACK.map((_, k) => WALK.map((_, j) => 22 + k * 8 + j)) })
+const ALL = [...IDLE, ...WALK, ...ATTACK, ...ATTACK_WALK]
 const BOX = { w: 48, h: 48 }
 anim("idle", { ...BOX, frames: 8, fps: 6 }, (c) => seraphine(c, IDLE[c.frame]))
 anim("walk", { ...BOX, frames: 8, fps: 10 }, (c) => seraphine(c, WALK[c.frame]))
 anim("attack", { ...BOX, frames: 6, fps: 13 }, (c) => seraphine(c, ATTACK[c.frame]))
-anim("paladin_a", { ...BOX, frames: 22, fps: 10 }, (c) => seraphine(c, ALL[c.frame]))
+anim("paladin_a", { ...BOX, frames: ALL.length, fps: 10 }, (c) => seraphine(c, ALL[c.frame]))

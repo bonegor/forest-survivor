@@ -1,5 +1,5 @@
-// Exactly the approved hero sheets. Frame order, cadence, equipment and menu poses
-// remain identical to the selected review assets.
+// The selected hero sheets, including authored combinations of attack and walking
+// poses. Original idle/walk indices and cadence remain stable when clips are added.
 import ARCHER from '../../assets/heroes/archer.js';
 import MAGE from '../../assets/heroes/mage.js';
 import NECROMANCER from '../../assets/heroes/necromancer.js';
@@ -28,7 +28,7 @@ export function sheet(data, more = {}) {
     idle: data.idle, walk: data.walk, attack: data.attack, attackFps: data.attackFps,
     motionRate: data.motionRate, idleRate: data.idleRate, anchorY: data.anchorY,
     fitW: data.fitW, fitH: data.fitH, selfBob: data.selfBob, outline: false,
-    // A ranger's bow (game/ranger-animation.js): the frame the arrow leaves on, her shots on the move.
+    // Actual release frame and the attack-by-walk-step table, shared by field and crypt combat.
     ...(data.attackRelease != null ? { attackRelease: data.attackRelease, attackWalk: data.attackWalk } : {}),
     ...(data.glow ? { glow: data.glow } : {}),
     ...more,

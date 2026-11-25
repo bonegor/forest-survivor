@@ -450,9 +450,13 @@ const ATTACK = ATTACK_UP.map((u, k) => {
   }
 })
 
-const ALL = [...IDLE, ...WALK, ...ATTACK]
+// Compose the attack arms/equipment with the complete walking lower body.
+// Re-render the figure in its original layer order; no cropped staffs or pasted waist seams.
+const ATTACK_WALK = ATTACK.flatMap(a => WALK.map(w => ({ ...a, by: w.by, feet: w.feet, back: w.back, kick: w.kick, sway: w.sway, ph: w.ph, hemUp: w.hemUp, mantle: w.mantle, mantle2: w.mantle2 })))
+meta({ attackRelease: 3, attackWalk: ATTACK.map((_, k) => WALK.map((_, j) => 22 + k * 8 + j)) })
+const ALL = [...IDLE, ...WALK, ...ATTACK, ...ATTACK_WALK]
 const BOX = { w: 48, h: 48 }
 anim("idle", { ...BOX, frames: 8, fps: 6 }, (c) => morvath(c, IDLE[c.frame]))
 anim("walk", { ...BOX, frames: 8, fps: 10 }, (c) => morvath(c, WALK[c.frame]))
 anim("attack", { ...BOX, frames: 6, fps: 12 }, (c) => morvath(c, ATTACK[c.frame]))
-anim("review", { ...BOX, frames: 22, fps: 10 }, (c) => morvath(c, ALL[c.frame]))
+anim("review", { ...BOX, frames: ALL.length, fps: 10 }, (c) => morvath(c, ALL[c.frame]))

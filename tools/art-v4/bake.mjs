@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { renderSource } from '../art-v3/bake.mjs';
 
-const SELECTED = { archer:'b', mage:'a', rogue:'a', necromancer:'a', paladin:'a', druid:'a', berserker:'a' };
+const SELECTED = { archer:'b', mage:'a', rogue:'a', necromancer:'a', paladin:'a', druid:'a', berserker:'a', witchhunter:'original' };
 export const IDS = ['archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
 export async function bake(id, option) {
   const file = `tools/art-v4/src/${id}-${option}.px.js`;
@@ -28,6 +28,16 @@ export async function bake(id, option) {
   if (data.glow) data.glow = data.glow.filter(c => indexes.has(c));
   for (const key of ['idle', 'walk', 'attack']) for (const frame of data[key] || []) {
     if (!frames[frame]) throw new Error(`${id}-${option}: missing ${key} frame ${frame}`);
+  }
+  if (data.attackWalk) {
+    if (data.attackWalk.length !== data.attack.length || !Number.isInteger(data.attackRelease) || data.attackRelease < 0 || data.attackRelease >= data.attack.length) {
+      throw new Error(`${id}-${option}: invalid moving attack or release mapping`);
+    }
+    for (const row of data.attackWalk) {
+      if (row.length !== data.walk.length || row.some(i => !Number.isInteger(i) || !frames[i])) {
+        throw new Error(`${id}-${option}: every attack needs a frame for each walk step`);
+      }
+    }
   }
   mkdirSync('tools/art-v4/archive/heroes-v4', { recursive: true });
   writeFileSync(`tools/art-v4/archive/heroes-v4/${id}-${option}.js`, `// Source: ${file}\n// Rebuild: node tools/art-v4/bake.mjs ${id}\nexport default ${JSON.stringify(data)};\n`);

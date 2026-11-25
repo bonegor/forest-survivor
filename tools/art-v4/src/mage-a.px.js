@@ -173,9 +173,9 @@ function beard(F, pts) {
 // round its foot, and the wide brim over the brow, lit on top, in shade beneath.
 const BLUE = "0123456789q"
 const BRIM = `
-.5678887654.
-.2567776542.
-..12233221..`
+.567888876654321.
+.25677777654321.
+..122333332211..`
 function hat(F, x0, y0, cone) {
   const P = new Part()
   P.strand(cone, [4.4, 3.7, 2.9, 2.1, 1.5, 1.0, 0.5], "123456789", { light: [-0.6, -1], fade: 0.2, lift: 0.08,
@@ -442,9 +442,13 @@ const ATTACK = [
   }
 })
 
-const ALL = [...IDLE, ...WALK, ...ATTACK]
+// Compose the attack arms/equipment with the complete walking lower body.
+// Re-render the figure in its original layer order; no cropped staffs or pasted waist seams.
+const ATTACK_WALK = ATTACK.flatMap(a => WALK.map(w => ({ ...a, by: w.by, boots: w.boots, robe: w.robe })))
+meta({ attackRelease: 3, attackWalk: ATTACK.map((_, k) => WALK.map((_, j) => 22 + k * 8 + j)) })
+const ALL = [...IDLE, ...WALK, ...ATTACK, ...ATTACK_WALK]
 const BOX = { w: 48, h: 48 }
 anim("idle", { ...BOX, frames: 8, fps: 6 }, (c) => eldrin(c, IDLE[c.frame]))
 anim("walk", { ...BOX, frames: 8, fps: 10 }, (c) => eldrin(c, WALK[c.frame]))
 anim("attack", { ...BOX, frames: 6, fps: 12 }, (c) => eldrin(c, ATTACK[c.frame]))
-anim("review", { ...BOX, frames: 22, fps: 10 }, (c) => eldrin(c, ALL[c.frame]))
+anim("review", { ...BOX, frames: ALL.length, fps: 10 }, (c) => eldrin(c, ALL[c.frame]))

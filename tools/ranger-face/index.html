@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ranger · Forest Survivor</title>
+<style>
+  :root { color-scheme:dark; font:16px 'Segoe UI',sans-serif; color:#eadfc6; background:#171b17 }
+  * { box-sizing:border-box } body { margin:0 } main { max-width:1300px; margin:auto; padding:clamp(16px,3vw,42px) }
+  header { border-bottom:1px solid #454a3c; margin-bottom:20px; padding-bottom:16px }
+  h1,h2 { font-family:'Baskerville Old Face',Georgia,serif; font-weight:normal; margin:0 }
+  h1 { font-size:clamp(28px,4vw,46px) } h2 { font-size:clamp(20px,3vw,27px) }
+  p { color:#bfc3ae; line-height:1.4; margin:6px 0 0 }
+  nav,.actions,.legend { display:flex; flex-wrap:wrap; gap:8px; align-items:center }
+  nav { gap:12px 18px; margin-bottom:20px }
+  label { display:inline-flex; align-items:center; gap:6px }
+  button,select,.run-link { background:#282e25; border:1px solid #5b6252; color:#efe7d2; font:inherit; border-radius:3px; padding:6px 10px; cursor:pointer }
+  .run-link { color:#f5d397; background:#302e22; border-color:#7b7051; text-decoration:none }
+  button:hover,select:hover,.run-link:hover { border-color:#bab991 }
+  :is(button,select,.run-link):focus-visible { outline:2px solid #e6b878; outline-offset:2px }
+  .panels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(8px,1.5vw,22px) }
+  article { min-width:0 } .legend { justify-content:space-between; margin-bottom:8px }
+  canvas { display:block; width:100%; height:clamp(160px,30vh,300px); image-rendering:pixelated; background:#22291e; border:0 }
+  .stage { border:1px solid #444b3d; background:#20251f; overflow:hidden }
+  #status { font-variant-numeric:tabular-nums; min-height:1.4em; font-size:.875rem; margin:12px 0 }
+  @media(max-width:570px) { main { padding:14px 8px } .legend { display:grid } .panels { gap:6px } nav { gap:8px } p,label,button,select,.run-link { font-size:14px } }
+</style>
+<main>
+  <header><h1>Ranger</h1><p>Compare the walk at gameplay size, or take either Ranger into the Darkwood.</p></header>
+  <nav aria-label="Comparison controls">
+    <label>Motion <select id="motion">
+      <option value="right">Walk right</option><option value="left">Walk left</option><option value="diagonal">Walk diagonally right</option><option value="diagonal-left">Walk diagonally left</option>
+      <option value="idle">Stand still</option><option value="attack">Fire a bow</option><option value="attack-walk">Walk and fire</option>
+      <option value="selection">Hero selection</option>
+    </select></label>
+    <label>Size <select id="size"><option value="1">Gameplay size</option><option value="3">3× close-up</option></select></label>
+    <div class="actions"><button id="pause">Pause</button><button id="step">Step</button><button id="restart">Restart</button></div>
+  </nav>
+  <section class="panels" aria-label="Ranger designs"></section>
+  <p id="status" role="status">Loading the Ranger…</p>
+</main>
+<script type="module">
+  const host = await fetch('/', { method: 'HEAD' });
+  if (host.headers.has('X-Ranger-Review')) await import('/review.js');
+  else location.replace('http://127.0.0.1:3111/');
+</script>
+</html>

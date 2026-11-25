@@ -453,9 +453,13 @@ const ATTACK = ATTACK_POSES.map((a, k) => {
   }
 })
 
-const ALL = [...IDLE, ...WALK, ...ATTACK]
+// Compose the attack arms/equipment with the complete walking lower body.
+// Re-render the figure in its original layer order; no cropped staffs or pasted waist seams.
+const ATTACK_WALK = ATTACK.flatMap(a => WALK.map(w => ({ ...a, by: w.by, legs: w.legs, ph: w.ph, trail: w.trail, drape: w.drape, drape2: w.drape2 })))
+meta({ attackRelease: 3, attackWalk: ATTACK.map((_, k) => WALK.map((_, j) => 22 + k * 8 + j)) })
+const ALL = [...IDLE, ...WALK, ...ATTACK, ...ATTACK_WALK]
 const BOX = { w: 48, h: 48 }
 anim("idle", { ...BOX, frames: 8, fps: 6 }, (c) => bramwyn(c, IDLE[c.frame]))
 anim("walk", { ...BOX, frames: 8, fps: 10 }, (c) => bramwyn(c, WALK[c.frame]))
 anim("attack", { ...BOX, frames: 6, fps: 12 }, (c) => bramwyn(c, ATTACK[c.frame]))
-anim("review", { ...BOX, frames: 22, fps: 10 }, (c) => bramwyn(c, ALL[c.frame]))
+anim("review", { ...BOX, frames: ALL.length, fps: 10 }, (c) => bramwyn(c, ALL[c.frame]))

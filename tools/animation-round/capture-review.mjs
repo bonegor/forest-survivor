@@ -5,7 +5,7 @@
 // REVIEW_DIFF selects a real difficulty; REVIEW_PHASES is a comma-separated scene subset.
 // REVIEW_SCALE sets real device pixels per logical world pixel (e.g. 1 or 2.4).
 import { createRequire } from 'node:module';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,13 +22,23 @@ const { mulberry32 } = await import('../../public/js/engine/util.js');
 const { moveFor } = await import('../../public/js/data/difficulty.js');
 const { KNIGHT_PLUMED } = await import('../../public/js/art/knight-plumed.js');
 buildSprites();
+const args = process.argv.slice(2), tag = args.shift() || 'review';
+const contactsOnly = args.includes('--contacts');
+const walkOnly = args.includes('--walk-only');
+const requested = args.filter(a => !a.startsWith('--'));
+const sheetDirectory = process.env.REVIEW_SHEETS;
+const overrideIds = process.env.REVIEW_SHEET_IDS?.split(',');
+const ids = requested.length ? requested : Object.keys(HEROES).filter(id =>
+  !sheetDirectory || overrideIds || existsSync(resolve(sheetDirectory, `${id}.js`)));
+if (!ids.length) throw Error(`No playable sheets found in ${sheetDirectory}`);
+for (const id of ids) if (!HEROES[id]) throw Error(`Unknown hero: ${id}`);
 // Stage a proposed sheet in memory without changing the production artwork.
 // The movement conversion is the same as approved-heroes.js and the browser review.
-if (process.env.REVIEW_SHEETS) {
-  for (const [id, hero] of Object.entries(HEROES)) {
-    if (process.env.REVIEW_SHEET_IDS && !process.env.REVIEW_SHEET_IDS.split(',').includes(id)) continue;
-    const data = (await import(pathToFileURL(resolve(process.env.REVIEW_SHEETS, `${id}.js`)))).default;
-    const manualDelay = SPR[hero.sprite].manualDelay;
+if (sheetDirectory) {
+  for (const id of ids) {
+    if (overrideIds && !overrideIds.includes(id)) continue;
+    const hero = HEROES[id], live = SPR[hero.sprite];
+    const data = (await import(pathToFileURL(resolve(sheetDirectory, `${id}.js`)))).default;
     SPR[hero.sprite] = buildSprite(hero.sprite, {
       gen: () => data.frames.map(([x,y,w,h,encoded]) => {
         const raw = Buffer.from(encoded,'base64'), d = new Uint32Array(data.w*data.h), n = data.indexBytes;
@@ -39,15 +49,11 @@ if (process.env.REVIEW_SHEETS) {
       }),
       ...Object.fromEntries(['idle','walk','attack','attackWalk','attackRelease','attackFps','anchorY','floating','hires'].map(k=>[k,data[k]])),
       motionRate:data.walkFps/(9.8*Math.max(.6,Math.min(1.6,moveFor('s15','easy')*(hero.stats.speed||1)))),
-      idleRate:data.idleFps/1.6,selfBob:true,outline:false,manualDelay,
+      attackStart:data.attackStart ?? live.attackStart,
+      idleRate:data.idleFps/1.6,selfBob:true,outline:false,manualDelay:live.manualDelay,
     });
   }
 }
-const args = process.argv.slice(2), tag = args.shift() || 'review';
-const contactsOnly = args.includes('--contacts');
-const walkOnly = args.includes('--walk-only');
-const requested = args.filter(a => !a.startsWith('--'));
-const ids = requested.length ? requested : Object.keys(HEROES);
 const root = resolve(process.env.REVIEW_OUT || `output/animation-round/${tag}`);
 const difficulty = process.env.REVIEW_DIFF || 'easy';
 mkdirSync(root, { recursive: true });

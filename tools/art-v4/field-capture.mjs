@@ -16,7 +16,7 @@ const { view } = await import('../../public/js/engine/view.js');
 const { mulberry32 } = await import('../../public/js/engine/util.js');
 buildSprites();
 
-const root = 'output/hero-v4/field';
+const root = process.env.FIELD_OUT || 'output/hero-v4/field';
 mkdirSync(root, { recursive: true });
 const ids = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(HEROES).filter(id => id !== 'knight');
 const W = 480, H = 300, FPS = 15, HZ = 60, SECONDS = 6.4;

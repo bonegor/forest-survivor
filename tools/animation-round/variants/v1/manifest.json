@@ -1,0 +1,29 @@
+{
+  "version": "v1",
+  "label": "V1 · current walk",
+  "date": "2026-11-12",
+  "files": {
+    "knight.js": "66c997148bc796418ee9be7040fb221ee6cac3d1f6e83488fca2111e580a795e",
+    "archer.js": "08abd38253c001d08aca4fc967d034fb92eb202ed68f89cbbf3526680533b2ac",
+    "mage.js": "2063e7ab2129a462877da3199eb1f04a6081419c0376558dedc78a0c97b4057a",
+    "rogue.js": "2a4c4032f61bd24d3844cec4d425f78d68be488c6d2a4a005b35da97b4feeed0",
+    "necromancer.js": "5561dea1c0c57e8e64995d8e07f000cab25561eee7140abae99f9d72d0e54c21",
+    "paladin.js": "0f3028b6ba1b5db1b6a01c24cb3a8cc8d3e328cac1ab4a26d9da46b0526ad7be",
+    "druid.js": "daf04eefe52ac17706842f91afe2b0ab2ffb9d36eeeb26b2a5a655642a81e96d",
+    "berserker.js": "f3fe9406892a190ad4f9bf5c3137cb4b76490d078b74bd2148c7a881a2257eaf",
+    "witchhunter.js": "e9ce2ef63c932c1b524a52f8cd57d4b670f812900c1bc24db31b5d9c1d00a177",
+    "footman.js": "7c0370791fbde60ad1ea1bd70fd882fb0ec9b06ef0d06dd5a6f742ce27159cfb",
+    "marksman.js": "1ac16c689713cc19b15200ac91ac9334639d5ea2b856ccee13feb343248a1645",
+    "templar.js": "6e1f6937ed91f5b98b189d7c321720ead0ebc27801ff192cc5a29f23dd4a5f20",
+    "trailblazer.js": "41ff0daf6e1f179add48393a8065344964ad889c4b36a77dcb0a2130771e0f88",
+    "thornkeeper.js": "b82cf29551926871a6c55e17a4764faabc87ff7427e3204e8ffeeb13a998b94f",
+    "wraith.js": "ff8f3702c61dcc153a3d808b7b2eadd50dd2abc09860399d3df08b946a6c438a",
+    "gravebinder.js": "76247ce1d3ea3281f7725c66bd497134a998a64114369b4614c674757ab98d6e",
+    "arcanist.js": "efe7c356620f2450cc1142614e0f37c9afd446dddf170941c84c2e7049f12d67",
+    "praetorian.js": "3fbc56da978f08ec462014c09c415dcc42e9497410313eac7e341bf580173cd0",
+    "seraph.js": "2a45559c8001d0454f8a526fd0b221806d5f5dc8d50a03ca0880e249f68986c4",
+    "boltguard.js": "3376bf2391e47f339cf91be80eebad126c8a291a130490960bfca46d4dbb02dc",
+    "swordbearer.js": "7e13db1e46166356db3367cd8f4e6ba84545639c363157a423a4bef04524f71a",
+    "index.js": "02b6fc59b5b91143466221b017b2d6edb3453573ca849fdbff01e03140fbddd1"
+  }
+}

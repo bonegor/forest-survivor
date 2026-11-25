@@ -353,9 +353,13 @@ const ATTACK = ATK.map((k, i) => {
   return { ...k, legs, cape: capeAt(ph, 1.2, k.back), cape2: capeIn(ph, 1.2, k.back), tail: tailAt(ph, 1.2, k.back * 0.6, k.back * 0.3) }
 })
 
-const ALL = [...IDLE, ...WALK, ...ATTACK]
+// Compose the attack arms/equipment with the complete walking lower body.
+// Re-render the figure in its original layer order; no cropped staffs or pasted waist seams.
+const ATTACK_WALK = ATTACK.flatMap(a => WALK.map(w => ({ ...a, by: w.by, legs: w.legs, kick: w.kick, cape: w.cape, cape2: w.cape2 })))
+meta({ attackRelease: 3, attackWalk: ATTACK.map((_, k) => WALK.map((_, j) => 22 + k * 8 + j)) })
+const ALL = [...IDLE, ...WALK, ...ATTACK, ...ATTACK_WALK]
 const BOX = { w: 48, h: 48 }
 anim("idle", { ...BOX, frames: 8, fps: 6 }, (c) => ulfric(c, IDLE[c.frame]))
 anim("walk", { ...BOX, frames: 8, fps: 10 }, (c) => ulfric(c, WALK[c.frame]))
 anim("attack", { ...BOX, frames: 6, fps: 12 }, (c) => ulfric(c, ATTACK[c.frame]))
-anim("berserker_a", { ...BOX, frames: 22, fps: 10 }, (c) => ulfric(c, ALL[c.frame]))
+anim("berserker_a", { ...BOX, frames: ALL.length, fps: 10 }, (c) => ulfric(c, ALL[c.frame]))

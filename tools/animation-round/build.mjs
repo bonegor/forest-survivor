@@ -9,7 +9,6 @@ import source from './baseline/index.js';
 import { writePng } from '../png.mjs';
 import { buildGroundedWalk, GROUNDED_MODELS } from './grounded-walk.mjs';
 import { buildRobedWalk } from './robed-walk.mjs';
-import { heavyHeroClarity } from './heavy-hero-clarity.mjs';
 import { fitPaladinFace } from './paladin-trail-face.mjs';
 import { fitPaladinArms } from './paladin-arms.mjs';
 import { colorTrailEyes, registerTrailIdleEyes, trailWalkPalette } from './trailblazer-eyes.mjs';
@@ -465,19 +464,19 @@ for(const [id,base] of Object.entries(source)) {
   }));
   // Shadow's requested 2x cadence is visual only. Keep the manual impact delay
   // and all weapon/movement statistics unchanged. Menu portraits read idleFps.
-  const visualRate=id==='rogue'?2:1;
+  const doubleShadowCadence=id==='rogue' && version==='v1';
+  const visualRate=doubleShadowCadence?2:1;
   walkFps*=visualRate; attackFps*=visualRate;
   const idleFps=(rig.floating?7:8)*visualRate;
-  if(id==='paladin' && !trailFace)for(let i=0;i<frames.length;i++)frames[i]=heavyHeroClarity(frames[i],id);
   const detail=sourceDetail(id,{base,frames,idle,walk,attack,attackWalk,version,idleField:i=>materialField(rig,i/16*TAU)});
   const finalFrames=detail?.frames||frames;
   const data=pack(finalFrames,{...base,idle,idleFps,walk,walkFps,attack,attackRelease,attackFps,attackWalk,
     manualDelay:base.manualDelay??Math.min(2,base.attackRelease)/base.attackFps,
     motionRevision:version==='v2'?'restrained-roster-gait-v2-2026-11-12':'continuous-roster-gait-2026-11-12',
-    ...(id==='paladin'?{clarityRevision:trailFace?'paladin-trail-face-2026-11-19':'heavy-hero-faces-2026-11-14',
-      claritySource:trailFace?'tools/animation-round/paladin-trail-face.mjs':'tools/animation-round/heavy-hero-clarity.mjs'}:{}),
+    ...(trailFace?{clarityRevision:'paladin-trail-face-2026-11-19',
+      claritySource:'tools/animation-round/paladin-trail-face.mjs'}:{}),
     motionSource:`tools/animation-round/${nativeGait?.settings?'robed':'grounded'}-walk.mjs`,
-    ...(id==='rogue'?{animationRevision:'shadow-double-cadence-2026-11-14'}:{}),
+    ...(doubleShadowCadence?{animationRevision:'shadow-double-cadence-2026-11-14'}:{}),
     motionNotes:nativeGait?.settings?.note||(nativeGait?'Sixteen connected contact, compression, passing and reaching phases; stable native upper-body texture, alternating planted soles and lifted returns.':rig.note),
     ...detail?.metadata,
   });
