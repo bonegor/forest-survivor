@@ -2,7 +2,7 @@
 // Builds the release of the game for itch.io: a copy of public/ with only what a player needs, its
 // engine/build.js switched to RELEASE (no debug address, no developer panel, never asks for the
 // game's server; the save in the browser's storage), zipped to upload as an HTML game.
-//   node tools/build-itch.mjs [--out=dist/itch] [--zip=dist/forest-survivor-itch.zip] [--no-zip] [--noindex]
+//   node tools/build-itch.mjs [--demo] [--out=dist/itch] [--zip=dist/forest-survivor-itch.zip] [--no-zip] [--noindex]
 // --noindex marks the page for search engines to leave out: the unlisted copy on gamevibe.si
 // that the Pages workflow builds, to play what ships before it is uploaded.
 //
@@ -12,9 +12,10 @@
 // (audio/sfx/). Not the menu-music candidates,
 // the unlisted pages, nor anything else in public/. Every module the game imports must be in the
 // copy, or the build fails (checkImports).
-import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { resolve, join, dirname, relative, posix } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, lstatSync, existsSync } from 'node:fs';
+import { resolve, join, dirname, relative, isAbsolute, parse, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 import zlib from 'node:zlib';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,6 +24,47 @@ const LEAVE_OUT = ['js/dev/', 'js/bots/'];
 const MUSIC = 'audio/music/';
 // itch.io's limits for a game played in the browser.
 const ITCH_FILES = 1000, ITCH_BYTES = 500 * 1024 * 1024, ITCH_FILE_BYTES = 200 * 1024 * 1024;
+
+const below = (root, path) => {
+  const rel = relative(root, path);
+  return !!rel && rel !== '..' && !rel.startsWith('..' + (process.platform === 'win32' ? '\\' : '/')) && !isAbsolute(rel);
+};
+
+// A build replaces its output directory. Only dedicated generated directories may be replaced;
+// an explicit temporary parent lets tests build in isolation without widening the CLI's scope.
+// Reject junctions/symlinks too: a lexical child of dist must not resolve into source or elsewhere.
+export function checkBuildDestination(path, { pub = PUBLIC, outputRoot } = {}) {
+  const target = resolve(path), source = resolve(pub);
+  const roots = [join(ROOT, 'dist'), join(ROOT, '_site')];
+  if (outputRoot !== undefined) {
+    const temporary = resolve(outputRoot);
+    if (!below(resolve(tmpdir()), temporary)) throw new Error('outputRoot must be a dedicated directory below the system temporary directory');
+    roots.push(temporary);
+  }
+  if (!roots.some(root => below(root, target))) throw new Error(`Unsafe build destination: ${target}; choose a child of dist/ or _site/`);
+  if (target === source || below(target, source) || below(source, target)) throw new Error('A build destination cannot contain or overwrite its source');
+  let current = parse(target).root;
+  for (const part of relative(current, target).split(/[\\/]/)) {
+    current = join(current, part);
+    if (existsSync(current) && lstatSync(current).isSymbolicLink()) throw new Error(`Build destination traverses a symbolic link or junction: ${current}`);
+  }
+  return target;
+}
+
+export function releaseManifest({ demo = false } = {}) {
+  const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  return {
+    schema: 1,
+    name: demo ? 'Forest Survivor Demo' : 'Forest Survivor',
+    version,
+    edition: demo ? 'demo' : 'full',
+    entry: 'index.html',
+    content: demo
+      ? { heroes: ['knight', 'archer', 'mage'], survivalMaps: ['desert'], modes: ['s15'], crypts: true, persistentEquipment: true, weaponEvolutions: true }
+      : { heroes: 'complete roster', survivalMaps: 'all', modes: ['s15', 'dungeon', 'ranked'], crypts: true, persistentEquipment: true, weaponEvolutions: true },
+    saves: { namespace: demo ? 'demo' : 'full', activeRunResume: false },
+  };
+}
 
 // Every file under dir (relative to pub), as posix paths.
 function walk(pub, dir) {
@@ -77,9 +119,10 @@ function checkImports(out) {
   return seen.size;
 }
 
-export function buildItch({ out = join(ROOT, 'dist/itch'), zip = join(ROOT, 'dist/forest-survivor-itch.zip'), noindex = false, pub = PUBLIC } = {}) {
+export function buildItch({ demo = false, out, zip, noindex = false, pub = PUBLIC, outputRoot } = {}) {
+  out = checkBuildDestination(out ?? join(ROOT, demo ? 'dist/itch-demo' : 'dist/itch'), { pub, outputRoot });
+  zip = zip === null ? null : checkBuildDestination(zip ?? join(ROOT, demo ? 'dist/forest-survivor-demo-itch.zip' : 'dist/forest-survivor-itch.zip'), { pub, outputRoot });
   const files = releaseFiles(pub);
-  rmSync(out, { recursive: true, force: true });
   let bytes = 0;
   const entries = [];
   for (const f of files) {
@@ -87,19 +130,30 @@ export function buildItch({ out = join(ROOT, 'dist/itch'), zip = join(ROOT, 'dis
     if (f === 'js/engine/build.js') {
       const src = data.toString('utf8');
       if (!/^export const RELEASE = false;$/m.test(src)) throw new Error('js/engine/build.js has no "export const RELEASE = false;" to switch');
-      data = Buffer.from(src.replace(/^export const RELEASE = false;$/m, 'export const RELEASE = true;'));
+      if (!/^export const DEMO = false;$/m.test(src)) throw new Error('js/engine/build.js has no "export const DEMO = false;" to switch');
+      data = Buffer.from(src.replace(/^export const RELEASE = false;$/m, 'export const RELEASE = true;')
+        .replace(/^export const DEMO = false;$/m, `export const DEMO = ${!!demo};`));
     }
     if (f === 'index.html' && noindex) {
       data = Buffer.from(data.toString('utf8').replace('<meta charset="utf-8">', '<meta charset="utf-8">\n  <meta name="robots" content="noindex">'));
     }
+    if (f === 'index.html' && demo) data = Buffer.from(data.toString('utf8').replace('<title>Forest Survivor</title>', '<title>Forest Survivor Demo</title>'));
     if (data.length > ITCH_FILE_BYTES) throw new Error(`${f} is over itch.io's 200 MB a file`);
     bytes += data.length;
-    mkdirSync(dirname(join(out, f)), { recursive: true });
-    writeFileSync(join(out, f), data);
     entries.push({ name: f, data });
   }
-  if (files.length > ITCH_FILES) throw new Error(`${files.length} files: itch.io takes at most ${ITCH_FILES}`);
+  const manifest = releaseManifest({ demo });
+  const manifestData = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
+  entries.push({ name: 'release-manifest.json', data: manifestData });
+  bytes += manifestData.length;
+  if (entries.length > ITCH_FILES) throw new Error(`${entries.length} files: itch.io takes at most ${ITCH_FILES}`);
   if (bytes > ITCH_BYTES) throw new Error(`${(bytes / 2 ** 20).toFixed(0)} MB: itch.io takes at most 500 MB`);
+  // All source reads/transformations and size checks succeed before replacing the previous build.
+  rmSync(out, { recursive: true, force: true });
+  for (const { name, data } of entries) {
+    mkdirSync(dirname(join(out, name)), { recursive: true });
+    writeFileSync(join(out, name), data);
+  }
   const modules = checkImports(out);
   let zipBytes = 0;
   if (zip) {
@@ -108,7 +162,7 @@ export function buildItch({ out = join(ROOT, 'dist/itch'), zip = join(ROOT, 'dis
     writeFileSync(zip, z);
     zipBytes = z.length;
   }
-  return { files: files.length, bytes, modules, zipBytes, out, zip };
+  return { files: entries.length, bytes, modules, zipBytes, out, zip, manifest };
 }
 
 // ---------------------------------------------------------------- zip --
@@ -182,11 +236,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     return a ? a.slice(k.length + 3) : d;
   };
   const r = buildItch({
-    out: resolve(opt('out', join(ROOT, 'dist/itch'))),
-    zip: args.includes('--no-zip') ? null : resolve(opt('zip', join(ROOT, 'dist/forest-survivor-itch.zip'))),
+    demo: args.includes('--demo'),
+    out: opt('out') === undefined ? undefined : resolve(opt('out')),
+    zip: args.includes('--no-zip') ? null : opt('zip') === undefined ? undefined : resolve(opt('zip')),
     noindex: args.includes('--noindex'),
   });
   const mb = (n) => (n / 2 ** 20).toFixed(1) + ' MB';
-  console.log(`Release: ${r.files} files, ${mb(r.bytes)}, ${r.modules} modules checked → ${relative(process.cwd(), r.out) || '.'}`);
+  console.log(`${r.manifest.name}: ${r.files} files, ${mb(r.bytes)}, ${r.modules} modules checked → ${relative(process.cwd(), r.out) || '.'}`);
   if (r.zip) console.log(`Zip: ${relative(process.cwd(), r.zip)} (${mb(r.zipBytes)}), to upload to itch.io as an HTML game`);
 }

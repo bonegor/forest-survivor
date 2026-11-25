@@ -28,6 +28,8 @@ import { validOaths, heatOf } from '../data/oaths.js';
 import { dailyKey, dailyNight, dailyDate, dailyLine, dailyOaths } from '../data/daily.js';
 import { historyRow, loadHistory } from '../shared/history.js';
 import { MusicMenu } from './music-menu.js';
+import { DEMO } from '../engine/build.js';
+import { DEMO_DETAILS } from '../shared/demo.js';
 
 const UP_ICONS = {
   might: 'i_might', armor: 'i_armor', vitality: 'i_vitality', recovery: 'i_regen', haste: 'i_cooldown', reach: 'i_area',
@@ -106,7 +108,7 @@ export class TitleScreen {
     ctx.drawImage(L, Math.round(W / 2 - lw / 2), ly, Math.round(lw), Math.round(lh));
     // The motto in the small gothic, between dividers. Jacquard's descenders leave room below
     // the logo's ink, so it tucks up into it.
-    const motto = 'Survive the Night · Delve the Depths', my = ly + lh - 5 * scale, mw = textWidth(motto, 'gothic');
+    const motto = DEMO ? 'Free Demo · Three Heroes · The Sunscorch' : 'Survive the Night · Delve the Depths', my = ly + lh - 5 * scale, mw = textWidth(motto, 'gothic');
     drawText(ctx, motto, W / 2, my, { align: 'center', color: ['#ead4aa', '#ead4aa', '#c28569'], font: 'gothic' });
     flank(ctx, W / 2 - mw / 2 - 5, W / 2 + mw / 2 + 5, my + 6, Math.min(40, W / 2 - mw / 2 - 12), '#b86f50');
 
@@ -131,6 +133,10 @@ export class TitleScreen {
       this.drawUnreadable(ctx, W, H, dt, ly + lh + 16);
       return;
     }
+    if (this.dialog) {
+      if (this.dialog.draw(ctx, ui, W, H, dt)) { this.dialog = null; ui.focus('demo'); ui.lock(0.2); }
+      return;
+    }
 
     // The NEW marks (the review's C5, 28 October 2026): the seen list's first fill, the save as it is
     // now (once a browser); then a dot on CODEX while anything has opened since the Codex last showed
@@ -146,7 +152,7 @@ export class TitleScreen {
     // No Continue: a run is never saved to come back to, only its results when it ends.
     ui.begin(dt);
     const firstJourney = needsPrologue(app.store.profile, app.settings);
-    const items = [['play', firstJourney ? 'BEGIN ADVENTURE' : 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], ['records', 'RECORDS'], ['options', 'OPTIONS']];
+    const items = [['play', firstJourney ? 'BEGIN ADVENTURE' : 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], DEMO ? ['demo', 'ABOUT THE DEMO'] : ['records', 'RECORDS'], ['options', 'OPTIONS']];
     if (!firstJourney) items.push(['prologue', 'REPLAY INTRO']);
     // The buttons and the NEXT line under them stay above the campfire's ring (background.js
     // campTop), which stands on a share of the screen's height while they are centred on it: on a
@@ -256,6 +262,11 @@ export class TitleScreen {
 
   pick(id) {
     const app = this.app;
+    if (id === 'demo' && DEMO) {
+      this.dialog = new MenuDialog('Free demo', [...DEMO_DETAILS]);
+      app.ui.focus('detail_close'); app.ui.lock(0.2);
+      return;
+    }
     if (id === 'play') app.go(needsPrologue(app.store.profile, app.settings) ? 'prologue' : 'hero');
     else if (id === 'prologue') app.go('prologue', { replay: true });
     else if (id === 'armory') app.go('armory');
@@ -393,7 +404,7 @@ export class ModeScreen {
         const line = [`${M.sub} · {best ${fmtTime(best)}}`, `${M.sub} · {${fmtTime(best)}}`].find((s) => textWidth(s.replace(/[{}]/g, '')) <= cw - 6);
         drawRich(ctx, line || `{${fmtTime(best)}}`, x + cw / 2, y + 61, { align: 'center', color: '#8b9bb4', hi: '#feae34' });
       } else {
-        const sub = !open ? 'LOCKED' : m === 's15' ? fitLine(MAPS[map].name, cw - 6) : M.sub;
+        const sub = !open ? DEMO ? 'FULL GAME' : 'LOCKED' : m === 's15' ? fitLine(MAPS[map].name, cw - 6) : M.sub;
         drawText(ctx, sub, x + cw / 2, y + 61, { align: 'center', color: !open ? '#5a6988' : m === 's15' ? MAPS[map].color : '#8b9bb4' });
       }
       // This hero's wins here, a star for each (any win, then Veteran, Elite, Nightmare), down the
@@ -456,9 +467,9 @@ export class ModeScreen {
     // row leaves a short screen no room for two (an 854 x 480 window's 427 x 240), cut short.
     const lockedFocus = focusMode && !canPlay(prof, focusMode, hero);
     const shutMap = !!focusMap && !mapOpen(prof, focusMap);
-    const desc = shutMap ? `To unlock: ${lockReason(prof, 's15', hero, focusMap)}`
+    const desc = shutMap ? `${DEMO ? '' : 'To unlock: '}${lockReason(prof, 's15', hero, focusMap)}`
       : focusMap ? MAPS[focusMap].desc
-      : lockedFocus ? `To unlock: ${lockReason(prof, focusMode, hero)}`
+      : lockedFocus ? `${DEMO ? '' : 'To unlock: '}${lockReason(prof, focusMode, hero)}`
       : (focusMode || mode) === 's15' ? MAPS[map].desc : MODES[focusMode || mode].desc;
     // (rowDescN: the lines kept under the map row, which BEGIN's place keeps room for, below.)
     const rowDescN = H < 250 ? 1 : 2, descN = row ? rowDescN : 2, lines = wrapText(desc, tw);

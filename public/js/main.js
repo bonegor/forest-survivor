@@ -16,6 +16,7 @@ import { GameScreen } from './ui/gamescreen.js';
 import { PrologueScreen } from './ui/prologue.js';
 import { SpoilsScreen } from './ui/reward-reels.js';
 import { MAPS } from './data/maps.js';
+import { demoChoice } from './shared/demo.js';
 
 const SCREENS = {
   title: TitleScreen,
@@ -52,6 +53,7 @@ const app = {
   },
 
   startRun() {
+    this.choice = demoChoice(this.choice);
     setMusicTracks(this.settings.musicTracks);
     this.go('game', {});
   },

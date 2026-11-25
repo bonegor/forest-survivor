@@ -12,6 +12,8 @@ import { SPR } from '../engine/sprites.js';
 import { fmtTime, fmtNum } from '../engine/util.js';
 import { heroCrop } from './scenes.js';
 import { padlock } from './ui.js';
+import { DEMO } from '../engine/build.js';
+import { demoMapAllowed, demoModeAllowed } from '../shared/demo.js';
 
 const title = (id) => `the ${HEROES[id].title}`;
 const prevHero = (id) => HERO_ORDER[HERO_ORDER.indexOf(id) - 1];
@@ -22,6 +24,8 @@ const land = (id) => MAPS[id].name.replace(/^The /, 'the ');
 export function goalText(goal) {
   if (!goal) return 'Every trial is open. Climb the Ranked ladder!';
   switch (goal.type) {
+    case 'demo':
+      return goal.complete ? 'Demo mastered! Try new builds and hunt rare crypt gear.' : 'Survive the Sunscorch with each of the three demo heroes';
     case 'survive':
       return `Survive ${goal.minutes} minutes with ${title(goal.hero)} to unlock ${title(goal.unlocks)}`;
     case 'survivalHard':
@@ -43,6 +47,7 @@ export function goalText(goal) {
 // still shut (28 October 2026): the night before it on the ladder (shared/progress.js mapLadder) is
 // not yet won.
 export function lockReason(p, mode, hero, map) {
+  if (DEMO && (!demoModeAllowed(mode) || (map && !demoMapAllowed(map)))) return 'Available in the full game';
   if (mode === 'dungeon') {
     if (!modeUnlocked(p, 'dungeon')) return 'Survive the night with the Necromancer';
     return `Beat the Dungeon with ${title(prevHero(hero))}`;

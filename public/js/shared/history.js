@@ -4,6 +4,8 @@
 // (recordRun), a few short fields each, in this browser's localStorage alone (HISTORY_KEY: a
 // convenience of its own, never a cookie, and never the settings, which a run writes at most once).
 // Where localStorage can't be used, there is no history.
+import { DEMO } from '../engine/build.js';
+
 export const RECENT = 5;
 export const HISTORY_MOST = 10;
 
@@ -24,7 +26,7 @@ export function lastMoments(recent, now, span = RECENT) {
 // The results' line of them: "Last 5 s: 3× Death Knight 210 · 1× Cultist's bolt 40".
 export const momentsLine = (moments) => `Last ${RECENT} s: ${moments.map((m) => `${m.n}× ${m.who} ${Math.round(m.dmg)}`).join(' · ')}`;
 
-export const HISTORY_KEY = 'fs_history';
+export const HISTORY_KEY = DEMO ? 'fs_demo_history' : 'fs_history';
 export function loadHistory() {
   try {
     const list = JSON.parse(globalThis.localStorage?.getItem(HISTORY_KEY) || '[]');

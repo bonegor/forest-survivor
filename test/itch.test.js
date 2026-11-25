@@ -5,12 +5,12 @@
 // pages or the music candidates, and with its RELEASE switch on (engine/build.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, readFileSync, existsSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
-import { buildItch, releaseFiles, zipFiles, crc32 } from '../tools/build-itch.mjs';
+import { buildItch, releaseFiles, zipFiles, crc32, checkBuildDestination } from '../tools/build-itch.mjs';
 import { MUSIC_TRACKS } from '../public/js/engine/combat-music.js';
 
 const jar = new Map();
@@ -83,11 +83,15 @@ test('the release holds the game and its music, not the developer\'s tools, the 
 });
 
 test('the build switches the copy to RELEASE: no debug address there, every import in it', async () => {
-  const out = mkdtempSync(join(tmpdir(), 'fs-itch-'));
+  const outputRoot = mkdtempSync(join(tmpdir(), 'fs-itch-'));
+  const out = join(outputRoot, 'full');
+  const fetch0 = globalThis.fetch;
   try {
-    const r = buildItch({ out, zip: null, noindex: true });
+    const r = buildItch({ out, zip: null, noindex: true, outputRoot });
     assert.ok(r.modules > 50, 'the imports were followed');
     assert.match(readFileSync(join(out, 'js/engine/build.js'), 'utf8'), /^export const RELEASE = true;$/m);
+    assert.match(readFileSync(join(out, 'js/engine/build.js'), 'utf8'), /^export const DEMO = false;$/m);
+    assert.equal(JSON.parse(readFileSync(join(out, 'release-manifest.json'), 'utf8')).edition, 'full');
     assert.match(readFileSync(join(out, 'index.html'), 'utf8'), /<meta name="robots" content="noindex">/);
     assert.match(readFileSync(new URL('../public/js/engine/build.js', import.meta.url), 'utf8'), /^export const RELEASE = false;$/m, 'the repository\'s own untouched');
     assert.ok(!existsSync(join(out, 'js/dev')));
@@ -103,7 +107,118 @@ test('the build switches the copy to RELEASE: no debug address there, every impo
     assert.equal(rel.store.mode, 'local');
   } finally {
     globalThis.location = { search: '', hostname: 'html-classic.itch.zone', protocol: 'https:' };
-    rmSync(out, { recursive: true, force: true });
+    globalThis.fetch = fetch0;
+    rmSync(outputRoot, { recursive: true, force: true });
+  }
+});
+
+test('the demo build has its own identity and declared playable scope without changing the source edition', async (t) => {
+  const outputRoot = mkdtempSync(join(tmpdir(), 'fs-itch-demo-'));
+  const out = join(outputRoot, 'demo');
+  try {
+    const r = buildItch({ demo: true, out, zip: null, outputRoot });
+    const flags = await import(pathToFileURL(join(out, 'js/engine/build.js')).href);
+    assert.equal(flags.RELEASE, true);
+    assert.equal(flags.DEMO, true);
+    const policy = await import(pathToFileURL(join(out, 'js/shared/demo.js')).href);
+    const manifest = JSON.parse(readFileSync(join(out, 'release-manifest.json'), 'utf8'));
+    assert.equal(manifest.edition, 'demo');
+    assert.deepEqual(manifest.content.heroes, [...policy.DEMO_HEROES]);
+    assert.deepEqual(manifest.content.survivalMaps, [...policy.DEMO_MAPS]);
+    assert.deepEqual(manifest.content.modes, [...policy.DEMO_MODES]);
+    assert.equal(manifest.content.crypts, true);
+    assert.equal(manifest.content.persistentEquipment, true);
+    assert.equal(manifest.saves.activeRunResume, false);
+    assert.deepEqual(r.manifest, manifest);
+    assert.match(readFileSync(join(out, 'index.html'), 'utf8'), /<title>Forest Survivor Demo<\/title>/);
+    assert.match(readFileSync(new URL('../public/js/engine/build.js', import.meta.url), 'utf8'), /^export const DEMO = false;$/m);
+    assert.ok(!existsSync(join(out, 'js/dev')));
+    assert.ok(!existsSync(join(out, 'js/bots')));
+
+    await t.test('only the demo hero who survives the required time earns an ultimate', async () => {
+      const profile = await import(pathToFileURL(join(out, 'js/shared/profile.js')).href);
+      const reload = p => profile.sanitizeProfile(profile.packProfile(p));
+      const openUltimates = p => p.heroes.filter(hero => profile.openFor(p, hero).ult);
+      const fresh = reload(profile.defaultProfile());
+      assert.deepEqual(openUltimates(fresh), []);
+      const run = { hero: 'knight', mode: 's15', map: 'desert', diff: 'easy' };
+      const short = profile.applyRun(fresh, { ...run, time: profile.PROGRESS.ultTime - 1 });
+      assert.ok(short.ok);
+      assert.deepEqual(openUltimates(reload(short.profile)), []);
+      const earned = profile.applyRun(short.profile, { ...run, time: profile.PROGRESS.ultTime });
+      assert.ok(earned.ok);
+      assert.deepEqual(openUltimates(reload(earned.profile)), ['knight']);
+    });
+
+    await t.test('demo runs keep their own history on the same origin', async () => {
+      const full = await import('../public/js/shared/history.js');
+      const demo = await import(pathToFileURL(join(out, 'js/shared/history.js')).href);
+      globalThis.localStorage = fakeStorage();
+      try {
+        const previous = full.recordRun([], { hero: 'druid', mode: 'dungeon' });
+        full.saveHistory(previous);
+        assert.deepEqual(demo.loadHistory(), []);
+        const played = demo.recordRun(demo.loadHistory(), { hero: 'knight', mode: 's15', map: 'desert' });
+        demo.saveHistory(played);
+        assert.deepEqual(demo.loadHistory(), played);
+        assert.deepEqual(full.loadHistory(), previous);
+      } finally {
+        delete globalThis.localStorage;
+      }
+    });
+
+    await t.test('weapon sounds use a separate preference on the same origin', async () => {
+      const ls = (globalThis.localStorage = fakeStorage());
+      const fullKey = 'fs_weapon_sound_style_v1';
+      try {
+        ls.setItem(fullKey, 'heavy');
+        const demo = await import(pathToFileURL(join(out, 'js/engine/weapon-sounds.js')).href);
+        assert.equal(demo.weaponSoundStyle(), 'current');
+        assert.equal(demo.applyWeaponSoundStyle('arcade'), true);
+        assert.equal(ls.getItem(demo.WEAPON_SOUND_KEY), 'arcade');
+        assert.equal(ls.getItem(fullKey), 'heavy');
+      } finally {
+        delete globalThis.localStorage;
+      }
+    });
+  } finally {
+    rmSync(outputRoot, { recursive: true, force: true });
+  }
+});
+
+test('build destinations cannot erase source, arbitrary directories, or a release root', () => {
+  const root = resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  for (const path of [root, join(root, 'public'), join(root, 'dist'), join(root, '_site'), join(root, 'tools'), tmpdir()]) {
+    assert.throws(() => checkBuildDestination(path), /Unsafe build destination/, path);
+  }
+  assert.equal(checkBuildDestination(join(root, 'dist', 'itch-demo')), join(root, 'dist', 'itch-demo'));
+  assert.equal(checkBuildDestination(join(root, '_site', 'release-preview')), join(root, '_site', 'release-preview'));
+  const outputRoot = mkdtempSync(join(tmpdir(), 'fs-itch-safety-'));
+  const sentinel = join(outputRoot, 'keep.txt');
+  writeFileSync(sentinel, 'keep');
+  try {
+    assert.throws(() => buildItch({ out: outputRoot, zip: null, outputRoot }), /Unsafe build destination/);
+    assert.throws(() => checkBuildDestination(join(outputRoot, 'release'), { outputRoot: tmpdir() }), /dedicated directory/);
+    assert.throws(() => checkBuildDestination(join(outputRoot, 'source'), { outputRoot, pub: join(outputRoot, 'source') }), /source/);
+    assert.throws(() => checkBuildDestination(join(outputRoot, 'source', 'nested'), { outputRoot, pub: join(outputRoot, 'source') }), /source/);
+    assert.equal(readFileSync(sentinel, 'utf8'), 'keep');
+    assert.equal(checkBuildDestination(join(outputRoot, 'release'), { outputRoot }), join(outputRoot, 'release'));
+  } finally {
+    rmSync(outputRoot, { recursive: true, force: true });
+  }
+});
+
+test('build destinations reject a junction that escapes the allowed output directory', () => {
+  const outputRoot = mkdtempSync(join(tmpdir(), 'fs-itch-junction-'));
+  const target = join(outputRoot, 'target');
+  const link = join(outputRoot, 'redirect');
+  mkdirSync(target);
+  try {
+    symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.throws(() => checkBuildDestination(join(link, 'release'), { outputRoot }), /symbolic link or junction/);
+    assert.ok(existsSync(target));
+  } finally {
+    rmSync(outputRoot, { recursive: true, force: true });
   }
 });
 

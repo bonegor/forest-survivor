@@ -16,13 +16,15 @@
 
 import * as P from '../shared/profile.js';
 import { DEBUG_FLAG } from './debugflag.js';
-import { RELEASE, STATIC } from './build.js';
+import { RELEASE, DEMO, STATIC } from './build.js';
 import { DEFAULT_COMBAT_MUSIC, normalizeMusicTracks } from './combat-music.js';
 import { MAX_CLAIMS, partitionRunSpoils, sealedFinds, settledSpoils, validRunId } from '../shared/spoils.js';
 
-export const DEBUG = !RELEASE && !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
-const LOCAL_PROFILE = DEBUG ? 'fs_dprofile' : 'fs_lprofile';
-const RUN_OUTBOX = DEBUG ? 'fs_dspoils' : 'fs_spoils';
+export const DEBUG = !RELEASE && !DEMO && !!globalThis.location && new URLSearchParams(globalThis.location.search).has(DEBUG_FLAG);
+// A demo can share a browser origin with the full game without reading,
+// changing, or migrating its profile, settings, pending loot, or NEW marks.
+const LOCAL_PROFILE = DEMO ? 'fs_demo_profile' : DEBUG ? 'fs_dprofile' : 'fs_lprofile';
+const RUN_OUTBOX = DEMO ? 'fs_demo_spoils' : DEBUG ? 'fs_dspoils' : 'fs_spoils';
 let queuedProfileWrite = Promise.resolve();
 
 export function withProfileLock(callback) {
@@ -33,7 +35,7 @@ export function withProfileLock(callback) {
 }
 // The game once kept a run to pick up again in these (the server's own, fs_run, it deletes
 // itself); one a player still has is deleted when the game loads, so nothing lingers.
-const STALE_RUNS = ['fs_lrun', 'fs_drun'];
+const STALE_RUNS = DEMO ? [] : ['fs_lrun', 'fs_drun'];
 
 // Every hero in, and as if each had survived the night and beaten the Dungeon: every mode open
 // to every hero (shared/profile.js canPlay); every weapon, relic and ultimate and every Survival map
@@ -44,7 +46,7 @@ export function unlockEverything(p) {
   P.openEverything(p);
   return p;
 }
-const SETTINGS = 'fs_settings';
+const SETTINGS = DEMO ? 'fs_demo_settings' : 'fs_settings';
 const MAX_AGE = 60 * 60 * 24 * 400;
 
 // A sandboxed frame throws on document.cookie, as a page with storage switched off does on
@@ -105,7 +107,18 @@ function writeCookieSave(name, value) {
 // (itch.zone inside itch.io), where browsers block or partition such a frame's cookies, and a save
 // kept in one could be gone on the next visit; localStorage keeps. A save or settings still in a
 // cookie from before move across the first time they are read.
+function desktopStore() {
+  const storage = globalThis.forestDesktop?.storage;
+  return storage && typeof storage.read === 'function' && typeof storage.write === 'function' ? storage : null;
+}
+
 function browserStore() {
+  const desktop = desktopStore();
+  if (desktop) return {
+    getItem: (name) => desktop.read(name),
+    setItem: (name, value) => desktop.write(name, value),
+    removeItem: (name) => desktop.write(name, null),
+  };
   try {
     const s = globalThis.localStorage;
     return s && typeof s.getItem === 'function' ? s : null;
@@ -116,6 +129,10 @@ function browserStore() {
 
 export const saveBox = {
   read(name) {
+    // Desktop saves have one authoritative file. Never hide a disk error by
+    // falling back to Chromium storage or a different browser cookie.
+    const desktop = desktopStore();
+    if (desktop) return desktop.read(name);
     const s = browserStore();
     if (s) {
       try {
@@ -133,6 +150,14 @@ export const saveBox = {
     return c;
   },
   write(name, value) {
+    const desktop = desktopStore();
+    if (desktop) {
+      try {
+        return desktop.write(name, value) === true;
+      } catch {
+        return false; // saveLocal/submitRun report the result as not kept
+      }
+    }
     const s = browserStore();
     if (s) {
       try {
@@ -152,7 +177,7 @@ export const saveBox = {
 // localStorage only, no cookie, and where the browser keeps nothing (a private window, storage off)
 // there are no marks at all, rather than marks that never go. Its first fill (start) is all a save
 // has open then, so only what opens from there on is marked.
-const SEEN = DEBUG ? 'fs_dseen' : 'fs_seen';
+const SEEN = DEMO ? 'fs_demo_seen' : DEBUG ? 'fs_dseen' : 'fs_seen';
 export const seenBox = {
   // { codex: Set, offered: Set }, or null: no localStorage, or nothing kept in it yet.
   read() {
@@ -271,7 +296,7 @@ export const store = {
   async init() {
     for (const name of STALE_RUNS) if (readCookie(name) != null) writeCookie(name, null);
     // Never on a static host (build.js STATIC, the Pages copy): no game server there to ask for.
-    for (let attempt = 0; !DEBUG && !RELEASE && !STATIC; attempt++) {
+    for (let attempt = 0; !DEBUG && !RELEASE && !STATIC && !DEMO && !desktopStore(); attempt++) {
       try {
         const data = await api('state');
         if (!data.server) throw new Error('not our server');
@@ -324,8 +349,8 @@ export const store = {
   // reaches while the older copy is there).
   saveLocal() {
     const raw = P.encodeState(P.packProfile(this.profile));
-    saveBox.write(LOCAL_PROFILE, raw);
-    this.kept = saveBox.read(LOCAL_PROFILE) === raw;
+    const written = saveBox.write(LOCAL_PROFILE, raw);
+    this.kept = written !== false && saveBox.read(LOCAL_PROFILE) === raw;
   },
 
   // The browser's save as another tab of the game may have left it (local mode). Every change starts
@@ -571,7 +596,7 @@ export const store = {
   // only on this machine: the published game has no developer mode, nor has a release.
 
   async devStatus() {
-    if (RELEASE) return { enabled: false, open: false, authed: false, local: true };
+    if (RELEASE || DEMO || desktopStore()) return { enabled: false, open: false, authed: false, local: true };
     if (this.mode !== 'server') {
       const here = onThisMachine();
       return { enabled: here, open: here, authed: here, local: true };

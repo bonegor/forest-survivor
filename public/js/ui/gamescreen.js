@@ -30,6 +30,7 @@ import { MenuDialog } from './menu-dialog.js';
 import { makeRunId } from '../shared/spoils.js';
 import { SpoilsReveal, SpoilsSelection, drawRewardReel, reelProgress } from './reward-reels.js';
 import { TrophyOverlay } from './trophy.js';
+import { demoChoice } from '../shared/demo.js';
 import { cardReaction } from '../data/reactions.js';
 import { heatOf } from '../data/oaths.js';
 import { recordDaily } from '../data/daily.js';
@@ -38,6 +39,8 @@ import { recordRun, momentsLine, loadHistory, saveHistory } from '../shared/hist
 export class GameScreen {
   enter(app, params = {}) {
     this.app = app;
+    // Also guard direct transitions from the prologue and retry flows.
+    app.choice = demoChoice(app.choice);
     const { hero, mode } = app.choice;
     this.runId = makeRunId();
     this.runFrom = app.store.profile.runs;

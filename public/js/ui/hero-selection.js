@@ -17,10 +17,14 @@ import { MenuDialog } from './menu-dialog.js';
 import { IDENTIFICATION_RULE } from './menu-copy.js';
 import { gearPreview } from './gear-preview.js';
 import { HeroShowcase, heroMenuScale } from './hero-showcase.js';
+import { DEMO } from '../engine/build.js';
+import { DEMO_HEROES, DEMO_DETAILS } from '../shared/demo.js';
+
+const SHOWN_HEROES = DEMO ? DEMO_HEROES : HERO_ORDER;
 
 const ROW_H = 34, ROW_STEP = 36, ROSTER_HEADER = 19;
 
-export function heroSelectionLayout(W, H, count = HERO_ORDER.length) {
+export function heroSelectionLayout(W, H, count = SHOWN_HEROES.length) {
   const width = Math.min(620, W - (W < 400 ? 12 : 24)), x = Math.round((W - width) / 2);
   const rosterW = clamp(Math.round(width * .31), 78, 170);
   const right = x + rosterW + 6, rightW = width - rosterW - 6;
@@ -87,7 +91,7 @@ export class HeroScreen {
   enter(app, params = {}) {
     this.app = app;
     this.t = 0;
-    const owned = HERO_ORDER.filter(id => app.store.profile.heroes.includes(id));
+    const owned = SHOWN_HEROES.filter(id => app.store.profile.heroes.includes(id));
     this.lastHero = owned.includes(app.choice.hero) ? app.choice.hero : owned[0] || 'knight';
     this.rosterScroll = 0;
     this.rosterFocus = null;
@@ -121,9 +125,9 @@ export class HeroScreen {
       return;
     }
     ui.begin(dt);
-    const next = nextHeroUnlock(profile) || HERO_ORDER.find(id => !profile.heroes.includes(id));
-    const roster = HERO_ORDER.filter(id => profile.heroes.includes(id));
-    if (next && HERO_ORDER.includes(next)) roster.push(next);
+    const next = nextHeroUnlock(profile) || SHOWN_HEROES.find(id => !profile.heroes.includes(id));
+    const roster = SHOWN_HEROES.filter(id => profile.heroes.includes(id));
+    if (next && SHOWN_HEROES.includes(next)) roster.push(next);
     const L = this.layout = heroSelectionLayout(W, H, roster.length);
     this.drawRoster(ctx, ui, L.roster, roster, next);
 
@@ -530,7 +534,10 @@ export class HeroScreen {
 
   journey() {
     const p = this.app.store.profile;
-    this.dialog = new MenuDialog('Your journey', [
+    this.dialog = new MenuDialog(DEMO ? 'Your demo adventure' : 'Your journey', DEMO ? [
+      { text: goalText(nextGoal(p)), color: '#fee761' },
+      ...DEMO_DETAILS,
+    ] : [
       { text: goalText(nextGoal(p)), color: '#fee761' },
       `${p.heroes.length} of ${HERO_ORDER.length} heroes recruited. Survive the time listed on each recruit's card.`,
       // The Survival maps in the order they open (data/maps.js; 28 October 2026).

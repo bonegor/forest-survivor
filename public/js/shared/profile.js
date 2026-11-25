@@ -40,6 +40,8 @@ import { killCredit } from './population.js';
 import { MAX_CLAIMS, packSpoils, partitionRunSpoils, settledSpoils, unpackSpoils, validClaimIndices, validRunId } from './spoils.js';
 import { RECRUITS } from '../expansion/roster.js';
 import { COPPER_IDS, COPPER_WEAPONS } from '../data/copper.js';
+import { DEMO } from '../engine/build.js';
+import { DEMO_HEROES, DEMO_MAPS, DEMO_START_RELICS, demoHeroAllowed, demoMapAllowed, demoModeAllowed } from './demo.js';
 
 export { PROGRESS, needText };
 
@@ -62,7 +64,7 @@ export const HERO_ORDER = [...RECRUIT_ORDER, 'eanasir'];
 // The ladder's five, whose Dungeon clears each bring the next one into it and the last opens
 // Ranked; the heroes after them are extras (canPlay, nextGoal).
 export const LADDER = HERO_ORDER.slice(0, 5);
-export const BASE_HEROES = ['knight'];
+export const BASE_HEROES = DEMO ? [...DEMO_HEROES] : ['knight'];
 export const HERO_UNLOCK_TIME = 5 * 60;
 const recruitmentTime = new Map(RECRUITS.map(h => [h.id, h.minutes * 60]));
 export const heroUnlockTime = (id) => recruitmentTime.get(id) ?? HERO_UNLOCK_TIME;
@@ -216,7 +218,7 @@ export function defaultProfile() {
     up: {},
     // Armory ranks a save from before was given (fromBefore); a refund pays them back as gold too.
     gift: {},
-    ul: 0, // the milestones' weapons and relics open: bit i is PROGRESS.locks[i]
+    ul: DEMO ? PROGRESS.locks.reduce((bits, l, i) => bits + (l.type === 'relic' && DEMO_START_RELICS.includes(l.id) ? 2 ** i : 0), 0) : 0,
     uu: 0, // the heroes whose ultimate is open: bit i is HERO_ORDER[i]
     // The Survival maps open (mo: bit i is PROGRESS.maps[i]; a new save's the ladder's first, the
     // desert) and the nights won on each (mw: bit 3i + d for maps[i] won on DIFFICULTIES[d], a
@@ -271,7 +273,7 @@ export function sanitizeProfile(raw) {
     const g = int(GIFTS.includes(u.id) ? giftOf(raw.gift, u.id) : 0, 0, r);
     if (g) p.gift[u.id] = g;
   }
-  p.ul = int(raw.ul, 0, ALL_LOCKS);
+  p.ul = orBits(p.ul, int(raw.ul, 0, ALL_LOCKS));
   if (Array.isArray(raw.ev)) p.ev = EVO_IDS.filter((id) => raw.ev.includes(id));
   p.ek = int(raw.ek, 0, ALL_EVOS);
   if (Array.isArray(raw.home)) p.home = SHARED_IDS.filter((id) => raw.home.includes(id)).slice(0, exclusionState(p).level);
@@ -279,7 +281,7 @@ export function sanitizeProfile(raw) {
   // A cookie keeps them as bits in HERO_ORDER's order (packProfile); one from before keeps a list.
   const heroes = typeof raw.heroes === 'number' ? HERO_ORDER.filter((h) => (raw.heroes & heroBit(h)) !== 0) : raw.heroes;
   if (Array.isArray(heroes)) {
-    for (const h of heroes) if (HERO_ORDER.includes(h) && !p.heroes.includes(h)) p.heroes.push(h);
+    for (const h of heroes) if (HERO_ORDER.includes(h) && demoHeroAllowed(h) && !p.heroes.includes(h)) p.heroes.push(h);
   }
   for (const h of HERO_ORDER) {
     // His marks, an object as the cookie keeps them (packProfile), or packed as his times are.
@@ -377,11 +379,12 @@ const winBit = (m, d) => 3 * mapI(m) + d;
 const ALL_MAPS = 2 ** MAP_IDS.length - 1, ALL_MAP_WINS = 2 ** (3 * MAP_IDS.length) - 1;
 // Whether a Survival map is open on a profile, and whether a night has been won on it (on any
 // difficulty): the trial screen's map row, the run's credit (applyRun).
-export const mapOpen = (p, m) => mapI(m) >= 0 && hasBit(p?.mo, mapI(m));
+export const mapOpen = (p, m) => demoMapAllowed(m) && mapI(m) >= 0 && hasBit(p?.mo, mapI(m));
 export const mapWon = (p, m) => mapI(m) >= 0 && [0, 1, 2].some((d) => hasBit(p?.mw, winBit(m, d)));
 // The maps a profile's nights have earned, on top of those open: the ladder's first, and every one
 // after a map with a night won on it.
-const mapsEarned = (p) => MAP_ORDER.reduce((n, m, k) => (k === 0 || mapWon(p, MAP_ORDER[k - 1]) ? withBit(n, mapI(m)) : n), p.mo || 0);
+const mapsEarned = (p) => DEMO ? 2 ** mapI(DEMO_MAPS[0])
+  : MAP_ORDER.reduce((n, m, k) => (k === 0 || mapWon(p, MAP_ORDER[k - 1]) ? withBit(n, mapI(m)) : n), p.mo || 0);
 
 // What the profile's records measure, for each kind of milestone (PROGRESS.locks need).
 function measures(p) {
@@ -428,12 +431,11 @@ function earnedBits(p) {
 }
 
 // Whether a hero's records show a run with him of PROGRESS.ultTime: his longest run that long (bt),
-// a Ranked best that long, a win with him (no win is that short), or the next hero brought in (five
-// minutes with him).
+// a Ranked best that long, a win with him (no win is that short), or a recruit earned by playing him.
 function ultEarned(p, h) {
   if ((p.bt[h] || 0) >= PROGRESS.ultTime || (p.ranked[h] || 0) >= PROGRESS.ultTime || (p.feats[h] || 0) !== 0) return true;
   const i = RECRUIT_ORDER.indexOf(h), next = i >= 0 ? RECRUIT_ORDER[i + 1] : null;
-  return HERO_UNLOCK_TIME >= PROGRESS.ultTime && !!next && p.heroes.includes(next);
+  return !!next && !BASE_HEROES.includes(next) && p.heroes.includes(next) && heroUnlockTime(next) >= PROGRESS.ultTime;
 }
 
 // A save from before progression (version 3 and older) keeps all it had: every milestone its
@@ -520,7 +522,7 @@ export function progressList(profile) {
     if (l.type === 'weapon' && p.home.includes(l.id)) e.home = true;
     out.push(e);
   });
-  for (const h of HERO_ORDER) {
+  for (const h of HERO_ORDER.filter(demoHeroAllowed)) {
     const open = ((p.uu & heroBit(h)) !== 0);
     out.push({ type: 'ult', id: h, open, need: needText({ need: 'time', at: PROGRESS.ultTime }) + ' with this hero', progress: open ? 1 : Math.min(1, (p.bt[h] || 0) / PROGRESS.ultTime) });
   }
@@ -637,6 +639,7 @@ export function transferItem(profile, action) {
 const prevHero = (id) => HERO_ORDER[HERO_ORDER.indexOf(id) - 1] || null;
 
 export function modeUnlocked(p, mode) {
+  if (!demoModeAllowed(mode)) return false;
   if (mode === 's15') return true;
   if (mode === 'dungeon') return hasFeat(p, 'necromancer', FEAT.survivalHard);
   if (mode === 'ranked') return hasFeat(p, 'necromancer', FEAT.dungeon);
@@ -646,7 +649,7 @@ export function modeUnlocked(p, mode) {
 // Whether a hero may enter a mode right now. In the Dungeon one of the ladder's five waits for
 // the one before him to beat it; an extra goes down as soon as it is open.
 export function canPlay(p, mode, hero) {
-  if (!p.heroes.includes(hero) || !modeUnlocked(p, mode)) return false;
+  if (!demoHeroAllowed(hero) || !p.heroes.includes(hero) || !modeUnlocked(p, mode)) return false;
   if (mode !== 'dungeon' || hero === LADDER[0] || !LADDER.includes(hero)) return true;
   return hasFeat(p, prevHero(hero), FEAT.dungeon);
 }
@@ -655,7 +658,7 @@ export function canPlay(p, mode, hero) {
 export function unlocksNext(p, hero) {
   const i = RECRUIT_ORDER.indexOf(hero);
   const next = i >= 0 ? RECRUIT_ORDER[i + 1] : null;
-  return next && !p.heroes.includes(next) ? next : null;
+  return next && demoHeroAllowed(next) && !p.heroes.includes(next) ? next : null;
 }
 
 // Whether a night of Survival has been won on Elite (a Nightmare's too).
@@ -664,6 +667,7 @@ export const wonElite = (p) => (p.wins.s15[DIFFICULTIES.indexOf('hard')] || 0) >
 // What the player should aim for next, or null once Ranked is open and a night has been won on Elite.
 //   { type: 'survive' | 'survivalHard' | 'dungeon' | 'elite', hero, unlocks, minutes? }
 export function nextGoal(p) {
+  if (DEMO) return { type: 'demo', complete: DEMO_HEROES.every(h => hasFeat(p, h, FEAT.survivalHard)) };
   const next = nextHeroUnlock(p);
   const survive = next && { type: 'survive', hero: prevHero(next), unlocks: next, minutes: heroUnlockTime(next) / 60 };
   // The ladder's five come first; the extras after them wait until the Dungeon and Ranked are open.
@@ -784,7 +788,7 @@ export function refundUpgrades(profile) {
 
 // The next hero waiting to be unlocked, or null when all are free.
 export function nextHeroUnlock(profile) {
-  return RECRUIT_ORDER.find((h) => !profile.heroes.includes(h)) || null;
+  return RECRUIT_ORDER.find((h) => demoHeroAllowed(h) && !profile.heroes.includes(h)) || null;
 }
 
 // A finished run as reported by the client. Numbers are clamped to what a
@@ -1090,6 +1094,9 @@ function settleRunGear(p, run, raw) {
 
 export function applyRun(profile, rawRun) {
   const p = sanitizeProfile(profile);
+  if (DEMO && (!demoHeroAllowed(rawRun?.hero) || !demoModeAllowed(rawRun?.mode) || !demoMapAllowed(rawRun?.map))) {
+    return { ok: false, profile: p, error: 'This adventure is outside the free demo' };
+  }
   const modern = rawRun?.runId !== undefined || rawRun?.runFrom !== undefined;
   if (modern) {
     const { runId, runFrom } = rawRun;
@@ -1117,7 +1124,7 @@ export function applyRun(profile, rawRun) {
   // Five minutes on the clock bring in the next hero.
   const next = unlocksNext(p, run.hero);
   if (next && run.time >= heroUnlockTime(next)) p.heroes.push(next);
-  if (run.copperVictory && !p.heroes.includes('eanasir')) p.heroes.push('eanasir');
+  if (run.copperVictory && demoHeroAllowed('eanasir') && !p.heroes.includes('eanasir')) p.heroes.push('eanasir');
   const reward = runReward(run);
   if (gearConflict) reward.gearConflict = true;
   p.gold = int(p.gold + reward.total, 0, 1e9);

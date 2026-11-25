@@ -14,5 +14,10 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.3.1",
+    "playwright-core": "1.65.0"
   }
 }
