@@ -17,7 +17,7 @@
 // stuns, fear and push). Support weapons (hex, smite, lantern, spores) also run beside a reference
 // (arcane at the same stage); their uplift is the pair's damage over the reference's alone.
 // Writes dps.json and dps.md to --out and prints the md. Runs the cases on worker processes.
-//   node tools/dps.mjs [--only=bow,axe] [--seeds=3] [--secs=60] [--workers=14] [--out=dir]
+//   node tools/dps.mjs [--only=bow,axe] [--seeds=3] [--secs=60] [--workers=14] [--out=dir] [--priority=low|normal]
 import { fork } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
@@ -172,6 +172,8 @@ async function worker() {
 // --------------------------------------------------------------------------------- main --
 
 async function main() {
+  const { setPriority } = await import('./priority.mjs');
+  setPriority(arg('priority', 'low')); // the PC stays usable; the workers inherit it
   const { WEAPONS, MAX_WEAPON_LEVEL } = await import('../public/js/data/weapons.js');
   const seeds = +arg('seeds', 3), secs = +arg('secs', 60), warm = 8;
   const nW = +arg('workers', Math.max(1, cpus().length - 2));

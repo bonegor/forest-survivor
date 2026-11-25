@@ -37,12 +37,13 @@ const { BUFFS } = await import('./buffs.mjs');
 
 buildSprites();
 
-// Plays one game until it ends or `max` seconds of game time pass, and
+// Plays one game until it ends or `max` seconds of game time pass (`null` for no cap), and
 // returns how it went. bot: a spec ('circle:r=60') or a strategy object;
 // armory: Armory ranks, e.g. { might: 5, armor: 3 }; diff: 'easy' (Normal), 'medium' (Veteran) or 'hard' (Elite);
 // nightmare: three times the monsters (data/difficulty.js NIGHTMARE; never in Ranked);
 // buff: a test buff in percent on top of the Armory, e.g. { damage: 10, life: 20, regen: 50, xp: 25, speed: 5 };
 // slots, relics: fewer weapon and relic slots than the game's six (or than the profile's);
+// sealedGear: hold collected gear for the results screen, as in the browser;
 // map: a Survival map id. With a profile, defaults to its newest unlocked map (a fresh save's
 // desert); without one, the forest as before. Explicit locked or unknown maps are rejected.
 // profile: play as this save (shared/profile.js): its Armory (armory is then ignored), its weapon
@@ -51,7 +52,7 @@ buildSprites();
 // banishes still come only from the requested Armory ranks, as they do in a real save.
 // The result's `report` is the run as the game would report it, for P.applyRun.
 export function playGame(o = {}) {
-  const { hero = 'knight', mode = 's15', map, diff = 'hard', nightmare = false, bot = 'autopilot', params, label, pick = 'build', seed = 1, hz = 60, max = 3600, armory = {}, buff = {}, slots, relics, crypts = false, profile = null } = o;
+  const { hero = 'knight', mode = 's15', map, diff = 'hard', nightmare = false, bot = 'autopilot', params, label, pick = 'build', seed = 1, hz = 60, max = 3600, armory = {}, buff = {}, slots, relics, crypts = false, sealedGear = false, profile = null } = o;
   if (!HEROES[hero]) throw new Error(`Unknown hero "${hero}" (${Object.keys(HEROES).join(', ')})`);
   if (!MODES[mode]) throw new Error(`Unknown mode "${mode}" (${Object.keys(MODES).join(', ')})`);
   if (map !== undefined && !Object.hasOwn(MAPS, map)) throw new Error(`Unknown map "${map}" (${Object.keys(MAPS).join(', ')})`);
@@ -69,10 +70,18 @@ export function playGame(o = {}) {
       const [key] = BUFFS[k], x = 1 + pct / 100;
       meta[key] = (meta[key] ?? 1) * x;
     }
-    const g = new Game({ hero, mode, map: chosenMap, diff, nightmare, meta, open, gear: prof?.gear[hero], settings: {}, crypts, headless: true, maxWeapons: slots, maxRelics: relics });
+    const g = new Game({ hero, mode, map: chosenMap, diff, nightmare, meta, open, gear: prof?.gear[hero], settings: {}, crypts, sealedGear, headless: true, maxWeapons: slots, maxRelics: relics });
     const d = new Driver(g, { bot, params, label, pick, hz, rng: mulberry32(Math.imul(seed, 0x9e3779b1) ^ 0x5bd1e995) });
     const t0 = performance.now();
-    d.run(max);
+    if (max === null) {
+      while (g.state !== 'over') {
+        const before = g.time + g.cryptTime;
+        d.run(30);
+        if (g.state !== 'over' && g.time + g.cryptTime <= before) {
+          throw new Error(`Simulation clock stopped in ${g.state} at ${g.time.toFixed(2)}s`);
+        }
+      }
+    } else d.run(max);
     const s = d.summary();
     // What the run banks, as the server would pay it (shared/profile.js): the gold picked up,
     // clamped to what a run that long could make, times the difficulty's rate, plus the wage for its

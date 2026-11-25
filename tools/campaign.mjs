@@ -17,6 +17,7 @@ import { BOTS, botFrom } from '../public/js/bots/strategies.js';
 import { HEROES } from '../public/js/data/heroes.js';
 import * as P from '../public/js/shared/profile.js';
 import { fmtTime } from '../public/js/engine/util.js';
+import { setPriority } from './priority.mjs';
 
 // Armory buying orders. Tiers (separated by / on the command line) are bought one after another:
 // on every visit the cheapest rank that gold can buy in the first tier with anything left, again
@@ -55,6 +56,7 @@ const HELP = `Usage: node tools/campaign.mjs [options]
   --block=N     runs to a column in the trends (default: 5)
   --max=TIME    stop a run after this much game time, seconds or m:ss (default: 20:00)
   --jobs=N      campaigns played in parallel (default: one per core, less one)
+  --priority=X  low or normal (default: low, so the PC stays usable)
   --each        print every campaign run by run
   --json=FILE   write every run of every campaign to FILE`;
 
@@ -130,6 +132,7 @@ export function playCampaign(o, playGame, onRun = () => {}) {
 
 async function main(argv) {
   const opts = parseArgs(argv);
+  setPriority(opts.priority ?? 'low');
   if (opts.help) return console.log(HELP);
   const list = (key, all, dflt) => {
     const raw = opts[key] ?? dflt;
@@ -295,7 +298,7 @@ function report(cs, title, maxRuns, block, each) {
 // --------------------------------------------------------------- options --
 
 function parseArgs(argv) {
-  const known = ['hero', 'bot', 'diff', 'runs', 'campaigns', 'seed', 'order', 'block', 'max', 'goal', 'jobs', 'each', 'json', 'help'];
+  const known = ['hero', 'bot', 'diff', 'runs', 'campaigns', 'seed', 'order', 'block', 'max', 'goal', 'jobs', 'priority', 'each', 'json', 'help'];
   const opts = {};
   for (const a of argv) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(a);

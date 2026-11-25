@@ -17,6 +17,7 @@ import { MAPS } from '../public/js/data/maps.js';
 import { UPGRADES } from '../public/js/shared/profile.js';
 import { fmtTime } from '../public/js/engine/util.js';
 import { BUFFS } from './buffs.mjs';
+import { setPriority } from './priority.mjs';
 
 const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options])
 
@@ -39,6 +40,7 @@ const HELP = `Usage: node tools/bots.mjs [options]     (npm run bots -- [options
   --diff=X      normal, veteran or elite (default: elite, the game as it was tuned)
   --nightmare   three times the monsters, on top of Elite (not Normal, not Veteran, not Ranked; default: off)
   --jobs=N      games played in parallel (default: one per core, less one)
+  --priority=X  low or normal (default: low, so the PC stays usable)
   --each        print a line per game
   --json=FILE   write every game's result to FILE
   --list        describe the strategies and pick policies`;
@@ -59,6 +61,7 @@ async function strategyOf(spec) {
 
 async function main(argv) {
   const opts = parseArgs(argv);
+  setPriority(opts.priority ?? 'low');
   if (opts.help) return console.log(HELP);
   if (opts.list) return listStrategies();
   const pickList = (key, all, dflt) => {
@@ -256,7 +259,7 @@ function listStrategies() {
 // --------------------------------------------------------------- options --
 
 function parseArgs(argv) {
-  const known = ['bot', 'pick', 'hero', 'mode', 'map', 'runs', 'seed', 'max', 'hz', 'armory', 'buff', 'slots', 'relics', 'diff', 'nightmare', 'jobs', 'each', 'json', 'list', 'help'];
+  const known = ['bot', 'pick', 'hero', 'mode', 'map', 'runs', 'seed', 'max', 'hz', 'armory', 'buff', 'slots', 'relics', 'diff', 'nightmare', 'jobs', 'priority', 'each', 'json', 'list', 'help'];
   const opts = {};
   for (const a of argv) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(a);
