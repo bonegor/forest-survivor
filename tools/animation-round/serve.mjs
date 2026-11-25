@@ -7,14 +7,15 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const source = resolve(root, 'tools/animation-round'), game = resolve(root, 'public');
 // Optional exact pre-edit sheets for a new motion review; never serve arbitrary paths.
 const previous = process.env.WALK_BASELINE && resolve(root, process.env.WALK_BASELINE);
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.png': 'image/png', '.gif': 'image/gif', '.json': 'application/json' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.png': 'image/png', '.gif': 'image/gif', '.json': 'application/json', '.svg': 'image/svg+xml', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav' };
 const port = Number(process.env.ANIMATION_PORT || 3016);
 http.createServer(async (req, res) => {
   try {
     if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
     const path = decodeURIComponent(new URL(req.url, `http://127.0.0.1:${port}`).pathname);
     const isPrevious = previous && path.startsWith('/previous/');
-    const base = isPrevious ? previous : /^\/(js|assets|img)\//.test(path) ? game : source;
+    const isGame = path === '/favicon.svg' || /^\/(js|assets|img|audio)\//.test(path);
+    const base = isPrevious ? previous : isGame ? game : source;
     const file = resolve(base, isPrevious ? path.slice('/previous/'.length) : path === '/' ? 'index.html' : path.slice(1));
     if (!file.startsWith(base + sep)) throw Error('Invalid path');
     const body = await readFile(file);
