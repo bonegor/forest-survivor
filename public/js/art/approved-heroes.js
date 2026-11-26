@@ -1,7 +1,5 @@
 import sheets from '../../assets/heroes-approved/index.js';
-import { moveFor } from '../data/difficulty.js';
-import { HEROES } from '../data/heroes.js';
-import { clamp } from '../engine/util.js';
+import { normalWalkRate } from '../game/hero-animation.js';
 
 // Packing trims transparent margins only; world frames are reconstructed on the original pivot.
 function unpack(data, [x, y, w, h, encoded], box) {
@@ -27,14 +25,13 @@ const manualDelay = {
 
 for (const [id, data] of Object.entries(sheets)) {
   const { w, h, anchorY, idle, walk, attack, attackRelease, attackFps, walkFps, idleFps, floating } = data;
-  const normalSpeed = clamp(moveFor('s15', 'easy') * (HEROES[id]?.stats.speed || 1), 0.6, 1.6);
   let worldFrames, portraitFrames;
   APPROVED_HERO_ART[id] = {
     gen: () => (worldFrames ??= data.frames.map(frame => unpack(data, frame, { x: 0, y: 0, w, h }))),
-    // The Knight begins his downswing with the sword already raised.
+    // The original steel sheet starts the downswing with its sword raised.
     attackStart: id === 'knight' ? attackRelease - 1 : null,
     anchorY, hires: data.hires || 1, idle, walk, attack, attackRelease, attackFps, floating, attackWalk: data.attackWalk, manualDelay: manualDelay[id] ?? data.manualDelay,
-    motionRate: walkFps / (7 * 1.4 * normalSpeed),
+    motionRate: normalWalkRate(id, walkFps),
     idleRate: idleFps / 1.6,
     selfBob: true, outline: false,
   };

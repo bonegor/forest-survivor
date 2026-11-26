@@ -3,8 +3,8 @@
 // directional attacks toward a target just as their visible cooldown expires.
 const TAU = Math.PI * 2;
 const headings = Array.from({ length: 24 }, (_, i) => [Math.cos(i / 24 * TAU), Math.sin(i / 24 * TAU)]);
-const melee = new Set(['knight', 'footman', 'templar', 'praetorian', 'swordbearer', 'seraph', 'berserker', 'wraith', 'eanasir']);
-const directional = new Set(['archer', 'knight', 'footman', 'templar', 'wraith', 'praetorian', 'swordbearer', 'seraph', 'berserker']);
+const melee = new Set(['knight', 'footman', 'templar', 'praetorian', 'swordbearer', 'sentinel', 'seraph', 'berserker', 'wraith', 'eanasir']);
+const directional = new Set(['archer', 'knight', 'footman', 'templar', 'wraith', 'praetorian', 'swordbearer', 'sentinel', 'seraph', 'berserker']);
 
 export const TACTICIAN = {
   about: 'Collects experience and chests, plans safe steps around terrain and visible hazards, and faces directional attacks at release',

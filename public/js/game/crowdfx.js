@@ -4,7 +4,7 @@
 // of each is on Enemy (blow, scare, addDot); none of them moves a boss, a lord or a champion,
 // they only hurt it.
 
-import { sfx } from '../engine/audio.js';
+import { weaponSfx } from '../engine/audio.js';
 import { rand, TAU, lerp, pick, angleDiff, clamp, hash2, ease } from '../engine/util.js';
 import { Pool, Ring, explode } from './effects.js';
 import { discSprite, ringSprite, glow } from './fxsprites.js';
@@ -48,7 +48,7 @@ export function gust(g, w, foes) {
   }
   // Seen all round from a half-arc of 3 on (Tempest's 3.14 is all round, a hair under Math.PI).
   g.effects.push(new GaleWave(id, p.x, p.y - 4, p.aim, GALE_R * s.area, s.arc, s.arc > 3));
-  sfx('blade', { pitch: 0.6 });
+  weaponSfx(w, 'blade', { pitch: 0.6 });
 }
 
 // The gust seen (the graphics review of 22 November 2026: 26-46 one-px sparks, the horde thrown
@@ -143,7 +143,7 @@ export class Hook {
       this.cut(p);
       this.back = true;
       this.t = 0;
-      sfx('axe', { pitch: 0.7 });
+      weaponSfx(this.w, 'axe', { pitch: 0.7 });
       return true;
     }
     if (this.t < HOOK_BACK) return true;
@@ -212,7 +212,7 @@ export class Hollow {
     this.R = HOLLOW_PULL * w.s.area;
     this.Rc = HOLLOW_CAVE * w.s.area;
     this.t = 0;
-    sfx('rumble');
+    weaponSfx(w, 'rumble');
   }
 
   update(dt) {
@@ -323,7 +323,7 @@ export function toll(g, w, foes) {
   }
   g.effects.push(new Ring(g, p.x, p.y, 6, R, 0.45, '#fee761', true), new Ring(g, p.x, p.y, 3, R * 0.8, 0.35, '#ffffff', true));
   if (s.echo && scared.length) g.effects.push(new Echoes(g, w, scared.slice(0, 12)));
-  sfx('aura', { pitch: 1.4 });
+  weaponSfx(w, 'aura', { pitch: 1.4 });
 }
 
 // The echoes of Death Knell: while a foe flees it drops a ghostly pool every so often, each short

@@ -49,6 +49,7 @@ const WEAPON_PREF = {
   seraph: ['aura', 'blades', 'lightning', 'axe'],
   boltguard: ['lightning', 'glaive', 'blades', 'wisps'],
   swordbearer: ['aura', 'blades', 'axe', 'lightning'],
+  sentinel: ['aura', 'blades', 'frost', 'axe'],
 };
 const prefOf = (v, id) => {
   const list = WEAPON_PREF[v.hero] || [], r = list.indexOf(id);

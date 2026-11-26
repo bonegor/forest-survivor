@@ -106,7 +106,7 @@ test('in a crypt the knight has his sword alone, and it waits for the player', (
 test('a strike starts with the sword raised and lands as it sweeps', () => gameCase((g, p) => {
   enterStartCrypt(g, p);
   const spr = SPR.knight, clip = strikeClip(spr), w = g.mainWeapon();
-  assert.equal(clip.hit, spr.attackRelease, 'the new Sentinel clip lands at its authored release');
+  assert.equal(clip.hit, spr.attackRelease, 'the plumed blade lands at its authored release');
   assert.equal(clip.from, clip.hit - 1, 'the first swing pose has the sword already raised');
   const foe = g.spawnEnemy('skeleton', p.x - 18, p.y, { instant: true });
   foe.dormant = true;

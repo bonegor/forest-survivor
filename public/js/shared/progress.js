@@ -119,14 +119,16 @@ export const PROGRESS = {
     { type: 'relic', id: 'pilgrimcord', need: 'level', at: 12 },
     { type: 'relic', id: 'bulwarkseal', need: 'bosses', at: 2 },
   ],
-  // Every evolution, in the order the save keeps them (profile.ek: bit i is evolutions[i]). The
+  // Every evolution in save order (the first 53 bits are ek, the following bits ek2). The
   // owner's (27 October 2026): a weapon's relic is not told until a run before has made its
   // evolution (shared/profile.js knownEvos). Add new ones at the end only (test/progress.test.js
   // holds it to data/weapons.js).
   evolutions: ['excalibur', 'whirlwind', 'aegis', 'sanctuary', 'stormstring', 'lodestar', 'briarheart', 'faelights', 'meteor', 'thunderstorm', 'stormlash',
     'frozenheart', 'prismatic', 'shadowstrike', 'hellfire', 'razorfield', 'tether', 'fairyring', 'doom', 'tempest', 'kraken', 'abyss', 'knell', 'beacon',
     'runestorm', 'harvest', 'comet', 'legion', 'pestilence', 'judgement', 'worldroot', 'bloodstorm', 'purifier',
-    ...EXPANSION_EVOLUTIONS, ...COPPER_EVOLUTIONS, WHIP_EVOLUTION, HIGH_COPPER_ID],
+    // Copper shipped after the first twelve recruits. Its discovery bits stay in those slots.
+    ...EXPANSION_EVOLUTIONS.slice(0, 12), ...COPPER_EVOLUTIONS, WHIP_EVOLUTION, HIGH_COPPER_ID,
+    ...EXPANSION_EVOLUTIONS.slice(12)],
   // The Survival maps (data/maps.js), the owner's (28 October 2026): "the first one where we start
   // is the desert map. From there on, we progress to the frozen map. From there on, we progress to
   // our current forest map. And from there on, we progress to the demonic map", harder in that

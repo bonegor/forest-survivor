@@ -1,6 +1,6 @@
 // The only shipped look for each hero. No saved preference overrides this roster.
 export const HERO_SELECTED_LOOKS = Object.freeze({
-  knight: 'Plumed Knight', archer: 'Moonsteel Huntress', mage: 'Ember Sage',
+  knight: 'Plumed Knight', sentinel: 'Dame Maera', archer: 'Moonsteel Huntress', mage: 'Ember Sage',
   rogue: 'Nightveil', necromancer: 'Bone Regent', paladin: 'Iron Vow',
   druid: 'Oakwarden', berserker: 'Ylva Wolf-Tooth', witchhunter: 'Original',
 });

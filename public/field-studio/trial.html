@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#121710">
+  <base href="../">
+  <title>Field trial · Forest Survivor</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="field-studio/trial.css">
+</head>
+<body>
+  <canvas id="field" tabindex="0" aria-label="Survival field trial. Move with WASD, arrow keys or a touch drag."></canvas>
+  <div id="notice" role="status"><strong>Preparing the field…</strong><span></span></div>
+  <footer id="controls">
+    <a id="back" href="field-studio/">‹ Field studio</a>
+    <div class="identity"><strong id="title">Field trial</strong><span id="detail">Practice run</span></div>
+    <span class="hint"><span class="keys">WASD or arrows to move</span><span class="touch">Drag to move</span></span>
+    <div class="actions"><button id="pause" type="button" disabled>Pause</button><button id="restart" type="button" disabled>Restart</button></div>
+  </footer>
+  <script type="module" src="field-studio/trial.js"></script>
+</body>
+</html>

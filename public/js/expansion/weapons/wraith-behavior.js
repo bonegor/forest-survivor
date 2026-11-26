@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { angleDiff, TAU } from '../../engine/util.js';
 import { slashFrame } from '../../game/fxsprites.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
@@ -144,6 +144,6 @@ export default {
     }
     w.fx = anchor;
     g.effects.push(anchor);
-    sfx('slash', { pitch: 0.8, pan: Math.cos(ang) * 0.25 });
+    weaponSfx(w, 'slash', { pitch: 0.8, pan: Math.cos(ang) * 0.25 });
   },
 };

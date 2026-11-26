@@ -79,6 +79,7 @@ const FIELD_TARGETING = {
   seraph: 'Cleaves ahead and sweeps the flanks',
   boltguard: 'Aimed bolt strengthens through lesser foes; strong foes stop it',
   swordbearer: 'Walk steadily to charge a longer cut along your stride',
+  sentinel: 'Land two cuts to ready a shield bash that staggers foes',
 };
 
 const PERK_COPY = {

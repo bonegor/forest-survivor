@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { reachesFeet } from '../../game/hitbox.js';
 
@@ -143,7 +143,7 @@ export default {
     const ang = w.hand ? p.strikeAng : target ? Math.atan2(target.y - p.y, target.x - p.x) : p.face < 0 ? Math.PI : 0;
     p.swing(ang);
     recordHeroAttack(w, ang);
-    sfx('slash', { pitch: 1.08, pan: Math.cos(ang) * 0.25 });
+    weaponSfx(w, 'slash', { pitch: 1.08, pan: Math.cos(ang) * 0.25 });
     const cut = new SunwingCut(w, ang);
     g.effects.push(cut);
     if (cut.tip.x !== p.x || cut.tip.y !== p.y) {

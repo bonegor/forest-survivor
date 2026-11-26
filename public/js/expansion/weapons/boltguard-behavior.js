@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { reachesBody, reachesFeet } from '../../game/hitbox.js';
 import { P, PC } from '../../game/particles.js';
@@ -108,6 +108,6 @@ export default {
     const ang = target && !target.dead ? Math.atan2(target.y - p.y, target.x - p.x) : (p.strikeAng ?? p.aim);
     recordHeroAttack(w, ang);
     g.effects.push(new RatchetBolt(w, ang));
-    sfx('arrow', { pitch: 0.68, pan: Math.cos(ang) * 0.3 });
+    weaponSfx(w, 'arrow', { pitch: 0.68, pan: Math.cos(ang) * 0.3 });
   },
 };

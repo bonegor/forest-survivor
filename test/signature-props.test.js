@@ -34,7 +34,7 @@ function scenario(hero, { crate = true, wall = false, onlyCrate = false } = {}) 
   }
 }
 
-for (const hero of ['praetorian', 'footman', 'templar', 'wraith', 'arcanist', 'thornkeeper', 'seraph', 'swordbearer']) {
+for (const hero of ['praetorian', 'footman', 'templar', 'wraith', 'arcanist', 'thornkeeper', 'seraph', 'swordbearer', 'sentinel']) {
   test(`${hero}: the signature breaks a crate in its footprint without spending a monster hit`, () => {
     const without = scenario(hero, { crate: false }), withBox = scenario(hero);
     assert.ok(withBox.broken, 'the visible weapon must hit the crate');
@@ -45,7 +45,7 @@ for (const hero of ['praetorian', 'footman', 'templar', 'wraith', 'arcanist', 't
   });
 }
 
-for (const hero of ['praetorian', 'footman', 'wraith', 'seraph', 'swordbearer']) {
+for (const hero of ['praetorian', 'footman', 'wraith', 'seraph', 'swordbearer', 'sentinel']) {
   test(`${hero}: facing a nearby crate breaks it even with no monsters around`, () => {
     assert.ok(scenario(hero, { onlyCrate: true }).broken);
   });

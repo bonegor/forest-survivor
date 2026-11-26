@@ -3,8 +3,9 @@
 import { DEMO } from './build.js';
 
 export const WEAPON_SOUND_KEY = DEMO ? 'fs_demo_weapon_sound_style_v1' : 'fs_weapon_sound_style_v1';
+export const WEAPON_CHOICES_KEY = WEAPON_SOUND_KEY + '_weapons';
 export const WEAPON_SOUND_STYLES = Object.freeze([
-  { id: 'current', name: 'Current', desc: 'The game’s existing recorded weapon sounds.' },
+  { id: 'current', name: 'Current', desc: 'Original in-game recordings and synthesis.' },
   { id: 'tempered', name: 'Tempered', desc: 'Short air cuts, restrained steel and a clear attack.' },
   { id: 'heavy', name: 'Heavy', desc: 'Lower iron weight with a soft, compact impact.' },
   { id: 'arcade', name: 'Arcade', desc: 'Crisp synthetic strikes with a bright, playful edge.' },
@@ -14,6 +15,27 @@ export const normalizeWeaponSoundStyle = value => WEAPON_SOUND_STYLES.some(s => 
 let selected = 'current';
 try { selected = normalizeWeaponSoundStyle(globalThis.localStorage?.getItem(WEAPON_SOUND_KEY)); } catch {}
 export const weaponSoundStyle = () => selected;
+const validChoice = id => WEAPON_SOUND_STYLES.some(s => s.id === id) ||
+  (typeof id === 'string' && id.startsWith('clip:') && id.length < 400);
+let choices = {};
+function readChoices(value) {
+  try {
+    return Object.fromEntries(Object.entries(JSON.parse(value) || {}).filter(([id, sound]) =>
+      /^[a-z0-9_]+$/.test(id) && validChoice(sound)));
+  } catch { return {}; }
+}
+try { choices = readChoices(globalThis.localStorage?.getItem(WEAPON_CHOICES_KEY)); } catch {}
+export const weaponSoundChoice = id => choices[id] || selected;
+export function applyWeaponSoundChoice(id, sound) {
+  if (!/^[a-z0-9_]+$/.test(id) || !validChoice(sound)) return false;
+  try {
+    const storage = globalThis.localStorage;
+    if (!storage) throw new Error('no storage');
+    choices = { ...readChoices(storage.getItem(WEAPON_CHOICES_KEY)), [id]: sound };
+    storage.setItem(WEAPON_CHOICES_KEY, JSON.stringify(choices));
+    return true;
+  } catch { choices[id] = sound; return false; }
+}
 export function applyWeaponSoundStyle(style) {
   selected = normalizeWeaponSoundStyle(style);
   try {
@@ -24,6 +46,8 @@ export function applyWeaponSoundStyle(style) {
 }
 globalThis.addEventListener?.('storage', event => {
   if (event.key === WEAPON_SOUND_KEY) selected = normalizeWeaponSoundStyle(event.newValue);
+  if (event.key === WEAPON_CHOICES_KEY) choices = readChoices(event.newValue);
+  if (event.key === null) { selected = 'current'; choices = {}; }
 });
 
 // Each family keeps its own pitch and envelope; styles change its materials.

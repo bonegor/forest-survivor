@@ -3,7 +3,7 @@
 // ignore them, and nothing bumps into them: they never stand in the hero's way or a monster's.
 
 import { SPR, walkFrame, idleFrame } from '../engine/sprites.js';
-import { sfx } from '../engine/audio.js';
+import { weaponSfx } from '../engine/audio.js';
 import { rand, TAU, clamp } from '../engine/util.js';
 import { shadowSprite, glow } from './fxsprites.js';
 import { PC, P } from './particles.js';
@@ -239,7 +239,7 @@ export class Minion {
     g.particles.burst(this.x, this.y - 6, 6, 10, this.look.dust, 60, 0.8, 1, P.GROUND | P.FADE, { vz: 70, grav: 260 });
     if (this.burst) {
       explode(g, this.x, this.y - 4, 26, this.dmg * 1.5, this.w, 'soul');
-    } else sfx('bones', { pitch: 1.3 });
+    } else weaponSfx(this.w, 'bones', { pitch: 1.3 });
   }
 
   rect(cam) {

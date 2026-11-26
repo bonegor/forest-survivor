@@ -355,7 +355,7 @@ const COMPACT_GRANTS = [
   'passive:projspeed', 'passive:duration', 'passive:movespeed', 'passive:magnet', 'passive:luck',
   'passive:hunter', 'passive:torc', 'passive:thornmail', 'passive:cloak', 'passive:ember', 'passive:ramhorn',
   'passive:fang', 'passive:rime', 'passive:amount', 'passive:growth', 'passive:bulwarkseal',
-  'passive:wardrum', 'passive:pilgrimcord',
+  'passive:wardrum', 'passive:pilgrimcord', 'weapon:sentinel_watchblade',
 ];
 const rangeBits = max => Math.ceil(Math.log2(max + 1));
 

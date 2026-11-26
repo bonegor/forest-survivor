@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { spawnProjectile } from '../../game/projectiles.js';
 import { PC } from '../../game/particles.js';
@@ -57,6 +57,6 @@ export default {
       x: p.x, y: p.y, z: 11, ang, speed: 285 * s.speed, life: Math.max(0.8, 0.8 * s.dur), r: 2,
       dmg: s.dmg, pierce: 0, kb: s.kb, w, onHit: splitPin,
     });
-    sfx('arrow', { pitch: 0.83, pan: Math.cos(ang) * 0.3 });
+    weaponSfx(w, 'arrow', { pitch: 0.83, pan: Math.cos(ang) * 0.3 });
   },
 };

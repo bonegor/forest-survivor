@@ -19,7 +19,7 @@ import { killCredit } from '../shared/population.js';
 import { RARITIES, SLOT_NAMES, rollItem, sanitizeGear, itemPrice, lordDrop, itemName, itemLines, canEquipItem } from '../shared/items.js';
 import { SPR, TINTS, walkFrame, idleFrame, PALETTE_CSS } from '../engine/sprites.js';
 import { SOUL_RELEASE } from '../art/hero-fall.js';
-import { sfx, playMusic, stopMusic, cutToMusic } from '../engine/audio.js';
+import { sfx, weaponSfx, playMusic, stopMusic, cutToMusic } from '../engine/audio.js';
 import { ARRIVAL, LOW_HP, CARD_END } from './arrival.js';
 import { ULT_LAUNCH, RECEIPT, compact, ultBlow } from './ultimate.js';
 import { WARN, eventWords, sideWord, RECORDS, RECORD_GRACE, LOCK_KIND, LOCK_GAP } from './events.js';
@@ -55,6 +55,7 @@ import { Minion } from './minions.js';
 import { Hints } from './hints.js';
 
 const tmp = [];
+const CONTACT_SOUND_KINDS = new Set(['aura', 'miasma', 'lantern', 'starfall', 'copper_area', 'copper_orbit']);
 // How far behind the hero coins and potions in the forest last (a few screens).
 const PICKUP_FAR = 1400;
 // How hard the hero's blows throw a foe back: px/s per point of a blow's kb, before the foe's
@@ -1475,8 +1476,9 @@ export class Game {
     const lit = p.ember > 0 && !o.noCrit && !e.prop && Math.random() < p.ember;
     if (lit) e.addDot('fire', dmg * 0.25, 3, o.w);
     const pan = clamp((e.x - p.x) / 200, -1, 1);
-    if (crit) sfx('crit', { pitch: rand(0.9, 1.1), pan });
-    else sfx('hit', { pitch: rand(0.8, 1.2), pan });
+    // Fields, beams and falling stars deliver their sound on contact.
+    const contactWeapon = CONTACT_SOUND_KINDS.has(o.w?.def?.kind) ? o.w : null;
+    weaponSfx(contactWeapon, crit ? 'crit' : 'hit', { pitch: crit ? rand(0.9, 1.1) : rand(0.8, 1.2), pan });
     if (crit) this.particles.burst(e.x, e.y - e.h * 0.5, 4, 5, [PC.Y, PC.w], 90, 0.25, 1, P.GLOW | P.FADE, {});
     if (e.hp <= 0) this.killEnemy(e, o);
     // The reaction the blow set off, once it is dealt (reactions.js): Scald's splash, Combust's.

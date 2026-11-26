@@ -1,35 +1,31 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <base href="../">
-  <title>Weapon sounds · Forest Survivor</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="sound-lab/style.css">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <base href="../"><title>Weapon sounds · Forest Survivor</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="sound-lab/style.css">
 </head>
-<body>
-  <main>
-    <header>
-      <a class="brand" href="./">FOREST SURVIVOR</a>
-      <p class="eyebrow">THE ARMOURY / AUDIO</p>
-      <h1>Find your edge.</h1>
-      <p class="intro">Compare four weapon sound styles. Hear a first-level attack, then a fully upgraded volley.</p>
-    </header>
-    <div class="controls">
-      <label class="weapon-label">Weapon <select id="weapon" aria-label="Preview weapon"></select></label>
-      <label class="volume-label">Preview volume <input id="volume" aria-label="Preview volume" type="range" min="0" max="100" value="55"><output id="volume-value">55%</output></label>
-      <button id="stop" type="button" class="quiet">Stop preview</button>
-    </div>
-    <section class="styles" id="styles" aria-label="Sound styles"></section>
-    <div class="saved" id="saved" role="status"></div>
-    <section class="stage" aria-label="Live weapon preview">
-      <div class="stage-heading"><div><span class="eyebrow">LIVE PRACTICE</span><h2 id="playing">Throwing Axe · ready</h2></div><span id="timer">8-second previews</span></div>
-      <canvas id="arena" width="720" height="340" aria-label="Actual game weapon attacks against stationary practice targets"></canvas>
-      <div class="stage-footer"><span id="stats">Choose a style and level to hear it.</span><span>Real attack timing · No progression saved</span></div>
+<body><main>
+  <header><nav><a href="./">Forest Survivor</a><a id="studio" href="field-studio/" hidden>Field Studio</a></nav>
+    <h1>Weapon sounds</h1><p>Choose a weapon and listen to its attacks. Apply a sound to use it for that weapon in the game.</p></header>
+  <section class="desk" aria-label="Weapon sound controls">
+    <div class="weapon-choice"><label for="weapon">Weapon</label><select id="weapon"></select><p id="identity"></p></div>
+    <div class="volume-choice"><label for="volume">Preview volume <output id="volume-value">55%</output></label>
+      <input id="volume" type="range" min="0" max="100" value="55"></div>
+  </section>
+  <div class="workbench">
+    <section class="library"><h2>Sound library</h2>
+      <div class="filters"><label>Search <input type="search" id="search" placeholder="Title, instrument or artist"></label>
+      <label>Show <select id="category"><option value="best">Suggested for this weapon</option><option value="all">All sounds</option><option value="styles">Game styles</option><option value="weapons-melee">Melee</option><option value="weapons-ranged">Ranged</option><option value="magic">Magic</option><option value="impacts">Impacts</option><option value="explosions">Explosions</option><option value="foley">Bells, coins and other foley</option></select></label></div>
+      <label class="record-label" for="recording">Sound <span id="count"></span></label>
+      <select id="recording" size="7" aria-label="Choose a weapon sound"></select>
+      <div id="credit"></div><button id="apply" type="button">Apply to weapon</button><p role="status" id="saved"></p>
     </section>
-    <p class="note">These weapons cover every launch sound family, including sounds shared by expansion weapons. Previews isolate launches so you can compare them clearly. Apply changes weapon launches in the game too; music, enemy attacks and impact sounds keep their own voices. Your current game picks up your choice immediately.</p>
-  </main>
-  <script type="module" src="sound-lab/audition.js"></script>
-</body>
-</html>
+    <section class="practice"><h2>Practice field</h2><p id="playing"></p>
+      <canvas id="arena" width="560" height="292" aria-label="Live practice with the selected weapon and training targets"></canvas>
+      <div id="levels" aria-label="Choose attack to play"></div>
+      <div class="transport"><span id="timer" aria-live="off">Ready</span><button id="stop" type="button">Stop</button></div>
+      <p id="stats">Choose a rank to start the eight-second audition.</p>
+    </section>
+  </div>
+</main><script type="module" src="sound-lab/audition.js"></script></body></html>

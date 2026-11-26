@@ -51,6 +51,11 @@ const ORIGINAL_BRIEFS = {
 };
 
 const RECRUIT_BRIEFS = {
+  sentinel: {
+    identity: 'Dame Maera wears dark steel plate and a tall closed helm. She carries a straight steel sword and a long pointed shield.',
+    scene: 'A stone watchpost at the edge of the forest, with a timber footbridge over a stream.',
+    pose: 'Watching the far bank from the bridge, weight on her forward boot, shield held close and sword resting low at her side.',
+  },
   eanasir: {
     identity: 'A Mesopotamian copper merchant inspired by the supplied standing worshipper statue: warm alabaster skin, large pale round eyes, tightly curled hair, a long tiered curly beard, bare upper torso, a cream fringed kaunakes skirt and bare feet. He holds one tarnished copper disc and one slim leather whip. Preserve the native sprite silhouette and restrained sandstone palette.',
     scene: 'A torchlit crypt trading alcove, with a low stone counter and a small pile of tarnished copper.',

@@ -5,7 +5,7 @@
 //
 // Effect interface as in effects.js: update(dt) -> keep?; drawGround / draw / drawGlow(ctx, cam).
 
-import { sfx } from '../engine/audio.js';
+import { weaponSfx } from '../engine/audio.js';
 import { rand, TAU, clamp, angleDiff, ease, pick, hash2, makeCanvas, hexToRgb } from '../engine/util.js';
 import { glow, glint } from './fxsprites.js';
 import { PC, P } from './particles.js';
@@ -166,7 +166,7 @@ export class Rune {
     if (this.y < y0) { this.y = y0; this.vy = Math.abs(this.vy); hit = true; }
     else if (this.y > y1) { this.y = y1; this.vy = -Math.abs(this.vy); hit = true; }
     if (hit) {
-      sfx('shard', { pitch: rand(1.5, 1.9), pan: panOf(g, this.x) });
+      weaponSfx(w, 'shard', { pitch: rand(1.5, 1.9), pan: panOf(g, this.x) });
       g.particles.burst(this.x, this.y, 4, 4, [PC.y, PC.Y, PC.w], 50, 0.3, 1, P.GLOW | P.FADE, {});
       if (++this.bounces === 1 && s.split && !this.kid) this.splitUp();
     }
@@ -296,7 +296,7 @@ export class Sweep {
         g.killEnemy(e, { w });
         g.effects.push(new ReapMark(g, x, y, this.look));
         g.particles.burst(x, y, 4, 7, this.look.souls, 22, 1, 1, P.GLOW | P.FADE | P.RISE, { vz: 26 });
-        sfx('reap', { pitch: rand(0.9, 1.1), pan: panOf(g, x) });
+        weaponSfx(w, 'reap', { pitch: rand(0.9, 1.1), pan: panOf(g, x) });
       }
     }
     // Ghost-light shed from a blade's point as it goes.
@@ -523,7 +523,7 @@ export class Star {
       }
       g.particles.burst(this.x, this.y, this.big ? 10 : 6, 8, [PC.w, PC.G, PC.j], R * 4, 0.4, 1, P.GLOW | P.FADE, { flat: 0.6, vz: 50 });
       g.effects.push(new Ring(g, this.x, this.y, 2, R, 0.22, STAR.ring, false, 1));
-      if (Math.random() < 0.35) sfx('gem', { pitch: rand(1.3, 1.8), pan: panOf(g, this.x) });
+      if (Math.random() < 0.35) weaponSfx(w, 'gem', { pitch: rand(1.3, 1.8), pan: panOf(g, this.x) });
     }
     return this.t < STAR.fall + 0.25;
   }
@@ -595,7 +595,7 @@ export const KINDS_LIGHT = {
         const ang = (t ? Math.atan2(t.y - p.y, t.x - p.x) : rand(TAU)) + rand(-0.15, 0.15);
         g.effects.push(new Rune(g, w, p.x, p.y - 2, ang, w.s.dur));
       }
-      sfx('shard', { pitch: 0.7 });
+      weaponSfx(w, 'shard', { pitch: 0.7 });
     },
   },
 
@@ -603,7 +603,7 @@ export const KINDS_LIGHT = {
   scythe: {
     fire(w) {
       w.g.effects.push(new Sweep(w.g, w));
-      sfx('whoosh', { pitch: w.s.reap ? 1.15 : rand(0.9, 1) });
+      weaponSfx(w, 'whoosh', { pitch: w.s.reap ? 1.15 : rand(0.9, 1) });
     },
     kill(w, e) {
       if (w.s.reap && e.xp > 0) w.g.dropGem(e.x, e.y, Math.max(1, Math.round(e.xp * w.s.reap)));

@@ -1,6 +1,16 @@
 // Every hero shares one animation rule: only a manual crypt strike can replace
 // idle/walk with attack poses. Automatic field weapons keep their combat effects.
 import { faceAlong } from './facing.js';
+import { moveFor } from '../data/difficulty.js';
+import { HEROES } from '../data/heroes.js';
+import { clamp } from '../engine/util.js';
+
+// Player advances by seven steps per base-speed second and drawPlayer samples
+// the walk at 1.4 poses per step. Match the sheet's fps at Normal travel speed.
+export function normalWalkRate(id, fps) {
+  const speed = clamp(moveFor('s15', 'easy') * (HEROES[id]?.stats.speed || 1), 0.6, 1.6);
+  return fps / (7 * 1.4 * speed);
+}
 
 export function recordHeroAttack(w, ang = w.g.player.aim) {
   if (w.g.mainWeapon?.() !== w || w.g.caveStrike) return;

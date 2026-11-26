@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { clamp, lerp } from '../../engine/util.js';
 import { Ring } from '../../game/effects.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
@@ -40,7 +40,7 @@ class CarrionFlight {
       this.dead = true;
       g.hitEnemy(target, this.damage, { w, type: 'dark' });
       g.effects.push(new Ring(g, target.x, target.y, 3, this.fed ? 17 : 10, 0.24, VIOLET, false, 2));
-      sfx('bones', { pitch: this.fed ? 0.85 : 1.1 });
+      weaponSfx(w, 'bones', { pitch: this.fed ? 0.85 : 1.1 });
     }
     if (w.fx === this) w.fx = null;
     return false;
@@ -97,6 +97,6 @@ export default {
     const damage = s.dmg * (1 + Math.min(MAX_TITHE, s.tithe * fed));
     w.fx = new CarrionFlight(w, target, damage, fed);
     g.effects.push(w.fx);
-    sfx('bones', { pitch: 1.35, pan: Math.cos(angle) * 0.24 });
+    weaponSfx(w, 'bones', { pitch: 1.35, pan: Math.cos(angle) * 0.24 });
   },
 };

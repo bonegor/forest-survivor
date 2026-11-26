@@ -11,8 +11,8 @@ export const LEGACY_DESIGNS = {
   witchhunter: 'heroes7-crossbowman',
 };
 
-// Each recruit's threshold belongs to the preceding hero's run. The order is append-only
-// because hero ids are stored as bit positions in profiles.
+// Each recruit's threshold belongs to the preceding hero's run. Append recruits to preserve
+// that route. shared/profile.js keeps their permanent save slots separately.
 export const RECRUITS = [
   { id: 'footman', design: 'heroes5-footman', minutes: 5, name: 'Garran', title: 'Footman',
     color: '#8b9bb4', stats: { maxHp: 92, armor: 1 }, perk: 'Drilled Guard: +1 armor', ultimate: 'knight' },
@@ -38,6 +38,9 @@ export const RECRUITS = [
     color: '#6c91bf', stats: { maxHp: 86, bane: 0.15 }, perk: 'Siege Training: +15% damage to champions, lords and bosses', ultimate: 'archer' },
   { id: 'swordbearer', design: 'heroes7-knecht', minutes: 10, name: 'Leopold', short: 'Bearer', title: 'Swordbearer',
     color: '#da825a', stats: { maxHp: 82, might: 1.08 }, perk: 'Masterwork Steel: +8% damage', ultimate: 'knight' },
+  // Maera wears the already packed heroes7-sentinel sheet originally shipped as knight.js.
+  { id: 'sentinel', minutes: 10, name: 'Dame Maera', title: 'Sentinel',
+    color: '#d6b674', stats: { maxHp: 96, armor: 2, speed: 0.94 }, perk: 'Tower Guard: +2 armor, −6% movement speed', ultimate: 'paladin' },
 ];
 
-export const APPROVED_DESIGNS = { ...LEGACY_DESIGNS, ...Object.fromEntries(RECRUITS.map(h => [h.id, h.design])) };
+export const APPROVED_DESIGNS = { ...LEGACY_DESIGNS, ...Object.fromEntries(RECRUITS.filter(h => h.design).map(h => [h.id, h.design])) };

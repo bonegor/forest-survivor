@@ -5,13 +5,13 @@ import {Game} from '../public/js/game/game.js';
 import {SPR} from '../public/js/engine/sprites.js';
 import {input} from '../public/js/engine/input.js';
 import {defaultProfile,metaBonuses} from '../public/js/shared/profile.js';
+import {moveFor} from '../public/js/data/difficulty.js';
+import plumed from '../public/assets/knight-plumed/recoloured.js';
 const context={globalAlpha:1,drawImage(){}};
-// At the speed the walk was drawn for (move 1): in a run the hero walks GAME_SPEED times as fast
-// (data/difficulty.js moveFor), and his walk plays faster with him.
-function game(){return new Game({hero:'knight',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},move:1});}
+function game(){return new Game({hero:'knight',mode:'s15',meta:metaBonuses(defaultProfile()),settings:{},move:moveFor('s15','easy')});}
 function shown(g){g.drawPlayer(context,g.cam);return SPR.knight.frames.indexOf(g.player._rect[4]);}
 
-test('the real player clock visits the complete Sentinel walk at its imported cadence',()=>{
+test('the real player clock visits the complete Plumed Knight walk at its imported cadence',()=>{
   const g=game(),p=g.player,old=input.bot;
   try{
     input.bot={x:1,y:0};
@@ -24,7 +24,7 @@ test('the real player clock visits the complete Sentinel walk at its imported ca
     }
     assert.deepEqual([...visited].sort((a,b)=>a-b),SPR.knight.walk);
     assert.ok(wraps.length>=2,'must complete two full walk cycles in two seconds');
-    const expected = SPR.knight.walk.length / (7 * p.speedMul * 1.4 * SPR.knight.motionRate);
+    const expected = plumed.animations.walk.length / plumed.fps.walk;
     assert.ok(Math.abs(wraps[1]-wraps[0]-expected)<1/30,'preserve the selected preview cadence');
   }finally{input.bot=old;}
 });
@@ -52,5 +52,5 @@ test('idle breath comes from the authored poses and keeps the foot anchor stable
     p.idleAnim=anim;shown(g);ys.push(g.player._rect[1]);
   }
   assert.equal(new Set(ys).size,1,'do not add the renderer bob on top of the authored idle');
-  assert.equal(SPR.knight.anchorY,56,'use the approved sheet anchor with its transparent padding');
+  assert.equal(SPR.knight.anchorY,plumed.footLine,'use the Plumed Knight foot line');
 });

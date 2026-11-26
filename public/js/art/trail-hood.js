@@ -1,6 +1,7 @@
 import { APPROVED_HERO_ART } from './approved-heroes.js';
 import { packedPalette } from './palette.js';
-import { bounds, cloneBuf, makeBuf } from '../engine/pixels.js';
+import { cloneBuf } from '../engine/pixels.js';
+import { idlePose } from './idle-pose.js';
 
 const trail = APPROVED_HERO_ART.trailblazer;
 const cloth = packedPalette();
@@ -69,26 +70,4 @@ export const HOODED_TRAIL_ART = {
   },
 };
 
-let poses;
-export const HOODED_TRAIL_POSE = {
-  ...APPROVED_HERO_ART.trailblazer_pose,
-  gen() {
-    if (!poses) {
-      const frames = HOODED_TRAIL_ART.gen();
-      const idle = trail.idle.map(i => frames[i]);
-      const boxes = idle.map(bounds);
-      const left = Math.min(...boxes.map(b => b.x0)), top = Math.min(...boxes.map(b => b.y0));
-      const w = Math.max(...boxes.map(b => b.x1)) - left + 1;
-      const h = Math.max(...boxes.map(b => b.y1)) - top + 1;
-      poses = idle.map(frame => {
-        const pose = makeBuf(w, h);
-        for (let y = 0; y < h; y++) {
-          const start = (top + y) * frame.w + left;
-          pose.d.set(frame.d.subarray(start, start + w), y * w);
-        }
-        return pose;
-      });
-    }
-    return poses;
-  },
-};
+export const HOODED_TRAIL_POSE = idlePose(HOODED_TRAIL_ART);

@@ -31,7 +31,7 @@ export const EXPOSED = { held: 0.25 };
 // Heavy blows: swords, axes, crossbows, Smite, the scythe and the hook, with their evolutions.
 const HEAVY_OF = ['sword', 'axe', 'twinaxes', 'smite', 'crossbow', 'scythe', 'hook',
   'footman_linebreaker', 'marksman_splitpin', 'templar_votive_edge', 'wraith_aftercut',
-  'praetorian_shieldward_blade', 'seraph_sunwing_edge', 'boltguard_ratchet', 'swordbearer_marchsteel'];
+  'praetorian_shieldward_blade', 'seraph_sunwing_edge', 'boltguard_ratchet', 'swordbearer_marchsteel', 'sentinel_watchblade'];
 const withEvos = (ids) => new Set(ids.flatMap((id) => (WEAPONS[id] ? [id, WEAPONS[id].evo?.into].filter(Boolean) : [])));
 export const HEAVY = withEvos(HEAVY_OF);
 export const isHeavy = (w) => !!w && HEAVY.has(w.id);

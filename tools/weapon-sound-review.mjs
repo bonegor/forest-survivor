@@ -24,33 +24,81 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 1040
 const errors = [], page = await context.newPage();
 page.on('pageerror', err => errors.push(err.message));
 try {
+  // Record actual bank-source starts, including offsets, independently of the on-screen cue counter.
+  await context.addInitScript(() => {
+    window.recordingStarts = [];
+    const original = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args) {
+      if (args.length === 2) window.recordingStarts.push(this.buffer?.duration);
+      return original.apply(this, args);
+    };
+  });
+  const bankResponses = [];
+  page.on('response', response => { if (response.url().includes('/library/bank-')) bankResponses.push(response.status()); });
   await page.goto(url + '/sound-lab/');
-  await page.waitForSelector('.style');
-  assert.equal(await page.locator('.style').count(), 4);
-  assert.match(await page.locator('#saved').innerText(), /Applied: Current/);
-  await page.locator('[data-style="heavy"] [data-level="8"]').click();
-  await page.waitForFunction(() => document.getElementById('timer').textContent.includes('remaining'));
-  await page.waitForTimeout(1400);
-  assert.match(await page.locator('#stats').innerText(), /3 per attack/);
-  assert.equal(await page.evaluate(() => localStorage.getItem('fs_weapon_sound_style_v1')), null, 'preview does not apply');
-  await page.screenshot({ path: out + '/desktop.png', fullPage: true });
-  await page.locator('#stop').click();
+  const libraryReady = tab => tab.waitForFunction(() => !!document.querySelector('#recording option[value^="clip:"]'));
+  await libraryReady(page);
+  assert.equal(await page.locator('#weapon option').count(), 60);
+  assert.match(await page.locator('#saved').innerText(), /In game · Current/);
+  assert.equal(await page.locator('#studio').getAttribute('href'), 'field-studio/');
+  await page.selectOption('#category', 'all');
+  const catalogCount = JSON.parse(await readFile(resolve(root, 'audio/sfx/library/index.json'), 'utf8')).length;
+  assert.equal(await page.locator('#recording option').count(), catalogCount + 4);
+  await page.fill('#search', 'axe');
+  assert.ok(await page.locator('#recording option').count() > 0);
+  await page.fill('#search', '');
+  await page.selectOption('#category', 'best');
+  await page.selectOption('#recording', 'heavy');
+  await page.click('[data-level="8"]');
+  await page.waitForFunction(() => /[1-9]\d* weapon cue/.test(document.querySelector('#stats').textContent));
+  assert.equal(await page.evaluate(() => localStorage.getItem('fs_weapon_sound_style_v1_weapons')), null, 'audition does not apply');
+  await page.click('#stop');
 
-  // A separate, already loaded game-side module receives the actual storage event.
+  const clip = await page.locator('#recording option[value^="clip:"]').first().getAttribute('value');
+  await page.selectOption('#recording', clip);
+  assert.ok(await page.locator('#credit a').count() > 0);
+  await page.click('[data-level="whirlwind"]');
+  await page.waitForFunction(() => window.recordingStarts.length > 0);
+  assert.ok(bankResponses.length && bankResponses.every(status => status === 200));
+  await page.screenshot({ path: out + '/desktop.png', fullPage: true });
+  await page.click('#stop');
+
+  // An already-open game-side module picks up changes without reloading the game.
   const receiver = await context.newPage();
   await receiver.goto(url + '/sound-lab/');
-  await receiver.waitForSelector('.style');
+  await libraryReady(receiver);
   await page.bringToFront();
-  await page.locator('[data-style="tempered"] .apply').click();
-  await receiver.waitForFunction(async () => (await import('/js/engine/weapon-sounds.js')).weaponSoundStyle() === 'tempered');
+  await page.click('#apply');
+  await receiver.waitForFunction(async expected => {
+    const { weaponSoundChoice } = await import('/js/engine/weapon-sounds.js');
+    return weaponSoundChoice('axe') === expected && weaponSoundChoice('bow') === 'current';
+  }, clip);
+  // Let real gameplay resolve its saved choice with no audition override.
+  const playedInGame = await receiver.evaluate(async expected => {
+    const { prepareWeaponAudio, setWeaponSoundAudition, setVolumes } = await import('/js/engine/audio.js');
+    const { makeWeaponPreview } = await import('/sound-lab/preview.js');
+    await prepareWeaponAudio(expected);
+    setWeaponSoundAudition(null);
+    setVolumes(0, .6);
+    const { game } = makeWeaponPreview('axe', 1, { headless: true });
+    const before = window.recordingStarts.length;
+    for (let i = 0; i < 100; i++) game.update(1 / 60);
+    return window.recordingStarts.length > before;
+  }, clip);
+  assert.ok(playedInGame, 'gameplay uses the saved recorded attack');
   await receiver.reload();
-  await receiver.waitForSelector('[data-style="tempered"].selected');
+  await libraryReady(receiver);
+  assert.equal(await receiver.inputValue('#recording'), clip);
   await receiver.close();
-  await page.locator('[data-style="current"] .apply').click();
+
+  await page.selectOption('#weapon', 'steamvent');
+  assert.equal(await page.locator('#levels button').count(), 1);
+  await page.click('[data-level="steamvent"]');
+  await page.waitForFunction(() => /[1-9]\d* weapon cue/.test(document.querySelector('#stats').textContent));
+  await page.click('#stop');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: out + '/mobile.png', fullPage: true });
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
-  assert.equal(overflow, false, 'phone page does not scroll sideways');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'phone layout fits');
 
   const result = await page.evaluate(async () => {
     const { scheduleWeaponSound, WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES } = await import('/js/engine/weapon-sounds.js');

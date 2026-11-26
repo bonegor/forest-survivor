@@ -39,3 +39,7 @@ loudness (peaks held at -1 dBFS), Ogg Vorbis 44.1 kHz.
 - **blades.ogg** (CC0): `swish_3` from Ogrebane's battle sounds for Summoning Wars (released under a choice of licences including public domain, which is the one used), by way of the free-game-sfx collection.
 - **scythe.ogg** (public domain): `audio/toon/swish` from M.A.R.S. (https://github.com/thelaui/M.A.R.S.), whose toon sounds are all public domain.
 - **wood-snap.ogg** (CC0): `wood-twigs-break-01` from the Fantasy Accessory SFX library by Jan Schupke ("Vehicle"), https://opengameart.org/content/fantasy-accessory-sfx-library, by way of the free-game-sfx collection.
+
+## Weapon Sound Lab recordings
+
+The [recording catalog](library/index.json) credits each included recording by title, creator, original source file and package, copyright, licence and prior changes. The sound chooser displays this credit with the selected recording. The banks contain the source archive's audio bytes. Playback trims leading silence, adjusts gain and fades long sounds after 1.2 seconds to fit the weapon's attacks. Each recording retains its individual licence. The [CC0](library/CC0-1.0.txt), [CC BY 3.0](library/CC-BY-3.0.txt), [CC BY-SA 3.0](library/CC-BY-SA-3.0.txt) and [CC BY-SA 4.0](library/CC-BY-SA-4.0.txt) texts accompany the recordings.

@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { TAU } from '../../engine/util.js';
 import { slashFrame } from '../../game/fxsprites.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
@@ -48,7 +48,7 @@ function ward(w, state) {
     guard.left--;
     state.chargeUntil = g.clock + CHARGE_TIME;
     g.particles.burst(p.x + guard.dx * guard.reach, p.y + guard.dy * guard.reach, shot.z, 7, [PC.Y, PC.w], 45, 0.24, 1, P.FADE | P.GLOW, {});
-    sfx('hit', { pitch: 1.45, pan: guard.dx * 0.22 });
+    weaponSfx(w, 'hit', { pitch: 1.45, pan: guard.dx * 0.22 });
     if (!guard.left) return;
   }
 }
@@ -134,7 +134,7 @@ export default {
     }
     p.swing(angle);
     recordHeroAttack(w, angle);
-    sfx('slash', { pitch: charged ? 1.12 : 0.88, pan: dx * 0.22 });
+    weaponSfx(w, 'slash', { pitch: charged ? 1.12 : 0.88, pan: dx * 0.22 });
     g.effects.push(new ShieldwardStroke(w, angle, guard, charged));
     const damage = s.dmg * (charged ? 1 + s.reprisal : 1);
     let left = Math.min(MAX_CUTS, s.amount + 1);

@@ -1,5 +1,5 @@
 // One visible leather lash; collision follows the same polyline from grip to tip.
-import { sfx } from '../engine/audio.js';
+import { weaponSfx } from '../engine/audio.js';
 import { reachesBody, reachesFeet } from './hitbox.js';
 import { recordHeroAttack } from './hero-animation.js';
 import { nearbyWeaponProp } from './weapon-targets.js';
@@ -123,6 +123,6 @@ export const MERCHANT_WHIP = {
     const angle = w.hand ? p.strikeAng : Math.atan2(target.y - p.y, target.x - p.x);
     recordHeroAttack(w, angle);
     g.effects.push(new MerchantLash(w, angle));
-    sfx('slash', { pitch: w.evolved ? 1.3 : 1.55 });
+    weaponSfx(w, 'slash', { pitch: w.evolved ? 1.3 : 1.55 });
   },
 };

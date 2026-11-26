@@ -3,7 +3,7 @@
 import { WEAPONS, MAX_WEAPON_LEVEL, WEAPON_SPRITES, statsAt } from '../data/weapons.js';
 import { PASSIVES, OVERCHARGE, overDamage } from '../data/passives.js';
 import { FUSION } from '../data/fusions.js';
-import { sfx } from '../engine/audio.js';
+import { preloadWeaponChoice, weaponSfx } from '../engine/audio.js';
 import { rand, TAU, pick, angleDiff } from '../engine/util.js';
 import { spawnProjectile, shadowBlade } from './projectiles.js';
 import { Slash, Pool, Orbit, Aura, Bolt, Meteor, Ring, Thorns, explode, Pillar, Burrow, Chop, FRENZY, PURGE, boltTargets, stunFoe, silverBolt, LeechChain, LEECH, plantMushroom, bakedCuts, bakedZap } from './effects.js';
@@ -20,6 +20,9 @@ import { nearbyWeaponProp } from './weapon-targets.js';
 
 // What a weapon's stats are where its data says nothing (data/weapons.js statsAt).
 const STAT_DEFAULTS = { dmg: 0, cd: 1, amount: 1, area: 1, speed: 1, dur: 1, pierce: 0, kb: 1, tick: 0.5, chains: 0, slow: 0, freeze: 0 };
+// Some rewards grant the evolution directly. Its per-weapon sound still belongs to the base.
+const soundBases = new Map(Object.entries(WEAPONS).filter(([, def]) => def.evo?.into && !def.evo.random)
+  .map(([id, def]) => [def.evo.into, id]));
 // A weapon's stats at a level as this hero (p) fires it: his area, cooldown, projectile speed,
 // duration and extra projectiles are in them (Weapon.recompute; a level-up card's before and
 // after, ui/gamescreen.js cardChange). Damage takes his might as it strikes (Game.hitEnemy).
@@ -69,6 +72,7 @@ export class Weapon {
     this.g = g;
     this.id = id;
     this.baseId = id;
+    preloadWeaponChoice(soundBases.get(id) || id);
     this.fromGear = fromGear;
     this.def = WEAPONS[id];
     this.level = 1;
@@ -100,6 +104,10 @@ export class Weapon {
 
   get evolved() {
     return !!this.def.evolved;
+  }
+
+  get soundId() {
+    return this.owner?.id || (this.baseId === this.id ? soundBases.get(this.id) || this.id : this.baseId);
   }
 
   get maxed() {
@@ -430,7 +438,7 @@ export const KINDS = {
           pierce: 999, kb: 1.2, w, type: 'holy',
         });
       }
-      sfx('slash', { pitch: rand(1.05, 1.3) });
+      weaponSfx(w, 'slash', { pitch: rand(1.05, 1.3) });
     },
   },
 
@@ -474,7 +482,7 @@ export const KINDS = {
       if (w.s.ring && i === 0 && w.volley % 3 === 0) {
         for (let k = 0; k < 10; k++) arrow((k / 10) * TAU + rand(-0.05, 0.05));
       }
-      sfx('arrow', { pitch: rand(0.9, 1.15), pan: Math.cos(ang) * 0.3 });
+      weaponSfx(w, 'arrow', { pitch: rand(0.9, 1.15), pan: Math.cos(ang) * 0.3 });
     },
   },
 
@@ -500,7 +508,7 @@ export const KINDS = {
         kind: 'fireball', sprite: 'fireball', x: p.x, y: p.y, z: 8, ang, speed: 150 * w.s.speed, life: 1.6, r: 4,
         dmg: w.s.dmg, pierce: 0, kb: w.s.kb, w, explodeR: 24 * w.s.area, type: 'fire',
       });
-      sfx('fireball', { pitch: rand(0.9, 1.1) });
+      weaponSfx(w, 'fireball', { pitch: rand(0.9, 1.1) });
     },
   },
 
@@ -531,7 +539,7 @@ export const KINDS = {
         kind: 'axe', sprite: 'axe', x: p.x, y: p.y - 6, z: 0, vx: side * (20 + i * 14) + rand(-14, 14), vy: -225 - rand(0, 45),
         grav: 430, life: 2.1, r: 6 * w.s.area, dmg: w.s.dmg, pierce: w.s.pierce, kb: w.s.kb, w, spin: side * 14, scale: w.s.area,
       });
-      sfx('axe', { pitch: rand(0.9, 1.1) });
+      weaponSfx(w, 'axe', { pitch: rand(0.9, 1.1) });
     },
   },
 
@@ -545,7 +553,7 @@ export const KINDS = {
           r: 7 * w.s.area, dmg: w.s.dmg, pierce: 999, kb: w.s.kb, w, spin: 16, scale: w.s.area, hitCd: 0.3,
         });
       }
-      sfx('axe', { pitch: 0.7 });
+      weaponSfx(w, 'axe', { pitch: 0.7 });
     },
   },
 
@@ -565,7 +573,7 @@ export const KINDS = {
         onLand: (x, y) => {
           g.effects.push(new Pool(g, w, x, y, 21 * w.s.area, w.s.dur, w.s.dmg, w.s.tick, hell ? 'hell' : 'fire', hell));
           fxBurst(g, hell ? 'fx_firebomb_hell' : 'fx_firebomb', x, y, { fps: 18, dy: 6 });
-          sfx('flask', { pan: panOf(g, x) });
+          weaponSfx(w, 'flask', { pan: panOf(g, x) });
         },
       });
     },
@@ -579,7 +587,7 @@ export const KINDS = {
       if (w.fx && !w.fx.dead) return w.s.eternal ? 0.5 : 0.2;
       w.fx = new Orbit(g, w);
       g.effects.push(w.fx);
-      sfx('blade');
+      weaponSfx(w, 'blade');
       return w.s.eternal ? 0.5 : w.s.dur + w.s.cd;
     },
   },
@@ -631,7 +639,7 @@ export const KINDS = {
       }
       g.particles.burst(e.x, e.y, 8, 10, [PC.c, PC.w, PC.U], 90, 0.35, 1, P.GLOW | P.FADE, { vz: 50 });
       g.light(e.x, e.y, 90, 'white', 0.9);
-      sfx('zap', { pitch: rand(0.75, 0.95), pan: panOf(g, e.x) });
+      weaponSfx(w, 'zap', { pitch: rand(0.75, 0.95), pan: panOf(g, e.x) });
     },
   },
 
@@ -669,7 +677,7 @@ export const KINDS = {
         }
         last = cur;
       }
-      if (last) sfx('zap', { pitch: rand(1.05, 1.3), pan: panOf(g, last.x) });
+      if (last) weaponSfx(w, 'zap', { pitch: rand(1.05, 1.3), pan: panOf(g, last.x) });
     },
   },
 
@@ -695,7 +703,7 @@ export const KINDS = {
       if (i === 0) recordHeroAttack(w, w.s.radial ? p.aim : ang);
       const off = w.s.radial ? 0 : (i - (n - 1) / 2) * 3;
       shadowBlade(g, w, p.x - Math.sin(ang) * off, p.y - 1 + Math.cos(ang) * off, ang, w.s.dmg, 0.75);
-      if (i % 2 === 0) sfx('dagger', { pitch: rand(0.9, 1.2) });
+      if (i % 2 === 0) weaponSfx(w, 'dagger', { pitch: rand(0.9, 1.2) });
     },
   },
 
@@ -714,7 +722,7 @@ export const KINDS = {
         life: 0.35, w, spin: 18,
         onLand: (x, y) => {
           g.effects.push(new Pool(g, w, x, y, 18 * w.s.area, w.s.dur, w.s.dmg, w.s.tick, 'spikes', false, { kb: 0, slow: w.s.slow, slowT: 0.6, critDmg: w.s.critDmg || 0 }));
-          sfx('dagger', { pitch: 0.7, pan: panOf(g, x) });
+          weaponSfx(w, 'dagger', { pitch: 0.7, pan: panOf(g, x) });
         },
       });
     },
@@ -739,7 +747,7 @@ export const KINDS = {
         w.chains.push(c);
         g.effects.push(c);
       }
-      sfx('dagger', { pitch: 0.6 });
+      weaponSfx(w, 'dagger', { pitch: 0.6 });
     },
   },
 
@@ -773,7 +781,7 @@ export const KINDS = {
       const foes = mightiest(g, p.x, p.y, 150 * w.s.area, 99).filter((e) => e.curseT <= 0).slice(0, w.s.amount);
       if (!foes.length) return 0.4;
       for (const e of foes) hexCurse(g, w, e);
-      sfx('zap', { pitch: 0.55, pan: panOf(g, foes[0].x) });
+      weaponSfx(w, 'zap', { pitch: 0.55, pan: panOf(g, foes[0].x) });
     },
     death(w, e) {
       if (!w.s.spread || e.curseT <= 0 || e.curseW !== w) return;
@@ -812,7 +820,7 @@ export const KINDS = {
       foes.sort((a, b) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2 - ((b.x - p.x) ** 2 + (b.y - p.y) ** 2));
       if (!foes.length) return false;
       foes.slice(-w.s.amount).reverse().forEach((t, i) => g.effects.push(new Hook(g, w, t, i)));
-      sfx('axe', { pitch: 0.5 });
+      weaponSfx(w, 'axe', { pitch: 0.5 });
     },
   },
 
@@ -852,7 +860,7 @@ export const KINDS = {
       }
       g.effects.push(new Ring(g, p.x, p.y, 4, 34, 0.45, '#9ee562', true));
       recordHeroAttack(w);
-      sfx('bones', { pitch: 0.7 });
+      weaponSfx(w, 'bones', { pitch: 0.7 });
     },
   },
 
@@ -870,7 +878,7 @@ export const KINDS = {
         });
       }
       g.effects.push(new Ring(g, p.x, p.y, 4, 30 * w.s.area, 0.3, '#2ce8f5', true));
-      sfx('shard');
+      weaponSfx(w, 'shard');
     },
   },
 
@@ -896,7 +904,7 @@ export const KINDS = {
         out: 0.65, life: 3, r: 6 * w.s.area, dmg: w.s.dmg, pierce: 999, kb: w.s.kb, w, spin: 18, scale: w.s.area,
         hitCd: 0.3, pull: w.s.pull, glow: w.s.pull ? ['#fee761', 24, 'holy', 34] : null, trail: w.s.pull ? PC.Y : null,
       });
-      if (!w.s.ring || i === 0) sfx('axe', { pitch: rand(1.3, 1.5) });
+      if (!w.s.ring || i === 0) weaponSfx(w, 'axe', { pitch: rand(1.3, 1.5) });
     },
   },
 
@@ -911,7 +919,7 @@ export const KINDS = {
         const near = g.nearestEnemies(p.x, p.y, n, 160);
         for (let i = 0; i < n; i++) g.effects.push(new Thorns(g, w, p.x, p.y, aimAt(p, near[i], p.aim + (i - (n - 1) / 2) * 0.5)));
       }
-      sfx('wood', { pitch: 0.6 });
+      weaponSfx(w, 'wood', { pitch: 0.6 });
     },
   },
 
@@ -967,7 +975,7 @@ export const KINDS = {
         }
       }
       g.light(p.x, p.y, 60, 'purple', 0.8);
-      sfx('zap', { pitch: rand(1.5, 1.7) });
+      weaponSfx(w, 'zap', { pitch: rand(1.5, 1.7) });
     },
   },
 
@@ -986,7 +994,7 @@ export const KINDS = {
         crit: w.s.critBonus || 0, type: fae ? 'holy' : 'normal', trail: fae ? PC.Y : PC.l,
         glow: fae ? ['#fee761', 22, 'holy', 34] : ['#9ee562', 18, 'green', 28],
       });
-      if (i % 2 === 0) sfx('blade', { pitch: fae ? 1.4 : 1.1 });
+      if (i % 2 === 0) weaponSfx(w, 'blade', { pitch: fae ? 1.4 : 1.1 });
     },
   },
   // Smite and Judgement (the Paladin's): a pillar on each of the mightiest foes in reach, one
@@ -1016,7 +1024,7 @@ export const KINDS = {
       if (!foes.length) return false;
       foes.slice(0, w.s.amount).forEach((e, i) => g.effects.push(new Burrow(g, w, p.x, p.y + 1, e, i * 0.06)));
       recordHeroAttack(w, aimAt(p, foes[0]));
-      sfx('wood', { pitch: rand(0.3, 0.4) });
+      weaponSfx(w, 'wood', { pitch: rand(0.3, 0.4) });
     },
   },
 
@@ -1080,7 +1088,7 @@ export const KINDS = {
         silverBolt(g, w, p.x, p.y, ang - PURGE.spread, o);
         silverBolt(g, w, p.x, p.y, ang + PURGE.spread, o);
       }
-      sfx('arrow', { pitch: rand(0.6, 0.7), pan: Math.cos(ang) * 0.3 });
+      weaponSfx(w, 'arrow', { pitch: rand(0.6, 0.7), pan: Math.cos(ang) * 0.3 });
     },
   },
 };

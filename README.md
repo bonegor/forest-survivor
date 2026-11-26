@@ -49,7 +49,9 @@ On each Survival map and in Ranked, the horde starts with one monster type. A fa
 
 Incidental box and horde pickups drop half as often. Fury pickups appear once the hero's ultimate is unlocked. Experience gems and guaranteed boss and champion rewards keep their usual rules. Enemy shots pass through weapons and deal their usual damage during the Knight's Whirlwind.
 
-**Options → Weapon Sounds** opens the audition page. Compare the current recordings with **Tempered**, **Heavy**, and **Arcade** at level 1 and maximum level, using real weapon timing and projectile counts. The 15 preview weapons cover every launch-sound family. Listening does not change your preference; **Apply** saves the style and updates the open game immediately.
+**Options → Weapon Sounds** opens the [weapon sound dashboard](https://gamevibe.si/sound-lab/). Choose a weapon to hear its level 1, max-level and evolved attacks, or select a fusion to hear its combined attack. Search the recordings or audition one of the four game styles. **Apply** saves the choice for that weapon in this browser and updates the open game.
+
+The [Field studio](https://gamevibe.si/field-studio/) shows eight sprite proposals for each playable hero and each XP crystal tier. Toggle the original artwork at the same scale, or choose **Playtest** to fight with a proposal. **My picks** saves the shortlist in this browser and lets you copy it.
 
 | Action | Keyboard | Gamepad | Touch |
 | --- | --- | --- | --- |
@@ -182,8 +184,8 @@ The clock keeps **real time**: the 15-minute night takes 15 minutes, and the 5:0
 
 ### The unlock ladder
 
-1. You start with the **Knight** and **15-minute Survival** in the Sunscorch only. Each hero has exactly one approved sprite: Plumed Knight, Moonsteel Huntress, Ember Sage, Nightveil, Bone Regent, Iron Vow, Oakwarden, Ylva Wolf-Tooth and the original Witch Hunter. There is no LOOK selector; old appearance settings cannot restore discarded variants. View the approved roster at `/skins/`. Source studies are archived outside `public/` and are not published.
-2. Last **5 minutes** on the clock with a hero to unlock the next hero, free. A banner says so at 5:00, and the hero is yours when the run ends, whether you win, fall or quit.
+1. You start with the **Knight** and **15-minute Survival** in the Sunscorch only. Sir Aldric wears the Plumed Knight sprite. The approved roster is at `/skins/`.
+2. The first recruits unlock after **5 minutes** with the preceding hero. Later recruits have their own times. **Dame Maera, the Sentinel**, wears the former Knight's steel armor and unlocks after **10 minutes with the Swordbearer**. Landing two Watchblade cuts readies her shield bash. You receive the recruit when the run ends, whether you win, fall or quit.
 3. Surviving the night with the **Necromancer** opens the **Dungeon**, for the Knight only at first.
 4. **Beat the Dungeon** with a hero to bring the next hero into it.
 5. Beat the Dungeon **with the Necromancer** to unlock **Ranked**, open to every hero.

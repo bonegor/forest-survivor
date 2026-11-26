@@ -156,8 +156,8 @@ test('pause opens the separate gear rank details through the normal button', () 
 test('legacy roster bits, ultimate bits and equipped slots retain their original hero identities', () => {
   const legacy = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter'];
   assert.deepEqual(HERO_ORDER.slice(0, legacy.length), legacy);
-  assert.equal(HERO_ORDER.length, 22);
-  assert.equal(Object.keys(HEROES).length, 22);
+  assert.equal(HERO_ORDER.length, 23);
+  assert.equal(Object.keys(HEROES).length, 23);
   assert.equal(HERO_ORDER.at(-1), 'eanasir', 'the challenge hero is appended without shifting old save bits');
   const ring = item('ring', 2);
   const old = sanitizeProfile({ v: 4, heroes: 511, uu: 511, bt: '0.0.0.0.0.0.0.0.8c',
@@ -166,6 +166,13 @@ test('legacy roster bits, ultimate bits and equipped slots retain their original
   assert.equal(old.uu, 511);
   assert.deepEqual(old.gear.witchhunter, { ring });
   assert.equal(old.bt.witchhunter, 300);
+  const merchant = sanitizeProfile({ v: 4, heroes: 2 ** 21, uu: 2 ** 21 });
+  assert.deepEqual(merchant.heroes, ['knight', 'eanasir'], 'the merchant keeps bit 21');
+  assert.equal(merchant.uu, 2 ** 21);
+  const reunited = packProfile({ ...merchant, heroes: [...merchant.heroes, 'sentinel'] });
+  assert.equal(reunited.heroes, 1 + 2 ** 21 + 2 ** 22);
+  const veteran = sanitizeProfile({ v: 4, heroes: ['knight', 'swordbearer'], bt: { swordbearer: 600 } });
+  assert.ok(veteran.heroes.includes('sentinel'), 'an existing ten-minute Swordbearer record earns the recruit');
 });
 
 test('static cookie fallback reads expanded profiles and removes all chunks after migration', () => {

@@ -22,6 +22,8 @@ import boltguard from './weapons/boltguard.js';
 import boltguardBehavior from './weapons/boltguard-behavior.js';
 import swordbearer from './weapons/swordbearer.js';
 import swordbearerBehavior from './weapons/swordbearer-behavior.js';
+import sentinel from './weapons/sentinel.js';
+import sentinelBehavior from './weapons/sentinel-behavior.js';
 
 export const EXPANSION_BEHAVIORS = {
   [footman.id]: footmanBehavior,
@@ -36,4 +38,5 @@ export const EXPANSION_BEHAVIORS = {
   [seraph.id]: seraphBehavior,
   [boltguard.id]: boltguardBehavior,
   [swordbearer.id]: swordbearerBehavior,
+  [sentinel.id]: sentinelBehavior,
 };

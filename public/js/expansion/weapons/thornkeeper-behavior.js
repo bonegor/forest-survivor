@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { TAU } from '../../engine/util.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { reachesFeet } from '../../game/hitbox.js';
@@ -120,7 +120,7 @@ export default {
     const x = aimed ? target.x : p.x + dx * distance;
     const y = aimed ? target.y : p.y + dy * distance;
     recordHeroAttack(w, ang);
-    sfx('wood', { pitch: w.evolved ? 0.68 : 0.86, pan: dx * 0.25 });
+    weaponSfx(w, 'wood', { pitch: w.evolved ? 0.68 : 0.86, pan: dx * 0.25 });
     const cast = new Convergence(w, x, y, ang);
     active.push(cast);
     w.convergences = active;

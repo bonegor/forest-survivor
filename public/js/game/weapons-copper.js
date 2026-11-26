@@ -7,7 +7,7 @@ import { TAU } from '../engine/util.js';
 import { PC } from './particles.js';
 import { reachesFeet, reachesBody, spriteRadius } from './hitbox.js';
 import { recordHeroAttack } from './hero-animation.js';
-import { sfx } from '../engine/audio.js';
+import { weaponSfx } from '../engine/audio.js';
 import { MERCHANT_WHIP, privateCopperDamage } from './merchant-whip.js';
 import { nearbyWeaponProp } from './weapon-targets.js';
 
@@ -108,7 +108,7 @@ function shoot(w, i) {
   if (!e && !w.hand) return;
   const ang = e ? bearing(p, e) : p.aim;
   if (!i) recordHeroAttack(w, ang);
-  sfx('blade', { pitch: w.evolved ? 0.85 : 1.12 });
+  weaponSfx(w, 'blade', { pitch: w.evolved ? 0.85 : 1.12 });
   const kind = w.def.kind;
   if (kind === 'copper_return') {
     disc(w, ang + (i - (w.s.amount - 1) / 2) * 0.13, {
@@ -187,7 +187,7 @@ export const COPPER_BEHAVIORS = {
       let e = target(w);
       if (!e) return false;
       recordHeroAttack(w, bearing(p, e));
-      sfx('zap', { pitch: 0.8 });
+      weaponSfx(w, 'zap', { pitch: 0.8 });
       let from = { x: p.x, y: p.y - 7 };
       const struck = new Set();
       for (let i = 0; e && i <= s.chains; i++) {

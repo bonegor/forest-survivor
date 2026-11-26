@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
 import { pointSegGap } from '../../game/hitbox.js';
 import { PC } from '../../game/particles.js';
@@ -120,6 +120,6 @@ export default {
       speed, life: (REACH + 10) / speed, r: 2, dmg: s.dmg, pierce: 0, kb: s.kb,
       trail: PC.g, w, onHit: plantLine,
     });
-    sfx('arrow', { pitch: 1.14, pan: Math.cos(ang) * 0.3 });
+    weaponSfx(w, 'arrow', { pitch: 1.14, pan: Math.cos(ang) * 0.3 });
   },
 };

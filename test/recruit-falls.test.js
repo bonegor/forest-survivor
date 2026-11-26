@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../tools/headless.mjs';
 import { RECRUITS } from '../public/js/expansion/roster.js';
+import { recruitPoses } from '../public/js/art/recruit-fall-poses.js';
 import { SPR } from '../public/js/engine/sprites.js';
 import { bounds } from '../public/js/engine/pixels.js';
 import { input } from '../public/js/engine/input.js';
@@ -9,8 +10,8 @@ import { mulberry32 } from '../public/js/engine/util.js';
 import { Game } from '../public/js/game/game.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 
-test('each recruit lands in the native field plane, releases a soul from the body, and leaves settled gear', () => {
-  for (const { id } of RECRUITS) {
+test('the recruit fall rigs land in the native field plane, release a soul from the body, and leave settled gear', () => {
+  for (const id of Object.keys(recruitPoses)) {
     const hero = SPR[id], fall = hero.fall, { wisp } = fall;
     const at = seconds => fall.frames[fall.frameAt(seconds)].buf;
     const gear = fall.frames.at(-1).buf;

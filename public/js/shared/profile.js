@@ -219,7 +219,7 @@ export function defaultProfile() {
     // Armory ranks a save from before was given (fromBefore); a refund pays them back as gold too.
     gift: {},
     ul: DEMO ? PROGRESS.locks.reduce((bits, l, i) => bits + (l.type === 'relic' && DEMO_START_RELICS.includes(l.id) ? 2 ** i : 0), 0) : 0,
-    uu: 0, // the heroes whose ultimate is open: bit i is HERO_ORDER[i]
+    uu: 0, // the heroes whose ultimate is open: bit i is SAVE_HEROES[i]
     // The Survival maps open (mo: bit i is PROGRESS.maps[i]; a new save's the ladder's first, the
     // desert) and the nights won on each (mw: bit 3i + d for maps[i] won on DIFFICULTIES[d], a
     // Nightmare's as Elite's): 28 October 2026 (mapsEarned).
@@ -239,7 +239,7 @@ export function defaultProfile() {
     stash: [], // shared inventory, including items whose enchantments remain unknown
     identifications: 0, // every successful identification raises the next price by ten gold
     ev: [], // the evolutions a lock waits on (need 'evolution') that a run has reached
-    ek: 0, // every evolution a run has made: bit i is PROGRESS.evolutions[i] (knownEvos)
+    ek: 0, ek2: 0, // discovered evolutions in save order, up to 53 bits per number
     home: [], // the shared weapons left at home: never offered in a run (setHome, the Codex)
   };
 }
@@ -276,9 +276,10 @@ export function sanitizeProfile(raw) {
   p.ul = orBits(p.ul, int(raw.ul, 0, ALL_LOCKS));
   if (Array.isArray(raw.ev)) p.ev = EVO_IDS.filter((id) => raw.ev.includes(id));
   p.ek = int(raw.ek, 0, ALL_EVOS);
+  p.ek2 = int(raw.ek2, 0, ALL_EVOS_2);
   if (Array.isArray(raw.home)) p.home = SHARED_IDS.filter((id) => raw.home.includes(id)).slice(0, exclusionState(p).level);
   p.uu = int(raw.uu, 0, ALL_ULTS);
-  // A cookie keeps them as bits in HERO_ORDER's order (packProfile); one from before keeps a list.
+  // A cookie keeps them as bits in SAVE_HEROES order (packProfile); one from before keeps a list.
   const heroes = typeof raw.heroes === 'number' ? HERO_ORDER.filter((h) => (raw.heroes & heroBit(h)) !== 0) : raw.heroes;
   if (Array.isArray(heroes)) {
     for (const h of heroes) if (HERO_ORDER.includes(h) && demoHeroAllowed(h) && !p.heroes.includes(h)) p.heroes.push(h);
@@ -297,10 +298,10 @@ export function sanitizeProfile(raw) {
   }
   // The evolutions a save from before 27 October 2026 already tells of are known (SIGNATURE_EVO);
   // taken again every time, which changes nothing once they are in.
-  for (const id of p.ev) p.ek = withEvo(p.ek, id);
-  for (const [h, id] of Object.entries(SIGNATURE_EVO)) if (hasFeat(p, h, FEAT.evolved)) p.ek = withEvo(p.ek, id);
+  for (const id of p.ev) discoverEvo(p, id);
+  for (const [h, id] of Object.entries(SIGNATURE_EVO)) if (hasFeat(p, h, FEAT.evolved)) discoverEvo(p, id);
   // And those a lock waits on are read back from ek, which the cookie keeps in their place (packProfile).
-  p.ev = EVO_IDS.filter((id) => hasBit(p.ek, EVOS.indexOf(id)));
+  p.ev = EVO_IDS.filter((id) => hasEvo(p, EVOS.indexOf(id)));
   // A hero who has won a night, or lasted five minutes in Ranked, has brought in the next
   // (saves from when the next hero was bought with gold, after a night survived).
   for (const h of HERO_ORDER) {
@@ -360,7 +361,7 @@ const ALL_LOCKS = 2 ** LOCKS.length - 1;
 // November 2026).
 const SAVE_HEROES = ['knight', 'archer', 'mage', 'rogue', 'necromancer', 'paladin', 'druid', 'berserker', 'witchhunter',
   'footman', 'marksman', 'templar', 'trailblazer', 'thornkeeper', 'wraith', 'gravebinder', 'arcanist', 'praetorian',
-  'seraph', 'boltguard', 'swordbearer', 'eanasir'];
+  'seraph', 'boltguard', 'swordbearer', 'eanasir', 'sentinel'];
 for (const h of HERO_ORDER) if (!SAVE_HEROES.includes(h)) SAVE_HEROES.push(h);
 const ALL_ULTS = 2 ** SAVE_HEROES.length - 1;
 const heroBit = (h) => 1 << SAVE_HEROES.indexOf(h);
@@ -407,16 +408,24 @@ const hiddenLock = (l, m) => !!l.deep && !m.wins;
 const SHARED_IDS = [...PROGRESS.openWeapons, ...PROGRESS.locks.filter((l) => l.type === 'weapon').map((l) => l.id)];
 // The evolutions a lock waits on (need 'evolution'), the only ones a profile keeps (p.ev).
 const EVO_IDS = PROGRESS.locks.filter((l) => l.need === 'evolution').map((l) => l.of);
-// Every evolution, each a bit of profile.ek (PROGRESS.evolutions); withEvo: one more of them known.
-const EVOS = PROGRESS.evolutions, ALL_EVOS = 2 ** EVOS.length - 1;
-const withEvo = (n, id) => (EVOS.includes(id) ? withBit(n, EVOS.indexOf(id)) : n || 0);
+// A JS number keeps exactly 53 bits. Preserve the original word so older saves retain their
+// discoveries, and start a second word for the Sentinel and later evolutions.
+const EVOS = PROGRESS.evolutions, WORD_BITS = 53;
+const ALL_EVOS = 2 ** Math.min(WORD_BITS, EVOS.length) - 1;
+const ALL_EVOS_2 = 2 ** Math.max(0, EVOS.length - WORD_BITS) - 1;
+const hasEvo = (p, i) => i >= WORD_BITS ? hasBit(p?.ek2, i - WORD_BITS) : hasBit(p?.ek, i);
+function discoverEvo(p, id) {
+  const i = EVOS.indexOf(id);
+  if (i >= WORD_BITS) p.ek2 = withBit(p.ek2, i - WORD_BITS);
+  else if (i >= 0) p.ek = withBit(p.ek, i);
+}
 // A save from before 27 October 2026 kept only that a hero's signature had evolved (FEAT.evolved):
 // that evolution is known. The Necromancer's two can't be told apart, so neither is.
 const SIGNATURE_EVO = { knight: 'excalibur', archer: 'stormstring', mage: 'meteor', rogue: 'shadowstrike', paladin: 'judgement', druid: 'worldroot', berserker: 'bloodstorm', witchhunter: 'purifier' };
 // The evolutions a run before has made, in PROGRESS.evolutions' order. The owner's (27 October
 // 2026): "we dont know the evolution relics unless we have already achieved that evolution in the
 // past": until then a card, the pause screen and the Codex never name a weapon's relic (Game.evoKnown).
-export const knownEvos = (p) => EVOS.filter((id, i) => hasBit(p?.ek, i));
+export const knownEvos = (p) => EVOS.filter((id, i) => hasEvo(p, i));
 // Whether a lock's weapon or relic may be found: its milestone reached, and, one for sale, bought.
 const lockUsable = (p, i) => lockOpen(p, i) && (!LOCKS[i].buy || (p.up?.[LOCKS[i].id] || 0) > 0);
 
@@ -471,6 +480,7 @@ export function openEverything(p) {
   p.ul = ALL_LOCKS;
   p.uu = ALL_ULTS;
   p.ek = ALL_EVOS;
+  p.ek2 = ALL_EVOS_2;
   p.mo = ALL_MAPS;
   for (const id of ['arsenal', 'reliquary', 'phoenix']) p.up[id] = UPGRADES.find((u) => u.id === id).max;
   return p;
@@ -574,6 +584,7 @@ export function packProfile(p) {
   const { ev, ...rest } = p;
   const out = { ...rest, heroes: p.heroes.reduce((n, h) => n | heroBit(h), 0), gift: packGift(p.gift), ranked: packPerHero(p.ranked), bt: packPerHero(p.bt), gear: Object.fromEntries(Object.entries(p.gear || {}).map(([h, g]) => [h, packGear(g)])) };
   if (!out.home?.length) delete out.home;
+  if (!p.ek2) delete out.ek2;
   if (Object.keys(p.oh || {}).length) out.oh = packPerHero(p.oh);
   else delete out.oh;
   if (p.stash?.length) out.stash = packSpoils(p.stash.map(item => ({ item, state: 'found' })));
@@ -1149,7 +1160,7 @@ export function applyRun(profile, rawRun) {
   }
   if (run.evolved) p.feats[run.hero] = (p.feats[run.hero] || 0) | FEAT.evolved;
   for (const id of run.evos) {
-    p.ek = withEvo(p.ek, id);
+    discoverEvo(p, id);
     if (EVO_IDS.includes(id) && !p.ev.includes(id)) p.ev.push(id);
   }
   if (run.mode === 'dungeon') {

@@ -4,8 +4,8 @@ import {
   mix, paint, segment, turn,
 } from './original-fall.js';
 
-// Each pose is drawn around Aldric's usual world pivot. The sword tip stays in
-// the same patch of earth while his hand slips away; the shield lands later.
+// The Sentinel inherits the original steel Knight's pivot and fall. The sword
+// tip stays in the same patch of earth as the hand slips away and the shield lands.
 export const KNIGHT_SHIELD_CONTACT = 0.76;
 const restingShield = { x: 49, y: 54.5, angle: 68, width: 1.5 };
 // time, pelvis x/y, cuirass and helmet angles, rear knee and ankle,

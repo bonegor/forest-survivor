@@ -6,9 +6,10 @@ import { HEROES, heroLook } from '../public/js/data/heroes.js';
 import { HERO_ART } from '../public/js/art/heroes.js';
 import { APPROVED_HERO_ART } from '../public/js/art/approved-heroes.js';
 import { SPR } from '../public/js/engine/sprites.js';
-import { snapAlpha } from '../public/js/engine/pixels.js';
+import { bounds, snapAlpha } from '../public/js/engine/pixels.js';
 import { releaseFiles } from '../tools/build-itch.mjs';
 import approved from '../public/assets/heroes-approved/index.js';
+import plumed from '../public/assets/knight-plumed/recoloured.js';
 import { APPROVED_DESIGNS } from '../public/js/expansion/roster.js';
 
 test('registered hero art contains one look and matching pose per hero', () => {
@@ -26,7 +27,7 @@ test('packed sheets reconstruct the native art underlying every registered sprit
   for (const [id, data] of Object.entries(approved)) {
     assert.equal(data.design, APPROVED_DESIGNS[id]);
     assert.match(data.sha256, /^[a-f0-9]{64}$/);
-    const spr = SPR[id];
+    const spr = SPR[id === 'knight' ? 'sentinel' : id];
     assert.equal(spr.frames.length,data.frames.length,id);
     // Trail wears her hood over this native sheet. The hood art test checks
     // the final silhouette, registration and weapon pixels of every pose.
@@ -40,6 +41,30 @@ test('packed sheets reconstruct the native art underlying every registered sprit
       }
       // The game snaps a sheet's near-clear dust to clear and its near-solid body to solid (snapAlpha).
       assert.deepEqual(frames[index].d,id === 'trailblazer' ? expected : snapAlpha({ d: expected }).d,`${id}: approved frame ${index}`);
+    }
+  }
+});
+
+test('the starter uses the original plumed idle, walk and swing, with the same knight on the menu', () => {
+  const { knight, knight_pose: pose } = SPR;
+  assert.deepEqual(knight.idle, plumed.animations.idle);
+  assert.deepEqual(knight.walk, plumed.animations.walk);
+  assert.deepEqual([...new Set(knight.attack)], plumed.animations.attack);
+  for (const [i, encoded] of plumed.frames.entries()) {
+    const bytes = Buffer.from(encoded, 'base64');
+    const expected = Uint32Array.from({ length: plumed.w * plumed.h }, (_, p) =>
+      plumed.palette[bytes.readUIntLE(p * plumed.indexBytes, plumed.indexBytes)]);
+    assert.deepEqual(knight.frames[i].buf.d, snapAlpha({ d: expected }).d, 'source pose ' + i);
+  }
+  const idle = knight.idle.map(i => knight.frames[i].buf);
+  const boxes = idle.map(bounds);
+  const left = Math.min(...boxes.map(b => b.x0)), top = Math.min(...boxes.map(b => b.y0));
+  assert.equal(pose.frames.length, idle.length);
+  for (const [i, frame] of idle.entries()) {
+    const menu = pose.frames[i].buf;
+    for (let y = 0; y < menu.h; y++) {
+      const start = (top + y) * frame.w + left;
+      assert.deepEqual(menu.d.subarray(y * menu.w, (y + 1) * menu.w), frame.d.subarray(start, start + menu.w));
     }
   }
 });

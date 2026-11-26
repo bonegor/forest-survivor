@@ -10,7 +10,7 @@ import { Weapon, KINDS } from '../public/js/game/weapons.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
 import { SIGNATURES } from '../public/js/expansion/signatures.js';
 
-test('the twelve expansion weapons and their evolutions have distinct native slot silhouettes', () => {
+test('the recruit signatures and their evolutions have distinct native slot silhouettes', () => {
   const silhouettes = new Set();
   for (const { weapon, evolution } of Object.values(SIGNATURES)) {
     for (const def of [weapon, evolution]) {
@@ -23,7 +23,7 @@ test('the twelve expansion weapons and their evolutions have distinct native slo
       silhouettes.add(mask);
     }
   }
-  assert.equal(silhouettes.size, 24);
+  assert.equal(silhouettes.size, Object.keys(SIGNATURES).length * 2);
 });
 
 test('Splitpin and Ratchet draw distinct bolts without changing their collision sprite or state', () => {

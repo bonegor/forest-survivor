@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { TAU } from '../../engine/util.js';
 import { stunFoe } from '../../game/effects.js';
 import { slashFrame } from '../../game/fxsprites.js';
@@ -138,7 +138,7 @@ export default {
     let t = 0;
     p.swing(ang);
     recordHeroAttack(w, ang);
-    sfx('slash', { pitch: 0.82, pan: Math.cos(ang) * 0.22 });
+    weaponSfx(w, 'slash', { pitch: 0.82, pan: Math.cos(ang) * 0.22 });
     g.effects.push({
       update(dt) { t += dt; return t < CUT_TIME; },
       draw(ctx, cam) { drawCut(ctx, cam, p.x, p.y - CUT_HEIGHT, CUT_REACH * s.area, CUT_ARC, ang, t / CUT_TIME, STEEL); },

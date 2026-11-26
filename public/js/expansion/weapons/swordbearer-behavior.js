@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { TAU } from '../../engine/util.js';
 import { faceAlong } from '../../game/facing.js';
 import { slashFrame } from '../../game/fxsprites.js';
@@ -114,7 +114,7 @@ export default {
     const budget = Math.min(MAX_HITS, s.amount + (charged ? 2 : 0));
     g.player.swing(ang);
     recordHeroAttack(w, ang);
-    sfx('slash', { pitch: charged ? 0.71 : 0.87, pan: dx * 0.23 });
+    weaponSfx(w, 'slash', { pitch: charged ? 0.71 : 0.87, pan: dx * 0.23 });
     g.effects.push(new MarchsteelCut(w, ang, reach, charged));
     let left = budget;
     for (const { e, along } of targets(w, dx, dy, reach, width)) {

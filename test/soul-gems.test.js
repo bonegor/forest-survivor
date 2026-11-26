@@ -4,8 +4,10 @@ import '../tools/headless.mjs';
 import { Game } from '../public/js/game/game.js';
 import { MAPS } from '../public/js/data/maps.js';
 import { SPR } from '../public/js/engine/sprites.js';
+import { OUTLINE } from '../public/js/art/palette.js';
 import { mulberry32 } from '../public/js/engine/util.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
+import { DEFAULT_GEM_FAMILY, GEM_FAMILIES, applyGemFamily, gemArt } from '../public/field-studio/art/crystals.js';
 
 test('the opening horde drops blue gems on every map and difficulty, with base XP', () => {
   const random = Math.random;
@@ -55,4 +57,32 @@ test('stronger monsters still drop green gems and collecting them pays their act
     assert.equal(collected - before, value, 'the gem passes its reward to the player before growth bonuses');
     assert.ok(gem.dead);
   }
+});
+
+test('a field trial changes the crystal cut on existing and future drops at every XP threshold', () => {
+  const g = new Game({ hero: 'knight', mode: 's15', diff: 'easy', settings: {}, meta: metaBonuses(defaultProfile()) });
+  const values = [4, 5, 25, 100];
+  const drop = value => {
+    g.dropGem(g.player.x + 48, g.player.y, value);
+    return g.pickups.at(-1);
+  };
+  const originals = values.map(drop);
+  assert.ok(originals.every((gem, rank) => gem.art === gemArt(DEFAULT_GEM_FAMILY, rank)));
+  const facetShapes = values.map(() => new Set());
+  const mask = buf => Array.from(buf.d, p => p && p !== OUTLINE ? '1' : '0').join('');
+  for (const family of GEM_FAMILIES) {
+    applyGemFamily(g, family.id);
+    for (const [rank, gem] of originals.entries()) {
+      const art = gemArt(family.id, rank), [field, blink] = art.frames;
+      assert.equal(gem.art, art);
+      assert.equal(drop(values[rank]).art, art);
+      assert.equal(gem.sprite, SPR['gem' + (rank + 1)]);
+      assert.equal(gem.value, values[rank]);
+      assert.ok(field.em && blink.em);
+      assert.notDeepEqual(field.buf.d, blink.buf.d);
+      assert.equal(mask(field.buf), mask(blink.buf));
+      facetShapes[rank].add(mask(field.buf));
+    }
+  }
+  assert.ok(facetShapes.every(masks => masks.size === GEM_FAMILIES.length));
 });

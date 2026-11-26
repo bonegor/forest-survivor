@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<base href="../"><meta name="theme-color" content="#131813"><link rel="icon" href="favicon.svg">
+<title>Field studio · Forest Survivor</title>
+<link rel="stylesheet" href="field-studio/studio.css">
+</head>
+<body>
+<header class="mast"><a class="wordmark" href="./"><img src="favicon.svg" width="31" height="31" alt="">Forest Survivor</a><span class="divider"></span><span class="studio-name">Field studio</span>
+<nav aria-label="Review section"><a id="hero-tab" href="field-studio/?tab=heroes">Hero sprites</a><a id="gem-tab" href="field-studio/?tab=crystals">Pickup crystals</a><a href="sound-lab/">Weapon sounds</a></nav></header>
+<main>
+<aside id="roster"><div class="rail-title"><h2>Hero roster</h2><span id="count"></span></div>
+<label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a hero" aria-label="Find a hero"></label>
+<label class="mobile-roster">Hero <select id="hero-select"></select></label><div id="hero-list"></div></aside>
+<section class="workspace" aria-label="Sprite comparison">
+<div class="intro"><div><div id="section-name" class="overline">Hero sprites</div><h1 id="title">Field studio</h1><p id="identity">Loading artwork…</p></div>
+<figure id="reference"><canvas aria-label="Original artwork on game terrain" width="144" height="72"></canvas><figcaption id="ref-label">Current look</figcaption></figure></div>
+<div id="sets" class="set-switch" aria-label="Design collection"><button data-set="new" aria-pressed="true">New sprites <span>4</span></button><button data-set="first" aria-pressed="false">First proposals <span>4</span></button></div>
+<div class="tools"><label>Terrain <select id="terrain"><option value="forest">Darkwood</option><option value="meadow">Bloomvale</option><option value="frozen">Frostfell</option><option value="desert">Sunscorch</option></select></label>
+<div id="motions" class="segments" aria-label="Animation"><button data-motion="idle">Idle</button><button data-motion="walk">Walk</button><button data-motion="strike">Strike</button></div>
+<button id="facing">Face right</button><button id="pause">Pause</button><button id="compare" aria-pressed="false" title="Switch the previews to the original artwork at the same scale">Show original</button><button id="picks" class="pick-count">My picks <span>0</span></button></div>
+<p id="status" class="status" role="status">Preparing the field…</p><div id="grid" class="grid"></div>
+</section></main>
+<dialog id="choices"><div class="dialog-inner"><button id="close" class="close" aria-label="Close picks">×</button><p class="overline">Field studio</p><h2>My picks</h2><p class="muted">Saved in this browser. Copy the list to share your choices.</p><ul id="pick-list"></ul><button id="copy" class="primary">Copy picks</button><span id="copy-status" role="status"></span></div></dialog>
+<script type="module" src="field-studio/studio.js"></script>
+</body></html>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import '../tools/headless.mjs';
 import { WEAPON_SOUND_KEY, WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES, normalizeWeaponSoundStyle, weaponSoundRecipe } from '../public/js/engine/weapon-sounds.js';
-import { MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
+import { WEAPONS, MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { makeWeaponPreview, PREVIEW_WEAPONS, PREVIEW_SECONDS } from '../public/sound-lab/preview.js';
 
 test('demo and full builds keep separate weapon sound preferences on the same origin', async t => {
@@ -80,13 +80,20 @@ test('the audition uses real axe volleys: one at level 1 and three at maximum', 
   assert.ok(captures[0][1] - captures[0][0] >= 1.25, 'the real cooldown is retained');
 });
 
-test('every offered preview runs its real weapon at both levels without a save', () => {
-  for (const choice of PREVIEW_WEAPONS) for (const level of [1, MAX_WEAPON_LEVEL]) {
+test('every shipped weapon, evolution and fusion plays real attack cues in an isolated practice run', () => {
+  const covered = new Set();
+  for (const choice of PREVIEW_WEAPONS) for (const level of choice.group === 'Fusions' ? choice.forms : [1, MAX_WEAPON_LEVEL, ...choice.forms]) {
     const { game: g, weapon: w } = makeWeaponPreview(choice.id, level, { headless: true });
-    for (let i = 0; i < 180; i++) g.update(1 / 60);
+    covered.add(w.id);
+    const cues = [];
+    g.onWeaponCue = (id, name) => cues.push([id, name]);
+    for (let i = 0; i < PREVIEW_SECONDS * 60; i++) g.update(1 / 60);
+    assert.ok(cues.length, `${choice.id}/${level}: a playable weapon cue`);
+    assert.ok(cues.every(([id]) => id === choice.id), `${choice.id}/${level}: isolated sound`);
     assert.equal(g.state, 'play', `${choice.id}/${level}`);
-    assert.equal(w.level, level);
+    assert.equal(w.level, typeof level === 'string' ? MAX_WEAPON_LEVEL : level);
     assert.equal(g.player.weapons.length, 1);
     assert.equal(g.player.hero.id, choice.hero);
   }
+  assert.deepEqual(covered, new Set(Object.keys(WEAPONS)));
 });

@@ -351,7 +351,7 @@ test('every evolution has its bit, and a relic is told only once a run before ha
   const evos = new Set(Object.values(WEAPONS).filter((d) => d.evo).flatMap((d) => d.evo.random || [d.evo.into]));
   assert.deepEqual([...PROGRESS.evolutions].sort(), [...evos].sort(), 'every evolution once, none else');
   assert.equal(new Set(PROGRESS.evolutions).size, PROGRESS.evolutions.length);
-  assert.ok(PROGRESS.evolutions.length <= 53, 'the bits of one number');
+  assert.ok(PROGRESS.evolutions.length <= 106, 'two exact 53-bit words');
   assert.deepEqual(P.knownEvos(P.defaultProfile()), [], 'a new player knows none');
   assert.deepEqual(P.knownEvos(P.openEverything(P.defaultProfile())), PROGRESS.evolutions);
   // A save from before kept Lightning Strike's in ev and a signature's in its feat: those are known;
@@ -360,6 +360,12 @@ test('every evolution has its bit, and a relic is told only once a run before ha
   assert.deepEqual(P.knownEvos(old), ['excalibur', 'thunderstorm']);
   assert.deepEqual(P.knownEvos(P.sanitizeProfile(old)), ['excalibur', 'thunderstorm'], 'read again, the same');
   assert.deepEqual(P.knownEvos(P.sanitizeProfile({ ek: -5 })), [], 'nothing absurd');
+  const oldCopper = P.sanitizeProfile({ ek: 1 + 2 ** 52 });
+  assert.deepEqual(P.knownEvos(oldCopper), ['excalibur', 'highcopper']);
+  const evolved = P.applyRun(oldCopper, { ...RUN, time: 400, realTime: 400, evos: ['sentinel_last_bastion'] });
+  const saved = P.sanitizeProfile(JSON.parse(JSON.stringify(P.packProfile(evolved.profile))));
+  assert.deepEqual([saved.ek, saved.ek2], [oldCopper.ek, 1]);
+  assert.deepEqual(P.knownEvos(saved), ['excalibur', 'highcopper', 'sentinel_last_bastion']);
 });
 
 test('Consecration opens on the tenth fall: a run quit or won is no fall', () => {

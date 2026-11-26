@@ -1,0 +1,48 @@
+// Luminance probes across each original idle face and helmet. A dot is clear.
+// Probes run top-to-bottom across a 6-by-6 grid with a two-pixel spacing.
+export const headProbes = {
+  knight: '4423..42dd52455d0520566.025c52882221',
+  archer: '..4881.67744724ac671a9c021469.22477.',
+  mage: '.21db.29ae88788db142bbe02e1e3203e3a0',
+  rogue: '1442..47761.74200.41600.0210..4410..',
+  necromancer: '22....0.0470014780033ba0304200020d00',
+  paladin: '..00...0342..241d014a0c.339cc1411a00',
+  druid: '.220..144891368190280c8.271eb14750c2',
+  berserker: '...11..1bdb118fb58bb40c525fcc1564.2.',
+  witchhunter: '.1462.012390011060011bc.16550.330e23',
+  eanasir: '2cca2.9cb8a2acb772b9b992c9878297777.',
+  footman: '..000..09eb0.48de8045b0f794a19c50000',
+  marksman: '04740.235920253612358c6.5051..073f0.',
+  templar: '.00...0d100.02593..9500.26093.5b9f00',
+  trailblazer: '..4642.46684.462c4.449c0b.469.06743.',
+  thornkeeper: '.004.4..300..6cd8.299a5.164c8.54a0b3',
+  wraith: '.1460.222463124600114000481321472112',
+  gravebinder: '0.....1.7b1.066c9.402d0.15410.341d0.',
+  arcanist: '.244820246643107980a8b09134ff0327206',
+  praetorian: '3203..1acc5.097c40138000a30918a23104',
+  seraph: '.d.00.c.0dc..06fb2.03bb23da3a2fa7095',
+  boltguard: '02450.124b100000008bcd5.536c4.5b632.',
+  swordbearer: '.000..388e3.48eea.04800.c08e5.429008',
+  sentinel: '..59b..08fd9.67add0548111227c0bc1710',
+};
+
+// Painted centres of shield faces, staff foci and crossbow furniture.
+export const gearProbes = {
+  knight: ['shield',47,35,'011.218.218.001.d2..'],
+  sentinel: ['shield',46,40,'c5c.c55.b58.656.049.'],
+  paladin: ['shield',44,41,'7bc09ee63c780870b37.'],
+  footman: ['shield',53,43,'43384cb4422483240320'],
+  templar: ['shield',47,42,'5ce22ce32ab21bb0ca90'],
+  praetorian: ['shield',46,43,'2b2.2b2.2b2.2b2.292.'],
+  seraph: ['shield',48,41,'0e04e0e30ee818d31cb5'],
+  swordbearer: ['shield',47,41,'72f16330313001300170'],
+  mage: ['focus',32,24,'.146.111.7c3.7c3.112'],
+  druid: ['focus',51,25,'..1.523320280621070.'],
+  thornkeeper: ['focus',50,27,'221.4c4.330.453.02..'],
+  gravebinder: ['focus',50,28,'.20.130122b3031.03..'],
+  arcanist: ['focus',30,33,'195..102.070..3...12'],
+  witchhunter: ['stock',44,41,'400.00302443021320b.'],
+  marksman: ['stock',49,44,'010.db0d73581.090...'],
+  boltguard: ['stock',49,44,'.0..300.44bd024403..'],
+  berserker: ['axe',35,25,'2...c9cc79c1.2c...c.'],
+};

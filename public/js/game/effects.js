@@ -4,7 +4,7 @@
 // Effect interface: update(dt) -> keep?; drawGround / draw / drawGlow(ctx, cam).
 
 import { SPR } from '../engine/sprites.js';
-import { sfx } from '../engine/audio.js';
+import { weaponSfx, sfx } from '../engine/audio.js';
 import { rand, TAU, lerp, clamp, ease, angleDiff, pick, hash2, hexToRgb, makeCanvas } from '../engine/util.js';
 import { ringSprite, discSprite, slashFrame, glow, glint, beamSprite, shadowSprite } from './fxsprites.js';
 import { PC, P } from './particles.js';
@@ -225,7 +225,7 @@ export function explode(g, x, y, R, dmg, w, style = 'fire', opts = {}) {
     ex.vfx = vfxBurst(g, name, x, y, { cap: xv.cap, span: xv.span, flip: opts.flip });
     ex.bare = !!ex.vfx && xv.bare;
   }
-  sfx('explode', { size: clamp(R / 28, 0.6, 1.8), pan: clamp((x - g.player.x) / 200, -1, 1), pitch: rand(0.85, 1.1) });
+  weaponSfx(w, 'explode', { size: clamp(R / 28, 0.6, 1.8), pan: clamp((x - g.player.x) / 200, -1, 1), pitch: rand(0.85, 1.1) });
 }
 
 // art: a sprite for the blast in place of its style's (a meteor's crash: Meteor.update). look:
@@ -1631,7 +1631,7 @@ export class Pillar {
       g.effects.push(beam);
       g.effects.push(new Ring(g, this.x, this.y, 3, R, 0.3, '#fee761', false, 2));
       g.particles.burst(this.x, this.y, 4, 14, [PC.Y, PC.y, PC.w], R * 3.5, 0.45, 1, P.GLOW | P.FADE, { flat: 0.8, vz: 60 });
-      sfx('zap', { pitch: rand(0.55, 0.7), pan: clamp((this.x - g.player.x) / 200, -1, 1) });
+      weaponSfx(w, 'zap', { pitch: rand(0.55, 0.7), pan: clamp((this.x - g.player.x) / 200, -1, 1) });
     }
     return this.t < 0.3;
   }
@@ -1751,7 +1751,7 @@ export class Grip {
     }
     this.roots.sort((a, b) => a.y - b.y);
     g.particles.burst(x, y, 2, 14, ROOT_DIRT, this.R * 4, 0.5, 1, P.GROUND | P.FADE, { vz: 80, grav: 300 });
-    sfx('wood', { pitch: rand(0.45, 0.6), pan: clamp((x - g.player.x) / 200, -1, 1) });
+    weaponSfx(w, 'wood', { pitch: rand(0.45, 0.6), pan: clamp((x - g.player.x) / 200, -1, 1) });
   }
 
   update(dt) {
@@ -1801,7 +1801,7 @@ export class Chop {
       g.hitEnemy(e, dmg, { w, type: 'normal', kb: o.kb ?? (w ? w.s.kb : 1), kx: dx / (d || 1), ky: dy / (d || 1), ult: o.ult });
     }
     g.particles.burst(this.x, this.y, 5, 6, [PC.r, PC.R, PC.G], R * 3, 0.3, 1, P.FADE, { flat: 0.9, vz: 30 });
-    if (!o.quiet) sfx('slash', { pitch: rand(0.7, 0.85) });
+    if (!o.quiet) weaponSfx(w, 'slash', { pitch: rand(0.7, 0.85) });
     // The chop as drawn: Sprite Fusion's slash baked nearly all the way round (vfx.js, 28 October
     // 2026; a white rim on a blood-red body), at the nearest reach baked (bakedCuts), starting right
     // or down and maybe mirrored by where he stands (hash2: no die is thrown for a picture, and
@@ -2223,7 +2223,7 @@ export function sporePuff(g, w, x, y) {
   }
   g.effects.push(new Ring(g, x, y, 4, R, 0.45, '#9ee562', false, 2));
   g.particles.burst(x, y - 4, 16, 8, [PC.l, PC.L, PC.z], 55, 0.9, 1, P.GLOW | P.FADE, {});
-  sfx('burn', { pan: clamp((x - g.player.x) / 200, -1, 1) });
+  weaponSfx(w, 'burn', { pan: clamp((x - g.player.x) / 200, -1, 1) });
 }
 
 // A mushroom of w where (x, y) is, if the weapon's cap allows (forced: the oldest gives way).

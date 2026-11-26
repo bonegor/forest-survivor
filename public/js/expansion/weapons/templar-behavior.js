@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { clamp } from '../../engine/util.js';
 import { reachesFeet } from '../../game/hitbox.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
@@ -130,7 +130,7 @@ export default {
     const [x, y] = wardEnd(g.world, p.x, p.y, dx, dy, clamp(distance, 4, REACH * s.area));
     p.swing(ang);
     recordHeroAttack(w, ang);
-    sfx('slash', { pitch: 1.22, pan: dx * 0.25 });
+    weaponSfx(w, 'slash', { pitch: 1.22, pan: dx * 0.25 });
     if (Math.hypot(x - p.x, y - p.y) < 2) return;
     if (w.fx) w.fx.dead = true;
     const ward = new VotiveWard(w, x, y, ang);

@@ -1,4 +1,4 @@
-import { sfx } from '../../engine/audio.js';
+import { weaponSfx } from '../../engine/audio.js';
 import { clamp } from '../../engine/util.js';
 import { SPR } from '../../engine/sprites.js';
 import { recordHeroAttack } from '../../game/hero-animation.js';
@@ -120,6 +120,6 @@ export default {
     w.meridianDirection = -(w.meridianDirection || -1);
     recordHeroAttack(w, ang);
     g.effects.push(new MeridianSweep(w, ang, radius, w.meridianDirection));
-    sfx('shard', { pitch: 1.25, pan: Math.cos(ang) * 0.25 });
+    weaponSfx(w, 'shard', { pitch: 1.25, pan: Math.cos(ang) * 0.25 });
   },
 };

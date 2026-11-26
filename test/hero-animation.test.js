@@ -96,12 +96,13 @@ test('ice sliding and airborne leaps do not spin a ground walk', () => {
   });
 });
 
-test('crypt attacks open on the release pose, with the Knight starting at the raised sword', () => {
+test('crypt attacks open on release, with the Knight and Sentinel raising their swords first', () => {
   for (const [id, hero] of Object.entries(HEROES)) {
     const spr = SPR[hero.sprite], clip = strikeClip(spr);
     assert.equal(clip.hit, spr.attackRelease, `${id}: contact uses the authored release pose`);
-    assert.equal(clip.from, clip.hit - (id === 'knight' ? 1 : 0));
-    assert.equal(clip.delay, id === 'knight' ? 1 / spr.attackFps : 0);
+    const windup = id === 'knight' || id === 'sentinel' ? 1 : 0;
+    assert.equal(clip.from, clip.hit - windup);
+    assert.equal(clip.delay, windup / spr.attackFps);
   }
 });
 

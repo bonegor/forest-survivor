@@ -155,9 +155,9 @@ test('Ea-Nasir rises from his own body and walks clear of either screen edge bef
     } finally {Object.assign(view,saved);}
   }, 'eanasir'));
 
-test('the Knight and Berserker retain their approved native fall frames and cues', () => {
+test('the Sentinel and Berserker retain their approved native fall frames and cues', () => {
   for (const [hero, release, digest] of [
-    ['knight', 1.10, '237a89ba1b4c4a2c91676cf43b22c3284fcf4e132a1cc6530b594236752908ec'],
+    ['sentinel', 1.10, '237a89ba1b4c4a2c91676cf43b22c3284fcf4e132a1cc6530b594236752908ec'],
     ['berserker', 1.85, '42f7bf8147fc3ac1974b3e93cfa0cacf57cc154f9e641705d5bf0667c662614b'],
   ]) {
     const fall = SPR[hero].fall, hash = createHash('sha256');
@@ -166,7 +166,7 @@ test('the Knight and Berserker retain their approved native fall frames and cues
     assert.equal(fall.wisp.release, release);
     assert.equal(fall.cues.find(cue => cue.sound === 'souldepart').time, release);
   }
-  assert.equal(SPR.knight.fall.cues.find(cue => cue.sound === 'shieldfall').time, .76);
+  assert.equal(SPR.sentinel.fall.cues.find(cue => cue.sound === 'shieldfall').time, .76);
 });
 
 test('Ylva holds the approved Low ready fall on all fours for 0.2 seconds, then collapses', () => {
@@ -192,9 +192,9 @@ test('Ylva holds the approved Low ready fall on all fours for 0.2 seconds, then 
   assert.deepEqual(frameAt(1.70).d, landed.d, 'Ylva stays down after landing');
 });
 
-test('Aldric falls in either facing, his wisp rises, and only his sword and shield stay until results', () =>
+test('the Sentinel falls in either facing, leaving a planted sword and a shield until results', () =>
   [1, -1].forEach(face => game((g, p) => {
-    const fall = SPR.knight.fall;
+    const fall = SPR.sentinel.fall;
     const ctx = document.createElement('canvas').getContext('2d');
     let shown;
     ctx.drawImage = img => { shown = img; };
@@ -231,7 +231,7 @@ test('Aldric falls in either facing, his wisp rises, and only his sword and shie
     assert.ok(shieldOnGround.x0 - sword.x1 >= 10, 'the helmet and armour have cleared the ground between them');
     assert.equal(at(g.deathTiming.end - 0.25), remains.get(face < 0));
     assert.equal(at(g.deathTiming.end), remains.get(face < 0));
-  })));
+  }, 'sentinel')));
 
 test('the Ranger drops her bow, leaves it planted at a slant and fully decays beneath the rising soul', () =>
   [1, -1].forEach(face => game((g, p) => {

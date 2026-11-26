@@ -12,7 +12,8 @@ const ONCE = new Set(['victory', 'gameover']);
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
 import { MUSIC_TRACKS, DEFAULT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, normalizeMusicTrack, normalizeMusicTracks, musicRoleForCue } from './combat-music.js';
-import { WEAPON_SOUND_NAMES, normalizeWeaponSoundStyle, weaponSoundStyle, scheduleWeaponSound } from './weapon-sounds.js';
+import { weaponSoundChoice, weaponSoundStyle, scheduleWeaponSound } from './weapon-sounds.js';
+import { loadWeaponRecording, playWeaponRecording } from './weapon-recordings.js';
 
 const MUSIC_DIR = 'audio/music/';
 // Recorded music is mastered loud; this keeps it level with the sound effects.
@@ -167,10 +168,18 @@ function loadSamples() {
 
 // The audition page waits for the current recordings, then compares alternatives
 // through the same live effects bus. Merely previewing never saves a preference.
-export async function prepareWeaponAudio() { initAudio(); await A.samplesReady; }
+export async function prepareWeaponAudio(choice) {
+  initAudio();
+  if (!A.ctx) throw new Error('Audio is unavailable in this browser.');
+  await Promise.all([A.samplesReady, choice?.startsWith('clip:') && loadWeaponRecording(A.ctx, choice.slice(5))]);
+}
 export function setWeaponSoundAudition(style = null) {
-  A.weaponAudition = style === null ? null : normalizeWeaponSoundStyle(style);
+  A.weaponAudition = style;
   A.last.clear();
+}
+export function preloadWeaponChoice(id) {
+  const choice = weaponSoundChoice(id);
+  if (A.ctx && choice.startsWith('clip:')) loadWeaponRecording(A.ctx, choice.slice(5)).catch(() => {});
 }
 
 // One of the sample's files, at random among those in.
@@ -744,9 +753,17 @@ const SFX = {
   },
 };
 
+const weaponFamily = { hit: 'slash', crit: 'shard', bones: 'wood', burn: 'fireball', aura: 'shard', rumble: 'whoosh',
+  reap: 'whoosh', gem: 'shard', explode: 'fireball' };
+export function weaponSfx(w, name, opts) {
+  const id = w?.soundId || w?.baseId || w?.id;
+  w?.g?.onWeaponCue?.(id, name);
+  sfx(name, id ? { ...opts, weaponId: id } : opts);
+}
+
 export function sfx(name, opts = {}) {
   if (!A.ctx || A.muted || A.vol.sfx <= 0) return;
-  if (A.weaponAudition !== null && (!WEAPON_SOUND_NAMES.has(name) || opts.weaponSound === false)) return;
+  if (A.weaponAudition !== null && !opts.weaponId) return;
   const t = A.ctx.currentTime;
   const lim = LIMITS[name];
   if (lim) {
@@ -763,7 +780,14 @@ export function sfx(name, opts = {}) {
   try {
     const o = { p: opts.pitch ?? 1, pan: opts.pan ?? 0, size: opts.size ?? 1 };
     const rate = (1 + (o.p - 1) * RECORDED.pitch) / Math.pow(o.size, 0.25);
-    const alternative = opts.weaponSound !== false && scheduleWeaponSound(A.ctx, A.sfxBus, name, A.weaponAudition ?? weaponSoundStyle(), opts, t + 0.005);
+    const choice = opts.weaponId ? A.weaponAudition ?? weaponSoundChoice(opts.weaponId) : weaponSoundStyle();
+    if (choice.startsWith('clip:')) {
+      const loading = loadWeaponRecording(A.ctx, choice.slice(5));
+      if (loading.ready) { playWeaponRecording(A.ctx, out(o.pan), loading.ready, t + 0.005, rate); return; }
+      loading.catch(() => {});
+    }
+    const family = opts.weaponId ? weaponFamily[name] || name : name;
+    const alternative = opts.weaponSound !== false && scheduleWeaponSound(A.ctx, A.sfxBus, family, choice, opts, t + 0.005);
     if (!alternative && !(RECORDED.names.has(name) && sample(t + 0.005, name, { vol: RECORDED.vol, pan: o.pan, rate }))) fn(t + 0.005, o);
     if (DUCKED.has(name)) duckMusic();
   } catch {
