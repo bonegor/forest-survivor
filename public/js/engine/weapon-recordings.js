@@ -1,4 +1,7 @@
+import { AXE_RECORDINGS } from './weapon-sounds.js';
+
 const root = new URL('../../audio/sfx/library/', import.meta.url);
+const standalone = new Set(Object.values(AXE_RECORDINGS));
 let catalog;
 const banks = new Map(), sounds = new Map();
 
@@ -23,16 +26,25 @@ function cached(map, id, limit, load) {
   return promise;
 }
 
+async function fetchBytes(path) {
+  const response = await fetch(new URL(path, root));
+  if (!response.ok) throw new Error('Could not load the weapon recording from ' + path);
+  return response.arrayBuffer();
+}
+
+async function recordingBytes(id) {
+  // Default attacks also ship as small files so the first throw can load
+  // straight from its Ogg, before the player has ever opened the sound lab.
+  if (standalone.has(id)) return fetchBytes(id);
+  const clip = (await weaponRecordingCatalog()).get(id);
+  if (!clip) throw new Error('This weapon recording is unavailable.');
+  const bytes = await cached(banks, clip.bank, 4, () => fetchBytes(`bank-${clip.bank}.bin`));
+  return bytes.slice(clip.offset, clip.offset + clip.bytes);
+}
+
 export function loadWeaponRecording(ctx, id) {
   return cached(sounds, id, 20, async () => {
-    const clip = (await weaponRecordingCatalog()).get(id);
-    if (!clip) throw new Error('This weapon recording is unavailable.');
-    const bytes = await cached(banks, clip.bank, 4, async () => {
-      const response = await fetch(new URL(`bank-${clip.bank}.bin`, root));
-      if (!response.ok) throw new Error(`Could not load ${clip.title}.`);
-      return response.arrayBuffer();
-    });
-    const buffer = await ctx.decodeAudioData(bytes.slice(clip.offset, clip.offset + clip.bytes));
+    const buffer = await ctx.decodeAudioData(await recordingBytes(id));
     // Trim leading digital silence for responsive releases, retaining the source in the bank.
     const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
     let start = 0, peak = 0;

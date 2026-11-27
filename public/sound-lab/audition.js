@@ -1,4 +1,4 @@
-import { WEAPON_SOUND_STYLES, WEAPON_SOUND_KEY, WEAPON_CHOICES_KEY, weaponSoundChoice, applyWeaponSoundChoice } from '../js/engine/weapon-sounds.js';
+import { WEAPON_SOUND_STYLES, WEAPON_SOUND_KEY, WEAPON_CHOICES_KEY, weaponSoundChoice, applyWeaponSoundChoice, resolveWeaponSound } from '../js/engine/weapon-sounds.js';
 import { weaponRecordingCatalog } from '../js/engine/weapon-recordings.js';
 import { prepareWeaponAudio, setWeaponSoundAudition, setVolumes, stopMusic } from '../js/engine/audio.js';
 import { MAX_WEAPON_LEVEL, WEAPONS } from '../js/data/weapons.js';
@@ -39,10 +39,13 @@ function saved(message) {
   $('apply').disabled = !selected;
   $('apply').textContent = 'Apply to ' + weapon().name;
 }
-function credit() {
-  const box = $('credit'); box.replaceChildren();
-  const clip = library.get(selected?.slice(5));
-  if (!clip) { box.textContent = style(selected)?.desc || ''; return; }
+function recordingCredit(clip, label = '') {
+  const box = document.createElement('div');
+  if (label) {
+    const range = document.createElement('strong');
+    range.textContent = label + ' · ';
+    box.append(range);
+  }
   box.append(document.createTextNode(clip.title + ' · ' + clip.artist + ' · '));
   const link = (name, url) => { const a = document.createElement('a'); a.textContent = name; a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a; };
   box.append(link(clip.source.game, clip.source.homepage));
@@ -52,6 +55,23 @@ function credit() {
   detail.append(summary, [clip.copyright, clip.origin, clip.source.file, clip.changes].filter(Boolean).join(' · '));
   if (clip.source.deb_url) detail.append(' · ', link('Source package', clip.source.deb_url));
   box.append(detail);
+  return box;
+}
+function credit() {
+  const box = $('credit'); box.replaceChildren();
+  if (selected === 'current') {
+    const w = weapon();
+    for (const form of new Set([w.id, ...w.forms])) {
+      const choice = resolveWeaponSound(selected, w.id, form);
+      const clip = library.get(choice.slice(5));
+      if (clip) box.append(recordingCredit(clip, form === w.id && w.group !== 'Fusions'
+        ? 'Levels 1–' + MAX_WEAPON_LEVEL : WEAPONS[form].name));
+    }
+    if (box.childElementCount) return;
+  }
+  const clip = library.get(selected?.slice(5));
+  if (clip) box.append(recordingCredit(clip));
+  else box.textContent = style(selected)?.desc || '';
 }
 function sounds() {
   const query = $('search').value.trim().toLowerCase(), category = $('category').value;
@@ -99,12 +119,15 @@ function showWeapon() {
 async function play(level, button) {
   if (!selected) return;
   stop('Loading sound…');
-  const token = request, voice = selected;
+  const token = request, w = weapon();
   try {
+    const preview = makeWeaponPreview(w.id, level);
+    stopMusic();
+    const voice = resolveWeaponSound(selected, w.id, preview.weapon.id);
     await prepareWeaponAudio(voice);
     if (token !== request) return;
-    current = makeWeaponPreview(weapon().id, level);
-    cues = 0; stopMusic();
+    current = preview;
+    cues = 0;
     current.game.onWeaponCue = () => { cues++; };
     setWeaponSoundAudition(voice);
     setVolumes(0, Number($('volume').value) / 100);

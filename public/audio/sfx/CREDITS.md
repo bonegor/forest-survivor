@@ -42,4 +42,6 @@ loudness (peaks held at -1 dBFS), Ogg Vorbis 44.1 kHz.
 
 ## Weapon Sound Lab recordings
 
+The Throwing Axe uses **Knife Draw** from Lugaru HD by Wolfire Games. Whirlwind uses **Katana hit 1** from Teeworlds by Magnus Auvinen and contributors. Both ship as individual copies of the catalog recordings under [CC BY-SA 3.0](library/CC-BY-SA-3.0.txt).
+
 The [recording catalog](library/index.json) credits each included recording by title, creator, original source file and package, copyright, licence and prior changes. The sound chooser displays this credit with the selected recording. The banks contain the source archive's audio bytes. Playback trims leading silence, adjusts gain and fades long sounds after 1.2 seconds to fit the weapon's attacks. Each recording retains its individual licence. The [CC0](library/CC0-1.0.txt), [CC BY 3.0](library/CC-BY-3.0.txt), [CC BY-SA 3.0](library/CC-BY-SA-3.0.txt) and [CC BY-SA 4.0](library/CC-BY-SA-4.0.txt) texts accompany the recordings.

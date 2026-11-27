@@ -101,7 +101,8 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'phone layout fits');
 
   const result = await page.evaluate(async () => {
-    const { scheduleWeaponSound, WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES } = await import('/js/engine/weapon-sounds.js');
+    const { scheduleWeaponSound, resolveWeaponSound, WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES } = await import('/js/engine/weapon-sounds.js');
+    const { loadWeaponRecording, playWeaponRecording } = await import('/js/engine/weapon-recordings.js');
     const { makeWeaponPreview, PREVIEW_SECONDS } = await import('/sound-lab/preview.js');
     const { setVolumes, stopMusic } = await import('/js/engine/audio.js');
     setVolumes(0, 0);
@@ -114,7 +115,7 @@ try {
       captures[level] = times;
     }
     stopMusic();
-    const metrics = [], clips = [], sample = await fetch('/audio/sfx/axe-throw.ogg').then(r => r.arrayBuffer());
+    const metrics = [], clips = [], currentId = resolveWeaponSound('current', 'axe').slice(5);
     const measure = buffer => {
       let peak = 0, sum = 0, finite = true, n = 0;
       for (let ch = 0; ch < buffer.numberOfChannels; ch++) for (const value of buffer.getChannelData(ch)) {
@@ -124,9 +125,9 @@ try {
     };
     for (const style of WEAPON_SOUND_STYLES) for (const level of [1, 8]) {
       const ctx = new OfflineAudioContext(1, 44100 * 9, 44100);
-      const current = style.id === 'current' ? await ctx.decodeAudioData(sample.slice(0)) : null;
+      const current = style.id === 'current' ? await loadWeaponRecording(ctx, currentId) : null;
       for (const when of captures[level]) {
-        if (current) { const src = ctx.createBufferSource(), gain = ctx.createGain(); src.buffer = current; gain.gain.value = 0.55; src.connect(gain); gain.connect(ctx.destination); src.start(when); }
+        if (current) playWeaponRecording(ctx, ctx.destination, current, when, 1);
         else scheduleWeaponSound(ctx, ctx.destination, 'axe', style.id, {}, when);
       }
       const buffer = await ctx.startRendering();

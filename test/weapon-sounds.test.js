@@ -2,9 +2,56 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import '../tools/headless.mjs';
-import { WEAPON_SOUND_KEY, WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES, normalizeWeaponSoundStyle, weaponSoundRecipe } from '../public/js/engine/weapon-sounds.js';
+import { WEAPON_SOUND_KEY, WEAPON_SOUND_STYLES, WEAPON_SOUND_NAMES, normalizeWeaponSoundStyle, resolveWeaponSound, weaponSoundRecipe } from '../public/js/engine/weapon-sounds.js';
 import { WEAPONS, MAX_WEAPON_LEVEL } from '../public/js/data/weapons.js';
 import { makeWeaponPreview, PREVIEW_WEAPONS, PREVIEW_SECONDS } from '../public/sound-lab/preview.js';
+
+const knifeDraw = 'clip:weapons-melee/lugaru/knifedraw.ogg';
+const katanaHit = 'clip:weapons-melee/teeworlds/wp-ninja-hit-01.ogg';
+
+test('Throwing Axe and Whirlwind use the selected recordings from the shipped catalog', () => {
+  const library = new URL('../public/audio/sfx/library/', import.meta.url);
+  const catalog = JSON.parse(readFileSync(new URL('index.json', library), 'utf8'));
+  for (const [choice, title, game] of [[knifeDraw, 'Knife Draw', 'Lugaru HD'], [katanaHit, 'Katana hit 1', 'Teeworlds']]) {
+    const clip = catalog.find(entry => 'clip:' + entry.id === choice);
+    assert.equal(clip?.title, title);
+    assert.equal(clip.source.game, game);
+    const bank = readFileSync(new URL(`bank-${clip.bank}.bin`, library));
+    assert.deepEqual(readFileSync(new URL(clip.id, library)), bank.subarray(clip.offset, clip.offset + clip.bytes));
+  }
+  assert.equal(resolveWeaponSound('current', 'axe'), knifeDraw);
+  assert.equal(resolveWeaponSound('current', 'axe', 'whirlwind'), katanaHit);
+});
+
+test('manual styles and custom recordings take precedence over both axe defaults', () => {
+  const choices = ['tempered', 'heavy', 'arcade', 'clip:weapons-melee/teeworlds/wp-ninja-hit-02.ogg'];
+  for (const choice of choices) {
+    assert.equal(resolveWeaponSound(choice, 'axe'), choice);
+    assert.equal(resolveWeaponSound(choice, 'axe', 'whirlwind'), choice);
+  }
+});
+
+test('real attack cues select axe defaults at level one, maximum and evolution and preserve dagger and fusion audio', () => {
+  const stages = [
+    // Weapon preference, preview stage, emitted cue, firing form, expected selection.
+    ['axe', 1, 'axe', 'axe', knifeDraw],
+    ['axe', MAX_WEAPON_LEVEL, 'axe', 'axe', knifeDraw],
+    ['axe', 'whirlwind', 'axe', 'whirlwind', katanaHit],
+    ['daggers', 1, 'dagger', 'daggers', 'current'],
+    ['daggers', 'shadowstrike', 'dagger', 'shadowstrike', 'current'],
+    ['glaive', 1, 'axe', 'glaive', 'current'],
+    ['stormglaive', 'stormglaive', 'axe', 'lodestar', 'current'],
+  ];
+  for (const [weapon, stage, cue, form, expected] of stages) {
+    const { game } = makeWeaponPreview(weapon, stage, { headless: true });
+    let attack;
+    game.onWeaponCue = (owner, name, formId) => {
+      if (name === cue) attack = [owner, formId, resolveWeaponSound('current', owner, formId)];
+    };
+    for (let i = 0; !attack && i < PREVIEW_SECONDS * 60; i++) game.update(1 / 60);
+    assert.deepEqual(attack, [weapon, form, expected], `${weapon}/${stage} · ${cue}`);
+  }
+});
 
 test('demo and full builds keep separate weapon sound preferences on the same origin', async t => {
   const fullKey = 'fs_weapon_sound_style_v1';

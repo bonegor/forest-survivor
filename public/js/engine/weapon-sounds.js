@@ -1,5 +1,4 @@
-// Original, short procedural alternatives for weapon launches. The current
-// recordings remain the default until the player explicitly applies a style.
+// Weapon recordings and short procedural alternatives for weapon launches.
 import { DEMO } from './build.js';
 
 export const WEAPON_SOUND_KEY = DEMO ? 'fs_demo_weapon_sound_style_v1' : 'fs_weapon_sound_style_v1';
@@ -26,6 +25,14 @@ function readChoices(value) {
 }
 try { choices = readChoices(globalThis.localStorage?.getItem(WEAPON_CHOICES_KEY)); } catch {}
 export const weaponSoundChoice = id => choices[id] || selected;
+export const AXE_RECORDINGS = Object.freeze({
+  axe: 'weapons-melee/lugaru/knifedraw.ogg',
+  whirlwind: 'weapons-melee/teeworlds/wp-ninja-hit-01.ogg',
+});
+export function resolveWeaponSound(choice, weaponId, formId = weaponId) {
+  if (choice === 'current' && weaponId === 'axe' && Object.hasOwn(AXE_RECORDINGS, formId)) return 'clip:' + AXE_RECORDINGS[formId];
+  return choice;
+}
 export function applyWeaponSoundChoice(id, sound) {
   if (!/^[a-z0-9_]+$/.test(id) || !validChoice(sound)) return false;
   try {

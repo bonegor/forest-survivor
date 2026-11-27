@@ -12,7 +12,7 @@ const ONCE = new Set(['victory', 'gameover']);
 import { DEBUG_FLAG } from './debugflag.js';
 import { RELEASE } from './build.js';
 import { MUSIC_TRACKS, DEFAULT_MUSIC, DEFAULT_COMBAT_MUSIC, normalizeCombatMusic, normalizeMusicTrack, normalizeMusicTracks, musicRoleForCue } from './combat-music.js';
-import { weaponSoundChoice, weaponSoundStyle, scheduleWeaponSound } from './weapon-sounds.js';
+import { weaponSoundChoice, weaponSoundStyle, resolveWeaponSound, scheduleWeaponSound } from './weapon-sounds.js';
 import { loadWeaponRecording, playWeaponRecording } from './weapon-recordings.js';
 
 const MUSIC_DIR = 'audio/music/';
@@ -177,8 +177,8 @@ export function setWeaponSoundAudition(style = null) {
   A.weaponAudition = style;
   A.last.clear();
 }
-export function preloadWeaponChoice(id) {
-  const choice = weaponSoundChoice(id);
+export function preloadWeaponChoice(id, formId) {
+  const choice = resolveWeaponSound(weaponSoundChoice(id), id, formId);
   if (A.ctx && choice.startsWith('clip:')) loadWeaponRecording(A.ctx, choice.slice(5)).catch(() => {});
 }
 
@@ -757,8 +757,9 @@ const weaponFamily = { hit: 'slash', crit: 'shard', bones: 'wood', burn: 'fireba
   reap: 'whoosh', gem: 'shard', explode: 'fireball' };
 export function weaponSfx(w, name, opts) {
   const id = w?.soundId || w?.baseId || w?.id;
-  w?.g?.onWeaponCue?.(id, name);
-  sfx(name, id ? { ...opts, weaponId: id } : opts);
+  const formId = w?.id || id;
+  w?.g?.onWeaponCue?.(id, name, formId);
+  sfx(name, id ? { ...opts, weaponId: id, formId } : opts);
 }
 
 export function sfx(name, opts = {}) {
@@ -780,7 +781,9 @@ export function sfx(name, opts = {}) {
   try {
     const o = { p: opts.pitch ?? 1, pan: opts.pan ?? 0, size: opts.size ?? 1 };
     const rate = (1 + (o.p - 1) * RECORDED.pitch) / Math.pow(o.size, 0.25);
-    const choice = opts.weaponId ? A.weaponAudition ?? weaponSoundChoice(opts.weaponId) : weaponSoundStyle();
+    const choice = opts.weaponId
+      ? resolveWeaponSound(A.weaponAudition ?? weaponSoundChoice(opts.weaponId), opts.weaponId, opts.formId)
+      : weaponSoundStyle();
     if (choice.startsWith('clip:')) {
       const loading = loadWeaponRecording(A.ctx, choice.slice(5));
       if (loading.ready) { playWeaponRecording(A.ctx, out(o.pan), loading.ready, t + 0.005, rate); return; }

@@ -72,7 +72,7 @@ export class Weapon {
     this.g = g;
     this.id = id;
     this.baseId = id;
-    preloadWeaponChoice(soundBases.get(id) || id);
+    preloadWeaponChoice(this.soundId, id);
     this.fromGear = fromGear;
     this.def = WEAPONS[id];
     this.level = 1;
@@ -154,6 +154,7 @@ export class Weapon {
     const into = this.def.evo.random ? pick(this.def.evo.random) : this.def.evo.into;
     this.id = into;
     this.def = WEAPONS[into];
+    preloadWeaponChoice(this.soundId, into);
     this.level = MAX_WEAPON_LEVEL;
     if (this.fx) {
       this.fx.dead = true;
