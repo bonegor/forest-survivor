@@ -13,7 +13,6 @@ import { UI } from './ui/ui.js';
 import { MenuScene } from './ui/background.js';
 import { TitleScreen, HeroScreen, ModeScreen, ArmoryScreen, CodexScreen, RecordsScreen, OptionsScreen } from './ui/screens.js';
 import { GameScreen } from './ui/gamescreen.js';
-import { PrologueScreen } from './ui/prologue.js';
 import { SpoilsScreen } from './ui/reward-reels.js';
 import { MAPS } from './data/maps.js';
 import { demoChoice } from './shared/demo.js';
@@ -27,7 +26,6 @@ const SCREENS = {
   records: RecordsScreen,
   options: OptionsScreen,
   game: GameScreen,
-  prologue: PrologueScreen,
   spoils: SpoilsScreen,
 };
 
@@ -42,7 +40,7 @@ const app = {
   audioUnlocked: false,
 
   go(name, params = {}) {
-    if ((name === 'game' || name === 'prologue') && (this.store.pendingRun || this.store.pendingReveal)) name = 'spoils';
+    if (name === 'game' && (this.store.pendingRun || this.store.pendingReveal)) name = 'spoils';
     stopCombatMusicPreview();
     if (this.screen && this.screen.leave) this.screen.leave();
     const S = SCREENS[name];
@@ -83,7 +81,7 @@ app.choice.nightmare = app.settings.nightmare === true;
 app.choice.oaths = validOaths(app.settings.oaths);
 // The Survival map as last chosen on the trial screen (settings.map, data/maps.js), where it names
 // one; else none, and the trial screen shows its default (ui/screens.js shownMap: for a save from
-// before the maps, the Darkwood). A new player's first night, the prologue's, saves the desert.
+// before the maps, the Darkwood). Begin Adventure saves the desert on the first launch.
 if (Object.hasOwn(MAPS, app.settings.map ?? '')) app.choice.map = app.settings.map;
 
 // Scanline overlay for the optional CRT look.

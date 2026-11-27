@@ -470,12 +470,11 @@ const TREE_GAP = 30;
 // stands without moving any of it: `standing` times the share of the groves' trees left standing
 // (so a sparser look's trees are some of the Darkwood's, each where it stood), and `bushes`,
 // `rocks`, `stumps` and `graves` times the odds of the scatter. Every draw is made as it always is,
-// whatever the knob, so nothing else in a chunk moves; without one (the Darkwood, the prologue's
-// road, the tools) it is the forest as it always was. What stands in each place, a cactus for an
-// oak, is the look's to say (biomes.js biomeProp): the names here are the slots.
+// whatever the knob, so nothing else in a chunk moves; without one the Darkwood keeps its original
+// distribution. The look picks what stands in each slot, such as a cactus for an oak (biomeProp).
 // `topo`, a Survival map's ground of its own (game/topology, 28 October 2026: the Sunscorch's and the
 // Frostfell's corridors, the Abyss's islands): its roads, places and landmarks in place of the
-// lattice's (topo.features, fetched per box as the prologue's scene is given whole), and no tree, bush
+// lattice's (topo.features, fetched per box), and no tree, bush
 // or stone of the scatter where the hero can't stand (topo.canStand: in the mountains, over the lava
 // or the void, in quicksand or on the ice, on a bridge). What the topology lays on purpose (its
 // places' and landmarks' props) stands where it is laid. Without one, the lattice as it always was.
@@ -586,7 +585,7 @@ export function layoutChunk(cx, cy, scene = null, knob = null, topo = null) {
   // trees never crowd or double up along a seam.
   function treeDensity(x, y) {
     const c = cellOf(x, y), d = dist[c], open = 1 - clearF[c];
-    const roadF = scene ? ss(20, 75, d) : ss(55, 165, d); // the prologue's narrower woodland trail
+    const roadF = scene ? ss(20, 75, d) : ss(55, 165, d); // narrower trails in custom scenes
     const zoneMul = 1 + pineF[c] * 0.2 - cursedF[c] * 0.45;
     const k = nearP[c];
     const avenue = k >= 0 && AV[k] && d > 36 && d < 52 ? 0.55 : 0;
@@ -733,7 +732,7 @@ const PEBBLE = ['#5a6988', '#3a4466', '#8b9bb4'].map(H);
 // is above `bloom`, and pebbles, mostly on the paths. The Survival maps' looks (game/biomes.js, 28
 // October 2026) are the same table in their own colours and counts, with what only they have:
 // `ripple` (the Sunscorch's dunes), `glint` (the Frostfell's snow catching the light), `cracks`
-// (the Abyss's, glowing). Day: the prologue's palettes for the zones and the road, the rest as by night.
+// (the Abyss's, glowing). The daylight fallback overrides the zones and road.
 export const GROUND = {
   zones: [GRASS.oak, GRASS.pine, GRASS.cursed],
   road: ROAD,
@@ -752,8 +751,8 @@ export const GROUND = {
 };
 const DAY_GROUND = { ...GROUND, zones: DAY_GRASS, road: DAY_ROAD };
 // How much of the ground's zone edges (zb, zn) and tone steps (tb, tn) the 4 x 4 Bayer matrix decides
-// and how much the hash's noise. The Darkwood's (by night and on the prologue's road by day) as it
-// always was, pixel for pixel (test/biomes.test.js). Every other look's mostly noise (graphics review
+// and how much the hash's noise. The Darkwood keeps its original values (test/biomes.test.js).
+// Every other look's mostly noise (graphics review
 // world-8, 22 November 2026): where a zone is weak but not gone its colour fell only on the matrix's
 // lowest cells, a regular dot every 4 px over the Frostfell's flat snow, a screen door, and moire at
 // a fractional scale.

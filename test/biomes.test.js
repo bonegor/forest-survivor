@@ -18,7 +18,6 @@ import { THEMES, cryptLook } from '../public/js/game/dungeon.js';
 import { Forest, NIGHT as FOREST_NIGHT } from '../public/js/game/forest.js';
 import { Weather, SKIES, CLIMATE, forecast } from '../public/js/game/weather.js';
 import { Game, cryptName, cryptLookFor } from '../public/js/game/game.js';
-import { Prologue } from '../public/js/game/prologue.js';
 import { MAPS } from '../public/js/data/maps.js';
 import { metaBonuses, defaultProfile } from '../public/js/shared/profile.js';
 
@@ -329,15 +328,4 @@ test("a crypt's look within and its name go by the map's look, the Darkwood's as
       if (Array.isArray(v)) assert.equal(THEMES[id][k].length, v.length, `${id}: ${k}`);
     }
   }
-});
-
-test("the road to the Sunscorch: the desert's sand and caravan road by day, saguaros and palms along the camp's west", () => {
-  const g = new Prologue({ headless: true, settings: {} }), w = g.world, desert = BIOMES.desert;
-  assert.equal(w.look, desert);
-  assert.equal(w.daylight, true);
-  assert.equal(w.layout(0, 0).ground, desert.day);
-  const trees = new Set(['sand_cactus1', 'sand_cactus2', 'sand_palm1', 'sand_joshua1', 'sand_joshua2', 'sand_acacia1', 'sand_acacia2'].map((n) => SPR[n]));
-  const west = w.chunk(-1, 0).props.filter((p) => p.x <= -88 && p.tree);
-  assert.ok(west.length >= 5, 'the west edge marked');
-  for (const p of west) assert.ok(trees.has(p.spr) && p.trunk > 0, `a desert tree at ${p.x},${p.y}`);
 });

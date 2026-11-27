@@ -20,7 +20,6 @@ import { flank, pointer } from './skin.js';
 import { MenuDialog } from './menu-dialog.js';
 import { codexSummary, codexDescription, codexReaction, evolutionRecipe, shortNeed, EFFORT_NOTE } from './menu-copy.js';
 import { metaBonuses, exclusionState, lastInPlay } from '../shared/profile.js';
-import { needsPrologue } from '../game/prologue.js';
 import { normalizeCombatMusic, normalizeMusicTracks } from '../engine/combat-music.js';
 import { CombatMusicPicker } from './music-picker.js';
 import { OathPicker } from './oath-picker.js';
@@ -70,6 +69,12 @@ function keysHint(ctx, W, H, text = 'ARROWS move · ENTER select · ESC back') {
 // ------------------------------------------------------------------ title --
 
 export class TitleScreen {
+  get firstRun() {
+    const { store, settings } = this.app;
+    // Older saves can have finished the intro without banking a run.
+    return store.profile.runs === 0 && !settings.firstRunStarted && !settings.prologueDone;
+  }
+
   enter(app, params = {}) {
     this.app = app;
     this.t = 0;
@@ -151,9 +156,7 @@ export class TitleScreen {
 
     // No Continue: a run is never saved to come back to, only its results when it ends.
     ui.begin(dt);
-    const firstJourney = needsPrologue(app.store.profile, app.settings);
-    const items = [['play', firstJourney ? 'BEGIN ADVENTURE' : 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], DEMO ? ['demo', 'ABOUT THE DEMO'] : ['records', 'RECORDS'], ['options', 'OPTIONS']];
-    if (!firstJourney) items.push(['prologue', 'REPLAY INTRO']);
+    const items = [['play', this.firstRun ? 'BEGIN ADVENTURE' : 'START RUN'], ['armory', 'UPGRADES'], ['codex', 'CODEX'], DEMO ? ['demo', 'ABOUT THE DEMO'] : ['records', 'RECORDS'], ['options', 'OPTIONS']];
     // The buttons and the NEXT line under them stay above the campfire's ring (background.js
     // campTop), which stands on a share of the screen's height while they are centred on it: on a
     // short screen (a 1080p one full, 270 high) they would run across the heroes' heads. There the
@@ -267,8 +270,15 @@ export class TitleScreen {
       app.ui.focus('detail_close'); app.ui.lock(0.2);
       return;
     }
-    if (id === 'play') app.go(needsPrologue(app.store.profile, app.settings) ? 'prologue' : 'hero');
-    else if (id === 'prologue') app.go('prologue', { replay: true });
+    if (id === 'play' && this.firstRun) {
+      app.choice = { hero: 'knight', mode: 's15', map: FIRST_MAP, diff: 'easy', nightmare: false };
+      app.startRun();
+      if (app.screenName === 'game') {
+        app.settings.firstRunStarted = true;
+        app.settings.map = FIRST_MAP;
+        saveSettings(app.settings);
+      }
+    } else if (id === 'play') app.go('hero');
     else if (id === 'armory') app.go('armory');
     else if (id === 'codex') app.go('codex');
     else if (id === 'records') app.go('records');

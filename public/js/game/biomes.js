@@ -17,7 +17,7 @@
 // A look:
 //   ground    darkwood.js GROUND in the look's colours: paintChunk's zones, road, verge, strewn
 //             tufts, leaves, flowers and pebbles, and the look's patterns (ripple, glint, cracks)
-//   day       the ground by day (the Sunscorch's alone, for the prologue's road: prologue.js)
+//   day       daylight ground colours for sunlit maps such as the Sunscorch and Frostfell
 //   density   darkwood.js layoutChunk's knob: { standing, bushes, rocks, stumps, graves }, the
 //             share standing and the scatter's odds (the Darkwood's, null: as they are)
 //   props     what stands in each slot (biomeProp); null, the slot's own

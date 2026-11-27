@@ -10,8 +10,7 @@
 // grains (Game.drawSkies); the foes' shots, the numbers, the hero and the HUD are drawn over it, so no
 // blow comes unseen.
 //
-// Seen where the weather is seen (not in a crypt, not on the road by day, and not with the options'
-// weather turned off: it is the storm's look, if one that fights), whether or not the run is headless.
+// The haze follows outdoor weather visibility and the player's weather setting, including in headless runs.
 
 import { makeCanvas, clamp } from '../../engine/util.js';
 

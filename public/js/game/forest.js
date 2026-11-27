@@ -55,7 +55,7 @@ export const CRYPT_BOX = { w: 24, up: 18, steps: 3 };
 
 export class Forest {
   // look: the map's (game/biomes.js), the Darkwood's without one. o.topology false: the look's
-  // ground without its topology (the prologue's road by day, in the Sunscorch's look).
+  // ground without its topology.
   constructor(g, seed, look = BIOMES.forest, o = {}) {
     this.g = g;
     this.seed = seed;
@@ -90,7 +90,7 @@ export class Forest {
     // A map's ground of its own (game/topology, 28 October 2026: the Sunscorch's and the Frostfell's
     // corridors between their mountains and cliffs, the Abyss's islands over lava or the void): laid
     // out from the map's world seed, its gaps from the run's. Null in the Darkwood (its look has none),
-    // in Ranked and on the prologue's road, and every use of it below is behind it, so the Darkwood is
+    // and in Ranked. Every use of it below is guarded, so the Darkwood is
     // what it was, pixel for pixel and draw for draw. Its terrain fields are kept per chunk by a
     // number (terrainOf), the last one asked for remembered.
     this.topo = o.topology === false ? null : makeTopology(look, world, g.seed);
@@ -278,8 +278,7 @@ export class Forest {
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(CH, CH);
     const lay = this.layout(cx, cy), look = this.look;
-    // The look's ground, unless the layout brought its own (the prologue's road by day; a layout
-    // that only says it is daylit keeps the Darkwood's day palettes, darkwood.js).
+    // Use the map's ground unless the layout specifies its own ground or daylight palette.
     if (!lay.ground && !lay.daylight) lay.ground = look.sun ? look.day || look.ground : look.ground;
     // A look whose cracks glow paints their glow apart: the light they give the night (addLights).
     // Kept at the light map's grain (lighting.js LS, 2 world px a texel), all the light map ever

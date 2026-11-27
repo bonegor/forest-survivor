@@ -9,7 +9,7 @@
 //     should have a better algorithm"); an Islands (topology/islands.js), the Abyss of 28 October, is
 //     kept registered, though no look names it now;
 //   a Quilt (topology/quilt.js, 29 October 2026): the Bloomvale's patchwork of flower fields and lanes;
-//   null: the Darkwood, Ranked, the prologue's road (forest.js { topology: false }).
+//   null: the Darkwood and Ranked.
 // Pure: no canvas, no SPR, so tools/mapgen/endless.mjs and the tests import it as the game does. The
 // surfaces and the lattice's constants live in topology/terrain.js (so the classes can read them without
 // an import cycle) and are the contracts every part of the game reads the ground by: here they are.

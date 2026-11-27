@@ -5,7 +5,6 @@ import { MusicMenu } from '../public/js/ui/music-menu.js';
 import { OptionsScreen } from '../public/js/ui/screens.js';
 import { PauseOverlay } from '../public/js/ui/gamescreen.js';
 import { Game } from '../public/js/game/game.js';
-import { PrologueScreen } from '../public/js/ui/prologue.js';
 import { COMBAT_MUSIC, MUSIC_ROLES, DEFAULT_MUSIC, musicTracksForRole } from '../public/js/engine/combat-music.js';
 import { loadSettings } from '../public/js/engine/storage.js';
 import { defaultProfile, metaBonuses } from '../public/js/shared/profile.js';
@@ -225,27 +224,4 @@ for (const completed of [false, true]) test(`Pause MUSIC keeps ${completed ? 'lo
   h.press('Escape');
   assert.equal(h.result(), 'close');
   assert.equal(g.state, completed ? 'cleared' : 'play');
-});
-
-test('the first journey offers MUSIC and Escape from it does not unpause or advance the road', () => {
-  reset(); const a = app(), screen = new PrologueScreen(); screen.enter(a);
-  screen.game.headless = true; screen.paused = true; screen.game.state = 'paused';
-  a.ui.lockT = 0;
-  const h = harness((c, W, H, dt) => screen.frame(dt));
-  try {
-    h.frame(); h.click(item(a, 'road_music')); assert.ok(screen.musicMenu);
-    screen.musicMenu.audio = audio(); h.frame();
-    h.click(showTrack(a, h, 'bootheel-loop'));
-    assert.equal(a.settings.combatMusic, 'bootheel-loop');
-    assert.equal(screen.paused, true);
-    assert.equal(screen.game.time, 0);
-    h.press('Escape');
-    assert.equal(screen.musicMenu, null);
-    assert.equal(screen.paused, true);
-    assert.equal(screen.game.state, 'paused');
-    assert.equal(screen.game.time, 0);
-    h.frame(); h.press('Escape');
-    assert.equal(screen.paused, false);
-    assert.equal(screen.game.state, 'play');
-  } finally { screen.leave(); }
 });

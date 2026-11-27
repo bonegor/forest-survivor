@@ -650,8 +650,7 @@ export const store = {
 // softFlash: the options' FLASHES: SOFT, white flashes held to FLASH_SOFT and crits in steady gold.
 // boneKingLegs: displays Ossarian's legged sprite in place of his floating one.
 // rankedNote: the trial screen's word that Ranked is always Elite has been said (ModeScreen).
-// map: the Survival map last picked on the trial screen (data/maps.js), or the first night's, the
-// desert (ui/prologue.js); none until then, when the trial screen shows its default (main.js).
+// map: the first battle's desert or the Survival map last picked on the trial screen.
 const DEFAULT_SETTINGS = { music: 0.55, sfx: 0.75, combatMusic: DEFAULT_COMBAT_MUSIC, shake: true, numbers: true, weather: true, crt: false, fps: false, diff: 'easy', nightmare: false, skins: {}, softFlash: false, boneKingLegs: false, rankedNote: false };
 
 // A setting of the wrong kind (a damaged or tampered save) is taken as its default, and the volumes

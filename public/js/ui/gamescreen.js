@@ -37,9 +37,9 @@ import { recordDaily } from '../data/daily.js';
 import { recordRun, momentsLine, loadHistory, saveHistory } from '../shared/history.js';
 
 export class GameScreen {
-  enter(app, params = {}) {
+  enter(app) {
     this.app = app;
-    // Also guard direct transitions from the prologue and retry flows.
+    // Enforce the edition's choices on entry, including retries.
     app.choice = demoChoice(app.choice);
     const { hero, mode } = app.choice;
     this.runId = makeRunId();
@@ -54,9 +54,7 @@ export class GameScreen {
     this.game = new Game({
       hero,
       mode,
-      // The Survival map chosen on the trial screen, or the first night's by the prologue (data/maps.js);
-      // none is the Darkwood (the tests, the bots, the tools), as Ranked and the Dungeon Run always are
-      // (Game: mapFor). Its report names it (ResultsOverlay.submit).
+      // Begin Adventure supplies the first Survival map; later runs use the trial screen's choice.
       map: daily ? daily.map : app.choice.map,
       diff: daily ? daily.diff : app.choice.diff || 'easy', // Normal, Veteran or Elite: Normal unless chosen, as the trial screen shows
       nightmare: !daily && app.choice.nightmare === true, // three times the monsters, if ticked there (Elite only, never on Ranked)
@@ -79,7 +77,6 @@ export class GameScreen {
       hints: true,
       saveSettings: () => saveSettings(app.settings),
     });
-    this.game.gold = this.game.stats.gold = params.prologueGold || 0;
     // Nothing of the run is saved while it lasts: its results reach the save when it ends
     // (ResultsOverlay), by death, Quit Run or victory.
     // The seen list as the run began (engine/storage.js seenBox), for the level-up's FIRST FIND; the

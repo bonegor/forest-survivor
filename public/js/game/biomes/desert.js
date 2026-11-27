@@ -63,7 +63,7 @@ const ground = {
   glint: { zones: [0, 0, 1], share: 0.004, color: H('#f0e4c8') },
 };
 
-// The road to the Sunscorch by day (game/prologue.js DayForest): sand and a caravan road in the sun.
+// Sunlit sand and caravan roads in the Sunscorch.
 const day = {
   ...ground,
   zones: [
@@ -122,8 +122,7 @@ export const DESERT = {
     // October 2026 (50 px before, and none for the pines) the palms are found by the roads, two or
     // three together where an avenue runs (darkwood.js: its trees 36-52 px out), not only now and
     // then: about 35 in the 16 by 16 chunks round the start against 13, the saguaros and joshua
-    // trees nearly as many as they were (154 and 99, against 160 and 115). The road by day
-    // (prologue.js) has a dozen along it now, one every 200 px or so.
+    // trees nearly as many as they were (154 and 99, against 160 and 115).
     oak1: { n: ['sand_cactus1', 'sand_cactus2'], road: 'sand_palm1', near: 90 },
     oak2: { n: ['sand_cactus1', 'sand_cactus2'], road: 'sand_palm1', near: 90 },
     oak3: { n: ['sand_cactus2', 'sand_cactus1'], road: 'sand_palm1', near: 90 },
