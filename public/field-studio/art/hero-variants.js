@@ -11,6 +11,8 @@ import { HERO_ART } from '../../js/art/heroes.js';
 import { vanguardRefinements } from './refined-vanguard.js';
 import { companyRefinements } from './refined-company.js';
 import { refineFrame } from './refinement.js';
+import { reforgedHeroes } from './reforged/catalog.js';
+import { reforgedFrame, reforgedFallFrame, reforgedWispFrame, reforgedWispOrigin } from './reforged/rig.js';
 
 const refinements = { ...vanguardRefinements, ...companyRefinements };
 
@@ -99,6 +101,7 @@ export function heroVariants(id) {
     ...heroKits[id][2].map(([name],i)=>({id:'v'+(i+1),name})),
     ...(newModels[id]||[]).map(({name},i)=>({id:'v'+(i+5),name})),
     { id: 'refined', name: refinements[id].name },
+    ...(reforgedHeroes[id] ? [{ id: 'reforged', name: reforgedHeroes[id].name }] : []),
   ]);
   return listings.get(id);
 }
@@ -304,6 +307,7 @@ function refinedPose(id, frame, idle) {
 }
 
 export function heroVariantFrame(id,variantId,rawFrame,frameIndex=0,idle) {
+  if (variantId === 'reforged') return reforgedFrame(id, reforgedHeroes[id], rawFrame, frameIndex);
   if (variantId === 'refined') return refinedPose(id, rawFrame, idle);
   const model=newModels[id]?.[Number(variantId.slice(1))-5];
   if(model)return redrawFrame(id,model,modelPen(model),rawFrame,frameIndex);
@@ -314,6 +318,7 @@ export function heroVariantFrame(id,variantId,rawFrame,frameIndex=0,idle) {
 // Map the material already painted on each surviving pixel and keep its exact
 // coverage. The falling rig and the independently drawn soul remain untouched.
 export function heroVariantFallFrame(id,variantId,rawFrame,frameIndex=0,idle) {
+  if (variantId === 'reforged') return reforgedFallFrame(id, reforgedHeroes[id], rawFrame, frameIndex);
   if (variantId === 'refined') return refinedPose(id, rawFrame, idle);
   const model=newModels[id]?.[Number(variantId.slice(1))-5];
   if(model)return redrawFall(id,model,modelPen(model),rawFrame,frameIndex);
@@ -328,6 +333,14 @@ export function heroVariantFallFrame(id,variantId,rawFrame,frameIndex=0,idle) {
     mapped[i]=(a<<24|ramp[lum]&0xffffff)>>>0;
   }
   return {w,h,d:mapped};
+}
+
+export function heroVariantWispFrame(id, variantId, rawFrame, frameIndex) {
+  return variantId === 'reforged' ? reforgedWispFrame(id, reforgedHeroes[id], rawFrame, frameIndex) : rawFrame;
+}
+
+export function reforgedSoulOrigin(id) {
+  return reforgedWispOrigin(id, reforgedHeroes[id]);
 }
 
 export function heroVariant(id, variantId, source) {
@@ -348,6 +361,11 @@ export function heroVariant(id, variantId, source) {
         return source.fall.gen().map((frame, index) => heroVariantFallFrame(id, variantId, frame, index, idle));
       },
     };
+    if (variantId === 'reforged' && source.fall.wisp) {
+      const wisp = source.fall.wisp;
+      definition.fall.wisp = { ...wisp, ...reforgedSoulOrigin(id), gen: () => wisp.gen().map((frame, index) =>
+        heroVariantWispFrame(id, variantId, frame, index)) };
+    }
   }
   return definition;
 }

@@ -2,7 +2,7 @@ import { ART } from '../js/art/defs.js';
 import { ART_FALLBACKS } from '../js/art/fallbacks.js';
 import { SPR, Frame, buildSprite } from '../js/engine/sprites.js';
 import { HEROES } from '../js/data/heroes.js';
-import { heroVariantFrame, heroVariantFallFrame } from './art/hero-variants.js';
+import { heroVariantFrame, heroVariantFallFrame, heroVariantWispFrame, reforgedSoulOrigin } from './art/hero-variants.js';
 
 function lazy(object, key, make) {
   Object.defineProperty(object, key, { enumerable: true, configurable: true, get() {
@@ -38,6 +38,12 @@ export function proposalSprite(id, look, source = SPR[HEROES[id].sprite]) {
   if (look === 'original') return source;
   const idle = look === 'refined' ? source.frames[source.idle[0]].buf : undefined;
   const result = dressFrames(source, id, look, heroVariantFrame, idle);
-  if ('fall' in source) lazy(result, 'fall', () => dressFrames(source.fall, id, look, heroVariantFallFrame, idle));
+  if ('fall' in source) lazy(result, 'fall', () => {
+    const fall = dressFrames(source.fall, id, look, heroVariantFallFrame, idle);
+    if (look === 'reforged' && source.fall.wisp) {
+      lazy(fall, 'wisp', () => Object.assign(dressFrames(source.fall.wisp, id, look, heroVariantWispFrame), reforgedSoulOrigin(id)));
+    }
+    return fall;
+  });
   return result;
 }

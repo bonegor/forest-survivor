@@ -34,6 +34,7 @@ let hero, terrain, gems, scene, cards = [], motion = 'idle', face = -1;
 const selectedSets = { heroes: 'refined', crystals: 'new' };
 const section = (crystals = gems) => crystals ? 'crystals' : 'heroes';
 let paused = matchMedia('(prefers-reduced-motion: reduce)').matches, comparing = false;
+let groundMark = false;
 let last = 0, ticking = false;
 const currentKey = () => gems ? 'crystals' : hero;
 function syncQuery() {
@@ -140,7 +141,12 @@ function cardFor(option) {
     choose.onclick = () => togglePick(gems ? tierKeys : [hero], option.id);
     actions.append(choose);
   }
-  footer.append(make('h2', '', option.name), actions);
+  const title = make('div');
+  if (selectedSets[section()] === 'refined' && option.id !== 'original') {
+    title.append(make('small', 'version', option.id === 'reforged' ? 'New design' : 'First refinement'));
+  }
+  title.append(make('h2', '', option.name));
+  footer.append(title, actions);
   card.append(stage);
   if (gems) card.append(swatches(option.id));
   card.append(footer);
@@ -180,6 +186,9 @@ function updatePicks() {
 function controls() {
   for (const btn of $('#motions').children) btn.setAttribute('aria-pressed', String(btn.dataset.motion === motion));
   $('#pause').textContent = paused ? 'Resume' : 'Pause';
+  $('#step').hidden = !paused || gems;
+  $('#ground').hidden = gems;
+  $('#ground').setAttribute('aria-pressed', String(groundMark));
   $('#facing').textContent = face < 0 ? 'Face right' : 'Face left';
   $('#compare').textContent = comparing ? 'Show proposals' : 'Show original';
   $('#compare').setAttribute('aria-pressed', String(comparing));
@@ -188,7 +197,7 @@ function controls() {
 function draw(dt = 0) {
   scene.advance(dt, gems ? 'idle' : motion, face);
   if (!$('#reference').hidden) scene.paint($('#reference canvas'), 'original');
-  for (const { el, option } of cards) scene.paint(el, comparing ? 'original' : option.id);
+  for (const { el, option } of cards) scene.paint(el, comparing ? 'original' : option.id, groundMark && !gems);
 }
 function fail(error) {
   scene = null;
@@ -241,6 +250,7 @@ function loadScene() {
   $('#hero-select').value = hero;
   $('#terrain').value = terrain;
   const refined = selectedSets[section()] === 'refined';
+  $('#grid').classList.toggle('refined', refined);
   $('#reference').hidden = refined;
   $('#compare').hidden = refined;
   updateSetButtons();
@@ -272,7 +282,9 @@ $('#motions').onclick = e => {
   controls(); draw();
 };
 $('#facing').onclick = () => { face *= -1; controls(); if (scene) draw(); };
+$('#ground').onclick = () => { groundMark = !groundMark; controls(); if (scene) draw(); };
 $('#pause').onclick = () => { paused = !paused; controls(); last = 0; start(); };
+$('#step').onclick = () => { if (paused && scene) draw(scene.stepDuration()); };
 $('#compare').onclick = () => { comparing = !comparing; controls(); if (scene) draw(); };
 document.addEventListener('visibilitychange', () => { last = 0; start(); });
 window.addEventListener('popstate', () => { readRoute(); loadScene(); });

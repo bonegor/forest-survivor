@@ -8,6 +8,34 @@ import { makeBuf, hexPack } from '../public/js/engine/pixels.js';
 import { GEM_FAMILIES } from '../public/field-studio/art/crystals.js';
 import { collectionForLink, collectionOptions } from '../public/field-studio/collections.js';
 import { prepareSprites, proposalSprite } from '../public/field-studio/runtime.js';
+import { FieldScene } from '../public/field-studio/field-scene.js';
+import { Player } from '../public/js/game/player.js';
+
+test('paused facing changes retain the selected gait and clips restart on their first pose', () => {
+  const player = { moveSpeed: 70, anim: 0, idleAnim: 0, advanceAnimation: Player.prototype.advanceAnimation,
+    strike(angle, time) { this.strikeAng = angle; this.strikeAt = time; } };
+  const scene = Object.create(FieldScene.prototype);
+  scene.game = { time: 12, player, pickups: [], deathTiming: { end: 4 } };
+  scene.original = { attack: [3, 4, 5], attackFps: 10, motionRate: 1, idleRate: 4 };
+  scene.advance(0, 'walk-strike', 1);
+  assert.equal(player.walking, true);
+  assert.equal(player.strikeAt, 12);
+  scene.advance(scene.stepDuration(), 'walk-strike', 1);
+  const gait = player.anim;
+  assert.ok(gait > 0);
+  scene.advance(0, 'walk-strike', -1);
+  assert.equal(player.anim, gait);
+  assert.equal(player.strikeAng, Math.PI);
+  scene.advance(0, 'strike', -1);
+  assert.equal(player.walking, false);
+  assert.equal(player.anim, 0);
+  assert.equal(player.strikeAt, scene.game.time);
+  scene.advance(0, 'fall', -1);
+  assert.equal(scene.game.deathT, 0);
+  assert.equal(player.dead, true);
+  scene.advance(0, 'idle', 1);
+  assert.equal(player.dead, false);
+});
 
 test('refined stitching follows moving cloth and stays behind a crossing blade', () => {
   const cloth = hexPack('#34445a'), seam = hexPack('#927f69'), blade = hexPack('#d7e2ef');
@@ -43,9 +71,9 @@ test('studio and trial links open the right collection for heroes and crystals',
     assert.equal(route({}), crystals ? 'new' : 'refined');
     assert.equal(route({ look: 'original' }), crystals ? 'new' : 'refined');
     assert.equal(route({ set: 'refined' }), crystals ? 'new' : 'refined');
-    assert.equal(collectionOptions(options, 'refined').length, crystals ? 0 : 1);
+    assert.equal(collectionOptions(options, 'refined').length, crystals ? 0 : 2);
     for (const [index, option] of options.entries()) {
-      const set = option.id === 'refined' ? 'refined' : index < 4 ? 'first' : 'new';
+      const set = index >= 8 ? 'refined' : index < 4 ? 'first' : 'new';
       assert.equal(route({ look: option.id }), set);
       assert.equal(route({ set, look: option.id }), set);
       assert.ok(collectionOptions(options, set).includes(option));
@@ -55,9 +83,9 @@ test('studio and trial links open the right collection for heroes and crystals',
   }
 });
 
-test('each hero offers eight earlier designs and one refinement at game size and timing', () => {
+test('each hero offers eight earlier designs and two refinements at game size and timing', () => {
   prepareSprites();
-  const ids = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'refined'];
+  const ids = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'refined', 'reforged'];
   for (const hero of HERO_ORDER) {
     const looks = heroVariants(hero);
     assert.deepEqual(looks.map(look => look.id), ids, hero);
@@ -73,7 +101,8 @@ test('each hero offers eight earlier designs and one refinement at game size and
       assert.equal(proposal.attack, live.attack);
       assert.equal(posed.w, original.w);
       assert.equal(posed.h, original.h);
-      assert.ok(Math.abs(posed.box[3] - posed.box[1] - height) <= 2, hero + '/' + look.id + ' idle height');
+      const tolerance = look.id === 'reforged' ? Math.max(2, Math.round(height * 0.12)) : 2;
+      assert.ok(Math.abs(posed.box[3] - posed.box[1] - height) <= tolerance, hero + '/' + look.id + ' idle height');
       const fallen = proposal.fall, fallenSource = live.fall;
       const gear = fallen.frames[fallen.frameAt(5)].buf.d;
       if (look.id === 'refined' || ids.indexOf(look.id) < 4) {
@@ -91,8 +120,31 @@ test('each hero offers eight earlier designs and one refinement at game size and
         assert.ok(!silhouettes.has(shape), hero + '/' + look.id + ' needs a distinct silhouette');
         silhouettes.add(shape);
         assert.ok(gear.some(color => color >>> 24), hero + '/' + look.id + ' retains fallen equipment');
+        if (look.id === 'reforged') {
+          assert.equal(proposal.idle, live.idle);
+          assert.equal(proposal.attackWalk, live.attackWalk);
+          assert.equal(proposal.attackRelease, live.attackRelease);
+          assert.equal(fallen.frameAt, fallenSource.frameAt);
+          assert.equal(fallen.wisp.frameAt, fallenSource.wisp.frameAt);
+        }
       }
     }
     assert.equal(SPR[HEROES[hero].sprite], live);
+  }
+});
+
+test('a new stationary strike retains foot contact or a hovering gap for its entire clip', () => {
+  prepareSprites();
+  for (const id of HERO_ORDER) {
+    const sprite = proposalSprite(id, 'reforged');
+    const poses = [...new Set([sprite.idle[0], ...sprite.attack])].map(index => sprite.frames[index].buf);
+    const floor = sprite.anchorY - 1;
+    const fixed = Array.from({ length: poses[0].w }, (_, x) => x)
+      .filter(x => poses.every(pose => pose.d[floor * pose.w + x] >>> 24));
+    if (sprite.floating) {
+      assert.equal(fixed.length, 0, id + ' hovers');
+    } else {
+      assert.ok(fixed.length >= 2, id + ' needs a planted foot throughout its standing strike');
+    }
   }
 });
