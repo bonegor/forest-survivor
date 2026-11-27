@@ -2,11 +2,6 @@ import { heroKits } from './hero-kits.js';
 import { headPieces, shoulders, devices, equipment, fletching, fabricEdges } from './hero-fittings.js';
 import { headProbes, gearProbes } from './hero-landmarks.js';
 import { fittings, garments, helmets, sorcererCrowns } from './hero-garments.js';
-import { championDesigns } from './designs-champions.js';
-import { companyDesigns } from './designs-company.js';
-import { courtDesigns } from './designs-court.js';
-import { bastionDesigns } from './designs-bastion.js';
-import { redrawFrame, redrawFall } from './redraw-model.js';
 
 // Dye, polished metal and contrasting enamel. The first three colours of a
 // dye are deliberately far apart so a two-pixel fold still reads in the field.
@@ -69,30 +64,13 @@ function palette([fabric, steel, enamel]) {
   };
 }
 const palettes = Object.fromEntries(Object.entries(materials).map(([id, value]) => [id, palette(value)]));
-const newModels={...championDesigns,...companyDesigns,...courtDesigns,...bastionDesigns};
-const pens=new Map();
-const designInk=new WeakMap();
-function modelPen(design) {
-  const name=design.palette;
-  if(designInk.has(design))return designInk.get(design);
-  let ink=pens.get(name);
-  const p=palettes[name];if(!p)throw Error('Unknown costume palette '+name);
-  if(!ink)ink={...p.ink,k:rgb('0e101a'),d:p.fabric[42],c:p.fabric[112],l:p.fabric[165],w:p.fabric[213],
-    n:p.fabric[25],s:p.steel[49],m:p.steel[110],h:p.steel[169],H:p.steel[235],
-    t:p.timber[110],g:p.gilt[155],A:p.gold[198],f:p.skin[135],F:p.skin[197],i:p.lining[189],
-    b:p.steel[33],B:p.steel[41]};
-  pens.set(name,ink);
-  if(design.ink)ink={...ink,...Object.fromEntries(Object.entries(design.ink).map(([k,hex])=>[k,rgb(hex)]))};
-  designInk.set(design,ink);return ink;
-}
 
 const listings = new Map();
 export function heroVariants(id) {
   if (!heroKits[id]) return [];
-  if (!listings.has(id)) listings.set(id, [
-    ...heroKits[id][2].map(([name],i)=>({id:'v'+(i+1),name})),
-    ...(newModels[id]||[]).map(({name},i)=>({id:'v'+(i+5),name})),
-  ]);
+  if (!listings.has(id)) {
+    listings.set(id, heroKits[id][2].map(([name], i) => ({ id: 'v' + (i + 1), name })));
+  }
   return listings.get(id);
 }
 
@@ -291,18 +269,14 @@ function fit(id,kit,frame) {
 
 // The review can lazily dress exactly the pose it is about to show. Facing is
 // handled by the normal renderer after fitting, so grips and ornaments mirror.
-export function heroVariantFrame(id,variantId,rawFrame,frameIndex=0) {
-  const model=newModels[id]?.[Number(variantId.slice(1))-5];
-  if(model)return redrawFrame(id,model,modelPen(model),rawFrame,frameIndex);
+export function heroVariantFrame(id,variantId,rawFrame) {
   return fit(id,tailor(id,variantId),rawFrame);
 }
 
 // Authored fall frames can contain a disjoint blade or only a fading fragment.
 // Map the material already painted on each surviving pixel and keep its exact
 // coverage. The falling rig and the independently drawn soul remain untouched.
-export function heroVariantFallFrame(id,variantId,rawFrame,frameIndex=0) {
-  const model=newModels[id]?.[Number(variantId.slice(1))-5];
-  if(model)return redrawFall(id,model,modelPen(model),rawFrame,frameIndex);
+export function heroVariantFallFrame(id,variantId,rawFrame) {
   const kit=tailor(id,variantId),p=kit.p, {w,h,d}=rawFrame;
   const mapped=new Uint32Array(d.length);
   for(let i=0;i<d.length;i++) {
@@ -317,6 +291,6 @@ export function heroVariantFallFrame(id,variantId,rawFrame,frameIndex=0) {
 }
 
 export function heroVariant(id,variantId,source) {
-  return {...source,gen:()=>source.gen().map((frame,i)=>heroVariantFrame(id,variantId,frame,i)),
-    ...(source.fall?{fall:{...source.fall,gen:()=>source.fall.gen().map((frame,i)=>heroVariantFallFrame(id,variantId,frame,i))}}:{})};
+  return {...source,gen:()=>source.gen().map(frame=>heroVariantFrame(id,variantId,frame)),
+    ...(source.fall?{fall:{...source.fall,gen:()=>source.fall.gen().map(frame=>heroVariantFallFrame(id,variantId,frame))}}:{})};
 }

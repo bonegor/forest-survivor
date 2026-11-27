@@ -17,22 +17,26 @@ const query = new URLSearchParams(location.search);
 const hero = Object.hasOwn(HEROES, query.get('hero')) ? query.get('hero') : 'mage';
 const map = Object.hasOwn(MAPS, query.get('map')) ? query.get('map') : 'forest';
 const crystals = query.get('tab') === 'crystals';
-const proposals = crystals ? GEM_FAMILIES.filter(family => family.id !== 'original') : heroVariants(hero);
+const proposals = crystals ? GEM_FAMILIES.filter(family => family.id !== 'original') : heroVariants(hero).slice(0, 4);
 const original = crystals ? GEM_FAMILIES.find(family => family.id === 'original') : { id: 'original', name: 'Original' };
 const requested = query.get('look');
-const first = query.get('set') === 'first' ||
-  (!query.has('set') && proposals.slice(0, 4).some(option => option.id === requested));
+const firstCrystalSet = crystals && (query.get('set') === 'first' ||
+  (!query.has('set') && proposals.slice(0, 4).some(option => option.id === requested)));
 const look = requested === 'original' ? original :
-  proposals.find(option => option.id === requested) || proposals[first ? 0 : 4];
+  proposals.find(option => option.id === requested) || proposals[crystals && !firstCrystalSet ? 4 : 0];
 const field = document.querySelector('#field'), notice = document.querySelector('#notice');
 const pauseButton = document.querySelector('#pause'), restart = document.querySelector('#restart');
 query.set('hero', hero);
 query.set('map', map);
 query.set('look', look.id);
-query.set('set', first ? 'first' : 'new');
+if (crystals) query.set('set', firstCrystalSet ? 'first' : 'new');
+else query.delete('set');
+const replacedLook = !crystals && !!requested && requested !== look.id;
+if (replacedLook) history.replaceState(null, '', location.pathname + '?' + query + location.hash);
 document.querySelector('#back').href = 'field-studio/?' + query.toString();
 document.querySelector('#title').textContent = crystals ? look.name : HEROES[hero].title + ' · ' + look.name;
-document.querySelector('#detail').textContent = (crystals ? HEROES[hero].title + ' · ' : '') + MAPS[map].name + ' · Practice';
+document.querySelector('#detail').textContent = (crystals ? HEROES[hero].title + ' · ' : '') + MAPS[map].name +
+  (replacedLook ? ' · Showing the first available look' : ' · Practice');
 
 const session = { app: { ui: new UI() }, seen: null };
 let game, reward, paused, previous;

@@ -51,7 +51,7 @@ Incidental box and horde pickups drop half as often. Fury pickups appear once th
 
 **Options → Weapon Sounds** opens the [weapon sound dashboard](https://gamevibe.si/sound-lab/). Choose a weapon to hear its level 1, max-level and evolved attacks, or select a fusion to hear its combined attack. Search the recordings or audition one of the four game styles. **Apply** saves the choice for that weapon in this browser and updates the open game.
 
-The [Field studio](https://gamevibe.si/field-studio/) shows eight sprite proposals for each playable hero and each XP crystal tier. Toggle the original artwork at the same scale, or choose **Playtest** to fight with a proposal. **My picks** saves the shortlist in this browser and lets you copy it.
+The [Field studio](https://gamevibe.si/field-studio/) shows the first four sprite proposals for each playable hero and eight designs for each XP crystal tier. Toggle the original artwork at the same scale, or choose **Playtest** to fight with a proposal. **My picks** saves the shortlist in this browser and lets you copy it.
 
 | Action | Keyboard | Gamepad | Touch |
 | --- | --- | --- | --- |
