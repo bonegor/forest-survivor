@@ -4,6 +4,7 @@ import { SPR } from '../js/engine/sprites.js';
 import { heroVariants } from './art/hero-variants.js';
 import { GEM_FAMILIES, gemArt, DEFAULT_GEM_FAMILY } from './art/crystals.js';
 import { prepareSprites } from './runtime.js';
+import { collectionForLink, collectionOptions } from './collections.js';
 import { FieldScene, FIELD_W, FIELD_H, TIER_VALUES } from './field-scene.js';
 
 const $ = selector => document.querySelector(selector);
@@ -30,16 +31,14 @@ try {
 } catch { /* Restricted browsers can still compare and copy choices. */ }
 
 let hero, terrain, gems, scene, cards = [], motion = 'idle', face = -1;
-let gemSet = 'new';
+const selectedSets = { heroes: 'first', crystals: 'new' };
+const section = (crystals = gems) => crystals ? 'crystals' : 'heroes';
 let paused = matchMedia('(prefers-reduced-motion: reduce)').matches, comparing = false;
 let last = 0, ticking = false;
 const currentKey = () => gems ? 'crystals' : hero;
 function syncQuery() {
-  const params = new URLSearchParams({ hero, map: terrain });
-  if (gems) {
-    params.set('tab', 'crystals');
-    params.set('set', gemSet);
-  }
+  const params = new URLSearchParams({ hero, map: terrain, set: selectedSets[section()] });
+  if (gems) params.set('tab', 'crystals');
   return params;
 }
 function readRoute() {
@@ -47,22 +46,20 @@ function readRoute() {
   hero = HERO_ORDER.includes(p.get('hero')) ? p.get('hero') : 'mage';
   terrain = terrains.includes(p.get('map')) ? p.get('map') : 'forest';
   gems = p.get('tab') === 'crystals';
-  if (gems) {
-    const legacyLink = !p.has('set') && crystalOptions.slice(0, 4).some(o => o.id === p.get('look'));
-    gemSet = p.get('set') === 'first' || legacyLink ? 'first' : 'new';
-  } else {
-    p.delete('set');
+  const options = proposals(currentKey());
+  selectedSets[section()] = collectionForLink(p, options, gems);
+  if (!gems) {
     const look = p.get('look');
-    if (look && look !== 'original' && !heroVariants(hero).some(o => o.id === look)) p.delete('look');
+    if (look && look !== 'original' && !options.some(o => o.id === look)) p.delete('look');
     if (url.href !== location.href) history.replaceState(null, '', url);
   }
 }
-function navigate(nextHero, nextTerrain, nextGems, nextGemSet = gemSet) {
-  if (hero === nextHero && terrain === nextTerrain && gems === nextGems && gemSet === nextGemSet) return;
+function navigate(nextHero, nextTerrain, nextGems, nextSet = selectedSets[section(nextGems)]) {
+  if (hero === nextHero && terrain === nextTerrain && gems === nextGems && selectedSets[section()] === nextSet) return;
   hero = nextHero;
   terrain = nextTerrain;
   gems = nextGems;
-  gemSet = nextGemSet;
+  selectedSets[section()] = nextSet;
   history.pushState(null, '', location.pathname + '?' + syncQuery());
   loadScene();
 }
@@ -210,6 +207,22 @@ function start() {
     requestAnimationFrame(tick);
   }
 }
+function updateSetButtons() {
+  const group = $('#sets');
+  if (group.dataset.section !== section()) {
+    group.dataset.section = section();
+    group.setAttribute('aria-label', gems ? 'Crystal designs' : 'Hero designs');
+    group.replaceChildren();
+    for (const set of gems ? ['new', 'first'] : ['first', 'new']) {
+      const name = set === 'first' ? 'First proposals' : gems ? 'New crystals' : 'New sprites';
+      const btn = make('button', '', name);
+      btn.dataset.set = set;
+      if (gems) btn.append(' ', make('span', '', '4'));
+      group.append(btn);
+    }
+  }
+  for (const btn of group.children) btn.setAttribute('aria-pressed', String(btn.dataset.set === selectedSets[section()]));
+}
 function loadScene() {
   scene = null;
   comparing = false;
@@ -223,14 +236,12 @@ function loadScene() {
   $('#ref-label').textContent = gems ? 'Original diamonds' : 'Current look';
   $('#hero-select').value = hero;
   $('#terrain').value = terrain;
-  $('#sets').hidden = !gems;
-  for (const btn of $('#sets').children) btn.setAttribute('aria-pressed', String(btn.dataset.set === gemSet));
+  updateSetButtons();
   $('#grid').replaceChildren();
   $('#status').textContent = 'Preparing the field…';
   try {
     scene = new FieldScene(hero, terrain, gems);
-    const offset = gemSet === 'first' ? 0 : 4;
-    cards = (gems ? crystalOptions.slice(offset, offset + 4) : heroVariants(hero)).map(cardFor);
+    cards = collectionOptions(proposals(currentKey()), selectedSets[section()]).map(cardFor);
     controls();
     updatePicks();
     draw();
