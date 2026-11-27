@@ -7,6 +7,12 @@ import { companyDesigns } from './designs-company.js';
 import { courtDesigns } from './designs-court.js';
 import { bastionDesigns } from './designs-bastion.js';
 import { redrawFrame, redrawFall } from './redraw-model.js';
+import { HERO_ART } from '../../js/art/heroes.js';
+import { vanguardRefinements } from './refined-vanguard.js';
+import { companyRefinements } from './refined-company.js';
+import { refineFrame } from './refinement.js';
+
+const refinements = { ...vanguardRefinements, ...companyRefinements };
 
 // Dye, polished metal and contrasting enamel. The first three colours of a
 // dye are deliberately far apart so a two-pixel fold still reads in the field.
@@ -92,6 +98,7 @@ export function heroVariants(id) {
   if (!listings.has(id)) listings.set(id, [
     ...heroKits[id][2].map(([name],i)=>({id:'v'+(i+1),name})),
     ...(newModels[id]||[]).map(({name},i)=>({id:'v'+(i+5),name})),
+    { id: 'refined', name: refinements[id].name },
   ]);
   return listings.get(id);
 }
@@ -291,7 +298,13 @@ function fit(id,kit,frame) {
 
 // The review can lazily dress exactly the pose it is about to show. Facing is
 // handled by the normal renderer after fitting, so grips and ornaments mirror.
-export function heroVariantFrame(id,variantId,rawFrame,frameIndex=0) {
+function refinedPose(id, frame, idle) {
+  const source = HERO_ART[id];
+  return refineFrame(refinements[id], frame, idle ?? source.gen()[source.idle[0]]);
+}
+
+export function heroVariantFrame(id,variantId,rawFrame,frameIndex=0,idle) {
+  if (variantId === 'refined') return refinedPose(id, rawFrame, idle);
   const model=newModels[id]?.[Number(variantId.slice(1))-5];
   if(model)return redrawFrame(id,model,modelPen(model),rawFrame,frameIndex);
   return fit(id,tailor(id,variantId),rawFrame);
@@ -300,7 +313,8 @@ export function heroVariantFrame(id,variantId,rawFrame,frameIndex=0) {
 // Authored fall frames can contain a disjoint blade or only a fading fragment.
 // Map the material already painted on each surviving pixel and keep its exact
 // coverage. The falling rig and the independently drawn soul remain untouched.
-export function heroVariantFallFrame(id,variantId,rawFrame,frameIndex=0) {
+export function heroVariantFallFrame(id,variantId,rawFrame,frameIndex=0,idle) {
+  if (variantId === 'refined') return refinedPose(id, rawFrame, idle);
   const model=newModels[id]?.[Number(variantId.slice(1))-5];
   if(model)return redrawFall(id,model,modelPen(model),rawFrame,frameIndex);
   const kit=tailor(id,variantId),p=kit.p, {w,h,d}=rawFrame;
@@ -316,7 +330,24 @@ export function heroVariantFallFrame(id,variantId,rawFrame,frameIndex=0) {
   return {w,h,d:mapped};
 }
 
-export function heroVariant(id,variantId,source) {
-  return {...source,gen:()=>source.gen().map((frame,i)=>heroVariantFrame(id,variantId,frame,i)),
-    ...(source.fall?{fall:{...source.fall,gen:()=>source.fall.gen().map((frame,i)=>heroVariantFallFrame(id,variantId,frame,i))}}:{})};
+export function heroVariant(id, variantId, source) {
+  let idle;
+  const definition = {
+    ...source,
+    gen() {
+      const frames = source.gen();
+      if (variantId === 'refined') idle = frames[source.idle[0]];
+      return frames.map((frame, index) => heroVariantFrame(id, variantId, frame, index, idle));
+    },
+  };
+  if (source.fall) {
+    definition.fall = {
+      ...source.fall,
+      gen() {
+        if (variantId === 'refined') idle ??= source.gen()[source.idle[0]];
+        return source.fall.gen().map((frame, index) => heroVariantFallFrame(id, variantId, frame, index, idle));
+      },
+    };
+  }
+  return definition;
 }

@@ -31,7 +31,7 @@ try {
 } catch { /* Restricted browsers can still compare and copy choices. */ }
 
 let hero, terrain, gems, scene, cards = [], motion = 'idle', face = -1;
-const selectedSets = { heroes: 'first', crystals: 'new' };
+const selectedSets = { heroes: 'refined', crystals: 'new' };
 const section = (crystals = gems) => crystals ? 'crystals' : 'heroes';
 let paused = matchMedia('(prefers-reduced-motion: reduce)').matches, comparing = false;
 let last = 0, ticking = false;
@@ -135,8 +135,11 @@ function cardFor(option) {
   params.set('look', option.id);
   tryLink.href = 'field-studio/trial.html?' + params;
   tryLink.setAttribute('aria-label', 'Playtest ' + option.name);
-  choose.onclick = () => togglePick(gems ? tierKeys : [hero], option.id);
-  actions.append(tryLink, choose);
+  actions.append(tryLink);
+  if (option.id !== 'original') {
+    choose.onclick = () => togglePick(gems ? tierKeys : [hero], option.id);
+    actions.append(choose);
+  }
   footer.append(make('h2', '', option.name), actions);
   card.append(stage);
   if (gems) card.append(swatches(option.id));
@@ -159,6 +162,7 @@ function togglePick(keys, id) {
 function updatePicks() {
   $('#picks span').textContent = Object.keys(picks).length;
   for (const { card, choose, option } of cards) {
+    if (option.id === 'original') continue;
     const active = gems ? tierKeys.every(key => picks[key] === option.id) : picks[hero] === option.id;
     for (const btn of card.querySelectorAll('[data-tier]')) {
       btn.setAttribute('aria-pressed', String(picks[btn.dataset.tier] === option.id));
@@ -183,7 +187,7 @@ function controls() {
 }
 function draw(dt = 0) {
   scene.advance(dt, gems ? 'idle' : motion, face);
-  scene.paint($('#reference canvas'), 'original');
+  if (!$('#reference').hidden) scene.paint($('#reference canvas'), 'original');
   for (const { el, option } of cards) scene.paint(el, comparing ? 'original' : option.id);
 }
 function fail(error) {
@@ -213,8 +217,8 @@ function updateSetButtons() {
     group.dataset.section = section();
     group.setAttribute('aria-label', gems ? 'Crystal designs' : 'Hero designs');
     group.replaceChildren();
-    for (const set of gems ? ['new', 'first'] : ['first', 'new']) {
-      const name = set === 'first' ? 'First proposals' : gems ? 'New crystals' : 'New sprites';
+    for (const set of gems ? ['new', 'first'] : ['refined', 'first', 'new']) {
+      const name = set === 'refined' ? 'Refined' : set === 'first' ? 'First proposals' : gems ? 'New crystals' : 'New sprites';
       const btn = make('button', '', name);
       btn.dataset.set = set;
       if (gems) btn.append(' ', make('span', '', '4'));
@@ -236,12 +240,17 @@ function loadScene() {
   $('#ref-label').textContent = gems ? 'Original diamonds' : 'Current look';
   $('#hero-select').value = hero;
   $('#terrain').value = terrain;
+  const refined = selectedSets[section()] === 'refined';
+  $('#reference').hidden = refined;
+  $('#compare').hidden = refined;
   updateSetButtons();
   $('#grid').replaceChildren();
   $('#status').textContent = 'Preparing the field…';
   try {
     scene = new FieldScene(hero, terrain, gems);
-    cards = collectionOptions(proposals(currentKey()), selectedSets[section()]).map(cardFor);
+    const options = collectionOptions(proposals(currentKey()), selectedSets[section()]);
+    if (refined) options.unshift({ id: 'original', name: 'Current gameplay sprite' });
+    cards = options.map(cardFor);
     controls();
     updatePicks();
     draw();

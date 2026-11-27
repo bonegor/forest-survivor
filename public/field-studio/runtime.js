@@ -22,13 +22,13 @@ export function prepareSprites() {
   }
 }
 
-function dressFrames(source, id, look, draw) {
+function dressFrames(source, id, look, draw, idle) {
   const result = Object.create(source);
   result.frames = new Array(source.frames.length);
   for (let i = 0; i < result.frames.length; i++) {
     lazy(result.frames, i, () => {
       const frame = source.frames[i];
-      return new Frame(draw(id, look, frame.buf, i), frame.emissive);
+      return new Frame(draw(id, look, frame.buf, i, idle), frame.emissive);
     });
   }
   return result;
@@ -36,7 +36,8 @@ function dressFrames(source, id, look, draw) {
 
 export function proposalSprite(id, look, source = SPR[HEROES[id].sprite]) {
   if (look === 'original') return source;
-  const result = dressFrames(source, id, look, heroVariantFrame);
-  if ('fall' in source) lazy(result, 'fall', () => dressFrames(source.fall, id, look, heroVariantFallFrame));
+  const idle = look === 'refined' ? source.frames[source.idle[0]].buf : undefined;
+  const result = dressFrames(source, id, look, heroVariantFrame, idle);
+  if ('fall' in source) lazy(result, 'fall', () => dressFrames(source.fall, id, look, heroVariantFallFrame, idle));
   return result;
 }
